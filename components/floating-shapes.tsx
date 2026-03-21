@@ -1,0 +1,135 @@
+"use client";
+
+import { motion } from "framer-motion";
+
+const shapes = [
+  {
+    type: "circle",
+    size: 8,
+    x: "10%",
+    y: "20%",
+    duration: 15,
+    delay: 0,
+    color: "oklch(0.7 0.15 280 / 0.25)",
+  },
+  {
+    type: "square",
+    size: 12,
+    x: "80%",
+    y: "15%",
+    duration: 18,
+    delay: 2,
+    color: "oklch(0.7 0.12 200 / 0.2)",
+  },
+  {
+    type: "triangle",
+    size: 10,
+    x: "70%",
+    y: "70%",
+    duration: 20,
+    delay: 4,
+    color: "oklch(0.7 0.15 330 / 0.2)",
+  },
+  {
+    type: "circle",
+    size: 6,
+    x: "20%",
+    y: "80%",
+    duration: 12,
+    delay: 1,
+    color: "oklch(0.8 0.1 150 / 0.2)",
+  },
+  {
+    type: "square",
+    size: 14,
+    x: "50%",
+    y: "10%",
+    duration: 22,
+    delay: 3,
+    color: "oklch(0.7 0.1 50 / 0.15)",
+  },
+  {
+    type: "circle",
+    size: 10,
+    x: "90%",
+    y: "50%",
+    duration: 16,
+    delay: 5,
+    color: "oklch(0.7 0.15 280 / 0.18)",
+  },
+  {
+    type: "triangle",
+    size: 8,
+    x: "35%",
+    y: "45%",
+    duration: 14,
+    delay: 2,
+    color: "oklch(0.8 0.12 200 / 0.15)",
+  },
+  {
+    type: "square",
+    size: 6,
+    x: "5%",
+    y: "55%",
+    duration: 19,
+    delay: 6,
+    color: "oklch(0.7 0.15 330 / 0.12)",
+  },
+];
+
+function Shape({
+  type,
+  size,
+  color,
+}: Readonly<{
+  type: string;
+  size: number;
+  color: string;
+}>) {
+  if (type === "circle") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="4" fill={color} />
+      </svg>
+    );
+  }
+  if (type === "square") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 10 10">
+        <rect x="1" y="1" width="8" height="8" rx="1" fill={color} />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 10 10">
+      <polygon points="5,1 9,9 1,9" fill={color} />
+    </svg>
+  );
+}
+
+export function FloatingShapes() {
+  return (
+    <div className="fixed inset-0 -z-5 pointer-events-none overflow-hidden">
+      {shapes.map((shape, i) => (
+        <motion.div
+          key={i}
+          className="absolute"
+          style={{ left: shape.x, top: shape.y }}
+          animate={{
+            y: [0, -30, 10, -20, 0],
+            x: [0, 15, -10, 20, 0],
+            rotate: [0, 90, 180, 270, 360],
+          }}
+          transition={{
+            duration: shape.duration,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: shape.delay,
+          }}
+        >
+          <Shape type={shape.type} size={shape.size} color={shape.color} />
+        </motion.div>
+      ))}
+    </div>
+  );
+}
