@@ -5,6 +5,7 @@ import { ExperienceSection } from "@/components/experience-section";
 import { ProjectsSection } from "@/components/projects-section";
 import { TestimonialsSection } from "@/components/testimonials-section";
 import { FaqSection } from "@/components/faq-section";
+import { CtaSection } from "@/components/cta-section";
 import { AnimatedBackground } from "@/components/animated-background";
 import { FloatingShapes } from "@/components/floating-shapes";
 import { Footer } from "@/components/footer";
@@ -21,6 +22,7 @@ export default function Home() {
         <ExperienceSection />
         <ProjectsSection />
         <TestimonialsSection />
+        <CtaSection />
         <FaqSection />
       </main>
       <Footer />
