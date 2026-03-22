@@ -107,7 +107,7 @@ const sectionVariants = {
 
 export function SkillsSection() {
   return (
-    <section id="skills" className="relative py-24 sm:py-32 px-6">
+    <section id="skills" className="relative py-7 sm:py-10 px-6">
       <div className="max-w-6xl mx-auto">
         <motion.div
           className="text-center mb-16"

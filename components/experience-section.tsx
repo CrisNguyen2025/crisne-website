@@ -339,7 +339,7 @@ function ExperienceCard({
 
 export function ExperienceSection() {
   return (
-    <section id="experience" className="relative py-24 sm:py-32 px-6 overflow-hidden">
+    <section id="experience" className="relative py-7 sm:py-10 px-6 overflow-hidden">
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 rounded-full opacity-[0.03] pointer-events-none"
         style={{

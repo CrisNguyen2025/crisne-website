@@ -1,21 +1,24 @@
 "use client";
 
-import { motion, useScroll, useMotionValueEvent, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  motion,
+  AnimatePresence,
+} from "framer-motion";
+import { useState, useEffect, useRef } from "react";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { useScrollSpy } from "@/hooks/use-scroll-spy";
 
 const navLinks = [
   { label: "Skills", href: "#skills" },
   { label: "Experience", href: "#experience" },
   { label: "Projects", href: "#projects" },
+  { label: "Testimonials", href: "#testimonials" },
   { label: "Contact", href: "mailto:hello@crisne.dev" },
 ];
 
-const sectionIds = ["skills", "experience", "projects"];
-
-const NAVBAR_HEIGHT = 80;
+const sectionIds = ["skills", "experience", "projects", "testimonials"];
 
 const mobileMenuVariants = {
   closed: {
@@ -47,98 +50,76 @@ const mobileItemVariants = {
   open: {
     opacity: 1,
     x: 0,
-    transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+    transition: {
+      duration: 0.3,
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
+    },
   },
 };
 
 export function Navbar() {
-  const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<string | null>(null);
-  const pendingScrollTarget = useRef<string | null>(null);
-  const { scrollY } = useScroll();
+  const navRef = useRef<HTMLDivElement>(null);
+  const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const [indicatorStyle, setIndicatorStyle] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
 
-  useMotionValueEvent(scrollY, "change", (latest) => {
-    setScrolled(latest > 50);
+  const { activeSection, scrolled, scrollToSection, isActive } = useScrollSpy({
+    sectionIds,
+    offset: 64,
   });
 
   useEffect(() => {
-    const observers: IntersectionObserver[] = [];
-
-    sectionIds.forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          if (entry.isIntersecting) {
-            setActiveSection(id);
-          }
-        },
-        {
-          rootMargin: "-20% 0px -60% 0px",
-          threshold: 0,
-        },
-      );
-
-      observer.observe(el);
-      observers.push(observer);
-    });
-
-    return () => {
-      observers.forEach((obs) => obs.disconnect());
-    };
-  }, []);
-
-  const scrollToTarget = useCallback((href: string) => {
-    if (href === "#" || href === "") {
-      globalThis.scrollTo({ top: 0, behavior: "smooth" });
+    const nav = navRef.current;
+    if (!nav || !activeSection) {
+      setIndicatorStyle(null);
       return;
     }
+    const activeLink = linkRefs.current.get(activeSection);
+    if (!activeLink) {
+      setIndicatorStyle(null);
+      return;
+    }
+    const navRect = nav.getBoundingClientRect();
+    const linkRect = activeLink.getBoundingClientRect();
+    setIndicatorStyle({
+      left: linkRect.left - navRect.left + 8,
+      width: linkRect.width - 16,
+    });
+  }, [activeSection]);
+
+  const handleDesktopClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) => {
+    e.preventDefault();
+    scrollToSection(href);
+  };
+
+  const handleMobileNavClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    href: string,
+  ) => {
+    e.preventDefault();
+    setMobileOpen(false);
 
     if (href.startsWith("mailto:")) {
-      globalThis.location.href = href;
+      window.open(href, "_blank");
       return;
     }
 
     const targetId = href.replace("#", "");
-    const targetEl = document.getElementById(targetId);
-    if (targetEl) {
-      const elementTop = targetEl.getBoundingClientRect().top + globalThis.scrollY;
-      globalThis.scrollTo({ top: elementTop - NAVBAR_HEIGHT, behavior: "smooth" });
-    }
-  }, []);
 
-  useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-
-      if (pendingScrollTarget.current) {
-        const target = pendingScrollTarget.current;
-        pendingScrollTarget.current = null;
-
-        setTimeout(() => {
-          scrollToTarget(target);
-        }, 100);
+    setTimeout(() => {
+      const el = targetId ? document.getElementById(targetId) : null;
+      if (el) {
+        el.scrollIntoView({ behavior: "instant", block: "start" });
+      } else {
+        globalThis.scrollTo({ top: 0, behavior: "instant" });
       }
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [mobileOpen, scrollToTarget]);
-
-  const handleMobileNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
-    pendingScrollTarget.current = href;
-    setMobileOpen(false);
-  };
-
-  const isActive = (href: string) => {
-    if (href.startsWith("mailto:")) return false;
-    const id = href.replace("#", "");
-    return activeSection === id;
+    }, 400);
   };
 
   return (
@@ -167,39 +148,60 @@ export function Navbar() {
             <span className="text-foreground">.dev</span>
           </motion.a>
 
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <motion.a
-                key={link.label}
-                href={link.href}
-                className={cn(
-                  "relative px-4 py-2 text-sm transition-colors rounded-lg",
-                  isActive(link.href)
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                )}
-                whileHover={{ y: -1 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {link.label}
-                {isActive(link.href) && (
-                  <motion.span
-                    layoutId="activeNavIndicator"
-                    className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                    transition={{
-                      type: "spring",
-                      stiffness: 380,
-                      damping: 30,
-                    }}
-                  />
-                )}
-              </motion.a>
-            ))}
+          {/* Desktop nav */}
+          <div
+            ref={navRef}
+            className="hidden md:flex items-center gap-1 relative"
+          >
+            {navLinks.map((link) => {
+              const sectionId = link.href.startsWith("#")
+                ? link.href.slice(1)
+                : null;
+              const active = sectionId ? activeSection === sectionId : false;
+              return (
+                <motion.a
+                  key={link.label}
+                  ref={(el) => {
+                    if (sectionId && el) linkRefs.current.set(sectionId, el);
+                  }}
+                  href={link.href}
+                  onClick={(e) => handleDesktopClick(e, link.href)}
+                  className={cn(
+                    "relative px-4 py-2 text-sm transition-colors duration-200 rounded-lg",
+                    active
+                      ? "text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                  )}
+                  whileHover={{ y: -1 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {link.label}
+                </motion.a>
+              );
+            })}
+
+            <motion.span
+              className="absolute bottom-0.5 h-0.5 rounded-full bg-linear-to-r from-indigo-500 to-purple-500 pointer-events-none"
+              animate={{
+                opacity: indicatorStyle ? 1 : 0,
+                scaleX: indicatorStyle ? 1 : 0.5,
+                left: indicatorStyle?.left ?? 0,
+                width: indicatorStyle?.width ?? 0,
+              }}
+              transition={{
+                left: { type: "spring", stiffness: 400, damping: 32 },
+                width: { type: "spring", stiffness: 400, damping: 32 },
+                opacity: { duration: 0.15 },
+                scaleX: { duration: 0.15 },
+              }}
+            />
+
             <div className="ml-2">
               <ThemeToggle />
             </div>
           </div>
 
+          {/* Mobile controls */}
           <div className="flex md:hidden items-center gap-2">
             <ThemeToggle />
             <motion.button
@@ -235,6 +237,7 @@ export function Navbar() {
           </div>
         </nav>
 
+        {/* Mobile menu */}
         <AnimatePresence>
           {mobileOpen && (
             <motion.div
@@ -253,7 +256,7 @@ export function Navbar() {
                       href={link.href}
                       variants={mobileItemVariants}
                       className={cn(
-                        "relative flex items-center gap-3 px-4 py-3.5 text-base font-medium rounded-xl transition-colors overflow-hidden",
+                        "relative flex items-center gap-3 px-4 py-3.5 text-base font-medium rounded-xl transition-colors duration-200 overflow-hidden",
                         active
                           ? "text-foreground bg-muted/60"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
@@ -261,19 +264,27 @@ export function Navbar() {
                       onClick={(e) => handleMobileNavClick(e, link.href)}
                       whileTap={{ scale: 0.98 }}
                     >
-                      {active && (
-                        <motion.span
-                          layoutId="activeMobileIndicator"
-                          className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-gradient-to-b from-indigo-500 to-purple-500"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
+                      <AnimatePresence>
+                        {active && (
+                          <motion.span
+                            key="mobile-bar"
+                            className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-linear-to-b from-indigo-500 to-purple-500"
+                            initial={{ scaleY: 0, opacity: 0 }}
+                            animate={{ scaleY: 1, opacity: 1 }}
+                            exit={{ scaleY: 0, opacity: 0 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 400,
+                              damping: 30,
+                            }}
+                          />
+                        )}
+                      </AnimatePresence>
                       <span
-                        className={cn("w-1.5 h-1.5 rounded-full shrink-0 transition-transform", active && "scale-150")}
+                        className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0 transition-transform",
+                          active && "scale-150",
+                        )}
                         style={{
                           background: active
                             ? "linear-gradient(135deg, #6366f1, #a855f7)"
@@ -290,6 +301,7 @@ export function Navbar() {
         </AnimatePresence>
       </motion.header>
 
+      {/* Mobile backdrop */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -304,4 +316,3 @@ export function Navbar() {
     </>
   );
 }
-

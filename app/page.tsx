@@ -3,6 +3,7 @@ import { HeroSection } from "@/components/hero-section";
 import { SkillsSection } from "@/components/skills-section";
 import { ExperienceSection } from "@/components/experience-section";
 import { ProjectsSection } from "@/components/projects-section";
+import { TestimonialsSection } from "@/components/testimonials-section";
 import { AnimatedBackground } from "@/components/animated-background";
 import { FloatingShapes } from "@/components/floating-shapes";
 import { Footer } from "@/components/footer";
@@ -18,6 +19,7 @@ export default function Home() {
         <SkillsSection />
         <ExperienceSection />
         <ProjectsSection />
+        <TestimonialsSection />
       </main>
       <Footer />
     </>
