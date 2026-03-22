@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const navLinks = [
   { label: "Home", href: "#" },
   { label: "Skills", href: "#skills" },
+  { label: "Projects", href: "#projects" },
   { label: "Contact", href: "mailto:hello@crisne.dev" },
 ];
 
