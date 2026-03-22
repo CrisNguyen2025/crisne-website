@@ -15,10 +15,11 @@ const navLinks = [
   { label: "Experience", href: "#experience" },
   { label: "Projects", href: "#projects" },
   { label: "Testimonials", href: "#testimonials" },
+  { label: "FAQ", href: "#faq" },
   { label: "Contact", href: "mailto:hello@crisne.dev" },
 ];
 
-const sectionIds = ["skills", "experience", "projects", "testimonials"];
+const sectionIds = ["skills", "experience", "projects", "testimonials", "faq"];
 
 const mobileMenuVariants = {
   closed: {
