@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/navbar";
 import { HeroSection } from "@/components/hero-section";
 import { SkillsSection } from "@/components/skills-section";
+import { ExperienceSection } from "@/components/experience-section";
 import { ProjectsSection } from "@/components/projects-section";
 import { AnimatedBackground } from "@/components/animated-background";
 import { FloatingShapes } from "@/components/floating-shapes";
@@ -15,6 +16,7 @@ export default function Home() {
       <main className="flex-1">
         <HeroSection />
         <SkillsSection />
+        <ExperienceSection />
         <ProjectsSection />
       </main>
       <Footer />
