@@ -1,9 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Briefcase, MapPin, Calendar, ExternalLink, TrendingUp } from "lucide-react";
+import {
+  Briefcase,
+  MapPin,
+  Calendar,
+  ExternalLink,
+  TrendingUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GradientText } from "@/components/gradient-text";
 
 interface Experience {
   id: string;
@@ -34,7 +39,14 @@ const experiences: Experience[] = [
     isCurrent: true,
     description:
       "Leading frontend architecture for enterprise SaaS platform. Building scalable design systems, mentoring junior developers, and driving technical decisions across multiple product teams.",
-    technologies: ["React", "Next.js", "TypeScript", "Tailwind CSS", "GraphQL", "Storybook"],
+    technologies: [
+      "React",
+      "Next.js",
+      "TypeScript",
+      "Tailwind CSS",
+      "GraphQL",
+      "Storybook",
+    ],
     color: "#818cf8",
     gradient: ["#6366f1", "#a855f7"],
     emoji: "🚀",
@@ -51,7 +63,14 @@ const experiences: Experience[] = [
     isCurrent: false,
     description:
       "Developed high-performance web applications for diverse clients. Implemented pixel-perfect UI from Figma designs, optimized Core Web Vitals, and collaborated closely with design and backend teams.",
-    technologies: ["React", "Next.js", "TypeScript", "Styled Components", "Redux", "Jest"],
+    technologies: [
+      "React",
+      "Next.js",
+      "TypeScript",
+      "Styled Components",
+      "Redux",
+      "Jest",
+    ],
     color: "#fb7185",
     gradient: ["#f43f5e", "#ec4899"],
     emoji: "💼",
@@ -121,15 +140,24 @@ function TimelineDot({
           initial={{ scale: 0 }}
           whileInView={{ scale: 1 }}
           viewport={{ once: true }}
-          transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.2 }}
+          transition={{
+            type: "spring",
+            stiffness: 200,
+            damping: 15,
+            delay: 0.2,
+          }}
         >
           <span
             className="animate-ping absolute inline-flex h-10 w-10 sm:h-12 sm:w-12 rounded-full opacity-30"
-            style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}
+            style={{
+              background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
+            }}
           />
           <span
             className="absolute inline-flex h-8 w-8 sm:h-10 sm:w-10 rounded-full opacity-15"
-            style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}
+            style={{
+              background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
+            }}
           />
           <span
             className="relative inline-flex items-center justify-center rounded-full h-10 w-10 sm:h-12 sm:w-12 border-[3px] border-background shadow-xl text-lg sm:text-xl"
@@ -147,7 +175,12 @@ function TimelineDot({
           initial={{ scale: 0 }}
           whileInView={{ scale: 1 }}
           viewport={{ once: true }}
-          transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.3 + index * 0.1 }}
+          transition={{
+            type: "spring",
+            stiffness: 200,
+            damping: 15,
+            delay: 0.3 + index * 0.1,
+          }}
         >
           <span
             className="relative inline-flex items-center justify-center rounded-full h-10 w-10 sm:h-11 sm:w-11 border-[3px] border-background shadow-lg text-base sm:text-lg"
@@ -170,7 +203,11 @@ function TimelineDot({
           initial={{ scaleY: 0, originY: 0 }}
           whileInView={{ scaleY: 1 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.5 + index * 0.2, ease: [0.22, 1, 0.36, 1] }}
+          transition={{
+            duration: 0.8,
+            delay: 0.5 + index * 0.2,
+            ease: [0.22, 1, 0.36, 1],
+          }}
         />
       )}
     </div>
@@ -244,8 +281,18 @@ function ExperienceCard({
                         style={{
                           background: `linear-gradient(135deg, ${experience.gradient[0]}, ${experience.gradient[1]})`,
                         }}
-                        animate={{ boxShadow: [`0 0 8px ${experience.color}40`, `0 0 16px ${experience.color}60`, `0 0 8px ${experience.color}40`] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        animate={{
+                          boxShadow: [
+                            `0 0 8px ${experience.color}40`,
+                            `0 0 16px ${experience.color}60`,
+                            `0 0 8px ${experience.color}40`,
+                          ],
+                        }}
+                        transition={{
+                          duration: 2,
+                          repeat: Infinity,
+                          ease: "easeInOut",
+                        }}
                       >
                         <span className="relative flex h-1.5 w-1.5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
@@ -340,11 +387,15 @@ function ExperienceCard({
 
 export function ExperienceSection() {
   return (
-    <section id="experience" className="relative section-padding overflow-hidden">
+    <section
+      id="experience"
+      className="relative section-padding overflow-hidden"
+    >
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 rounded-full opacity-[0.03] pointer-events-none"
         style={{
-          background: "radial-gradient(circle, oklch(0.623 0.214 259.815), transparent 70%)",
+          background:
+            "radial-gradient(circle, oklch(0.623 0.214 259.815), transparent 70%)",
         }}
       />
 
@@ -367,11 +418,13 @@ export function ExperienceSection() {
           </motion.span>
           <h2 className="heading-2 mb-4">
             Work{" "}
-            <GradientText>Experience</GradientText>
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+              Experience
+            </span>
           </h2>
           <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
-            My professional journey as a frontend developer.
-            Growing with each role, one project at a time.
+            My professional journey as a frontend developer. Growing with each
+            role, one project at a time.
           </p>
 
           <motion.div

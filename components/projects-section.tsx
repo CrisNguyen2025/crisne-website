@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { ProjectCard, type ProjectData } from "@/components/project-card";
 import { ProjectDetailModal } from "@/components/project-detail-modal";
-import { GradientText } from "@/components/gradient-text";
 
 const projects: ProjectData[] = [
   {
@@ -75,9 +74,7 @@ const projects: ProjectData[] = [
       "Styled Components",
       "Chromatic",
     ],
-    images: [
-      "https://picsum.photos/seed/p3a/800/450",
-    ],
+    images: ["https://picsum.photos/seed/p3a/800/450"],
     highlights: [
       "Highlight feature or achievement #1",
       "Highlight feature or achievement #2",
@@ -207,7 +204,9 @@ export function ProjectsSection() {
             </motion.span>
             <h2 className="heading-2 mb-4">
               Projects &{" "}
-              <GradientText>Creations</GradientText>
+              <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text font-semibold text-transparent">
+                Creations
+              </span>
             </h2>
             <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
               A selection of projects I&apos;ve worked on. Each one represents a

@@ -8,7 +8,7 @@ import {
 } from "framer-motion";
 import { useRef, useState } from "react";
 import { Quote, Star } from "lucide-react";
-import { GradientText } from "@/components/gradient-text";
+
 import { cn } from "@/lib/utils";
 
 interface Testimonial {
@@ -218,7 +218,6 @@ function InfiniteScroller({ items, speed = 35 }: InfiniteScrollerProps) {
   );
 }
 
-
 export function TestimonialsSection() {
   return (
     <section
@@ -242,7 +241,9 @@ export function TestimonialsSection() {
             What People Say
           </motion.span>
           <h2 className="heading-2 mb-4">
-            <GradientText>Testimonials</GradientText>
+            <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent font-semibold">
+              Testimonials
+            </span>
           </h2>
           <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             Real feedback from clients and colleagues I&apos;ve had the pleasure

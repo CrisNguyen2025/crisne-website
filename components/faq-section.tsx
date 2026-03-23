@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { ChevronDown, HelpCircle } from "lucide-react";
-import { GradientText } from "@/components/gradient-text";
+
 import { cn } from "@/lib/utils";
 
 interface FaqItem {
@@ -179,7 +179,9 @@ export function FaqSection() {
             Common Questions
           </motion.span>
           <h2 className="heading-2 mb-4">
-            <GradientText>FAQ</GradientText>
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+              FAQ
+            </span>
           </h2>
           <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             Got questions? Here are some answers to the most common ones

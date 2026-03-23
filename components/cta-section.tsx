@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { Sparkles, MessageSquare } from "lucide-react";
-import { GradientText } from "@/components/gradient-text";
+
 import { ShinyButton } from "@/components/ui/shiny-button";
 
 const containerVariants = {
@@ -85,13 +85,11 @@ export function CtaSection() {
               Let&apos;s Connect
             </motion.span>
 
-            <motion.h2
-              variants={itemVariants}
-              className="heading-2 mb-5"
-            >
-              Have a project in mind?{" "}
-              <br className="hidden sm:block" />
-              <GradientText>Let&apos;s build it together.</GradientText>
+            <motion.h2 variants={itemVariants} className="heading-2 mb-5">
+              Have a project in mind? <br className="hidden sm:block" />
+              <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent font-medium">
+                Let&apos;s build it together.
+              </span>
             </motion.h2>
 
             <motion.p
@@ -99,22 +97,30 @@ export function CtaSection() {
               className="text-muted-foreground body-lg max-w-2xl mx-auto mb-10 leading-relaxed"
             >
               Whether you need a stunning landing page, a complex web
-              application, or a creative partner for your next big idea — I&apos;m
-              here to help bring your vision to life.
+              application, or a creative partner for your next big idea —
+              I&apos;m here to help bring your vision to life.
             </motion.p>
 
             <motion.div
               variants={itemVariants}
               className="flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}>
+              <motion.div
+                whileHover={{ scale: 1.03, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+              >
                 <ShinyButton
                   href="https://zalo.me/12345"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold"
                 >
-                  <Image src="/icon-zalo.svg" alt="Zalo" width={22} height={22} />
+                  <Image
+                    src="/icon-zalo.svg"
+                    alt="Zalo"
+                    width={22}
+                    height={22}
+                  />
                   Connect Zalo
                 </ShinyButton>
               </motion.div>
