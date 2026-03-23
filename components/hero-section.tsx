@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState, useCallback } from "react";
-import { GradientText } from "@/components/gradient-text";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { SparklesText } from "@/components/ui/sparkles-text";
 
 const titles = [
   "Frontend Developer",
@@ -74,10 +74,56 @@ const itemVariants = {
 };
 
 const stats = [
-  { value: "5+", label: "Years Experience" },
-  { value: "30+", label: "Projects Delivered" },
-  { value: "10+", label: "Technologies" },
+  { end: 5, suffix: "+", label: "Years Experience" },
+  { end: 30, suffix: "+", label: "Projects Delivered" },
+  { end: 10, suffix: "+", label: "Technologies" },
 ];
+
+function useCountUp(end: number, duration = 1800) {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setStarted(true); },
+      { threshold: 0.5 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!started) return;
+    let startTime: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(eased * end));
+      if (progress < 1) requestAnimationFrame(step);
+      else setCount(end);
+    };
+    const raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [started, end, duration]);
+
+  return { count, ref };
+}
+
+function CountUpStat({ end, suffix, label }: { readonly end: number; readonly suffix: string; readonly label: string }) {
+  const { count, ref } = useCountUp(end);
+  return (
+    <div ref={ref} className="text-center">
+      <div className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent tabular-nums">
+        {count}{suffix}
+      </div>
+      <div className="text-xs sm:text-sm text-muted-foreground mt-1">{label}</div>
+    </div>
+  );
+}
 
 export function HeroSection() {
   const typedText = useTypingEffect(titles);
@@ -108,9 +154,13 @@ export function HeroSection() {
           className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.2] mb-6"
         >
           <span className="block">Hi, I&apos;m</span>
-          <GradientText className="block text-6xl sm:text-7xl md:text-8xl lg:text-9xl">
+          <SparklesText
+            className="block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
+            sparklesCount={12}
+            colors={{ first: "#818cf8", second: "#a855f7" }}
+          >
             Cris Nguyen
-          </GradientText>
+          </SparklesText>
         </motion.h1>
 
         <motion.div
@@ -143,15 +193,8 @@ export function HeroSection() {
           variants={itemVariants}
           className="flex items-center justify-center gap-8 sm:gap-12"
         >
-          {stats.map(({ value, label }) => (
-            <div key={label} className="text-center">
-              <div className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                {value}
-              </div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1">
-                {label}
-              </div>
-            </div>
+          {stats.map(({ end, suffix, label }) => (
+            <CountUpStat key={label} end={end} suffix={suffix} label={label} />
           ))}
         </motion.div>
       </motion.div>

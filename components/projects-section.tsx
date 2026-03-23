@@ -187,7 +187,7 @@ export function ProjectsSection() {
 
   return (
     <>
-      <section id="projects" className="relative py-7 sm:py-10 px-6">
+      <section id="projects" className="relative py-24 sm:py-32 lg:py-48 px-6">
         <div className="max-w-6xl mx-auto">
           <motion.div
             className="text-center mb-16"

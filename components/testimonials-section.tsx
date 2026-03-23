@@ -223,7 +223,7 @@ export function TestimonialsSection() {
   return (
     <section
       id="testimonials"
-      className="relative py-7 sm:py-10 overflow-hidden"
+      className="relative py-24 sm:py-32 lg:py-48 overflow-hidden"
     >
       <div className="max-w-6xl mx-auto px-6 mb-16">
         <motion.div

@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, Mail, MessageSquare } from "lucide-react";
+import Image from "next/image";
+import { Sparkles, MessageSquare } from "lucide-react";
 import { GradientText } from "@/components/gradient-text";
+import { ShinyButton } from "@/components/ui/shiny-button";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -41,7 +43,7 @@ const floatingVariants = {
 
 export function CtaSection() {
   return (
-    <section id="contact" className="relative py-7 sm:py-10 overflow-hidden">
+    <section id="contact" className="relative py-24 sm:py-32 lg:py-48 overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/3 left-1/6 w-md h-112 bg-indigo-500/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/6 w-lg h-128 bg-purple-500/5 rounded-full blur-3xl" />
@@ -105,24 +107,17 @@ export function CtaSection() {
               variants={itemVariants}
               className="flex flex-col sm:flex-row items-center justify-center gap-4"
             >
-              <motion.a
-                href="mailto:hello@crisne.dev"
-                className="group relative inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl bg-linear-to-r from-indigo-600 to-purple-600 text-white font-semibold text-base shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-shadow duration-300 overflow-hidden"
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-              >
-                <span className="absolute inset-0 bg-linear-to-r from-indigo-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                <Mail className="w-5 h-5 relative z-10" />
-                <span className="relative z-10">Get in Touch</span>
-                <motion.span
-                  className="relative z-10"
-                  initial={{ x: 0 }}
-                  whileHover={{ x: 4 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+              <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}>
+                <ShinyButton
+                  href="https://zalo.me/12345"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold"
                 >
-                  <ArrowRight className="w-5 h-5" />
-                </motion.span>
-              </motion.a>
+                  <Image src="/icon-zalo.svg" alt="Zalo" width={22} height={22} />
+                  Connect Zalo
+                </ShinyButton>
+              </motion.div>
 
               <motion.a
                 href="https://github.com/crisne"

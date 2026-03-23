@@ -9,6 +9,7 @@ import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useScrollSpy } from "@/hooks/use-scroll-spy";
+import { SpinningText } from "@/components/ui/spinning-text";
 
 const navLinks = [
   { label: "Skills", href: "#skills" },
@@ -137,17 +138,26 @@ export function Navbar() {
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       >
         <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <motion.a
-            href="#"
-            className="text-xl font-bold tracking-tight"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <span className="bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
-              Cris
-            </span>
-            <span className="text-foreground">.dev</span>
-          </motion.a>
+          <div className="flex items-center gap-3">
+            <motion.a
+              href="#"
+              className="text-xl font-bold tracking-tight"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <span className="bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+                Cris
+              </span>
+              <span className="text-foreground">.dev</span>
+            </motion.a>
+            <SpinningText
+              duration={14}
+              radius={0.75}
+              className="text-[0.35rem] text-muted-foreground/40 hidden sm:inline-flex shrink-0"
+            >
+              {"learnmore•earnmore•growmore•"}
+            </SpinningText>
+          </div>
 
           {/* Desktop nav */}
           <div

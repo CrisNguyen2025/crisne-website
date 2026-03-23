@@ -27,13 +27,12 @@ const overlayVariants = {
 };
 
 const modalVariants = {
-  hidden: { opacity: 0, scale: 0.92, y: 30 },
+  hidden: { opacity: 0, y: "4%" },
   visible: {
     opacity: 1,
-    scale: 1,
     y: 0,
     transition: {
-      duration: 0.45,
+      duration: 0.4,
       ease: [0.16, 1, 0.3, 1] as [number, number, number, number],
       staggerChildren: 0.08,
       delayChildren: 0.15,
@@ -41,8 +40,7 @@ const modalVariants = {
   },
   exit: {
     opacity: 0,
-    scale: 0.95,
-    y: 20,
+    y: "4%",
     transition: {
       duration: 0.25,
       ease: [0.4, 0, 1, 1] as [number, number, number, number],
@@ -100,7 +98,7 @@ function CoverCarousel({
   if (!hasImages) {
     return (
       <div
-        className="relative aspect-video shrink-0 overflow-hidden rounded-t-3xl"
+        className="relative aspect-video shrink-0 overflow-hidden sm:rounded-t-3xl"
         style={{
           background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
         }}
@@ -125,7 +123,7 @@ function CoverCarousel({
   }
 
   return (
-    <div className="relative shrink-0 overflow-hidden rounded-t-3xl">
+    <div className="relative shrink-0 overflow-hidden sm:rounded-t-3xl">
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex">
           {images.map((src) => (
@@ -215,30 +213,32 @@ export function ProjectDetailModal({
     <AnimatePresence>
       {isOpen && project && (
         <motion.div
-          className="fixed inset-0 z-100 flex items-center justify-center p-4 sm:p-6"
-          variants={overlayVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-        >
-          <motion.div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={onClose}
-          />
-
-          <motion.div
-            className={cn(
-              "relative z-10 w-full max-w-3xl max-h-[85vh] flex flex-col",
-              "rounded-3xl border border-border/50",
-              "bg-card/95 backdrop-blur-2xl",
-              "shadow-2xl shadow-black/20 dark:shadow-black/50",
-            )}
-            variants={modalVariants}
+            className="fixed inset-0 z-100 flex items-stretch justify-center"
+            variants={overlayVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
-            onClick={(e) => e.stopPropagation()}
           >
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={onClose}
+            />
+
+            <motion.div
+              className={cn(
+                "relative z-10 w-full flex flex-col",
+                "sm:m-4 sm:rounded-3xl lg:m-8 lg:max-w-4xl lg:mx-auto lg:my-8",
+                "border-0 sm:border sm:border-border/50",
+                "bg-card/98 backdrop-blur-2xl",
+                "shadow-none sm:shadow-2xl sm:shadow-black/20 dark:sm:shadow-black/50",
+                "overflow-hidden",
+              )}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+            >
             <div className="relative">
               <CoverCarousel
                 images={project.images}
@@ -257,7 +257,7 @@ export function ProjectDetailModal({
               </motion.button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:p-8">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-8 pb-8 sm:pb-8">
               <motion.div variants={contentVariants}>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span
@@ -358,8 +358,8 @@ export function ProjectDetailModal({
                 )}
               </motion.div>
             </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
       )}
     </AnimatePresence>
   );
