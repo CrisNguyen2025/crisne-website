@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { ProjectCard, type ProjectData } from "@/components/project-card";
 import { ProjectDetailModal } from "@/components/project-detail-modal";
+import { GradientText } from "@/components/gradient-text";
 
 const projects: ProjectData[] = [
   {
@@ -187,27 +188,28 @@ export function ProjectsSection() {
 
   return (
     <>
-      <section id="projects" className="relative py-24 sm:py-32 lg:py-48 px-6">
-        <div className="max-w-6xl mx-auto">
+      <section id="projects" className="relative section-padding">
+        <div className="section-container">
           <motion.div
-            className="text-center mb-16"
+            className="text-center section-header-gap"
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           >
             <motion.span
-              className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+              className="inline-block section-label mb-4"
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
             >
               Featured Work
             </motion.span>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
-              Projects & Creations
+            <h2 className="heading-2 mb-4">
+              Projects &{" "}
+              <GradientText>Creations</GradientText>
             </h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
               A selection of projects I&apos;ve worked on. Each one represents a
               unique challenge and a chance to grow.
             </p>

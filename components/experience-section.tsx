@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Briefcase, MapPin, Calendar, ExternalLink, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GradientText } from "@/components/gradient-text";
 
 interface Experience {
   id: string;
@@ -339,7 +340,7 @@ function ExperienceCard({
 
 export function ExperienceSection() {
   return (
-    <section id="experience" className="relative py-24 sm:py-32 lg:py-48 px-6 overflow-hidden">
+    <section id="experience" className="relative section-padding overflow-hidden">
       <div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 rounded-full opacity-[0.03] pointer-events-none"
         style={{
@@ -347,16 +348,16 @@ export function ExperienceSection() {
         }}
       />
 
-      <div className="max-w-4xl mx-auto relative">
+      <div className="section-container-sm mx-auto relative">
         <motion.div
-          className="text-center mb-16 sm:mb-20"
+          className="text-center section-header-gap"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.span
-            className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+            className="inline-block section-label mb-4"
             initial={{ opacity: 0, y: 10 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -364,13 +365,11 @@ export function ExperienceSection() {
           >
             Career Journey
           </motion.span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
+          <h2 className="heading-2 mb-4">
             Work{" "}
-            <span className="bg-linear-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-              Experience
-            </span>
+            <GradientText>Experience</GradientText>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             My professional journey as a frontend developer.
             Growing with each role, one project at a time.
           </p>

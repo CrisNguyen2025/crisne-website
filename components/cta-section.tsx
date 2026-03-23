@@ -43,7 +43,7 @@ const floatingVariants = {
 
 export function CtaSection() {
   return (
-    <section id="contact" className="relative py-24 sm:py-32 lg:py-48 overflow-hidden">
+    <section id="contact" className="relative section-padding overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/3 left-1/6 w-md h-112 bg-indigo-500/5 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/6 w-lg h-128 bg-purple-500/5 rounded-full blur-3xl" />
@@ -80,14 +80,14 @@ export function CtaSection() {
           <div className="relative z-10 text-center">
             <motion.span
               variants={itemVariants}
-              className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+              className="inline-block section-label mb-4"
             >
               Let&apos;s Connect
             </motion.span>
 
             <motion.h2
               variants={itemVariants}
-              className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-5"
+              className="heading-2 mb-5"
             >
               Have a project in mind?{" "}
               <br className="hidden sm:block" />
@@ -96,7 +96,7 @@ export function CtaSection() {
 
             <motion.p
               variants={itemVariants}
-              className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto mb-10 leading-relaxed"
+              className="text-muted-foreground body-lg max-w-2xl mx-auto mb-10 leading-relaxed"
             >
               Whether you need a stunning landing page, a complex web
               application, or a creative partner for your next big idea — I&apos;m

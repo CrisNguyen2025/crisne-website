@@ -223,9 +223,9 @@ export function TestimonialsSection() {
   return (
     <section
       id="testimonials"
-      className="relative py-24 sm:py-32 lg:py-48 overflow-hidden"
+      className="relative section-padding overflow-hidden"
     >
-      <div className="max-w-6xl mx-auto px-6 mb-16">
+      <div className="section-container px-6 mb-16">
         <motion.div
           className="text-center"
           initial={{ opacity: 0, y: 30 }}
@@ -234,17 +234,17 @@ export function TestimonialsSection() {
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.span
-            className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+            className="inline-block section-label mb-4"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
             What People Say
           </motion.span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
+          <h2 className="heading-2 mb-4">
             <GradientText>Testimonials</GradientText>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             Real feedback from clients and colleagues I&apos;ve had the pleasure
             of working with.
           </p>

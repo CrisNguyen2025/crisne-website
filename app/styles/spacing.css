@@ -1,0 +1,33 @@
+@layer components {
+  .section-padding {
+    @apply py-24 px-6 sm:py-32 lg:py-48;
+  }
+
+  .section-padding-sm {
+    @apply py-16 px-6 sm:py-20 lg:py-28;
+  }
+
+  .section-padding-lg {
+    @apply py-32 px-6 sm:py-40 lg:py-56;
+  }
+
+  .section-container {
+    @apply max-w-6xl mx-auto;
+  }
+
+  .section-container-sm {
+    @apply max-w-4xl mx-auto;
+  }
+
+  .section-container-lg {
+    @apply max-w-7xl mx-auto;
+  }
+
+  .section-gap {
+    @apply space-y-16 sm:space-y-20 lg:space-y-28;
+  }
+
+  .section-header-gap {
+    @apply mb-12 sm:mb-16 lg:mb-20;
+  }
+}

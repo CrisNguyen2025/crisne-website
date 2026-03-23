@@ -88,7 +88,9 @@ function useCountUp(end: number, duration = 1800) {
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setStarted(true); },
+      ([entry]) => {
+        if (entry.isIntersecting) setStarted(true);
+      },
       { threshold: 0.5 },
     );
     observer.observe(el);
@@ -113,14 +115,25 @@ function useCountUp(end: number, duration = 1800) {
   return { count, ref };
 }
 
-function CountUpStat({ end, suffix, label }: { readonly end: number; readonly suffix: string; readonly label: string }) {
+function CountUpStat({
+  end,
+  suffix,
+  label,
+}: {
+  readonly end: number;
+  readonly suffix: string;
+  readonly label: string;
+}) {
   const { count, ref } = useCountUp(end);
   return (
     <div ref={ref} className="text-center">
       <div className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent tabular-nums">
-        {count}{suffix}
+        {count}
+        {suffix}
       </div>
-      <div className="text-xs sm:text-sm text-muted-foreground mt-1">{label}</div>
+      <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+        {label}
+      </div>
     </div>
   );
 }

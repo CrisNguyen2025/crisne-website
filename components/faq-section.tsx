@@ -156,7 +156,7 @@ export function FaqSection() {
   };
 
   return (
-    <section id="faq" className="relative py-24 sm:py-32 lg:py-48 overflow-hidden">
+    <section id="faq" className="relative section-padding overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/3 rounded-full blur-3xl" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/3 rounded-full blur-3xl" />
@@ -164,24 +164,24 @@ export function FaqSection() {
 
       <div className="max-w-3xl mx-auto px-6 relative z-10">
         <motion.div
-          className="text-center mb-14"
+          className="text-center section-header-gap"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.span
-            className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+            className="inline-block section-label mb-4"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
             Common Questions
           </motion.span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
+          <h2 className="heading-2 mb-4">
             <GradientText>FAQ</GradientText>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             Got questions? Here are some answers to the most common ones
             I&apos;ve received.
           </p>

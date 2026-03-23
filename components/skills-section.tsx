@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { SkillCard, type SkillData } from "@/components/skill-card";
+import { GradientText } from "@/components/gradient-text";
 
 const skills: SkillData[] = [
   {
@@ -107,27 +108,28 @@ const sectionVariants = {
 
 export function SkillsSection() {
   return (
-    <section id="skills" className="relative py-24 sm:py-32 lg:py-48 px-6">
-      <div className="max-w-6xl mx-auto">
+    <section id="skills" className="relative section-padding">
+      <div className="section-container">
         <motion.div
-          className="text-center mb-16"
+          className="text-center section-header-gap"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.span
-            className="inline-block text-sm font-mono text-muted-foreground tracking-widest uppercase mb-4"
+            className="inline-block section-label mb-4"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
           >
             What I Work With
           </motion.span>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
-            Skills & Technologies
+          <h2 className="heading-2 mb-4">
+            Skills &{" "}
+            <GradientText>Technologies</GradientText>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
             My technical toolkit for building modern web applications.
             Always learning, always improving.
           </p>
