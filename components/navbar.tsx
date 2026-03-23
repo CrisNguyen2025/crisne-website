@@ -1,15 +1,11 @@
 "use client";
 
-import {
-  motion,
-  AnimatePresence,
-} from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
 import { Menu, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useScrollSpy } from "@/hooks/use-scroll-spy";
-import { SpinningText } from "@/components/ui/spinning-text";
 
 const navLinks = [
   { label: "Skills", href: "#skills" },
@@ -76,6 +72,7 @@ export function Navbar() {
   useEffect(() => {
     const nav = navRef.current;
     if (!nav || !activeSection) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIndicatorStyle(null);
       return;
     }
@@ -150,13 +147,6 @@ export function Navbar() {
               </span>
               <span className="text-foreground">.dev</span>
             </motion.a>
-            <SpinningText
-              duration={14}
-              radius={0.75}
-              className="text-[0.35rem] text-muted-foreground/40 hidden sm:inline-flex shrink-0"
-            >
-              {"learnmore•earnmore•growmore•"}
-            </SpinningText>
           </div>
 
           {/* Desktop nav */}

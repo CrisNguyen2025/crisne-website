@@ -1,14 +1,14 @@
 @layer components {
   .section-padding {
-    @apply py-24 px-6 sm:py-32 lg:py-48;
+    @apply py-16 px-6 sm:py-20 lg:py-24;
   }
 
   .section-padding-sm {
-    @apply py-16 px-6 sm:py-20 lg:py-28;
+    @apply py-10 px-6 sm:py-12 lg:py-16;
   }
 
   .section-padding-lg {
-    @apply py-32 px-6 sm:py-40 lg:py-56;
+    @apply py-20 px-6 sm:py-24 lg:py-32;
   }
 
   .section-container {
@@ -24,10 +24,10 @@
   }
 
   .section-gap {
-    @apply space-y-16 sm:space-y-20 lg:space-y-28;
+    @apply space-y-10 sm:space-y-12 lg:space-y-16;
   }
 
   .section-header-gap {
-    @apply mb-12 sm:mb-16 lg:mb-20;
+    @apply mb-8 sm:mb-10 lg:mb-12;
   }
 }
