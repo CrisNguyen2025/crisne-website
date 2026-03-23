@@ -20,6 +20,10 @@ const jetbrainsMono = JetBrains_Mono({
 const SITE_URL = "https://crisne.blog";
 
 export const metadata: Metadata = {
+  verification: {
+    google:
+      "google-site-verification=OMKBg-dLxNUwnKB8y8snJzMlTOr6pr5SrO6zosQ53xM",
+  },
   metadataBase: new URL(SITE_URL),
   title: {
     default: "Cris Nguyen — Frontend Developer",
@@ -54,12 +58,8 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [
-      { url: "/icon.png", type: "image/png" },
-    ],
-    apple: [
-      { url: "/apple-icon.png", type: "image/png" },
-    ],
+    icon: [{ url: "/icon.png", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
   },
   openGraph: {
     type: "website",
@@ -105,11 +105,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <JsonLd />
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-        >
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
       </body>
