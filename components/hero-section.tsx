@@ -75,7 +75,7 @@ const itemVariants = {
 
 const stats = [
   { end: 5, suffix: "+", label: "Years Experience" },
-  { end: 30, suffix: "+", label: "Projects Delivered" },
+  { end: 20, suffix: "+", label: "Projects Delivered" },
   { end: 10, suffix: "+", label: "Technologies" },
 ];
 

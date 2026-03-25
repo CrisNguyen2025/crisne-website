@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useEffect, useCallback, useState, useMemo } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import type { ProjectData } from "@/components/project-card";
+import { Lens } from "@/components/ui/lens";
 import { cn } from "@/lib/utils";
 
 interface ProjectDetailModalProps {
@@ -134,14 +135,21 @@ function CoverCarousel({
                   background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`,
                 }}
               >
-                <Image
-                  src={src}
-                  alt={`Project slide`}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 768px"
-                  unoptimized
-                />
+                <Lens
+                  zoomFactor={1.8}
+                  lensSize={180}
+                  ariaLabel="Zoom into project image"
+                  className="rounded-none h-full"
+                >
+                  <Image
+                    src={src}
+                    alt={`Project slide`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 768px"
+                    unoptimized
+                  />
+                </Lens>
               </div>
             </div>
           ))}
