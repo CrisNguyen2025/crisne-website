@@ -1,19 +1,18 @@
 # crisne-website — Project Memory
-
-> Auto-synced | 75 observations
+# Auto-synced | 75 observations
 
 **Stack:** JavaScript/TypeScript · Next.js + React + Tailwind
 
-## 🛡️ GLOBAL SAFETY RULES
+# 🛡️ GLOBAL SAFETY RULES
 
 - **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.
 - **NEVER** delete untracked files or folders blindly. Always backup or stash before bulk edits.
 
-## 🧭 ACTIVE CONTEXT
+# 🧭 ACTIVE CONTEXT
 
 > Always read `.cursor/active-context.md` for exact instructions on the specific file you are currently editing. It updates dynamically.
 
-## 🔴 STOP — READ THESE FIRST
+# 🔴 CRITICAL — DO NOT IGNORE
 
 - **Don't mix Tailwind with inline styles** — Don't mix Tailwind with inline styles
 - **Don't import server-only code in client components** — Don't import server-only code in client components
@@ -21,7 +20,7 @@
 - **Don't use useEffect for data fetching — use server actions or loader** — Don't use useEffect for data fetching — use server actions or loader
 - **Clean up effects — return cleanup function from useEffect** — Clean up effects — return cleanup function from useEffect
 
-## 📐 Conventions
+# 📐 Conventions
 
 - Extract repeated class patterns into components
 - Use responsive prefixes consistently (sm:, md:, lg:, xl:)
@@ -32,7 +31,7 @@
 - Use Server Components by default — add "use client" only when needed
 - Use Suspense and Error Boundaries for async operations
 
-## ⚡ Available Tools (ON-DEMAND only)
+# ⚡ Available Tools (ON-DEMAND only)
 - `save(title, content, category)` — Save a note + auto-detect conflicts
 - `batch_save(items[])` — Save multiple notes in 1 call
 - `query(text)` — Search memory for architecture, past fixes, decisions

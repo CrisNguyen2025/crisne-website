@@ -1,0 +1,13 @@
+{
+  "project": {
+    "enabled": true,
+    "lastGenerated": "2026-03-25T15:24:10.607Z",
+    "observationCount": 75,
+    "skillCount": 0,
+    "domain": "project",
+    "triggerGlobs": [
+      "**/*"
+    ],
+    "description": "Project for crisne-website. 31 gotchas, 42 conventions, 1 fixes."
+  }
+}

@@ -1,3 +1,14 @@
+> **BrainSync Context Pumper** 🧠
+> Dynamically loaded for active file: `.gitignore` (Domain: **Generic Logic**)
+
+### 📐 Generic Logic Conventions & Fixes
+- **[what-changed] what-changed in .gitignore**: + AGENT.md
++ CLAUDE.md
++ .agent-mem/
++ 
+- **[problem-fix] problem-fix in .gitignore**: File updated (external): .gitignore
+
+Content summary (45 lines):
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -40,9 +51,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Auto-generated agent rules (personalized per developer)
-.brainsync/agent-rules.md
-
-AGENT.md
-CLAUDE.md
-.agent-mem/
+# Auto-generated ag
