@@ -86,7 +86,7 @@ function FaqAccordionItem({
         className={cn(
           "group rounded-2xl border transition-all duration-300 overflow-hidden",
           isOpen
-            ? "border-indigo-500/30 bg-indigo-500/3 shadow-[0_0_24px_-6px_rgba(99,102,241,0.12)]"
+            ? "border-steel/30 bg-steel/3 shadow-[0_0_24px_-6px_rgba(107,154,196,0.12)]"
             : "border-border/50 bg-background/60 backdrop-blur-md hover:border-border/80 hover:bg-muted/30",
         )}
       >
@@ -99,7 +99,7 @@ function FaqAccordionItem({
             className={cn(
               "flex items-center justify-center w-10 h-10 rounded-xl text-lg shrink-0 transition-all duration-300",
               isOpen
-                ? "bg-indigo-500/10 scale-110"
+                ? "bg-steel/10 scale-110"
                 : "bg-muted/60 group-hover:bg-muted",
             )}
           >
@@ -158,11 +158,11 @@ export function FaqSection() {
   return (
     <section id="faq" className="relative section-padding overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/3 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/3 rounded-full blur-3xl" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-steel/3 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-steel-light/3 rounded-full blur-3xl" />
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 relative z-10">
+      <div className="max-w-3xl mx-auto sm:px-6 relative z-10">
         <motion.div
           className="text-center section-header-gap"
           initial={{ opacity: 0, y: 30 }}
@@ -179,7 +179,7 @@ export function FaqSection() {
             Common Questions
           </motion.span>
           <h2 className="heading-2 mb-4">
-            <span className="heading-display-italic font-semibold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
               FAQ
             </span>
           </h2>
@@ -213,7 +213,7 @@ export function FaqSection() {
             Still have questions?{" "}
             <a
               href="mailto:hello@crisne.dev"
-              className="text-indigo-500 hover:text-indigo-400 font-medium underline underline-offset-4 decoration-indigo-500/30 hover:decoration-indigo-400/50 transition-colors"
+              className="text-steel hover:text-steel-light font-medium underline underline-offset-4 decoration-steel-light/30 hover:decoration-steel-light/50 transition-colors"
             >
               Send me an email
             </a>

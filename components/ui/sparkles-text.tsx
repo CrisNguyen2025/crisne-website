@@ -19,6 +19,7 @@ interface SparklesTextProps {
   readonly children: string;
   readonly className?: string;
   readonly sparklesCount?: number;
+  readonly delayMs?: number;
   readonly colors?: {
     readonly first: string;
     readonly second: string;
@@ -70,27 +71,32 @@ export function SparklesText({
   children,
   className,
   sparklesCount = 10,
+  delayMs = 0,
   colors = DEFAULT_COLORS,
 }: SparklesTextProps) {
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setSparkles(Array.from({ length: sparklesCount }, () => generateSparkle(colors)));
+    timeoutRef.current = setTimeout(() => {
+      setSparkles(Array.from({ length: sparklesCount }, () => generateSparkle(colors)));
 
-    intervalRef.current = setInterval(() => {
-      setSparkles(prev => {
-        const next = [...prev];
-        const idx = Math.floor(Math.random() * next.length);
-        next[idx] = generateSparkle(colors);
-        return next;
-      });
-    }, 700);
+      intervalRef.current = setInterval(() => {
+        setSparkles(prev => {
+          const next = [...prev];
+          const idx = Math.floor(Math.random() * next.length);
+          next[idx] = generateSparkle(colors);
+          return next;
+        });
+      }, 700);
+    }, delayMs);
 
     return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [sparklesCount, colors]);
+  }, [sparklesCount, colors, delayMs]);
 
   return (
     <span className={cn("relative inline-block", className)}>
@@ -108,7 +114,7 @@ export function SparklesText({
           </motion.span>
         ))}
       </AnimatePresence>
-      <span className="relative z-0 bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+      <span className="relative z-0 bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
         {children}
       </span>
     </span>

@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useCallback, useRef, useEffect } from "react";
 
 const COLORS = [
-  { id: 0, bg: "bg-indigo-500", glow: "#6366f1", label: "indigo" },
+  { id: 0, bg: "bg-steel", glow: "#6B9AC4", label: "steel" },
   { id: 1, bg: "bg-rose-500", glow: "#f43f5e", label: "rose" },
   { id: 2, bg: "bg-cyan-400", glow: "#22d3ee", label: "cyan" },
-  { id: 3, bg: "bg-amber-400", glow: "#fbbf24", label: "amber" },
+  { id: 3, bg: "bg-steel-light", glow: "#8BB5D9", label: "steel-light" },
 ] as const;
 
 const SEQUENCE_LENGTH = 4;

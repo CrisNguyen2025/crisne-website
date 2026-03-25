@@ -39,7 +39,11 @@ const cardVariants = {
   }),
 };
 
-export function ProjectCard({ project, index, onViewDetail }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  index,
+  onViewDetail,
+}: ProjectCardProps) {
   return (
     <motion.div
       custom={index}

@@ -142,7 +142,7 @@ export function Navbar() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <span className="bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+              <span className="bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
                 Cris
               </span>
               <span className="text-foreground">.dev</span>
@@ -182,7 +182,7 @@ export function Navbar() {
             })}
 
             <motion.span
-              className="absolute bottom-0.5 h-0.5 rounded-full bg-linear-to-r from-indigo-500 to-purple-500 pointer-events-none"
+              className="absolute bottom-0.5 h-0.5 rounded-full bg-linear-to-r from-steel to-steel-light pointer-events-none"
               animate={{
                 opacity: indicatorStyle ? 1 : 0,
                 scaleX: indicatorStyle ? 1 : 0.5,
@@ -269,7 +269,7 @@ export function Navbar() {
                         {active && (
                           <motion.span
                             key="mobile-bar"
-                            className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-linear-to-b from-indigo-500 to-purple-500"
+                            className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-linear-to-b from-steel to-steel-light"
                             initial={{ scaleY: 0, opacity: 0 }}
                             animate={{ scaleY: 1, opacity: 1 }}
                             exit={{ scaleY: 0, opacity: 0 }}
@@ -288,8 +288,8 @@ export function Navbar() {
                         )}
                         style={{
                           background: active
-                            ? "linear-gradient(135deg, #6366f1, #a855f7)"
-                            : `hsl(${220 + i * 30}, 80%, 60%)`,
+                            ? "linear-gradient(135deg, #6B9AC4, #8BB5D9)"
+                            : `hsl(${30 + i * 15}, 70%, 55%)`,
                         }}
                       />
                       {link.label}

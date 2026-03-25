@@ -47,8 +47,8 @@ const experiences: Experience[] = [
       "GraphQL",
       "Storybook",
     ],
-    color: "#818cf8",
-    gradient: ["#6366f1", "#a855f7"],
+    color: "#6B9AC4",
+    gradient: ["#4A7A9B", "#6B9AC4"],
     emoji: "🚀",
     companyUrl: "#",
   },
@@ -395,7 +395,7 @@ export function ExperienceSection() {
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 rounded-full opacity-[0.03] pointer-events-none"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.623 0.214 259.815), transparent 70%)",
+            "radial-gradient(circle, oklch(0.78 0.1 72), transparent 70%)",
         }}
       />
 
@@ -418,7 +418,7 @@ export function ExperienceSection() {
           </motion.span>
           <h2 className="heading-2 mb-4">
             Work{" "}
-            <span className="heading-display-italic font-semibold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
               Experience
             </span>
           </h2>

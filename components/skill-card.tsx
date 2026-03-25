@@ -53,7 +53,7 @@ export function SkillCard({ skill, index }: SkillCardProps) {
           mass: 0.8,
         }}
       >
-        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-out bg-linear-to-br from-indigo-500/6 via-transparent to-purple-500/6" />
+        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-out bg-linear-to-br from-steel/6 via-transparent to-steel-light/6" />
 
         <div
           className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 ease-out"

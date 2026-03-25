@@ -12,7 +12,7 @@ interface GradientTextProps {
 export function GradientText({
   children,
   className,
-  gradient = "from-indigo-500 via-purple-500 to-pink-500",
+  gradient = "from-steel via-steel-light to-steel",
 }: Readonly<GradientTextProps>) {
   return (
     <motion.span

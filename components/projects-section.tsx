@@ -16,7 +16,7 @@ const projects: ProjectData[] = [
     category: "Web App",
     year: "2025",
     emoji: "🚀",
-    gradient: ["#6366f1", "#a855f7"],
+    gradient: ["#4A7A9B", "#6B9AC4"],
     techStack: ["React", "Next.js", "TypeScript", "Tailwind CSS", "Prisma"],
     images: [
       "https://picsum.photos/seed/p1a/800/450",
@@ -144,7 +144,7 @@ const projects: ProjectData[] = [
     category: "Open Source",
     year: "2023",
     emoji: "🔧",
-    gradient: ["#8b5cf6", "#6366f1"],
+    gradient: ["#4A7A9B", "#3A6A8B"],
     techStack: ["TypeScript", "Node.js", "CLI", "npm"],
     images: [],
     highlights: [
@@ -204,7 +204,7 @@ export function ProjectsSection() {
             </motion.span>
             <h2 className="heading-2 mb-4">
               Projects &{" "}
-              <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text font-semibold text-transparent">
+              <span className="heading-display-italic bg-linear-to-r from-steel to-steel-light bg-clip-text font-semibold text-transparent">
                 Creations
               </span>
             </h2>

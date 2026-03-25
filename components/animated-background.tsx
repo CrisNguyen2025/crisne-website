@@ -35,7 +35,7 @@ export function AnimatedBackground() {
         className="absolute top-[-20%] right-[-10%] w-[40rem] h-[40rem] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.7 0.15 280 / 0.15), transparent 70%)",
+            "radial-gradient(circle, oklch(0.62 0.09 240 / 0.15), transparent 70%)",
         }}
         animate={{
           x: [0, 30, -20, 0],
@@ -52,7 +52,7 @@ export function AnimatedBackground() {
         className="absolute bottom-[-20%] left-[-10%] w-[35rem] h-[35rem] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.7 0.15 330 / 0.12), transparent 70%)",
+            "radial-gradient(circle, oklch(0.62 0.08 230 / 0.12), transparent 70%)",
         }}
         animate={{
           x: [0, -30, 40, 0],
@@ -69,7 +69,7 @@ export function AnimatedBackground() {
         className="absolute top-[40%] left-[30%] w-[25rem] h-[25rem] rounded-full"
         style={{
           background:
-            "radial-gradient(circle, oklch(0.7 0.12 200 / 0.08), transparent 70%)",
+            "radial-gradient(circle, oklch(0.62 0.06 245 / 0.08), transparent 70%)",
         }}
         animate={{
           x: [0, 50, -30, 0],

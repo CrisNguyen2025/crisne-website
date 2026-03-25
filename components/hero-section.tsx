@@ -127,7 +127,7 @@ function CountUpStat({
   const { count, ref } = useCountUp(end);
   return (
     <div ref={ref} className="text-center">
-      <div className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent tabular-nums">
+      <div className="text-2xl sm:text-3xl font-bold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent tabular-nums">
         {count}
         {suffix}
       </div>
@@ -155,8 +155,8 @@ export function HeroSection() {
             whileHover={{ scale: 1.05 }}
           >
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-steel-light opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-steel" />
             </span>
             {"Available for work"}
           </motion.div>
@@ -174,11 +174,21 @@ export function HeroSection() {
             Hi, I&apos;m
           </span>
           <SparklesText
-            className="block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
-            sparklesCount={12}
-            colors={{ first: "#818cf8", second: "#a855f7" }}
+            className="inline-block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
+            sparklesCount={6}
+            delayMs={0}
+            colors={{ first: "#6B9AC4", second: "#8BB5D9" }}
           >
-            Cris Nguyen
+            Cris
+          </SparklesText>
+          {" "}
+          <SparklesText
+            className="inline-block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
+            sparklesCount={6}
+            delayMs={350}
+            colors={{ first: "#6B9AC4", second: "#8BB5D9" }}
+          >
+            Nguyen
           </SparklesText>
         </motion.h1>
 

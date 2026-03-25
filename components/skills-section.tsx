@@ -190,7 +190,7 @@ const contentVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
   },
   exit: {
     opacity: 0,
@@ -207,7 +207,7 @@ const listItemVariants = {
     transition: {
       duration: 0.3,
       delay: i * 0.03,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as const,
     },
   }),
 };
@@ -236,7 +236,7 @@ export function SkillsSection() {
           </motion.span>
           <h2 className="heading-2 mb-4">
             Skills &{" "}
-            <span className="heading-display-italic font-semibold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
               Technologies
             </span>
           </h2>

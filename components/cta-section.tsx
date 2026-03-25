@@ -45,20 +45,20 @@ export function CtaSection() {
   return (
     <section id="contact" className="relative section-padding overflow-hidden">
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/6 w-md h-112 bg-indigo-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/6 w-lg h-128 bg-purple-500/5 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 bg-pink-500/3 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 left-1/6 w-md h-112 bg-steel/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/6 w-lg h-128 bg-steel-light/5 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-160 h-160 bg-steel/3 rounded-full blur-3xl" />
       </div>
 
       <motion.div
-        className="absolute top-16 right-[15%] hidden md:block text-indigo-500/20"
+        className="absolute top-16 right-[15%] hidden md:block text-steel/20"
         variants={floatingVariants}
         animate="animate"
       >
         <Sparkles className="w-8 h-8" />
       </motion.div>
       <motion.div
-        className="absolute bottom-20 left-[12%] hidden md:block text-purple-500/20"
+        className="absolute bottom-20 left-[12%] hidden md:block text-steel-light/20"
         variants={floatingVariants}
         animate="animate"
         style={{ animationDelay: "2s" }}
@@ -66,7 +66,7 @@ export function CtaSection() {
         <MessageSquare className="w-7 h-7" />
       </motion.div>
 
-      <div className="max-w-4xl mx-auto px-6 relative z-10">
+      <div className="max-w-4xl mx-auto sm:px-6 relative z-10">
         <motion.div
           className="relative rounded-3xl border border-border/50 bg-background/60 backdrop-blur-xl p-10 sm:p-14 md:p-16 overflow-hidden"
           variants={containerVariants}
@@ -74,8 +74,8 @@ export function CtaSection() {
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
         >
-          <div className="absolute inset-0 rounded-3xl bg-linear-to-br from-indigo-500/5 via-transparent to-purple-500/5 pointer-events-none" />
-          <div className="absolute -top-px left-8 right-8 h-px bg-linear-to-r from-transparent via-indigo-500/30 to-transparent" />
+          <div className="absolute inset-0 rounded-3xl bg-linear-to-br from-steel/5 via-transparent to-steel-light/5 pointer-events-none" />
+          <div className="absolute -top-px left-8 right-8 h-px bg-linear-to-r from-transparent via-steel/30 to-transparent" />
 
           <div className="relative z-10 text-center">
             <motion.span
@@ -87,7 +87,7 @@ export function CtaSection() {
 
             <motion.h2 variants={itemVariants} className="heading-2 mb-5">
               Have a project in mind? <br className="hidden sm:block" />
-              <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent font-medium">
+              <span className="heading-display-italic bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent font-medium">
                 Let&apos;s build it together.
               </span>
             </motion.h2>
@@ -160,7 +160,7 @@ export function CtaSection() {
               { value: "Free", label: "Initial Consultation" },
             ].map(({ value, label }) => (
               <div key={label} className="text-center">
-                <div className="text-lg sm:text-xl font-bold bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">
+                <div className="text-lg sm:text-xl font-bold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
                   {value}
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">

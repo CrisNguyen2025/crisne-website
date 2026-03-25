@@ -92,12 +92,12 @@ const testimonials: Testimonial[] = [
 ];
 
 const avatarGradients = [
-  "from-indigo-500 to-purple-500",
-  "from-purple-500 to-pink-500",
+  "from-steel to-steel-light",
+  "from-steel-dark to-steel",
   "from-blue-500 to-cyan-500",
   "from-emerald-500 to-teal-500",
-  "from-orange-500 to-amber-500",
-  "from-rose-500 to-pink-500",
+  "from-rose-500 to-orange-500",
+  "from-steel-light to-steel",
 ];
 
 interface TestimonialCardProps {
@@ -110,7 +110,7 @@ function TestimonialCard({ testimonial, gradientIndex }: TestimonialCardProps) {
     <div className="flex flex-col self-stretch shrink-0 w-72 sm:w-80">
       <motion.div
         className="group relative flex-1 flex flex-col p-6 rounded-2xl border border-border/50 bg-background/60 backdrop-blur-md cursor-default"
-        whileHover={{ y: -6, borderColor: "rgba(99,102,241,0.4)" }}
+        whileHover={{ y: -6, borderColor: "rgba(212,168,83,0.4)" }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         style={{ boxShadow: "0 2px 12px 0 rgba(0,0,0,0.06)" }}
       >
@@ -118,7 +118,7 @@ function TestimonialCard({ testimonial, gradientIndex }: TestimonialCardProps) {
           className="absolute inset-0 rounded-2xl opacity-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse at 30% 20%, rgba(99,102,241,0.07) 0%, transparent 70%)",
+              "radial-gradient(ellipse at 30% 20%, rgba(212,168,83,0.07) 0%, transparent 70%)",
           }}
           whileHover={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
@@ -132,7 +132,7 @@ function TestimonialCard({ testimonial, gradientIndex }: TestimonialCardProps) {
           {Array.from({ length: testimonial.rating }).map((_, i) => (
             <Star
               key={`star-${testimonial.id}-${i}`}
-              className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
+              className="w-3.5 h-3.5 fill-steel-light text-steel-light"
             />
           ))}
         </div>
@@ -155,7 +155,7 @@ function TestimonialCard({ testimonial, gradientIndex }: TestimonialCardProps) {
               <p className="text-sm font-semibold leading-snug">
                 {testimonial.name}
               </p>
-              <span className="text-[0.6rem] font-medium text-indigo-500/80 bg-indigo-500/8 border border-indigo-500/15 px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
+              <span className="text-[0.6rem] font-medium text-steel/80 bg-steel-light/8 border border-steel-light/15 px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
                 {testimonial.relation}
               </span>
             </div>
@@ -224,7 +224,7 @@ export function TestimonialsSection() {
       id="testimonials"
       className="relative section-padding overflow-hidden"
     >
-      <div className="section-container px-6 mb-16">
+      <div className="section-container sm:px-6 mb-16">
         <motion.div
           className="text-center"
           initial={{ opacity: 0, y: 30 }}
@@ -241,7 +241,7 @@ export function TestimonialsSection() {
             What People Say
           </motion.span>
           <h2 className="heading-2 mb-4">
-            <span className="heading-display-italic bg-linear-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent font-semibold">
+            <span className="heading-display-italic bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent font-semibold">
               Testimonials
             </span>
           </h2>

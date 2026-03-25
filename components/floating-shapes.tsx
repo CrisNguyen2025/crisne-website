@@ -10,7 +10,7 @@ const shapes = [
     y: "20%",
     duration: 15,
     delay: 0,
-    color: "oklch(0.7 0.15 280 / 0.25)",
+    color: "oklch(0.62 0.09 240 / 0.25)",
   },
   {
     type: "square",
@@ -19,7 +19,7 @@ const shapes = [
     y: "15%",
     duration: 18,
     delay: 2,
-    color: "oklch(0.7 0.12 200 / 0.2)",
+    color: "oklch(0.62 0.06 245 / 0.2)",
   },
   {
     type: "triangle",
@@ -28,7 +28,7 @@ const shapes = [
     y: "70%",
     duration: 20,
     delay: 4,
-    color: "oklch(0.7 0.15 330 / 0.2)",
+    color: "oklch(0.62 0.08 230 / 0.2)",
   },
   {
     type: "circle",
@@ -37,7 +37,7 @@ const shapes = [
     y: "80%",
     duration: 12,
     delay: 1,
-    color: "oklch(0.8 0.1 150 / 0.2)",
+    color: "oklch(0.70 0.06 235 / 0.2)",
   },
   {
     type: "square",
@@ -46,7 +46,7 @@ const shapes = [
     y: "10%",
     duration: 22,
     delay: 3,
-    color: "oklch(0.7 0.1 50 / 0.15)",
+    color: "oklch(0.62 0.06 250 / 0.15)",
   },
   {
     type: "circle",
@@ -55,7 +55,7 @@ const shapes = [
     y: "50%",
     duration: 16,
     delay: 5,
-    color: "oklch(0.7 0.15 280 / 0.18)",
+    color: "oklch(0.62 0.09 240 / 0.18)",
   },
   {
     type: "triangle",
@@ -64,7 +64,7 @@ const shapes = [
     y: "45%",
     duration: 14,
     delay: 2,
-    color: "oklch(0.8 0.12 200 / 0.15)",
+    color: "oklch(0.72 0.08 42 / 0.15)",
   },
   {
     type: "square",
@@ -73,7 +73,7 @@ const shapes = [
     y: "55%",
     duration: 19,
     delay: 6,
-    color: "oklch(0.7 0.15 330 / 0.12)",
+    color: "oklch(0.62 0.08 230 / 0.12)",
   },
 ];
 
