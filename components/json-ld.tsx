@@ -1,5 +1,3 @@
-import Script from "next/script";
-
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "Person",
@@ -13,11 +11,10 @@ const structuredData = {
 
 export function JsonLd() {
   return (
-    <Script
-      id="json-ld-person"
+    <script
       type="application/ld+json"
+      suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      strategy="afterInteractive"
     />
   );
 }

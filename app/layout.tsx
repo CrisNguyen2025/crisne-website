@@ -28,6 +28,8 @@ const fraunces = Fraunces({
 
 const SITE_URL = "https://crisne.blog";
 
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme")||"dark";var r=t==="system"?window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":t;document.documentElement.classList.add(r);document.documentElement.style.colorScheme=r}catch(e){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark"}})()`;
+
 export const metadata: Metadata = {
   verification: {
     google:
@@ -112,9 +114,15 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+          suppressHydrationWarning
+        />
+      </head>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <JsonLd />
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
       </body>
