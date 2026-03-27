@@ -10,6 +10,7 @@ import { AnimatedBackground } from "@/components/animated-background";
 import { FloatingShapes } from "@/components/floating-shapes";
 import { Footer } from "@/components/footer";
 import { UnlockGate } from "@/components/unlock-gate";
+import { TrackedSection } from "@/components/tracked-section";
 
 export default function Home() {
   return (
@@ -18,17 +19,31 @@ export default function Home() {
       <FloatingShapes />
       <Navbar />
       <main className="flex-1">
-        <HeroSection />
-        <SkillsSection />
+        <TrackedSection sectionId="hero">
+          <HeroSection />
+        </TrackedSection>
+        <TrackedSection sectionId="skills">
+          <SkillsSection />
+        </TrackedSection>
         <UnlockGate sectionId="experience">
-          <ExperienceSection />
+          <TrackedSection sectionId="experience">
+            <ExperienceSection />
+          </TrackedSection>
         </UnlockGate>
         <UnlockGate sectionId="projects">
-          <ProjectsSection />
+          <TrackedSection sectionId="projects">
+            <ProjectsSection />
+          </TrackedSection>
         </UnlockGate>
-        <TestimonialsSection />
-        <CtaSection />
-        <FaqSection />
+        <TrackedSection sectionId="testimonials">
+          <TestimonialsSection />
+        </TrackedSection>
+        <TrackedSection sectionId="cta">
+          <CtaSection />
+        </TrackedSection>
+        <TrackedSection sectionId="faq">
+          <FaqSection />
+        </TrackedSection>
       </main>
       <Footer />
     </>

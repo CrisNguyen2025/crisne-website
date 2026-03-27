@@ -4,9 +4,8 @@ import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { JsonLd } from "@/components/json-ld";
+import { GA_ID } from "@/lib/gtag";
 import "./styles/globals.css";
-
-const GA_ID = "G-XYFE5H3634";
 
 const inter = Inter({
   variable: "--font-sans",
