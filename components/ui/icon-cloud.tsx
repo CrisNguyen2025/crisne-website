@@ -22,7 +22,7 @@ interface IconCloudProps {
 
 function getSpherePositions(count: number): { x: number; y: number; z: number }[] {
   const positions: { x: number; y: number; z: number }[] = [];
-  const phi = Math.acos(-1 + (2 * 0) / count);
+
   const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
   for (let i = 0; i < count; i++) {
@@ -34,7 +34,7 @@ function getSpherePositions(count: number): { x: number; y: number; z: number }[
       z: Math.cos(phiAngle),
     });
   }
-  void phi;
+
   return positions;
 }
 
@@ -54,11 +54,11 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
     items.forEach(item => {
       const scale = (item.z + r) / (2 * r);
       const opacity = scale * 0.7 + 0.3;
-      const x = item.x * (r / r) + r;
-      const y = item.y * (r / r) + r;
+      const x = item.x + r;
+      const y = item.y + r;
       item.el.style.transform = `translate3d(${x - item.el.offsetWidth / 2}px, ${y - item.el.offsetHeight / 2}px, 0) scale(${0.65 + scale * 0.55})`;
       item.el.style.opacity = String(opacity.toFixed(2));
-      item.el.style.zIndex = String(Math.round(scale * 100));
+      item.el.style.zIndex = String(Math.round(scale * 10));
       item.el.style.filter = scale > 0.6 ? "none" : `blur(${(0.6 - scale) * 2}px)`;
     });
   }, []);
@@ -147,7 +147,7 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
     >
       {icons.map((icon, i) => (
         <div
-          key={i}
+          key={`cloud-item-${i}`}
           data-cloud-item=""
           className="absolute top-0 left-0 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-card/70 backdrop-blur-sm border border-border/40 transition-none shadow-sm hover:border-border/70 hover:bg-card/90 cursor-default"
           style={{ willChange: "transform, opacity" }}

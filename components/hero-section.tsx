@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { Download } from "lucide-react";
 import { SparklesText } from "@/components/ui/sparkles-text";
 
 const titles = [
@@ -208,7 +209,7 @@ export function HeroSection() {
 
         <motion.p
           variants={itemVariants}
-          className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
+          className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed"
         >
           I craft modern, performant web experiences with{" "}
           <span className="text-foreground font-medium">React</span>,{" "}
@@ -217,6 +218,19 @@ export function HeroSection() {
           Passionate about clean code, beautiful interfaces, and seamless user
           experiences.
         </motion.p>
+
+        <motion.div variants={itemVariants} className="flex justify-center mb-12">
+          <motion.a
+            href="/cris-nguyen-cv.pdf"
+            download="Cris_Nguyen_CV.pdf"
+            className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-linear-to-r from-steel to-steel-light text-white font-medium text-sm shadow-lg shadow-steel/25 hover:shadow-xl hover:shadow-steel/30 transition-shadow duration-300"
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <Download className="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" />
+            Download CV
+          </motion.a>
+        </motion.div>
 
         <motion.div
           variants={itemVariants}
