@@ -128,6 +128,23 @@ export default function RootLayout({
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>
         <Script
+          id="Cookiebot"
+          src="https://consent.cookiebot.com/uc.js"
+          data-cbid="9b27ca4c-818b-4742-941f-4734fe840663"
+          strategy="beforeInteractive"
+        />
+        <Script id="gtag-consent-default" strategy="beforeInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('consent', 'default', {
+              ad_storage: 'denied',
+              ad_user_data: 'denied',
+              ad_personalization: 'denied',
+              analytics_storage: 'denied',
+              wait_for_update: 500
+            });`}
+        </Script>
+        <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
           strategy="afterInteractive"
         />
