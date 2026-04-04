@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { trackSectionView } from "@/lib/gtag";
+import { trackSectionView } from "@/lib/analytics";
 
 export function useTrackSectionView(sectionId: string) {
   const tracked = useRef(false);

@@ -9,11 +9,15 @@ export function useUnlock() {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "true") {
-      setIsUnlocked(true);
-    }
-    setIsHydrated(true);
+    // Use requestAnimationFrame to avoid synchronous setState in effect
+    const timer = requestAnimationFrame(() => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored === "true") {
+        setIsUnlocked(true);
+      }
+      setIsHydrated(true);
+    });
+    return () => cancelAnimationFrame(timer);
   }, []);
 
   const unlock = () => {

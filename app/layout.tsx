@@ -4,7 +4,14 @@ import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { JsonLd } from "@/components/json-ld";
-import { GA_ID } from "@/lib/gtag";
+import { WebVitals } from "@/components/web-vitals";
+import { SkipLink } from "@/components/skip-link";
+import {
+  GoogleTagManager,
+  ScrollTracker,
+  PageTimer,
+} from "@/components/analytics";
+import { GA_ID } from "@/lib/analytics";
 import "./styles/globals.css";
 
 const inter = Inter({
@@ -117,13 +124,24 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        {/* Performance: Preconnect to external domains */}
+        <link rel="preconnect" href="https://www.googletagmanager.com" />
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+        <link rel="preconnect" href="https://consent.cookiebot.com" />
+        <link rel="dns-prefetch" href="https://consent.cookiebot.com" />
+
         <script
           dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
           suppressHydrationWarning
         />
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
-        <JsonLd />
+        <SkipLink />
+        <WebVitals />
+        <JsonLd schemas={["website", "person", "professionalService"]} />
+        <ScrollTracker />
+        <PageTimer />
+        <GoogleTagManager />
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>

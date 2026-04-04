@@ -20,7 +20,9 @@ interface IconCloudProps {
   readonly speed?: number;
 }
 
-function getSpherePositions(count: number): { x: number; y: number; z: number }[] {
+function getSpherePositions(
+  count: number,
+): { x: number; y: number; z: number }[] {
   const positions: { x: number; y: number; z: number }[] = [];
 
   const goldenRatio = (1 + Math.sqrt(5)) / 2;
@@ -38,7 +40,12 @@ function getSpherePositions(count: number): { x: number; y: number; z: number }[
   return positions;
 }
 
-export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconCloudProps) {
+export function IconCloud({
+  icons,
+  className,
+  radius = 220,
+  speed = 0.4,
+}: IconCloudProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<CloudItem[]>([]);
   const rafRef = useRef<number>(0);
@@ -47,11 +54,15 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
+    // Use requestAnimationFrame to avoid synchronous setState in effect
+    const timer = requestAnimationFrame(() => {
+      setMounted(true);
+    });
+    return () => cancelAnimationFrame(timer);
   }, []);
 
   const applyPositions = useCallback((items: CloudItem[], r: number) => {
-    items.forEach(item => {
+    items.forEach((item) => {
       const scale = (item.z + r) / (2 * r);
       const opacity = scale * 0.7 + 0.3;
       const x = item.x + r;
@@ -59,7 +70,8 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
       item.el.style.transform = `translate3d(${x - item.el.offsetWidth / 2}px, ${y - item.el.offsetHeight / 2}px, 0) scale(${0.65 + scale * 0.55})`;
       item.el.style.opacity = String(opacity.toFixed(2));
       item.el.style.zIndex = String(Math.round(scale * 10));
-      item.el.style.filter = scale > 0.6 ? "none" : `blur(${(0.6 - scale) * 2}px)`;
+      item.el.style.filter =
+        scale > 0.6 ? "none" : `blur(${(0.6 - scale) * 2}px)`;
     });
   }, []);
 
@@ -70,8 +82,8 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
       const cosY = Math.cos(ay);
       const sinY = Math.sin(ay);
 
-      items.forEach(item => {
-        let { x, y, z } = item;
+      items.forEach((item) => {
+        const { x, y, z } = item;
         const y1 = y * cosX - z * sinX;
         const z1 = y * sinX + z * cosX;
         const x1 = x * cosY + z1 * sinY;
@@ -89,7 +101,9 @@ export function IconCloud({ icons, className, radius = 220, speed = 0.4 }: IconC
   useEffect(() => {
     if (!mounted || !containerRef.current) return;
     const container = containerRef.current;
-    const els = Array.from(container.querySelectorAll<HTMLElement>("[data-cloud-item]"));
+    const els = Array.from(
+      container.querySelectorAll<HTMLElement>("[data-cloud-item]"),
+    );
     if (els.length === 0) return;
 
     const positions = getSpherePositions(els.length);

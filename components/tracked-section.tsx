@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useTrackSectionView } from "@/hooks/use-track-section";
-import { trackSectionClick } from "@/lib/gtag";
+import { trackSectionClick } from "@/lib/analytics";
 
 interface TrackedSectionProps {
   readonly sectionId: string;
@@ -21,9 +21,5 @@ export function TrackedSection({ sectionId, children }: TrackedSectionProps) {
     return () => el.removeEventListener("click", handler);
   }, [sectionId, ref]);
 
-  return (
-    <div ref={ref as React.RefObject<HTMLDivElement>}>
-      {children}
-    </div>
-  );
+  return <div ref={ref as React.RefObject<HTMLDivElement>}>{children}</div>;
 }

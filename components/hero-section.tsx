@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Download } from "lucide-react";
 import { SparklesText } from "@/components/ui/sparkles-text";
-import { trackDownloadCV } from "@/lib/gtag";
+import { trackDownloadCV } from "@/lib/analytics";
 
 const titles = [
   "Frontend Developer",
@@ -182,8 +182,7 @@ export function HeroSection() {
             colors={{ first: "#6B9AC4", second: "#8BB5D9" }}
           >
             Cris
-          </SparklesText>
-          {" "}
+          </SparklesText>{" "}
           <SparklesText
             className="inline-block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
             sparklesCount={6}
@@ -220,14 +219,19 @@ export function HeroSection() {
           experiences.
         </motion.p>
 
-        <motion.div variants={itemVariants} className="flex justify-center mb-12">
+        <motion.div
+          variants={itemVariants}
+          className="flex justify-center mb-12"
+        >
           <motion.a
             href="/cris-nguyen-cv.pdf"
             download="Cris_Nguyen_CV.pdf"
             className="group inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-linear-to-r from-steel to-steel-light text-white font-medium text-sm shadow-lg shadow-steel/25 hover:shadow-xl hover:shadow-steel/30 transition-shadow duration-300"
             whileHover={{ scale: 1.05, y: -2 }}
             whileTap={{ scale: 0.97 }}
-            onClick={trackDownloadCV}
+            onClick={() => {
+              trackDownloadCV();
+            }}
           >
             <Download className="w-4 h-4 transition-transform duration-300 group-hover:translate-y-0.5" />
             Download CV

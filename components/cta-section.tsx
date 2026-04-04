@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Sparkles, MessageSquare } from "lucide-react";
 
 import { ShinyButton } from "@/components/ui/shiny-button";
+import { trackCTAClick } from "@/lib/analytics";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -108,6 +109,9 @@ export function CtaSection() {
               <motion.div
                 whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.97 }}
+                onClick={() =>
+                  trackCTAClick("zalo_connect", "https://zalo.me/12345")
+                }
               >
                 <ShinyButton
                   href="https://zalo.me/12345"
@@ -132,6 +136,9 @@ export function CtaSection() {
                 className="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl border border-border/60 bg-muted/30 backdrop-blur-sm text-foreground font-semibold text-base hover:bg-muted/60 hover:border-border transition-all duration-300"
                 whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.97 }}
+                onClick={() =>
+                  trackCTAClick("github_view", "https://github.com/crisne")
+                }
               >
                 <svg
                   viewBox="0 0 24 24"
