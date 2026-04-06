@@ -10,6 +10,7 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         // Disallow common patterns that shouldn't be indexed
         disallow: [
+          "/test-robot",
           "/api/", // API routes
           "/_next/", // Next.js internal
           "/static/", // Static files if any
@@ -20,8 +21,9 @@ export default function robots(): MetadataRoute.Robots {
       {
         // Googlebot specific rules
         userAgent: "Googlebot",
+
         allow: "/",
-        disallow: ["/api/", "/_next/"],
+        disallow: ["/api/", "/_next/", "/test-robot"],
       },
       {
         // Googlebot-Image for image indexing
