@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Prisma SQLite — keep dev.db in repo, ignore migrations lock
+prisma/migrations/migration_lock.toml
+
 # Auto-generated agent rules (personalized per developer)
 .brainsync/agent-rules.md
 

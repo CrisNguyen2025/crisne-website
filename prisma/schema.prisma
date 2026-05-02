@@ -1,0 +1,83 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String   @default("#6b9ac4")
+  prompt    String?  // custom AI prompt for this tag
+  createdAt DateTime @default(now())
+  notes     Note[]
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  title       String
+  link        String?
+  description String?
+  tagId       String?
+  tag         Tag?     @relation(fields: [tagId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Role {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  summary     String
+  focusTasks  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  roleApiRefs RoleApiAccess[]
+}
+
+model ApiEndpoint {
+  id          String          @id @default(cuid())
+  method      String
+  path        String
+  module      String
+  summary     String
+  requestExample  String?
+  responseExample String?
+  featureId   String?
+  sortOrder   Int             @default(0)
+  reviewed    Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  feature     Feature?        @relation(fields: [featureId], references: [id], onDelete: SetNull)
+  roleApiRefs RoleApiAccess[]
+
+  @@unique([method, path])
+}
+
+model Feature {
+  id        String        @id @default(cuid())
+  name      String        @unique
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  apis      ApiEndpoint[]
+}
+
+model RoleApiAccess {
+  id        String      @id @default(cuid())
+  roleId    String
+  apiId     String
+  access    String      @default("denied")
+  note      String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  role Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  api  ApiEndpoint @relation(fields: [apiId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, apiId])
+}
