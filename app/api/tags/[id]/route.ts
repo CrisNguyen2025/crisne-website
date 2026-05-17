@@ -29,6 +29,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
+    
+    // Retrieve the tag and posts under this tag to verify association
+    const [tag, posts] = await Promise.all([
+      getTagById(id),
+      getPosts({ tagId: id }),
+    ]);
+
+    if (!tag) {
+      return NextResponse.json({ error: "Tag not found" }, { status: 404 });
+    }
+
+    if (posts.length > 0 || (tag.postIds && tag.postIds.length > 0)) {
+      return NextResponse.json(
+        { error: "Cannot delete tag because it contains posts." },
+        { status: 400 }
+      );
+    }
+
     await deleteTag(id);
     return NextResponse.json({ success: true });
   } catch (err) {

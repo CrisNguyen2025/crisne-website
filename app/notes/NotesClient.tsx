@@ -4,19 +4,33 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import {
+  Plus,
+  X,
+  Pencil,
+  Trash2,
+  Search,
+  Sparkles,
+  BookOpen,
+  Folder,
+  Calendar,
+  ArrowRight,
+  CornerDownRight,
+  Check,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 const PRESET_COLORS = [
-  "#6b9ac4", "#8bb5d9", "#10b981",
-  "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#64748b",
+  "#6b9ac4",
+  "#8bb5d9",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+  "#64748b",
 ];
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 export function NotesClient() {
   const searchParams = useSearchParams();
@@ -24,14 +38,24 @@ export function NotesClient() {
   const [tags, setTags] = useState<TagWithPostCount[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [localSearch, setLocalSearch] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(localSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localSearch]);
 
   // Active tab: "all" | tag.id — synced with ?tab= param
   const [activeTab, setActiveTab] = useState<string>(
-    searchParams.get("tab") ?? "all"
+    searchParams.get("tab") ?? "all",
   );
 
   const switchTab = useCallback((tabId: string) => {
     setActiveTab(tabId);
+    setLocalSearch("");
     const params = new URLSearchParams(window.location.search);
     if (tabId === "all") {
       params.delete("tab");
@@ -47,38 +71,59 @@ export function NotesClient() {
   const [editingPost, setEditingPost] = useState<PostWithTags | null>(null);
   const [showTagForm, setShowTagForm] = useState(false);
   const [editingTag, setEditingTag] = useState<TagWithPostCount | null>(null);
+  const [showTagManager, setShowTagManager] = useState(false);
 
   // Sliding indicator (navbar pattern)
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+  const [indicator, setIndicator] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
 
   useEffect(() => {
     const bar = tabBarRef.current;
     if (!bar) return;
     const el = tabRefs.current.get(activeTab);
-    if (!el) { setIndicator(null); return; }
+    if (!el) {
+      setIndicator(null);
+      return;
+    }
     const barRect = bar.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
-    setIndicator({ left: elRect.left - barRect.left + 8, width: elRect.width - 16 });
+    setIndicator({ left: elRect.left - barRect.left, width: elRect.width });
   }, [activeTab, tags]);
 
   const refresh = useCallback(async () => {
-    const [postsRes, tagsRes]: [PostWithTags[], TagWithPostCount[]] = await Promise.all([
-      fetch("/api/posts", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/tags", { cache: "no-store" }).then((r) => r.json()),
-    ]);
-    const tagMap = Object.fromEntries(tagsRes.map((t) => [t.id, t]));
-    const enriched: PostWithTags[] = postsRes.map((post) => ({
-      ...post,
-      tags: post.tags?.length
-        ? post.tags
-        : ((post as unknown as { tagIds?: string[] }).tagIds ?? []).flatMap(
-            (id) => (tagMap[id] ? [tagMap[id]] : [])
-          ),
-    }));
-    setPosts(enriched);
-    setTags(tagsRes);
+    try {
+      const [postsRes, tagsRes] = await Promise.all([
+        fetch("/api/posts", { cache: "no-store" }).then((r) =>
+          r.ok ? r.json() : [],
+        ),
+        fetch("/api/tags", { cache: "no-store" }).then((r) =>
+          r.ok ? r.json() : [],
+        ),
+      ]);
+      if (!Array.isArray(postsRes) || !Array.isArray(tagsRes)) return;
+
+      const tagMap = Object.fromEntries(
+        tagsRes.map((t: TagWithPostCount) => [t.id, t]),
+      );
+      const enriched: PostWithTags[] = postsRes.map(
+        (post: PostWithTags & { tagIds?: string[] }) => ({
+          ...post,
+          tags: post.tags?.length
+            ? post.tags
+            : (post.tagIds ?? []).flatMap((id: string) =>
+                tagMap[id] ? [tagMap[id]] : [],
+              ),
+        }),
+      );
+      setPosts(enriched);
+      setTags(tagsRes);
+    } catch {
+      // Network error — keep existing state
+    }
   }, []);
 
   // Initial load
@@ -91,52 +136,166 @@ export function NotesClient() {
     setEditingPost(null);
     setShowTagForm(false);
     setEditingTag(null);
+    setShowTagManager(false);
   };
 
-  const visiblePosts = activeTab === "all"
-    ? posts
-    : posts.filter((p) => p.tags.some((t) => t.id === activeTab));
+  const filteredPosts = posts.filter((post) => {
+    const matchesSearch =
+      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (post.content &&
+        post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      post.slug.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (activeTab === "all") return matchesSearch;
+    return matchesSearch && post.tags.some((t) => t.id === activeTab);
+  });
 
   const activeTagObj = tags.find((t) => t.id === activeTab) ?? null;
+  const tagHasPosts = activeTab === "all"
+    ? posts.length > 0
+    : posts.some((post) => post.tags.some((t) => t.id === activeTab));
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto px-6 py-24 text-center">
-        <p className="text-sm font-mono text-muted-foreground">Loading...</p>
+      <div className="max-w-7xl mx-auto px-6 py-32 flex flex-col items-center justify-center">
+        <div className="w-10 h-10 border-2 border-steel/20 border-t-steel rounded-full animate-spin mb-4" />
+        <p className="text-xs font-mono text-muted-foreground/60 tracking-wider">
+          RETRIEVING FROM DATABASE...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-12">
+    <div className="max-w-[90rem] mx-auto px-6 pb-16 relative">
+      {/* Background Decorative Glow */}
+      <div className="absolute top-0 right-10 w-72 h-72 bg-steel/5 blur-3xl rounded-full -z-10" />
 
       {/* ------------------------------------------------------------------ */}
-      {/* Header                                                               */}
+      {/* Header                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex items-start justify-between mb-10">
-        <div>
-          <p className="text-xs font-mono text-muted-foreground tracking-widest uppercase mb-2">
-            {new Date().getFullYear()} · {posts.length} entries
-          </p>
-          <h1 className="text-3xl font-display font-bold tracking-tight text-foreground">
-            Notes
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12">
+        <div className="flex-shrink-0">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-steel animate-pulse" />
+            <p className="text-xs font-mono text-muted-foreground tracking-widest uppercase">
+              {new Date().getFullYear()} · {posts.length} entries total
+            </p>
+          </div>
+          <h1 className="text-4xl font-display font-bold tracking-tight text-foreground sm:text-5xl">
+            Thoughts &{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-steel to-steel-light">
+              Notes
+            </span>
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 mt-1">
-          <motion.button
-            onClick={() => { closeAllForms(); setShowTagForm(true); }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-muted text-muted-foreground text-xs font-medium rounded-lg hover:text-foreground transition-colors"
-            whileTap={{ scale: 0.95 }}
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Tag
-          </motion.button>
+        {/* Right side: Search and Actions */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 lg:flex-1 lg:justify-end max-w-3xl w-full lg:w-auto">
+          {/* Search box positioned directly to the right of title */}
+          {activeTab === "all" && (
+            <div className="relative group w-full max-w-[400px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
+              <input
+                type="text"
+                placeholder="Search notes, tags..."
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/30 focus:border-steel/40 focus:ring-4 focus:ring-steel/5 rounded-2xl text-sm transition-all focus:outline-none placeholder:text-muted-foreground/40"
+              />
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            <motion.button
+              onClick={() => {
+                closeAllForms();
+                setShowTagManager(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/40 cursor-pointer"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Folder className="w-3.5 h-3.5" />
+              Manage Tags
+            </motion.button>
+          </div>
         </div>
       </div>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Modals                                                                */}
+      {/* Search & Tags bar                                                  */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="mb-10">
+        {/* Tab bar — navbar style */}
+        <div className="border-b border-border/30">
+          <div
+            ref={tabBarRef}
+            className="flex items-center gap-2 relative overflow-x-auto pb-px scrollbar-none"
+          >
+            {/* All tab */}
+            <button
+              ref={(el) => {
+                if (el) tabRefs.current.set("all", el);
+              }}
+              onClick={() => switchTab("all")}
+              className={cn(
+                "relative px-4 py-3 text-sm font-medium transition-all shrink-0 rounded-t-xl cursor-pointer",
+                activeTab === "all"
+                  ? "text-steel"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              All Notes
+              <span className="ml-2 text-xs font-mono px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground/80">
+                {posts.length}
+              </span>
+            </button>
+
+            {/* Tag tabs */}
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(tag.id, el);
+                }}
+                onClick={() => switchTab(tag.id)}
+                className={cn(
+                  "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all shrink-0 rounded-t-xl cursor-pointer",
+                  activeTab === tag.id
+                    ? "text-steel font-semibold"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: tag.color }}
+                />
+                {tag.name}
+                <span className="text-xs font-mono px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground/80">
+                  {tag.postCount}
+                </span>
+              </button>
+            ))}
+
+            {/* Sliding indicator */}
+            {indicator && (
+              <motion.span
+                className="absolute bottom-0 h-0.5 bg-steel"
+                layoutId="activeTabIndicator"
+                animate={{
+                  left: indicator.left,
+                  width: indicator.width,
+                }}
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Modals                                                             */}
       {/* ------------------------------------------------------------------ */}
       <AnimatePresence>
         {(showPostForm || editingPost) && (
@@ -152,11 +311,16 @@ export function NotesClient() {
                 const tagMap = Object.fromEntries(tags.map((t) => [t.id, t]));
                 const enriched: PostWithTags = {
                   ...savedPost,
-                  tags: (savedPost.tagIds ?? savedPost.tags?.map((t) => t.id) ?? [])
-                    .flatMap((id: string) => (tagMap[id] ? [tagMap[id]] : [])),
+                  tags: (
+                    savedPost.tagIds ??
+                    savedPost.tags?.map((t) => t.id) ??
+                    []
+                  ).flatMap((id: string) => (tagMap[id] ? [tagMap[id]] : [])),
                 };
                 if (editingPost) {
-                  setPosts((prev) => prev.map((p) => p.id === enriched.id ? enriched : p));
+                  setPosts((prev) =>
+                    prev.map((p) => (p.id === enriched.id ? enriched : p)),
+                  );
                 } else {
                   setPosts((prev) => [enriched, ...prev]);
                 }
@@ -169,15 +333,19 @@ export function NotesClient() {
           <Modal onClose={closeAllForms}>
             <TagForm
               tag={editingTag}
+              existingColors={tags.map((t) => t.color)}
               saving={saving}
               setSaving={setSaving}
               onSaved={(savedTag) => {
                 closeAllForms();
                 if (editingTag) {
-                  setTags((prev) => prev.map((t) => t.id === savedTag.id
-                    ? { ...savedTag, postCount: t.postCount }
-                    : t
-                  ));
+                  setTags((prev) =>
+                    prev.map((t) =>
+                      t.id === savedTag.id
+                        ? { ...savedTag, postCount: t.postCount }
+                        : t,
+                    ),
+                  );
                 } else {
                   setTags((prev) => [...prev, { ...savedTag, postCount: 0 }]);
                 }
@@ -186,200 +354,186 @@ export function NotesClient() {
             />
           </Modal>
         )}
+        {showTagManager && (
+          <Modal onClose={closeAllForms}>
+            <TagManager
+              tags={tags}
+              onEditTag={(tag) => {
+                closeAllForms();
+                setEditingTag(tag);
+              }}
+              onAddTag={() => {
+                closeAllForms();
+                setShowTagForm(true);
+              }}
+              onDeleteTag={async (tag) => {
+                if (tag.postCount > 0 || (tag.postIds && tag.postIds.length > 0)) {
+                  alert(
+                    `Không thể xóa tag "${tag.name}" vì tag này đang có bài viết sử dụng. Vui lòng gỡ tag khỏi các bài viết trước khi xóa tag!`,
+                  );
+                  return;
+                }
+                if (
+                  !confirm(
+                    `Delete tag "${tag.name}"? This won't delete the notes.`,
+                  )
+                )
+                  return;
+                const res = await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
+                if (!res.ok) {
+                  const errData = await res.json().catch(() => ({}));
+                  alert(errData.error || `Failed to delete tag "${tag.name}".`);
+                  return;
+                }
+                if (activeTab === tag.id) setActiveTab("all");
+                refresh();
+              }}
+              onCancel={closeAllForms}
+            />
+          </Modal>
+        )}
       </AnimatePresence>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Tab bar — navbar style                                               */}
-      {/* ------------------------------------------------------------------ */}
-      <div
-        ref={tabBarRef}
-        className="flex items-center gap-1 relative border-b border-border/40 mb-8 overflow-x-auto"
-      >
-            {/* All tab */}
-            <button
-              ref={(el) => { if (el) tabRefs.current.set("all", el); }}
-              onClick={() => switchTab("all")}
-              className={cn(
-                "relative px-4 py-2.5 text-sm transition-colors duration-200 rounded-t-lg shrink-0",
-                activeTab === "all"
-                  ? "text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-              )}
-            >
-              All
-              <span className="ml-1.5 text-xs font-mono opacity-40">{posts.length}</span>
-            </button>
-
-            {/* Tag tabs */}
-            {tags.map((tag) => (
-              <div key={tag.id} className="group/tabtag relative shrink-0">
-                <button
-                  ref={(el) => { if (el) tabRefs.current.set(tag.id, el); }}
-                  onClick={() => switchTab(tag.id)}
-                  className={cn(
-                    "relative flex items-center gap-1.5 px-4 py-2.5 text-sm transition-colors duration-200 rounded-t-lg",
-                    activeTab === tag.id
-                      ? "text-foreground font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                  )}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: tag.color }}
-                  />
-                  {tag.name}
-                  <span className="text-xs font-mono opacity-40">{tag.postCount}</span>
-                </button>
-
-                {/* Hover actions */}
-                <span className="absolute -top-1 right-0 hidden group-hover/tabtag:flex items-center gap-0.5 bg-background border border-border/60 rounded-full px-1 py-0.5 shadow-sm z-20">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); closeAllForms(); setShowPostForm(true); setActiveTab(tag.id); }}
-                    className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Add post"
-                  >
-                    <Plus className="w-2.5 h-2.5" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); closeAllForms(); setEditingTag(tag); }}
-                    className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Edit tag"
-                  >
-                    <Pencil className="w-2.5 h-2.5" />
-                  </button>
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (!confirm(`Delete tag "${tag.name}"?`)) return;
-                      await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
-                      if (activeTab === tag.id) setActiveTab("all");
-                      refresh();
-                    }}
-                    className="p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                    title="Delete tag"
-                  >
-                    <Trash2 className="w-2.5 h-2.5" />
-                  </button>
-                </span>
+      {/* -------------------------------------------------------------- */}
+      {/* Post list                                                      */}
+      {/* -------------------------------------------------------------- */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab + searchQuery}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {activeTab !== "all" && activeTagObj && tagHasPosts && (
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-card border border-border/40 rounded-2xl shadow-sm">
+              <div className="flex items-center gap-3">
+                <span
+                  className="w-3.5 h-3.5 rounded-full shrink-0 animate-pulse"
+                  style={{ background: activeTagObj.color }}
+                />
+                <div>
+                  <h2 className="text-base font-bold text-foreground tracking-tight">
+                    {activeTagObj.name}
+                  </h2>
+                  <p className="text-[11px] font-mono text-muted-foreground/60">
+                    {filteredPosts.length} of {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length}{" "}
+                    {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag
+                  </p>
+                </div>
               </div>
-            ))}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                {/* Tag-specific Search input */}
+                <div className="relative group w-full max-w-[400px] sm:w-[400px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
+                  <input
+                    type="text"
+                    placeholder={`Search in ${activeTagObj.name}...`}
+                    value={localSearch}
+                    onChange={(e) => setLocalSearch(e.target.value)}
+                    className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
+                  />
+                  {localSearch && (
+                    <button
+                      onClick={() => setLocalSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
 
-            {/* + Tag button in tab bar */}
-            <button
-              onClick={() => { closeAllForms(); setShowTagForm(true); }}
-              className="shrink-0 px-3 py-2.5 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-              title="New tag"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Sliding indicator — navbar style */}
-            <motion.span
-              className="absolute bottom-0 h-0.5 rounded-full bg-gradient-to-r from-steel to-steel-light pointer-events-none"
-              animate={{
-                opacity: indicator ? 1 : 0,
-                left: indicator?.left ?? 0,
-                width: indicator?.width ?? 0,
-              }}
-              transition={{
-                left: { type: "spring", stiffness: 400, damping: 32 },
-                width: { type: "spring", stiffness: 400, damping: 32 },
-                opacity: { duration: 0.15 },
-              }}
-            />
-          </div>
-
-          {/* -------------------------------------------------------------- */}
-          {/* + Post button for active tag (not All)                           */}
-          {/* -------------------------------------------------------------- */}
-          {activeTab !== "all" && (
-            <div className="flex items-center justify-between mb-5">
-              <p className="text-xs text-muted-foreground">
-                {visiblePosts.length} {visiblePosts.length === 1 ? "post" : "posts"} in{" "}
-                <span className="font-medium text-foreground">{activeTagObj?.name}</span>
-              </p>
-              <motion.button
-                onClick={() => { closeAllForms(); setShowPostForm(true); }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-foreground text-background text-xs font-medium rounded-lg hover:opacity-80 transition-opacity"
-                whileTap={{ scale: 0.95 }}
-              >
-                <Plus className="w-3 h-3" />
-                Post
-              </motion.button>
+                <motion.button
+                  onClick={() => {
+                    closeAllForms();
+                    setShowPostForm(true);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+                  whileHover={{ y: -0.5 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Post
+                </motion.button>
+              </div>
             </div>
           )}
 
-          {/* -------------------------------------------------------------- */}
-          {/* Post list                                                         */}
-          {/* -------------------------------------------------------------- */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {visiblePosts.length === 0 ? (
-                <div className="py-20 text-center border border-dashed border-border/50 rounded-xl">
-                  <p className="text-muted-foreground text-sm mb-3">
-                    {activeTab !== "all"
-                      ? `No posts in "${activeTagObj?.name}" yet.`
-                      : "No notes yet."}
-                  </p>
-                  <button
-                    onClick={() => { closeAllForms(); setShowPostForm(true); }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-                  >
-                    Create one
-                  </button>
-                </div>
-              ) : (
-                <div className="divide-y divide-border/30">
-                  {visiblePosts.map((post) => (
-                    <PostRow
-                      key={post.id}
-                      post={post}
-                      onEdit={() => { closeAllForms(); setEditingPost(post); }}
-                      onDelete={async () => {
-                        if (!confirm("Delete this post?")) return;
-                        await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
-                        refresh();
-                      }}
-                      onTogglePublish={async () => {
-                        await fetch(`/api/posts/${post.id}`, {
-                          method: "PATCH",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ published: !post.published }),
-                        });
-                        refresh();
-                      }}
-                    />
-                  ))}
-                </div>
+          {filteredPosts.length === 0 ? (
+            <div className="py-24 text-center border border-dashed border-border/60 rounded-3xl bg-muted/5 flex flex-col items-center justify-center p-6">
+              <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4 text-muted-foreground/60">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <h3 className="font-semibold text-foreground mb-1 text-sm">
+                No notes found
+              </h3>
+              <p className="text-muted-foreground/60 text-xs max-w-xs mb-4">
+                {activeTab !== "all"
+                  ? `There are no posts in tag "${activeTagObj?.name}" matching your search.`
+                  : "Start documenting your ideas and resources today."}
+              </p>
+              {!tagHasPosts && (
+                <button
+                  onClick={() => {
+                    closeAllForms();
+                    setShowPostForm(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Post{" "}
+                  {activeTab !== "all" ? `for ${activeTagObj?.name}` : "Note"}
+                </button>
               )}
-            </motion.div>
-          </AnimatePresence>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredPosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  onEdit={() => {
+                    closeAllForms();
+                    setEditingPost(post);
+                  }}
+                  onDelete={async () => {
+                    if (!confirm("Are you sure you want to delete this note?"))
+                      return;
+                    await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+                    refresh();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Modal overlay
+// Modal Overlay with Premium Glassmorphism
 // ---------------------------------------------------------------------------
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function Modal({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: 0.2 }}
     >
       {/* Backdrop */}
       <motion.div
-        className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/50 backdrop-blur-md"
         onClick={onClose}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -387,12 +541,13 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
       />
       {/* Content */}
       <motion.div
-        className="relative w-full max-w-lg bg-card border border-border/60 rounded-2xl shadow-xl p-6"
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="relative w-full max-w-xl bg-card/85 dark:bg-card/90 border border-border/50 rounded-3xl shadow-2xl p-6 md:p-8 backdrop-blur-2xl overflow-hidden"
+        initial={{ opacity: 0, scale: 0.96, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        exit={{ opacity: 0, scale: 0.96, y: 15 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       >
+        <div className="absolute top-0 right-0 w-24 h-24 bg-steel/10 blur-2xl rounded-full pointer-events-none" />
         {children}
       </motion.div>
     </motion.div>
@@ -400,78 +555,125 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 }
 
 // ---------------------------------------------------------------------------
-// Post row
+// Premium Post Card
 // ---------------------------------------------------------------------------
 
-function PostRow({ post, onEdit, onDelete, onTogglePublish }: {
+function PostCard({
+  post,
+  onEdit,
+  onDelete,
+}: {
   post: PostWithTags;
   onEdit: () => void;
   onDelete: () => void;
-  onTogglePublish: () => void;
 }) {
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
-    month: "short", day: "numeric", year: "numeric",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 
   return (
     <motion.div
-      className="group flex items-start gap-4 py-4 -mx-3 px-3 rounded-xl hover:bg-muted/20 transition-colors"
-      whileHover={{ x: 2 }}
-      transition={{ duration: 0.15 }}
+      className="group relative flex flex-col justify-between p-6 bg-card border border-border/40 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full"
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="pt-1.5 shrink-0">
-        <span
-          className={`block w-1.5 h-1.5 rounded-full ${post.published ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
-          title={post.published ? "Published" : "Draft"}
-        />
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {post.tags.slice(0, 2).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
+              style={{
+                background: `${tag.color}12`,
+                borderColor: `${tag.color}30`,
+                color: tag.color,
+              }}
+            >
+              <span
+                className="w-1 h-1 rounded-full"
+                style={{ background: tag.color }}
+              />
+              {tag.name}
+            </span>
+          ))}
+          {post.tags.length > 2 && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border bg-muted/40 border-border/40 text-muted-foreground cursor-help"
+              title={post.tags
+                .slice(2)
+                .map((t) => t.name)
+                .join(", ")}
+            >
+              +{post.tags.length - 2}
+            </span>
+          )}
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button
+            onClick={onEdit}
+            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer"
+            title="Edit Note"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all cursor-pointer"
+            title="Delete Note"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
-      <Link href={`/notes/${post.slug || post.id}`} className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-3 mb-0.5">
-          <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors truncate">
+      <div className="flex-1 min-w-0">
+        <Link
+          href={`/notes/${post.slug || post.id}`}
+          className="block group/link cursor-pointer"
+        >
+          <h3 className="text-lg font-bold text-foreground group-hover/link:text-steel transition-colors tracking-tight line-clamp-1 mb-2">
             {post.title}
-          </span>
-          <time className="text-xs font-mono text-muted-foreground shrink-0 tabular-nums">
-            {date}
-          </time>
-        </div>
-        {post.content && (
-          <p className="text-xs text-muted-foreground line-clamp-1 leading-relaxed mb-1.5">
-            {post.content}
+          </h3>
+          <p className="text-xs text-muted-foreground/70 line-clamp-2 mb-4 leading-relaxed">
+            {post.content && post.content.trim() ? post.content : "N/A"}
           </p>
-        )}
-        {post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {post.tags.map((tag) => (
-              <span key={tag.id} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: tag.color }} />
-                {tag.name}
-              </span>
-            ))}
-          </div>
-        )}
-      </Link>
+        </Link>
+      </div>
 
-      <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
-        <button onClick={onTogglePublish} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-md transition-colors" title={post.published ? "Unpublish" : "Publish"}>
-          {post.published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-        </button>
-        <button onClick={onEdit} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-md transition-colors" title="Edit">
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={onDelete} className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors" title="Delete">
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+      <div className="flex items-center justify-between pt-4 border-t border-border/30 text-[11px] font-mono text-muted-foreground/60">
+        <div className="flex items-center gap-1">
+          <Calendar className="w-3 h-3" />
+          <time className="tabular-nums">{date}</time>
+        </div>
+        <Link
+          href={`/notes/${post.slug || post.id}`}
+          className="inline-flex items-center gap-1 text-steel hover:text-steel-light font-medium group/btn transition-colors cursor-pointer"
+        >
+          Read entry
+          <ArrowRight className="w-3 h-3 transition-transform group-hover/btn:translate-x-0.5" />
+        </Link>
       </div>
     </motion.div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Post form
+// Premium Post Form
 // ---------------------------------------------------------------------------
 
-function PostForm({ post, tags, preselectedTagId, saving, setSaving, onSaved, onCancel }: {
+function PostForm({
+  post,
+  tags,
+  preselectedTagId,
+  saving,
+  setSaving,
+  onSaved,
+  onCancel,
+}: {
   post?: PostWithTags | null;
   tags: TagWithPostCount[];
   preselectedTagId?: string;
@@ -480,122 +682,216 @@ function PostForm({ post, tags, preselectedTagId, saving, setSaving, onSaved, on
   onSaved: (post: PostWithTags & { tagIds?: string[] }) => void;
   onCancel: () => void;
 }) {
-  const initTagIds = post?.tags.map((t) => t.id) ?? (preselectedTagId ? [preselectedTagId] : []);
+  const initTagIds =
+    post?.tags.map((t) => t.id) ?? (preselectedTagId ? [preselectedTagId] : []);
   const [title, setTitle] = useState(post?.title ?? "");
   const [slug, setSlug] = useState(post?.slug ?? "");
   const [content, setContent] = useState(post?.content ?? "");
-  const [published, setPublished] = useState(post?.published ?? false);
+  const [published, setPublished] = useState(post?.published ?? true);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(initTagIds);
   const [error, setError] = useState("");
 
   const autoSlug = (t: string) =>
-    t.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
+    t
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, "")
+      .replace(/[\s_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
   const toggleTag = (id: string) =>
-    setSelectedTagIds((prev) => prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]);
+    setSelectedTagIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) { setError("Title is required"); return; }
-    setSaving(true); setError("");
+    if (!title.trim()) {
+      setError("Title is required");
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
       const res = await fetch(post ? `/api/posts/${post.id}` : "/api/posts", {
         method: post ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, slug, content, published, tagIds: selectedTagIds }),
+        body: JSON.stringify({
+          title,
+          slug,
+          content,
+          published,
+          tagIds: selectedTagIds,
+        }),
       });
-      if (!res.ok) { setError((await res.json()).error ?? "Failed"); return; }
+      if (!res.ok) {
+        setError((await res.json()).error ?? "Failed to save note");
+        return;
+      }
       const saved = await res.json();
       onSaved(saved);
-    } catch { setError("Network error"); }
-    finally { setSaving(false); }
+    } catch {
+      setError("A network error occurred. Please check your connection.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">
-          {post ? "Edit post" : "New post"}
-        </span>
-        <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground transition-colors">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="flex items-center justify-between pb-3 border-b border-border/30">
+        <div>
+          <h2 className="text-lg font-bold text-foreground tracking-tight">
+            {post ? "Edit Post Entry" : "Create New Post"}
+          </h2>
+          <p className="text-xs text-muted-foreground/60">
+            Fill in details for your thoughts.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {error && <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{error}</p>}
-
-      <input autoFocus type="text" value={title}
-        onChange={(e) => { setTitle(e.target.value); if (!post) setSlug(autoSlug(e.target.value)); }}
-        placeholder="Title"
-        className="w-full px-3 py-2.5 bg-muted/40 border border-border/60 rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-colors"
-        required
-      />
-
-      <input type="text" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="slug"
-        className="w-full px-3 py-2 bg-muted/40 border border-border/60 rounded-lg text-xs font-mono text-muted-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-colors"
-      />
-
-      <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Content (optional)" rows={5}
-        className="w-full px-3 py-2.5 bg-muted/40 border border-border/60 rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-colors resize-none leading-relaxed"
-      />
-
-      {tags.length > 0 && (
-        <div>
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider">Tags</p>
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((tag) => {
-              const sel = selectedTagIds.includes(tag.id);
-              return (
-                <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
-                  className={cn(
-                    "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                    sel ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: sel ? "currentColor" : tag.color }} />
-                  {tag.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {error && (
+        <motion.p
+          className="text-xs font-medium text-destructive bg-destructive/5 border border-destructive/15 px-4 py-2.5 rounded-xl"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {error}
+        </motion.p>
       )}
 
-      <div className="flex items-center justify-between pt-2">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <button type="button" role="switch" aria-checked={published} onClick={() => setPublished(!published)}
-            className={cn("relative w-8 h-4 rounded-full transition-colors", published ? "bg-emerald-500" : "bg-muted")}
-          >
-            <span className={cn("absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform", published ? "translate-x-4" : "")} />
-          </button>
-          <span className="text-xs text-muted-foreground">{published ? "Publish" : "Draft"}</span>
-        </label>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-          <button type="submit" disabled={saving}
-            className="px-4 py-2 bg-foreground text-background text-sm font-medium rounded-lg hover:opacity-80 disabled:opacity-40 transition-opacity"
-          >
-            {saving ? "Saving..." : post ? "Save" : "Create"}
-          </button>
+      <div className="space-y-4">
+        {/* Title */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Title
+          </label>
+          <input
+            autoFocus
+            type="text"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (!post) setSlug(autoSlug(e.target.value));
+            }}
+            placeholder="My latest dynamic experiment..."
+            className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none placeholder:text-muted-foreground/30"
+            required
+          />
         </div>
+
+        {/* Slug */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Slug URL
+          </label>
+          <input
+            type="text"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="my-latest-experiment"
+            className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
+          />
+        </div>
+
+        {/* Content */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Content Body
+          </label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Document your concepts, scripts, or simple reflections here..."
+            rows={5}
+            className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm leading-relaxed focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none resize-none placeholder:text-muted-foreground/30"
+          />
+        </div>
+
+        {/* Tags Selection */}
+        {tags.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+              Categorize with Tags
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => {
+                const sel = selectedTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => toggleTag(tag.id)}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer",
+                      sel
+                        ? "bg-steel border-steel text-white shadow-sm"
+                        : "bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/80",
+                    )}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ background: sel ? "white" : tag.color }}
+                    />
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/30">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
+        >
+          {saving ? "Saving..." : post ? "Save Changes" : "Create Post"}
+        </button>
       </div>
     </form>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Tag form
+// Premium Tag Form
 // ---------------------------------------------------------------------------
 
-function TagForm({ tag, saving, setSaving, onSaved, onCancel }: {
+function TagForm({
+  tag,
+  existingColors,
+  saving,
+  setSaving,
+  onSaved,
+  onCancel,
+}: {
   tag?: TagWithPostCount | null;
+  existingColors: string[];
   saving: boolean;
   setSaving: (v: boolean) => void;
   onSaved: (tag: TagWithPostCount) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(tag?.name ?? "");
-  const [color, setColor] = useState(tag?.color ?? "#6b9ac4");
+  const [color, setColor] = useState(
+    tag?.color ?? generateContrastColor(existingColors),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -609,41 +905,298 @@ function TagForm({ tag, saving, setSaving, onSaved, onCancel }: {
       });
       const saved = await res.json();
       onSaved(saved);
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">
-          {tag ? "Edit tag" : "New tag"}
-        </span>
-        <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground transition-colors">
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="flex items-center justify-between pb-3 border-b border-border/30">
+        <div>
+          <h2 className="text-lg font-bold text-foreground tracking-tight">
+            {tag ? "Edit Tag Group" : "Create New Tag"}
+          </h2>
+          <p className="text-xs text-muted-foreground/60">
+            Organize your notes into clean collections.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
+        >
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="flex items-center gap-3">
-        <input autoFocus type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tag name"
-          className="flex-1 px-3 py-2.5 bg-muted/40 border border-border/60 rounded-lg text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/40 transition-colors"
-          required
-        />
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {PRESET_COLORS.map((c) => (
-          <button key={c} type="button" onClick={() => setColor(c)}
-            className={cn("w-6 h-6 rounded-full transition-transform hover:scale-110", color === c ? "ring-2 ring-offset-2 ring-offset-background ring-foreground/40 scale-110" : "")}
-            style={{ background: c }}
+
+      <div className="space-y-5">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Tag Label Name
+          </label>
+          <input
+            autoFocus
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. System Design, UI/UX..."
+            className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none placeholder:text-muted-foreground/30"
+            required
           />
-        ))}
+        </div>
+
+        {/* Color picker section */}
+        <div className="space-y-2.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Visual Palette Accent
+          </label>
+          <div className="flex items-center gap-3">
+            {/* Presets */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "w-7 h-7 rounded-full transition-all border border-black/5 dark:border-white/5 cursor-pointer",
+                      color === c
+                        ? "ring-2 ring-offset-2 ring-offset-background ring-steel scale-110"
+                        : "hover:scale-105",
+                    )}
+                    style={{ background: c }}
+                  />
+                ))}
+            </div>
+            {/* Native color picker */}
+            <label className="relative cursor-pointer shrink-0">
+              <input
+                type="color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <span
+                className={cn(
+                  "block w-7 h-7 rounded-full border-2 border-dashed border-border hover:border-steel/60 transition-all flex items-center justify-center text-muted-foreground",
+                  !PRESET_COLORS.includes(color)
+                    ? "ring-2 ring-offset-2 ring-offset-background ring-steel"
+                    : "",
+                )}
+                style={{ background: color }}
+                title="Custom accent"
+              >
+                {!PRESET_COLORS.includes(color) && (
+                  <Check className="w-3.5 h-3.5 text-white mix-blend-difference" />
+                )}
+              </span>
+            </label>
+          </div>
+        </div>
       </div>
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <button type="button" onClick={onCancel} className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-        <button type="submit" disabled={saving || !name.trim()}
-          className="px-4 py-2 bg-foreground text-background text-sm font-medium rounded-lg hover:opacity-80 disabled:opacity-40 transition-opacity"
+
+      <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/30">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
         >
-          {saving ? "Saving..." : tag ? "Save" : "Create"}
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={saving || !name.trim()}
+          className="px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
+        >
+          {saving ? "Saving..." : tag ? "Save Changes" : "Create Tag"}
         </button>
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HSL Color Contrast Generator
+// ---------------------------------------------------------------------------
+
+function hexToHsl(hex: string): [number, number, number] {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h * 360, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const r = Math.round(hue2rgb(p, q, h / 360 + 1 / 3) * 255);
+  const g = Math.round(hue2rgb(p, q, h / 360) * 255);
+  const b = Math.round(hue2rgb(p, q, h / 360 - 1 / 3) * 255);
+  return `#${[r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function generateContrastColor(existingHexColors: string[]): string {
+  if (existingHexColors.length === 0) {
+    const h = Math.random() * 360;
+    return hslToHex(h, 0.65, 0.55);
+  }
+
+  const existingHues = existingHexColors.map((c) => {
+    try {
+      return hexToHsl(c)[0];
+    } catch {
+      return 0;
+    }
+  });
+
+  let bestHue = 0;
+  let bestMinDist = 0;
+
+  for (let candidate = 0; candidate < 360; candidate += 5) {
+    const minDist = Math.min(
+      ...existingHues.map((h) => {
+        const diff = Math.abs(candidate - h);
+        return Math.min(diff, 360 - diff);
+      }),
+    );
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist;
+      bestHue = candidate;
+    }
+  }
+
+  const jitter = (Math.random() - 0.5) * 20;
+  const finalHue = (bestHue + jitter + 360) % 360;
+
+  return hslToHex(
+    finalHue,
+    0.6 + Math.random() * 0.15,
+    0.5 + Math.random() * 0.1,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Premium Tag Manager Modal Content
+// ---------------------------------------------------------------------------
+
+function TagManager({
+  tags,
+  onEditTag,
+  onAddTag,
+  onDeleteTag,
+  onCancel,
+}: {
+  tags: TagWithPostCount[];
+  onEditTag: (tag: TagWithPostCount) => void;
+  onAddTag: () => void;
+  onDeleteTag: (tag: TagWithPostCount) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between pb-3 border-b border-border/30">
+        <div>
+          <h2 className="text-lg font-bold text-foreground tracking-tight">
+            Manage Tag Groups
+          </h2>
+          <p className="text-xs text-muted-foreground/60">
+            Create, update, or remove your classification tags.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+        {tags.length === 0 ? (
+          <div className="py-8 text-center text-xs text-muted-foreground">
+            No tags created yet.
+          </div>
+        ) : (
+          tags.map((tag) => (
+            <div
+              key={tag.id}
+              className="flex items-center justify-between p-3 rounded-xl bg-muted/20 border border-border/10 hover:bg-muted/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0 animate-pulse"
+                  style={{ background: tag.color }}
+                />
+                <span className="text-sm font-medium text-foreground">
+                  {tag.name}
+                </span>
+                <span className="text-[11px] font-mono px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground/80">
+                  {tag.postCount} {tag.postCount === 1 ? "note" : "notes"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onEditTag(tag)}
+                  className="p-1.5 text-muted-foreground hover:text-steel hover:bg-muted rounded-lg transition-colors cursor-pointer"
+                  title="Edit tag"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => onDeleteTag(tag)}
+                  className={cn(
+                    "p-1.5 rounded-lg transition-colors",
+                    tag.postCount > 0
+                      ? "text-muted-foreground/30 hover:bg-muted cursor-not-allowed"
+                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                  )}
+                  title={tag.postCount > 0 ? "Cannot delete tag containing posts" : "Delete tag"}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="flex items-center justify-between pt-4 border-t border-border/30">
+        <button
+          type="button"
+          onClick={onAddTag}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-steel text-white text-xs font-semibold rounded-xl hover:bg-steel/90 transition-colors shadow-sm cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add Tag
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          Close
+        </button>
+      </div>
+    </div>
   );
 }

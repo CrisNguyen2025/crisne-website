@@ -846,12 +846,20 @@ export function ToolsClient() {
   };
 
   const handleDeleteTag = async (id: string) => {
+    const tag = tags.find((t) => t.id === id);
+    if (tag && tag._count && tag._count.notes > 0) {
+      alert(`Cannot delete tag "${tag.name}" because it contains notes.`);
+      return;
+    }
+    if (tag && !confirm(`Delete tag "${tag.name}"?`)) {
+      return;
+    }
     try {
       await apiFetch(`/api/tags/${id}`, { method: "DELETE" });
       setTags((prev) => prev.filter((t) => t.id !== id));
       if (activeTag === id) setActiveTag(null);
-    } catch {
-      // silent
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete tag because it contains posts.");
     }
   };
 

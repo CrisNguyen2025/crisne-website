@@ -14,8 +14,12 @@ export async function GET() {
 
     return NextResponse.json(result);
   } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[GET /api/tags]", err);
-    return NextResponse.json({ error: "Failed to fetch tags" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch tags", detail: message },
+      { status: 500 }
+    );
   }
 }
 
