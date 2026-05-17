@@ -1,6 +1,11 @@
 import { Client, isFullPage } from "@notionhq/client";
-import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints";
+import type {
+  PageObjectResponse,
+  UpdatePageParameters,
+} from "@notionhq/client/build/src/api-endpoints";
 import type { NotionPost, NotionTag } from "./notion-types";
+
+type NotionProperties = UpdatePageParameters["properties"];
 
 // ---------------------------------------------------------------------------
 // Client singleton
@@ -200,7 +205,7 @@ export async function updateTag(
   id: string,
   data: { name?: string; color?: string }
 ): Promise<NotionTag> {
-  const properties: Record<string, unknown> = {};
+  const properties: NotionProperties = {};
   if (data.name !== undefined)
     properties["Name"] = { title: [{ text: { content: data.name } }] };
   if (data.color !== undefined)
@@ -291,7 +296,7 @@ export async function updatePost(
     tagIds?: string[];
   }
 ): Promise<NotionPost> {
-  const properties: Record<string, unknown> = {};
+  const properties: NotionProperties = {};
   if (data.title !== undefined)
     properties["Title"] = { title: [{ text: { content: data.title } }] };
   if (data.slug !== undefined)
