@@ -226,10 +226,10 @@ export function NotesClient() {
 
         {/* Right side: Search and Actions */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 lg:flex-1 lg:justify-end max-w-3xl w-full lg:w-auto">
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 border-t border-border/10 pt-4 sm:border-t-0 sm:pt-0 w-full sm:w-auto justify-start">
             <motion.button
               onClick={handleBackup}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/40 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/30 cursor-pointer shadow-sm shadow-foreground/5"
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -241,7 +241,7 @@ export function NotesClient() {
                 closeAllForms();
                 setShowTagManager(true);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/40 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/30 cursor-pointer shadow-sm shadow-foreground/5"
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -448,7 +448,9 @@ export function NotesClient() {
               saving={saving}
               setSaving={setSaving}
               onSaved={(savedTag) => {
-                closeAllForms();
+                setShowTagForm(false);
+                setEditingTag(null);
+                setShowTagManager(true);
                 if (editingTag) {
                   setTags((prev) =>
                     prev.map((t) =>
@@ -463,7 +465,11 @@ export function NotesClient() {
                   toast("Tag created successfully");
                 }
               }}
-              onCancel={closeAllForms}
+              onCancel={() => {
+                setShowTagForm(false);
+                setEditingTag(null);
+                setShowTagManager(true);
+              }}
             />
           </Modal>
         )}
@@ -472,11 +478,11 @@ export function NotesClient() {
             <TagManager
               tags={tags}
               onEditTag={(tag) => {
-                closeAllForms();
+                setShowTagManager(false);
                 setEditingTag(tag);
               }}
               onAddTag={() => {
-                closeAllForms();
+                setShowTagManager(false);
                 setShowTagForm(true);
               }}
               onDeleteTag={async (tag) => {
@@ -559,7 +565,7 @@ export function NotesClient() {
                 closeAllForms();
                 setShowPostForm(true);
               }}
-              className="sm:hidden inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+              className="sm:hidden inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all border border-foreground/10 shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
               whileHover={{ y: -0.5 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -582,7 +588,7 @@ export function NotesClient() {
               }
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
-              className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
+              className="w-full pl-9 pr-7 py-2.5 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/30 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45 shadow-sm"
             />
             {localSearch && (
               <button
@@ -601,7 +607,7 @@ export function NotesClient() {
                 closeAllForms();
                 setShowPostForm(true);
               }}
-              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all border border-foreground/10 shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
               whileHover={{ y: -0.5 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -642,7 +648,7 @@ export function NotesClient() {
                     closeAllForms();
                     setShowPostForm(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-opacity border border-foreground/10 cursor-pointer shadow-sm shadow-foreground/5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Post for {activeTagObj?.name}
@@ -650,7 +656,7 @@ export function NotesClient() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
               {filteredPosts.map((post) => (
                 <PostCard
                   key={post.id}
@@ -760,17 +766,17 @@ function PostCard({
 
   return (
     <motion.div
-      className="group relative flex flex-col justify-between p-6 bg-card border border-border/40 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full"
+      className="group relative flex flex-col justify-between p-4 bg-card border border-border/30 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full"
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
       layout
     >
-      <div className="flex items-start justify-between gap-4 mb-3">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {post.tags.slice(0, 2).map((tag) => (
             <span
               key={tag.id}
-              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
               style={{
                 background: `${tag.color}12`,
                 borderColor: `${tag.color}30`,
@@ -778,7 +784,7 @@ function PostCard({
               }}
             >
               <span
-                className="w-1 h-1 rounded-full"
+                className="w-1 h-1 rounded-full animate-pulse"
                 style={{ background: tag.color }}
               />
               {tag.name}
@@ -786,7 +792,7 @@ function PostCard({
           ))}
           {post.tags.length > 2 && (
             <span
-              className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold border bg-muted/40 border-border/40 text-muted-foreground cursor-help"
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono font-semibold border bg-muted/40 border-border/40 text-muted-foreground cursor-help"
               title={post.tags
                 .slice(2)
                 .map((t) => t.name)
@@ -797,21 +803,20 @@ function PostCard({
           )}
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <button
             onClick={onEdit}
-            className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer"
+            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-all cursor-pointer"
             title="Edit Note"
           >
-            <Pencil className="w-3.5 h-3.5" />
+            <Pencil className="w-3 h-3" />
           </button>
           <button
             onClick={onDelete}
-            className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all cursor-pointer"
+            className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all cursor-pointer"
             title="Delete Note"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -821,16 +826,16 @@ function PostCard({
           onClick={onView}
           className="block group/link cursor-pointer text-left w-full"
         >
-          <h3 className="text-lg font-bold text-foreground group-hover/link:text-steel transition-colors tracking-tight line-clamp-1 mb-2">
+          <h3 className="text-base font-bold text-foreground group-hover/link:text-steel transition-colors tracking-tight line-clamp-1 mb-1">
             {post.title}
           </h3>
-          <p className="text-xs text-muted-foreground/70 line-clamp-2 mb-4 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mb-3 leading-relaxed">
             {post.content && post.content.trim() ? post.content : "N/A"}
           </p>
         </button>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-border/30 text-[11px] font-mono text-muted-foreground/60">
+      <div className="flex items-center justify-between pt-2.5 border-t border-border/30 text-[10px] font-mono text-muted-foreground/60">
         <div className="flex items-center gap-1">
           <Calendar className="w-3 h-3" />
           <time className="tabular-nums">{date}</time>

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTags, createTag } from "@/lib/notion";
 import type { TagWithPostCount } from "@/lib/notion-types";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/tags — list all tags with post count
 export async function GET() {
   try {

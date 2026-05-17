@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPosts, getTags, createPost } from "@/lib/notion";
 import type { PostWithTags } from "@/lib/notion-types";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/posts
 // Query params:
 //   ?tagId=<notionPageId>   — filter by tag
