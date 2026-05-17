@@ -14,6 +14,9 @@ import {
   Calendar,
   ArrowRight,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -73,26 +76,37 @@ export function NotesClient() {
   const [editingTag, setEditingTag] = useState<TagWithPostCount | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
 
-  // Sliding indicator (navbar pattern)
+  // Tab bar reference for auto-scrolling
   const tabBarRef = useRef<HTMLDivElement>(null);
-  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [indicator, setIndicator] = useState<{
-    left: number;
-    width: number;
-  } | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScroll = useCallback(() => {
+    if (tabBarRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = tabBarRef.current;
+      setCanScrollLeft(scrollLeft > 0);
+      setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
+  }, [checkScroll, tags]);
 
   useEffect(() => {
     const bar = tabBarRef.current;
     if (!bar) return;
-    const el = tabRefs.current.get(activeTab);
-    if (!el) {
-      setIndicator(null);
-      return;
+    const activeEl = bar.querySelector('[data-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
     }
-    const barRect = bar.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    setIndicator({ left: elRect.left - barRect.left, width: elRect.width });
-  }, [activeTab, tags]);
+  }, [activeTab]);
 
   const refresh = useCallback(async () => {
     try {
@@ -140,6 +154,24 @@ export function NotesClient() {
     setShowTagManager(false);
   };
 
+  const handleBackup = async () => {
+    try {
+      const res = await fetch("/api/backup-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ posts, tags }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`Backup #${data.index} saved → ${data.path}`);
+      } else {
+        toast(data.error || "Failed to save backup", "error");
+      }
+    } catch {
+      toast("Error saving backup", "error");
+    }
+  };
+
   const filteredPosts = posts.filter((post) => {
     const matchesSearch =
       post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -152,9 +184,10 @@ export function NotesClient() {
   });
 
   const activeTagObj = tags.find((t) => t.id === activeTab) ?? null;
-  const tagHasPosts = activeTab === "all"
-    ? posts.length > 0
-    : posts.some((post) => post.tags.some((t) => t.id === activeTab));
+  const tagHasPosts =
+    activeTab === "all"
+      ? posts.length > 0
+      : posts.some((post) => post.tags.some((t) => t.id === activeTab));
 
   if (loading) {
     return (
@@ -175,7 +208,7 @@ export function NotesClient() {
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-12">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-4 lg:mb-12">
         <div className="flex-shrink-0">
           <div className="flex items-center gap-2 mb-2">
             <span className="h-1.5 w-1.5 rounded-full bg-steel animate-pulse" />
@@ -193,21 +226,16 @@ export function NotesClient() {
 
         {/* Right side: Search and Actions */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 lg:flex-1 lg:justify-end max-w-3xl w-full lg:w-auto">
-          {/* Search box positioned directly to the right of title */}
-          {activeTab === "all" && (
-            <div className="relative group w-full max-w-[400px]">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
-              <input
-                type="text"
-                placeholder="Search notes, tags..."
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/30 focus:border-steel/40 focus:ring-4 focus:ring-steel/5 rounded-2xl text-sm transition-all focus:outline-none placeholder:text-muted-foreground/40"
-              />
-            </div>
-          )}
-
           <div className="flex items-center gap-2 shrink-0">
+            <motion.button
+              onClick={handleBackup}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/40 cursor-pointer"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Save md file
+            </motion.button>
             <motion.button
               onClick={() => {
                 closeAllForms();
@@ -227,72 +255,126 @@ export function NotesClient() {
       {/* ------------------------------------------------------------------ */}
       {/* Search & Tags bar                                                  */}
       {/* ------------------------------------------------------------------ */}
-      <div className="mb-10">
-        {/* Tab bar — navbar style */}
-        <div className="border-b border-border/30">
-          <div
-            ref={tabBarRef}
-            className="flex items-center gap-2 relative overflow-x-auto pb-px scrollbar-none"
+      <div className="lg:mb-10 mb-4 relative group">
+        <div
+          ref={tabBarRef}
+          onScroll={checkScroll}
+          className="flex items-center gap-2 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {/* All tab */}
+          <button
+            data-active={activeTab === "all"}
+            onClick={() => switchTab("all")}
+            className={cn(
+              "relative px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border flex items-center gap-2",
+              activeTab === "all"
+                ? "text-background border-transparent"
+                : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
+            )}
           >
-            {/* All tab */}
-            <button
-              ref={(el) => {
-                if (el) tabRefs.current.set("all", el);
-              }}
-              onClick={() => switchTab("all")}
-              className={cn(
-                "relative px-4 py-3 text-sm font-medium transition-all shrink-0 rounded-t-xl cursor-pointer",
-                activeTab === "all"
-                  ? "text-steel"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              All Notes
-              <span className="ml-2 text-xs font-mono px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground/80">
-                {posts.length}
-              </span>
-            </button>
-
-            {/* Tag tabs */}
-            {tags.map((tag) => (
-              <button
-                key={tag.id}
-                ref={(el) => {
-                  if (el) tabRefs.current.set(tag.id, el);
-                }}
-                onClick={() => switchTab(tag.id)}
-                className={cn(
-                  "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all shrink-0 rounded-t-xl cursor-pointer",
-                  activeTab === tag.id
-                    ? "text-steel font-semibold"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: tag.color }}
-                />
-                {tag.name}
-                <span className="text-xs font-mono px-1.5 py-0.5 bg-muted rounded-md text-muted-foreground/80">
-                  {tag.postCount}
-                </span>
-              </button>
-            ))}
-
-            {/* Sliding indicator */}
-            {indicator && (
-              <motion.span
-                className="absolute bottom-0 h-0.5 bg-steel"
-                layoutId="activeTabIndicator"
-                animate={{
-                  left: indicator.left,
-                  width: indicator.width,
-                }}
+            {activeTab === "all" && (
+              <motion.div
+                className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
+                layoutId="activeTabBackground"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
-          </div>
+            <span className="relative z-10">All Notes</span>
+            <span
+              className={cn(
+                "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
+                activeTab === "all"
+                  ? "bg-background/20 text-background"
+                  : "bg-muted text-muted-foreground/80",
+              )}
+            >
+              {posts.length}
+            </span>
+          </button>
+
+          {/* Tag tabs */}
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              data-active={activeTab === tag.id}
+              onClick={() => switchTab(tag.id)}
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border",
+                activeTab === tag.id
+                  ? "text-background border-transparent"
+                  : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
+              )}
+            >
+              {activeTab === tag.id && (
+                <motion.div
+                  className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
+                  layoutId="activeTabBackground"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span
+                className="relative z-10 w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ background: tag.color }}
+              />
+              <span className="relative z-10">{tag.name}</span>
+              <span
+                className={cn(
+                  "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
+                  activeTab === tag.id
+                    ? "bg-background/20 text-background"
+                    : "bg-muted text-muted-foreground/80",
+                )}
+              >
+                {tag.postCount}
+              </span>
+            </button>
+          ))}
         </div>
+
+        {/* Scroll fade masks and chevron buttons */}
+        <AnimatePresence>
+          {canScrollLeft && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-0 left-0 bottom-4 w-20 bg-gradient-to-r from-background via-background/80 to-transparent flex items-center justify-start pointer-events-none z-20"
+            >
+              <button
+                onClick={() =>
+                  tabBarRef.current?.scrollBy({
+                    left: -250,
+                    behavior: "smooth",
+                  })
+                }
+                className="w-8 h-8 flex items-center justify-center bg-background border border-border shadow-sm rounded-full pointer-events-auto text-muted-foreground hover:text-foreground transition-all hover:scale-105 active:scale-95 shadow-foreground/5 ml-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {canScrollRight && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute top-0 right-0 bottom-4 w-20 bg-gradient-to-l from-background via-background/80 to-transparent flex items-center justify-end pointer-events-none z-20"
+            >
+              <button
+                onClick={() =>
+                  tabBarRef.current?.scrollBy({ left: 250, behavior: "smooth" })
+                }
+                className="w-8 h-8 flex items-center justify-center bg-background border border-border shadow-sm rounded-full pointer-events-auto text-muted-foreground hover:text-foreground transition-all hover:scale-105 active:scale-95 shadow-foreground/5 mr-1"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* ------------------------------------------------------------------ */}
@@ -329,8 +411,13 @@ export function NotesClient() {
                     prev.map((t) => {
                       const wasIn = oldTagIds.includes(t.id);
                       const isIn = newTagIds.includes(t.id);
-                      if (wasIn && !isIn) return { ...t, postCount: Math.max(0, t.postCount - 1) };
-                      if (!wasIn && isIn) return { ...t, postCount: t.postCount + 1 };
+                      if (wasIn && !isIn)
+                        return {
+                          ...t,
+                          postCount: Math.max(0, t.postCount - 1),
+                        };
+                      if (!wasIn && isIn)
+                        return { ...t, postCount: t.postCount + 1 };
                       return t;
                     }),
                   );
@@ -393,8 +480,14 @@ export function NotesClient() {
                 setShowTagForm(true);
               }}
               onDeleteTag={async (tag) => {
-                if (tag.postCount > 0 || (tag.postIds && tag.postIds.length > 0)) {
-                  toast(`Cannot delete tag "${tag.name}" — it has posts`, "error");
+                if (
+                  tag.postCount > 0 ||
+                  (tag.postIds && tag.postIds.length > 0)
+                ) {
+                  toast(
+                    `Cannot delete tag "${tag.name}" — it has posts`,
+                    "error",
+                  );
                   return;
                 }
                 if (
@@ -403,10 +496,15 @@ export function NotesClient() {
                   )
                 )
                   return;
-                const res = await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
+                const res = await fetch(`/api/tags/${tag.id}`, {
+                  method: "DELETE",
+                });
                 if (!res.ok) {
                   const errData = await res.json().catch(() => ({}));
-                  toast(errData.error || `Failed to delete tag "${tag.name}"`, "error");
+                  toast(
+                    errData.error || `Failed to delete tag "${tag.name}"`,
+                    "error",
+                  );
                   return;
                 }
                 if (activeTab === tag.id) setActiveTab("all");
@@ -433,54 +531,86 @@ export function NotesClient() {
       </AnimatePresence>
 
       {/* -------------------------------------------------------------- */}
-      {/* Tag detail bar (outside AnimatePresence to avoid rerender)     */}
+      {/* Search & Actions Detail Bar                                    */}
       {/* -------------------------------------------------------------- */}
-      {activeTab !== "all" && activeTagObj && (
-        <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Mobile Top Row / Desktop Left Side */}
+        <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
-            <span
-              className="w-3 h-3 rounded-full shrink-0"
-              style={{ background: activeTagObj.color }}
-            />
+            {activeTab === "all" ? (
+              <BookOpen className="w-4 h-4 text-steel shrink-0" />
+            ) : (
+              <span
+                className="w-3 h-3 rounded-full shrink-0"
+                style={{ background: activeTagObj?.color }}
+              />
+            )}
             <p className="text-xs font-mono text-muted-foreground/70">
-              {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length}{" "}
-              {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag
+              {activeTab === "all"
+                ? `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`
+                : `${posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length} ${posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag`}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative group w-full max-w-[280px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
-              <input
-                type="text"
-                placeholder={`Search in ${activeTagObj.name}...`}
-                value={localSearch}
-                onChange={(e) => setLocalSearch(e.target.value)}
-                className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
-              />
-              {localSearch && (
-                <button
-                  onClick={() => setLocalSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              )}
-            </div>
+
+          {/* Post button for mobile (shown on left row's right side) */}
+          {activeTab !== "all" && (
             <motion.button
               onClick={() => {
                 closeAllForms();
                 setShowPostForm(true);
               }}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+              className="sm:hidden inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
               whileHover={{ y: -0.5 }}
               whileTap={{ scale: 0.98 }}
             >
               <Plus className="w-3.5 h-3.5" />
               Post
             </motion.button>
-          </div>
+          )}
         </div>
-      )}
+
+        {/* Mobile Bottom Row / Desktop Right Side */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative group w-full sm:w-64 lg:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
+            <input
+              type="text"
+              placeholder={
+                activeTab === "all"
+                  ? "Search all notes..."
+                  : `Search in ${activeTagObj?.name}...`
+              }
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
+            />
+            {localSearch && (
+              <button
+                onClick={() => setLocalSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Post button for desktop (shown next to search) */}
+          {activeTab !== "all" && (
+            <motion.button
+              onClick={() => {
+                closeAllForms();
+                setShowPostForm(true);
+              }}
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+              whileHover={{ y: -0.5 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Post
+            </motion.button>
+          )}
+        </div>
+      </div>
 
       {/* -------------------------------------------------------------- */}
       {/* Post list                                                      */}
@@ -493,9 +623,8 @@ export function NotesClient() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-
           {filteredPosts.length === 0 ? (
-            <div className="py-24 text-center border border-dashed border-border/60 rounded-3xl bg-muted/5 flex flex-col items-center justify-center p-6">
+            <div className="py-10 lg:py-24 text-center border border-dashed border-border/60 rounded-3xl bg-muted/5 flex flex-col items-center justify-center p-6">
               <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4 text-muted-foreground/60">
                 <BookOpen className="w-6 h-6" />
               </div>
@@ -507,7 +636,7 @@ export function NotesClient() {
                   ? `There are no posts in tag "${activeTagObj?.name}" matching your search.`
                   : "Start documenting your ideas and resources today."}
               </p>
-              {!tagHasPosts && (
+              {!tagHasPosts && activeTab !== "all" && (
                 <button
                   onClick={() => {
                     closeAllForms();
@@ -516,8 +645,7 @@ export function NotesClient() {
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-opacity cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Post{" "}
-                  {activeTab !== "all" ? `for ${activeTagObj?.name}` : "Note"}
+                  Post for {activeTagObj?.name}
                 </button>
               )}
             </div>
@@ -538,7 +666,9 @@ export function NotesClient() {
                   onDelete={async () => {
                     if (!confirm("Are you sure you want to delete this note?"))
                       return;
-                    const res = await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+                    const res = await fetch(`/api/posts/${post.id}`, {
+                      method: "DELETE",
+                    });
                     if (!res.ok) {
                       toast("Failed to delete post", "error");
                       return;
@@ -1096,19 +1226,19 @@ function TagForm({
             {/* Presets */}
             <div className="flex items-center gap-2 flex-wrap">
               {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    className={cn(
-                      "w-7 h-7 rounded-full transition-all border border-black/5 dark:border-white/5 cursor-pointer",
-                      color === c
-                        ? "ring-2 ring-offset-2 ring-offset-background ring-steel scale-110"
-                        : "hover:scale-105",
-                    )}
-                    style={{ background: c }}
-                  />
-                ))}
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    "w-7 h-7 rounded-full transition-all border border-black/5 dark:border-white/5 cursor-pointer",
+                    color === c
+                      ? "ring-2 ring-offset-2 ring-offset-background ring-steel scale-110"
+                      : "hover:scale-105",
+                  )}
+                  style={{ background: c }}
+                />
+              ))}
             </div>
             {/* Native color picker */}
             <label className="relative cursor-pointer shrink-0">
@@ -1309,9 +1439,13 @@ function TagManager({
                     "p-1.5 rounded-lg transition-colors",
                     tag.postCount > 0
                       ? "text-muted-foreground/30 hover:bg-muted cursor-not-allowed"
-                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer",
                   )}
-                  title={tag.postCount > 0 ? "Cannot delete tag containing posts" : "Delete tag"}
+                  title={
+                    tag.postCount > 0
+                      ? "Cannot delete tag containing posts"
+                      : "Delete tag"
+                  }
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
