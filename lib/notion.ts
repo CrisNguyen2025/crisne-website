@@ -60,45 +60,50 @@ async function queryDatabase(
   const results: PageObjectResponse[] = [];
   let cursor: string | undefined;
 
+  // SDK v5 (Notion-Version 2025-09-03) removed databases.query endpoint.
+  // Must use dataSources.query with the data_source_id instead.
+  const dataSourceId = await resolveDataSourceId(databaseId);
+
+  const sorts = opts?.sorts?.map((s) => ({
+    timestamp: s.timestamp as "created_time" | "last_edited_time",
+    direction: s.direction as "ascending" | "descending",
+  }));
+
   do {
-    const res = await notion.search({
-      filter: { property: "object", value: "page" },
+    const res = await (notion.dataSources as any).query({
+      data_source_id: dataSourceId,
+      ...(opts?.filter ? { filter: opts.filter } : {}),
+      ...(sorts?.length ? { sorts } : {}),
       ...(cursor ? { start_cursor: cursor } : {}),
+      page_size: 100,
     });
 
     for (const page of res.results) {
       if (!isFullPage(page)) continue;
-
-      // SDK v5: parent can be type "database_id" OR "data_source_id"
-      const parent = page.parent as Record<string, unknown>;
-      const parentDbId =
-        (parent["database_id"] as string | undefined) ??
-        (parent["data_source_id"] as string | undefined);
-
-      if (!parentDbId || normalizeId(parentDbId) !== normalizeId(databaseId)) continue;
-
-      // Apply optional filter
-      if (opts?.filter && !matchFilter(page, opts.filter)) continue;
-
       results.push(page);
     }
 
     cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
   } while (cursor);
 
-  // Sort client-side
-  if (opts?.sorts?.length) {
-    const { timestamp, direction } = opts.sorts[0];
-    results.sort((a, b) => {
-      const aVal = timestamp === "created_time" ? a.created_time : a.last_edited_time;
-      const bVal = timestamp === "created_time" ? b.created_time : b.last_edited_time;
-      return direction === "ascending"
-        ? aVal.localeCompare(bVal)
-        : bVal.localeCompare(aVal);
-    });
-  }
-
   return results;
+}
+
+// Cache: database_id → data_source_id (first data source)
+const dataSourceIdCache = new Map<string, string>();
+
+async function resolveDataSourceId(databaseId: string): Promise<string> {
+  const cached = dataSourceIdCache.get(databaseId);
+  if (cached) return cached;
+
+  const db = await notion.databases.retrieve({ database_id: databaseId }) as any;
+  const dataSources: { id: string; name: string }[] = db.data_sources ?? [];
+  if (!dataSources.length) {
+    throw new Error(`No data sources found for database ${databaseId}`);
+  }
+  const dsId = dataSources[0].id;
+  dataSourceIdCache.set(databaseId, dsId);
+  return dsId;
 }
 
 /** Normalize Notion IDs — strip dashes for comparison */
@@ -230,9 +235,6 @@ export async function getPosts(opts?: {
 }): Promise<NotionPost[]> {
   const filters: Record<string, unknown>[] = [];
 
-  if (opts?.publishedOnly) {
-    filters.push({ property: "Published", checkbox: { equals: true } });
-  }
   if (opts?.tagId) {
     filters.push({ property: "Tags", relation: { contains: opts.tagId } });
   }
@@ -272,15 +274,16 @@ export async function createPost(data: {
   published?: boolean;
   tagIds?: string[];
 }): Promise<NotionPost> {
+  const properties: NotionProperties = {
+    Title: { title: [{ text: { content: data.title } }] },
+    Slug: { rich_text: [{ text: { content: data.slug ?? slugify(data.title) } }] },
+    Content: { rich_text: [{ text: { content: data.content ?? "" } }] },
+    Tags: { relation: (data.tagIds ?? []).map((id) => ({ id })) },
+  };
+
   const page = await notion.pages.create({
     parent: { database_id: POSTS_DB_ID },
-    properties: {
-      Title: { title: [{ text: { content: data.title } }] },
-      Slug: { rich_text: [{ text: { content: data.slug ?? slugify(data.title) } }] },
-      Content: { rich_text: [{ text: { content: data.content ?? "" } }] },
-      Published: { checkbox: data.published ?? false },
-      Tags: { relation: (data.tagIds ?? []).map((id) => ({ id })) },
-    },
+    properties,
   });
   if (!isFullPage(page)) throw new Error("Unexpected partial page response");
   return mapPost(page);
@@ -303,8 +306,6 @@ export async function updatePost(
     properties["Slug"] = { rich_text: [{ text: { content: data.slug } }] };
   if (data.content !== undefined)
     properties["Content"] = { rich_text: [{ text: { content: data.content } }] };
-  if (data.published !== undefined)
-    properties["Published"] = { checkbox: data.published };
   if (data.tagIds !== undefined)
     properties["Tags"] = { relation: data.tagIds.map((tid) => ({ id: tid })) };
 

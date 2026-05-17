@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ToastProvider } from "@/components/ui/toast";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -50,7 +51,9 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      <main className="pt-14">{children}</main>
+      <main className="pt-14">
+        <ToastProvider>{children}</ToastProvider>
+      </main>
     </div>
   );
 }

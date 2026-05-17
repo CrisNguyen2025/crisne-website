@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -10,15 +9,14 @@ import {
   Pencil,
   Trash2,
   Search,
-  Sparkles,
   BookOpen,
   Folder,
   Calendar,
   ArrowRight,
-  CornerDownRight,
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 const PRESET_COLORS = [
@@ -34,6 +32,7 @@ const PRESET_COLORS = [
 
 export function NotesClient() {
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [posts, setPosts] = useState<PostWithTags[]>([]);
   const [tags, setTags] = useState<TagWithPostCount[]>([]);
   const [saving, setSaving] = useState(false);
@@ -69,6 +68,7 @@ export function NotesClient() {
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
   const [editingPost, setEditingPost] = useState<PostWithTags | null>(null);
+  const [viewingPost, setViewingPost] = useState<PostWithTags | null>(null);
   const [showTagForm, setShowTagForm] = useState(false);
   const [editingTag, setEditingTag] = useState<TagWithPostCount | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
@@ -134,6 +134,7 @@ export function NotesClient() {
   const closeAllForms = () => {
     setShowPostForm(false);
     setEditingPost(null);
+    setViewingPost(null);
     setShowTagForm(false);
     setEditingTag(null);
     setShowTagManager(false);
@@ -321,8 +322,31 @@ export function NotesClient() {
                   setPosts((prev) =>
                     prev.map((p) => (p.id === enriched.id ? enriched : p)),
                   );
+                  // Update tag counts: remove from old tags, add to new tags
+                  const oldTagIds = editingPost.tags.map((t) => t.id);
+                  const newTagIds = enriched.tags.map((t) => t.id);
+                  setTags((prev) =>
+                    prev.map((t) => {
+                      const wasIn = oldTagIds.includes(t.id);
+                      const isIn = newTagIds.includes(t.id);
+                      if (wasIn && !isIn) return { ...t, postCount: Math.max(0, t.postCount - 1) };
+                      if (!wasIn && isIn) return { ...t, postCount: t.postCount + 1 };
+                      return t;
+                    }),
+                  );
+                  toast("Post updated successfully");
                 } else {
                   setPosts((prev) => [enriched, ...prev]);
+                  // Increment tag counts for new post
+                  const newTagIds = enriched.tags.map((t) => t.id);
+                  setTags((prev) =>
+                    prev.map((t) =>
+                      newTagIds.includes(t.id)
+                        ? { ...t, postCount: t.postCount + 1 }
+                        : t,
+                    ),
+                  );
+                  toast("Post created successfully");
                 }
               }}
               onCancel={closeAllForms}
@@ -346,8 +370,10 @@ export function NotesClient() {
                         : t,
                     ),
                   );
+                  toast("Tag updated successfully");
                 } else {
                   setTags((prev) => [...prev, { ...savedTag, postCount: 0 }]);
+                  toast("Tag created successfully");
                 }
               }}
               onCancel={closeAllForms}
@@ -368,9 +394,7 @@ export function NotesClient() {
               }}
               onDeleteTag={async (tag) => {
                 if (tag.postCount > 0 || (tag.postIds && tag.postIds.length > 0)) {
-                  alert(
-                    `Không thể xóa tag "${tag.name}" vì tag này đang có bài viết sử dụng. Vui lòng gỡ tag khỏi các bài viết trước khi xóa tag!`,
-                  );
+                  toast(`Cannot delete tag "${tag.name}" — it has posts`, "error");
                   return;
                 }
                 if (
@@ -382,17 +406,81 @@ export function NotesClient() {
                 const res = await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
                 if (!res.ok) {
                   const errData = await res.json().catch(() => ({}));
-                  alert(errData.error || `Failed to delete tag "${tag.name}".`);
+                  toast(errData.error || `Failed to delete tag "${tag.name}"`, "error");
                   return;
                 }
                 if (activeTab === tag.id) setActiveTab("all");
-                refresh();
+                setTags((prev) => prev.filter((t) => t.id !== tag.id));
+                toast(`Tag "${tag.name}" deleted`);
               }}
               onCancel={closeAllForms}
             />
           </Modal>
         )}
+        {viewingPost && (
+          <Modal onClose={closeAllForms}>
+            <PostDetailView
+              post={viewingPost}
+              onEdit={() => {
+                const post = viewingPost;
+                closeAllForms();
+                setEditingPost(post);
+              }}
+              onClose={closeAllForms}
+            />
+          </Modal>
+        )}
       </AnimatePresence>
+
+      {/* -------------------------------------------------------------- */}
+      {/* Tag detail bar (outside AnimatePresence to avoid rerender)     */}
+      {/* -------------------------------------------------------------- */}
+      {activeTab !== "all" && activeTagObj && (
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="w-3 h-3 rounded-full shrink-0"
+              style={{ background: activeTagObj.color }}
+            />
+            <p className="text-xs font-mono text-muted-foreground/70">
+              {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length}{" "}
+              {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative group w-full max-w-[280px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
+              <input
+                type="text"
+                placeholder={`Search in ${activeTagObj.name}...`}
+                value={localSearch}
+                onChange={(e) => setLocalSearch(e.target.value)}
+                className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
+              />
+              {localSearch && (
+                <button
+                  onClick={() => setLocalSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <motion.button
+              onClick={() => {
+                closeAllForms();
+                setShowPostForm(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+              whileHover={{ y: -0.5 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Post
+            </motion.button>
+          </div>
+        </div>
+      )}
 
       {/* -------------------------------------------------------------- */}
       {/* Post list                                                      */}
@@ -405,59 +493,6 @@ export function NotesClient() {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab !== "all" && activeTagObj && tagHasPosts && (
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-card border border-border/40 rounded-2xl shadow-sm">
-              <div className="flex items-center gap-3">
-                <span
-                  className="w-3.5 h-3.5 rounded-full shrink-0 animate-pulse"
-                  style={{ background: activeTagObj.color }}
-                />
-                <div>
-                  <h2 className="text-base font-bold text-foreground tracking-tight">
-                    {activeTagObj.name}
-                  </h2>
-                  <p className="text-[11px] font-mono text-muted-foreground/60">
-                    {filteredPosts.length} of {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length}{" "}
-                    {posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-                {/* Tag-specific Search input */}
-                <div className="relative group w-full max-w-[400px] sm:w-[400px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 group-focus-within:text-steel transition-colors" />
-                  <input
-                    type="text"
-                    placeholder={`Search in ${activeTagObj.name}...`}
-                    value={localSearch}
-                    onChange={(e) => setLocalSearch(e.target.value)}
-                    className="w-full pl-9 pr-7 py-2 bg-muted/20 hover:bg-muted/30 focus:bg-muted/40 border border-border/20 focus:border-steel/30 focus:ring-2 focus:ring-steel/5 rounded-xl text-xs transition-all focus:outline-none placeholder:text-muted-foreground/45"
-                  />
-                  {localSearch && (
-                    <button
-                      onClick={() => setLocalSearch("")}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50 hover:text-foreground cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                <motion.button
-                  onClick={() => {
-                    closeAllForms();
-                    setShowPostForm(true);
-                  }}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
-                  whileHover={{ y: -0.5 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Post
-                </motion.button>
-              </div>
-            </div>
-          )}
 
           {filteredPosts.length === 0 ? (
             <div className="py-24 text-center border border-dashed border-border/60 rounded-3xl bg-muted/5 flex flex-col items-center justify-center p-6">
@@ -492,6 +527,10 @@ export function NotesClient() {
                 <PostCard
                   key={post.id}
                   post={post}
+                  onView={() => {
+                    closeAllForms();
+                    setViewingPost(post);
+                  }}
                   onEdit={() => {
                     closeAllForms();
                     setEditingPost(post);
@@ -499,8 +538,22 @@ export function NotesClient() {
                   onDelete={async () => {
                     if (!confirm("Are you sure you want to delete this note?"))
                       return;
-                    await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
-                    refresh();
+                    const res = await fetch(`/api/posts/${post.id}`, { method: "DELETE" });
+                    if (!res.ok) {
+                      toast("Failed to delete post", "error");
+                      return;
+                    }
+                    // Decrement tag counts for deleted post
+                    const deletedTagIds = post.tags.map((t) => t.id);
+                    setTags((prev) =>
+                      prev.map((t) =>
+                        deletedTagIds.includes(t.id)
+                          ? { ...t, postCount: Math.max(0, t.postCount - 1) }
+                          : t,
+                      ),
+                    );
+                    setPosts((prev) => prev.filter((p) => p.id !== post.id));
+                    toast("Post deleted successfully");
                   }}
                 />
               ))}
@@ -562,10 +615,12 @@ function PostCard({
   post,
   onEdit,
   onDelete,
+  onView,
 }: {
   post: PostWithTags;
   onEdit: () => void;
   onDelete: () => void;
+  onView: () => void;
 }) {
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "short",
@@ -578,6 +633,7 @@ function PostCard({
       className="group relative flex flex-col justify-between p-6 bg-card border border-border/40 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full"
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
+      layout
     >
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -631,9 +687,9 @@ function PostCard({
       </div>
 
       <div className="flex-1 min-w-0">
-        <Link
-          href={`/notes/${post.slug || post.id}`}
-          className="block group/link cursor-pointer"
+        <button
+          onClick={onView}
+          className="block group/link cursor-pointer text-left w-full"
         >
           <h3 className="text-lg font-bold text-foreground group-hover/link:text-steel transition-colors tracking-tight line-clamp-1 mb-2">
             {post.title}
@@ -641,7 +697,7 @@ function PostCard({
           <p className="text-xs text-muted-foreground/70 line-clamp-2 mb-4 leading-relaxed">
             {post.content && post.content.trim() ? post.content : "N/A"}
           </p>
-        </Link>
+        </button>
       </div>
 
       <div className="flex items-center justify-between pt-4 border-t border-border/30 text-[11px] font-mono text-muted-foreground/60">
@@ -649,15 +705,100 @@ function PostCard({
           <Calendar className="w-3 h-3" />
           <time className="tabular-nums">{date}</time>
         </div>
-        <Link
-          href={`/notes/${post.slug || post.id}`}
+        <button
+          onClick={onView}
           className="inline-flex items-center gap-1 text-steel hover:text-steel-light font-medium group/btn transition-colors cursor-pointer"
         >
           Read entry
           <ArrowRight className="w-3 h-3 transition-transform group-hover/btn:translate-x-0.5" />
-        </Link>
+        </button>
       </div>
     </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Post Detail View (read-only modal)
+// ---------------------------------------------------------------------------
+
+function PostDetailView({
+  post,
+  onEdit,
+  onClose,
+}: {
+  post: PostWithTags;
+  onEdit: () => void;
+  onClose: () => void;
+}) {
+  const date = new Date(post.createdAt).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {post.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
+                style={{
+                  background: `${tag.color}12`,
+                  borderColor: `${tag.color}30`,
+                  color: tag.color,
+                }}
+              >
+                <span
+                  className="w-1 h-1 rounded-full"
+                  style={{ background: tag.color }}
+                />
+                {tag.name}
+              </span>
+            ))}
+          </div>
+          <h2 className="text-xl font-bold text-foreground tracking-tight leading-tight">
+            {post.title}
+          </h2>
+          <p className="text-xs font-mono text-muted-foreground/60 mt-1.5">
+            {date}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={onEdit}
+            className="p-2 text-muted-foreground hover:text-steel hover:bg-muted rounded-lg transition-all cursor-pointer"
+            title="Edit"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="border-t border-border/30 pt-5">
+        <div className="prose prose-sm dark:prose-invert max-w-none">
+          <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+            {post.content && post.content.trim() ? post.content : "No content."}
+          </p>
+        </div>
+      </div>
+
+      {post.slug && (
+        <div className="pt-3 border-t border-border/20">
+          <p className="text-[11px] font-mono text-muted-foreground/50">
+            slug: {post.slug}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -787,20 +928,6 @@ function PostForm({
           />
         </div>
 
-        {/* Slug */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-            Slug URL
-          </label>
-          <input
-            type="text"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="my-latest-experiment"
-            className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
-          />
-        </div>
-
         {/* Content */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
@@ -847,6 +974,20 @@ function PostForm({
             </div>
           </div>
         )}
+
+        {/* Slug */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+            Slug URL
+          </label>
+          <input
+            type="text"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="my-latest-experiment"
+            className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
+          />
+        </div>
       </div>
 
       <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/30">
