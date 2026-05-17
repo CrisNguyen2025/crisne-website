@@ -1,26 +1,16 @@
-import { getPosts, getTags } from "@/lib/notion";
-import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
+"use client";
+
+import { Suspense } from "react";
 import { NotesClient } from "./NotesClient";
 
-export const revalidate = 0;
-
-export default async function NotesPage() {
-  const [rawPosts, rawTags] = await Promise.all([
-    getPosts(),
-    getTags(),
-  ]);
-
-  const tagMap = Object.fromEntries(rawTags.map((t) => [t.id, t]));
-
-  const posts: PostWithTags[] = rawPosts.map(({ tagIds, ...post }) => ({
-    ...post,
-    tags: tagIds.flatMap((id) => (tagMap[id] ? [tagMap[id]] : [])),
-  }));
-
-  const tags: TagWithPostCount[] = rawTags.map((t) => ({
-    ...t,
-    postCount: t.postIds.length,
-  }));
-
-  return <NotesClient initialPosts={posts} initialTags={tags} />;
+export default function NotesPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto px-6 py-24 text-center">
+        <p className="text-sm font-mono text-muted-foreground">Loading...</p>
+      </div>
+    }>
+      <NotesClient />
+    </Suspense>
+  );
 }
