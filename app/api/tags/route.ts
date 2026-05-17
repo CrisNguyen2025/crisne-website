@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getTags, createTag } from "@/lib/notion";
+import type { TagWithPostCount } from "@/lib/notion-types";
 
-// GET /api/tags — list all tags
+// GET /api/tags — list all tags with post count
 export async function GET() {
   try {
-    const tags = await prisma.tag.findMany({
-      orderBy: { createdAt: "asc" },
-      include: { _count: { select: { notes: true } } },
-    });
-    return NextResponse.json(tags);
-  } catch {
+    const tags = await getTags();
+
+    const result: TagWithPostCount[] = tags.map((tag) => ({
+      ...tag,
+      postCount: tag.postIds.length,
+    }));
+
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("[GET /api/tags]", err);
     return NextResponse.json({ error: "Failed to fetch tags" }, { status: 500 });
   }
 }
 
-// POST /api/tags — create a tag
+// POST /api/tags
+// Body: { name, color? }
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -24,17 +30,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Tag name is required" }, { status: 400 });
     }
 
-    const tag = await prisma.tag.create({
-      data: { name: name.trim(), color: color ?? "#6b9ac4" },
-    });
-
+    const tag = await createTag(name.trim(), color);
     return NextResponse.json(tag, { status: 201 });
-  } catch (err: unknown) {
-    const isUniqueConstraint =
-      err instanceof Error && err.message.includes("Unique constraint");
-    if (isUniqueConstraint) {
-      return NextResponse.json({ error: "Tag already exists" }, { status: 409 });
-    }
-    return NextResponse.json({ error: "Failed to create tag" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[POST /api/tags]", err);
+    return NextResponse.json(
+      { error: "Failed to create tag", detail: message },
+      { status: 500 }
+    );
   }
 }
