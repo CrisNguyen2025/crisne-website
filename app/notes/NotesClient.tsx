@@ -42,18 +42,54 @@ function tagSlug(name: string): string {
 
 /** Strip HTML tags to get plain text for previews */
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  return html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\[!(success|info|warning|error)\]\s*/g, "") // Remove callout markers
+    .trim();
 }
 
 /** Convert plain text to HTML (newlines → paragraphs) if no HTML detected */
 function contentToHtml(content: string): string {
-  // If already contains HTML tags, return as-is
-  if (/<[a-z][\s\S]*>/i.test(content)) return content;
-  // Split by double newlines into paragraphs, single newlines into <br>
-  return content
-    .split(/\n\n+/)
-    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
-    .join("");
+  let html: string;
+  // If already contains HTML tags, use as-is
+  if (/<[a-z][\s\S]*>/i.test(content)) {
+    html = content;
+  } else {
+    // Split by double newlines into paragraphs, single newlines into <br>
+    html = content
+      .split(/\n\n+/)
+      .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+      .join("");
+  }
+  
+  const copyIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+  
+  // Transform callout markers in blockquotes: [!success], [!info], [!warning], [!error]
+  html = html.replace(
+    /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi,
+    (_match, inner: string) => {
+      const markerMatch = inner.match(
+        /^\s*(?:<[^>]+>)*\s*\[!(success|info|warning|error)\]\s*/,
+      );
+      if (markerMatch) {
+        const type = markerMatch[1];
+        const cleanInner = inner.replace(/\[!(success|info|warning|error)\]\s*/, "");
+        return `<div class="callout callout-${type}"><button class="callout-copy-btn" data-copy title="Copy">${copyIcon}</button><div class="callout-content">${cleanInner}</div></div>`;
+      }
+      return `<blockquote>${inner}</blockquote>`;
+    },
+  );
+  
+  // Also handle plain text with [!type] markers (not in blockquote)
+  html = html.replace(
+    /(<p[^>]*>)\s*\[!(success|info|warning|error)\]\s*([\s\S]*?)(<\/p>)/gi,
+    (_match, _openTag, type, innerContent) => {
+      return `<div class="callout callout-${type}"><button class="callout-copy-btn" data-copy title="Copy">${copyIcon}</button><div class="callout-content">${innerContent}</div></div>`;
+    },
+  );
+  
+  return html;
 }
 
 const PRESET_COLORS = [
@@ -770,11 +806,6 @@ export function NotesClient() {
                     setDrawerPost(post);
                     setDrawerMode("view");
                   }}
-                  onEdit={() => {
-                    closeAllForms();
-                    setDrawerPost(post);
-                    setDrawerMode("edit");
-                  }}
                   onDelete={async () => {
                     if (!confirm("Are you sure you want to delete this note?"))
                       return;
@@ -820,7 +851,7 @@ function Modal({
 }) {
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -882,7 +913,7 @@ function Drawer({
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-[100] flex justify-end"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -935,12 +966,10 @@ function Drawer({
 
 function PostCard({
   post,
-  onEdit,
   onDelete,
   onView,
 }: {
   post: PostWithTags;
-  onEdit: () => void;
   onDelete: () => void;
   onView: () => void;
 }) {
@@ -989,22 +1018,13 @@ function PostCard({
           )}
         </div>
 
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <button
-            onClick={onEdit}
-            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-all cursor-pointer"
-            title="Edit Note"
-          >
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all cursor-pointer"
-            title="Delete Note"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
+        <button
+          onClick={onDelete}
+          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+          title="Delete Note"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -1113,10 +1133,46 @@ function PostDetailView({
             dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }}
             onClick={(e) => {
               const target = e.target as HTMLElement;
+              
+              // Handle link clicks
               const anchor = target.closest("a");
               if (anchor) {
                 e.preventDefault();
                 window.open(anchor.href, "_blank", "noopener,noreferrer");
+                return;
+              }
+              
+              // Handle copy button clicks
+              const copyBtn = target.closest("[data-copy]") as HTMLButtonElement;
+              if (copyBtn) {
+                e.preventDefault();
+                const callout = copyBtn.closest(".callout");
+                const contentEl = callout?.querySelector(".callout-content");
+                
+                // Get text with line breaks preserved
+                let text = "";
+                if (contentEl) {
+                  // Clone to avoid modifying original
+                  const clone = contentEl.cloneNode(true) as HTMLElement;
+                  // Replace <br> with newlines
+                  clone.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
+                  // Replace block elements with newlines
+                  clone.querySelectorAll("p, div").forEach(el => {
+                    el.prepend(document.createTextNode("\n"));
+                  });
+                  text = clone.textContent || "";
+                } else if (callout) {
+                  text = callout.textContent || "";
+                }
+                
+                navigator.clipboard.writeText(text.trim());
+                
+                // Show checkmark
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+                setTimeout(() => {
+                  copyBtn.innerHTML = originalHtml;
+                }, 1500);
               }
             }}
           />

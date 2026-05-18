@@ -16,6 +16,7 @@ import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import { Expand, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import './editor.css';
+import { CalloutNode } from './nodes/CalloutNode';
 import { ImageNode } from './nodes/ImageNode';
 import { KeywordNode } from './nodes/KeywordNode';
 import { MentionNode } from './nodes/MentionNode';
@@ -28,6 +29,7 @@ import {
   ToolbarPlugin,
   type ImagePickerRenderer,
 } from './plugins';
+import CalloutTransformPlugin from './plugins/CalloutTransformPlugin';
 import FloatingLinkEditorPlugin from './plugins/FloatingLinkEditorPlugin';
 import LinkPlugin from './plugins/LinkPlugin';
 import NewMentionsPlugin from './plugins/MentionPlugin';
@@ -55,6 +57,7 @@ const initialConfig = {
     ImageNode,
     KeywordNode,
     MentionNode,
+    CalloutNode,
   ],
 };
 
@@ -137,6 +140,7 @@ export default function Editor({
         <LexicalComposer initialConfig={config}>
           <ImagesPlugin />
           <SetContentPlugin value={value} />
+          <CalloutTransformPlugin />
           <OnChangePlugin
             onChange={(_, editor) => {
               editor.update(() => {

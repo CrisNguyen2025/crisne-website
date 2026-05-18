@@ -7,6 +7,7 @@ import { $setBlocksType } from '@lexical/selection';
 import { Select } from 'antd';
 import {
   $createParagraphNode,
+  $createTextNode,
   $findMatchingParent,
   $getRoot,
   $getSelection,
@@ -32,6 +33,7 @@ import {
   Link,
   List,
   ListOrdered,
+  MessageSquare,
   Redo,
   Strikethrough,
   Underline,
@@ -39,6 +41,7 @@ import {
 } from 'lucide-react';
 
 import React, { Dispatch, useCallback, useEffect, useState } from 'react';
+import { $createCalloutNode, CalloutType } from '../../nodes/CalloutNode';
 import { getSelectedNode } from '../../utils/getSelectedNode';
 import { sanitizeUrl } from '../../utils/url';
 import { ImagePickerRenderer, InsertImageDialog } from '../ImagesPlugin';
@@ -208,6 +211,27 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   };
 
   const [visibleImageModal, setVisibleImageModal] = useState<boolean>(false);
+  const [showCalloutMenu, setShowCalloutMenu] = useState(false);
+
+  const insertCallout = (type: CalloutType) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        // Get selected text before converting
+        const selectedText = selection.getTextContent();
+        // Convert block to CalloutNode
+        $setBlocksType(selection, () => $createCalloutNode(type));
+        // Insert the selected text into the callout
+        if (selectedText) {
+          const newSelection = $getSelection();
+          if ($isRangeSelection(newSelection)) {
+            newSelection.insertText(selectedText);
+          }
+        }
+      }
+    });
+    setShowCalloutMenu(false);
+  };
 
   const clearContent = () => {
     editor.update(() => {
@@ -306,6 +330,53 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
         <ToolbarButton disabled={disabled} onClick={() => setVisibleImageModal(true)} title='Image'>
           <Image size={18} />
         </ToolbarButton>
+        <div className='relative'>
+          <ToolbarButton
+            disabled={disabled}
+            onClick={() => setShowCalloutMenu(!showCalloutMenu)}
+            title='Insert Callout (success/info/warning/error)'
+          >
+            <MessageSquare size={18} />
+          </ToolbarButton>
+          {showCalloutMenu && (
+            <>
+              <div className='fixed inset-0' style={{ zIndex: 9998 }} onClick={() => setShowCalloutMenu(false)} />
+              <div
+                className='absolute left-0 mt-1 rounded-xl shadow-2xl p-1.5 flex flex-col gap-0.5 min-w-[140px]'
+                style={{
+                  top: '100%',
+                  zIndex: 9999,
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                {(['success', 'info', 'warning', 'error'] as CalloutType[]).map((type) => (
+                  <button
+                    key={type}
+                    type='button'
+                    onClick={() => insertCallout(type)}
+                    className='flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-colors text-left cursor-pointer'
+                    style={{ color: 'var(--foreground)' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--muted)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span
+                      className='w-2.5 h-2.5 rounded-full shrink-0'
+                      style={{
+                        background:
+                          type === 'success' ? '#22c55e' :
+                          type === 'info' ? '#3b82f6' :
+                          type === 'warning' ? '#f59e0b' :
+                          '#ef4444',
+                      }}
+                    />
+                    <span className='capitalize'>{type}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </ToolbarButtonGroup>
 
       <ToolbarButtonGroup>

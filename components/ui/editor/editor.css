@@ -7,7 +7,7 @@
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: none;
   transition:
     box-shadow 0.2s ease,
@@ -98,6 +98,8 @@
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: color-mix(in srgb, var(--surface-subtle) 50%, transparent);
+  overflow: visible;
+  position: relative;
 }
 
 .editor-toolbar-group {
@@ -156,8 +158,9 @@
 
 .editor-canvas {
   border: 0;
-  border-radius: 0;
+  border-radius: 0 0 12px 12px;
   background: transparent;
+  overflow: auto;
 }
 
 .editor-shell .editor-container.tree-view {
@@ -474,4 +477,24 @@
   border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
   border-radius: 999px;
   padding: 2px 8px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Callout Blocks (blockquote with [!type] marker)
+ * --------------------------------------------------------------------------- */
+
+.editor-canvas blockquote {
+  position: relative;
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem 0.75rem 1.25rem;
+  border: 1.5px solid #3b82f6;
+  border-left: 4px solid #3b82f6;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+  font-style: normal;
+}
+
+/* Hide [!type] markers visually but keep for export */
+.editor-canvas blockquote [data-lexical-text="true"] {
+  /* Markers will be hidden via JS transform */
 }

@@ -20,6 +20,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         theme="colored"
         transition={Slide}
         toastClassName="!rounded-xl !text-sm !font-medium !shadow-lg"
+        style={{ zIndex: 9999 }}
       />
     </>
   );

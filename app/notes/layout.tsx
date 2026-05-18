@@ -12,7 +12,7 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen relative">
       {/* Grid background + gradient blobs */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-background" />
         <svg
           className="absolute inset-0 w-full h-full opacity-[0.04] dark:opacity-[0.06]"
@@ -48,7 +48,7 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
         />
       </div>
 
-      <header className="fixed top-0 left-0 right-0 z-50">
+      <header className="fixed top-0 left-0 right-0 z-40">
         <div className="h-px bg-gradient-to-r from-transparent via-[#6b9ac4]/40 to-transparent" />
         <div className="bg-background/75 backdrop-blur-2xl border-b border-border/30">
           <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
@@ -77,7 +77,7 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      <main className="relative z-10 pt-14">
+      <main className="relative pt-14">
         <ToastProvider>{children}</ToastProvider>
       </main>
     </div>

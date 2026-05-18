@@ -185,3 +185,93 @@
   animation: none;
   mix-blend-mode: normal;
 }
+
+/* ---------------------------------------------------------------------------
+ * Callout Blocks — rendered from [!type] markers in blockquotes
+ * --------------------------------------------------------------------------- */
+
+.callout {
+  position: relative;
+  margin: 0.75rem 0;
+  padding: 0.875rem 2.5rem 0.875rem 1.25rem;
+  border: 1.5px solid;
+  border-left: 4px solid;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.callout-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.callout:hover .callout-copy-btn {
+  opacity: 0.7;
+}
+
+.callout-copy-btn:hover {
+  opacity: 1 !important;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:is(.dark) .callout-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.callout-success {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.06);
+  color: #166534;
+}
+
+.callout-info {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.06);
+  color: #1e40af;
+}
+
+.callout-warning {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+  color: #92400e;
+}
+
+.callout-error {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+  color: #991b1b;
+}
+
+:is(.dark) .callout-success {
+  background: rgba(34, 197, 94, 0.1);
+  color: #86efac;
+}
+
+:is(.dark) .callout-info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+}
+
+:is(.dark) .callout-warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fcd34d;
+}
+
+:is(.dark) .callout-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+}
