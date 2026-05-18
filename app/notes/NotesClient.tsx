@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 const Editor = dynamic(() => import("@/components/ui/editor/Editor"), {
@@ -597,10 +598,12 @@ export function NotesClient() {
             onClose={closeAllForms}
             widthClass="sm:w-[80%] lg:w-[60%]"
           >
+            <div className="flex-1 min-h-0 relative">
             <AnimatePresence mode="wait" initial={false}>
               {drawerMode === "view" ? (
                 <motion.div
                   key="view"
+                  className="absolute inset-0 flex flex-col"
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
@@ -615,6 +618,7 @@ export function NotesClient() {
               ) : (
                 <motion.div
                   key="edit"
+                  className="absolute inset-0 flex flex-col"
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
@@ -672,6 +676,7 @@ export function NotesClient() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
           </Drawer>
         )}
       </AnimatePresence>
@@ -796,7 +801,7 @@ export function NotesClient() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
               {filteredPosts.map((post) => (
                 <PostCard
                   key={post.id}
@@ -931,7 +936,7 @@ function Drawer({
       <motion.div
         ref={panelRef}
         className={cn(
-          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl overflow-y-auto touch-pan-y",
+          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl flex flex-col touch-pan-y overflow-hidden",
           widthClass,
         )}
         initial={{ x: "100%" }}
@@ -949,12 +954,44 @@ function Drawer({
           }
         }}
       >
+        {/* Animated Grid Pattern background */}
+        <AnimatedGridPattern
+          numSquares={40}
+          maxOpacity={0.15}
+          duration={3}
+          repeatDelay={1}
+          width={40}
+          height={40}
+          className={cn(
+            "[mask-image:radial-gradient(500px_circle_at_center,white,transparent)]",
+            "inset-x-0 inset-y-[-30%] h-[200%] skew-y-12 fill-steel/40 stroke-steel/40",
+          )}
+        />
+
+        {/* Ambient light glow */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {/* Top right - bright glow */}
+          <div
+            className="absolute -top-20 -right-20 w-[35rem] h-[30rem] rounded-full blur-[8rem] opacity-[0.18] dark:opacity-[0.22]"
+            style={{ background: "radial-gradient(circle, #6b9ac4 0%, transparent 60%)" }}
+          />
+          {/* Center - ambient */}
+          <div
+            className="absolute top-1/3 left-1/4 w-[25rem] h-[25rem] rounded-full blur-[6rem] opacity-[0.1] dark:opacity-[0.14]"
+            style={{ background: "radial-gradient(circle, #8bb5d9 0%, transparent 70%)" }}
+          />
+          {/* Bottom left - subtle */}
+          <div
+            className="absolute -bottom-10 -left-10 w-[30rem] h-[25rem] rounded-full blur-[7rem] opacity-[0.08] dark:opacity-[0.12]"
+            style={{ background: "radial-gradient(circle, #a78bfa 0%, transparent 70%)" }}
+          />
+        </div>
+
         {/* Swipe indicator — mobile only */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1">
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 relative z-10">
           <div className="w-8 h-1 rounded-full bg-border/60" />
         </div>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-steel/5 blur-3xl rounded-full pointer-events-none" />
-        <div className="p-6 md:p-8">{children}</div>
+        <div className="flex-1 min-h-0 flex flex-col relative z-10">{children}</div>
       </motion.div>
     </motion.div>
   );
@@ -1080,7 +1117,8 @@ function PostDetailView({
   });
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -1108,21 +1146,6 @@ function PostDetailView({
           <p className="text-xs font-mono text-muted-foreground/60 mt-1.5">
             {date}
           </p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onEdit}
-            className="p-2 text-muted-foreground hover:text-steel hover:bg-muted rounded-lg transition-all cursor-pointer"
-            title="Edit"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -1180,7 +1203,25 @@ function PostDetailView({
           <p className="text-sm text-muted-foreground/60">No content.</p>
         )}
       </div>
+      </div>
 
+      {/* Pinned bottom actions - always visible */}
+      <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-end gap-3">
+        <button
+          onClick={onEdit}
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          Edit
+        </button>
+        <button
+          onClick={onClose}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-xl border border-border/30 transition-all cursor-pointer hover:bg-secondary/80"
+        >
+          <X className="w-3.5 h-3.5" />
+          Close
+        </button>
+      </div>
     </div>
   );
 }
@@ -1262,18 +1303,19 @@ function PostForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="flex items-center justify-between pb-3 border-b border-border/30">
-        <div>
-          <h2 className="text-lg font-bold text-foreground tracking-tight">
-            {post ? "Edit Post Entry" : "Create New Post"}
-          </h2>
-          <p className="text-xs text-muted-foreground/60">
-            Fill in details for your thoughts.
-          </p>
-        </div>
-        <button
-          type="button"
+    <form onSubmit={handleSubmit} className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+        <div className="flex items-center justify-between pb-3 border-b border-border/30">
+          <div>
+            <h2 className="text-lg font-bold text-foreground tracking-tight">
+              {post ? "Edit Post Entry" : "Create New Post"}
+            </h2>
+            <p className="text-xs text-muted-foreground/60">
+              Fill in details for your thoughts.
+            </p>
+          </div>
+          <button
+            type="button"
           onClick={onCancel}
           className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
         >
@@ -1371,21 +1413,25 @@ function PostForm({
             className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
           />
         </div>
+        </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/30">
+      {/* Pinned bottom actions - always visible */}
+      <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-end gap-3">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-xl border border-border/30 transition-all cursor-pointer hover:bg-secondary/80"
         >
+          <X className="w-3.5 h-3.5 sm:hidden" />
           Cancel
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl disabled:opacity-40 transition-all cursor-pointer hover:opacity-90"
         >
+          <Check className="w-3.5 h-3.5 sm:hidden" />
           {saving ? "Saving..." : post ? "Save Changes" : "Create Post"}
         </button>
       </div>
