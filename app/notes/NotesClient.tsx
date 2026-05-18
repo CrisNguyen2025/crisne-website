@@ -22,6 +22,16 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
+/** Generate a URL-friendly slug from a tag name */
+function tagSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 const PRESET_COLORS = [
   "#6b9ac4",
   "#8bb5d9",
@@ -50,23 +60,37 @@ export function NotesClient() {
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  // Active tab: "all" | tag.id — synced with ?tab= param
-  const [activeTab, setActiveTab] = useState<string>(
-    searchParams.get("tab") ?? "all",
-  );
+  // Active tab: "all" | tag.id — synced with ?tab=<tag-slug> param
+  const [activeTab, setActiveTab] = useState<string>("all");
+  const initialTabParam = searchParams.get("tab");
 
-  const switchTab = useCallback((tabId: string) => {
-    setActiveTab(tabId);
-    setLocalSearch("");
-    const params = new URLSearchParams(window.location.search);
-    if (tabId === "all") {
-      params.delete("tab");
-    } else {
-      params.set("tab", tabId);
+  // Resolve ?tab=slug → tag.id once tags are loaded
+  useEffect(() => {
+    if (!initialTabParam || tags.length === 0) return;
+    if (initialTabParam === "all") return;
+    const matched = tags.find((t) => tagSlug(t.name) === initialTabParam);
+    if (matched) {
+      setActiveTab(matched.id);
     }
-    const qs = params.toString();
-    window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tags]);
+
+  const switchTab = useCallback(
+    (tabId: string) => {
+      setActiveTab(tabId);
+      setLocalSearch("");
+      const params = new URLSearchParams(window.location.search);
+      if (tabId === "all") {
+        params.delete("tab");
+      } else {
+        const tag = tags.find((t) => t.id === tabId);
+        params.set("tab", tag ? tagSlug(tag.name) : tabId);
+      }
+      const qs = params.toString();
+      window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
+    },
+    [tags],
+  );
 
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
