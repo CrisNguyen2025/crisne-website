@@ -26,7 +26,12 @@ export async function GET(req: NextRequest) {
       tags: tagIds.flatMap((id) => (tagMap[id] ? [tagMap[id]] : [])),
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+      },
+    });
   } catch (err) {
     console.error("[GET /api/posts]", err);
     return NextResponse.json({ error: "Failed to fetch posts" }, { status: 500 });

@@ -46,6 +46,17 @@ function relationToIds(prop: ReturnType<typeof getProp>): string[] {
   return prop.relation.map((r) => r.id);
 }
 
+/** Notion rich_text blocks are limited to 2000 chars each. Split long strings. */
+const NOTION_TEXT_LIMIT = 2000;
+function toRichTextBlocks(text: string): { text: { content: string } }[] {
+  if (!text) return [{ text: { content: "" } }];
+  const blocks: { text: { content: string } }[] = [];
+  for (let i = 0; i < text.length; i += NOTION_TEXT_LIMIT) {
+    blocks.push({ text: { content: text.slice(i, i + NOTION_TEXT_LIMIT) } });
+  }
+  return blocks;
+}
+
 // ---------------------------------------------------------------------------
 // Query helper — SDK v5 removed databases.query, use search() instead
 // ---------------------------------------------------------------------------
@@ -277,7 +288,7 @@ export async function createPost(data: {
   const properties: NotionProperties = {
     Title: { title: [{ text: { content: data.title } }] },
     Slug: { rich_text: [{ text: { content: data.slug ?? slugify(data.title) } }] },
-    Content: { rich_text: [{ text: { content: data.content ?? "" } }] },
+    Content: { rich_text: toRichTextBlocks(data.content ?? "") },
     Tags: { relation: (data.tagIds ?? []).map((id) => ({ id })) },
   };
 
@@ -305,7 +316,7 @@ export async function updatePost(
   if (data.slug !== undefined)
     properties["Slug"] = { rich_text: [{ text: { content: data.slug } }] };
   if (data.content !== undefined)
-    properties["Content"] = { rich_text: [{ text: { content: data.content } }] };
+    properties["Content"] = { rich_text: toRichTextBlocks(data.content) };
   if (data.tagIds !== undefined)
     properties["Tags"] = { relation: data.tagIds.map((tid) => ({ id: tid })) };
 

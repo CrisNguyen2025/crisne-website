@@ -14,7 +14,12 @@ export async function GET() {
       postCount: tag.postIds.length,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+      },
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[GET /api/tags]", err);

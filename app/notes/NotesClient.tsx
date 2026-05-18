@@ -45,6 +45,17 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
 
+/** Convert plain text to HTML (newlines → paragraphs) if no HTML detected */
+function contentToHtml(content: string): string {
+  // If already contains HTML tags, return as-is
+  if (/<[a-z][\s\S]*>/i.test(content)) return content;
+  // Split by double newlines into paragraphs, single newlines into <br>
+  return content
+    .split(/\n\n+/)
+    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
 const PRESET_COLORS = [
   "#6b9ac4",
   "#8bb5d9",
@@ -151,11 +162,13 @@ export function NotesClient() {
 
   const refresh = useCallback(async () => {
     try {
+      const ts = Date.now(); // cache-busting
+      const headers = { "Cache-Control": "no-cache", Pragma: "no-cache" };
       const [postsRes, tagsRes] = await Promise.all([
-        fetch("/api/posts", { cache: "no-store" }).then((r) =>
+        fetch(`/api/posts?_t=${ts}`, { cache: "no-store", headers }).then((r) =>
           r.ok ? r.json() : [],
         ),
-        fetch("/api/tags", { cache: "no-store" }).then((r) =>
+        fetch(`/api/tags?_t=${ts}`, { cache: "no-store", headers }).then((r) =>
           r.ok ? r.json() : [],
         ),
       ]);
@@ -1097,7 +1110,7 @@ function PostDetailView({
         {post.content && post.content.trim() ? (
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2"
-            dangerouslySetInnerHTML={{ __html: post.content }}
+            dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }}
             onClick={(e) => {
               const target = e.target as HTMLElement;
               const anchor = target.closest("a");
