@@ -1,0 +1,477 @@
+.editor-shell {
+  --editor-gutter: 0;
+  color: var(--foreground);
+  position: relative;
+  line-height: 1.7;
+  font-weight: 400;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: none;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.editor-shell:focus-within {
+  border-color: color-mix(in srgb, var(--focus) 35%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 10%, transparent);
+}
+
+.editor-shell-disabled {
+  opacity: 0.8;
+}
+
+.editor-shell .editor-container {
+  background: transparent;
+  position: relative;
+  display: block;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.editor-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.editor-topbar-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  background: var(--info-bg);
+}
+
+.editor-topbar-title {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 0;
+}
+
+.editor-topbar-subtitle {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-fullscreen-button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.editor-fullscreen-button:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--surface-subtle) 50%, transparent);
+}
+
+.editor-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+}
+
+.editor-toolbar-group:last-child {
+  border-right: 0;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.editor-toolbar-button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  border-radius: 6px;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.editor-toolbar-button:hover {
+  color: var(--foreground);
+  background: var(--surface-muted);
+  border-color: transparent;
+}
+
+.editor-toolbar-button-active {
+  color: var(--primary);
+  background: var(--info-bg);
+  border-color: transparent;
+}
+
+.editor-toolbar-button-disabled {
+  color: var(--muted-foreground);
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.editor-toolbar .ant-select-selector,
+.editor-toolbar .ant-select-arrow,
+.editor-toolbar .ant-select-selection-item,
+.editor-topbar button,
+.editor-toolbar button {
+  cursor: pointer !important;
+}
+
+.editor-canvas {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.editor-shell .editor-container.tree-view {
+  border-radius: 0;
+}
+
+.editor-shell .editor-container.plain-text {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.editor-scroller {
+  min-height: 180px;
+  max-width: 100%;
+  border: 0;
+  display: flex;
+  position: relative;
+  outline: 0;
+  z-index: 0;
+  resize: vertical;
+}
+
+.editor {
+  flex: auto;
+  max-width: 100%;
+  position: relative;
+  resize: vertical;
+  z-index: -1;
+}
+
+#rich-text-switch {
+  right: 0;
+}
+
+.editor-shell span.editor-image {
+  cursor: default;
+  display: inline-block;
+  position: relative;
+  user-select: none;
+}
+
+.editor-shell .editor-image img {
+  max-width: 100%;
+  cursor: default;
+}
+
+.editor-shell .editor-image img.focused {
+  outline: 2px solid var(--focus);
+  user-select: none;
+}
+
+.editor-shell .editor-image img.focused.draggable {
+  cursor: grab;
+}
+
+.editor-shell .editor-image img.focused.draggable:active {
+  cursor: grabbing;
+}
+
+.editor-shell .editor-image .image-caption-container .tree-view-output {
+  margin: 0;
+  border-radius: 0;
+}
+
+.editor-shell .editor-image .image-caption-container {
+  display: block;
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--surface-subtle) 95%, transparent);
+  min-width: 100px;
+  color: var(--foreground);
+  overflow: hidden;
+}
+
+.editor-shell .editor-image .image-caption-button {
+  display: block;
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  width: 30%;
+  padding: 10px;
+  margin: 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 5px;
+  background-color: color-mix(in srgb, var(--overlay) 70%, transparent);
+  min-width: 100px;
+  color: var(--inverse-foreground);
+  cursor: pointer;
+  user-select: none;
+}
+
+.editor-shell .editor-image .image-caption-button:hover {
+  background-color: color-mix(in srgb, var(--primary) 50%, transparent);
+}
+
+.editor-shell .editor-image .image-edit-button {
+  border: 1px solid var(--input);
+  border-radius: 5px;
+  background-size: 16px;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 35px;
+  height: 35px;
+  vertical-align: -0.25em;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editor-shell .editor-image .image-edit-button:hover {
+  background-color: var(--info-bg);
+}
+
+.editor-shell .editor-image .image-resizer {
+  display: block;
+  width: 7px;
+  height: 7px;
+  position: absolute;
+  background-color: var(--focus);
+  border: 1px solid var(--inverse-foreground);
+  z-index: 100;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-n {
+  top: -6px;
+  left: 48%;
+  cursor: n-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-ne {
+  top: -6px;
+  right: -6px;
+  cursor: ne-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-e {
+  bottom: 48%;
+  right: -6px;
+  cursor: e-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-se {
+  bottom: -2px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-s {
+  bottom: -2px;
+  left: 48%;
+  cursor: s-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-sw {
+  bottom: -2px;
+  left: -6px;
+  cursor: sw-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-w {
+  bottom: 48%;
+  left: -6px;
+  cursor: w-resize;
+}
+
+.editor-shell .editor-image .image-resizer.image-resizer-nw {
+  top: -6px;
+  left: -6px;
+  cursor: nw-resize;
+}
+
+.editor-text-italic {
+  font-style: italic !important;
+}
+
+/* Force list markers in editor even if global reset removes them */
+.editor-canvas ul,
+.editor-canvas ol {
+  padding-left: 1.25rem !important;
+  margin: 0.25rem 0 !important;
+}
+
+.editor-canvas ul {
+  list-style: disc !important;
+}
+
+.editor-canvas ol {
+  list-style: decimal !important;
+}
+
+.editor-canvas li {
+  margin: 0.125rem 0 !important;
+}
+
+/* Ensure links always look like links in content */
+.editor-canvas a,
+.editor-canvas .editor-link {
+  color: var(--primary) !important;
+  text-decoration-line: underline !important;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1.5px;
+}
+
+/* Floating link panel */
+.editor-link-floating-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 100%;
+  max-width: 460px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.editor-link-popover {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 98%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+
+.editor-link-url {
+  flex: 1;
+  min-width: 0;
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.editor-link-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-link-action {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.editor-link-action:hover {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--foreground);
+}
+
+.editor-link-action-primary {
+  color: var(--primary);
+  background: var(--info-bg);
+  border-color: color-mix(in srgb, var(--focus) 50%, var(--border));
+}
+
+.editor-link-action-danger:hover {
+  color: var(--error);
+  background: var(--error-bg);
+  border-color: color-mix(in srgb, var(--error) 35%, var(--border));
+}
+
+.editor-link-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.editor-link-input {
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  padding: 0 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.editor-link-input:focus {
+  border-color: color-mix(in srgb, var(--focus) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
+}
+
+.editor-link-copied {
+  position: absolute;
+  right: 10px;
+  top: -10px;
+  font-size: 11px;
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
+  border-radius: 999px;
+  padding: 2px 8px;
+}

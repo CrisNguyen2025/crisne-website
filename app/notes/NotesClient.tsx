@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -22,6 +23,13 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
+const Editor = dynamic(() => import("@/components/ui/editor/Editor"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[200px] rounded-xl border border-border/30 bg-muted/20 animate-pulse" />
+  ),
+});
+
 /** Generate a URL-friendly slug from a tag name */
 function tagSlug(name: string): string {
   return name
@@ -30,6 +38,11 @@ function tagSlug(name: string): string {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/** Strip HTML tags to get plain text for previews */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
 
 const PRESET_COLORS = [
@@ -99,6 +112,10 @@ export function NotesClient() {
   const [showTagForm, setShowTagForm] = useState(false);
   const [editingTag, setEditingTag] = useState<TagWithPostCount | null>(null);
   const [showTagManager, setShowTagManager] = useState(false);
+
+  // Post drawer: single drawer for both view/edit
+  const [drawerPost, setDrawerPost] = useState<PostWithTags | null>(null);
+  const [drawerMode, setDrawerMode] = useState<"view" | "edit">("view");
 
   // Tab bar reference for auto-scrolling
   const tabBarRef = useRef<HTMLDivElement>(null);
@@ -173,6 +190,8 @@ export function NotesClient() {
     setShowPostForm(false);
     setEditingPost(null);
     setViewingPost(null);
+    setDrawerPost(null);
+    setDrawerMode("view");
     setShowTagForm(false);
     setEditingTag(null);
     setShowTagManager(false);
@@ -405,10 +424,10 @@ export function NotesClient() {
       {/* Modals                                                             */}
       {/* ------------------------------------------------------------------ */}
       <AnimatePresence>
-        {(showPostForm || editingPost) && (
-          <Modal onClose={closeAllForms}>
+        {showPostForm && !drawerPost && (
+          <Drawer onClose={closeAllForms}>
             <PostForm
-              post={editingPost}
+              post={null}
               tags={tags}
               preselectedTagId={activeTab !== "all" ? activeTab : undefined}
               saving={saving}
@@ -424,45 +443,20 @@ export function NotesClient() {
                     []
                   ).flatMap((id: string) => (tagMap[id] ? [tagMap[id]] : [])),
                 };
-                if (editingPost) {
-                  setPosts((prev) =>
-                    prev.map((p) => (p.id === enriched.id ? enriched : p)),
-                  );
-                  // Update tag counts: remove from old tags, add to new tags
-                  const oldTagIds = editingPost.tags.map((t) => t.id);
-                  const newTagIds = enriched.tags.map((t) => t.id);
-                  setTags((prev) =>
-                    prev.map((t) => {
-                      const wasIn = oldTagIds.includes(t.id);
-                      const isIn = newTagIds.includes(t.id);
-                      if (wasIn && !isIn)
-                        return {
-                          ...t,
-                          postCount: Math.max(0, t.postCount - 1),
-                        };
-                      if (!wasIn && isIn)
-                        return { ...t, postCount: t.postCount + 1 };
-                      return t;
-                    }),
-                  );
-                  toast("Post updated successfully");
-                } else {
-                  setPosts((prev) => [enriched, ...prev]);
-                  // Increment tag counts for new post
-                  const newTagIds = enriched.tags.map((t) => t.id);
-                  setTags((prev) =>
-                    prev.map((t) =>
-                      newTagIds.includes(t.id)
-                        ? { ...t, postCount: t.postCount + 1 }
-                        : t,
-                    ),
-                  );
-                  toast("Post created successfully");
-                }
+                setPosts((prev) => [enriched, ...prev]);
+                const newTagIds = enriched.tags.map((t) => t.id);
+                setTags((prev) =>
+                  prev.map((t) =>
+                    newTagIds.includes(t.id)
+                      ? { ...t, postCount: t.postCount + 1 }
+                      : t,
+                  ),
+                );
+                toast("Post created successfully");
               }}
               onCancel={closeAllForms}
             />
-          </Modal>
+          </Drawer>
         )}
         {(showTagForm || editingTag) && (
           <Modal onClose={closeAllForms}>
@@ -545,18 +539,91 @@ export function NotesClient() {
             />
           </Modal>
         )}
-        {viewingPost && (
-          <Modal onClose={closeAllForms}>
-            <PostDetailView
-              post={viewingPost}
-              onEdit={() => {
-                const post = viewingPost;
-                closeAllForms();
-                setEditingPost(post);
-              }}
-              onClose={closeAllForms}
-            />
-          </Modal>
+      </AnimatePresence>
+
+      {/* Unified Post View/Edit Drawer */}
+      <AnimatePresence>
+        {drawerPost && (
+          <Drawer
+            onClose={closeAllForms}
+            widthClass="sm:w-[80%] lg:w-[60%]"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              {drawerMode === "view" ? (
+                <motion.div
+                  key="view"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <PostDetailView
+                    post={drawerPost}
+                    onEdit={() => setDrawerMode("edit")}
+                    onClose={closeAllForms}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="edit"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <PostForm
+                    post={drawerPost}
+                    tags={tags}
+                    preselectedTagId={activeTab !== "all" ? activeTab : undefined}
+                    saving={saving}
+                    setSaving={setSaving}
+                    onSaved={(savedPost) => {
+                      const tagMap = Object.fromEntries(
+                        tags.map((t) => [t.id, t]),
+                      );
+                      const enriched: PostWithTags = {
+                        ...savedPost,
+                        tags: (
+                          savedPost.tagIds ??
+                          savedPost.tags?.map((t) => t.id) ??
+                          []
+                        ).flatMap((id: string) =>
+                          tagMap[id] ? [tagMap[id]] : [],
+                        ),
+                      };
+                      setPosts((prev) =>
+                        prev.map((p) =>
+                          p.id === enriched.id ? enriched : p,
+                        ),
+                      );
+                      // Update tag counts
+                      const oldTagIds = drawerPost.tags.map((t) => t.id);
+                      const newTagIds = enriched.tags.map((t) => t.id);
+                      setTags((prev) =>
+                        prev.map((t) => {
+                          const wasIn = oldTagIds.includes(t.id);
+                          const isIn = newTagIds.includes(t.id);
+                          if (wasIn && !isIn)
+                            return {
+                              ...t,
+                              postCount: Math.max(0, t.postCount - 1),
+                            };
+                          if (!wasIn && isIn)
+                            return { ...t, postCount: t.postCount + 1 };
+                          return t;
+                        }),
+                      );
+                      // Switch back to view mode with updated post
+                      setDrawerPost(enriched);
+                      setDrawerMode("view");
+                      toast("Post updated successfully");
+                    }}
+                    onCancel={() => setDrawerMode("view")}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Drawer>
         )}
       </AnimatePresence>
 
@@ -687,11 +754,13 @@ export function NotesClient() {
                   post={post}
                   onView={() => {
                     closeAllForms();
-                    setViewingPost(post);
+                    setDrawerPost(post);
+                    setDrawerMode("view");
                   }}
                   onEdit={() => {
                     closeAllForms();
-                    setEditingPost(post);
+                    setDrawerPost(post);
+                    setDrawerMode("edit");
                   }}
                   onDelete={async () => {
                     if (!confirm("Are you sure you want to delete this note?"))
@@ -762,6 +831,86 @@ function Modal({
       >
         <div className="absolute top-0 right-0 w-24 h-24 bg-steel/10 blur-2xl rounded-full pointer-events-none" />
         {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Drawer (slide from right — 40% desktop, 100% mobile, Esc to close)
+// ---------------------------------------------------------------------------
+
+function Drawer({
+  children,
+  onClose,
+  widthClass = "sm:w-[60%] lg:w-[40%]",
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  widthClass?: string;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  // Prevent body scroll while drawer is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex justify-end"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-background/50 backdrop-blur-sm"
+        onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
+      {/* Panel — swipe right to close on mobile */}
+      <motion.div
+        ref={panelRef}
+        className={cn(
+          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl overflow-y-auto touch-pan-y",
+          widthClass,
+        )}
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={{ left: 0, right: 0.4 }}
+        dragSnapToOrigin
+        onDragEnd={(_e, info) => {
+          // Close if swiped right far enough or with enough velocity
+          if (info.offset.x > 100 || info.velocity.x > 300) {
+            onClose();
+          }
+        }}
+      >
+        {/* Swipe indicator — mobile only */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-8 h-1 rounded-full bg-border/60" />
+        </div>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-steel/5 blur-3xl rounded-full pointer-events-none" />
+        <div className="p-6 md:p-8">{children}</div>
       </motion.div>
     </motion.div>
   );
@@ -854,7 +1003,9 @@ function PostCard({
             {post.title}
           </h3>
           <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mb-3 leading-relaxed">
-            {post.content && post.content.trim() ? post.content : "N/A"}
+            {post.content && post.content.trim()
+              ? stripHtml(post.content)
+              : "N/A"}
           </p>
         </button>
       </div>
@@ -943,20 +1094,24 @@ function PostDetailView({
       </div>
 
       <div className="border-t border-border/30 pt-5">
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-            {post.content && post.content.trim() ? post.content : "No content."}
-          </p>
-        </div>
+        {post.content && post.content.trim() ? (
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const anchor = target.closest("a");
+              if (anchor) {
+                e.preventDefault();
+                window.open(anchor.href, "_blank", "noopener,noreferrer");
+              }
+            }}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground/60">No content.</p>
+        )}
       </div>
 
-      {post.slug && (
-        <div className="pt-3 border-t border-border/20">
-          <p className="text-[11px] font-mono text-muted-foreground/50">
-            slug: {post.slug}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -1092,12 +1247,12 @@ function PostForm({
           <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
             Content Body
           </label>
-          <textarea
+          <Editor
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Document your concepts, scripts, or simple reflections here..."
-            rows={5}
-            className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm leading-relaxed focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none resize-none placeholder:text-muted-foreground/30"
+            onChange={(val) => setContent(val)}
+            minContentHeight={200}
+            namespace="NotesEditor"
+            showTopbar={false}
           />
         </div>
 

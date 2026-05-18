@@ -1,0 +1,33 @@
+export const defaultTheme = {
+  paragraph: 'text-foreground mb-1',
+  quote: 'border-border text-text-subtle my-3 border-l-4 pl-4 italic',
+  heading: {
+    h1: 'text-foreground mb-4 text-3xl font-bold tracking-tight',
+    h2: 'text-foreground mb-3 text-2xl font-bold tracking-tight',
+    h3: 'text-foreground mb-2 text-xl font-bold',
+    h4: 'text-foreground mb-2 text-lg font-bold',
+    h5: 'text-foreground mb-1 text-lg font-bold',
+    h6: 'text-foreground text-base font-bold',
+  },
+  list: {
+    nested: {
+      listitem: 'list-none',
+    },
+    ol: 'list-decimal ml-5 mb-1',
+    ul: 'list-disc ml-5 mb-1',
+    listitem: 'mb-0.5',
+  },
+  link: 'text-primary cursor-pointer underline underline-offset-2',
+  text: {
+    bold: 'font-bold',
+    italic: 'editor-text-italic',
+    underline: 'underline',
+    strikethrough: 'line-through',
+    code: 'bg-surface-muted text-foreground rounded px-1 py-0.5 font-mono text-sm',
+    lowercase: 'lowercase',
+    uppercase: 'uppercase',
+    capitalize: 'capitalize',
+  },
+  code: 'bg-surface-muted text-foreground my-3 block rounded-lg p-3 font-mono text-sm',
+  image: 'editor-image',
+};

@@ -1,0 +1,41 @@
+.ContentEditable__root {
+  border: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--foreground);
+  display: block;
+  position: relative;
+  outline: 0;
+  padding-top: 16px !important;
+  padding-right: 0 !important;
+  padding-bottom: 18px !important;
+  padding-left: 0 !important;
+  min-height: 180px;
+}
+@media (max-width: 1025px) {
+  .ContentEditable__root {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+.ContentEditable__placeholder {
+  font-size: 14px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  position: absolute;
+  text-overflow: ellipsis;
+  top: 14px;
+  left: 0 !important;
+  right: 0 !important;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-block;
+  pointer-events: none;
+}
+@media (max-width: 1025px) {
+  .ContentEditable__placeholder {
+    left: 0 !important;
+    right: 0 !important;
+  }
+}
