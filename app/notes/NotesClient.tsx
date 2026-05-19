@@ -256,7 +256,7 @@ export function NotesClient() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast(`Backup #${data.index} saved → ${data.path}`);
+        toast(`Backup #${data.index} saved → MD + JSON in /docs`);
       } else {
         toast(data.error || "Failed to save backup", "error");
       }
@@ -801,7 +801,7 @@ export function NotesClient() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
               {filteredPosts.map((post) => (
                 <PostCard
                   key={post.id}
@@ -899,6 +899,17 @@ function Drawer({
   widthClass?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [dragX, setDragX] = useState(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -916,6 +927,50 @@ function Drawer({
     };
   }, []);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isMobile) return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    isDraggingRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isMobile || !touchStartRef.current) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+
+    // Only start drag if horizontal movement dominates and is rightward
+    if (!isDraggingRef.current) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5 && dx > 0) {
+        isDraggingRef.current = true;
+      } else {
+        return;
+      }
+    }
+
+    if (isDraggingRef.current && dx > 0) {
+      setDragX(dx);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isMobile || !touchStartRef.current) return;
+    const elapsed = Date.now() - touchStartRef.current.time;
+    const velocity = dragX / elapsed * 1000;
+
+    if (isDraggingRef.current) {
+      if (dragX > 100 || velocity > 300) {
+        onClose();
+      } else {
+        setDragX(0);
+      }
+    }
+
+    touchStartRef.current = null;
+    isDraggingRef.current = false;
+  };
+
   return (
     <motion.div
       className="fixed inset-0 z-[100] flex justify-end"
@@ -932,27 +987,20 @@ function Drawer({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       />
-      {/* Panel — swipe right to close on mobile */}
+      {/* Panel — swipe right to close on mobile only */}
       <motion.div
         ref={panelRef}
         className={cn(
-          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl flex flex-col touch-pan-y overflow-hidden",
+          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden",
           widthClass,
         )}
         initial={{ x: "100%" }}
-        animate={{ x: 0 }}
+        animate={{ x: dragX }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", stiffness: 400, damping: 35 }}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={{ left: 0, right: 0.4 }}
-        dragSnapToOrigin
-        onDragEnd={(_e, info) => {
-          // Close if swiped right far enough or with enough velocity
-          if (info.offset.x > 100 || info.velocity.x > 300) {
-            onClose();
-          }
-        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Animated Grid Pattern background */}
         <AnimatedGridPattern

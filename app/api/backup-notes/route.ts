@@ -11,9 +11,9 @@ async function getNextBackupIndex(docsDir: string): Promise<number> {
     return 1;
   }
   const indices = files
-    .map(f => f.match(/^backup(\d+)\.md$/))
+    .map((f) => f.match(/^backup(\d+)\.md$/))
     .filter(Boolean)
-    .map(m => parseInt(m![1], 10));
+    .map((m) => parseInt(m![1], 10));
   return indices.length === 0 ? 1 : Math.max(...indices) + 1;
 }
 
@@ -33,8 +33,12 @@ export async function POST(request: Request) {
     }
 
     const index = await getNextBackupIndex(docsDir);
-    const fileName = `backup${index}.md`;
+    const mdFileName = `backup${index}.md`;
+    const jsonFileName = `backup${index}.json`;
 
+    // ----------------------------------------------------------------------
+    // Build Markdown
+    // ----------------------------------------------------------------------
     let mdContent = `# Notes Backup #${index}\n\nGenerated on: ${new Date().toISOString()}\n\n`;
 
     if (Array.isArray(tags) && tags.length > 0) {
@@ -55,15 +59,39 @@ export async function POST(request: Request) {
         mdContent += `**Slug:** ${post.slug}\n`;
       }
       if (post.tags && post.tags.length > 0) {
-        mdContent += `**Tags:** ${post.tags.map(t => t.name).join(", ")}\n`;
+        mdContent += `**Tags:** ${post.tags.map((t) => t.name).join(", ")}\n`;
       }
       mdContent += `\n${post.content || "No content."}\n\n---\n\n`;
     }
 
-    const filePath = path.join(docsDir, fileName);
-    await fs.writeFile(filePath, mdContent, "utf-8");
+    // ----------------------------------------------------------------------
+    // Build JSON (full data dump for restore)
+    // ----------------------------------------------------------------------
+    const jsonContent = {
+      version: 1,
+      index,
+      generatedAt: new Date().toISOString(),
+      tagsCount: Array.isArray(tags) ? tags.length : 0,
+      postsCount: posts.length,
+      tags: Array.isArray(tags) ? tags : [],
+      posts,
+    };
 
-    return NextResponse.json({ success: true, path: `docs/${fileName}`, index });
+    // Write both files
+    const mdPath = path.join(docsDir, mdFileName);
+    const jsonPath = path.join(docsDir, jsonFileName);
+    await Promise.all([
+      fs.writeFile(mdPath, mdContent, "utf-8"),
+      fs.writeFile(jsonPath, JSON.stringify(jsonContent, null, 2), "utf-8"),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      index,
+      mdPath: `docs/${mdFileName}`,
+      jsonPath: `docs/${jsonFileName}`,
+      path: `docs/${mdFileName}`, // backwards compat
+    });
   } catch (error) {
     console.error("Backup error:", error);
     return NextResponse.json({ error: "Failed to create backup" }, { status: 500 });
