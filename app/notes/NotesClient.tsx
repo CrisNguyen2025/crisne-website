@@ -1,9 +1,29 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  DndContext,
+  closestCenter,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Plus,
   X,
@@ -265,16 +285,108 @@ export function NotesClient() {
     }
   };
 
-  const filteredPosts = posts.filter((post) => {
-    const matchesSearch =
-      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (post.content &&
-        post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      post.slug.toLowerCase().includes(searchQuery.toLowerCase());
+  // ----- Custom order per tag (persisted in localStorage) -----
+  const [tagOrders, setTagOrders] = useState<Record<string, string[]>>({});
 
-    if (activeTab === "all") return matchesSearch;
-    return matchesSearch && post.tags.some((t) => t.id === activeTab);
-  });
+  // Load orders from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("notes-tag-orders");
+      if (stored) {
+        setTagOrders(JSON.parse(stored));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Persist orders whenever they change
+  const persistTagOrders = useCallback((next: Record<string, string[]>) => {
+    setTagOrders(next);
+    try {
+      localStorage.setItem("notes-tag-orders", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const filteredPosts = useMemo(() => {
+    const matched = posts.filter((post) => {
+      const matchesSearch =
+        post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (post.content &&
+          post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        post.slug.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (activeTab === "all") return matchesSearch;
+      return matchesSearch && post.tags.some((t) => t.id === activeTab);
+    });
+
+    // Tab "All" → sort A-Z by title
+    if (activeTab === "all") {
+      return [...matched].sort((a, b) =>
+        a.title.localeCompare(b.title, "vi", { sensitivity: "base" }),
+      );
+    }
+
+    // Tab specific → use custom order; new posts (not in order) go to the end
+    const customOrder = tagOrders[activeTab] ?? [];
+    const orderIndex = new Map(customOrder.map((id, i) => [id, i]));
+    return [...matched].sort((a, b) => {
+      const ai = orderIndex.has(a.id) ? orderIndex.get(a.id)! : Number.MAX_SAFE_INTEGER;
+      const bi = orderIndex.has(b.id) ? orderIndex.get(b.id)! : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      // Tie-breaker for new posts: by createdAt ASC (oldest new ones first, newest last)
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [posts, activeTab, searchQuery, tagOrders]);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveDragId(null);
+      if (!over || active.id === over.id) return;
+      if (activeTab === "all") return; // No DnD on "all" tab
+
+      const ids = filteredPosts.map((p) => p.id);
+      const oldIndex = ids.indexOf(active.id as string);
+      const newIndex = ids.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newOrder = arrayMove(ids, oldIndex, newIndex);
+      persistTagOrders({ ...tagOrders, [activeTab]: newOrder });
+    },
+    [activeTab, filteredPosts, tagOrders, persistTagOrders],
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
+  }, []);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveDragId(null);
+  }, []);
+
+  // Use long-press to activate drag, allowing normal clicks to open detail
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // 250ms hold + 5px tolerance before drag starts
+      activationConstraint: { delay: 250, tolerance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      // Mobile long-press 300ms
+      activationConstraint: { delay: 300, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  // Active dragging post id (for DragOverlay)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const activeDragPost = activeDragId
+    ? filteredPosts.find((p) => p.id === activeDragId) ?? null
+    : null;
 
   const activeTagObj = tags.find((t) => t.id === activeTab) ?? null;
   const tagHasPosts =
@@ -493,7 +605,7 @@ export function NotesClient() {
                     []
                   ).flatMap((id: string) => (tagMap[id] ? [tagMap[id]] : [])),
                 };
-                setPosts((prev) => [enriched, ...prev]);
+                setPosts((prev) => [...prev, enriched]);
                 const newTagIds = enriched.tags.map((t) => t.id);
                 setTags((prev) =>
                   prev.map((t) =>
@@ -612,6 +724,30 @@ export function NotesClient() {
                   <PostDetailView
                     post={drawerPost}
                     onEdit={() => setDrawerMode("edit")}
+                    onDelete={async () => {
+                      if (!confirm("Are you sure you want to delete this note?"))
+                        return;
+                      const res = await fetch(`/api/posts/${drawerPost.id}`, {
+                        method: "DELETE",
+                      });
+                      if (!res.ok) {
+                        toast("Failed to delete post", "error");
+                        return;
+                      }
+                      const deletedTagIds = drawerPost.tags.map((t) => t.id);
+                      setTags((prev) =>
+                        prev.map((t) =>
+                          deletedTagIds.includes(t.id)
+                            ? { ...t, postCount: Math.max(0, t.postCount - 1) }
+                            : t,
+                        ),
+                      );
+                      setPosts((prev) =>
+                        prev.filter((p) => p.id !== drawerPost.id),
+                      );
+                      closeAllForms();
+                      toast("Post deleted successfully");
+                    }}
                     onClose={closeAllForms}
                   />
                 </motion.div>
@@ -801,41 +937,48 @@ export function NotesClient() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
-              {filteredPosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onView={() => {
-                    closeAllForms();
-                    setDrawerPost(post);
-                    setDrawerMode("view");
-                  }}
-                  onDelete={async () => {
-                    if (!confirm("Are you sure you want to delete this note?"))
-                      return;
-                    const res = await fetch(`/api/posts/${post.id}`, {
-                      method: "DELETE",
-                    });
-                    if (!res.ok) {
-                      toast("Failed to delete post", "error");
-                      return;
-                    }
-                    // Decrement tag counts for deleted post
-                    const deletedTagIds = post.tags.map((t) => t.id);
-                    setTags((prev) =>
-                      prev.map((t) =>
-                        deletedTagIds.includes(t.id)
-                          ? { ...t, postCount: Math.max(0, t.postCount - 1) }
-                          : t,
-                      ),
-                    );
-                    setPosts((prev) => prev.filter((p) => p.id !== post.id));
-                    toast("Post deleted successfully");
-                  }}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
+              <SortableContext
+                items={filteredPosts.map((p) => p.id)}
+                strategy={rectSortingStrategy}
+                disabled={activeTab === "all"}
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+                  {filteredPosts.map((post) => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      sortable={activeTab !== "all"}
+                      onView={() => {
+                        closeAllForms();
+                        setDrawerPost(post);
+                        setDrawerMode("view");
+                      }}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+
+              {/* Floating preview while dragging */}
+              <DragOverlay
+                dropAnimation={{
+                  duration: 200,
+                  easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)",
+                }}
+              >
+                {activeDragPost && (
+                  <div className="rotate-2 scale-105 cursor-grabbing">
+                    <PostCardPreview post={activeDragPost} />
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
           )}
         </motion.div>
       </AnimatePresence>
@@ -1051,13 +1194,28 @@ function Drawer({
 
 function PostCard({
   post,
-  onDelete,
   onView,
+  sortable = false,
 }: {
   post: PostWithTags;
-  onDelete: () => void;
   onView: () => void;
+  sortable?: boolean;
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: post.id, disabled: !sortable });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+  };
+
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -1065,11 +1223,16 @@ function PostCard({
   });
 
   return (
-    <motion.div
-      className="group relative flex flex-col justify-between p-4 bg-card border border-border/30 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full"
-      whileHover={{ y: -2 }}
-      transition={{ duration: 0.2 }}
-      layout
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...(sortable ? listeners : {})}
+      className={cn(
+        "group relative flex flex-col justify-between p-4 bg-card border border-border/30 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full",
+        sortable && "cursor-grab active:cursor-grabbing touch-none",
+        isDragging && "ring-2 ring-steel/40",
+      )}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -1102,14 +1265,6 @@ function PostCard({
             </span>
           )}
         </div>
-
-        <button
-          onClick={onDelete}
-          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-          title="Delete Note"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -1141,7 +1296,54 @@ function PostCard({
           <ArrowRight className="w-3 h-3 transition-transform group-hover/btn:translate-x-0.5" />
         </button>
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Post Card Preview (for DragOverlay)
+// ---------------------------------------------------------------------------
+
+function PostCardPreview({ post }: { post: PostWithTags }) {
+  const date = new Date(post.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <div className="relative flex flex-col justify-between p-4 bg-card border border-steel/40 rounded-2xl shadow-2xl shadow-foreground/10 backdrop-blur">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {post.tags.slice(0, 2).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+              style={{
+                background: `${tag.color}12`,
+                borderColor: `${tag.color}30`,
+                color: tag.color,
+              }}
+            >
+              <span className="w-1 h-1 rounded-full" style={{ background: tag.color }} />
+              {tag.name}
+            </span>
+          ))}
+        </div>
+      </div>
+      <h3 className="text-base font-bold text-foreground tracking-tight line-clamp-1 mb-1">
+        {post.title}
+      </h3>
+      <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mb-3 leading-relaxed">
+        {post.content && post.content.trim() ? stripHtml(post.content) : "N/A"}
+      </p>
+      <div className="flex items-center justify-between pt-2.5 border-t border-border/30 text-[10px] font-mono text-muted-foreground/60">
+        <div className="flex items-center gap-1">
+          <Calendar className="w-3 h-3" />
+          <time className="tabular-nums">{date}</time>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1152,10 +1354,12 @@ function PostCard({
 function PostDetailView({
   post,
   onEdit,
+  onDelete,
   onClose,
 }: {
   post: PostWithTags;
   onEdit: () => void;
+  onDelete: () => void;
   onClose: () => void;
 }) {
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
@@ -1254,21 +1458,30 @@ function PostDetailView({
       </div>
 
       {/* Pinned bottom actions - always visible */}
-      <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-end gap-3">
+      <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-between gap-3">
         <button
-          onClick={onEdit}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
+          onClick={onDelete}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-xs font-semibold rounded-xl border border-destructive/20 transition-all cursor-pointer hover:bg-destructive/20"
         >
-          <Pencil className="w-3.5 h-3.5" />
-          Edit
+          <Trash2 className="w-3.5 h-3.5" />
+          Delete
         </button>
-        <button
-          onClick={onClose}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-xl border border-border/30 transition-all cursor-pointer hover:bg-secondary/80"
-        >
-          <X className="w-3.5 h-3.5" />
-          Close
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-xl border border-border/30 transition-all cursor-pointer hover:bg-secondary/80"
+          >
+            <X className="w-3.5 h-3.5" />
+            Close
+          </button>
+          <button
+            onClick={onEdit}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </button>
+        </div>
       </div>
     </div>
   );
