@@ -749,6 +749,36 @@ export function NotesClient() {
                       toast("Post deleted successfully");
                     }}
                     onClose={closeAllForms}
+                    onPrev={
+                      (() => {
+                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                        return idx > 0
+                          ? () => setDrawerPost(filteredPosts[idx - 1])
+                          : undefined;
+                      })()
+                    }
+                    onNext={
+                      (() => {
+                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                        return idx >= 0 && idx < filteredPosts.length - 1
+                          ? () => setDrawerPost(filteredPosts[idx + 1])
+                          : undefined;
+                      })()
+                    }
+                    prevTitle={
+                      (() => {
+                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                        return idx > 0 ? filteredPosts[idx - 1].title : undefined;
+                      })()
+                    }
+                    nextTitle={
+                      (() => {
+                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                        return idx >= 0 && idx < filteredPosts.length - 1
+                          ? filteredPosts[idx + 1].title
+                          : undefined;
+                      })()
+                    }
                   />
                 </motion.div>
               ) : (
@@ -1356,11 +1386,19 @@ function PostDetailView({
   onEdit,
   onDelete,
   onClose,
+  onPrev,
+  onNext,
+  prevTitle,
+  nextTitle,
 }: {
   post: PostWithTags;
   onEdit: () => void;
   onDelete: () => void;
   onClose: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
+  prevTitle?: string;
+  nextTitle?: string;
 }) {
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "long",
@@ -1459,28 +1497,46 @@ function PostDetailView({
 
       {/* Pinned bottom actions - always visible */}
       <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-between gap-3">
-        <button
-          onClick={onDelete}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-xs font-semibold rounded-xl border border-destructive/20 transition-all cursor-pointer hover:bg-destructive/20"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Delete
-        </button>
-        <div className="flex items-center gap-3">
+        {/* Left: Delete + Edit */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={onClose}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground text-xs font-semibold rounded-xl border border-border/30 transition-all cursor-pointer hover:bg-secondary/80"
+            onClick={onDelete}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-xs font-semibold rounded-xl border border-destructive/20 transition-all cursor-pointer hover:bg-destructive/20"
           >
-            <X className="w-3.5 h-3.5" />
-            Close
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
           </button>
           <button
             onClick={onEdit}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
           >
             <Pencil className="w-3.5 h-3.5" />
             Edit
           </button>
+        </div>
+
+        {/* Right: Prev/Next navigation */}
+        <div className="flex items-center gap-2">
+          {onPrev && (
+            <button
+              onClick={onPrev}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer max-w-[120px] overflow-hidden"
+              title={prevTitle}
+            >
+              <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{prevTitle}</span>
+            </button>
+          )}
+          {onNext && (
+            <button
+              onClick={onNext}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer max-w-[120px] overflow-hidden"
+              title={nextTitle}
+            >
+              <span className="truncate">{nextTitle}</span>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          )}
         </div>
       </div>
     </div>
