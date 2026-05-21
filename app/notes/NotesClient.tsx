@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
-import { AnimatedGridPattern } from "@/components/ui/animated-grid-pattern";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 const Editor = dynamic(() => import("@/components/ui/editor/Editor"), {
@@ -184,6 +184,48 @@ export function NotesClient() {
   // Post drawer: single drawer for both view/edit
   const [drawerPost, setDrawerPost] = useState<PostWithTags | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit">("view");
+
+  // Tag long-press context menu
+  const [tagContextMenu, setTagContextMenu] = useState<{
+    tagId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const tagLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Custom confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const showConfirm = useCallback(
+    (title: string, message: string, onConfirm: () => void) => {
+      setConfirmDialog({ title, message, onConfirm });
+    },
+    [],
+  );
+
+  // Global Esc handler for tag context menu + confirm dialog
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmDialog) {
+          setConfirmDialog(null);
+          e.stopPropagation();
+          return;
+        }
+        if (tagContextMenu) {
+          setTagContextMenu(null);
+          e.stopPropagation();
+          return;
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKey, true); // capture phase
+    return () => document.removeEventListener("keydown", handleKey, true);
+  }, [tagContextMenu, confirmDialog]);
 
   // Tab bar reference for auto-scrolling
   const tabBarRef = useRef<HTMLDivElement>(null);
@@ -413,13 +455,14 @@ export function NotesClient() {
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-4 lg:mb-12">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-4 lg:mb-12 mt-2">
         <div className="flex-shrink-0">
           <div className="flex items-center gap-2 mb-2">
             <span className="h-1.5 w-1.5 rounded-full bg-steel animate-pulse" />
             <p className="text-xs font-mono text-muted-foreground tracking-widest uppercase">
               {new Date().getFullYear()} · {posts.length} entries total
             </p>
+            <ThemeToggle />
           </div>
           <h1 className="text-4xl font-display font-bold tracking-tight text-foreground sm:text-5xl">
             Thoughts &{" "}
@@ -441,18 +484,6 @@ export function NotesClient() {
               <Download className="w-3.5 h-3.5" />
               Save md file
             </motion.button>
-            <motion.button
-              onClick={() => {
-                closeAllForms();
-                setShowTagManager(true);
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 text-xs font-semibold rounded-xl transition-all border border-border/30 cursor-pointer shadow-sm shadow-foreground/5"
-              whileHover={{ y: -1 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Folder className="w-3.5 h-3.5" />
-              Manage Tags
-            </motion.button>
           </div>
         </div>
       </div>
@@ -464,8 +495,7 @@ export function NotesClient() {
         <div
           ref={tabBarRef}
           onScroll={checkScroll}
-          className="flex items-center gap-2 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth"
-          style={{ WebkitOverflowScrolling: "touch" }}
+          className="flex flex-wrap items-center gap-2 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
           {/* All tab */}
           <button
@@ -504,8 +534,38 @@ export function NotesClient() {
               key={tag.id}
               data-active={activeTab === tag.id}
               onClick={() => switchTab(tag.id)}
+              onPointerDown={(e) => {
+                // Start long-press timer
+                tagLongPressRef.current = setTimeout(() => {
+                  setTagContextMenu({
+                    tagId: tag.id,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }, 500);
+              }}
+              onPointerUp={() => {
+                if (tagLongPressRef.current) {
+                  clearTimeout(tagLongPressRef.current);
+                  tagLongPressRef.current = null;
+                }
+              }}
+              onPointerLeave={() => {
+                if (tagLongPressRef.current) {
+                  clearTimeout(tagLongPressRef.current);
+                  tagLongPressRef.current = null;
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setTagContextMenu({
+                  tagId: tag.id,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              }}
               className={cn(
-                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border",
+                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border select-none",
                 activeTab === tag.id
                   ? "text-background border-transparent"
                   : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
@@ -535,6 +595,18 @@ export function NotesClient() {
               </span>
             </button>
           ))}
+
+          {/* Add Tag button */}
+          <button
+            onClick={() => {
+              closeAllForms();
+              setShowTagForm(true);
+            }}
+            className="relative flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none border border-dashed border-border/60 text-muted-foreground hover:text-foreground hover:border-steel/40 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Tag</span>
+          </button>
         </div>
 
         {/* Scroll fade masks and chevron buttons */}
@@ -581,6 +653,126 @@ export function NotesClient() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Tag context menu (long-press / right-click) */}
+      {tagContextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-[200]"
+            onClick={() => setTagContextMenu(null)}
+          />
+          <div
+            className="fixed z-[201] bg-card border border-border/50 rounded-xl shadow-xl p-1.5 min-w-[120px]"
+            style={{
+              top: tagContextMenu.y,
+              left: tagContextMenu.x,
+              transform: "translate(-50%, 8px)",
+            }}
+          >
+            <button
+              onClick={() => {
+                const tag = tags.find((t) => t.id === tagContextMenu.tagId);
+                if (tag) {
+                  setTagContextMenu(null);
+                  closeAllForms();
+                  setEditingTag(tag);
+                }
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium rounded-lg hover:bg-muted transition-colors cursor-pointer text-left"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Tag
+            </button>
+            <button
+              onClick={async () => {
+                const tag = tags.find((t) => t.id === tagContextMenu.tagId);
+                if (!tag) return;
+                setTagContextMenu(null);
+                if (tag.postCount > 0) {
+                  toast(`Cannot delete "${tag.name}" — it has posts`, "error");
+                  return;
+                }
+                showConfirm(
+                  "Xóa tag",
+                  `Bạn có chắc chắn muốn xóa tag "${tag.name}"? Hành động này không thể hoàn tác.`,
+                  async () => {
+                    const res = await fetch(`/api/tags/${tag.id}`, {
+                      method: "DELETE",
+                    });
+                    if (!res.ok) {
+                      toast(`Failed to delete "${tag.name}"`, "error");
+                      return;
+                    }
+                    if (activeTab === tag.id) setActiveTab("all");
+                    setTags((prev) => prev.filter((t) => t.id !== tag.id));
+                    toast(`Tag "${tag.name}" deleted`);
+                  },
+                );
+              }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete Tag
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Confirm Dialog */}
+      <AnimatePresence>
+        {confirmDialog && (
+          <motion.div
+            className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-background/60 backdrop-blur-sm"
+              onClick={() => setConfirmDialog(null)}
+            />
+            <motion.div
+              className="relative bg-card border border-border/50 rounded-2xl shadow-2xl p-6 w-full max-w-sm"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="text-base font-bold text-foreground">
+                  {confirmDialog.title}
+                </h3>
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="p-1 text-muted-foreground hover:text-foreground rounded-lg transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+                {confirmDialog.message}
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setConfirmDialog(null)}
+                  className="px-5 py-2.5 text-xs font-semibold text-foreground bg-secondary hover:bg-secondary/80 rounded-full border border-border/30 transition-all cursor-pointer"
+                >
+                  Huỷ
+                </button>
+                <button
+                  onClick={async () => {
+                    await confirmDialog.onConfirm();
+                    setConfirmDialog(null);
+                  }}
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-destructive hover:bg-destructive/90 rounded-full transition-all cursor-pointer"
+                >
+                  Xoá
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ------------------------------------------------------------------ */}
       {/* Modals                                                             */}
@@ -676,26 +868,26 @@ export function NotesClient() {
                   );
                   return;
                 }
-                if (
-                  !confirm(
-                    `Delete tag "${tag.name}"? This won't delete the notes.`,
-                  )
-                )
-                  return;
-                const res = await fetch(`/api/tags/${tag.id}`, {
-                  method: "DELETE",
-                });
-                if (!res.ok) {
-                  const errData = await res.json().catch(() => ({}));
-                  toast(
-                    errData.error || `Failed to delete tag "${tag.name}"`,
-                    "error",
-                  );
-                  return;
-                }
-                if (activeTab === tag.id) setActiveTab("all");
-                setTags((prev) => prev.filter((t) => t.id !== tag.id));
-                toast(`Tag "${tag.name}" deleted`);
+                showConfirm(
+                  "Xóa tag",
+                  `Bạn có chắc chắn muốn xóa tag "${tag.name}"? Hành động này không thể hoàn tác.`,
+                  async () => {
+                    const res = await fetch(`/api/tags/${tag.id}`, {
+                      method: "DELETE",
+                    });
+                    if (!res.ok) {
+                      const errData = await res.json().catch(() => ({}));
+                      toast(
+                        errData.error || `Failed to delete tag "${tag.name}"`,
+                        "error",
+                      );
+                      return;
+                    }
+                    if (activeTab === tag.id) setActiveTab("all");
+                    setTags((prev) => prev.filter((t) => t.id !== tag.id));
+                    toast(`Tag "${tag.name}" deleted`);
+                  },
+                );
               }}
               onCancel={closeAllForms}
             />
@@ -725,28 +917,32 @@ export function NotesClient() {
                     post={drawerPost}
                     onEdit={() => setDrawerMode("edit")}
                     onDelete={async () => {
-                      if (!confirm("Are you sure you want to delete this note?"))
-                        return;
-                      const res = await fetch(`/api/posts/${drawerPost.id}`, {
-                        method: "DELETE",
-                      });
-                      if (!res.ok) {
-                        toast("Failed to delete post", "error");
-                        return;
-                      }
-                      const deletedTagIds = drawerPost.tags.map((t) => t.id);
-                      setTags((prev) =>
-                        prev.map((t) =>
-                          deletedTagIds.includes(t.id)
-                            ? { ...t, postCount: Math.max(0, t.postCount - 1) }
-                            : t,
-                        ),
+                      showConfirm(
+                        "Xóa ghi chú",
+                        "Bạn có chắc chắn muốn xóa ghi chú này? Hành động này không thể hoàn tác.",
+                        async () => {
+                          const res = await fetch(`/api/posts/${drawerPost.id}`, {
+                            method: "DELETE",
+                          });
+                          if (!res.ok) {
+                            toast("Failed to delete post", "error");
+                            return;
+                          }
+                          const deletedTagIds = drawerPost.tags.map((t) => t.id);
+                          setTags((prev) =>
+                            prev.map((t) =>
+                              deletedTagIds.includes(t.id)
+                                ? { ...t, postCount: Math.max(0, t.postCount - 1) }
+                                : t,
+                            ),
+                          );
+                          setPosts((prev) =>
+                            prev.filter((p) => p.id !== drawerPost.id),
+                          );
+                          closeAllForms();
+                          toast("Post deleted successfully");
+                        },
                       );
-                      setPosts((prev) =>
-                        prev.filter((p) => p.id !== drawerPost.id),
-                      );
-                      closeAllForms();
-                      toast("Post deleted successfully");
                     }}
                     onClose={closeAllForms}
                     onPrev={
@@ -1027,6 +1223,14 @@ function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   return (
     <motion.div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto"
@@ -1154,7 +1358,7 @@ function Drawer({
     >
       {/* Backdrop */}
       <motion.div
-        className="absolute inset-0 bg-background/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-background/60"
         onClick={onClose}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -1164,55 +1368,22 @@ function Drawer({
       <motion.div
         ref={panelRef}
         className={cn(
-          "relative w-full h-full bg-card/95 dark:bg-card/95 border-l border-border/50 shadow-2xl backdrop-blur-2xl flex flex-col overflow-hidden",
+          "relative w-full h-full bg-card border-l border-border/50 shadow-2xl flex flex-col",
           widthClass,
         )}
         initial={{ x: "100%" }}
         animate={{ x: dragX }}
         exit={{ x: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+        transition={dragX > 0 ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 35 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Animated Grid Pattern background */}
-        <AnimatedGridPattern
-          numSquares={40}
-          maxOpacity={0.15}
-          duration={3}
-          repeatDelay={1}
-          width={40}
-          height={40}
-          className={cn(
-            "[mask-image:radial-gradient(500px_circle_at_center,white,transparent)]",
-            "inset-x-0 inset-y-[-30%] h-[200%] skew-y-12 fill-steel/40 stroke-steel/40",
-          )}
-        />
-
-        {/* Ambient light glow */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {/* Top right - bright glow */}
-          <div
-            className="absolute -top-20 -right-20 w-[35rem] h-[30rem] rounded-full blur-[8rem] opacity-[0.18] dark:opacity-[0.22]"
-            style={{ background: "radial-gradient(circle, #6b9ac4 0%, transparent 60%)" }}
-          />
-          {/* Center - ambient */}
-          <div
-            className="absolute top-1/3 left-1/4 w-[25rem] h-[25rem] rounded-full blur-[6rem] opacity-[0.1] dark:opacity-[0.14]"
-            style={{ background: "radial-gradient(circle, #8bb5d9 0%, transparent 70%)" }}
-          />
-          {/* Bottom left - subtle */}
-          <div
-            className="absolute -bottom-10 -left-10 w-[30rem] h-[25rem] rounded-full blur-[7rem] opacity-[0.08] dark:opacity-[0.12]"
-            style={{ background: "radial-gradient(circle, #a78bfa 0%, transparent 70%)" }}
-          />
-        </div>
-
         {/* Swipe indicator — mobile only */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 relative z-10">
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 relative">
           <div className="w-8 h-1 rounded-full bg-border/60" />
         </div>
-        <div className="flex-1 min-h-0 flex flex-col relative z-10">{children}</div>
+        <div className="flex-1 min-h-0 flex flex-col relative">{children}</div>
       </motion.div>
     </motion.div>
   );
