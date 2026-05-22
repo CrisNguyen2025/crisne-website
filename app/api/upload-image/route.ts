@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { uploadToR2, generateFilename } from '@/lib/r2-client';
 
 export const runtime = 'nodejs';
 
 /**
  * POST /api/upload-image
- * Upload image to public/uploads folder
+ * Upload image to Cloudflare R2
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,23 +37,17 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'public', 'uploads');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-    
     // Convert file to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     
-    // Save file
-    const filename = file.name;
-    const filepath = join(uploadsDir, filename);
-    await writeFile(filepath, buffer);
+    // Generate unique filename
+    const filename = generateFilename(file.name);
     
-    // Return public URL
-    const url = `/uploads/${filename}`;
+    // Upload to R2
+    const url = await uploadToR2(buffer, filename, file.type);
+    
+    console.log(`✅ Uploaded to R2: ${url} (${(file.size / 1024).toFixed(2)}KB)`);
     
     return NextResponse.json({
       url,
@@ -64,7 +56,7 @@ export async function POST(req: NextRequest) {
       filename,
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('❌ R2 upload error:', error);
     return NextResponse.json(
       { error: 'Upload failed' },
       { status: 500 }
