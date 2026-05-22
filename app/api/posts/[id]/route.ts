@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPostById, getTags, updatePost, deletePost } from "@/lib/notion";
+import { replaceBase64WithUrls, estimateContentSize } from "@/lib/image-upload";
 import type { PostWithTags } from "@/lib/notion-types";
 
 type Params = { params: Promise<{ id: string }> };
@@ -45,10 +46,39 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       tagIds?: string[];
     };
 
+    // Process content if provided (fallback for legacy base64)
+    let processedContent = content;
+    
+    if (content !== undefined) {
+      const trimmedContent = content.trim();
+      
+      if (trimmedContent) {
+        const sizeInfo = estimateContentSize(trimmedContent);
+        
+        // Only convert if there are base64 images (legacy content)
+        if (sizeInfo.imageCount > 0) {
+          console.log('Found base64 images in content (legacy), converting...', {
+            total: `${(sizeInfo.totalSize / 1024).toFixed(2)}KB`,
+            base64: `${(sizeInfo.base64Size / 1024).toFixed(2)}KB`,
+            images: sizeInfo.imageCount,
+          });
+          
+          processedContent = await replaceBase64WithUrls(trimmedContent);
+          
+          const newSize = processedContent.length;
+          console.log(`Content size after conversion: ${(newSize / 1024).toFixed(2)}KB`);
+        } else {
+          processedContent = trimmedContent;
+        }
+      } else {
+        processedContent = trimmedContent;
+      }
+    }
+
     const post = await updatePost(id, {
       ...(title !== undefined && { title: title.trim() }),
       ...(slug !== undefined && { slug: slug.trim() }),
-      ...(content !== undefined && { content: content.trim() }),
+      ...(processedContent !== undefined && { content: processedContent }),
       ...(published !== undefined && { published }),
       ...(tagIds !== undefined && { tagIds }),
     });

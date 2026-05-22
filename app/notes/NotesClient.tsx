@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,6 +43,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ImagePreview } from "@/components/ui/image-preview";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 const Editor = dynamic(() => import("@/components/ui/editor/Editor"), {
@@ -1571,11 +1573,25 @@ function PostDetailView({
   prevTitle?: string;
   nextTitle?: string;
 }) {
+  const [previewImage, setPreviewImage] = React.useState<{ src: string; alt: string } | null>(null);
+  const clickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = React.useRef(0);
+  const lastClickedImageRef = React.useRef<HTMLImageElement | null>(null);
+
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "long",
     day: "numeric",
     year: "numeric",
   });
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -1613,10 +1629,43 @@ function PostDetailView({
       <div className="border-t border-border/30 pt-5">
         {post.content && post.content.trim() ? (
           <div
-            className="prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2"
+            className="prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
             dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }}
             onClick={(e) => {
               const target = e.target as HTMLElement;
+              
+              // Handle image double-click for preview
+              if (target.tagName === "IMG") {
+                const img = target as HTMLImageElement;
+                
+                // Track clicks for double-click detection
+                if (lastClickedImageRef.current === img) {
+                  clickCountRef.current += 1;
+                } else {
+                  clickCountRef.current = 1;
+                  lastClickedImageRef.current = img;
+                }
+                
+                if (clickCountRef.current === 1) {
+                  clickTimeoutRef.current = setTimeout(() => {
+                    clickCountRef.current = 0;
+                    lastClickedImageRef.current = null;
+                  }, 300);
+                } else if (clickCountRef.current === 2) {
+                  if (clickTimeoutRef.current) {
+                    clearTimeout(clickTimeoutRef.current);
+                  }
+                  clickCountRef.current = 0;
+                  lastClickedImageRef.current = null;
+                  
+                  // Open preview
+                  setPreviewImage({
+                    src: img.src,
+                    alt: img.alt || 'Image',
+                  });
+                  return;
+                }
+              }
               
               // Handle link clicks
               const anchor = target.closest("a");
@@ -1710,6 +1759,16 @@ function PostDetailView({
           )}
         </div>
       </div>
+
+      {/* Image Preview */}
+      {previewImage && (
+        <ImagePreview
+          src={previewImage.src}
+          alt={previewImage.alt}
+          visible={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
     </div>
   );
 }

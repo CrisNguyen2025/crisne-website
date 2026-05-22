@@ -38,25 +38,53 @@ export function PasteImagePlugin(): null {
                 console.warn(`Image size (${(file.size / 1024 / 1024).toFixed(2)}MB) is large. Consider compressing it.`);
               }
               
-              // Convert file to base64 data URL
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const src = e.target?.result as string;
-                if (src) {
-                  // Check base64 size
-                  const base64Size = src.length;
-                  if (base64Size > 100000) { // ~100KB base64
-                    console.warn(`Base64 image is large (${(base64Size / 1024).toFixed(2)}KB). This may affect save performance.`);
+              // Upload image immediately instead of using base64
+              const uploadImage = async () => {
+                try {
+                  // Create FormData
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  
+                  // Upload to server
+                  const response = await fetch('/api/upload-image', {
+                    method: 'POST',
+                    body: formData,
+                  });
+                  
+                  if (!response.ok) {
+                    throw new Error('Upload failed');
                   }
                   
+                  const data = await response.json();
+                  
+                  // Insert image with URL
                   editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
-                    src,
-                    altText: file.name || 'Pasted image',
+                    src: data.url,
+                    altText: file.name || 'Uploaded image',
                     maxWidth: 800,
                   });
+                  
+                  console.log(`Image uploaded: ${data.url} (${(data.size / 1024).toFixed(2)}KB)`);
+                } catch (error) {
+                  console.error('Image upload failed, falling back to base64:', error);
+                  
+                  // Fallback to base64 if upload fails
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    const src = e.target?.result as string;
+                    if (src) {
+                      editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
+                        src,
+                        altText: file.name || 'Pasted image',
+                        maxWidth: 800,
+                      });
+                    }
+                  };
+                  reader.readAsDataURL(file);
                 }
               };
-              reader.readAsDataURL(file);
+              
+              uploadImage();
               
               return true;
             }

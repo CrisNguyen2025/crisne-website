@@ -50,3 +50,6 @@ AGENT.md
 CLAUDE.md
 .agent-mem/
 .gitnexus
+
+# Uploaded images
+/public/uploads/

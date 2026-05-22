@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPosts, getTags, createPost } from "@/lib/notion";
+import { replaceBase64WithUrls, estimateContentSize } from "@/lib/image-upload";
 import type { PostWithTags } from "@/lib/notion-types";
 
 export const dynamic = "force-dynamic";
@@ -55,10 +56,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
 
+    // Check content size and convert base64 images to URLs (fallback for old content)
+    let processedContent = content?.trim();
+    
+    if (processedContent) {
+      const sizeInfo = estimateContentSize(processedContent);
+      
+      // Only process if there are base64 images (shouldn't happen with new paste plugin)
+      if (sizeInfo.imageCount > 0) {
+        console.log('Found base64 images in content (legacy), converting...', {
+          total: `${(sizeInfo.totalSize / 1024).toFixed(2)}KB`,
+          base64: `${(sizeInfo.base64Size / 1024).toFixed(2)}KB`,
+          images: sizeInfo.imageCount,
+        });
+        
+        processedContent = await replaceBase64WithUrls(processedContent);
+        
+        const newSize = processedContent.length;
+        console.log(`Content size after conversion: ${(newSize / 1024).toFixed(2)}KB (saved ${((sizeInfo.totalSize - newSize) / 1024).toFixed(2)}KB)`);
+      }
+      
+      // Warn if still too large
+      if (processedContent.length > 200000) {
+        console.warn(`Content is still large (${(processedContent.length / 1024).toFixed(2)}KB). May exceed Notion limits.`);
+      }
+    }
+
     const post = await createPost({
       title: title.trim(),
       slug: slug?.trim(),
-      content: content?.trim(),
+      content: processedContent,
       published: published ?? false,
       tagIds: tagIds ?? [],
     });
