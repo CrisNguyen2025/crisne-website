@@ -18,6 +18,7 @@ import {
   DRAGOVER_COMMAND,
   DRAGSTART_COMMAND,
   DROP_COMMAND,
+  PASTE_COMMAND,
   getDOMSelectionFromTarget,
   isHTMLElement,
   LexicalCommand,
@@ -164,6 +165,13 @@ export function ImagesPlugin({ captionsEnabled }: { captionsEnabled?: boolean })
         },
         COMMAND_PRIORITY_HIGH,
       ),
+      editor.registerCommand<ClipboardEvent>(
+        PASTE_COMMAND,
+        event => {
+          return $onPaste(event, editor);
+        },
+        COMMAND_PRIORITY_HIGH,
+      ),
     );
   }, [captionsEnabled, editor]);
 
@@ -299,4 +307,43 @@ function getDragSelection(event: DragEvent): Range | null | undefined {
   }
 
   return range;
+}
+
+function $onPaste(event: ClipboardEvent, editor: LexicalEditor): boolean {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) {
+    return false;
+  }
+
+  const items = clipboardData.items;
+  if (!items) {
+    return false;
+  }
+
+  // Check if there are any image files in the clipboard
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault();
+      const file = item.getAsFile();
+      if (file) {
+        // Convert file to data URL
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const src = e.target?.result as string;
+          if (src) {
+            editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
+              altText: file.name || 'Pasted image',
+              src,
+              maxWidth: 500,
+            });
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+      return true;
+    }
+  }
+
+  return false;
 }

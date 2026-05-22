@@ -25,6 +25,7 @@ import {
 } from 'lexical';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageResizer from '../ui/ImageResizer';
+import { ImagePreview } from '@/components/ui/image-preview';
 import { $isImageNode } from './ImageNode';
 type ImageStatus = { error: true } | { error: false; width: number; height: number };
 const imageCache = new Map<string, Promise<ImageStatus> | ImageStatus>();
@@ -189,10 +190,12 @@ export default function ImageComponent({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [isSelected, setSelected, clearSelection] = useLexicalNodeSelection(nodeKey);
   const [isResizing, setIsResizing] = useState<boolean>(false);
+  const [showFullscreen, setShowFullscreen] = useState<boolean>(false);
   const [editor] = useLexicalComposerContext();
   const activeEditorRef = useRef<LexicalEditor | null>(null);
   const [isLoadError, setIsLoadError] = useState<boolean>(false);
   const isEditable = useLexicalEditable();
+  const lastClickTimeRef = useRef<number>(0);
   const isInNodeSelection = useMemo(
     () =>
       isSelected &&
@@ -247,6 +250,23 @@ export default function ImageComponent({
     [caption, editor, setSelected],
   );
 
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
+  const touchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchCountRef = useRef(0);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const onClick = useCallback(
     (payload: MouseEvent) => {
       const event = payload;
@@ -255,6 +275,22 @@ export default function ImageComponent({
         return true;
       }
       if (event.target === imageRef.current) {
+        // Handle double-click for fullscreen
+        clickCountRef.current += 1;
+        
+        if (clickCountRef.current === 1) {
+          clickTimeoutRef.current = setTimeout(() => {
+            clickCountRef.current = 0;
+          }, 300);
+        } else if (clickCountRef.current === 2) {
+          if (clickTimeoutRef.current) {
+            clearTimeout(clickTimeoutRef.current);
+          }
+          clickCountRef.current = 0;
+          setShowFullscreen(true);
+          return true;
+        }
+
         if (event.shiftKey) {
           setSelected(!isSelected);
         } else {
@@ -364,10 +400,28 @@ export default function ImageComponent({
 
   const draggable = isInNodeSelection && !isResizing;
   const isFocused = (isSelected || isResizing) && isEditable;
+  
+  // Handle touch events for double-tap
+  const handleTouchEnd = useCallback(() => {
+    touchCountRef.current += 1;
+    
+    if (touchCountRef.current === 1) {
+      touchTimeoutRef.current = setTimeout(() => {
+        touchCountRef.current = 0;
+      }, 300);
+    } else if (touchCountRef.current === 2) {
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+      touchCountRef.current = 0;
+      setShowFullscreen(true);
+    }
+  }, []);
+
   return (
     <Suspense fallback={null}>
       <>
-        <div draggable={draggable}>
+        <div draggable={draggable} onTouchEnd={handleTouchEnd}>
           {isLoadError ? (
             <BrokenImage />
           ) : (
@@ -397,6 +451,14 @@ export default function ImageComponent({
             captionsEnabled={false}
           />
         )}
+
+        {/* Fullscreen Image Preview with Ant Design features */}
+        <ImagePreview
+          src={getMediaUrl({ url: src })}
+          alt={altText}
+          visible={showFullscreen}
+          onClose={() => setShowFullscreen(false)}
+        />
       </>
     </Suspense>
   );

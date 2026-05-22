@@ -48,12 +48,24 @@ function relationToIds(prop: ReturnType<typeof getProp>): string[] {
 
 /** Notion rich_text blocks are limited to 2000 chars each. Split long strings. */
 const NOTION_TEXT_LIMIT = 2000;
+const NOTION_BLOCKS_LIMIT = 100; // Notion limit for rich_text array
+
 function toRichTextBlocks(text: string): { text: { content: string } }[] {
   if (!text) return [{ text: { content: "" } }];
   const blocks: { text: { content: string } }[] = [];
   for (let i = 0; i < text.length; i += NOTION_TEXT_LIMIT) {
     blocks.push({ text: { content: text.slice(i, i + NOTION_TEXT_LIMIT) } });
   }
+  
+  // Warn if exceeding Notion's limit
+  if (blocks.length > NOTION_BLOCKS_LIMIT) {
+    console.warn(
+      `Content is too large (${blocks.length} blocks). Notion limit is ${NOTION_BLOCKS_LIMIT} blocks. ` +
+      `Content will be truncated. Consider using external image hosting.`
+    );
+    return blocks.slice(0, NOTION_BLOCKS_LIMIT);
+  }
+  
   return blocks;
 }
 

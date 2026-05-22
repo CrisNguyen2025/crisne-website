@@ -1,0 +1,48 @@
+/**
+ * Font Optimization
+ * - Fallback fonts với size-adjust để giảm layout shift
+ * - Font-display: swap để hiển thị text ngay lập tức
+ */
+
+/* Fallback font adjustments để match với Inter */
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+  size-adjust: 107%;
+}
+
+/* Fallback font adjustments để match với JetBrains Mono */
+@font-face {
+  font-family: 'JetBrains Mono Fallback';
+  src: local('Courier New');
+  ascent-override: 85%;
+  descent-override: 20%;
+  line-gap-override: 0%;
+  size-adjust: 95%;
+}
+
+/* Fallback font adjustments để match với Fraunces */
+@font-face {
+  font-family: 'Fraunces Fallback';
+  src: local('Georgia');
+  ascent-override: 92%;
+  descent-override: 24%;
+  line-gap-override: 0%;
+  size-adjust: 102%;
+}
+
+/* Optimize font loading với font-display */
+@supports (font-display: swap) {
+  @font-face {
+    font-display: swap;
+  }
+}
+
+/* Prevent invisible text during font loading */
+.font-loading {
+  font-display: swap;
+  font-synthesis: none;
+}

@@ -18,18 +18,24 @@ const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
   display: "swap",
+  preload: true,
+  fallback: ["system-ui", "arial"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: true,
+  fallback: ["ui-monospace", "monospace"],
 });
 
 const fraunces = Fraunces({
   variable: "--font-display",
   subsets: ["latin"],
   display: "swap",
+  preload: true,
+  fallback: ["Georgia", "serif"],
   axes: ["SOFT", "WONK"],
   style: ["normal", "italic"],
   weight: "variable",
@@ -125,6 +131,8 @@ export default function RootLayout({
     >
       <head>
         {/* Performance: Preconnect to external domains */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://www.googletagmanager.com" />
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
         <link rel="preconnect" href="https://consent.cookiebot.com" />

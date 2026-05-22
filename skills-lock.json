@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "fireworks-tech-graph": {
+      "source": "yizhiyanhua-ai/fireworks-tech-graph",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "224ec0ce865dc17d882aefd18ec968ca0bbe43643f9cff6a916017465e807358"
+    }
+  }
+}

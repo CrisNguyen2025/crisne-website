@@ -72,7 +72,7 @@ export default function ImageResizer({
 
   const maxHeightContainer = editorRootElement === null ? 100 : editorRootElement.getBoundingClientRect().height - 20;
 
-  const minWidth = 100;
+  const minWidth = 150;
   const minHeight = 100;
 
   const setStartCursor = (direction: number) => {

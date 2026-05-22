@@ -24,6 +24,7 @@ import {
   AutoLinkPlugin,
   ImagesPlugin,
   InitialToolbarState,
+  PasteImagePlugin,
   SetContentPlugin,
   ToolbarButton,
   ToolbarPlugin,
@@ -139,6 +140,7 @@ export default function Editor({
       >
         <LexicalComposer initialConfig={config}>
           <ImagesPlugin />
+          <PasteImagePlugin />
           <SetContentPlugin value={value} />
           <CalloutTransformPlugin />
           <OnChangePlugin
