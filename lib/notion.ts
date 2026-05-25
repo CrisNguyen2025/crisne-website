@@ -17,6 +17,7 @@ const notion = new Client({
 
 export const POSTS_DB_ID = process.env.NOTION_POSTS_DB_ID!;
 export const TAGS_DB_ID = process.env.NOTION_TAGS_DB_ID!;
+export const FAVORITES_DB_ID = process.env.NOTION_FAVORITES_DB_ID!;
 
 // ---------------------------------------------------------------------------
 // Property helpers
@@ -167,6 +168,13 @@ function matchFilter(page: PageObjectResponse, filter: Record<string, unknown>):
   if (filter["rich_text"] && prop.type === "rich_text") {
     const { equals } = filter["rich_text"] as { equals: string };
     const val = prop.rich_text.map((t) => t.plain_text).join("");
+    return val === equals;
+  }
+
+  // title: { equals: string }
+  if (filter["title"] && prop.type === "title") {
+    const { equals } = filter["title"] as { equals: string };
+    const val = prop.title.map((t) => t.plain_text).join("");
     return val === equals;
   }
 
@@ -352,4 +360,74 @@ function slugify(text: string): string {
     .replace(/[^\w\s-]/g, "")
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+// ---------------------------------------------------------------------------
+// FAVORITES CRUD
+// ---------------------------------------------------------------------------
+
+export interface NotionFavorite {
+  id: string;
+  userId: string;
+  tagId: string;
+  createdAt: string;
+}
+
+function mapFavorite(page: PageObjectResponse): NotionFavorite {
+  return {
+    id: page.id,
+    userId: titleToString(getProp(page, "UserId")), // UserId is Title field
+    tagId: richTextToString(getProp(page, "TagId")),
+    createdAt: page.created_time,
+  };
+}
+
+export async function getFavorites(userId: string): Promise<string[]> {
+  const pages = await queryDatabase(FAVORITES_DB_ID, {
+    filter: { property: "UserId", title: { equals: userId } }, // Changed to title
+  });
+  return pages.map(page => richTextToString(getProp(page, "TagId")));
+}
+
+export async function addFavorite(userId: string, tagId: string): Promise<NotionFavorite> {
+  // Check if already exists
+  const existing = await queryDatabase(FAVORITES_DB_ID, {
+    filter: {
+      and: [
+        { property: "UserId", title: { equals: userId } }, // Changed to title
+        { property: "TagId", rich_text: { equals: tagId } },
+      ],
+    },
+  });
+
+  if (existing.length > 0) {
+    return mapFavorite(existing[0]);
+  }
+
+  // Create new
+  const page = await notion.pages.create({
+    parent: { database_id: FAVORITES_DB_ID },
+    properties: {
+      UserId: { title: [{ text: { content: userId } }] }, // Changed to title
+      TagId: { rich_text: [{ text: { content: tagId } }] },
+    },
+  });
+
+  if (!isFullPage(page)) throw new Error("Unexpected partial page response");
+  return mapFavorite(page);
+}
+
+export async function removeFavorite(userId: string, tagId: string): Promise<void> {
+  const pages = await queryDatabase(FAVORITES_DB_ID, {
+    filter: {
+      and: [
+        { property: "UserId", title: { equals: userId } }, // Changed to title
+        { property: "TagId", rich_text: { equals: tagId } },
+      ],
+    },
+  });
+
+  for (const page of pages) {
+    await notion.pages.update({ page_id: page.id, archived: true });
+  }
 }

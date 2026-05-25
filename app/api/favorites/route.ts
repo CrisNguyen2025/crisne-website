@@ -3,18 +3,7 @@
 // DELETE /api/favorites — remove a tag from favorites
 
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-// Use singleton pattern for Prisma Client
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-const prisma = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+import { getFavorites, addFavorite, removeFavorite } from "@/lib/notion";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +21,10 @@ export async function GET(req: NextRequest) {
   try {
     const userId = getUserId(req);
     
-    const favorites = await prisma.favorite.findMany({
-      where: { userId },
-      select: { tagId: true },
-    });
+    const favorites = await getFavorites(userId);
     
     return NextResponse.json({
-      favorites: favorites.map(f => f.tagId),
+      favorites,
     });
   } catch (err) {
     console.error("[GET /api/favorites]", err);
@@ -65,14 +51,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upsert to handle duplicates gracefully
-    const result = await prisma.favorite.upsert({
-      where: {
-        userId_tagId: { userId, tagId },
-      },
-      update: {},
-      create: { userId, tagId },
-    });
+    // Add to Notion
+    const result = await addFavorite(userId, tagId);
     
     console.log("[POST /api/favorites] Success:", result);
 
@@ -101,9 +81,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    await prisma.favorite.deleteMany({
-      where: { userId, tagId },
-    });
+    await removeFavorite(userId, tagId);
 
     return NextResponse.json({ success: true });
   } catch (err) {
