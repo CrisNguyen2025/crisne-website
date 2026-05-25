@@ -143,14 +143,28 @@ export function NotesClient() {
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  // Active tab: "all" | tag.id — synced with ?tab=<tag-slug> param
+  // Active tab: "all" | "show-all" | tag.id — synced with ?tab=<tag-slug> param
   const [activeTab, setActiveTab] = useState<string>("all");
   const initialTabParam = searchParams.get("tab");
 
   // Resolve ?tab=slug → tag.id once tags are loaded
   useEffect(() => {
-    if (!initialTabParam || tags.length === 0) return;
-    if (initialTabParam === "all") return;
+    if (tags.length === 0) return;
+    
+    // If no tab param, default to "favorites" tag
+    if (!initialTabParam) {
+      const favoritesTag = tags.find((t) => t.name.toLowerCase() === "favorites");
+      if (favoritesTag) {
+        setActiveTab(favoritesTag.id);
+        return;
+      }
+    }
+    
+    if (initialTabParam === "all" || initialTabParam === "show-all") {
+      setActiveTab(initialTabParam);
+      return;
+    }
+    
     const matched = tags.find((t) => tagSlug(t.name) === initialTabParam);
     if (matched) {
       setActiveTab(matched.id);
@@ -163,8 +177,8 @@ export function NotesClient() {
       setActiveTab(tabId);
       setLocalSearch("");
       const params = new URLSearchParams(window.location.search);
-      if (tabId === "all") {
-        params.delete("tab");
+      if (tabId === "all" || tabId === "show-all") {
+        params.set("tab", tabId);
       } else {
         const tag = tags.find((t) => t.id === tabId);
         params.set("tab", tag ? tagSlug(tag.name) : tabId);
@@ -362,12 +376,12 @@ export function NotesClient() {
           post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
         post.slug.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (activeTab === "all") return matchesSearch;
+      if (activeTab === "all" || activeTab === "show-all") return matchesSearch;
       return matchesSearch && post.tags.some((t) => t.id === activeTab);
     });
 
-    // Tab "All" → sort A-Z by title
-    if (activeTab === "all") {
+    // Tab "All" or "Show All" → sort A-Z by title
+    if (activeTab === "all" || activeTab === "show-all") {
       return [...matched].sort((a, b) =>
         a.title.localeCompare(b.title, "vi", { sensitivity: "base" }),
       );
@@ -390,7 +404,7 @@ export function NotesClient() {
       const { active, over } = event;
       setActiveDragId(null);
       if (!over || active.id === over.id) return;
-      if (activeTab === "all") return; // No DnD on "all" tab
+      if (activeTab === "all" || activeTab === "show-all") return; // No DnD on "all" or "show-all" tab
 
       const ids = filteredPosts.map((p) => p.id);
       const oldIndex = ids.indexOf(active.id as string);
@@ -530,8 +544,40 @@ export function NotesClient() {
             </span>
           </button>
 
-          {/* Tag tabs */}
-          {tags.map((tag) => (
+          {/* Show All tab */}
+          <button
+            data-active={activeTab === "show-all"}
+            onClick={() => switchTab("show-all")}
+            className={cn(
+              "relative px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border flex items-center gap-2",
+              activeTab === "show-all"
+                ? "text-background border-transparent"
+                : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
+            )}
+          >
+            {activeTab === "show-all" && (
+              <motion.div
+                className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
+                layoutId="activeTabBackground"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10">Show All Tags</span>
+          </button>
+
+          {/* Tag tabs - sorted: favorites first when show-all */}
+          {(() => {
+            const sortedTags = activeTab === "show-all"
+              ? [...tags].sort((a, b) => {
+                  const aIsFav = a.name.toLowerCase() === "favorites";
+                  const bIsFav = b.name.toLowerCase() === "favorites";
+                  if (aIsFav && !bIsFav) return -1;
+                  if (!aIsFav && bIsFav) return 1;
+                  return 0;
+                })
+              : tags;
+            
+            return sortedTags.map((tag) => (
             <button
               key={tag.id}
               data-active={activeTab === tag.id}
@@ -596,7 +642,8 @@ export function NotesClient() {
                 {tag.postCount}
               </span>
             </button>
-          ))}
+          ));
+          })()}
 
           {/* Add Tag button */}
           <button
