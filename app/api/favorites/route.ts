@@ -40,10 +40,8 @@ export async function POST(req: NextRequest) {
 
     favoriteTags.add(tagId);
 
-    return NextResponse.json({
-      success: true,
-      favorites: Array.from(favoriteTags),
-    });
+    // Only return success status (client already has updated state)
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[POST /api/favorites]", err);
     return NextResponse.json(
@@ -68,10 +66,8 @@ export async function DELETE(req: NextRequest) {
 
     favoriteTags.delete(tagId);
 
-    return NextResponse.json({
-      success: true,
-      favorites: Array.from(favoriteTags),
-    });
+    // Only return success status (client already has updated state)
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[DELETE /api/favorites]", err);
     return NextResponse.json(

@@ -5,6 +5,7 @@ import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import confetti from "canvas-confetti";
 import {
   DndContext,
   closestCenter,
@@ -153,8 +154,9 @@ export function NotesClient() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const initialTabParam = searchParams.get("tab");
 
-  // Load favorites from localStorage on mount
+  // Load favorites from localStorage on mount + sync with server
   useEffect(() => {
+    // Load from localStorage first (instant)
     try {
       const stored = localStorage.getItem("notes-favorite-tags");
       if (stored) {
@@ -163,6 +165,33 @@ export function NotesClient() {
     } catch {
       // ignore
     }
+    
+    // Then sync with server in background
+    fetch("/api/favorites")
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to fetch favorites");
+        return res.json();
+      })
+      .then(data => {
+        if (data.favorites && Array.isArray(data.favorites)) {
+          const serverFavorites = new Set<string>(data.favorites);
+          setFavoriteTags(serverFavorites);
+          try {
+            localStorage.setItem("notes-favorite-tags", JSON.stringify(data.favorites));
+          } catch {
+            // ignore
+          }
+        }
+      })
+      .catch(err => {
+        console.error("Failed to sync favorites from server:", err);
+        // Continue with localStorage data
+      });
+    
+    // Cleanup debounce timers on unmount
+    return () => {
+      Object.values(debounceTimerRef.current).forEach(timer => clearTimeout(timer));
+    };
   }, []);
 
   // Resolve ?tab=slug → mode + tag once tags are loaded
@@ -230,33 +259,114 @@ export function NotesClient() {
     window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
   }, []);
 
-  // Toggle favorite tag
-  const toggleFavorite = useCallback(async (tagId: string) => {
-    const newFavorites = new Set(favoriteTags);
-    const isFavorite = newFavorites.has(tagId);
+  // Debounce timer ref for API calls
+  const debounceTimerRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  // Confetti effect for favorite action
+  const shootConfetti = useCallback((x: number, y: number) => {
+    const originX = x / window.innerWidth;
+    const originY = y / window.innerHeight;
     
-    if (isFavorite) {
-      newFavorites.delete(tagId);
-      // Call API to remove favorite
-      await fetch(`/api/favorites?tagId=${tagId}`, { method: "DELETE" });
-    } else {
-      newFavorites.add(tagId);
-      // Call API to add favorite
-      await fetch("/api/favorites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tagId }),
+    const defaults = {
+      spread: 360,
+      ticks: 50,
+      gravity: 0,
+      decay: 0.94,
+      startVelocity: 30,
+      colors: ['FFE400', 'FFBD00', 'E89400', 'FFCA6C', 'FDFFB8'],
+      origin: { x: originX, y: originY }
+    };
+    
+    function shoot() {
+      confetti({
+        ...defaults,
+        particleCount: 40,
+        scalar: 1.2,
+        shapes: ['star']
+      });
+      
+      confetti({
+        ...defaults,
+        particleCount: 10,
+        scalar: 0.75,
+        shapes: ['circle']
       });
     }
     
+    setTimeout(shoot, 0);
+    setTimeout(shoot, 100);
+    setTimeout(shoot, 200);
+  }, []);
+
+  // Toggle favorite tag with optimistic updates + debouncing
+  const toggleFavorite = useCallback((tagId: string, x?: number, y?: number) => {
+    const newFavorites = new Set(favoriteTags);
+    const isFavorite = newFavorites.has(tagId);
+    const previousState = new Set(favoriteTags); // Backup for rollback
+    
+    // STEP 1: Update UI immediately (Optimistic)
+    if (isFavorite) {
+      newFavorites.delete(tagId);
+    } else {
+      newFavorites.add(tagId);
+      // Trigger confetti effect when favoriting (not unfavoriting)
+      if (x !== undefined && y !== undefined) {
+        shootConfetti(x, y);
+      }
+    }
     setFavoriteTags(newFavorites);
-    // Persist to localStorage
+    
+    // Persist to localStorage immediately
     try {
       localStorage.setItem("notes-favorite-tags", JSON.stringify(Array.from(newFavorites)));
     } catch {
       // ignore
     }
-  }, [favoriteTags]);
+    
+    // STEP 2: Debounce API call (300ms)
+    // Clear existing timer for this tag
+    if (debounceTimerRef.current[tagId]) {
+      clearTimeout(debounceTimerRef.current[tagId]);
+    }
+    
+    // Set new timer
+    debounceTimerRef.current[tagId] = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          isFavorite ? `/api/favorites?tagId=${tagId}` : "/api/favorites",
+          {
+            method: isFavorite ? "DELETE" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: isFavorite ? undefined : JSON.stringify({ tagId }),
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`API failed with status ${response.status}`);
+        }
+        
+        // Success - cleanup timer
+        delete debounceTimerRef.current[tagId];
+      } catch (error) {
+        // STEP 3: Rollback on error
+        console.error("Failed to update favorite:", error);
+        
+        // Revert to previous state
+        setFavoriteTags(previousState);
+        try {
+          localStorage.setItem("notes-favorite-tags", JSON.stringify(Array.from(previousState)));
+        } catch {
+          // ignore
+        }
+        
+        // Show error toast
+        toast("Failed to update favorite. Please try again.", "error");
+        
+        // Cleanup timer
+        delete debounceTimerRef.current[tagId];
+      }
+    }, 300);
+  }, [favoriteTags, toast, shootConfetti]);
 
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
@@ -275,6 +385,7 @@ export function NotesClient() {
     tagId: string;
     x: number;
     y: number;
+    buttonElement?: HTMLElement; // Add reference to tag button
   } | null>(null);
   const tagLongPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -654,6 +765,7 @@ export function NotesClient() {
                     tagId: tag.id,
                     x: e.clientX,
                     y: e.clientY,
+                    buttonElement: e.currentTarget as HTMLElement,
                   });
                 }, 500);
               }}
@@ -675,6 +787,7 @@ export function NotesClient() {
                   tagId: tag.id,
                   x: e.clientX,
                   y: e.clientY,
+                  buttonElement: e.currentTarget as HTMLElement,
                 });
               }}
               className={cn(
@@ -798,12 +911,24 @@ export function NotesClient() {
               onClick={() => {
                 const tag = tags.find((t) => t.id === tagContextMenu.tagId);
                 if (tag) {
-                  toggleFavorite(tag.id);
+                  const willBeFavorite = !favoriteTags.has(tag.id);
+                  
+                  // Get confetti position from tag button (center of button)
+                  let confettiX = tagContextMenu.x;
+                  let confettiY = tagContextMenu.y;
+                  
+                  if (tagContextMenu.buttonElement) {
+                    const rect = tagContextMenu.buttonElement.getBoundingClientRect();
+                    confettiX = rect.left + rect.width / 2;
+                    confettiY = rect.top + rect.height / 2;
+                  }
+                  
+                  toggleFavorite(tag.id, confettiX, confettiY);
                   setTagContextMenu(null);
                   toast(
-                    favoriteTags.has(tag.id) 
-                      ? `Removed "${tag.name}" from favorites` 
-                      : `Added "${tag.name}" to favorites`
+                    willBeFavorite
+                      ? `Added "${tag.name}" to favorites` 
+                      : `Removed "${tag.name}" from favorites`
                   );
                 }
               }}
@@ -1293,25 +1418,6 @@ export function NotesClient() {
               </button>
             )}
           </div>
-
-          {/* Favorite toggle button - desktop (shown next to search) */}
-          {activeTag && activeTagObj && (
-            <motion.button
-              onClick={() => toggleFavorite(activeTag)}
-              className={cn(
-                "hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold rounded-xl transition-all border shadow-sm cursor-pointer shrink-0",
-                favoriteTags.has(activeTag)
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
-                  : "bg-secondary text-secondary-foreground border-border/30 hover:bg-secondary/80"
-              )}
-              whileHover={{ y: -0.5 }}
-              whileTap={{ scale: 0.98 }}
-              title={favoriteTags.has(activeTag) ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Star className={cn("w-3.5 h-3.5", favoriteTags.has(activeTag) && "fill-amber-500")} />
-              {favoriteTags.has(activeTag) ? "Favorited" : "Favorite"}
-            </motion.button>
-          )}
 
           {/* Post button for desktop (shown next to search) */}
           {activeTag && (
