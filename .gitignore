@@ -53,3 +53,6 @@ CLAUDE.md
 
 # Uploaded images
 /public/uploads/
+
+# Favorites data (user-specific)
+/data/favorites.json

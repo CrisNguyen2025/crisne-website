@@ -4,17 +4,20 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-// Temporary in-memory storage (will be replaced with database for multi-user)
-// In production, this should be stored per user in a database
-let favoriteTags: Set<string> = new Set();
+// NOTE: This is a placeholder API for future multi-user support
+// Currently, favorites are stored in localStorage on client-side only
+// When authentication is added, this will use database with userId
 
 export const dynamic = "force-dynamic";
 
 // GET /api/favorites
+// Returns empty array - client uses localStorage
 export async function GET() {
   try {
+    // TODO: When auth is added, query database by userId
+    // For now, return empty to let client use localStorage
     return NextResponse.json({
-      favorites: Array.from(favoriteTags),
+      favorites: [],
     });
   } catch (err) {
     console.error("[GET /api/favorites]", err);
@@ -27,6 +30,7 @@ export async function GET() {
 
 // POST /api/favorites
 // Body: { tagId: string }
+// Currently no-op - client handles via localStorage
 export async function POST(req: NextRequest) {
   try {
     const { tagId } = await req.json();
@@ -38,9 +42,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    favoriteTags.add(tagId);
+    // TODO: When auth is added, save to database with userId
+    // For now, just return success (client handles localStorage)
 
-    // Only return success status (client already has updated state)
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[POST /api/favorites]", err);
@@ -52,6 +56,7 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE /api/favorites?tagId=xxx
+// Currently no-op - client handles via localStorage
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -64,9 +69,9 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    favoriteTags.delete(tagId);
+    // TODO: When auth is added, delete from database by userId + tagId
+    // For now, just return success (client handles localStorage)
 
-    // Only return success status (client already has updated state)
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("[DELETE /api/favorites]", err);

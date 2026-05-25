@@ -11,12 +11,13 @@ datasource db {
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  color     String   @default("#6b9ac4")
-  prompt    String?  // custom AI prompt for this tag
-  createdAt DateTime @default(now())
+  id        String     @id @default(cuid())
+  name      String     @unique
+  color     String     @default("#6b9ac4")
+  prompt    String?    // custom AI prompt for this tag
+  createdAt DateTime   @default(now())
   notes     Note[]
+  favorites Favorite[] // Relation to favorites
 }
 
 model Note {
@@ -80,4 +81,18 @@ model RoleApiAccess {
   api  ApiEndpoint @relation(fields: [apiId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, apiId])
+}
+
+// Favorites model - scalable for multi-user
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String   // User identifier (can be session ID, email, or user ID from auth)
+  tagId     String
+  createdAt DateTime @default(now())
+
+  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId]) // One user can only favorite a tag once
+  @@index([userId]) // Fast lookup by user
+  @@index([tagId]) // Fast lookup by tag
 }
