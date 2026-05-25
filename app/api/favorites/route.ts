@@ -3,21 +3,33 @@
 // DELETE /api/favorites — remove a tag from favorites
 
 import { NextRequest, NextResponse } from "next/server";
+import { PrismaClient } from "@prisma/client";
 
-// NOTE: This is a placeholder API for future multi-user support
-// Currently, favorites are stored in localStorage on client-side only
-// When authentication is added, this will use database with userId
+const prisma = new PrismaClient();
 
 export const dynamic = "force-dynamic";
 
+// Helper: Get or generate anonymous user ID from header
+function getUserId(request: NextRequest): string {
+  const userId = request.headers.get("X-User-ID");
+  if (!userId) {
+    throw new Error("X-User-ID header is required");
+  }
+  return userId;
+}
+
 // GET /api/favorites
-// Returns empty array - client uses localStorage
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    // TODO: When auth is added, query database by userId
-    // For now, return empty to let client use localStorage
+    const userId = getUserId(req);
+    
+    const favorites = await prisma.favorite.findMany({
+      where: { userId },
+      select: { tagId: true },
+    });
+    
     return NextResponse.json({
-      favorites: [],
+      favorites: favorites.map(f => f.tagId),
     });
   } catch (err) {
     console.error("[GET /api/favorites]", err);
@@ -30,9 +42,9 @@ export async function GET() {
 
 // POST /api/favorites
 // Body: { tagId: string }
-// Currently no-op - client handles via localStorage
 export async function POST(req: NextRequest) {
   try {
+    const userId = getUserId(req);
     const { tagId } = await req.json();
     
     if (!tagId || typeof tagId !== "string") {
@@ -42,8 +54,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO: When auth is added, save to database with userId
-    // For now, just return success (client handles localStorage)
+    // Upsert to handle duplicates gracefully
+    await prisma.favorite.upsert({
+      where: {
+        userId_tagId: { userId, tagId },
+      },
+      update: {},
+      create: { userId, tagId },
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {
@@ -56,9 +74,9 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE /api/favorites?tagId=xxx
-// Currently no-op - client handles via localStorage
 export async function DELETE(req: NextRequest) {
   try {
+    const userId = getUserId(req);
     const { searchParams } = new URL(req.url);
     const tagId = searchParams.get("tagId");
 
@@ -69,8 +87,9 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // TODO: When auth is added, delete from database by userId + tagId
-    // For now, just return success (client handles localStorage)
+    await prisma.favorite.deleteMany({
+      where: { userId, tagId },
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

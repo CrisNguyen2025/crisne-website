@@ -140,6 +140,9 @@ export function NotesClient() {
   
   // Favorites state (synced with localStorage + API)
   const [favoriteTags, setFavoriteTags] = useState<Set<string>>(new Set());
+  
+  // Anonymous user ID (generated once per browser, stored in localStorage)
+  const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -154,20 +157,57 @@ export function NotesClient() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const initialTabParam = searchParams.get("tab");
 
+  // Generate or retrieve anonymous user ID on mount
+  useEffect(() => {
+    const STORAGE_KEY = "notes-anonymous-user-id";
+    let id = localStorage.getItem(STORAGE_KEY);
+    
+    if (!id) {
+      // Generate new UUID v4 for new user
+      id = crypto.randomUUID();
+      localStorage.setItem(STORAGE_KEY, id);
+      
+      // Clear old favorites from localStorage (new user = empty favorites)
+      localStorage.removeItem("notes-favorite-tags");
+      setFavoriteTags(new Set());
+    }
+    
+    setUserId(id);
+  }, []);
+
   // Load favorites from localStorage on mount + sync with server
   useEffect(() => {
-    // Load from localStorage first (instant)
+    // Wait for userId to be ready
+    if (!userId) return;
+    
+    // Check if favorites in localStorage belong to current user
     try {
+      const storedUserId = localStorage.getItem("notes-favorite-tags-user-id");
       const stored = localStorage.getItem("notes-favorite-tags");
-      if (stored) {
+      
+      if (storedUserId === userId && stored) {
+        // Same user → Load from localStorage (instant)
         setFavoriteTags(new Set(JSON.parse(stored)));
+      } else if (storedUserId && storedUserId !== userId) {
+        // Different user → Clear old favorites
+        console.log("User ID mismatch, clearing old favorites");
+        setFavoriteTags(new Set());
+        localStorage.removeItem("notes-favorite-tags");
+        localStorage.setItem("notes-favorite-tags-user-id", userId);
+      } else {
+        // First time → Set user ID
+        localStorage.setItem("notes-favorite-tags-user-id", userId);
       }
     } catch {
       // ignore
     }
     
     // Then sync with server in background
-    fetch("/api/favorites")
+    fetch("/api/favorites", {
+      headers: {
+        "X-User-ID": userId,
+      },
+    })
       .then(res => {
         if (!res.ok) throw new Error("Failed to fetch favorites");
         return res.json();
@@ -178,6 +218,7 @@ export function NotesClient() {
           setFavoriteTags(serverFavorites);
           try {
             localStorage.setItem("notes-favorite-tags", JSON.stringify(data.favorites));
+            localStorage.setItem("notes-favorite-tags-user-id", userId);
           } catch {
             // ignore
           }
@@ -192,7 +233,7 @@ export function NotesClient() {
     return () => {
       Object.values(debounceTimerRef.current).forEach(timer => clearTimeout(timer));
     };
-  }, []);
+  }, [userId]);
 
   // Resolve ?tab=slug → mode + tag once tags are loaded
   useEffect(() => {
@@ -300,6 +341,12 @@ export function NotesClient() {
 
   // Toggle favorite tag with optimistic updates + debouncing
   const toggleFavorite = useCallback((tagId: string, x?: number, y?: number) => {
+    // Don't allow toggle if userId not ready
+    if (!userId) {
+      console.warn("User ID not ready yet");
+      return;
+    }
+    
     const newFavorites = new Set(favoriteTags);
     const isFavorite = newFavorites.has(tagId);
     const previousState = new Set(favoriteTags); // Backup for rollback
@@ -336,7 +383,10 @@ export function NotesClient() {
           isFavorite ? `/api/favorites?tagId=${tagId}` : "/api/favorites",
           {
             method: isFavorite ? "DELETE" : "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "X-User-ID": userId,
+            },
             body: isFavorite ? undefined : JSON.stringify({ tagId }),
           }
         );
@@ -366,7 +416,7 @@ export function NotesClient() {
         delete debounceTimerRef.current[tagId];
       }
     }, 300);
-  }, [favoriteTags, toast, shootConfetti]);
+  }, [favoriteTags, toast, shootConfetti, userId]);
 
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
