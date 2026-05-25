@@ -1040,7 +1040,6 @@ export function NotesClient() {
                     if (favoriteTags.has(tag.id)) {
                       toggleFavorite(tag.id);
                     }
-                    toast(`Tag "${tag.name}" deleted`);
                   },
                 );
               }}
@@ -1141,7 +1140,6 @@ export function NotesClient() {
                       : t,
                   ),
                 );
-                toast("Post created successfully");
               }}
               onCancel={closeAllForms}
             />
@@ -1166,10 +1164,8 @@ export function NotesClient() {
                         : t,
                     ),
                   );
-                  toast("Tag updated successfully");
                 } else {
                   setTags((prev) => [...prev, { ...savedTag, postCount: 0 }]);
-                  toast("Tag created successfully");
                 }
               }}
               onCancel={() => {
@@ -1220,7 +1216,6 @@ export function NotesClient() {
                     }
                     if (activeTag === tag.id) setActiveTag(null);
                     setTags((prev) => prev.filter((t) => t.id !== tag.id));
-                    toast(`Tag "${tag.name}" deleted`);
                   },
                 );
               }}
@@ -1275,7 +1270,6 @@ export function NotesClient() {
                             prev.filter((p) => p.id !== drawerPost.id),
                           );
                           closeAllForms();
-                          toast("Post deleted successfully");
                         },
                       );
                     }}

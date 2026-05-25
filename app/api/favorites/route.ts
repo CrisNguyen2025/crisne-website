@@ -5,7 +5,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+// Use singleton pattern for Prisma Client
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +56,8 @@ export async function POST(req: NextRequest) {
     const userId = getUserId(req);
     const { tagId } = await req.json();
     
+    console.log("[POST /api/favorites] userId:", userId, "tagId:", tagId);
+    
     if (!tagId || typeof tagId !== "string") {
       return NextResponse.json(
         { error: "tagId is required" },
@@ -55,19 +66,22 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert to handle duplicates gracefully
-    await prisma.favorite.upsert({
+    const result = await prisma.favorite.upsert({
       where: {
         userId_tagId: { userId, tagId },
       },
       update: {},
       create: { userId, tagId },
     });
+    
+    console.log("[POST /api/favorites] Success:", result);
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[POST /api/favorites]", err);
+    console.error("[POST /api/favorites] Error:", err);
+    console.error("[POST /api/favorites] Error stack:", (err as Error).stack);
     return NextResponse.json(
-      { error: "Failed to add favorite" },
+      { error: "Failed to add favorite", details: (err as Error).message },
       { status: 500 }
     );
   }

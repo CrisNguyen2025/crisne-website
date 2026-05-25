@@ -17,7 +17,7 @@ model Tag {
   prompt    String?    // custom AI prompt for this tag
   createdAt DateTime   @default(now())
   notes     Note[]
-  favorites Favorite[] // Relation to favorites
+  // Note: Favorite model doesn't have foreign key to Tag (tags are from Notion API)
 }
 
 model Note {
@@ -84,13 +84,12 @@ model RoleApiAccess {
 }
 
 // Favorites model - scalable for multi-user
+// Note: tagId references tags from Notion API, not the Tag table
 model Favorite {
   id        String   @id @default(cuid())
   userId    String   // User identifier (can be session ID, email, or user ID from auth)
-  tagId     String
+  tagId     String   // Tag ID from Notion API (no foreign key constraint)
   createdAt DateTime @default(now())
-
-  tag Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tagId]) // One user can only favorite a tag once
   @@index([userId]) // Fast lookup by user
