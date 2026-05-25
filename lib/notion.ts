@@ -383,10 +383,29 @@ function mapFavorite(page: PageObjectResponse): NotionFavorite {
 }
 
 export async function getFavorites(userId: string): Promise<string[]> {
-  const pages = await queryDatabase(FAVORITES_DB_ID, {
-    filter: { property: "UserId", title: { equals: userId } }, // Changed to title
+  console.log("[getFavorites] Querying for userId:", userId);
+  
+  // Query all favorites (no filter) then filter client-side
+  const allPages = await queryDatabase(FAVORITES_DB_ID);
+  
+  console.log("[getFavorites] Total pages in database:", allPages.length);
+  
+  // Filter by userId client-side
+  const pages = allPages.filter(page => {
+    const uid = titleToString(getProp(page, "UserId")).trim();
+    const match = uid === userId;
+    if (allPages.length < 20) { // Only log if not too many
+      console.log(`  - Page UserId: "${uid}", Looking for: "${userId}", Match: ${match}`);
+    }
+    return match;
   });
-  return pages.map(page => richTextToString(getProp(page, "TagId")));
+  
+  console.log("[getFavorites] Matched pages:", pages.length);
+  
+  const tagIds = pages.map(page => richTextToString(getProp(page, "TagId")));
+  console.log("[getFavorites] Returning tagIds:", tagIds);
+  
+  return tagIds;
 }
 
 export async function addFavorite(userId: string, tagId: string): Promise<NotionFavorite> {

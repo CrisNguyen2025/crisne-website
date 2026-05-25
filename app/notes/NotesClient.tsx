@@ -167,9 +167,13 @@ export function NotesClient() {
       id = crypto.randomUUID();
       localStorage.setItem(STORAGE_KEY, id);
       
+      console.log("[UserId] Generated new userId:", id);
+      
       // Clear old favorites from localStorage (new user = empty favorites)
       localStorage.removeItem("notes-favorite-tags");
       setFavoriteTags(new Set());
+    } else {
+      console.log("[UserId] Loaded existing userId:", id);
     }
     
     setUserId(id);
