@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   DndContext,
   closestCenter,
@@ -39,6 +39,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
@@ -135,6 +136,9 @@ export function NotesClient() {
   const [loading, setLoading] = useState(true);
   const [localSearch, setLocalSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Favorites state (synced with localStorage + API)
+  const [favoriteTags, setFavoriteTags] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -143,51 +147,116 @@ export function NotesClient() {
     return () => clearTimeout(timer);
   }, [localSearch]);
 
-  // Active tab: "all" | "show-all" | tag.id — synced with ?tab=<tag-slug> param
-  const [activeTab, setActiveTab] = useState<string>("all");
+  // View mode: "favorites" | "show-all" (mutually exclusive)
+  // Active tag: tag.id | null (independent from view mode)
+  const [viewMode, setViewMode] = useState<"favorites" | "show-all">("favorites");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const initialTabParam = searchParams.get("tab");
 
-  // Resolve ?tab=slug → tag.id once tags are loaded
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("notes-favorite-tags");
+      if (stored) {
+        setFavoriteTags(new Set(JSON.parse(stored)));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Resolve ?tab=slug → mode + tag once tags are loaded
   useEffect(() => {
     if (tags.length === 0) return;
     
-    // If no tab param, default to "favorites" tag
+    // If no tab param, default to show-all mode
     if (!initialTabParam) {
-      const favoritesTag = tags.find((t) => t.name.toLowerCase() === "favorites");
-      if (favoritesTag) {
-        setActiveTab(favoritesTag.id);
-        return;
-      }
-    }
-    
-    if (initialTabParam === "all" || initialTabParam === "show-all") {
-      setActiveTab(initialTabParam);
+      setViewMode("show-all");
+      setActiveTag(null);
       return;
     }
     
+    // Check if it's a mode
+    if (initialTabParam === "favorites") {
+      setViewMode("favorites");
+      setActiveTag(null);
+      return;
+    }
+    
+    if (initialTabParam === "show-all") {
+      setViewMode("show-all");
+      setActiveTag(null);
+      return;
+    }
+    
+    // Otherwise it's a tag slug
     const matched = tags.find((t) => tagSlug(t.name) === initialTabParam);
     if (matched) {
-      setActiveTab(matched.id);
+      setViewMode("show-all"); // Default to show-all mode when accessing via tag
+      setActiveTag(matched.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tags]);
 
-  const switchTab = useCallback(
-    (tabId: string) => {
-      setActiveTab(tabId);
+  const switchTag = useCallback(
+    (tagId: string | null) => {
+      setActiveTag(tagId);
       setLocalSearch("");
+      
+      // Update URL
       const params = new URLSearchParams(window.location.search);
-      if (tabId === "all" || tabId === "show-all") {
-        params.set("tab", tabId);
+      if (tagId) {
+        const tag = tags.find((t) => t.id === tagId);
+        params.set("tab", tag ? tagSlug(tag.name) : tagId);
       } else {
-        const tag = tags.find((t) => t.id === tabId);
-        params.set("tab", tag ? tagSlug(tag.name) : tabId);
+        params.set("tab", viewMode);
       }
       const qs = params.toString();
       window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
     },
-    [tags],
+    [tags, viewMode],
   );
+
+  // Switch view mode (favorites <-> show-all)
+  const switchViewMode = useCallback((mode: "favorites" | "show-all") => {
+    setViewMode(mode);
+    setActiveTag(null); // Reset active tag when switching mode
+    setLocalSearch("");
+    
+    // Update URL
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", mode);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
+  }, []);
+
+  // Toggle favorite tag
+  const toggleFavorite = useCallback(async (tagId: string) => {
+    const newFavorites = new Set(favoriteTags);
+    const isFavorite = newFavorites.has(tagId);
+    
+    if (isFavorite) {
+      newFavorites.delete(tagId);
+      // Call API to remove favorite
+      await fetch(`/api/favorites?tagId=${tagId}`, { method: "DELETE" });
+    } else {
+      newFavorites.add(tagId);
+      // Call API to add favorite
+      await fetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tagId }),
+      });
+    }
+    
+    setFavoriteTags(newFavorites);
+    // Persist to localStorage
+    try {
+      localStorage.setItem("notes-favorite-tags", JSON.stringify(Array.from(newFavorites)));
+    } catch {
+      // ignore
+    }
+  }, [favoriteTags]);
 
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
@@ -273,7 +342,7 @@ export function NotesClient() {
         inline: "center",
       });
     }
-  }, [activeTab]);
+  }, [activeTag, viewMode]);
 
   const refresh = useCallback(async () => {
     try {
@@ -369,42 +438,64 @@ export function NotesClient() {
   }, []);
 
   const filteredPosts = useMemo(() => {
-    const matched = posts.filter((post) => {
-      const matchesSearch =
-        post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (post.content &&
-          post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        post.slug.toLowerCase().includes(searchQuery.toLowerCase());
+    let matched = posts;
 
-      if (activeTab === "all" || activeTab === "show-all") return matchesSearch;
-      return matchesSearch && post.tags.some((t) => t.id === activeTab);
-    });
-
-    // Tab "All" or "Show All" → sort A-Z by title
-    if (activeTab === "all" || activeTab === "show-all") {
-      return [...matched].sort((a, b) =>
-        a.title.localeCompare(b.title, "vi", { sensitivity: "base" }),
+    // Apply view mode filter first
+    if (viewMode === "favorites") {
+      matched = posts.filter((post) => 
+        post.tags.some((t) => favoriteTags.has(t.id))
       );
     }
 
-    // Tab specific → use custom order; new posts (not in order) go to the end
-    const customOrder = tagOrders[activeTab] ?? [];
+    // Then apply tag filter if a tag is selected
+    if (activeTag) {
+      matched = matched.filter((post) =>
+        post.tags.some((t) => t.id === activeTag)
+      );
+    }
+
+    // Finally apply search filter
+    if (searchQuery) {
+      matched = matched.filter((post) =>
+        post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (post.content &&
+          post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        post.slug.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Sort based on context
+    if (!activeTag) {
+      if (viewMode === "favorites") {
+        // Favorites mode without tag → sort by createdAt DESC
+        return [...matched].sort((a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      } else {
+        // Show-all mode without tag → sort A-Z by title
+        return [...matched].sort((a, b) =>
+          a.title.localeCompare(b.title, "vi", { sensitivity: "base" }),
+        );
+      }
+    }
+
+    // Specific tag selected → use custom order
+    const customOrder = tagOrders[activeTag] ?? [];
     const orderIndex = new Map(customOrder.map((id, i) => [id, i]));
     return [...matched].sort((a, b) => {
       const ai = orderIndex.has(a.id) ? orderIndex.get(a.id)! : Number.MAX_SAFE_INTEGER;
       const bi = orderIndex.has(b.id) ? orderIndex.get(b.id)! : Number.MAX_SAFE_INTEGER;
       if (ai !== bi) return ai - bi;
-      // Tie-breaker for new posts: by createdAt ASC (oldest new ones first, newest last)
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
-  }, [posts, activeTab, searchQuery, tagOrders]);
+  }, [posts, activeTag, searchQuery, tagOrders, favoriteTags, viewMode]);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveDragId(null);
       if (!over || active.id === over.id) return;
-      if (activeTab === "all" || activeTab === "show-all") return; // No DnD on "all" or "show-all" tab
+      if (!activeTag) return; // No DnD when no tag is selected
 
       const ids = filteredPosts.map((p) => p.id);
       const oldIndex = ids.indexOf(active.id as string);
@@ -412,9 +503,9 @@ export function NotesClient() {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const newOrder = arrayMove(ids, oldIndex, newIndex);
-      persistTagOrders({ ...tagOrders, [activeTab]: newOrder });
+      persistTagOrders({ ...tagOrders, [activeTag]: newOrder });
     },
-    [activeTab, filteredPosts, tagOrders, persistTagOrders],
+    [activeTag, filteredPosts, tagOrders, persistTagOrders],
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -446,11 +537,10 @@ export function NotesClient() {
     ? filteredPosts.find((p) => p.id === activeDragId) ?? null
     : null;
 
-  const activeTagObj = tags.find((t) => t.id === activeTab) ?? null;
-  const tagHasPosts =
-    activeTab === "all"
-      ? posts.length > 0
-      : posts.some((post) => post.tags.some((t) => t.id === activeTab));
+  const activeTagObj = tags.find((t) => t.id === activeTag) ?? null;
+  const tagHasPosts = activeTag
+    ? posts.some((post) => post.tags.some((t) => t.id === activeTag))
+    : posts.length > 0;
 
   if (loading) {
     return (
@@ -466,7 +556,7 @@ export function NotesClient() {
   return (
     <div className="max-w-[90rem] mx-auto px-6 pb-16 relative">
       {/* Background Decorative Glow */}
-      <div className="absolute top-0 right-10 w-72 h-72 bg-steel/5 blur-3xl rounded-full -z-10" />
+      <div className="absolute top-0 right-0 w-72 h-72 bg-steel/5 blur-3xl rounded-full -z-10" />
 
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                             */}
@@ -508,80 +598,55 @@ export function NotesClient() {
       {/* Search & Tags bar                                                  */}
       {/* ------------------------------------------------------------------ */}
       <div className="lg:mb-10 mb-4 relative group">
-        <div
-          ref={tabBarRef}
-          onScroll={checkScroll}
-          className="flex flex-wrap items-center gap-2 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-        >
-          {/* All tab */}
-          <button
-            data-active={activeTab === "all"}
-            onClick={() => switchTab("all")}
-            className={cn(
-              "relative px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border flex items-center gap-2",
-              activeTab === "all"
-                ? "text-background border-transparent"
-                : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
-            )}
+        <LayoutGroup>
+          <div
+            ref={tabBarRef}
+            onScroll={checkScroll}
+            className="flex flex-wrap items-center gap-2 pb-4 overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           >
-            {activeTab === "all" && (
-              <motion.div
-                className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
-                layoutId="activeTabBackground"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <span className="relative z-10">All Notes</span>
-            <span
+          {/* Simple Favorites Toggle */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-full border border-border/40 shrink-0">
+            <Star className={cn("w-3.5 h-3.5 transition-all", viewMode === "favorites" ? "text-amber-500 fill-amber-500" : "text-muted-foreground")} />
+            <span className="text-xs font-medium text-muted-foreground">Only favorites</span>
+            <button
+              onClick={() => switchViewMode(viewMode === "favorites" ? "show-all" : "favorites")}
               className={cn(
-                "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
-                activeTab === "all"
-                  ? "bg-background/20 text-background"
-                  : "bg-muted text-muted-foreground/80",
+                "relative w-9 h-5 rounded-full transition-colors",
+                viewMode === "favorites" ? "bg-amber-500" : "bg-muted"
               )}
             >
-              {posts.length}
-            </span>
-          </button>
-
-          {/* Show All tab */}
-          <button
-            data-active={activeTab === "show-all"}
-            onClick={() => switchTab("show-all")}
-            className={cn(
-              "relative px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border flex items-center gap-2",
-              activeTab === "show-all"
-                ? "text-background border-transparent"
-                : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
-            )}
-          >
-            {activeTab === "show-all" && (
               <motion.div
-                className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
-                layoutId="activeTabBackground"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                className="absolute top-0.5 w-4 h-4 bg-background rounded-full shadow-sm"
+                animate={{ left: viewMode === "favorites" ? "18px" : "2px" }}
+                transition={{ type: "spring", stiffness: 500, damping: 30 }}
               />
-            )}
-            <span className="relative z-10">Show All Tags</span>
-          </button>
+            </button>
+          </div>
 
-          {/* Tag tabs - sorted: favorites first when show-all */}
+          {/* Divider */}
+          <div className="h-8 w-px bg-border/40 shrink-0" />
+
+          {/* Tags - filter by favorites mode, no reordering */}
           {(() => {
-            const sortedTags = activeTab === "show-all"
-              ? [...tags].sort((a, b) => {
-                  const aIsFav = a.name.toLowerCase() === "favorites";
-                  const bIsFav = b.name.toLowerCase() === "favorites";
-                  if (aIsFav && !bIsFav) return -1;
-                  if (!aIsFav && bIsFav) return 1;
-                  return 0;
-                })
+            // Filter tags based on favorites mode, keep original order
+            const displayTags = viewMode === "favorites"
+              ? tags.filter(tag => favoriteTags.has(tag.id))
               : tags;
             
-            return sortedTags.map((tag) => (
-            <button
+            return displayTags.map((tag) => {
+              const isFavorite = favoriteTags.has(tag.id);
+              return (
+            <motion.button
               key={tag.id}
-              data-active={activeTab === tag.id}
-              onClick={() => switchTab(tag.id)}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{
+                opacity: { duration: 0.2 },
+                scale: { duration: 0.2, ease: "easeOut" }
+              }}
+              data-active={activeTag === tag.id}
+              onClick={() => switchTag(tag.id)}
               onPointerDown={(e) => {
                 // Start long-press timer
                 tagLongPressRef.current = setTimeout(() => {
@@ -613,19 +678,24 @@ export function NotesClient() {
                 });
               }}
               className={cn(
-                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border select-none",
-                activeTab === tag.id
+                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border-2 select-none overflow-visible group/tag",
+                "transition-[border-color,box-shadow] duration-300 ease-in-out",
+                activeTag === tag.id
                   ? "text-background border-transparent"
-                  : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40",
+                  : isFavorite
+                    ? "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-amber-500/60 shadow-sm shadow-amber-500/10"
+                    : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40"
               )}
+              style={{ isolation: "isolate" }}
             >
-              {activeTab === tag.id && (
+              {activeTag === tag.id && (
                 <motion.div
                   className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
-                  layoutId="activeTabBackground"
+                  layoutId="activeTagBackground"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
+              
               <span
                 className="relative z-10 w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ background: tag.color }}
@@ -634,15 +704,16 @@ export function NotesClient() {
               <span
                 className={cn(
                   "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
-                  activeTab === tag.id
+                  activeTag === tag.id
                     ? "bg-background/20 text-background"
                     : "bg-muted text-muted-foreground/80",
                 )}
               >
                 {tag.postCount}
               </span>
-            </button>
-          ));
+            </motion.button>
+          );
+          });
           })()}
 
           {/* Add Tag button */}
@@ -657,6 +728,7 @@ export function NotesClient() {
             <span>Tag</span>
           </button>
         </div>
+        </LayoutGroup>
 
         {/* Scroll fade masks and chevron buttons */}
         <AnimatePresence>
@@ -710,14 +782,49 @@ export function NotesClient() {
             className="fixed inset-0 z-[200]"
             onClick={() => setTagContextMenu(null)}
           />
-          <div
-            className="fixed z-[201] bg-card border border-border/50 rounded-xl shadow-xl p-1.5 min-w-[120px]"
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className="fixed z-[201] bg-card border border-border/50 rounded-xl shadow-xl p-1.5 min-w-[160px]"
             style={{
               top: tagContextMenu.y,
               left: tagContextMenu.x,
               transform: "translate(-50%, 8px)",
             }}
           >
+            <button
+              onClick={() => {
+                const tag = tags.find((t) => t.id === tagContextMenu.tagId);
+                if (tag) {
+                  toggleFavorite(tag.id);
+                  setTagContextMenu(null);
+                  toast(
+                    favoriteTags.has(tag.id) 
+                      ? `Removed "${tag.name}" from favorites` 
+                      : `Added "${tag.name}" to favorites`
+                  );
+                }
+              }}
+              className={cn(
+                "flex items-center gap-2 w-full px-3 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer text-left",
+                favoriteTags.has(tagContextMenu.tagId)
+                  ? "hover:bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                  : "hover:bg-muted"
+              )}
+            >
+              <motion.div
+                whileHover={{ scale: 1.1, rotate: 15 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <Star className={cn(
+                  "w-3.5 h-3.5 transition-all",
+                  favoriteTags.has(tagContextMenu.tagId) && "fill-amber-500 text-amber-500"
+                )} />
+              </motion.div>
+              {favoriteTags.has(tagContextMenu.tagId) ? "Remove from Favorites" : "Add to Favorites"}
+            </button>
             <button
               onClick={() => {
                 const tag = tags.find((t) => t.id === tagContextMenu.tagId);
@@ -752,8 +859,12 @@ export function NotesClient() {
                       toast(`Failed to delete "${tag.name}"`, "error");
                       return;
                     }
-                    if (activeTab === tag.id) setActiveTab("all");
+                    if (activeTag === tag.id) setActiveTag(null);
                     setTags((prev) => prev.filter((t) => t.id !== tag.id));
+                    // Also remove from favorites if it was favorited
+                    if (favoriteTags.has(tag.id)) {
+                      toggleFavorite(tag.id);
+                    }
                     toast(`Tag "${tag.name}" deleted`);
                   },
                 );
@@ -763,7 +874,7 @@ export function NotesClient() {
               <Trash2 className="w-3.5 h-3.5" />
               Delete Tag
             </button>
-          </div>
+          </motion.div>
         </>
       )}
 
@@ -832,7 +943,7 @@ export function NotesClient() {
             <PostForm
               post={null}
               tags={tags}
-              preselectedTagId={activeTab !== "all" ? activeTab : undefined}
+              preselectedTagId={activeTag ?? undefined}
               saving={saving}
               setSaving={setSaving}
               onSaved={(savedPost) => {
@@ -932,7 +1043,7 @@ export function NotesClient() {
                       );
                       return;
                     }
-                    if (activeTab === tag.id) setActiveTab("all");
+                    if (activeTag === tag.id) setActiveTag(null);
                     setTags((prev) => prev.filter((t) => t.id !== tag.id));
                     toast(`Tag "${tag.name}" deleted`);
                   },
@@ -1038,7 +1149,7 @@ export function NotesClient() {
                   <PostForm
                     post={drawerPost}
                     tags={tags}
-                    preselectedTagId={activeTab !== "all" ? activeTab : undefined}
+                    preselectedTagId={activeTag ?? undefined}
                     saving={saving}
                     setSaving={setSaving}
                     onSaved={(savedPost) => {
@@ -1099,7 +1210,7 @@ export function NotesClient() {
         {/* Mobile Top Row / Desktop Left Side */}
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
-            {activeTab === "all" ? (
+            {!activeTag ? (
               <BookOpen className="w-4 h-4 text-steel shrink-0" />
             ) : (
               <span
@@ -1108,27 +1219,50 @@ export function NotesClient() {
               />
             )}
             <p className="text-xs font-mono text-muted-foreground/70">
-              {activeTab === "all"
-                ? `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`
-                : `${posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length} ${posts.filter((p) => p.tags.some((t) => t.id === activeTab)).length === 1 ? "note" : "notes"} in this tag`}
+              {viewMode === "favorites"
+                ? activeTag
+                  ? `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites in ${activeTagObj?.name}`
+                  : `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites`
+                : activeTag
+                ? `${posts.filter((p) => p.tags.some((t) => t.id === activeTag)).length} ${posts.filter((p) => p.tags.some((t) => t.id === activeTag)).length === 1 ? "note" : "notes"} in this tag`
+                : `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`}
             </p>
           </div>
 
           {/* Post button for mobile (shown on left row's right side) */}
-          {activeTab !== "all" && (
-            <motion.button
-              onClick={() => {
-                closeAllForms();
-                setShowPostForm(true);
-              }}
-              className="sm:hidden inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all border border-foreground/10 shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
-              whileHover={{ y: -0.5 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Post
-            </motion.button>
-          )}
+          <div className="sm:hidden flex items-center gap-2">
+            {/* Favorite toggle button - mobile */}
+            {activeTag && activeTagObj && (
+              <motion.button
+                onClick={() => toggleFavorite(activeTag)}
+                className={cn(
+                  "inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold rounded-xl transition-all border shadow-sm cursor-pointer shrink-0",
+                  favoriteTags.has(activeTag)
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                    : "bg-secondary text-secondary-foreground border-border/30 hover:bg-secondary/80"
+                )}
+                whileHover={{ y: -0.5 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Star className={cn("w-3.5 h-3.5", favoriteTags.has(activeTag) && "fill-amber-500")} />
+              </motion.button>
+            )}
+            
+            {activeTag && (
+              <motion.button
+                onClick={() => {
+                  closeAllForms();
+                  setShowPostForm(true);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl hover:opacity-90 transition-all border border-foreground/10 shadow-sm shadow-foreground/5 cursor-pointer shrink-0"
+                whileHover={{ y: -0.5 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Post
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* Mobile Bottom Row / Desktop Right Side */}
@@ -1138,9 +1272,13 @@ export function NotesClient() {
             <input
               type="text"
               placeholder={
-                activeTab === "all"
-                  ? "Search all notes..."
-                  : `Search in ${activeTagObj?.name}...`
+                viewMode === "favorites"
+                  ? activeTag
+                    ? `Search in favorites (${activeTagObj?.name})...`
+                    : "Search in favorites..."
+                  : activeTag
+                  ? `Search in ${activeTagObj?.name}...`
+                  : "Search all notes..."
               }
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
@@ -1156,8 +1294,27 @@ export function NotesClient() {
             )}
           </div>
 
+          {/* Favorite toggle button - desktop (shown next to search) */}
+          {activeTag && activeTagObj && (
+            <motion.button
+              onClick={() => toggleFavorite(activeTag)}
+              className={cn(
+                "hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold rounded-xl transition-all border shadow-sm cursor-pointer shrink-0",
+                favoriteTags.has(activeTag)
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+                  : "bg-secondary text-secondary-foreground border-border/30 hover:bg-secondary/80"
+              )}
+              whileHover={{ y: -0.5 }}
+              whileTap={{ scale: 0.98 }}
+              title={favoriteTags.has(activeTag) ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star className={cn("w-3.5 h-3.5", favoriteTags.has(activeTag) && "fill-amber-500")} />
+              {favoriteTags.has(activeTag) ? "Favorited" : "Favorite"}
+            </motion.button>
+          )}
+
           {/* Post button for desktop (shown next to search) */}
-          {activeTab !== "all" && (
+          {activeTag && (
             <motion.button
               onClick={() => {
                 closeAllForms();
@@ -1179,7 +1336,7 @@ export function NotesClient() {
       {/* -------------------------------------------------------------- */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={activeTab + searchQuery}
+          key={activeTag + viewMode + searchQuery}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -1194,11 +1351,15 @@ export function NotesClient() {
                 No notes found
               </h3>
               <p className="text-muted-foreground/60 text-xs max-w-xs mb-4">
-                {activeTab !== "all"
+                {viewMode === "favorites"
+                  ? activeTag
+                    ? `No posts found in "${activeTagObj?.name}" from your favorites.`
+                    : "No posts found in your favorite tags."
+                  : activeTag
                   ? `There are no posts in tag "${activeTagObj?.name}" matching your search.`
                   : "Start documenting your ideas and resources today."}
               </p>
-              {!tagHasPosts && activeTab !== "all" && (
+              {!tagHasPosts && activeTag && (
                 <button
                   onClick={() => {
                     closeAllForms();
@@ -1222,14 +1383,14 @@ export function NotesClient() {
               <SortableContext
                 items={filteredPosts.map((p) => p.id)}
                 strategy={rectSortingStrategy}
-                disabled={activeTab === "all"}
+                disabled={!activeTag}
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
                   {filteredPosts.map((post) => (
                     <PostCard
                       key={post.id}
                       post={post}
-                      sortable={activeTab !== "all"}
+                      sortable={!!activeTag}
                       onView={() => {
                         closeAllForms();
                         setDrawerPost(post);
