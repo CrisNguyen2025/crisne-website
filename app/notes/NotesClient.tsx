@@ -736,10 +736,7 @@ export function NotesClient() {
             <ThemeToggle />
           </div>
           <h1 className="text-4xl font-display font-bold tracking-tight text-foreground sm:text-5xl">
-            Thoughts &{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-steel to-steel-light">
-              Notes
-            </span>
+            Notes
           </h1>
         </div>
 
