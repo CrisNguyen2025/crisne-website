@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const nextConfig: NextConfig = {
+  // Generate build ID based on timestamp to force cache invalidation
+  generateBuildId: async () => {
+    return `build-${Date.now()}`;
+  },
   images: {
     remotePatterns: [
       {
@@ -30,7 +34,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Cache static assets including fonts
+      // Cache static assets (JS, CSS, images) with hash in filename
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // Cache fonts
       {
         source: "/fonts/:path*",
         headers: [
@@ -40,12 +54,33 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Cache images
       {
-        source: "/(.*)",
+        source: "/images/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      // Don't cache HTML pages - always revalidate
+      {
+        source: "/:path*.html",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, must-revalidate",
+          },
+        ],
+      },
+      // Don't cache API routes
+      {
+        source: "/api/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate",
           },
         ],
       },
