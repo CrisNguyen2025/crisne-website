@@ -433,6 +433,7 @@ export function NotesClient() {
   // Post drawer: single drawer for both view/edit
   const [drawerPost, setDrawerPost] = useState<PostWithTags | null>(null);
   const [drawerMode, setDrawerMode] = useState<"view" | "edit">("view");
+  const [drawerLoading, setDrawerLoading] = useState(false);
 
   // Tag long-press context menu
   const [tagContextMenu, setTagContextMenu] = useState<{
@@ -554,10 +555,22 @@ export function NotesClient() {
     setViewingPost(null);
     setDrawerPost(null);
     setDrawerMode("view");
+    setDrawerLoading(false);
     setShowTagForm(false);
     setEditingTag(null);
     setShowTagManager(false);
   };
+
+  // Navigate to next/prev post with loading animation
+  const navigateToPost = useCallback((post: PostWithTags) => {
+    setDrawerLoading(true);
+    // Simulate brief loading for smooth transition
+    setTimeout(() => {
+      setDrawerPost(post);
+      setDrawerMode("view");
+      setDrawerLoading(false);
+    }, 150);
+  }, []);
 
   const handleBackup = async () => {
     try {
@@ -1232,6 +1245,17 @@ export function NotesClient() {
           <Drawer
             onClose={closeAllForms}
             widthClass="sm:w-[80%] lg:w-[60%]"
+            loading={drawerLoading}
+            onNext={
+              drawerMode === "view"
+                ? (() => {
+                    const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                    return idx >= 0 && idx < filteredPosts.length - 1
+                      ? () => navigateToPost(filteredPosts[idx + 1])
+                      : undefined;
+                  })()
+                : undefined
+            }
           >
             <div className="flex-1 min-h-0 relative">
             <AnimatePresence mode="wait" initial={false}>
@@ -1279,7 +1303,7 @@ export function NotesClient() {
                       (() => {
                         const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
                         return idx > 0
-                          ? () => setDrawerPost(filteredPosts[idx - 1])
+                          ? () => navigateToPost(filteredPosts[idx - 1])
                           : undefined;
                       })()
                     }
@@ -1287,7 +1311,7 @@ export function NotesClient() {
                       (() => {
                         const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
                         return idx >= 0 && idx < filteredPosts.length - 1
-                          ? () => setDrawerPost(filteredPosts[idx + 1])
+                          ? () => navigateToPost(filteredPosts[idx + 1])
                           : undefined;
                       })()
                     }
@@ -1631,16 +1655,22 @@ function Drawer({
   children,
   onClose,
   widthClass = "sm:w-[60%] lg:w-[40%]",
+  onNext,
+  loading = false,
 }: {
   children: React.ReactNode;
   onClose: () => void;
   widthClass?: string;
+  onNext?: () => void;
+  loading?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [dragX, setDragX] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const isDraggingRef = useRef(false);
+  // Direction: "close" (drag right → close) | "next" (drag left → next post) | null
+  const dragDirectionRef = useRef<"close" | "next" | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
@@ -1667,9 +1697,16 @@ function Drawer({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!isMobile) return;
+    // Don't hijack touches that originate from scrollable content / interactive elements
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('[data-no-swipe], button, a, input, textarea, [contenteditable="true"]')) {
+      touchStartRef.current = null;
+      return;
+    }
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
     isDraggingRef.current = false;
+    dragDirectionRef.current = null;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -1678,35 +1715,67 @@ function Drawer({
     const dx = touch.clientX - touchStartRef.current.x;
     const dy = touch.clientY - touchStartRef.current.y;
 
-    // Only start drag if horizontal movement dominates and is rightward
+    // Determine direction once horizontal motion clearly dominates
     if (!isDraggingRef.current) {
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5 && dx > 0) {
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) {
         isDraggingRef.current = true;
+        // swipe-right → close, swipe-left → next post
+        dragDirectionRef.current = dx > 0 ? "close" : "next";
       } else {
         return;
       }
     }
 
-    if (isDraggingRef.current && dx > 0) {
-      setDragX(dx);
+    if (dragDirectionRef.current === "close" && dx > 0) {
+      // Drift right while dragging to close (cap at half viewport)
+      setDragX(Math.min(dx, 160));
+    } else if (dragDirectionRef.current === "next" && dx < 0) {
+      if (onNext) {
+        // Follow finger up to ~140px leftward
+        setDragX(Math.max(dx, -140));
+      } else {
+        // Last post: rubber-band resistance so user feels "no more posts"
+        const resisted = Math.max(-40, dx * 0.3);
+        setDragX(resisted);
+      }
     }
   };
 
   const handleTouchEnd = () => {
-    if (!isMobile || !touchStartRef.current) return;
+    if (!isMobile || !touchStartRef.current) {
+      touchStartRef.current = null;
+      isDraggingRef.current = false;
+      dragDirectionRef.current = null;
+      setDragX(0);
+      return;
+    }
     const elapsed = Date.now() - touchStartRef.current.time;
-    const velocity = dragX / elapsed * 1000;
+    const velocity = (dragX / Math.max(elapsed, 1)) * 1000;
 
     if (isDraggingRef.current) {
-      if (dragX > 100 || velocity > 300) {
-        onClose();
+      if (dragDirectionRef.current === "close") {
+        // Swipe-right to close
+        if (dragX > 90 || velocity > 350) {
+          onClose();
+        } else {
+          setDragX(0);
+        }
+      } else if (dragDirectionRef.current === "next" && onNext) {
+        // Swipe-left to next post: distance OR velocity-based commit
+        if (dragX < -70 || velocity < -350) {
+          onNext();
+        }
+        setDragX(0);
       } else {
         setDragX(0);
       }
+    } else {
+      setDragX(0);
     }
 
     touchStartRef.current = null;
     isDraggingRef.current = false;
+    dragDirectionRef.current = null;
   };
 
   return (
@@ -1725,7 +1794,7 @@ function Drawer({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       />
-      {/* Panel — swipe right to close on mobile only */}
+      {/* Panel — swipe right to close / swipe left for next post on mobile */}
       <motion.div
         ref={panelRef}
         className={cn(
@@ -1735,15 +1804,40 @@ function Drawer({
         initial={{ x: "100%" }}
         animate={{ x: dragX }}
         exit={{ x: "100%" }}
-        transition={dragX > 0 ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 35 }}
+        transition={dragX !== 0 ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 35 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        {/* Top loader progress bar */}
+        <AnimatePresence>
+          {loading && (
+            <motion.div
+              className="absolute top-0 left-0 right-0 h-0.5 bg-steel z-50 origin-left"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              exit={{ scaleX: 1, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Swipe indicator — mobile only */}
         <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 relative">
           <div className="w-8 h-1 rounded-full bg-border/60" />
         </div>
+
+        {/* Mobile swipe-left "next" hint — appears while dragging */}
+        {onNext && dragX < -20 && (
+          <div
+            className="sm:hidden pointer-events-none absolute top-1/2 -translate-y-1/2 right-4 z-10 flex items-center gap-1.5 px-3 py-2 rounded-full bg-foreground/90 text-background text-[11px] font-medium shadow-lg"
+            style={{ opacity: Math.min(1, -dragX / 70) }}
+          >
+            Next post
+            <ChevronRight className="w-3.5 h-3.5" />
+          </div>
+        )}
+
         <div className="flex-1 min-h-0 flex flex-col relative">{children}</div>
       </motion.div>
     </motion.div>
@@ -1792,8 +1886,8 @@ function PostCard({
       {...(sortable ? listeners : {})}
       className={cn(
         "group relative flex flex-col justify-between p-4 bg-card border border-border/30 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full",
-        sortable && "cursor-grab active:cursor-grabbing touch-none",
-        isDragging && "ring-2 ring-steel/40",
+        sortable && "cursor-grab active:cursor-grabbing touch-pan-y",
+        isDragging && "ring-2 ring-steel/40 touch-none",
       )}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
@@ -2075,8 +2169,11 @@ function PostDetailView({
       </div>
 
       {/* Pinned bottom actions - always visible */}
-      <div className="shrink-0 bg-card border-t border-border/40 px-6 md:px-8 py-3 flex items-center justify-between gap-3">
-        {/* Left: Delete + Edit */}
+      <div
+        className="shrink-0 bg-card border-t border-border/40 px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3"
+        data-no-swipe
+      >
+        {/* Top (mobile) / Left (desktop): Delete + Edit */}
         <div className="flex items-center gap-2">
           <button
             onClick={onDelete}
@@ -2094,27 +2191,33 @@ function PostDetailView({
           </button>
         </div>
 
-        {/* Right: Prev/Next navigation */}
-        <div className="flex items-center gap-2">
-          {onPrev && (
+        {/* Bottom (mobile, 50/50) / Right (desktop): Prev/Next navigation */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {onPrev ? (
             <button
               onClick={onPrev}
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer max-w-[120px] overflow-hidden"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer sm:max-w-[160px] min-w-0"
               title={prevTitle}
             >
               <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">{prevTitle}</span>
+              <span className="truncate sm:inline hidden">{prevTitle}</span>
+              <span className="sm:hidden">Prev</span>
             </button>
+          ) : (
+            <div className="flex-1 sm:hidden" aria-hidden />
           )}
-          {onNext && (
+          {onNext ? (
             <button
               onClick={onNext}
-              className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer max-w-[120px] overflow-hidden"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center sm:justify-end gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer sm:max-w-[160px] min-w-0"
               title={nextTitle}
             >
-              <span className="truncate">{nextTitle}</span>
+              <span className="truncate sm:inline hidden">{nextTitle}</span>
+              <span className="sm:hidden">Next</span>
               <ChevronRight className="w-3.5 h-3.5 shrink-0" />
             </button>
+          ) : (
+            <div className="flex-1 sm:hidden" aria-hidden />
           )}
         </div>
       </div>
