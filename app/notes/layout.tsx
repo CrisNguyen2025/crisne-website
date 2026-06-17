@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ToastProvider } from "@/components/ui/toast";
+import { SiteLockGate } from "@/components/site-lock-gate";
 
 export const metadata: Metadata = {
   title: "Notes — Cris.dev",
@@ -46,9 +47,11 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
         />
       </div>
 
-      <main className="relative">
-        <ToastProvider>{children}</ToastProvider>
-      </main>
+      <SiteLockGate>
+        <main className="relative">
+          <ToastProvider>{children}</ToastProvider>
+        </main>
+      </SiteLockGate>
     </div>
   );
 }

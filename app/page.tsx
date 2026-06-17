@@ -5,6 +5,7 @@ import { SkillsSection } from "@/components/skills-section";
 import { Footer } from "@/components/footer";
 import { TrackedSection } from "@/components/tracked-section";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { SiteLockGate } from "@/components/site-lock-gate";
 import {
   ExperienceSkeleton,
   ProjectsSkeleton,
@@ -62,7 +63,7 @@ const UnlockGate = dynamic(() =>
 
 export default function Home() {
   return (
-    <>
+    <SiteLockGate>
       <AnimatedBackground />
       <FloatingShapes />
       <Navbar />
@@ -114,6 +115,6 @@ export default function Home() {
         </ErrorBoundary>
       </main>
       <Footer />
-    </>
+    </SiteLockGate>
   );
 }
