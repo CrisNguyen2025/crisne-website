@@ -17,6 +17,11 @@ export const defaultTheme = {
     ul: 'list-disc ml-5 mb-1',
     listitem: 'mb-0.5',
   },
+  table: 'editor-table',
+  tableCell: 'editor-table-cell',
+  tableCellHeader: 'editor-table-cell-header',
+  tableRow: 'editor-table-row',
+  tableScrollableWrapper: 'editor-table-scroll',
   link: 'text-primary cursor-pointer underline underline-offset-2',
   text: {
     bold: 'font-bold',

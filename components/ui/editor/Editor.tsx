@@ -11,6 +11,7 @@ import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { ListPlugin } from '@lexical/react/LexicalListPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import { Expand, Sparkles } from 'lucide-react';
@@ -25,6 +26,7 @@ import {
   ImagesPlugin,
   InitialToolbarState,
   PasteImagePlugin,
+  PasteTablePlugin,
   SetContentPlugin,
   ToolbarButton,
   ToolbarPlugin,
@@ -141,6 +143,7 @@ export default function Editor({
         <LexicalComposer initialConfig={config}>
           <ImagesPlugin />
           <PasteImagePlugin />
+          <PasteTablePlugin />
           <SetContentPlugin value={value} />
           <CalloutTransformPlugin />
           <OnChangePlugin
@@ -205,6 +208,7 @@ export default function Editor({
           />
           {autoFocus && <AutoFocusPlugin defaultSelection='rootEnd' />}
           <ListPlugin />
+          <TablePlugin hasCellMerge={false} hasHorizontalScroll />
           <AutoLinkPlugin />
         </LexicalComposer>
       </div>

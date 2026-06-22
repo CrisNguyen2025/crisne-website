@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react"],
   },
+  compiler: {
+    removeConsole: {
+      exclude: ["error"],
+    },
+  },
   async headers() {
     return [
       {

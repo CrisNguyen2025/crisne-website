@@ -1,7 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Select } from "@base-ui/react/select";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  CalendarDays,
+  ExternalLink,
+  Figma,
+  GitBranch,
+  ListFilter,
+  MoreHorizontal,
+  Newspaper,
+  Plus,
+  Settings2,
+  Ticket,
+  Trash2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +33,7 @@ type TaskStatus =
   | "uat-done"
   | "preprod-done";
 type TaskSort = "manual" | "status";
+type TaskLinkField = "jira" | "figma" | "gitlab";
 
 type Sprint = {
   id: string;
@@ -30,6 +46,7 @@ type TaskItem = {
   id: string;
   order: number;
   title: string;
+  branch: string;
   area: TaskArea;
   sprintId: string;
   jira: string;
@@ -40,16 +57,33 @@ type TaskItem = {
   notes: string;
 };
 
-const tabs: Array<{ id: TaskArea; label: string; icon: string }> = [
-  { id: "FO", label: "FO", icon: "◫" },
-  { id: "CMS", label: "CMS", icon: "▦" },
-  { id: "BO", label: "BO", icon: "⚙" },
+const tabs: Array<{ id: TaskArea; label: string; Icon: LucideIcon }> = [
+  { id: "FO", label: "FO", Icon: ListFilter },
+  { id: "CMS", label: "CMS", Icon: Newspaper },
+  { id: "BO", label: "BO", Icon: Settings2 },
 ];
 
+const taskLinkFields: Array<{ field: TaskLinkField; label: string; Icon: LucideIcon }> = [
+  { field: "jira", label: "Jira", Icon: Ticket },
+  { field: "figma", label: "Figma", Icon: Figma },
+  { field: "gitlab", label: "GitLab", Icon: GitBranch },
+];
+
+const NOTE_MORE_THRESHOLD = 44;
+
 const sprints: Sprint[] = [
-  { id: "sprint-17", name: "Sprint 17", startDate: "2026-06-15", endDate: "2026-06-28" },
-  { id: "sprint-18", name: "Sprint 18", startDate: "2026-06-29", endDate: "2026-07-12" },
-  { id: "sprint-19", name: "Sprint 19", startDate: "2026-07-13", endDate: "2026-07-26" },
+  { id: "sprint-19", name: "Sprint 19", startDate: "2026-06-08", endDate: "2026-06-19" },
+  { id: "sprint-20", name: "Sprint 20", startDate: "2026-06-22", endDate: "2026-07-03" },
+  { id: "sprint-21", name: "Sprint 21", startDate: "2026-07-06", endDate: "2026-07-17" },
+  { id: "sprint-22", name: "Sprint 22", startDate: "2026-07-20", endDate: "2026-07-31" },
+  { id: "sprint-23", name: "Sprint 23", startDate: "2026-08-03", endDate: "2026-08-14" },
+  { id: "sprint-24", name: "Sprint 24", startDate: "2026-08-17", endDate: "2026-08-28" },
+  { id: "sprint-25", name: "Sprint 25", startDate: "2026-08-31", endDate: "2026-09-11" },
+  { id: "sprint-26", name: "Sprint 26", startDate: "2026-09-14", endDate: "2026-09-25" },
+  { id: "sprint-27", name: "Sprint 27", startDate: "2026-09-28", endDate: "2026-10-09" },
+  { id: "sprint-28", name: "Sprint 28", startDate: "2026-10-12", endDate: "2026-10-23" },
+  { id: "sprint-29", name: "Sprint 29", startDate: "2026-10-26", endDate: "2026-11-06" },
+  { id: "sprint-30", name: "Sprint 30", startDate: "2026-11-09", endDate: "2026-11-20" },
 ];
 
 const CURRENT_SPRINT_ID = "sprint-19";
@@ -59,6 +93,7 @@ const initialTasks: TaskItem[] = [
     id: "fo-001",
     order: 1,
     title: "Checkout page responsive polish",
+    branch: "feature/checkout-responsive",
     area: "FO",
     sprintId: "sprint-17",
     jira: "https://jira.example.com/browse/FO-101",
@@ -72,6 +107,7 @@ const initialTasks: TaskItem[] = [
     id: "fo-002",
     order: 2,
     title: "Product detail image zoom fix",
+    branch: "feature/pdp-image-zoom",
     area: "FO",
     sprintId: "sprint-17",
     jira: "https://jira.example.com/browse/FO-102",
@@ -85,6 +121,7 @@ const initialTasks: TaskItem[] = [
     id: "cms-001",
     order: 3,
     title: "CMS article scheduling workflow",
+    branch: "feature/cms-article-schedule",
     area: "CMS",
     sprintId: "sprint-17",
     jira: "https://jira.example.com/browse/CMS-88",
@@ -98,6 +135,7 @@ const initialTasks: TaskItem[] = [
     id: "bo-001",
     order: 4,
     title: "Order sync retry worker",
+    branch: "feature/order-sync-retry",
     area: "BO",
     sprintId: "sprint-17",
     jira: "https://jira.example.com/browse/BO-52",
@@ -111,6 +149,7 @@ const initialTasks: TaskItem[] = [
     id: "fo-003",
     order: 5,
     title: "Profile address book empty state",
+    branch: "feature/profile-address-empty",
     area: "FO",
     sprintId: "sprint-18",
     jira: "https://jira.example.com/browse/FO-111",
@@ -124,6 +163,7 @@ const initialTasks: TaskItem[] = [
     id: "cms-002",
     order: 6,
     title: "CMS media library tag filter",
+    branch: "feature/cms-media-tag-filter",
     area: "CMS",
     sprintId: "sprint-18",
     jira: "https://jira.example.com/browse/CMS-93",
@@ -137,6 +177,7 @@ const initialTasks: TaskItem[] = [
     id: "bo-002",
     order: 7,
     title: "Role permission audit export",
+    branch: "feature/role-audit-export",
     area: "BO",
     sprintId: "sprint-18",
     jira: "https://jira.example.com/browse/BO-57",
@@ -150,6 +191,7 @@ const initialTasks: TaskItem[] = [
     id: "fo-004",
     order: 8,
     title: "Voucher banner A/B tracking",
+    branch: "feature/voucher-ab-tracking",
     area: "FO",
     sprintId: "sprint-19",
     jira: "https://jira.example.com/browse/FO-120",
@@ -163,6 +205,7 @@ const initialTasks: TaskItem[] = [
     id: "cms-003",
     order: 9,
     title: "Bulk publish rollback flow",
+    branch: "feature/cms-bulk-rollback",
     area: "CMS",
     sprintId: "sprint-19",
     jira: "https://jira.example.com/browse/CMS-98",
@@ -176,6 +219,7 @@ const initialTasks: TaskItem[] = [
     id: "bo-003",
     order: 10,
     title: "Inventory discrepancy dashboard",
+    branch: "feature/inventory-dashboard",
     area: "BO",
     sprintId: "sprint-19",
     jira: "https://jira.example.com/browse/BO-61",
@@ -222,11 +266,51 @@ function formatDate(dateString: string) {
   });
 }
 
+function formatSprintOption(sprint: Sprint) {
+  const dateFormatter = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+
+  return `${sprint.name} (${dateFormatter.format(new Date(sprint.startDate))} - ${dateFormatter.format(new Date(sprint.endDate))})`;
+}
+
+const STORAGE_KEY = "task-tracking-tasks";
+
+function loadTasks(): TaskItem[] {
+  if (typeof window === "undefined") return initialTasks;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return initialTasks;
+    const parsed = JSON.parse(stored) as TaskItem[];
+    // Merge: keep stored tasks, but if a new initialTask id doesn't exist yet, add it
+    const storedIds = new Set(parsed.map((t) => t.id));
+    const newDefaults = initialTasks.filter((t) => !storedIds.has(t.id));
+    return [...parsed, ...newDefaults];
+  } catch {
+    return initialTasks;
+  }
+}
+
 export function TaskTrackingClient() {
   const [activeTab, setActiveTab] = useState<TaskArea>("FO");
   const [selectedSprintId, setSelectedSprintId] = useState<string>(CURRENT_SPRINT_ID);
   const [sortBy, setSortBy] = useState<TaskSort>("manual");
   const [tasks, setTasks] = useState<TaskItem[]>(initialTasks);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    setTasks(loadTasks());
+  }, []);
+
+  // Persist to localStorage whenever tasks change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch {
+      // ignore quota errors
+    }
+  }, [tasks]);
 
   const selectedSprint = sprints.find((sprint) => sprint.id === selectedSprintId) ?? sprints[0];
 
@@ -285,6 +369,7 @@ export function TaskTrackingClient() {
         id: `${prefix}-${String(nextCount).padStart(3, "0")}-${Date.now()}`,
         order: nextOrder,
         title: `New ${activeTab} task`,
+        branch: "",
         area: activeTab,
         sprintId: selectedSprintId,
         jira: "",
@@ -310,32 +395,35 @@ export function TaskTrackingClient() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1800px] flex-col gap-6 pb-24">
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-6 pb-8">
         <Card className="border-border/60 bg-card/80 backdrop-blur-sm">
           <CardHeader className="gap-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="space-y-3">
-                <Badge variant="outline" className="w-fit rounded-full px-3 py-1 text-xs uppercase tracking-[0.25em]">
-                  Sprint tracking
-                </Badge>
-                <div className="space-y-2">
-                  <CardTitle className="text-3xl font-bold tracking-tight sm:text-4xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline" className="h-6 rounded-full px-3 text-xs uppercase tracking-[0.18em]">
+                    Task inline
+                  </Badge>
+                  <Badge className="h-6 rounded-full bg-primary/10 px-3 text-primary">
+                    {selectedSprint.name}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
                     Task Tracking
                   </CardTitle>
-                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-                    Theo dõi task theo sprint 2 tuần với 3 domain FO, CMS và BO. Dữ liệu hiện đang là mock data để chốt layout và luồng theo dõi.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Mặc định đang filter {selectedSprint.name}. Sprint mới bắt đầu từ Thứ Hai, 22/06/2026.
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <CalendarDays className="size-4" />
+                    <span>{formatDate(selectedSprint.startDate)} - {formatDate(selectedSprint.endDate)}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <SummaryCard label="Active tab" value={activeTab} />
-                <SummaryCard label="Sprint" value={selectedSprint.name} />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[520px]">
+                <SummaryCard label="Tab" value={activeTab} />
                 <SummaryCard label="Tasks" value={String(summary.total)} />
-                <SummaryCard label="Cycle" value="2 weeks" />
+                <SummaryCard label="Working" value={String(summary.working)} />
+                <SummaryCard label="Done" value={String(summary.done)} />
               </div>
             </div>
 
@@ -343,6 +431,7 @@ export function TaskTrackingClient() {
               <div className="flex flex-wrap gap-2">
                 {tabs.map((tab) => {
                   const active = tab.id === activeTab;
+                  const Icon = tab.Icon;
                   return (
                     <Button
                       key={tab.id}
@@ -351,7 +440,7 @@ export function TaskTrackingClient() {
                       className={cn("h-10 gap-2 rounded-full px-4", !active && "bg-background")}
                       onClick={() => setActiveTab(tab.id)}
                     >
-                      <span aria-hidden="true">{tab.icon}</span>
+                      <Icon className="size-4" />
                       {tab.label}
                       <span className={cn(
                         "rounded-full px-2 py-0.5 text-xs",
@@ -371,6 +460,14 @@ export function TaskTrackingClient() {
                   value={selectedSprintId}
                   onChange={(value) => setSelectedSprintId(value)}
                 />
+                <Button
+                  type="button"
+                  className="h-10 gap-2 rounded-full px-4"
+                  onClick={handleAddTask}
+                >
+                  <Plus className="size-4" />
+                  Add task
+                </Button>
               </div>
             </div>
           </CardHeader>
@@ -381,11 +478,11 @@ export function TaskTrackingClient() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-primary" aria-hidden="true">◷</span>
-                  <CardTitle className="text-xl font-semibold">{selectedSprint.name}</CardTitle>
+                  <ListFilter className="size-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold">{activeTab} Tasks</CardTitle>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  {formatDate(selectedSprint.startDate)} - {formatDate(selectedSprint.endDate)}
+                  {selectedSprint.name}
                 </p>
               </div>
 
@@ -401,54 +498,25 @@ export function TaskTrackingClient() {
           <CardContent className="pt-5">
             {filteredTasks.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border/70 bg-background/50 px-6 py-12 text-center text-sm text-muted-foreground">
-                Chưa có task mock data cho tab {activeTab} trong {selectedSprint.name}.
+                Chưa có task cho tab {activeTab} trong {selectedSprint.name}.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-border/60">
-                <div className="min-w-[1600px] bg-background/70">
-                  <TaskHeaderRow />
-                  <div className="divide-y divide-border/60">
-                    {filteredTasks.map((task, index) => (
-                      <TaskFlatRow
-                        key={task.id}
-                        task={task}
-                        displayOrder={index + 1}
-                        onBlurField={handleFieldBlur}
-                        onDelete={handleDeleteTask}
-                      />
-                    ))}
-                  </div>
-                </div>
+              <div className="space-y-2">
+                {filteredTasks.map((task, index) => (
+                  <TaskFlatRow
+                    key={task.id}
+                    task={task}
+                    displayOrder={index + 1}
+                    onBlurField={handleFieldBlur}
+                    onDelete={handleDeleteTask}
+                  />
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <button
-        type="button"
-        onClick={handleAddTask}
-        className="fixed right-6 bottom-6 z-100 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-xl transition hover:scale-[1.02] hover:opacity-95"
-      >
-        <span aria-hidden="true">＋</span>
-        Add task
-      </button>
-    </div>
-  );
-}
-
-function TaskHeaderRow() {
-  return (
-    <div className="grid min-h-12 grid-cols-[80px_260px_240px_240px_240px_130px_150px_minmax(320px,1fr)_110px] items-center gap-3 border-b border-border/60 bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-      <div>No.</div>
-      <div>Task</div>
-      <div>Jira</div>
-      <div>Figma</div>
-      <div>GitLab</div>
-      <div>Env</div>
-      <div>Status</div>
-      <div>Notes</div>
-      <div>Actions</div>
     </div>
   );
 }
@@ -465,135 +533,275 @@ function TaskFlatRow({
   onDelete: (taskId: string) => void;
 }) {
   const [title, setTitle] = useState(task.title);
+  const [branch, setBranch] = useState(task.branch);
   const [jira, setJira] = useState(task.jira);
   const [figma, setFigma] = useState(task.figma);
   const [gitlab, setGitlab] = useState(task.gitlab);
   const [notes, setNotes] = useState(task.notes);
+  const [notesDraft, setNotesDraft] = useState(task.notes);
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const linkValues: Record<TaskLinkField, string> = { jira, figma, gitlab };
+  const linkSetters: Record<TaskLinkField, (value: string) => void> = {
+    jira: setJira,
+    figma: setFigma,
+    gitlab: setGitlab,
+  };
+  const hasLongNotes = notes.trim().length > NOTE_MORE_THRESHOLD;
+
+  const handleOpenNotesModal = () => {
+    setNotesDraft(notes);
+    setIsNotesModalOpen(true);
+  };
+
+  const handleSaveNotes = () => {
+    setNotes(notesDraft);
+    onBlurField(task.id, "notes", notesDraft);
+    setIsNotesModalOpen(false);
+  };
 
   return (
-    <div className="grid min-h-20 grid-cols-[80px_260px_240px_240px_240px_130px_150px_minmax(320px,1fr)_110px] items-center gap-3 px-4 py-3">
-      <div>
-        <Badge variant="outline" className="font-mono">#{displayOrder}</Badge>
+    <div className="rounded-xl border border-border/60 bg-background/70 p-3 transition hover:bg-muted/20">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="flex items-center gap-2 lg:w-[calc(100%-360px)] lg:min-w-0">
+          <Badge variant="outline" className="h-8 rounded-lg font-mono">
+            #{displayOrder}
+          </Badge>
+          <div className="min-w-0 flex-1">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={() => onBlurField(task.id, "title", title)}
+              className="h-9 w-full rounded-lg border border-border/70 bg-background px-3 text-sm font-medium outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
+              placeholder="Task title"
+            />
+          </div>
+          <div className="relative shrink-0 w-[160px]">
+            <GitBranch className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/50" />
+            <input
+              value={branch}
+              onChange={(event) => setBranch(event.target.value)}
+              onBlur={() => onBlurField(task.id, "branch", branch)}
+              className="h-9 w-full rounded-lg border border-border/70 bg-background pl-6 pr-2 font-mono text-xs text-muted-foreground outline-none transition placeholder:text-muted-foreground/40 focus:border-primary focus:text-foreground"
+              placeholder="feature/branch-name"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px] gap-2 lg:w-[360px]">
+          <InlineSelect
+            value={task.env}
+            onChange={(value) => onBlurField(task.id, "env", value as TaskEnv)}
+            options={[
+              { value: "dev", label: "dev" },
+              { value: "uat", label: "uat" },
+              { value: "preprod", label: "preprod" },
+              { value: "prod", label: "prod" },
+            ]}
+            className={envClasses[task.env]}
+          />
+          <InlineSelect
+            value={task.status}
+            onChange={(value) => onBlurField(task.id, "status", value as TaskStatus)}
+            options={[
+              { value: "todo", label: "todo" },
+              { value: "working", label: "working" },
+              { value: "pending", label: "pending" },
+              { value: "blocked", label: "blocked" },
+              { value: "dev-done", label: "dev - done" },
+              { value: "uat-done", label: "uat - done" },
+              { value: "preprod-done", label: "preprod - done" },
+            ]}
+            className={statusClasses[task.status]}
+          />
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
+            onClick={() => onDelete(task.id)}
+            className="rounded-lg"
+            aria-label={`Delete ${task.title}`}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
       </div>
 
-      <div>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          onBlur={() => onBlurField(task.id, "title", title)}
-          className="h-10 w-full rounded-xl border border-border/70 bg-background px-3 text-sm font-medium outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-          placeholder="Task title"
+      <div className="mt-2 grid gap-2 xl:grid-cols-[minmax(420px,1fr)_minmax(260px,0.8fr)]">
+        <div className="grid gap-2 sm:grid-cols-3">
+          {taskLinkFields.map(({ field, label, Icon }) => (
+            <LinkInput
+              key={field}
+              label={label}
+              Icon={Icon}
+              value={linkValues[field]}
+              onChange={linkSetters[field]}
+              onBlur={() => onBlurField(task.id, field, linkValues[field])}
+            />
+          ))}
+        </div>
+        <div className="relative">
+          <input
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            onBlur={() => onBlurField(task.id, "notes", notes)}
+            className={cn(
+              "h-9 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15",
+              hasLongNotes && "pr-12",
+            )}
+            placeholder="Notes"
+          />
+          {hasLongNotes ? (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleOpenNotesModal}
+              className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Show full notes"
+              title="More"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {isNotesModalOpen ? (
+        <NotesModal
+          taskTitle={title}
+          value={notesDraft}
+          onChange={setNotesDraft}
+          onClose={() => setIsNotesModalOpen(false)}
+          onSave={handleSaveNotes}
         />
-      </div>
-
-      <LinkInput
-        value={jira}
-        onChange={setJira}
-        onBlur={() => onBlurField(task.id, "jira", jira)}
-      />
-
-      <LinkInput
-        value={figma}
-        onChange={setFigma}
-        onBlur={() => onBlurField(task.id, "figma", figma)}
-      />
-
-      <LinkInput
-        value={gitlab}
-        onChange={setGitlab}
-        onBlur={() => onBlurField(task.id, "gitlab", gitlab)}
-      />
-
-      <div>
-        <InlineSelect
-          value={task.env}
-          onChange={(value) => onBlurField(task.id, "env", value as TaskEnv)}
-          options={[
-            { value: "dev", label: "dev" },
-            { value: "uat", label: "uat" },
-            { value: "preprod", label: "preprod" },
-            { value: "prod", label: "prod" },
-          ]}
-          className={envClasses[task.env]}
-        />
-      </div>
-
-      <div>
-        <InlineSelect
-          value={task.status}
-          onChange={(value) => onBlurField(task.id, "status", value as TaskStatus)}
-          options={[
-            { value: "todo", label: "todo" },
-            { value: "working", label: "working" },
-            { value: "pending", label: "pending" },
-            { value: "blocked", label: "blocked" },
-            { value: "dev-done", label: "dev - done" },
-            { value: "uat-done", label: "uat - done" },
-            { value: "preprod-done", label: "preprod - done" },
-          ]}
-          className={statusClasses[task.status]}
-        />
-      </div>
-
-      <div>
-        <input
-          value={notes}
-          onChange={(event) => setNotes(event.target.value)}
-          onBlur={() => onBlurField(task.id, "notes", notes)}
-          className="h-10 w-full rounded-xl border border-border/70 bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-          placeholder="Add note"
-        />
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={() => onDelete(task.id)}
-          className="h-10 w-full rounded-xl border border-destructive/30 bg-destructive/10 px-3 text-sm font-medium text-destructive transition hover:bg-destructive/20"
-        >
-          Delete
-        </button>
-      </div>
+      ) : null}
     </div>
   );
 }
 
+function NotesModal({
+  taskTitle,
+  value,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  taskTitle: string;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-notes-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-xl border border-border/70 bg-card p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Notes</p>
+            <h2 id="task-notes-title" className="mt-1 truncate text-lg font-semibold">
+              {taskTitle}
+            </h2>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-lg"
+            onClick={onClose}
+            aria-label="Close notes"
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-h-44 w-full resize-y rounded-lg border border-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
+          placeholder="Notes"
+          autoFocus
+        />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" className="rounded-lg" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="button" className="rounded-lg" onClick={onSave}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function LinkInput({
+  label,
+  Icon,
   value,
   onChange,
   onBlur,
 }: {
+  label: string;
+  Icon: LucideIcon;
   value: string;
   onChange: (value: string) => void;
   onBlur: () => void;
 }) {
+  const hasLink = value.trim().length > 0;
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative">
+      <Icon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <input
+        aria-label={`${label} link`}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onBlur}
-        className="h-10 w-full rounded-xl border border-border/70 bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
-        placeholder="https://"
+        className="h-9 w-full rounded-lg border border-border/70 bg-background px-8 text-sm outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15"
+        placeholder={label}
       />
-      <a
-        href={value}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-background text-muted-foreground transition hover:text-foreground"
-        aria-label="Open link"
-      >
-        <span aria-hidden="true">↗</span>
-      </a>
+      {hasLink ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground"
+          aria-label={`Open ${label}`}
+        >
+          <ExternalLink className="size-3.5" />
+        </a>
+      ) : (
+        <span className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/40">
+          <ExternalLink className="size-3.5" />
+        </span>
+      )}
     </div>
   );
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-background/70 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-lg font-semibold tracking-tight">{value}</p>
+    <div className="rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-lg font-semibold tracking-tight">{value}</p>
     </div>
   );
 }
@@ -614,7 +822,7 @@ function InlineSelect({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className={cn(
-        "h-10 w-full rounded-xl border border-border/70 px-3 text-sm font-medium capitalize outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15",
+        "h-9 w-full rounded-lg border border-border/70 px-3 text-sm font-medium capitalize outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/15",
         className,
       )}
     >
@@ -656,37 +864,16 @@ function SprintSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <Select.Root value={value} onValueChange={(nextValue) => nextValue && onChange(nextValue)}>
-      <Select.Trigger className="inline-flex h-10 min-w-52 items-center justify-between rounded-full border border-border/70 bg-background px-4 text-sm font-medium outline-none transition hover:bg-muted focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15">
-        <Select.Value />
-        <Select.Icon>
-          <span className="text-muted-foreground" aria-hidden="true">⌄</span>
-        </Select.Icon>
-      </Select.Trigger>
-
-      <Select.Portal>
-        <Select.Positioner className="z-200 outline-none" sideOffset={8}>
-          <Select.Popup className="w-[var(--anchor-width)] rounded-2xl border border-border/70 bg-popover p-1.5 shadow-2xl outline-none">
-            {sprints.map((sprint) => (
-              <Select.Item
-                key={sprint.id}
-                value={sprint.id}
-                className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm outline-none transition data-[highlighted]:bg-muted"
-              >
-                <div className="flex flex-col">
-                  <Select.ItemText>{sprint.name}</Select.ItemText>
-                  <span className="text-xs text-muted-foreground">
-                    {formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}
-                  </span>
-                </div>
-                <Select.ItemIndicator>
-                  <span className="text-primary" aria-hidden="true">✓</span>
-                </Select.ItemIndicator>
-              </Select.Item>
-            ))}
-          </Select.Popup>
-        </Select.Positioner>
-      </Select.Portal>
-    </Select.Root>
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-10 min-w-52 rounded-full border border-border/70 bg-background px-4 text-sm font-medium outline-none transition hover:bg-muted focus:border-primary focus:ring-4 focus:ring-primary/15"
+    >
+      {sprints.map((sprint) => (
+        <option key={sprint.id} value={sprint.id}>
+          {formatSprintOption(sprint)}
+        </option>
+      ))}
+    </select>
   );
 }

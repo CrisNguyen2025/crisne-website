@@ -359,6 +359,35 @@
   list-style: decimal !important;
 }
 
+.editor-table-scroll {
+  margin: 0.75rem 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.editor-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.editor-table-cell {
+  min-width: 10rem;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+  border: 1px solid var(--border);
+}
+
+.editor-table-cell-header {
+  font-weight: 600;
+  background: var(--surface-muted);
+}
+
+.editor-table-cell p {
+  margin: 0;
+}
+
 .editor-canvas li {
   margin: 0.125rem 0 !important;
 }
