@@ -4,6 +4,14 @@
 
 **Stack:** JavaScript/TypeScript · Next.js + React + Tailwind
 
+## 📚 Local Codex Rules And Skills
+
+Global Codex rules and skills are vendored in this repository so they can be used without relying on a user-level installation.
+
+- Before code changes or reviews, load `.codex/codex-rules/skill-usage-rules.md`, then every rule file relevant to the task.
+- Use project-specific skills from `.agents/skills/` first. Global Codex skills are available in `.codex/skills/`.
+- Preserve the local copies when updating or sharing the repository; do not replace project-specific skills with global versions.
+
 ## 🛡️ GLOBAL SAFETY RULES
 
 - **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.
