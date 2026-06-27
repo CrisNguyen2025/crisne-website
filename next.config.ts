@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "fastly.picsum.photos",
       },
+      {
+        protocol: "https",
+        hostname: "kamala.vn",
+      },
+      {
+        protocol: "https",
+        hostname: "zelenespa.com",
+      },
     ],
     formats: ["image/webp", "image/avif"],
     minimumCacheTTL: 60,

@@ -18,52 +18,52 @@ import {
 const ExperienceSection = dynamic(
   () =>
     import("@/components/experience-section").then(
-      (mod) => mod.ExperienceSection,
+      (mod) => mod.ExperienceSection
     ),
-  { loading: () => <ExperienceSkeleton /> },
+  { loading: () => <ExperienceSkeleton /> }
 );
 
 const ProjectsSection = dynamic(
   () =>
     import("@/components/projects-section").then((mod) => mod.ProjectsSection),
-  { loading: () => <ProjectsSkeleton /> },
+  { loading: () => <ProjectsSkeleton /> }
 );
 
 const TestimonialsSection = dynamic(
   () =>
     import("@/components/testimonials-section").then(
-      (mod) => mod.TestimonialsSection,
+      (mod) => mod.TestimonialsSection
     ),
-  { loading: () => <TestimonialsSkeleton /> },
+  { loading: () => <TestimonialsSkeleton /> }
 );
 
 const FaqSection = dynamic(
   () => import("@/components/faq-section").then((mod) => mod.FaqSection),
-  { loading: () => <FaqSkeleton /> },
+  { loading: () => <FaqSkeleton /> }
 );
 
 const CtaSection = dynamic(
   () => import("@/components/cta-section").then((mod) => mod.CtaSection),
-  { loading: () => <CtaSkeleton /> },
+  { loading: () => <CtaSkeleton /> }
 );
 
 const AnimatedBackground = dynamic(() =>
   import("@/components/animated-background").then(
-    (mod) => mod.AnimatedBackground,
-  ),
+    (mod) => mod.AnimatedBackground
+  )
 );
 
 const FloatingShapes = dynamic(() =>
-  import("@/components/floating-shapes").then((mod) => mod.FloatingShapes),
+  import("@/components/floating-shapes").then((mod) => mod.FloatingShapes)
 );
 
 const UnlockGate = dynamic(() =>
-  import("@/components/unlock-gate").then((mod) => mod.UnlockGate),
+  import("@/components/unlock-gate").then((mod) => mod.UnlockGate)
 );
 
 export default function Home() {
   return (
-    <SiteLockGate>
+    <UnlockGate sectionId="home">
       <AnimatedBackground />
       <FloatingShapes />
       <Navbar />
@@ -80,21 +80,17 @@ export default function Home() {
           </TrackedSection>
         </ErrorBoundary>
 
-        <UnlockGate sectionId="experience">
-          <TrackedSection sectionId="experience">
-            <ErrorBoundary>
-              <ExperienceSection />
-            </ErrorBoundary>
-          </TrackedSection>
-        </UnlockGate>
+        <TrackedSection sectionId="experience">
+          <ErrorBoundary>
+            <ExperienceSection />
+          </ErrorBoundary>
+        </TrackedSection>
 
-        <UnlockGate sectionId="projects">
-          <TrackedSection sectionId="projects">
-            <ErrorBoundary>
-              <ProjectsSection />
-            </ErrorBoundary>
-          </TrackedSection>
-        </UnlockGate>
+        <TrackedSection sectionId="projects">
+          <ErrorBoundary>
+            <ProjectsSection />
+          </ErrorBoundary>
+        </TrackedSection>
 
         <ErrorBoundary>
           <TrackedSection sectionId="testimonials">
@@ -114,7 +110,8 @@ export default function Home() {
           </TrackedSection>
         </ErrorBoundary>
       </main>
+
       <Footer />
-    </SiteLockGate>
+    </UnlockGate>
   );
 }

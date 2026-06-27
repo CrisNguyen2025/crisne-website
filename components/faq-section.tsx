@@ -87,7 +87,7 @@ function FaqAccordionItem({
           "group rounded-2xl border transition-all duration-300 overflow-hidden",
           isOpen
             ? "border-steel/30 bg-steel/3 shadow-[0_0_24px_-6px_rgba(107,154,196,0.12)]"
-            : "border-border/50 bg-background/60 backdrop-blur-md hover:border-border/80 hover:bg-muted/30",
+            : "border-border/50 bg-background/60 backdrop-blur-md hover:border-border/80 hover:bg-muted/30"
         )}
       >
         <button
@@ -100,7 +100,7 @@ function FaqAccordionItem({
               "flex items-center justify-center w-10 h-10 rounded-xl text-lg shrink-0 transition-all duration-300",
               isOpen
                 ? "bg-steel/10 scale-110"
-                : "bg-muted/60 group-hover:bg-muted",
+                : "bg-muted/60 group-hover:bg-muted"
             )}
           >
             {item.icon}
@@ -109,7 +109,7 @@ function FaqAccordionItem({
           <span
             className={cn(
               "flex-1 text-sm sm:text-base font-semibold transition-colors duration-200",
-              isOpen ? "text-foreground" : "text-foreground/80",
+              isOpen ? "text-foreground" : "text-foreground/80"
             )}
           >
             {item.question}
@@ -179,7 +179,7 @@ export function FaqSection() {
             Common Questions
           </motion.span>
           <h2 className="heading-2 mb-4">
-            <span className="heading-display-italic font-semibold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
+            <span className="heading-display-italic font-semibold bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent ">
               FAQ
             </span>
           </h2>

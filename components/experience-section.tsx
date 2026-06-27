@@ -1,13 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  Briefcase,
-  MapPin,
-  Calendar,
-  ExternalLink,
-  TrendingUp,
-} from "lucide-react";
+import { Briefcase, MapPin, Calendar, ExternalLink, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Experience {
@@ -18,9 +12,15 @@ interface Experience {
   startDate: string;
   endDate: string | null;
   duration: string;
+  teamSize: string;
   isCurrent: boolean;
   description: string;
   technologies: string[];
+  phases?: {
+    title: string;
+    description: string;
+    technologies: string[];
+  }[];
   color: string;
   gradient: [string, string];
   emoji: string;
@@ -29,68 +29,250 @@ interface Experience {
 
 const experiences: Experience[] = [
   {
-    id: "exp-3",
-    company: "TechVision Solutions",
-    role: "Senior Frontend Developer",
+    id: "exp-4",
+    company: "Smartbit Technology",
+    role: "Middle Frontend Developer",
     location: "Ho Chi Minh City, Vietnam",
     startDate: "Mar 2024",
     endDate: null,
     duration: "1 yr+",
+    teamSize: "10 members",
     isCurrent: true,
     description:
-      "Leading frontend architecture for enterprise SaaS platform. Building scalable design systems, mentoring junior developers, and driving technical decisions across multiple product teams.",
+      "• FO: Built SEO-optimized customer-facing pages with Next.js App Router, improving discoverability, landing page performance, and conversion flows. Integrated eKYC, Paystack payment flows, and other product onboarding/payment touchpoints to support seamless user activation.\n• CMS: Developed detailed management modules for business entities, dynamic content, configurable forms, and RBAC-based permission settings so internal teams could control operational data safely and efficiently.\n• BO: Built back-office features for internal operations, including admin configuration, workflow handling, monitoring screens, and data processing tools that supported day-to-day business execution at scale.\n• SaaS / Multi-tenant: Worked on shared-platform capabilities for multiple client organizations, helping implement configurable tenant-specific flows, permission models, and management experiences while keeping the product scalable and maintainable.",
     technologies: [
-      "React",
-      "Next.js",
+      "ReactJS",
+      "Next.js 13+",
       "TypeScript",
       "Tailwind CSS",
-      "GraphQL",
-      "Storybook",
+      "React Query",
+      "Zustand",
+      "Axios",
+      "Ant Design",
+      "React Hook Form",
+      "Yup",
+      "eKYC",
+      "Paystack",
+      "RBAC",
     ],
-    color: "#6B9AC4",
-    gradient: ["#4A7A9B", "#6B9AC4"],
-    emoji: "🚀",
-    companyUrl: "#",
-  },
-  {
-    id: "exp-2",
-    company: "DigitalCraft Agency",
-    role: "Frontend Developer",
-    location: "Ho Chi Minh City, Vietnam",
-    startDate: "Aug 2022",
-    endDate: "Feb 2024",
-    duration: "1 yr 7 mos",
-    isCurrent: false,
-    description:
-      "Developed high-performance web applications for diverse clients. Implemented pixel-perfect UI from Figma designs, optimized Core Web Vitals, and collaborated closely with design and backend teams.",
-    technologies: [
-      "React",
-      "Next.js",
-      "TypeScript",
-      "Styled Components",
-      "Redux",
-      "Jest",
-    ],
-    color: "#fb7185",
-    gradient: ["#f43f5e", "#ec4899"],
+    color: "#2563eb",
+    gradient: ["#1d4ed8", "#06b6d4"],
     emoji: "💼",
     companyUrl: "#",
   },
   {
-    id: "exp-1",
-    company: "StartupHub Inc.",
-    role: "Junior Frontend Developer",
-    location: "Ho Chi Minh City, Vietnam",
-    startDate: "Jan 2021",
-    endDate: "Jul 2022",
-    duration: "1 yr 7 mos",
+    id: "exp-javis",
+    company: "JAVIS",
+    role: "Middle Frontend Developer",
+    location: "Remote - Ha Noi, Vietnam",
+    startDate: "Jun 2025",
+    endDate: "August 2025",
+    duration: "August 2025",
+    teamSize: "4 members",
     isCurrent: false,
     description:
-      "Built responsive user interfaces and interactive features for startup products. Learned agile development practices, participated in code reviews, and contributed to component library development.",
-    technologies: ["React", "JavaScript", "SCSS", "Material UI", "Firebase"],
-    color: "#22d3ee",
-    gradient: ["#06b6d4", "#3b82f6"],
-    emoji: "🌱",
+      "Built a 3D tile simulation web app where users visualize tile patterns on a Unity-powered house model, calculate surface area and tile quantity, and generate quotations directly in the UI.",
+    technologies: [
+      "Next.js 13+",
+      "React Query",
+      "Zustand",
+      "Axios",
+      "Ant Design",
+      "Tailwind CSS",
+      "TypeScript",
+      "Yup",
+    ],
+    color: "#9333ea",
+    gradient: ["#7e22ce", "#d946ef"],
+    emoji: "🧩",
+    companyUrl: "#",
+  },
+  {
+    id: "exp-bearabyte",
+    company: "BearaByte",
+    role: "Software Engineer (Frontend & Mobile)",
+    location: "Remote - US",
+    startDate: "Jul 2024",
+    endDate: "May 2025",
+    duration: "11 mos",
+    teamSize: "4 members",
+    isCurrent: false,
+    description:
+      "Worked across Zelene Spa web, CMS dashboard, BE team, and mobile booking products, covering customer-facing booking flows and internal management experiences.",
+    technologies: [
+      "ReactJS",
+      "Next.js 13+",
+      "React Native",
+      "Expo",
+      "React Query",
+      "Zustand",
+      "Redux Toolkit",
+      "Ant Design",
+      "Tailwind CSS",
+      "NativeWind",
+      "TypeScript",
+      "React Hook Form",
+      "Yup",
+      "NestJS",
+      "Strapi CMS",
+      "Socket.io",
+      "GA4",
+      "Clover",
+    ],
+    phases: [
+      {
+        title: "Phase 1 — Spa Booking Website + CMS Dashboard",
+        description:
+          "Developed the frontend booking pages for spa customers and built CMS/dashboard features to help the operations team manage content, bookings, related business workflows, and payment handling with Clover integration.",
+        technologies: [
+          "ReactJS",
+          "Next.js 13+",
+          "React Query",
+          "Zustand",
+          "Ant Design",
+          "Tailwind CSS",
+          "TypeScript",
+          "Yup",
+          "NestJS",
+          "GA4",
+          "Socket.io",
+          "Clover",
+        ],
+      },
+      {
+        title: "Phase 2 — Mobile Booking App",
+        description:
+          "Built a React Native Expo mobile application so customers could browse services, complete spa bookings, and continue payment-related flows directly on mobile devices.",
+        technologies: [
+          "React Native",
+          "Expo",
+          "React Query",
+          "React Hook Form",
+          "Zustand",
+          "NativeWind",
+          "TypeScript",
+          "Clover",
+        ],
+      },
+    ],
+    color: "#ea580c",
+    gradient: ["#c2410c", "#f97316"],
+    emoji: "📱",
+    companyUrl: "#",
+  },
+  {
+    id: "exp-kamala-v2",
+    company: "Kamala",
+    role: "Software Engineer (Frontend & Mobile)",
+    location: "Ho Chi Minh City, Vietnam",
+    startDate: "Jan 2023",
+    endDate: "Jun 2024",
+    duration: "1 yr 6 mos",
+    teamSize: "4-5 members",
+    isCurrent: false,
+    description:
+      "Worked across two Kamala product phases, covering content platform development, mobile sales support, and booking tour website delivery.",
+    technologies: [
+      "ReactJS",
+      "Next.js 12",
+      "Next.js 13+",
+      "React Native",
+      "Expo",
+      "Node.js",
+      "React Query",
+      "Mantine UI",
+      "Tailwind CSS",
+      "TypeScript",
+      "TanStack Table",
+      "Strapi CMS",
+    ],
+    phases: [
+      {
+        title: "Phase 1 — Kamala News + Sales Support Mobile App",
+        description:
+          "Built and optimized the Kamala News content platform, and additionally developed a mobile app to support the sales team in searching product information quickly during customer consulting and selling.",
+        technologies: [
+          "ReactJS",
+          "Next.js 12",
+          "React Native",
+          "Expo",
+          "React Query",
+          "Axios",
+          "Tiptap",
+          "Strapi CMS v4",
+          "Mantine UI",
+          "Dnd-kit",
+          "TanStack Table",
+          "Node.js",
+        ],
+      },
+      {
+        title: "Phase 2 — Booking Tour Website",
+        description:
+          "Continued with the booking tour website, keeping the focus on responsive UI development, dynamic content workflows, API integration, performance, and SEO improvements.",
+        technologies: [
+          "Next.js 13+",
+          "ReactJS",
+          "Node.js",
+          "React Query",
+          "Zustand",
+          "Redux Toolkit",
+          "Mantine UI",
+          "Tailwind CSS",
+          "TypeScript",
+          "TanStack Table",
+          "Strapi CMS",
+        ],
+      },
+    ],
+    color: "#14b8a6",
+    gradient: ["#0f766e", "#2dd4bf"],
+    emoji: "🗂️",
+    companyUrl: "#",
+  },
+
+  {
+    id: "exp-r2s",
+    company: "R2S Academy",
+    role: "Software Engineer Intern",
+    location: "Ho Chi Minh City, Vietnam",
+    startDate: "May 2022",
+    endDate: "Dec 2022",
+    duration: "8 mos",
+    teamSize: "5 members",
+    isCurrent: false,
+    description:
+      "Developed a web-based apartment management system for resident information, event registration, delivery notifications, and internal communication to improve coordination between residents and building management.",
+    technologies: [
+      "ReactJS",
+      "Ant Design",
+      "Node.js",
+      "PostgreSQL",
+      "SourceTree",
+      "Postman",
+      "Github",
+    ],
+    color: "#84cc16",
+    gradient: ["#65a30d", "#a3e635"],
+    emoji: "🧱",
+    companyUrl: "#",
+  },
+  {
+    id: "exp-fujinet",
+    company: "FUJINET SYSTEMS JSC",
+    role: "Backend Developer Intern",
+    location: "Ho Chi Minh City, Vietnam",
+    startDate: "Jan 2022",
+    endDate: "Apr 2022",
+    duration: "4 mos",
+    teamSize: "4 members",
+    isCurrent: false,
+    description:
+      "Adjusted application templates and database structure to match Japanese client requirements while ensuring compatibility with their standards and future enhancements.",
+    technologies: ["VB.NET", "SQL Server", "GitLab"],
+    color: "#64748b",
+    gradient: ["#475569", "#94a3b8"],
+    emoji: "⚙️",
     companyUrl: "#",
   },
 ];
@@ -238,13 +420,14 @@ function ExperienceCard({
           <motion.div
             className={cn(
               "relative overflow-hidden rounded-2xl border transition-all duration-500",
-              "bg-card/40 backdrop-blur-md border-border/40",
-              "hover:border-border/80 hover:shadow-2xl",
-              experience.isCurrent && "border-border/60",
+              experience.isCurrent
+                ? "bg-card/80 backdrop-blur-xl border-primary/45 ring-1 ring-primary/20"
+                : "bg-card/45 backdrop-blur-md border-border/45",
+              "hover:border-border/80 hover:shadow-2xl"
             )}
             style={{
               boxShadow: experience.isCurrent
-                ? `0 8px 40px ${experience.color}15, 0 0 0 1px ${experience.color}10`
+                ? `0 18px 60px ${experience.color}28, 0 0 0 1px ${experience.color}30, inset 0 1px 0 ${experience.gradient[1]}22`
                 : undefined,
             }}
             whileHover={{
@@ -253,17 +436,25 @@ function ExperienceCard({
             }}
           >
             <div
-              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+              className={cn(
+                "absolute inset-0 transition-opacity duration-500 pointer-events-none",
+                experience.isCurrent ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              )}
               style={{
-                background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), ${experience.color}06, transparent 60%)`,
+                background: experience.isCurrent
+                  ? `linear-gradient(135deg, ${experience.color}14, transparent 45%), radial-gradient(700px circle at 10% 0%, ${experience.gradient[1]}18, transparent 55%)`
+                  : `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), ${experience.color}08, transparent 60%)`,
               }}
             />
 
             <div
-              className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl"
+              className={cn(
+                "absolute top-0 left-0 right-0 rounded-t-2xl",
+                experience.isCurrent ? "h-1.5" : "h-1"
+              )}
               style={{
                 background: experience.isCurrent
-                  ? `linear-gradient(90deg, ${experience.gradient[0]}, ${experience.gradient[1]}, transparent)`
+                  ? `linear-gradient(90deg, ${experience.gradient[0]}, ${experience.gradient[1]}, ${experience.gradient[0]})`
                   : `linear-gradient(90deg, ${experience.color}40, transparent 60%)`,
               }}
             />
@@ -302,13 +493,13 @@ function ExperienceCard({
                       </motion.span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center flex-wrap gap-1.5 text-sm">
                     {experience.companyUrl ? (
                       <a
                         href={experience.companyUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-semibold text-sm hover:opacity-80 transition-opacity inline-flex items-center gap-1.5 group/link"
+                        className="font-semibold hover:opacity-80 transition-opacity inline-flex items-center gap-1.5 group/link"
                         style={{ color: experience.color }}
                       >
                         <Briefcase className="w-3.5 h-3.5" />
@@ -317,13 +508,18 @@ function ExperienceCard({
                       </a>
                     ) : (
                       <span
-                        className="font-semibold text-sm inline-flex items-center gap-1.5"
+                        className="font-semibold inline-flex items-center gap-1.5"
                         style={{ color: experience.color }}
                       >
                         <Briefcase className="w-3.5 h-3.5" />
                         {experience.company}
                       </span>
                     )}
+                    <span className="text-muted-foreground">-</span>
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                      <Users className="w-3.5 h-3.5" />
+                      {experience.teamSize}
+                    </span>
                   </div>
                 </div>
 
@@ -336,47 +532,83 @@ function ExperienceCard({
                     <MapPin className="w-3.5 h-3.5" />
                     {experience.location}
                   </span>
-                  <span
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border"
-                    style={{
-                      color: experience.color,
-                      borderColor: `${experience.color}30`,
-                      backgroundColor: `${experience.color}08`,
-                    }}
-                  >
-                    <TrendingUp className="w-3 h-3" />
-                    {experience.duration}
-                  </span>
                 </div>
               </div>
 
-              <p className="text-muted-foreground text-sm leading-relaxed mb-5">
+              <p className="text-muted-foreground text-sm leading-relaxed whitespace-pre-line mb-5">
                 {experience.description}
               </p>
 
-              <div className="flex flex-wrap gap-1.5">
-                {experience.technologies.map((tech, i) => (
-                  <motion.span
-                    key={tech}
-                    className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border backdrop-blur-sm transition-colors"
-                    style={{
-                      borderColor: `${experience.color}20`,
-                      color: experience.color,
-                      backgroundColor: `${experience.color}08`,
-                    }}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.5 + i * 0.05 }}
-                    whileHover={{
-                      scale: 1.05,
-                      backgroundColor: `${experience.color}15`,
-                    }}
-                  >
-                    {tech}
-                  </motion.span>
-                ))}
-              </div>
+              {experience.phases?.length ? (
+                <div className="space-y-4">
+                  {experience.phases.map((phase, phaseIndex) => (
+                    <div
+                      key={phase.title}
+                      className="rounded-xl border p-4"
+                      style={{
+                        borderColor: `${experience.color}20`,
+                        backgroundColor: `${experience.color}06`,
+                      }}
+                    >
+                      <h4 className="mb-2 text-sm font-semibold text-foreground">
+                        {phase.title}
+                      </h4>
+                      <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+                        {phase.description}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {phase.technologies.map((tech, techIndex) => (
+                          <motion.span
+                            key={`${phase.title}-${tech}`}
+                            className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border backdrop-blur-sm transition-colors"
+                            style={{
+                              borderColor: `${experience.color}20`,
+                              color: experience.color,
+                              backgroundColor: `${experience.color}08`,
+                            }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            viewport={{ once: true }}
+                            transition={{
+                              delay: 0.4 + phaseIndex * 0.1 + techIndex * 0.04,
+                            }}
+                            whileHover={{
+                              scale: 1.05,
+                              backgroundColor: `${experience.color}15`,
+                            }}
+                          >
+                            {tech}
+                          </motion.span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {experience.technologies.map((tech, i) => (
+                    <motion.span
+                      key={tech}
+                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border backdrop-blur-sm transition-colors"
+                      style={{
+                        borderColor: `${experience.color}20`,
+                        color: experience.color,
+                        backgroundColor: `${experience.color}08`,
+                      }}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: 0.5 + i * 0.05 }}
+                      whileHover={{
+                        scale: 1.05,
+                        backgroundColor: `${experience.color}15`,
+                      }}
+                    >
+                      {tech}
+                    </motion.span>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
         </div>
@@ -423,8 +655,8 @@ export function ExperienceSection() {
             </span>
           </h2>
           <p className="text-muted-foreground body-lg max-w-2xl mx-auto">
-            My professional journey as a frontend developer. Growing with each
-            role, one project at a time.
+            Fullstack Developer specializing in Frontend craftsmanship.
+            Delivering high-performance applications with end-to-end expertise.
           </p>
 
           <motion.div

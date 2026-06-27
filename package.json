@@ -7,6 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start -p 33343",
     "lint": "eslint",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "analyze": "cross-env ANALYZE=true next build",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -69,6 +71,8 @@
     "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.4",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "typescript": "^5"

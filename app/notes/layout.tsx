@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { ToastProvider } from "@/components/ui/toast";
-import { SiteLockGate } from "@/components/site-lock-gate";
 
 export const metadata: Metadata = {
   title: "Notes — Cris.dev",
   description: "Thoughts, links, and things worth saving.",
 };
 
-export default function NotesLayout({ children }: { children: React.ReactNode }) {
+export default function NotesLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen relative">
       {/* Grid background + gradient blobs */}
@@ -39,19 +42,21 @@ export default function NotesLayout({ children }: { children: React.ReactNode })
         </svg>
         <div
           className="absolute top-0 left-1/4 w-[40rem] h-[30rem] rounded-full blur-[8rem] opacity-[0.06] dark:opacity-[0.08]"
-          style={{ background: "radial-gradient(circle, #6b9ac4 0%, transparent 70%)" }}
+          style={{
+            background: "radial-gradient(circle, #6b9ac4 0%, transparent 70%)",
+          }}
         />
         <div
           className="absolute bottom-1/4 right-1/4 w-[30rem] h-[25rem] rounded-full blur-[6rem] opacity-[0.04] dark:opacity-[0.06]"
-          style={{ background: "radial-gradient(circle, #8bb5d9 0%, transparent 70%)" }}
+          style={{
+            background: "radial-gradient(circle, #8bb5d9 0%, transparent 70%)",
+          }}
         />
       </div>
 
-      <SiteLockGate>
-        <main className="relative">
-          <ToastProvider>{children}</ToastProvider>
-        </main>
-      </SiteLockGate>
+      <main className="relative">
+        <ToastProvider>{children}</ToastProvider>
+      </main>
     </div>
   );
 }

@@ -9,7 +9,7 @@ const websiteSchema = {
   name: "Cris Nguyen Portfolio",
   url: SITE_URL,
   description:
-    "Portfolio of Cris Nguyen - Frontend Developer specializing in React, Next.js, and TypeScript",
+    "Portfolio of Cris Nguyen featuring scalable, high-performance web solutions built with React, Next.js, and TypeScript for SaaS products, CMS, CRM, HRM, and booking systems.",
   potentialAction: {
     "@type": "SearchAction",
     target: {
@@ -28,11 +28,16 @@ const personSchema = {
   url: SITE_URL,
   jobTitle: "Frontend Developer",
   description:
-    "I craft modern, performant web experiences with React, Next.js, and TypeScript.",
+    "Building scalable, high-performance web solutions with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
   knowsAbout: [
     "React",
     "Next.js",
     "TypeScript",
+    "SaaS Development",
+    "CMS Development",
+    "CRM Development",
+    "HRM Development",
+    "Booking Systems",
     "JavaScript",
     "Tailwind CSS",
     "Frontend Development",
@@ -64,7 +69,7 @@ const professionalServiceSchema = {
   name: "Cris Nguyen Frontend Development Services",
   url: SITE_URL,
   description:
-    "Professional frontend development services specializing in modern web technologies",
+    "Professional frontend development services for scalable, high-performance SaaS products, CMS, CRM, HRM, and booking systems.",
   provider: {
     "@type": "Person",
     name: "Cris Nguyen",
@@ -77,6 +82,11 @@ const professionalServiceSchema = {
     "Frontend Development",
     "React Development",
     "Next.js Development",
+    "SaaS Development",
+    "CMS Development",
+    "CRM Development",
+    "HRM Development",
+    "Booking Systems Development",
     "UI/UX Implementation",
     "Web Performance Optimization",
   ],

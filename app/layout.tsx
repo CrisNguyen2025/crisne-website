@@ -56,13 +56,19 @@ export const metadata: Metadata = {
     template: "%s | Cris Nguyen",
   },
   description:
-    "Hi, I'm Cris Nguyen. I craft modern, performant web experiences with React, Next.js, and TypeScript. Explore my portfolio, skills, and projects.",
+    "Cris Nguyen builds scalable, high-performance web solutions with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
   keywords: [
     "Cris Nguyen",
     "Frontend Developer",
     "React Developer",
     "Next.js Developer",
     "TypeScript",
+    "SaaS Development",
+    "CMS Development",
+    "CRM Development",
+    "HRM Development",
+    "Booking Systems",
+    "Enterprise Web Applications",
     "Portfolio",
     "Web Developer",
     "UI/UX",
@@ -94,7 +100,7 @@ export const metadata: Metadata = {
     siteName: "Cris Nguyen",
     title: "Cris Nguyen — Frontend Developer",
     description:
-      "I craft modern, performant web experiences with React, Next.js, and TypeScript. Let's build something great together.",
+      "Scalable, high-performance web solutions built with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
     images: [
       {
         url: "/og-image.png",
@@ -109,7 +115,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Cris Nguyen — Frontend Developer",
     description:
-      "I craft modern, performant web experiences with React, Next.js, and TypeScript.",
+      "Building scalable SaaS, CMS, CRM, HRM, and booking systems with React, Next.js, and TypeScript.",
     images: ["/og-image.png"],
     creator: "@crisne",
   },

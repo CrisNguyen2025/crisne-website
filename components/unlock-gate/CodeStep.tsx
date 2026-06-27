@@ -7,7 +7,10 @@ import { RefreshCw } from "lucide-react";
 const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function makeCode(): string {
-  return Array.from({ length: 6 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
+  return Array.from(
+    { length: 6 },
+    () => CHARS[Math.floor(Math.random() * CHARS.length)]
+  ).join("");
 }
 
 const SECRET = "NECRIS";
@@ -63,7 +66,8 @@ export function CodeStep({ onFail, onSuccess }: CodeStepProps) {
           <div
             className="absolute inset-0 rounded-2xl opacity-20 pointer-events-none"
             style={{
-              background: "radial-gradient(ellipse at center, oklch(0.623 0.214 259.815 / 0.3), transparent 70%)",
+              background:
+                "radial-gradient(ellipse at center, oklch(0.623 0.214 259.815 / 0.3), transparent 70%)",
             }}
           />
           <span className="relative font-mono text-3xl font-bold tracking-[0.35em] text-primary select-none">
@@ -91,12 +95,15 @@ export function CodeStep({ onFail, onSuccess }: CodeStepProps) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-3 w-full max-w-xs">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col items-center gap-3 w-full max-w-xs"
+      >
         <motion.input
           ref={inputRef}
           type="text"
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           placeholder="Nhập code..."
           autoComplete="off"
           spellCheck={false}

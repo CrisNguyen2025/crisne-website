@@ -6,19 +6,13 @@ import { Download } from "lucide-react";
 import { SparklesText } from "@/components/ui/sparkles-text";
 import { trackDownloadCV } from "@/lib/analytics";
 
-const titles = [
-  "Frontend Developer",
-  "UI/UX Enthusiast",
-  "React Specialist",
-  "Next.js Developer",
-  "Creative Coder",
-];
+const titles = ["Fullstack Developer(FE Strong)", "React/Next.js Specialist"];
 
 function useTypingEffect(
   texts: string[],
   typingSpeed = 80,
   deletingSpeed = 50,
-  pauseTime = 2000,
+  pauseTime = 2000
 ) {
   const [displayText, setDisplayText] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -77,8 +71,8 @@ const itemVariants = {
 
 const stats = [
   { end: 5, suffix: "+", label: "Years Experience" },
-  { end: 20, suffix: "+", label: "Projects Delivered" },
-  { end: 10, suffix: "+", label: "Technologies" },
+  { end: 10, suffix: "+", label: "Projects Delivered" },
+  { end: 20, suffix: "+", label: "Technologies" },
 ];
 
 function useCountUp(end: number, duration = 1800) {
@@ -93,7 +87,7 @@ function useCountUp(end: number, duration = 1800) {
       ([entry]) => {
         if (entry.isIntersecting) setStarted(true);
       },
-      { threshold: 0.5 },
+      { threshold: 0.5 }
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -211,12 +205,11 @@ export function HeroSection() {
           variants={itemVariants}
           className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed"
         >
-          I craft modern, performant web experiences with{" "}
+          Building scalable, high-performance web solutions. Specialized in{" "}
           <span className="text-foreground font-medium">React</span>,{" "}
           <span className="text-foreground font-medium">Next.js</span>, and{" "}
-          <span className="text-foreground font-medium">TypeScript</span>.
-          Passionate about clean code, beautiful interfaces, and seamless user
-          experiences.
+          <span className="text-foreground font-medium">TypeScript</span> with a
+          focus on SaaS products, enterprise CMS, CRM, HRM, and booking systems.
         </motion.p>
 
         <motion.div

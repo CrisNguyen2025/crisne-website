@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Cris Nguyen — Frontend Developer Portfolio",
     short_name: "Cris Nguyen",
     description:
-      "Portfolio of Cris Nguyen - Frontend Developer specializing in React, Next.js, and TypeScript. Explore my projects, skills, and experience.",
+      "Portfolio of Cris Nguyen featuring scalable, high-performance web solutions built with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
     start_url: "/",
     display: "standalone",
     background_color: "#0a0a0a",
