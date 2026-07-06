@@ -91,13 +91,14 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   padding: 6px 8px;
   margin: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
-  background: color-mix(in srgb, var(--surface-subtle) 50%, transparent);
+  background: var(--card) !important;
   overflow: visible;
   position: relative;
 }
@@ -527,3 +528,52 @@
 .editor-canvas blockquote [data-lexical-text="true"] {
   /* Markers will be hidden via JS transform */
 }
+
+/* Dark premium code block */
+.editor-canvas code.block {
+  display: block !important;
+  position: relative !important;
+  background: #1e1e1e !important;
+  color: #ffffff !important;
+  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace !important;
+  font-size: 0.875rem !important;
+  line-height: 1.6 !important;
+  padding: 16px 20px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  margin: 12px 0 !important;
+  white-space: pre-wrap !important;
+  overflow-x: auto !important;
+  tab-size: 4 !important;
+}
+
+/* Force all child text nodes inside code block to be visible and white */
+.editor-canvas code.block * {
+  color: #ffffff !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  font-family: inherit !important;
+}
+
+.editor-canvas code.block:focus-within {
+  outline: none !important;
+}
+
+/* Hover style overrides for portal code action buttons */
+.editor-code-btn-copy:hover,
+.editor-code-btn-revert:hover {
+  color: #ffffff !important;
+  background: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Header toolbar layout style override */
+.editor-header-toolbar .editor-toolbar {
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  padding: 2px 4px !important;
+}
+
+

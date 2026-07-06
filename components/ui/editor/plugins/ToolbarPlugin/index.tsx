@@ -2,7 +2,8 @@ import { cn } from '@/lib/utils';
 import { $isLinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
 import { $isListNode, INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND } from '@lexical/list';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $createHeadingNode, $createQuoteNode, HeadingTagType } from '@lexical/rich-text';
+import { $createHeadingNode, $createQuoteNode, $isHeadingNode, $isQuoteNode, HeadingTagType } from '@lexical/rich-text';
+import { $createCodeNode, $isCodeNode } from '@lexical/code';
 import { $setBlocksType } from '@lexical/selection';
 import { Select } from 'antd';
 import {
@@ -14,9 +15,11 @@ import {
   $isElementNode,
   $isRangeSelection,
   ElementFormatType,
+  ElementNode,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
+  LexicalEditor,
   REDO_COMMAND,
   TextFormatType,
   UNDO_COMMAND,
@@ -55,6 +58,7 @@ export const BlockTypeToBlockName = {
   h5: 'Heading 5',
   h6: 'Heading 6',
   quote: 'Quote',
+  code: 'Code Block',
 };
 
 export const TextFormat = {
@@ -79,15 +83,14 @@ export const InitialToolbarState = {
 type ToolbarState = typeof InitialToolbarState;
 
 type Props = {
-  activeFormats: ToolbarState;
-  onChange: (value: Partial<ToolbarState>) => void;
-  setIsLinkEditMode: Dispatch<boolean>;
+  editor?: LexicalEditor | null;
   disabled?: boolean;
   renderImagePicker?: ImagePickerRenderer;
 };
 
-export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disabled, renderImagePicker }: Props) => {
-  const [editor] = useLexicalComposerContext();
+export const ToolbarPlugin = ({ editor, disabled, renderImagePicker }: Props) => {
+  const [activeFormats, setActiveFormats] = useState<ToolbarState>(InitialToolbarState);
+  const [isLinkEditMode, setIsLinkEditMode] = useState<boolean>(false);
 
   const updateToolbar = useCallback(() => {
     const selection = $getSelection();
@@ -112,12 +115,31 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
     } else if (parent) {
       elementFormat = parent.getFormatType() || 'left';
     }
-    // lowercase: selection.hasFormat('lowercase'),
-    // uppercase: selection.hasFormat('uppercase'),
-    // capitalize: selection.hasFormat('capitalize'),
 
-    onChange({
-      ...activeFormats,
+    // Detect block type from cursor position
+    let blockType: BlockTypeKey = 'paragraph';
+    const anchorNode = selection.anchor.getNode();
+    const element = anchorNode.getKey() === 'root' ? anchorNode : $findMatchingParent(anchorNode, e => {
+      const p = e.getParent();
+      return p !== null && $isElementNode(p) && p.getKey() === 'root';
+    });
+
+    if (element !== null) {
+      if ($isCodeNode(element)) {
+        blockType = 'code';
+      } else if ($isHeadingNode(element)) {
+        blockType = element.getTag() as BlockTypeKey;
+      } else if ($isQuoteNode(element)) {
+        blockType = 'quote';
+      } else if ($isListNode(element)) {
+        blockType = 'paragraph';
+      } else {
+        blockType = 'paragraph';
+      }
+    }
+
+    setActiveFormats({
+      blockType,
       bold: selection.hasFormat('bold'),
       italic: selection.hasFormat('italic'),
       underline: selection.hasFormat('underline'),
@@ -126,10 +148,13 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
       link: isLink,
       elementFormat,
     });
-  }, [activeFormats, onChange]);
+  }, [setActiveFormats]);
 
   useEffect(() => {
-    if (disabled) return;
+    if (!editor || disabled) return;
+
+    // Trigger initial updates
+    editor.getEditorState().read(updateToolbar);
 
     return editor.registerUpdateListener(({ editorState }) => {
       editorState.read(updateToolbar);
@@ -137,7 +162,7 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   }, [editor, disabled, updateToolbar]);
 
   useEffect(() => {
-    if (disabled) return;
+    if (!editor || disabled) return;
 
     return editor.registerCommand(
       KEY_ENTER_COMMAND,
@@ -174,10 +199,11 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   }, [disabled, editor]);
 
   const formatBlockType = (value: BlockTypeKey) => {
+    if (!editor) return;
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
-        onChange({ ...activeFormats, blockType: value });
+        setActiveFormats(prev => ({ ...prev, blockType: value }));
         switch (value) {
           case 'paragraph':
             $setBlocksType(selection, () => $createParagraphNode());
@@ -185,6 +211,49 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
           case 'quote':
             $setBlocksType(selection, () => $createQuoteNode());
             break;
+          case 'code': {
+            // Find all selected top-level element nodes to avoid splitting
+            const topLevelElements = new Set<ElementNode>();
+            const selectedNodes = selection.getNodes();
+            selectedNodes.forEach(node => {
+              let parent: any = node;
+              while (parent) {
+                const parentNode = parent.getParent();
+                if (parentNode === null || parentNode.getKey() === 'root') {
+                  break;
+                }
+                parent = parentNode;
+              }
+              if (parent && $isElementNode(parent)) {
+                topLevelElements.add(parent as ElementNode);
+              }
+            });
+
+            // Extract text lines
+            const textLines: string[] = [];
+            topLevelElements.forEach(el => {
+              textLines.push(el.getTextContent());
+            });
+
+            const combinedText = textLines.join('\n');
+
+            // Create one code block node
+            const codeNode = $createCodeNode();
+            const textNode = $createTextNode(combinedText);
+            codeNode.append(textNode);
+
+            // Replace the first element with the code block, delete the rest
+            const elementsArray = Array.from(topLevelElements);
+            if (elementsArray.length > 0) {
+              const firstElement = elementsArray[0];
+              firstElement.replace(codeNode);
+              for (let i = 1; i < elementsArray.length; i++) {
+                elementsArray[i].remove();
+              }
+            }
+            codeNode.select();
+            break;
+          }
           default:
             $setBlocksType(selection, () => $createHeadingNode(value as HeadingTagType));
         }
@@ -193,14 +262,17 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   };
 
   const formatText = (format: TextFormatType): void => {
+    if (!editor) return;
     editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
   };
 
   const formatAlignment = (alignment: ElementFormatType): void => {
+    if (!editor) return;
     editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, alignment);
   };
 
   const insertLink = () => {
+    if (!editor) return;
     if (activeFormats.link) {
       setIsLinkEditMode(false);
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
@@ -214,6 +286,7 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   const [showCalloutMenu, setShowCalloutMenu] = useState(false);
 
   const insertCallout = (type: CalloutType) => {
+    if (!editor) return;
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
@@ -234,6 +307,7 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
   };
 
   const clearContent = () => {
+    if (!editor) return;
     editor.update(() => {
       const root = $getRoot();
       root.clear();
@@ -241,8 +315,16 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
     });
   };
 
+  if (!editor) {
+    return (
+      <div className="editor-toolbar flex items-center justify-center text-xs text-gray-400 select-none py-1.5 px-3 bg-gray-50/50 dark:bg-gray-900/50 italic border-b border-gray-200/50 dark:border-gray-800/50 h-[38px] w-full">
+        Click inside any editor to start formatting content
+      </div>
+    );
+  }
+
   return (
-    <div className='editor-toolbar'>
+    <div className='editor-toolbar w-full border-0! border-b! border-gray-200/50! dark:border-gray-800/50!'>
         <InsertImageDialog
           activeEditor={editor}
           onClose={() => setVisibleImageModal(false)}
@@ -252,7 +334,7 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
       <Select
         size='small'
         onChange={formatBlockType}
-        defaultValue={'paragraph'}
+        value={activeFormats.blockType}
         style={{ width: 110 }}
         disabled={disabled}
       >
@@ -297,9 +379,9 @@ export const ToolbarPlugin = ({ activeFormats, onChange, setIsLinkEditMode, disa
 
         <ToolbarButton
           disabled={disabled}
-          active={activeFormats.code}
-          onClick={() => formatText('code')}
-          title='Inline Code'
+          active={activeFormats.blockType === 'code'}
+          onClick={() => formatBlockType(activeFormats.blockType === 'code' ? 'paragraph' : 'code')}
+          title='Code Block'
         >
           <Code size={18} />
         </ToolbarButton>

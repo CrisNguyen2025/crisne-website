@@ -16,6 +16,8 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import { Expand, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { COMMAND_PRIORITY_LOW, FOCUS_COMMAND, LexicalEditor } from 'lexical';
+import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import './editor.css';
 import { CalloutNode } from './nodes/CalloutNode';
 import { ImageNode } from './nodes/ImageNode';
@@ -23,6 +25,8 @@ import { KeywordNode } from './nodes/KeywordNode';
 import { MentionNode } from './nodes/MentionNode';
 import {
   AutoLinkPlugin,
+  CodeActionPlugin,
+  MarkdownPastePlugin,
   ImagesPlugin,
   InitialToolbarState,
   PasteImagePlugin,
@@ -68,6 +72,8 @@ type Props = Readonly<{
   id?: string;
   value?: string;
   onChange?: (value: string) => void;
+  onFocus?: (editor: LexicalEditor) => void;
+  onEditorInit?: (editor: LexicalEditor) => void;
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
@@ -79,10 +85,39 @@ type Props = Readonly<{
   showTopbar?: boolean;
 }>;
 
+function EditorInitPlugin({
+  onInit,
+  onFocus,
+}: {
+  onInit?: (editor: LexicalEditor) => void;
+  onFocus?: (editor: LexicalEditor) => void;
+}) {
+  const [editor] = useLexicalComposerContext();
+  useEffect(() => {
+    onInit?.(editor);
+  }, [editor, onInit]);
+
+  useEffect(() => {
+    if (!onFocus) return;
+    return editor.registerCommand(
+      FOCUS_COMMAND,
+      () => {
+        onFocus(editor);
+        return false;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor, onFocus]);
+
+  return null;
+}
+
 export default function Editor({
   id = '',
   value,
   onChange,
+  onFocus,
+  onEditorInit,
   className,
   disabled,
   autoFocus,
@@ -94,7 +129,6 @@ export default function Editor({
   showTopbar = true,
 }: Props) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeFormats, setActiveFormats] = useState(InitialToolbarState);
   const [isLinkEditMode, setIsLinkEditMode] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -141,6 +175,7 @@ export default function Editor({
         ref={containerRef}
       >
         <LexicalComposer initialConfig={config}>
+          <EditorInitPlugin onInit={onEditorInit} onFocus={onFocus} />
           <ImagesPlugin />
           <PasteImagePlugin />
           <PasteTablePlugin />
@@ -168,13 +203,6 @@ export default function Editor({
             </div>
           )}
 
-          <ToolbarPlugin
-            activeFormats={activeFormats}
-            onChange={value => setActiveFormats(prev => ({ ...prev, ...value }))}
-            setIsLinkEditMode={setIsLinkEditMode}
-            disabled={disabled}
-            renderImagePicker={renderImagePicker}
-          />
           <div
             className={cn(
               'editor-canvas relative w-full overflow-auto',
@@ -210,6 +238,8 @@ export default function Editor({
           <ListPlugin />
           <TablePlugin hasCellMerge={false} hasHorizontalScroll />
           <AutoLinkPlugin />
+          <CodeActionPlugin />
+          <MarkdownPastePlugin />
         </LexicalComposer>
       </div>
     </div>

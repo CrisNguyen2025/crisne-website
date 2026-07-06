@@ -4,3 +4,5 @@ export * from './PasteImagePlugin';
 export * from './PasteTablePlugin';
 export * from './SetContentPlugin';
 export * from './ToolbarPlugin';
+export * from './CodeActionPlugin';
+export * from './MarkdownPastePlugin';

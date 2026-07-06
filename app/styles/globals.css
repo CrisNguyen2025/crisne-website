@@ -164,6 +164,11 @@
   background: oklch(0.62 0.09 240 / 0.25);
 }
 
+input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+  display: none;
+}
+
 .dark ::selection {
   background: oklch(0.72 0.08 240 / 0.3);
 }

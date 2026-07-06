@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzer from "@next/bundle-analyzer";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const nextConfig: NextConfig = {
   // Generate build ID based on timestamp to force cache invalidation
   generateBuildId: async () => {
@@ -47,16 +49,19 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Cache static assets (JS, CSS, images) with hash in filename
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
+      ...(isProduction
+        ? [
+            {
+              source: "/_next/static/:path*",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+          ]
+        : []),
       // Cache fonts
       {
         source: "/fonts/:path*",
