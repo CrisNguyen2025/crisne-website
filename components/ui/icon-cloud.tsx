@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 interface CloudItem {
   el: HTMLElement;
@@ -11,6 +13,8 @@ interface CloudItem {
   cx: number;
   cy: number;
   cz: number;
+  width: number;
+  height: number;
 }
 
 interface IconCloudProps {
@@ -21,7 +25,7 @@ interface IconCloudProps {
 }
 
 function getSpherePositions(
-  count: number,
+  count: number
 ): { x: number; y: number; z: number }[] {
   const positions: { x: number; y: number; z: number }[] = [];
 
@@ -46,28 +50,20 @@ export function IconCloud({
   radius = 220,
   speed = 0.4,
 }: IconCloudProps) {
+  const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const prefersReducedMotion = useReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<CloudItem[]>([]);
   const rafRef = useRef<number>(0);
   const mouseRef = useRef({ x: 0, y: 0, isOver: false });
   const rotRef = useRef({ ax: 0.012, ay: 0.018 });
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    // Use requestAnimationFrame to avoid synchronous setState in effect
-    const timer = requestAnimationFrame(() => {
-      setMounted(true);
-    });
-    return () => cancelAnimationFrame(timer);
-  }, []);
-
   const applyPositions = useCallback((items: CloudItem[], r: number) => {
     items.forEach((item) => {
       const scale = (item.z + r) / (2 * r);
       const opacity = scale * 0.7 + 0.3;
       const x = item.x + r;
       const y = item.y + r;
-      item.el.style.transform = `translate3d(${x - item.el.offsetWidth / 2}px, ${y - item.el.offsetHeight / 2}px, 0) scale(${0.65 + scale * 0.55})`;
+      item.el.style.transform = `translate3d(${x - item.width / 2}px, ${y - item.height / 2}px, 0) scale(${0.65 + scale * 0.55})`;
       item.el.style.opacity = String(opacity.toFixed(2));
       item.el.style.zIndex = String(Math.round(scale * 10));
       item.el.style.filter =
@@ -95,16 +91,27 @@ export function IconCloud({
 
       applyPositions(items, radius);
     },
-    [applyPositions, radius],
+    [applyPositions, radius]
   );
 
   useEffect(() => {
-    if (!mounted || !containerRef.current) return;
+    if (!containerRef.current) return;
     const container = containerRef.current;
     const els = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-cloud-item]"),
+      container.querySelectorAll<HTMLElement>("[data-cloud-item]")
     );
     if (els.length === 0) return;
+
+    if (isMobile) {
+      els.forEach((el) => {
+        el.style.removeProperty("transform");
+        el.style.removeProperty("opacity");
+        el.style.removeProperty("z-index");
+        el.style.removeProperty("filter");
+      });
+      itemsRef.current = [];
+      return;
+    }
 
     const positions = getSpherePositions(els.length);
     itemsRef.current = els.map((el, i) => ({
@@ -115,6 +122,8 @@ export function IconCloud({
       cx: positions[i].x * radius,
       cy: positions[i].y * radius,
       cz: positions[i].z * radius,
+      width: el.offsetWidth,
+      height: el.offsetHeight,
     }));
 
     applyPositions(itemsRef.current, radius);
@@ -127,17 +136,34 @@ export function IconCloud({
       mouseRef.current.y = (e.clientY - cy) / rect.height;
     };
 
-    container.addEventListener("mousemove", handleMouseMove);
-    container.addEventListener("mouseenter", () => {
+    const handleMouseEnter = () => {
       mouseRef.current.isOver = true;
-    });
-    container.addEventListener("mouseleave", () => {
+    };
+
+    const handleMouseLeave = () => {
       mouseRef.current.isOver = false;
       mouseRef.current.x = 0;
       mouseRef.current.y = 0;
-    });
+    };
+
+    container.addEventListener("mousemove", handleMouseMove);
+    container.addEventListener("mouseenter", handleMouseEnter);
+    container.addEventListener("mouseleave", handleMouseLeave);
+
+    let isVisible = false;
+
+    const stopAnimation = () => {
+      if (rafRef.current === 0) return;
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
 
     const animate = () => {
+      if (!isVisible || document.hidden) {
+        rafRef.current = 0;
+        return;
+      }
+
       const { isOver, x, y } = mouseRef.current;
       const ax = isOver ? y * speed * 0.08 : rotRef.current.ax * speed;
       const ay = isOver ? -x * speed * 0.08 : rotRef.current.ay * speed;
@@ -145,26 +171,64 @@ export function IconCloud({
       rafRef.current = requestAnimationFrame(animate);
     };
 
-    rafRef.current = requestAnimationFrame(animate);
+    const startAnimation = () => {
+      if (prefersReducedMotion || rafRef.current !== 0) return;
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisible = entry.isIntersecting;
+        if (isVisible) startAnimation();
+        else stopAnimation();
+      },
+      { rootMargin: "100px" }
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) stopAnimation();
+      else if (isVisible) startAnimation();
+    };
+
+    observer.observe(container);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      stopAnimation();
+      observer.disconnect();
       container.removeEventListener("mousemove", handleMouseMove);
+      container.removeEventListener("mouseenter", handleMouseEnter);
+      container.removeEventListener("mouseleave", handleMouseLeave);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [mounted, radius, speed, applyPositions, rotateAll]);
+  }, [
+    isMobile,
+    prefersReducedMotion,
+    radius,
+    speed,
+    applyPositions,
+    rotateAll,
+  ]);
 
   return (
     <div
       ref={containerRef}
-      className={cn("relative select-none mx-auto max-w-full", className)}
-      style={{ width: radius * 2, height: radius * 2 }}
+      className={cn(
+        "mx-auto max-w-full select-none",
+        isMobile ? "grid w-fit grid-cols-6 gap-1.5" : "relative",
+        className
+      )}
+      style={isMobile ? undefined : { width: radius * 2, height: radius * 2 }}
     >
       {icons.map((icon, i) => (
         <div
           key={`cloud-item-${i}`}
           data-cloud-item=""
-          className="absolute top-0 left-0 flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-card/70 backdrop-blur-sm border border-border/40 transition-none shadow-sm hover:border-border/70 hover:bg-card/90 cursor-default"
-          style={{ willChange: "transform, opacity" }}
+          className={cn(
+            "flex items-center justify-center rounded-xl border border-border/40 bg-card/70 shadow-sm transition-none hover:border-border/70 hover:bg-card/90",
+            isMobile ? "relative size-10" : "absolute left-0 top-0 size-12"
+          )}
+          style={isMobile ? undefined : { willChange: "transform, opacity" }}
         >
           {icon}
         </div>

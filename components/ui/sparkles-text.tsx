@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 interface Sparkle {
   id: string;
@@ -28,7 +30,10 @@ interface SparklesTextProps {
 
 const DEFAULT_COLORS = { first: "#A07CFE", second: "#FE8FB5" };
 
-function generateSparkle(colors: { readonly first: string; readonly second: string }): Sparkle {
+function generateSparkle(colors: {
+  readonly first: string;
+  readonly second: string;
+}): Sparkle {
   return {
     id: Math.random().toString(36).slice(2),
     x: `${Math.random() * 100}%`,
@@ -74,16 +79,25 @@ export function SparklesText({
   delayMs = 0,
   colors = DEFAULT_COLORS,
 }: SparklesTextProps) {
+  const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const prefersReducedMotion = useReducedMotion();
+  const shouldAnimate = !isMobile && !prefersReducedMotion;
   const [sparkles, setSparkles] = useState<Sparkle[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!shouldAnimate) {
+      return;
+    }
+
     timeoutRef.current = setTimeout(() => {
-      setSparkles(Array.from({ length: sparklesCount }, () => generateSparkle(colors)));
+      setSparkles(
+        Array.from({ length: sparklesCount }, () => generateSparkle(colors))
+      );
 
       intervalRef.current = setInterval(() => {
-        setSparkles(prev => {
+        setSparkles((prev) => {
           const next = [...prev];
           const idx = Math.floor(Math.random() * next.length);
           next[idx] = generateSparkle(colors);
@@ -96,23 +110,36 @@ export function SparklesText({
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [sparklesCount, colors, delayMs]);
+  }, [sparklesCount, colors, delayMs, shouldAnimate]);
 
   return (
     <span className={cn("relative inline-block", className)}>
       <AnimatePresence>
-        {sparkles.map(sparkle => (
-          <motion.span
-            key={sparkle.id}
-            className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 z-10"
-            style={{ left: sparkle.x, top: sparkle.y }}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: [0, 1, 0], scale: [0, 1, 0], rotate: sparkle.rotation }}
-            transition={{ duration: sparkle.duration, delay: sparkle.delay, ease: "easeInOut" }}
-          >
-            <StarSvg size={sparkle.size} color={sparkle.color} rotation={sparkle.rotation} />
-          </motion.span>
-        ))}
+        {shouldAnimate &&
+          sparkles.map((sparkle) => (
+            <motion.span
+              key={sparkle.id}
+              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 z-10"
+              style={{ left: sparkle.x, top: sparkle.y }}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{
+                opacity: [0, 1, 0],
+                scale: [0, 1, 0],
+                rotate: sparkle.rotation,
+              }}
+              transition={{
+                duration: sparkle.duration,
+                delay: sparkle.delay,
+                ease: "easeInOut",
+              }}
+            >
+              <StarSvg
+                size={sparkle.size}
+                color={sparkle.color}
+                rotation={sparkle.rotation}
+              />
+            </motion.span>
+          ))}
       </AnimatePresence>
       <span className="relative z-0 bg-linear-to-r from-steel to-steel-light bg-clip-text text-transparent">
         {children}

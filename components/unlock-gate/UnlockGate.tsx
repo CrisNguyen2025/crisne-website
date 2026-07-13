@@ -1,10 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { Lock, Sparkles } from "lucide-react";
 import { useUnlock } from "@/hooks/use-unlock";
-import { UnlockModal } from "./UnlockModal";
+
+const UnlockModal = dynamic(
+  () => import("./UnlockModal").then((module) => module.UnlockModal),
+  { ssr: false }
+);
 
 interface UnlockGateProps {
   readonly children: React.ReactNode;
@@ -83,7 +88,7 @@ export function UnlockGate({ children, sectionId }: UnlockGateProps) {
 
                 <motion.button
                   onClick={() => setIsModalOpen(true)}
-                  className="group relative flex items-center gap-2.5 px-6 py-3 rounded-2xl font-semibold text-sm text-white overflow-hidden shadow-lg"
+                  className="group relative flex min-h-11 items-center gap-2.5 overflow-hidden rounded-2xl px-6 py-3 text-sm font-semibold text-white shadow-lg"
                   style={{
                     background:
                       "linear-gradient(135deg, oklch(0.50 0.10 240), oklch(0.62 0.09 240))",
@@ -105,11 +110,13 @@ export function UnlockGate({ children, sectionId }: UnlockGateProps) {
         )}
       </AnimatePresence>
 
-      <UnlockModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onUnlock={unlock}
-      />
+      {isModalOpen && (
+        <UnlockModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onUnlock={unlock}
+        />
+      )}
     </div>
   );
 }

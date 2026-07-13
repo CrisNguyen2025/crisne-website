@@ -72,7 +72,6 @@ export function Navbar() {
   useEffect(() => {
     const nav = navRef.current;
     if (!nav || !activeSection) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIndicatorStyle(null);
       return;
     }
@@ -91,7 +90,7 @@ export function Navbar() {
 
   const handleDesktopClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
-    href: string,
+    href: string
   ) => {
     e.preventDefault();
     scrollToSection(href);
@@ -99,7 +98,7 @@ export function Navbar() {
 
   const handleMobileNavClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
-    href: string,
+    href: string
   ) => {
     e.preventDefault();
     setMobileOpen(false);
@@ -128,7 +127,7 @@ export function Navbar() {
           "fixed top-0 left-0 right-0 z-100 transition-all duration-300",
           scrolled
             ? "bg-background/70 backdrop-blur-xl border-b border-border/50 shadow-sm"
-            : "bg-transparent",
+            : "bg-transparent"
         )}
         initial={{ y: -100 }}
         animate={{ y: 0 }}
@@ -171,7 +170,7 @@ export function Navbar() {
                     "relative px-4 py-2 text-sm transition-colors duration-200 rounded-lg",
                     active
                       ? "text-foreground font-medium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                   whileHover={{ y: -1 }}
                   whileTap={{ scale: 0.95 }}
@@ -204,9 +203,9 @@ export function Navbar() {
 
           {/* Mobile controls */}
           <div className="flex md:hidden items-center gap-2">
-            <ThemeToggle />
+            <ThemeToggle className="size-11" />
             <motion.button
-              className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="flex size-11 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
               onClick={() => setMobileOpen(!mobileOpen)}
               whileTap={{ scale: 0.9 }}
               aria-label="Toggle menu"
@@ -260,7 +259,7 @@ export function Navbar() {
                         "relative flex items-center gap-3 px-4 py-3.5 text-base font-medium rounded-xl transition-colors duration-200 overflow-hidden",
                         active
                           ? "text-foreground bg-muted/60"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                       )}
                       onClick={(e) => handleMobileNavClick(e, link.href)}
                       whileTap={{ scale: 0.98 }}
@@ -284,7 +283,7 @@ export function Navbar() {
                       <span
                         className={cn(
                           "w-1.5 h-1.5 rounded-full shrink-0 transition-transform",
-                          active && "scale-150",
+                          active && "scale-150"
                         )}
                         style={{
                           background: active

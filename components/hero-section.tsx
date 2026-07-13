@@ -5,11 +5,15 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Download } from "lucide-react";
 import { SparklesText } from "@/components/ui/sparkles-text";
 import { trackDownloadCV } from "@/lib/analytics";
+import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 const titles = ["Fullstack Developer(FE Strong)", "React/Next.js Specialist"];
+const SPARKLE_COLORS = { first: "#6B9AC4", second: "#8BB5D9" } as const;
 
 function useTypingEffect(
   texts: string[],
+  isEnabled: boolean,
   typingSpeed = 80,
   deletingSpeed = 50,
   pauseTime = 2000
@@ -22,28 +26,51 @@ function useTypingEffect(
     const currentText = texts[currentIndex];
 
     if (isDeleting) {
-      setDisplayText(currentText.substring(0, displayText.length - 1));
       if (displayText.length === 0) {
         setIsDeleting(false);
         setCurrentIndex((prev) => (prev + 1) % texts.length);
         return;
       }
+
+      setDisplayText(currentText.substring(0, displayText.length - 1));
     } else {
       setDisplayText(currentText.substring(0, displayText.length + 1));
-      if (displayText.length === currentText.length) {
-        setTimeout(() => setIsDeleting(true), pauseTime);
-        return;
-      }
     }
-  }, [displayText, currentIndex, isDeleting, texts, pauseTime]);
+  }, [displayText, currentIndex, isDeleting, texts]);
 
   useEffect(() => {
-    const speed = isDeleting ? deletingSpeed : typingSpeed;
-    const timer = setTimeout(tick, speed);
-    return () => clearTimeout(timer);
-  }, [tick, isDeleting, deletingSpeed, typingSpeed]);
+    if (!isEnabled) return;
 
-  return displayText;
+    const currentText = texts[currentIndex];
+    const hasFinishedTyping =
+      !isDeleting && displayText.length === currentText.length;
+    const delay = hasFinishedTyping
+      ? pauseTime
+      : isDeleting
+        ? deletingSpeed
+        : typingSpeed;
+    const timer = setTimeout(() => {
+      if (hasFinishedTyping) {
+        setIsDeleting(true);
+        return;
+      }
+
+      tick();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [
+    currentIndex,
+    deletingSpeed,
+    displayText.length,
+    isDeleting,
+    isEnabled,
+    pauseTime,
+    texts,
+    tick,
+    typingSpeed,
+  ]);
+
+  return isEnabled ? displayText : texts[0];
 }
 
 const containerVariants = {
@@ -135,19 +162,22 @@ function CountUpStat({
 }
 
 export function HeroSection() {
-  const typedText = useTypingEffect(titles);
+  const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const prefersReducedMotion = useReducedMotion();
+  const shouldAnimateText = !isMobile && !prefersReducedMotion;
+  const typedText = useTypingEffect(titles, shouldAnimateText);
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-6 overflow-hidden">
+    <section className="relative flex min-h-svh items-center justify-center overflow-hidden px-4 pb-8 pt-20 sm:min-h-screen sm:px-6 sm:py-16">
       <motion.div
-        className="max-w-4xl mx-auto text-center z-10"
+        className="z-10 mx-auto w-full max-w-4xl text-center"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        <motion.div variants={itemVariants} className="mb-6">
+        <motion.div variants={itemVariants} className="mb-4 sm:mb-6">
           <motion.div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-muted/60 backdrop-blur-md border border-border/50 text-sm text-muted-foreground"
+            className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-md sm:px-4 sm:py-2 sm:text-sm"
             whileHover={{ scale: 1.05 }}
           >
             <span className="relative flex h-2 w-2">
@@ -160,7 +190,7 @@ export function HeroSection() {
 
         <motion.h1
           variants={itemVariants}
-          className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-[1.2] mb-6"
+          className="mb-4 text-4xl font-bold leading-tight tracking-tight sm:mb-6 sm:text-6xl md:text-7xl lg:text-8xl"
           style={{ fontFamily: "var(--font-display)" }}
         >
           <span
@@ -170,18 +200,18 @@ export function HeroSection() {
             Hi, I&apos;m
           </span>
           <SparklesText
-            className="inline-block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
+            className="inline-block text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
             sparklesCount={6}
             delayMs={0}
-            colors={{ first: "#6B9AC4", second: "#8BB5D9" }}
+            colors={SPARKLE_COLORS}
           >
             Cris
           </SparklesText>{" "}
           <SparklesText
-            className="inline-block text-6xl sm:text-7xl md:text-8xl lg:text-9xl"
+            className="inline-block text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
             sparklesCount={6}
             delayMs={350}
-            colors={{ first: "#6B9AC4", second: "#8BB5D9" }}
+            colors={SPARKLE_COLORS}
           >
             Nguyen
           </SparklesText>
@@ -189,21 +219,23 @@ export function HeroSection() {
 
         <motion.div
           variants={itemVariants}
-          className="text-xl sm:text-2xl md:text-3xl text-muted-foreground mb-8 h-10 flex items-center justify-center"
+          className="mb-5 flex min-h-12 items-center justify-center px-2 text-base leading-snug text-muted-foreground sm:mb-8 sm:h-10 sm:min-h-0 sm:px-0 sm:text-2xl md:text-3xl"
         >
           <span className="font-mono">
             {typedText}
-            <motion.span
-              className="inline-block w-[3px] h-[1.2em] bg-foreground ml-1 align-middle"
-              animate={{ opacity: [1, 0] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-            />
+            {shouldAnimateText && (
+              <motion.span
+                className="ml-1 inline-block h-[1.2em] w-[3px] bg-foreground align-middle"
+                animate={{ opacity: [1, 0] }}
+                transition={{ duration: 0.8, repeat: Infinity }}
+              />
+            )}
           </span>
         </motion.div>
 
         <motion.p
           variants={itemVariants}
-          className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed"
+          className="mx-auto mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mb-8 sm:text-lg"
         >
           Building scalable, high-performance web solutions. Specialized in{" "}
           <span className="text-foreground font-medium">React</span>,{" "}
@@ -214,7 +246,7 @@ export function HeroSection() {
 
         <motion.div
           variants={itemVariants}
-          className="flex justify-center mb-12"
+          className="mb-8 flex justify-center sm:mb-12"
         >
           <motion.a
             href="/cris-nguyen-cv.pdf"
@@ -233,7 +265,7 @@ export function HeroSection() {
 
         <motion.div
           variants={itemVariants}
-          className="flex items-center justify-center gap-8 sm:gap-12"
+          className="grid w-full grid-cols-3 items-start gap-3 sm:flex sm:items-center sm:justify-center sm:gap-12"
         >
           {stats.map(({ end, suffix, label }) => (
             <CountUpStat key={label} end={end} suffix={suffix} label={label} />

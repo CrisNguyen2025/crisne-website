@@ -1,6 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from "@/hooks/use-media-query";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 const shapes = [
   {
@@ -108,6 +110,11 @@ function Shape({
 }
 
 export function FloatingShapes() {
+  const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const prefersReducedMotion = useReducedMotion();
+
+  if (isMobile || prefersReducedMotion) return null;
+
   return (
     <div className="fixed inset-0 -z-5 pointer-events-none overflow-hidden">
       {shapes.map((shape, i) => (

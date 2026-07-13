@@ -1,13 +1,15 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { MOBILE_VIEWPORT_QUERY, useMediaQuery } from "@/hooks/use-media-query";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 export function AnimatedBackground() {
+  const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
   const prefersReducedMotion = useReducedMotion();
 
-  // Static version for reduced motion preference
-  if (prefersReducedMotion) {
+  // Mobile devices get the same visual treatment without continuous animation.
+  if (isMobile || prefersReducedMotion) {
     return (
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-0 bg-background" />

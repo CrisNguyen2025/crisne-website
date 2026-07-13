@@ -9,6 +9,8 @@ interface TrackedSectionProps {
   readonly children: React.ReactNode;
 }
 
+const HERO_SECTION_ID = "hero";
+
 export function TrackedSection({ sectionId, children }: TrackedSectionProps) {
   const ref = useTrackSectionView(sectionId);
 
@@ -21,5 +23,12 @@ export function TrackedSection({ sectionId, children }: TrackedSectionProps) {
     return () => el.removeEventListener("click", handler);
   }, [sectionId, ref]);
 
-  return <div ref={ref as React.RefObject<HTMLDivElement>}>{children}</div>;
+  return (
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={sectionId === HERO_SECTION_ID ? undefined : "deferred-section"}
+    >
+      {children}
+    </div>
+  );
 }
