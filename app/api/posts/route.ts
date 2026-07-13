@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPosts, getTags, createPost } from "@/lib/notion";
 import { replaceBase64WithUrls, estimateContentSize } from "@/lib/image-upload";
-import type { PostWithTags } from "@/lib/notion-types";
+import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +9,13 @@ export const dynamic = "force-dynamic";
 // Query params:
 //   ?tagId=<notionPageId>   — filter by tag
 //   ?published=true         — only published posts
+//   ?includeTags=true       — include all tags with post counts for list views
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const tagId = searchParams.get("tagId") ?? undefined;
     const publishedOnly = searchParams.get("published") === "true";
+    const includeTags = searchParams.get("includeTags") === "true";
 
     const [posts, allTags] = await Promise.all([
       getPosts({ tagId, publishedOnly }),
@@ -27,7 +29,19 @@ export async function GET(req: NextRequest) {
       tags: tagIds.flatMap((id) => (tagMap[id] ? [tagMap[id]] : [])),
     }));
 
-    return NextResponse.json(result, {
+    const body = includeTags
+      ? {
+          posts: result,
+          tags: allTags.map(
+            (tag): TagWithPostCount => ({
+              ...tag,
+              postCount: tag.postIds.length,
+            }),
+          ),
+        }
+      : result;
+
+    return NextResponse.json(body, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
         Pragma: "no-cache",

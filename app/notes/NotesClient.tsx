@@ -35,10 +35,7 @@ import {
   Trash2,
   Search,
   BookOpen,
-  FileText,
   Folder,
-  Calendar,
-  ArrowRight,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -68,13 +65,52 @@ function tagSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** Strip HTML tags to get plain text for previews */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\[!(success|info|warning|error)\]\s*/g, "") // Remove callout markers
-    .trim();
+function getInlineMatchRanges(text: string, query: string): [number, number][] {
+  const normalizedText = text.toLowerCase();
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  const ranges: [number, number][] = [];
+  let start = normalizedText.indexOf(normalizedQuery);
+  while (start !== -1) {
+    ranges.push([start, start + normalizedQuery.length - 1]);
+    start = normalizedText.indexOf(normalizedQuery, start + normalizedQuery.length);
+  }
+  return ranges;
+}
+
+function HighlightedText({
+  text,
+  ranges,
+}: {
+  text: string;
+  ranges: readonly [number, number][];
+}) {
+  if (ranges.length === 0) return <>{text}</>;
+
+  const fragments: React.ReactNode[] = [];
+  let cursor = 0;
+
+  ranges.forEach(([start, end], index) => {
+    if (start > cursor) {
+      fragments.push(text.slice(cursor, start));
+    }
+    fragments.push(
+      <mark
+        key={`${start}-${end}-${index}`}
+        className="rounded bg-steel/15 px-0.5 text-steel"
+      >
+        {text.slice(start, end + 1)}
+      </mark>,
+    );
+    cursor = end + 1;
+  });
+
+  if (cursor < text.length) {
+    fragments.push(text.slice(cursor));
+  }
+
+  return <>{fragments}</>;
 }
 
 /** Convert plain text to HTML (newlines → paragraphs) if no HTML detected */
@@ -132,29 +168,23 @@ const PRESET_COLORS = [
 ];
 
 const QUICK_SEARCH_DEBOUNCE_MS = 160;
-const QUICK_SEARCH_RESULT_LIMIT = 14;
-const QUICK_SEARCH_CONTENT_LIMIT = 900;
+const QUICK_SEARCH_MIN_FUSE_LENGTH = 2;
 
-type QuickSearchItem =
-  | {
-      id: string;
-      type: "tag";
-      title: string;
-      subtitle: string;
-      keywords: string;
-      color: string;
-      count: number;
-      tag: TagWithPostCount;
-    }
-  | {
-      id: string;
-      type: "post";
-      title: string;
-      subtitle: string;
-      keywords: string;
-      color: string;
-      post: PostWithTags;
-    };
+interface QuickSearchItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  keywords: string;
+  color: string;
+  count: number;
+  titleMatches: readonly [number, number][];
+  tag: TagWithPostCount;
+}
+
+interface NotesIndexResponse {
+  posts: PostWithTags[];
+  tags: TagWithPostCount[];
+}
 
 export function NotesClient() {
   const searchParams = useSearchParams();
@@ -476,7 +506,9 @@ export function NotesClient() {
   const [drawerLoading, setDrawerLoading] = useState(false);
 
   const quickSearchItems = useMemo<QuickSearchItem[]>(() => {
-    const tagItems: QuickSearchItem[] = [...tags]
+    if (!quickSearchOpen) return [];
+
+    return [...tags]
       .sort((a, b) => {
         const favoriteDiff = Number(favoriteTags.has(b.id)) - Number(favoriteTags.has(a.id));
         if (favoriteDiff !== 0) return favoriteDiff;
@@ -484,67 +516,55 @@ export function NotesClient() {
       })
       .map((tag) => ({
         id: `tag-${tag.id}`,
-        type: "tag",
         title: tag.name,
         subtitle: `${tag.postCount} ${tag.postCount === 1 ? "note" : "notes"}`,
         keywords: `${tag.name} ${tag.color} ${favoriteTags.has(tag.id) ? "favorite starred" : ""}`,
         color: tag.color,
         count: tag.postCount,
+        titleMatches: [],
         tag,
       }));
-
-    const postItems: QuickSearchItem[] = [...posts]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .map((post) => ({
-        id: `post-${post.id}`,
-        type: "post",
-        title: post.title,
-        subtitle: post.tags.map((tag) => tag.name).join(", ") || "Untagged",
-        keywords: [
-          post.title,
-          post.slug,
-          stripHtml((post.content ?? "").slice(0, QUICK_SEARCH_CONTENT_LIMIT)),
-          post.tags.map((tag) => tag.name).join(" "),
-        ].join(" "),
-        color: post.tags[0]?.color ?? "#6b9ac4",
-        post,
-      }));
-
-    return [...tagItems, ...postItems];
-  }, [favoriteTags, posts, tags]);
+  }, [favoriteTags, quickSearchOpen, tags]);
 
   const quickSearchFuse = useMemo(() => {
     if (!quickSearchOpen) return null;
 
     return new Fuse(quickSearchItems, {
       keys: [
-        { name: "title", weight: 0.55 },
-        { name: "subtitle", weight: 0.25 },
-        { name: "keywords", weight: 0.2 },
+        { name: "title", weight: 0.72 },
+        { name: "keywords", weight: 0.18 },
+        { name: "subtitle", weight: 0.1 },
       ],
-      threshold: 0.32,
+      threshold: 0.34,
       ignoreLocation: true,
-      minMatchCharLength: 1,
+      includeMatches: true,
+      minMatchCharLength: QUICK_SEARCH_MIN_FUSE_LENGTH,
     });
   }, [quickSearchItems, quickSearchOpen]);
 
   const quickSearchResults = useMemo(() => {
-    if (!quickSearchQuery) {
-      return quickSearchItems.slice(0, QUICK_SEARCH_RESULT_LIMIT);
-    }
+    const query = quickSearchQuery.trim();
+    if (!query) return quickSearchItems;
 
-    if (!quickSearchFuse) {
-      const query = quickSearchQuery.toLowerCase();
+    if (query.length < QUICK_SEARCH_MIN_FUSE_LENGTH || !quickSearchFuse) {
+      const normalizedQuery = query.toLowerCase();
       return quickSearchItems
         .filter((item) =>
-          `${item.title} ${item.subtitle} ${item.keywords}`.toLowerCase().includes(query),
+          `${item.title} ${item.subtitle} ${item.keywords}`
+            .toLowerCase()
+            .includes(normalizedQuery),
         )
-        .slice(0, QUICK_SEARCH_RESULT_LIMIT);
+        .map((item) => ({
+          ...item,
+          titleMatches: getInlineMatchRanges(item.title, normalizedQuery),
+        }));
     }
 
-    return quickSearchFuse
-      .search(quickSearchQuery, { limit: QUICK_SEARCH_RESULT_LIMIT })
-      .map((result) => result.item);
+    return quickSearchFuse.search(query).map(({ item, matches }) => ({
+      ...item,
+      titleMatches:
+        matches?.find((match) => match.key === "title")?.indices ?? [],
+    }));
   }, [quickSearchFuse, quickSearchItems, quickSearchQuery]);
 
   useEffect(() => {
@@ -673,16 +693,12 @@ export function NotesClient() {
 
   const refresh = useCallback(async () => {
     try {
-      const ts = Date.now(); // cache-busting
-      const headers = { "Cache-Control": "no-cache", Pragma: "no-cache" };
-      const [postsRes, tagsRes] = await Promise.all([
-        fetch(`/api/posts?_t=${ts}`, { cache: "no-store", headers }).then((r) =>
-          r.ok ? r.json() : [],
-        ),
-        fetch(`/api/tags?_t=${ts}`, { cache: "no-store", headers }).then((r) =>
-          r.ok ? r.json() : [],
-        ),
-      ]);
+      const data = (await fetch("/api/posts?includeTags=true", {
+        cache: "no-store",
+      }).then((r) => (r.ok ? r.json() : null))) as NotesIndexResponse | null;
+      if (!data) return;
+
+      const { posts: postsRes, tags: tagsRes } = data;
       if (!Array.isArray(postsRes) || !Array.isArray(tagsRes)) return;
 
       const tagMap = Object.fromEntries(
@@ -725,14 +741,7 @@ export function NotesClient() {
   const selectQuickSearchItem = (item: QuickSearchItem) => {
     closeQuickSearch();
     closeAllForms();
-
-    if (item.type === "tag") {
-      switchTag(item.tag.id);
-      return;
-    }
-
-    setDrawerPost(item.post);
-    setDrawerMode("view");
+    switchTag(item.tag.id);
   };
 
   // Navigate to next/prev post with loading animation
@@ -808,11 +817,9 @@ export function NotesClient() {
 
     // Finally apply search filter
     if (searchQuery) {
+      const normalizedSearchQuery = searchQuery.toLowerCase();
       matched = matched.filter((post) =>
-        post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (post.content &&
-          post.content.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        post.slug.toLowerCase().includes(searchQuery.toLowerCase())
+        post.title.toLowerCase().includes(normalizedSearchQuery)
       );
     }
 
@@ -889,14 +896,33 @@ export function NotesClient() {
     ? filteredPosts.find((p) => p.id === activeDragId) ?? null
     : null;
 
-  const activeTagObj = tags.find((t) => t.id === activeTag) ?? null;
-  const tagHasPosts = activeTag
-    ? posts.some((post) => post.tags.some((t) => t.id === activeTag))
-    : posts.length > 0;
+  const activeTagObj = useMemo(
+    () => tags.find((tag) => tag.id === activeTag) ?? null,
+    [activeTag, tags],
+  );
+  const displayTags = useMemo(
+    () =>
+      viewMode === "favorites"
+        ? tags.filter((tag) => favoriteTags.has(tag.id))
+        : tags,
+    [favoriteTags, tags, viewMode],
+  );
+  const activeTagPostCount = useMemo(
+    () =>
+      activeTag
+        ? posts.reduce(
+            (count, post) =>
+              count + (post.tags.some((tag) => tag.id === activeTag) ? 1 : 0),
+            0,
+          )
+        : posts.length,
+    [activeTag, posts],
+  );
+  const tagHasPosts = activeTag ? activeTagPostCount > 0 : posts.length > 0;
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-6 py-32 flex flex-col items-center justify-center">
+      <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 sm:py-32 min-h-screen flex flex-col items-center justify-center">
         <div className="w-10 h-10 border-2 border-steel/20 border-t-steel rounded-full animate-spin mb-4" />
         <p className="text-xs font-mono text-muted-foreground/60 tracking-wider">
           RETRIEVING FROM DATABASE...
@@ -932,7 +958,7 @@ export function NotesClient() {
           <div className="flex items-center gap-2 shrink-0 border-t border-border/10 pt-4 sm:border-t-0 sm:pt-0 w-full sm:w-auto justify-start">
             <motion.button
               onClick={openQuickSearch}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-card text-foreground hover:bg-muted/50 text-xs font-semibold rounded-xl transition-colors border border-border/40 cursor-pointer shadow-sm shadow-foreground/5"
+              className="hidden lg:inline-flex items-center gap-2 px-4 py-2.5 bg-card text-foreground hover:bg-muted/50 text-xs font-semibold rounded-xl transition-colors border border-border/40 cursor-pointer shadow-sm shadow-foreground/5"
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
             >
@@ -959,11 +985,41 @@ export function NotesClient() {
       {/* Search & Tags bar                                                  */}
       {/* ------------------------------------------------------------------ */}
       <div className="lg:mb-10 mb-4 relative group">
+        <div className="lg:hidden pb-4">
+          <button
+            type="button"
+            aria-label="Open quick search"
+            onClick={openQuickSearch}
+            className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-border/40 bg-card/70 px-3 py-2.5 text-left shadow-sm shadow-foreground/5 transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-steel/40"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">
+                Active tag
+              </p>
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                {activeTagObj ? (
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: activeTagObj.color }}
+                  />
+                ) : (
+                  <BookOpen className="h-3.5 w-3.5 shrink-0 text-steel" />
+                )}
+                <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                  {activeTagObj?.name ??
+                    (viewMode === "favorites" ? "Favorite tags" : "All tags")}
+                </span>
+              </div>
+            </div>
+            <Search className="h-4 w-4 shrink-0 text-steel" aria-hidden="true" />
+          </button>
+        </div>
+
         <LayoutGroup>
           <div
             ref={tabBarRef}
             onScroll={checkScroll}
-            className="flex flex-wrap items-center gap-2 pb-4 overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+            className="hidden lg:flex lg:flex-wrap items-center gap-2 pb-4 overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           >
           {/* Simple Favorites Toggle */}
           <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-full border border-border/40 shrink-0">
@@ -988,13 +1044,7 @@ export function NotesClient() {
           <div className="h-8 w-px bg-border/40 shrink-0" />
 
           {/* Tags - filter by favorites mode, no reordering */}
-          {(() => {
-            // Filter tags based on favorites mode, keep original order
-            const displayTags = viewMode === "favorites"
-              ? tags.filter(tag => favoriteTags.has(tag.id))
-              : tags;
-            
-            return displayTags.map((tag) => {
+          {displayTags.map((tag) => {
               const isFavorite = favoriteTags.has(tag.id);
               return (
             <motion.button
@@ -1076,8 +1126,7 @@ export function NotesClient() {
               </span>
             </motion.button>
           );
-          });
-          })()}
+          })}
 
           {/* Add Tag button */}
           <button
@@ -1100,7 +1149,7 @@ export function NotesClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute top-0 left-0 bottom-4 w-20 bg-gradient-to-r from-background via-background/80 to-transparent flex items-center justify-start pointer-events-none z-20"
+              className="hidden lg:flex absolute top-0 left-0 bottom-4 w-20 bg-gradient-to-r from-background via-background/80 to-transparent items-center justify-start pointer-events-none z-20"
             >
               <button
                 onClick={() =>
@@ -1123,7 +1172,7 @@ export function NotesClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute top-0 right-0 bottom-4 w-20 bg-gradient-to-l from-background via-background/80 to-transparent flex items-center justify-end pointer-events-none z-20"
+              className="hidden lg:flex absolute top-0 right-0 bottom-4 w-20 bg-gradient-to-l from-background via-background/80 to-transparent items-center justify-end pointer-events-none z-20"
             >
               <button
                 onClick={() =>
@@ -1621,7 +1670,7 @@ export function NotesClient() {
                   ? `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites in ${activeTagObj?.name}`
                   : `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites`
                 : activeTag
-                ? `${posts.filter((p) => p.tags.some((t) => t.id === activeTag)).length} ${posts.filter((p) => p.tags.some((t) => t.id === activeTag)).length === 1 ? "note" : "notes"} in this tag`
+                ? `${activeTagPostCount} ${activeTagPostCount === 1 ? "note" : "notes"} in this tag`
                 : `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`}
             </p>
           </div>
@@ -1768,6 +1817,7 @@ export function NotesClient() {
                     <PostCard
                       key={post.id}
                       post={post}
+                      searchQuery={searchQuery}
                       sortable={!!activeTag}
                       onView={() => {
                         closeAllForms();
@@ -1875,7 +1925,7 @@ function QuickSearchModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="quick-search-title"
-      className="fixed inset-0 z-[400] flex items-start justify-center px-3 pt-[8vh] sm:px-6"
+      className="fixed inset-0 z-[400] flex items-center justify-center lg:items-start lg:px-6 lg:pt-[8vh]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -1893,7 +1943,7 @@ function QuickSearchModal({
       />
 
       <motion.div
-        className="relative w-full max-w-xl overflow-hidden rounded-xl border border-border/60 bg-card shadow-xl shadow-foreground/10"
+        className="relative flex h-[90svh] w-[90vw] max-w-none flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl shadow-foreground/10 lg:h-auto lg:w-full lg:max-w-xl lg:rounded-xl"
         initial={{ opacity: 0, y: 8, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.985 }}
@@ -1903,7 +1953,7 @@ function QuickSearchModal({
           <Search className="h-4 w-4 shrink-0 text-steel" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <h2 id="quick-search-title" className="sr-only">
-              Quick search
+              Search tags
             </h2>
             <input
               ref={inputRef}
@@ -1911,10 +1961,10 @@ function QuickSearchModal({
               name="quick-search"
               autoComplete="off"
               spellCheck={false}
-              aria-label="Search tags and notes"
+              aria-label="Search tags"
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
-              placeholder="Search tags and notes..."
+              placeholder="Search tags..."
               className="h-10 w-full bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/45"
             />
           </div>
@@ -1946,9 +1996,9 @@ function QuickSearchModal({
         </div>
 
         <div
-          className="max-h-[52vh] overflow-y-auto p-1.5"
+          className="min-h-0 flex-1 overflow-y-auto p-1.5 lg:max-h-[52vh]"
           role="listbox"
-          aria-label="Quick search results"
+          aria-label="Tag search results"
         >
           {results.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
@@ -1963,8 +2013,6 @@ function QuickSearchModal({
           ) : (
             results.map((item, index) => {
               const isActive = index === selectedIndex;
-              const Icon = item.type === "tag" ? Folder : FileText;
-
               return (
                 <button
                   ref={isActive ? activeItemRef : undefined}
@@ -1983,25 +2031,20 @@ function QuickSearchModal({
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-background/70"
                     style={{ color: item.color }}
                   >
-                    <Icon className="h-4 w-4" aria-hidden="true" />
+                    <Folder className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-foreground">
-                      {item.title}
+                      <HighlightedText text={item.title} ranges={item.titleMatches} />
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {item.subtitle}
                     </span>
                   </span>
                   <span
-                    className={cn(
-                      "shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide",
-                      item.type === "tag"
-                        ? "border-steel/20 bg-steel/10 text-steel"
-                        : "border-border/50 bg-background text-muted-foreground",
-                    )}
+                    className="shrink-0 rounded-full border border-steel/20 bg-steel/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-steel"
                   >
-                    {item.type === "tag" ? "Tag" : "Item"}
+                    Tag
                   </span>
                 </button>
               );
@@ -2013,7 +2056,7 @@ function QuickSearchModal({
           <span aria-live="polite">
             {isDebouncing
               ? "Searching..."
-              : `${results.length} of ${totalCount} indexed`}
+              : `${results.length} of ${totalCount} tags`}
           </span>
         </div>
       </motion.div>
@@ -2275,10 +2318,12 @@ function Drawer({
 function PostCard({
   post,
   onView,
+  searchQuery,
   sortable = false,
 }: {
   post: PostWithTags;
   onView: () => void;
+  searchQuery?: string;
   sortable?: boolean;
 }) {
   const {
@@ -2298,9 +2343,9 @@ function PostCard({
 
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "short",
-    day: "numeric",
     year: "numeric",
   });
+  const titleMatches = getInlineMatchRanges(post.title, searchQuery ?? "");
 
   return (
     <div
@@ -2309,17 +2354,17 @@ function PostCard({
       {...attributes}
       {...(sortable ? listeners : {})}
       className={cn(
-        "group relative flex flex-col justify-between p-4 bg-card border border-border/30 hover:border-steel/30 rounded-2xl transition-all shadow-sm hover:shadow-md duration-300 h-full",
+        "group relative flex h-full flex-col justify-between rounded-2xl border border-border/30 bg-card p-3 shadow-sm transition-all duration-300 hover:border-steel/30 hover:shadow-md",
         sortable && "cursor-grab active:cursor-grabbing touch-pan-y",
         isDragging && "ring-2 ring-steel/40 touch-none",
       )}
     >
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {post.tags.slice(0, 2).map((tag) => (
             <span
               key={tag.id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border"
+              className="inline-flex min-w-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium"
               style={{
                 background: `${tag.color}12`,
                 borderColor: `${tag.color}30`,
@@ -2345,35 +2390,20 @@ function PostCard({
             </span>
           )}
         </div>
+        <time className="shrink-0 rounded-md border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] uppercase leading-4 text-muted-foreground/70 tabular-nums">
+          {date}
+        </time>
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <button
           onClick={onView}
-          className="block group/link cursor-pointer text-left w-full"
+          className="group/link flex w-full cursor-pointer items-center gap-2 text-left"
         >
-          <h3 className="text-base font-bold text-foreground group-hover/link:text-steel transition-colors tracking-tight line-clamp-1 mb-1">
-            {post.title}
+          <h3 className="line-clamp-1 min-w-0 flex-1 text-base font-bold tracking-tight text-foreground transition-colors group-hover/link:text-steel">
+            <HighlightedText text={post.title} ranges={titleMatches} />
           </h3>
-          <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mb-3 leading-relaxed">
-            {post.content && post.content.trim()
-              ? stripHtml(post.content)
-              : "N/A"}
-          </p>
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between pt-2.5 border-t border-border/30 text-[10px] font-mono text-muted-foreground/60">
-        <div className="flex items-center gap-1">
-          <Calendar className="w-3 h-3" />
-          <time className="tabular-nums">{date}</time>
-        </div>
-        <button
-          onClick={onView}
-          className="inline-flex items-center gap-1 text-steel hover:text-steel-light font-medium group/btn transition-colors cursor-pointer"
-        >
-          Read entry
-          <ArrowRight className="w-3 h-3 transition-transform group-hover/btn:translate-x-0.5" />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 translate-x-1 text-steel opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100" />
         </button>
       </div>
     </div>
@@ -2387,14 +2417,13 @@ function PostCard({
 function PostCardPreview({ post }: { post: PostWithTags }) {
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "short",
-    day: "numeric",
     year: "numeric",
   });
 
   return (
-    <div className="relative flex flex-col justify-between p-4 bg-card border border-steel/40 rounded-2xl shadow-2xl shadow-foreground/10 backdrop-blur">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex flex-wrap items-center gap-1.5">
+    <div className="relative flex flex-col justify-between rounded-2xl border border-steel/40 bg-card p-3 shadow-2xl shadow-foreground/10 backdrop-blur">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {post.tags.slice(0, 2).map((tag) => (
             <span
               key={tag.id}
@@ -2410,19 +2439,13 @@ function PostCardPreview({ post }: { post: PostWithTags }) {
             </span>
           ))}
         </div>
+        <time className="shrink-0 rounded-md border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[9px] uppercase leading-4 text-muted-foreground/70 tabular-nums">
+          {date}
+        </time>
       </div>
-      <h3 className="text-base font-bold text-foreground tracking-tight line-clamp-1 mb-1">
+      <h3 className="line-clamp-1 text-base font-bold tracking-tight text-foreground">
         {post.title}
       </h3>
-      <p className="text-[11px] text-muted-foreground/70 line-clamp-2 mb-3 leading-relaxed">
-        {post.content && post.content.trim() ? stripHtml(post.content) : "N/A"}
-      </p>
-      <div className="flex items-center justify-between pt-2.5 border-t border-border/30 text-[10px] font-mono text-muted-foreground/60">
-        <div className="flex items-center gap-1">
-          <Calendar className="w-3 h-3" />
-          <time className="tabular-nums">{date}</time>
-        </div>
-      </div>
     </div>
   );
 }
