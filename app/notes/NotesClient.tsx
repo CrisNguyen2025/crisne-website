@@ -2477,6 +2477,7 @@ function PostDetailView({
   const clickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const clickCountRef = React.useRef(0);
   const lastClickedImageRef = React.useRef<HTMLImageElement | null>(null);
+  const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "long",
@@ -2493,12 +2494,16 @@ function PostDetailView({
     };
   }, []);
 
+  React.useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [post.id]);
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-5">
-      <div className="flex items-start justify-between gap-4">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+      <div className="sticky top-0 z-30 flex items-start justify-between gap-4 border-b border-border/30 bg-card px-5 pt-4 pb-3 shadow-sm md:px-6 md:pt-5">
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
             {post.tags.map((tag) => (
               <span
                 key={tag.id}
@@ -2517,19 +2522,19 @@ function PostDetailView({
               </span>
             ))}
           </div>
-          <h2 className="text-xl font-bold text-foreground tracking-tight leading-tight">
+          <h2 className="text-lg font-bold text-foreground tracking-tight leading-tight md:text-xl">
             {post.title}
           </h2>
-          <p className="text-xs font-mono text-muted-foreground/60 mt-1.5">
+          <p className="text-xs font-mono text-muted-foreground/60 mt-1">
             {date}
           </p>
         </div>
       </div>
 
-      <div className="border-t border-border/30 pt-5">
+      <div className="px-6 pt-5 pb-6 md:px-8 md:pb-8">
         {post.content && post.content.trim() ? (
           <div
-            className="prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
+            className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
             dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }}
             onClick={(e) => {
               const target = e.target as HTMLElement;
@@ -2617,11 +2622,39 @@ function PostDetailView({
 
       {/* Pinned bottom actions - always visible */}
       <div
-        className="shrink-0 bg-card border-t border-border/40 px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3"
+        className="shrink-0 bg-card border-t border-border/40 px-4 md:px-8 py-3 flex flex-col gap-3"
         data-no-swipe
       >
-        {/* Top (mobile) / Left (desktop): Delete + Edit */}
-        <div className="flex items-center gap-2">
+        {/* Top: Prev/Next navigation */}
+        <div className="flex w-full items-center gap-2">
+          {onPrev ? (
+            <button
+              onClick={onPrev}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer min-w-0"
+              title={prevTitle}
+            >
+              <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate min-w-0">{prevTitle}</span>
+            </button>
+          ) : (
+            <div className="flex-1" aria-hidden />
+          )}
+          {onNext ? (
+            <button
+              onClick={onNext}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer min-w-0"
+              title={nextTitle}
+            >
+              <span className="truncate min-w-0">{nextTitle}</span>
+              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+            </button>
+          ) : (
+            <div className="flex-1" aria-hidden />
+          )}
+        </div>
+
+        {/* Bottom: Delete + Edit */}
+        <div className="flex items-center justify-center gap-2">
           <button
             onClick={onDelete}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-xs font-semibold rounded-xl border border-destructive/20 transition-all cursor-pointer hover:bg-destructive/20"
@@ -2636,36 +2669,6 @@ function PostDetailView({
             <Pencil className="w-3.5 h-3.5" />
             Edit
           </button>
-        </div>
-
-        {/* Bottom (mobile, 50/50) / Right (desktop): Prev/Next navigation */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          {onPrev ? (
-            <button
-              onClick={onPrev}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer sm:max-w-[160px] min-w-0"
-              title={prevTitle}
-            >
-              <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate sm:inline hidden">{prevTitle}</span>
-              <span className="sm:hidden">Prev</span>
-            </button>
-          ) : (
-            <div className="flex-1 sm:hidden" aria-hidden />
-          )}
-          {onNext ? (
-            <button
-              onClick={onNext}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center sm:justify-end gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer sm:max-w-[160px] min-w-0"
-              title={nextTitle}
-            >
-              <span className="truncate sm:inline hidden">{nextTitle}</span>
-              <span className="sm:hidden">Next</span>
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-            </button>
-          ) : (
-            <div className="flex-1 sm:hidden" aria-hidden />
-          )}
         </div>
       </div>
 
