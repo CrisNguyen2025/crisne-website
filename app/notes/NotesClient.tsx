@@ -178,6 +178,9 @@ const PRESET_COLORS = [
 const QUICK_SEARCH_DEBOUNCE_MS = 160;
 const QUICK_SEARCH_MIN_FUSE_LENGTH = 2;
 const DRAWER_COMMENT_NOTES_STORAGE_PREFIX = "notes-drawer-comment-notes";
+const DRAWER_COMMENT_DRAG_HOLD_MS = 120;
+const DRAWER_COMMENT_DRAG_START_PX = 3;
+const DRAWER_COMMENT_CLICK_SUPPRESS_MS = 220;
 type DrawerCommentSurfaceKind = "content" | "footer";
 
 interface DrawerCommentNote {
@@ -205,6 +208,24 @@ interface DrawerCommentDragOverlay {
   offsetX: number;
   offsetY: number;
 }
+
+interface DrawerCommentDragState extends DrawerCommentDragOverlay {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  hasMoved: boolean;
+  isArmed: boolean;
+  holdTimerId: number | null;
+}
+
+type CommentFocusTarget =
+  | {
+      kind: "marker";
+      noteId: string;
+    }
+  | {
+      kind: "toggle";
+    };
 
 function clampPercent(value: number): number {
   return Math.min(98, Math.max(2, value));
@@ -2727,6 +2748,34 @@ function DrawerCommentLayer({
   const popoverRef = React.useRef<HTMLDivElement | null>(null);
   const portalTarget = typeof document !== "undefined" ? document.body : null;
 
+  React.useEffect(() => {
+    if (!popoverPosition) return;
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (popoverRef.current?.contains(target)) return;
+      if (target.closest("[data-no-comment]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (activeNote || draftText.trim()) {
+        onSave();
+      } else {
+        onCancel();
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handleOutsidePointerDown,
+        true
+      );
+    };
+  }, [activeNote, draftText, onCancel, onSave, popoverPosition]);
+
   const handleDraftTextareaBlur = (
     event: React.FocusEvent<HTMLTextAreaElement>
   ) => {
@@ -2744,28 +2793,37 @@ function DrawerCommentLayer({
           <button
             type="button"
             data-no-comment
+            data-comment-marker-id={note.id}
             draggable={false}
             onPointerDown={(event) => onMarkerPointerDown(note, event)}
             onPointerMove={(event) => onMarkerPointerMove(surfaceRef, event)}
             onPointerUp={(event) => onMarkerPointerUp(surfaceRef, event)}
             onPointerCancel={onMarkerPointerCancel}
+            onContextMenu={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation();
               onMarkerClick(note);
             }}
             className={cn(
-              "pointer-events-auto absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[11px] font-bold shadow-lg transition touch-none select-none cursor-grab active:cursor-grabbing",
-              dragOverlay?.noteId === note.id
-                ? "border-transparent bg-transparent text-transparent shadow-none opacity-20"
-                : activeNoteId === note.id
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-steel/30 bg-steel text-white hover:scale-105 hover:bg-steel/90"
+              "group pointer-events-auto absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-transparent transition touch-none select-none cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-11 md:w-11",
+              dragOverlay?.noteId === note.id ? "opacity-20" : "opacity-100"
             )}
             style={{ left: `${note.xPercent}%`, top: `${note.yPercent}%` }}
             aria-label={`Open comment ${index + 1}`}
             title={note.text}
           >
-            {index + 1}
+            <span
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-bold shadow-lg transition-transform transition-colors duration-150 md:h-8 md:w-8",
+                dragOverlay?.noteId === note.id
+                  ? "border-transparent bg-transparent text-transparent shadow-none"
+                  : activeNoteId === note.id
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-steel/30 bg-steel text-white group-hover:scale-105 group-hover:bg-steel/90 group-active:scale-95"
+              )}
+            >
+              {index + 1}
+            </span>
           </button>
 
           {dragOverlay?.noteId === note.id &&
@@ -2774,7 +2832,7 @@ function DrawerCommentLayer({
             ? createPortal(
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none fixed z-[120] flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold shadow-2xl"
+                  className="pointer-events-none fixed z-[120] flex h-7 w-7 cursor-grabbing items-center justify-center rounded-full text-[11px] font-bold shadow-2xl"
                   style={{
                     left: 0,
                     top: 0,
@@ -3045,20 +3103,12 @@ function PostDetailView({
   const commentDragOverlayFrameRef = React.useRef<number | null>(null);
   const commentDragOverlayNextRef =
     React.useRef<DrawerCommentDragOverlay | null>(null);
-  const commentDragRef = React.useRef<{
-    noteId: string;
-    surface: DrawerCommentSurfaceKind;
-    pointerId: number;
-    startClientX: number;
-    startClientY: number;
-    offsetX: number;
-    offsetY: number;
-    hasMoved: boolean;
-    isArmed: boolean;
-    holdTimerId: number | null;
-  } | null>(null);
+  const commentDragRef = React.useRef<DrawerCommentDragState | null>(null);
   const justDraggedCommentIdRef = React.useRef<string | null>(null);
   const suppressCommentClickIdRef = React.useRef<string | null>(null);
+  const commentClickGuardTimerRef = React.useRef<number | null>(null);
+  const commentModeToggleRef = React.useRef<HTMLButtonElement | null>(null);
+  const commentFocusTargetRef = React.useRef<CommentFocusTarget | null>(null);
   const commentSaveLockRef = React.useRef<boolean>(false);
 
   const scheduleCommentDragOverlay = (
@@ -3081,10 +3131,76 @@ function PostDetailView({
     setCommentDragOverlay(null);
   };
 
+  const clearCommentClickGuards = () => {
+    if (commentClickGuardTimerRef.current !== null) {
+      window.clearTimeout(commentClickGuardTimerRef.current);
+      commentClickGuardTimerRef.current = null;
+    }
+    justDraggedCommentIdRef.current = null;
+    suppressCommentClickIdRef.current = null;
+  };
+
+  const suppressNextCommentClick = (noteId: string, markAsDragged: boolean) => {
+    clearCommentClickGuards();
+    if (markAsDragged) {
+      justDraggedCommentIdRef.current = noteId;
+    }
+    suppressCommentClickIdRef.current = noteId;
+    const timerId = window.setTimeout(() => {
+      if (justDraggedCommentIdRef.current === noteId) {
+        justDraggedCommentIdRef.current = null;
+      }
+      if (suppressCommentClickIdRef.current === noteId) {
+        suppressCommentClickIdRef.current = null;
+      }
+      if (commentClickGuardTimerRef.current === timerId) {
+        commentClickGuardTimerRef.current = null;
+      }
+    }, DRAWER_COMMENT_CLICK_SUPPRESS_MS);
+    commentClickGuardTimerRef.current = timerId;
+  };
+
+  const clearActiveCommentDrag = () => {
+    const drag = commentDragRef.current;
+    if (drag?.holdTimerId) {
+      window.clearTimeout(drag.holdTimerId);
+    }
+    commentDragRef.current = null;
+    clearCommentDragOverlay();
+  };
+
+  const restoreCommentFocus = React.useCallback(() => {
+    const target = commentFocusTargetRef.current;
+    if (!target) return;
+
+    window.requestAnimationFrame(() => {
+      if (target.kind === "marker") {
+        const marker = document.querySelector<HTMLButtonElement>(
+          `[data-comment-marker-id="${target.noteId}"]`
+        );
+        if (marker) {
+          marker.focus({ preventScroll: true });
+        } else {
+          commentModeToggleRef.current?.focus({ preventScroll: true });
+        }
+      } else {
+        commentModeToggleRef.current?.focus({ preventScroll: true });
+      }
+      commentFocusTargetRef.current = null;
+    });
+  }, []);
+
   React.useEffect(() => {
     return () => {
       if (commentDragOverlayFrameRef.current !== null) {
         window.cancelAnimationFrame(commentDragOverlayFrameRef.current);
+      }
+      const drag = commentDragRef.current;
+      if (drag?.holdTimerId) {
+        window.clearTimeout(drag.holdTimerId);
+      }
+      if (commentClickGuardTimerRef.current !== null) {
+        window.clearTimeout(commentClickGuardTimerRef.current);
       }
     };
   }, []);
@@ -3161,6 +3277,7 @@ function PostDetailView({
     setCommentDraftText("");
     setCommentDraftSurface(surface);
     setCommentStorageError("");
+    commentFocusTargetRef.current = { kind: "toggle" };
     setCommentDraftPosition({
       surface,
       xPercent: clampPercent(
@@ -3174,6 +3291,7 @@ function PostDetailView({
   };
 
   const handleCommentMarkerClick = (note: DrawerCommentNote) => {
+    commentFocusTargetRef.current = { kind: "marker", noteId: note.id };
     if (justDraggedCommentIdRef.current === note.id) {
       justDraggedCommentIdRef.current = null;
       return;
@@ -3215,11 +3333,13 @@ function PostDetailView({
     event: React.PointerEvent<HTMLButtonElement>
   ) => {
     event.stopPropagation();
+    clearActiveCommentDrag();
     const markerBounds = event.currentTarget.getBoundingClientRect();
     const holdTimerId = window.setTimeout(() => {
       const drag = commentDragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
       drag.isArmed = true;
+      drag.holdTimerId = null;
       scheduleCommentDragOverlay({
         noteId: drag.noteId,
         surface: drag.surface,
@@ -3228,10 +3348,12 @@ function PostDetailView({
         offsetX: drag.offsetX,
         offsetY: drag.offsetY,
       });
-    }, 180);
+    }, DRAWER_COMMENT_DRAG_HOLD_MS);
     commentDragRef.current = {
       noteId: note.id,
       surface: note.surface,
+      clientX: event.clientX,
+      clientY: event.clientY,
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
@@ -3241,7 +3363,6 @@ function PostDetailView({
       isArmed: false,
       holdTimerId,
     };
-    clearCommentDragOverlay();
     setActiveCommentNoteId(null);
     setCommentDraftText("");
     setCommentDraftPosition(null);
@@ -3267,28 +3388,21 @@ function PostDetailView({
       Math.abs(event.clientY - drag.startClientY)
     );
     if (!drag.isArmed) {
-      if (movedDistance > 6) {
-        if (drag.holdTimerId) {
-          window.clearTimeout(drag.holdTimerId);
-        }
-        suppressCommentClickIdRef.current = drag.noteId;
-        window.setTimeout(() => {
-          if (suppressCommentClickIdRef.current === drag.noteId) {
-            suppressCommentClickIdRef.current = null;
-          }
-        }, 250);
-        try {
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        } catch {
-          // Ignore pointer capture release failures.
-        }
-        clearCommentDragOverlay();
-        commentDragRef.current = null;
+      if (movedDistance < DRAWER_COMMENT_DRAG_START_PX) {
+        return;
       }
-      return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (drag.holdTimerId) {
+        window.clearTimeout(drag.holdTimerId);
+        drag.holdTimerId = null;
+      }
+      drag.isArmed = true;
+    } else {
+      event.preventDefault();
+      event.stopPropagation();
     }
 
-    if (movedDistance < 2) return;
     drag.hasMoved = true;
     scheduleCommentDragOverlay({
       noteId: drag.noteId,
@@ -3306,8 +3420,13 @@ function PostDetailView({
   ) => {
     const drag = commentDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.isArmed || drag.hasMoved) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     if (drag.holdTimerId) {
       window.clearTimeout(drag.holdTimerId);
+      drag.holdTimerId = null;
     }
     const bounds = surfaceRef.current?.getBoundingClientRect();
 
@@ -3335,24 +3454,10 @@ function PostDetailView({
         setCommentStorageError(
           savedNotes ? "" : "Comment could not be saved in this browser."
         );
-        justDraggedCommentIdRef.current = currentNote.id;
-        suppressCommentClickIdRef.current = currentNote.id;
-        window.setTimeout(() => {
-          if (justDraggedCommentIdRef.current === currentNote.id) {
-            justDraggedCommentIdRef.current = null;
-          }
-          if (suppressCommentClickIdRef.current === currentNote.id) {
-            suppressCommentClickIdRef.current = null;
-          }
-        }, 250);
+        suppressNextCommentClick(currentNote.id, true);
       }
     } else if (drag.isArmed) {
-      suppressCommentClickIdRef.current = drag.noteId;
-      window.setTimeout(() => {
-        if (suppressCommentClickIdRef.current === drag.noteId) {
-          suppressCommentClickIdRef.current = null;
-        }
-      }, 250);
+      suppressNextCommentClick(drag.noteId, false);
     }
 
     clearCommentDragOverlay();
@@ -3369,8 +3474,11 @@ function PostDetailView({
   ) => {
     const drag = commentDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     if (drag.holdTimerId) {
       window.clearTimeout(drag.holdTimerId);
+      drag.holdTimerId = null;
     }
     clearCommentDragOverlay();
     commentDragRef.current = null;
@@ -3400,6 +3508,7 @@ function PostDetailView({
       applyCommentNotes(nextNotes, true);
       setActiveCommentNoteId(null);
       setCommentDraftText("");
+      restoreCommentFocus();
       return;
     }
 
@@ -3422,6 +3531,7 @@ function PostDetailView({
     applyCommentNotes(nextNotes, true);
     setCommentDraftText("");
     setCommentDraftPosition(null);
+    restoreCommentFocus();
   };
 
   const handleDeleteCommentNote = () => {
@@ -3432,15 +3542,36 @@ function PostDetailView({
     );
     setActiveCommentNoteId(null);
     setCommentDraftText("");
+    restoreCommentFocus();
   };
 
-  const handleCancelCommentDraft = () => {
+  const handleCancelCommentDraft = React.useCallback(() => {
     setActiveCommentNoteId(null);
     setCommentDraftText("");
     setCommentDraftPosition(null);
     setCommentDraftSurface("content");
     setCommentStorageError("");
-  };
+    restoreCommentFocus();
+  }, [restoreCommentFocus]);
+
+  React.useEffect(() => {
+    const hasOpenCommentModal = Boolean(
+      activeCommentNoteId || commentDraftPosition
+    );
+    if (!hasOpenCommentModal) return;
+
+    const handleCommentEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      handleCancelCommentDraft();
+    };
+
+    document.addEventListener("keydown", handleCommentEscape, true);
+    return () => {
+      document.removeEventListener("keydown", handleCommentEscape, true);
+    };
+  }, [activeCommentNoteId, commentDraftPosition, handleCancelCommentDraft]);
 
   return (
     <div className="flex flex-col h-full">
@@ -3489,6 +3620,7 @@ function PostDetailView({
                 type="button"
                 data-no-comment
                 data-no-swipe
+                ref={commentModeToggleRef}
                 onTouchStart={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={() => {
@@ -3526,7 +3658,8 @@ function PostDetailView({
             <div className="flex-1 px-4 pt-3 pb-4 md:px-8 md:pt-4 md:pb-8">
               {post.content && post.content.trim() ? (
                 <div
-                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
+                  data-no-swipe
+                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-text"
                   dangerouslySetInnerHTML={{
                     __html: contentToHtml(post.content),
                   }}
