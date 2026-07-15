@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
@@ -37,6 +38,7 @@ import {
   BookOpen,
   Folder,
   Check,
+  MessageCircle,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -74,7 +76,10 @@ function getInlineMatchRanges(text: string, query: string): [number, number][] {
   let start = normalizedText.indexOf(normalizedQuery);
   while (start !== -1) {
     ranges.push([start, start + normalizedQuery.length - 1]);
-    start = normalizedText.indexOf(normalizedQuery, start + normalizedQuery.length);
+    start = normalizedText.indexOf(
+      normalizedQuery,
+      start + normalizedQuery.length
+    );
   }
   return ranges;
 }
@@ -101,7 +106,7 @@ function HighlightedText({
         className="rounded bg-steel/15 px-0.5 text-steel"
       >
         {text.slice(start, end + 1)}
-      </mark>,
+      </mark>
     );
     cursor = end + 1;
   });
@@ -126,33 +131,36 @@ function contentToHtml(content: string): string {
       .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
       .join("");
   }
-  
+
   const copyIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
-  
+
   // Transform callout markers in blockquotes: [!success], [!info], [!warning], [!error]
   html = html.replace(
     /<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi,
     (_match, inner: string) => {
       const markerMatch = inner.match(
-        /^\s*(?:<[^>]+>)*\s*\[!(success|info|warning|error)\]\s*/,
+        /^\s*(?:<[^>]+>)*\s*\[!(success|info|warning|error)\]\s*/
       );
       if (markerMatch) {
         const type = markerMatch[1];
-        const cleanInner = inner.replace(/\[!(success|info|warning|error)\]\s*/, "");
+        const cleanInner = inner.replace(
+          /\[!(success|info|warning|error)\]\s*/,
+          ""
+        );
         return `<div class="callout callout-${type}"><button class="callout-copy-btn" data-copy title="Copy">${copyIcon}</button><div class="callout-content">${cleanInner}</div></div>`;
       }
       return `<blockquote>${inner}</blockquote>`;
-    },
+    }
   );
-  
+
   // Also handle plain text with [!type] markers (not in blockquote)
   html = html.replace(
     /(<p[^>]*>)\s*\[!(success|info|warning|error)\]\s*([\s\S]*?)(<\/p>)/gi,
     (_match, _openTag, type, innerContent) => {
       return `<div class="callout callout-${type}"><button class="callout-copy-btn" data-copy title="Copy">${copyIcon}</button><div class="callout-content">${innerContent}</div></div>`;
-    },
+    }
   );
-  
+
   return html;
 }
 
@@ -169,6 +177,92 @@ const PRESET_COLORS = [
 
 const QUICK_SEARCH_DEBOUNCE_MS = 160;
 const QUICK_SEARCH_MIN_FUSE_LENGTH = 2;
+const DRAWER_COMMENT_NOTES_STORAGE_PREFIX = "notes-drawer-comment-notes";
+type DrawerCommentSurfaceKind = "content" | "footer";
+
+interface DrawerCommentNote {
+  id: string;
+  postId: string;
+  surface: DrawerCommentSurfaceKind;
+  xPercent: number;
+  yPercent: number;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DrawerCommentPosition {
+  surface: DrawerCommentSurfaceKind;
+  xPercent: number;
+  yPercent: number;
+}
+
+interface DrawerCommentDragOverlay {
+  noteId: string;
+  surface: DrawerCommentSurfaceKind;
+  clientX: number;
+  clientY: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+function clampPercent(value: number): number {
+  return Math.min(98, Math.max(2, value));
+}
+
+function getDrawerCommentNotesStorageKey(postId: string): string {
+  return `${DRAWER_COMMENT_NOTES_STORAGE_PREFIX}:${postId}`;
+}
+
+function isDrawerCommentNote(value: unknown): value is DrawerCommentNote {
+  if (!value || typeof value !== "object") return false;
+  const note = value as Partial<DrawerCommentNote>;
+  return (
+    typeof note.id === "string" &&
+    typeof note.postId === "string" &&
+    (note.surface === "content" || note.surface === "footer") &&
+    typeof note.xPercent === "number" &&
+    typeof note.yPercent === "number" &&
+    typeof note.text === "string" &&
+    typeof note.createdAt === "string" &&
+    typeof note.updatedAt === "string"
+  );
+}
+
+function readDrawerCommentNotes(postId: string): DrawerCommentNote[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(
+      getDrawerCommentNotesStorageKey(postId)
+    );
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((entry) => (isDrawerCommentNote(entry) ? entry : null))
+      .filter((entry): entry is DrawerCommentNote => entry !== null);
+  } catch (error) {
+    console.warn("[Drawer comments] Failed to read stored notes:", error);
+    return [];
+  }
+}
+
+function writeDrawerCommentNotes(
+  postId: string,
+  notes: DrawerCommentNote[]
+): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    localStorage.setItem(
+      getDrawerCommentNotesStorageKey(postId),
+      JSON.stringify(notes)
+    );
+    return true;
+  } catch (error) {
+    console.warn("[Drawer comments] Failed to save stored notes:", error);
+    return false;
+  }
+}
 
 interface QuickSearchItem {
   id: string;
@@ -200,10 +294,10 @@ export function NotesClient() {
   const [quickSearchQuery, setQuickSearchQuery] = useState("");
   const [quickSearchActiveIndex, setQuickSearchActiveIndex] = useState(0);
   const quickSearchInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Favorites state (synced with localStorage + API)
   const [favoriteTags, setFavoriteTags] = useState<Set<string>>(new Set());
-  
+
   // Anonymous user ID (generated once per browser, stored in localStorage)
   const [userId, setUserId] = useState<string>("");
 
@@ -223,7 +317,9 @@ export function NotesClient() {
 
   // View mode: "favorites" | "show-all" (mutually exclusive)
   // Active tag: tag.id | null (independent from view mode)
-  const [viewMode, setViewMode] = useState<"favorites" | "show-all">("favorites");
+  const [viewMode, setViewMode] = useState<"favorites" | "show-all">(
+    "favorites"
+  );
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const initialTabParam = searchParams.get("tab");
 
@@ -231,21 +327,21 @@ export function NotesClient() {
   useEffect(() => {
     const STORAGE_KEY = "notes-anonymous-user-id";
     let id = localStorage.getItem(STORAGE_KEY);
-    
+
     if (!id) {
       // Generate new UUID v4 for new user
       id = crypto.randomUUID();
       localStorage.setItem(STORAGE_KEY, id);
-      
+
       console.log("[UserId] Generated new userId:", id);
-      
+
       // Clear old favorites from localStorage (new user = empty favorites)
       localStorage.removeItem("notes-favorite-tags");
       setFavoriteTags(new Set());
     } else {
       console.log("[UserId] Loaded existing userId:", id);
     }
-    
+
     setUserId(id);
   }, []);
 
@@ -253,12 +349,12 @@ export function NotesClient() {
   useEffect(() => {
     // Wait for userId to be ready
     if (!userId) return;
-    
+
     // Check if favorites in localStorage belong to current user
     try {
       const storedUserId = localStorage.getItem("notes-favorite-tags-user-id");
       const stored = localStorage.getItem("notes-favorite-tags");
-      
+
       if (storedUserId === userId && stored) {
         // Same user → Load from localStorage (instant)
         setFavoriteTags(new Set(JSON.parse(stored)));
@@ -275,64 +371,69 @@ export function NotesClient() {
     } catch {
       // ignore
     }
-    
+
     // Then sync with server in background
     fetch("/api/favorites", {
       headers: {
         "X-User-ID": userId,
       },
     })
-      .then(res => {
+      .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch favorites");
         return res.json();
       })
-      .then(data => {
+      .then((data) => {
         if (data.favorites && Array.isArray(data.favorites)) {
           const serverFavorites = new Set<string>(data.favorites);
           setFavoriteTags(serverFavorites);
           try {
-            localStorage.setItem("notes-favorite-tags", JSON.stringify(data.favorites));
+            localStorage.setItem(
+              "notes-favorite-tags",
+              JSON.stringify(data.favorites)
+            );
             localStorage.setItem("notes-favorite-tags-user-id", userId);
           } catch {
             // ignore
           }
         }
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Failed to sync favorites from server:", err);
         // Continue with localStorage data
       });
-    
+
     // Cleanup debounce timers on unmount
     return () => {
-      Object.values(debounceTimerRef.current).forEach(timer => clearTimeout(timer));
+      Object.values(debounceTimerRef.current).forEach((timer) =>
+        clearTimeout(timer)
+      );
     };
   }, [userId]);
 
   // Resolve ?tab=slug → mode + tag once tags are loaded
   useEffect(() => {
     if (tags.length === 0) return;
-    
+
     // If no tab param, default to show-all mode
     if (!initialTabParam) {
       setViewMode("show-all");
       setActiveTag(null);
       return;
     }
-    
+
     // Check if it's a mode
     if (initialTabParam === "favorites") {
       setViewMode("favorites");
       setActiveTag(null);
       return;
     }
-    
+
     if (initialTabParam === "show-all") {
       setViewMode("show-all");
       setActiveTag(null);
       return;
     }
-    
+
     // Otherwise it's a tag slug
     const matched = tags.find((t) => tagSlug(t.name) === initialTabParam);
     if (matched) {
@@ -346,7 +447,7 @@ export function NotesClient() {
     (tagId: string | null) => {
       setActiveTag(tagId);
       setLocalSearch("");
-      
+
       // Update URL
       const params = new URLSearchParams(window.location.search);
       if (tagId) {
@@ -358,7 +459,7 @@ export function NotesClient() {
       const qs = params.toString();
       window.history.replaceState(null, "", qs ? `/notes?${qs}` : "/notes");
     },
-    [tags, viewMode],
+    [tags, viewMode]
   );
 
   // Switch view mode (favorites <-> show-all)
@@ -366,7 +467,7 @@ export function NotesClient() {
     setViewMode(mode);
     setActiveTag(null); // Reset active tag when switching mode
     setLocalSearch("");
-    
+
     // Update URL
     const params = new URLSearchParams(window.location.search);
     params.set("tab", mode);
@@ -381,116 +482,125 @@ export function NotesClient() {
   const shootConfetti = useCallback((x: number, y: number) => {
     const originX = x / window.innerWidth;
     const originY = y / window.innerHeight;
-    
+
     const defaults = {
       spread: 360,
       ticks: 50,
       gravity: 0,
       decay: 0.94,
       startVelocity: 30,
-      colors: ['FFE400', 'FFBD00', 'E89400', 'FFCA6C', 'FDFFB8'],
-      origin: { x: originX, y: originY }
+      colors: ["FFE400", "FFBD00", "E89400", "FFCA6C", "FDFFB8"],
+      origin: { x: originX, y: originY },
     };
-    
+
     function shoot() {
       confetti({
         ...defaults,
         particleCount: 40,
         scalar: 1.2,
-        shapes: ['star']
+        shapes: ["star"],
       });
-      
+
       confetti({
         ...defaults,
         particleCount: 10,
         scalar: 0.75,
-        shapes: ['circle']
+        shapes: ["circle"],
       });
     }
-    
+
     setTimeout(shoot, 0);
     setTimeout(shoot, 100);
     setTimeout(shoot, 200);
   }, []);
 
   // Toggle favorite tag with optimistic updates + debouncing
-  const toggleFavorite = useCallback((tagId: string, x?: number, y?: number) => {
-    // Don't allow toggle if userId not ready
-    if (!userId) {
-      console.warn("User ID not ready yet");
-      return;
-    }
-    
-    const newFavorites = new Set(favoriteTags);
-    const isFavorite = newFavorites.has(tagId);
-    const previousState = new Set(favoriteTags); // Backup for rollback
-    
-    // STEP 1: Update UI immediately (Optimistic)
-    if (isFavorite) {
-      newFavorites.delete(tagId);
-    } else {
-      newFavorites.add(tagId);
-      // Trigger confetti effect when favoriting (not unfavoriting)
-      if (x !== undefined && y !== undefined) {
-        shootConfetti(x, y);
+  const toggleFavorite = useCallback(
+    (tagId: string, x?: number, y?: number) => {
+      // Don't allow toggle if userId not ready
+      if (!userId) {
+        console.warn("User ID not ready yet");
+        return;
       }
-    }
-    setFavoriteTags(newFavorites);
-    
-    // Persist to localStorage immediately
-    try {
-      localStorage.setItem("notes-favorite-tags", JSON.stringify(Array.from(newFavorites)));
-    } catch {
-      // ignore
-    }
-    
-    // STEP 2: Debounce API call (300ms)
-    // Clear existing timer for this tag
-    if (debounceTimerRef.current[tagId]) {
-      clearTimeout(debounceTimerRef.current[tagId]);
-    }
-    
-    // Set new timer
-    debounceTimerRef.current[tagId] = setTimeout(async () => {
+
+      const newFavorites = new Set(favoriteTags);
+      const isFavorite = newFavorites.has(tagId);
+      const previousState = new Set(favoriteTags); // Backup for rollback
+
+      // STEP 1: Update UI immediately (Optimistic)
+      if (isFavorite) {
+        newFavorites.delete(tagId);
+      } else {
+        newFavorites.add(tagId);
+        // Trigger confetti effect when favoriting (not unfavoriting)
+        if (x !== undefined && y !== undefined) {
+          shootConfetti(x, y);
+        }
+      }
+      setFavoriteTags(newFavorites);
+
+      // Persist to localStorage immediately
       try {
-        const response = await fetch(
-          isFavorite ? `/api/favorites?tagId=${tagId}` : "/api/favorites",
-          {
-            method: isFavorite ? "DELETE" : "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              "X-User-ID": userId,
-            },
-            body: isFavorite ? undefined : JSON.stringify({ tagId }),
-          }
+        localStorage.setItem(
+          "notes-favorite-tags",
+          JSON.stringify(Array.from(newFavorites))
         );
-        
-        if (!response.ok) {
-          throw new Error(`API failed with status ${response.status}`);
-        }
-        
-        // Success - cleanup timer
-        delete debounceTimerRef.current[tagId];
-      } catch (error) {
-        // STEP 3: Rollback on error
-        console.error("Failed to update favorite:", error);
-        
-        // Revert to previous state
-        setFavoriteTags(previousState);
-        try {
-          localStorage.setItem("notes-favorite-tags", JSON.stringify(Array.from(previousState)));
-        } catch {
-          // ignore
-        }
-        
-        // Show error toast
-        toast("Failed to update favorite. Please try again.", "error");
-        
-        // Cleanup timer
-        delete debounceTimerRef.current[tagId];
+      } catch {
+        // ignore
       }
-    }, 300);
-  }, [favoriteTags, toast, shootConfetti, userId]);
+
+      // STEP 2: Debounce API call (300ms)
+      // Clear existing timer for this tag
+      if (debounceTimerRef.current[tagId]) {
+        clearTimeout(debounceTimerRef.current[tagId]);
+      }
+
+      // Set new timer
+      debounceTimerRef.current[tagId] = setTimeout(async () => {
+        try {
+          const response = await fetch(
+            isFavorite ? `/api/favorites?tagId=${tagId}` : "/api/favorites",
+            {
+              method: isFavorite ? "DELETE" : "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-User-ID": userId,
+              },
+              body: isFavorite ? undefined : JSON.stringify({ tagId }),
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(`API failed with status ${response.status}`);
+          }
+
+          // Success - cleanup timer
+          delete debounceTimerRef.current[tagId];
+        } catch (error) {
+          // STEP 3: Rollback on error
+          console.error("Failed to update favorite:", error);
+
+          // Revert to previous state
+          setFavoriteTags(previousState);
+          try {
+            localStorage.setItem(
+              "notes-favorite-tags",
+              JSON.stringify(Array.from(previousState))
+            );
+          } catch {
+            // ignore
+          }
+
+          // Show error toast
+          toast("Failed to update favorite. Please try again.", "error");
+
+          // Cleanup timer
+          delete debounceTimerRef.current[tagId];
+        }
+      }, 300);
+    },
+    [favoriteTags, toast, shootConfetti, userId]
+  );
 
   // Form states
   const [showPostForm, setShowPostForm] = useState(false);
@@ -510,7 +620,8 @@ export function NotesClient() {
 
     return [...tags]
       .sort((a, b) => {
-        const favoriteDiff = Number(favoriteTags.has(b.id)) - Number(favoriteTags.has(a.id));
+        const favoriteDiff =
+          Number(favoriteTags.has(b.id)) - Number(favoriteTags.has(a.id));
         if (favoriteDiff !== 0) return favoriteDiff;
         return b.postCount - a.postCount;
       })
@@ -552,7 +663,7 @@ export function NotesClient() {
         .filter((item) =>
           `${item.title} ${item.subtitle} ${item.keywords}`
             .toLowerCase()
-            .includes(normalizedQuery),
+            .includes(normalizedQuery)
         )
         .map((item) => ({
           ...item,
@@ -569,7 +680,10 @@ export function NotesClient() {
 
   useEffect(() => {
     if (!quickSearchOpen) return;
-    const focusTimer = window.setTimeout(() => quickSearchInputRef.current?.focus(), 40);
+    const focusTimer = window.setTimeout(
+      () => quickSearchInputRef.current?.focus(),
+      40
+    );
     return () => window.clearTimeout(focusTimer);
   }, [quickSearchOpen]);
 
@@ -593,7 +707,7 @@ export function NotesClient() {
     (title: string, message: string, onConfirm: () => void) => {
       setConfirmDialog({ title, message, onConfirm });
     },
-    [],
+    []
   );
 
   const openQuickSearch = useCallback(() => {
@@ -702,7 +816,7 @@ export function NotesClient() {
       if (!Array.isArray(postsRes) || !Array.isArray(tagsRes)) return;
 
       const tagMap = Object.fromEntries(
-        tagsRes.map((t: TagWithPostCount) => [t.id, t]),
+        tagsRes.map((t: TagWithPostCount) => [t.id, t])
       );
       const enriched: PostWithTags[] = postsRes.map(
         (post: PostWithTags & { tagIds?: string[] }) => ({
@@ -710,9 +824,9 @@ export function NotesClient() {
           tags: post.tags?.length
             ? post.tags
             : (post.tagIds ?? []).flatMap((id: string) =>
-                tagMap[id] ? [tagMap[id]] : [],
+                tagMap[id] ? [tagMap[id]] : []
               ),
-        }),
+        })
       );
       setPosts(enriched);
       setTags(tagsRes);
@@ -803,7 +917,7 @@ export function NotesClient() {
 
     // Apply view mode filter first
     if (viewMode === "favorites") {
-      matched = posts.filter((post) => 
+      matched = posts.filter((post) =>
         post.tags.some((t) => favoriteTags.has(t.id))
       );
     }
@@ -827,13 +941,14 @@ export function NotesClient() {
     if (!activeTag) {
       if (viewMode === "favorites") {
         // Favorites mode without tag → sort by createdAt DESC
-        return [...matched].sort((a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        return [...matched].sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
       } else {
         // Show-all mode without tag → sort A-Z by title
         return [...matched].sort((a, b) =>
-          a.title.localeCompare(b.title, "vi", { sensitivity: "base" }),
+          a.title.localeCompare(b.title, "vi", { sensitivity: "base" })
         );
       }
     }
@@ -842,8 +957,12 @@ export function NotesClient() {
     const customOrder = tagOrders[activeTag] ?? [];
     const orderIndex = new Map(customOrder.map((id, i) => [id, i]));
     return [...matched].sort((a, b) => {
-      const ai = orderIndex.has(a.id) ? orderIndex.get(a.id)! : Number.MAX_SAFE_INTEGER;
-      const bi = orderIndex.has(b.id) ? orderIndex.get(b.id)! : Number.MAX_SAFE_INTEGER;
+      const ai = orderIndex.has(a.id)
+        ? orderIndex.get(a.id)!
+        : Number.MAX_SAFE_INTEGER;
+      const bi = orderIndex.has(b.id)
+        ? orderIndex.get(b.id)!
+        : Number.MAX_SAFE_INTEGER;
       if (ai !== bi) return ai - bi;
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
@@ -864,7 +983,7 @@ export function NotesClient() {
       const newOrder = arrayMove(ids, oldIndex, newIndex);
       persistTagOrders({ ...tagOrders, [activeTag]: newOrder });
     },
-    [activeTag, filteredPosts, tagOrders, persistTagOrders],
+    [activeTag, filteredPosts, tagOrders, persistTagOrders]
   );
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -887,25 +1006,25 @@ export function NotesClient() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    }),
+    })
   );
 
   // Active dragging post id (for DragOverlay)
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const activeDragPost = activeDragId
-    ? filteredPosts.find((p) => p.id === activeDragId) ?? null
+    ? (filteredPosts.find((p) => p.id === activeDragId) ?? null)
     : null;
 
   const activeTagObj = useMemo(
     () => tags.find((tag) => tag.id === activeTag) ?? null,
-    [activeTag, tags],
+    [activeTag, tags]
   );
   const displayTags = useMemo(
     () =>
       viewMode === "favorites"
         ? tags.filter((tag) => favoriteTags.has(tag.id))
         : tags,
-    [favoriteTags, tags, viewMode],
+    [favoriteTags, tags, viewMode]
   );
   const activeTagPostCount = useMemo(
     () =>
@@ -913,10 +1032,10 @@ export function NotesClient() {
         ? posts.reduce(
             (count, post) =>
               count + (post.tags.some((tag) => tag.id === activeTag) ? 1 : 0),
-            0,
+            0
           )
         : posts.length,
-    [activeTag, posts],
+    [activeTag, posts]
   );
   const tagHasPosts = activeTag ? activeTagPostCount > 0 : posts.length > 0;
 
@@ -1011,7 +1130,10 @@ export function NotesClient() {
                 </span>
               </div>
             </div>
-            <Search className="h-4 w-4 shrink-0 text-steel" aria-hidden="true" />
+            <Search
+              className="h-4 w-4 shrink-0 text-steel"
+              aria-hidden="true"
+            />
           </button>
         </div>
 
@@ -1021,125 +1143,142 @@ export function NotesClient() {
             onScroll={checkScroll}
             className="hidden lg:flex lg:flex-wrap items-center gap-2 pb-4 overflow-visible [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           >
-          {/* Simple Favorites Toggle */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-full border border-border/40 shrink-0">
-            <Star className={cn("w-3.5 h-3.5 transition-all", viewMode === "favorites" ? "text-amber-500 fill-amber-500" : "text-muted-foreground")} />
-            <span className="text-xs font-medium text-muted-foreground">Only favorites</span>
-            <button
-              onClick={() => switchViewMode(viewMode === "favorites" ? "show-all" : "favorites")}
-              className={cn(
-                "relative w-9 h-5 rounded-full transition-colors",
-                viewMode === "favorites" ? "bg-amber-500" : "bg-muted"
-              )}
-            >
-              <motion.div
-                className="absolute top-0.5 w-4 h-4 bg-background rounded-full shadow-sm"
-                animate={{ left: viewMode === "favorites" ? "18px" : "2px" }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              />
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="h-8 w-px bg-border/40 shrink-0" />
-
-          {/* Tags - filter by favorites mode, no reordering */}
-          {displayTags.map((tag) => {
-              const isFavorite = favoriteTags.has(tag.id);
-              return (
-            <motion.button
-              key={tag.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{
-                opacity: { duration: 0.2 },
-                scale: { duration: 0.2, ease: "easeOut" }
-              }}
-              data-active={activeTag === tag.id}
-              onClick={() => switchTag(tag.id)}
-              onPointerDown={(e) => {
-                // Start long-press timer
-                tagLongPressRef.current = setTimeout(() => {
-                  setTagContextMenu({
-                    tagId: tag.id,
-                    x: e.clientX,
-                    y: e.clientY,
-                    buttonElement: e.currentTarget as HTMLElement,
-                  });
-                }, 500);
-              }}
-              onPointerUp={() => {
-                if (tagLongPressRef.current) {
-                  clearTimeout(tagLongPressRef.current);
-                  tagLongPressRef.current = null;
-                }
-              }}
-              onPointerLeave={() => {
-                if (tagLongPressRef.current) {
-                  clearTimeout(tagLongPressRef.current);
-                  tagLongPressRef.current = null;
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setTagContextMenu({
-                  tagId: tag.id,
-                  x: e.clientX,
-                  y: e.clientY,
-                  buttonElement: e.currentTarget as HTMLElement,
-                });
-              }}
-              className={cn(
-                "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border-2 select-none overflow-visible group/tag",
-                "transition-[border-color,box-shadow] duration-300 ease-in-out",
-                activeTag === tag.id
-                  ? "text-background border-transparent"
-                  : isFavorite
-                    ? "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-amber-500/60 shadow-sm shadow-amber-500/10"
-                    : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40"
-              )}
-              style={{ isolation: "isolate" }}
-            >
-              {activeTag === tag.id && (
-                <motion.div
-                  className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
-                  layoutId="activeTagBackground"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              
-              <span
-                className="relative z-10 w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ background: tag.color }}
-              />
-              <span className="relative z-10">{tag.name}</span>
-              <span
+            {/* Simple Favorites Toggle */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-card/50 rounded-full border border-border/40 shrink-0">
+              <Star
                 className={cn(
-                  "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
-                  activeTag === tag.id
-                    ? "bg-background/20 text-background"
-                    : "bg-muted text-muted-foreground/80",
+                  "w-3.5 h-3.5 transition-all",
+                  viewMode === "favorites"
+                    ? "text-amber-500 fill-amber-500"
+                    : "text-muted-foreground"
+                )}
+              />
+              <span className="text-xs font-medium text-muted-foreground">
+                Only favorites
+              </span>
+              <button
+                onClick={() =>
+                  switchViewMode(
+                    viewMode === "favorites" ? "show-all" : "favorites"
+                  )
+                }
+                className={cn(
+                  "relative w-9 h-5 rounded-full transition-colors",
+                  viewMode === "favorites" ? "bg-amber-500" : "bg-muted"
                 )}
               >
-                {tag.postCount}
-              </span>
-            </motion.button>
-          );
-          })}
+                <motion.div
+                  className="absolute top-0.5 w-4 h-4 bg-background rounded-full shadow-sm"
+                  animate={{ left: viewMode === "favorites" ? "18px" : "2px" }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                />
+              </button>
+            </div>
 
-          {/* Add Tag button */}
-          <button
-            onClick={() => {
-              closeAllForms();
-              setShowTagForm(true);
-            }}
-            className="relative flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none border border-dashed border-border/60 text-muted-foreground hover:text-foreground hover:border-steel/40 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Tag</span>
-          </button>
-        </div>
+            {/* Divider */}
+            <div className="h-8 w-px bg-border/40 shrink-0" />
+
+            {/* Tags - filter by favorites mode, no reordering */}
+            {displayTags.map((tag) => {
+              const isFavorite = favoriteTags.has(tag.id);
+              return (
+                <motion.button
+                  key={tag.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{
+                    opacity: { duration: 0.2 },
+                    scale: { duration: 0.2, ease: "easeOut" },
+                  }}
+                  data-active={activeTag === tag.id}
+                  onClick={() => switchTag(tag.id)}
+                  onPointerDown={(e) => {
+                    // Start long-press timer
+                    tagLongPressRef.current = setTimeout(() => {
+                      setTagContextMenu({
+                        tagId: tag.id,
+                        x: e.clientX,
+                        y: e.clientY,
+                        buttonElement: e.currentTarget as HTMLElement,
+                      });
+                    }, 500);
+                  }}
+                  onPointerUp={() => {
+                    if (tagLongPressRef.current) {
+                      clearTimeout(tagLongPressRef.current);
+                      tagLongPressRef.current = null;
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (tagLongPressRef.current) {
+                      clearTimeout(tagLongPressRef.current);
+                      tagLongPressRef.current = null;
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setTagContextMenu({
+                      tagId: tag.id,
+                      x: e.clientX,
+                      y: e.clientY,
+                      buttonElement: e.currentTarget as HTMLElement,
+                    });
+                  }}
+                  className={cn(
+                    "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 border-2 select-none overflow-visible group/tag",
+                    "transition-[border-color,box-shadow] duration-300 ease-in-out",
+                    activeTag === tag.id
+                      ? "text-background border-transparent"
+                      : isFavorite
+                        ? "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-amber-500/60 shadow-sm shadow-amber-500/10"
+                        : "bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground border-border/40"
+                  )}
+                  style={{ isolation: "isolate" }}
+                >
+                  {activeTag === tag.id && (
+                    <motion.div
+                      className="absolute inset-0 rounded-full bg-foreground shadow-sm shadow-foreground/20"
+                      layoutId="activeTagBackground"
+                      transition={{
+                        type: "spring",
+                        stiffness: 380,
+                        damping: 30,
+                      }}
+                    />
+                  )}
+
+                  <span
+                    className="relative z-10 w-2.5 h-2.5 rounded-full shrink-0"
+                    style={{ background: tag.color }}
+                  />
+                  <span className="relative z-10">{tag.name}</span>
+                  <span
+                    className={cn(
+                      "relative z-10 text-xs font-mono px-1.5 py-0.5 rounded-md transition-colors",
+                      activeTag === tag.id
+                        ? "bg-background/20 text-background"
+                        : "bg-muted text-muted-foreground/80"
+                    )}
+                  >
+                    {tag.postCount}
+                  </span>
+                </motion.button>
+              );
+            })}
+
+            {/* Add Tag button */}
+            <button
+              onClick={() => {
+                closeAllForms();
+                setShowTagForm(true);
+              }}
+              className="relative flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium shrink-0 rounded-full cursor-pointer outline-none border border-dashed border-border/60 text-muted-foreground hover:text-foreground hover:border-steel/40 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tag</span>
+            </button>
+          </div>
         </LayoutGroup>
 
         {/* Scroll fade masks and chevron buttons */}
@@ -1211,22 +1350,23 @@ export function NotesClient() {
                 const tag = tags.find((t) => t.id === tagContextMenu.tagId);
                 if (tag) {
                   const willBeFavorite = !favoriteTags.has(tag.id);
-                  
+
                   // Get confetti position from tag button (center of button)
                   let confettiX = tagContextMenu.x;
                   let confettiY = tagContextMenu.y;
-                  
+
                   if (tagContextMenu.buttonElement) {
-                    const rect = tagContextMenu.buttonElement.getBoundingClientRect();
+                    const rect =
+                      tagContextMenu.buttonElement.getBoundingClientRect();
                     confettiX = rect.left + rect.width / 2;
                     confettiY = rect.top + rect.height / 2;
                   }
-                  
+
                   toggleFavorite(tag.id, confettiX, confettiY);
                   setTagContextMenu(null);
                   toast(
                     willBeFavorite
-                      ? `Added "${tag.name}" to favorites` 
+                      ? `Added "${tag.name}" to favorites`
                       : `Removed "${tag.name}" from favorites`
                   );
                 }
@@ -1242,12 +1382,17 @@ export function NotesClient() {
                 whileHover={{ scale: 1.1, rotate: 15 }}
                 whileTap={{ scale: 0.9 }}
               >
-                <Star className={cn(
-                  "w-3.5 h-3.5 transition-all",
-                  favoriteTags.has(tagContextMenu.tagId) && "fill-amber-500 text-amber-500"
-                )} />
+                <Star
+                  className={cn(
+                    "w-3.5 h-3.5 transition-all",
+                    favoriteTags.has(tagContextMenu.tagId) &&
+                      "fill-amber-500 text-amber-500"
+                  )}
+                />
               </motion.div>
-              {favoriteTags.has(tagContextMenu.tagId) ? "Remove from Favorites" : "Add to Favorites"}
+              {favoriteTags.has(tagContextMenu.tagId)
+                ? "Remove from Favorites"
+                : "Add to Favorites"}
             </button>
             <button
               onClick={() => {
@@ -1289,7 +1434,7 @@ export function NotesClient() {
                     if (favoriteTags.has(tag.id)) {
                       toggleFavorite(tag.id);
                     }
-                  },
+                  }
                 );
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs font-medium rounded-lg hover:bg-destructive/10 text-destructive transition-colors cursor-pointer text-left"
@@ -1386,8 +1531,8 @@ export function NotesClient() {
                   prev.map((t) =>
                     newTagIds.includes(t.id)
                       ? { ...t, postCount: t.postCount + 1 }
-                      : t,
-                  ),
+                      : t
+                  )
                 );
               }}
               onCancel={closeAllForms}
@@ -1410,8 +1555,8 @@ export function NotesClient() {
                     prev.map((t) =>
                       t.id === savedTag.id
                         ? { ...savedTag, postCount: t.postCount }
-                        : t,
-                    ),
+                        : t
+                    )
                   );
                 } else {
                   setTags((prev) => [...prev, { ...savedTag, postCount: 0 }]);
@@ -1444,7 +1589,7 @@ export function NotesClient() {
                 ) {
                   toast(
                     `Cannot delete tag "${tag.name}" — it has posts`,
-                    "error",
+                    "error"
                   );
                   return;
                 }
@@ -1459,13 +1604,13 @@ export function NotesClient() {
                       const errData = await res.json().catch(() => ({}));
                       toast(
                         errData.error || `Failed to delete tag "${tag.name}"`,
-                        "error",
+                        "error"
                       );
                       return;
                     }
                     if (activeTag === tag.id) setActiveTag(null);
                     setTags((prev) => prev.filter((t) => t.id !== tag.id));
-                  },
+                  }
                 );
               }}
               onCancel={closeAllForms}
@@ -1484,7 +1629,9 @@ export function NotesClient() {
             onNext={
               drawerMode === "view"
                 ? (() => {
-                    const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                    const idx = filteredPosts.findIndex(
+                      (p) => p.id === drawerPost.id
+                    );
                     return idx >= 0 && idx < filteredPosts.length - 1
                       ? () => navigateToPost(filteredPosts[idx + 1])
                       : undefined;
@@ -1493,140 +1640,149 @@ export function NotesClient() {
             }
           >
             <div className="flex-1 min-h-0 relative">
-            <AnimatePresence mode="wait" initial={false}>
-              {drawerMode === "view" ? (
-                <motion.div
-                  key="view"
-                  className="absolute inset-0 flex flex-col"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -10 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <PostDetailView
-                    post={drawerPost}
-                    onEdit={() => setDrawerMode("edit")}
-                    onDelete={async () => {
-                      showConfirm(
-                        "Xóa ghi chú",
-                        "Bạn có chắc chắn muốn xóa ghi chú này? Hành động này không thể hoàn tác.",
-                        async () => {
-                          const res = await fetch(`/api/posts/${drawerPost.id}`, {
-                            method: "DELETE",
-                          });
-                          if (!res.ok) {
-                            toast("Failed to delete post", "error");
-                            return;
+              <AnimatePresence mode="wait" initial={false}>
+                {drawerMode === "view" ? (
+                  <motion.div
+                    key="view"
+                    className="absolute inset-0 flex flex-col"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <PostDetailView
+                      key={drawerPost.id}
+                      post={drawerPost}
+                      onEdit={() => setDrawerMode("edit")}
+                      onDelete={async () => {
+                        showConfirm(
+                          "Xóa ghi chú",
+                          "Bạn có chắc chắn muốn xóa ghi chú này? Hành động này không thể hoàn tác.",
+                          async () => {
+                            const res = await fetch(
+                              `/api/posts/${drawerPost.id}`,
+                              {
+                                method: "DELETE",
+                              }
+                            );
+                            if (!res.ok) {
+                              toast("Failed to delete post", "error");
+                              return;
+                            }
+                            const deletedTagIds = drawerPost.tags.map(
+                              (t) => t.id
+                            );
+                            setTags((prev) =>
+                              prev.map((t) =>
+                                deletedTagIds.includes(t.id)
+                                  ? {
+                                      ...t,
+                                      postCount: Math.max(0, t.postCount - 1),
+                                    }
+                                  : t
+                              )
+                            );
+                            setPosts((prev) =>
+                              prev.filter((p) => p.id !== drawerPost.id)
+                            );
+                            closeAllForms();
                           }
-                          const deletedTagIds = drawerPost.tags.map((t) => t.id);
-                          setTags((prev) =>
-                            prev.map((t) =>
-                              deletedTagIds.includes(t.id)
-                                ? { ...t, postCount: Math.max(0, t.postCount - 1) }
-                                : t,
-                            ),
-                          );
-                          setPosts((prev) =>
-                            prev.filter((p) => p.id !== drawerPost.id),
-                          );
-                          closeAllForms();
-                        },
-                      );
-                    }}
-                    onClose={closeAllForms}
-                    onPrev={
-                      (() => {
-                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                        );
+                      }}
+                      onClose={closeAllForms}
+                      onPrev={(() => {
+                        const idx = filteredPosts.findIndex(
+                          (p) => p.id === drawerPost.id
+                        );
                         return idx > 0
                           ? () => navigateToPost(filteredPosts[idx - 1])
                           : undefined;
-                      })()
-                    }
-                    onNext={
-                      (() => {
-                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                      })()}
+                      onNext={(() => {
+                        const idx = filteredPosts.findIndex(
+                          (p) => p.id === drawerPost.id
+                        );
                         return idx >= 0 && idx < filteredPosts.length - 1
                           ? () => navigateToPost(filteredPosts[idx + 1])
                           : undefined;
-                      })()
-                    }
-                    prevTitle={
-                      (() => {
-                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
-                        return idx > 0 ? filteredPosts[idx - 1].title : undefined;
-                      })()
-                    }
-                    nextTitle={
-                      (() => {
-                        const idx = filteredPosts.findIndex((p) => p.id === drawerPost.id);
+                      })()}
+                      prevTitle={(() => {
+                        const idx = filteredPosts.findIndex(
+                          (p) => p.id === drawerPost.id
+                        );
+                        return idx > 0
+                          ? filteredPosts[idx - 1].title
+                          : undefined;
+                      })()}
+                      nextTitle={(() => {
+                        const idx = filteredPosts.findIndex(
+                          (p) => p.id === drawerPost.id
+                        );
                         return idx >= 0 && idx < filteredPosts.length - 1
                           ? filteredPosts[idx + 1].title
                           : undefined;
-                      })()
-                    }
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="edit"
-                  className="absolute inset-0 flex flex-col"
-                  initial={{ opacity: 0, x: 10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  <PostForm
-                    post={drawerPost}
-                    tags={tags}
-                    preselectedTagId={activeTag ?? undefined}
-                    saving={saving}
-                    setSaving={setSaving}
-                    onSaved={(savedPost) => {
-                      const tagMap = Object.fromEntries(
-                        tags.map((t) => [t.id, t]),
-                      );
-                      const enriched: PostWithTags = {
-                        ...savedPost,
-                        tags: (
-                          savedPost.tagIds ??
-                          savedPost.tags?.map((t) => t.id) ??
-                          []
-                        ).flatMap((id: string) =>
-                          tagMap[id] ? [tagMap[id]] : [],
-                        ),
-                      };
-                      setPosts((prev) =>
-                        prev.map((p) =>
-                          p.id === enriched.id ? enriched : p,
-                        ),
-                      );
-                      // Update tag counts
-                      const oldTagIds = drawerPost.tags.map((t) => t.id);
-                      const newTagIds = enriched.tags.map((t) => t.id);
-                      setTags((prev) =>
-                        prev.map((t) => {
-                          const wasIn = oldTagIds.includes(t.id);
-                          const isIn = newTagIds.includes(t.id);
-                          if (wasIn && !isIn)
-                            return {
-                              ...t,
-                              postCount: Math.max(0, t.postCount - 1),
-                            };
-                          if (!wasIn && isIn)
-                            return { ...t, postCount: t.postCount + 1 };
-                          return t;
-                        }),
-                      );
-                      // Switch back to view mode with updated post
-                      setDrawerPost(enriched);
-                      setDrawerMode("view");
-                      toast("Post updated successfully");
-                    }}
-                    onCancel={() => setDrawerMode("view")}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      })()}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="edit"
+                    className="absolute inset-0 flex flex-col"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <PostForm
+                      post={drawerPost}
+                      tags={tags}
+                      preselectedTagId={activeTag ?? undefined}
+                      saving={saving}
+                      setSaving={setSaving}
+                      onSaved={(savedPost) => {
+                        const tagMap = Object.fromEntries(
+                          tags.map((t) => [t.id, t])
+                        );
+                        const enriched: PostWithTags = {
+                          ...savedPost,
+                          tags: (
+                            savedPost.tagIds ??
+                            savedPost.tags?.map((t) => t.id) ??
+                            []
+                          ).flatMap((id: string) =>
+                            tagMap[id] ? [tagMap[id]] : []
+                          ),
+                        };
+                        setPosts((prev) =>
+                          prev.map((p) => (p.id === enriched.id ? enriched : p))
+                        );
+                        // Update tag counts
+                        const oldTagIds = drawerPost.tags.map((t) => t.id);
+                        const newTagIds = enriched.tags.map((t) => t.id);
+                        setTags((prev) =>
+                          prev.map((t) => {
+                            const wasIn = oldTagIds.includes(t.id);
+                            const isIn = newTagIds.includes(t.id);
+                            if (wasIn && !isIn)
+                              return {
+                                ...t,
+                                postCount: Math.max(0, t.postCount - 1),
+                              };
+                            if (!wasIn && isIn)
+                              return { ...t, postCount: t.postCount + 1 };
+                            return t;
+                          })
+                        );
+                        // Switch back to view mode with updated post
+                        setDrawerPost(enriched);
+                        setDrawerMode("view");
+                        toast("Post updated successfully");
+                      }}
+                      onCancel={() => setDrawerMode("view")}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </Drawer>
         )}
@@ -1670,8 +1826,8 @@ export function NotesClient() {
                   ? `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites in ${activeTagObj?.name}`
                   : `${filteredPosts.length} ${filteredPosts.length === 1 ? "note" : "notes"} from favorites`
                 : activeTag
-                ? `${activeTagPostCount} ${activeTagPostCount === 1 ? "note" : "notes"} in this tag`
-                : `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`}
+                  ? `${activeTagPostCount} ${activeTagPostCount === 1 ? "note" : "notes"} in this tag`
+                  : `${posts.length} ${posts.length === 1 ? "note" : "notes"} in total`}
             </p>
           </div>
 
@@ -1690,10 +1846,15 @@ export function NotesClient() {
                 whileHover={{ y: -0.5 }}
                 whileTap={{ scale: 0.98 }}
               >
-                <Star className={cn("w-3.5 h-3.5", favoriteTags.has(activeTag) && "fill-amber-500")} />
+                <Star
+                  className={cn(
+                    "w-3.5 h-3.5",
+                    favoriteTags.has(activeTag) && "fill-amber-500"
+                  )}
+                />
               </motion.button>
             )}
-            
+
             {activeTag && (
               <motion.button
                 onClick={() => {
@@ -1723,8 +1884,8 @@ export function NotesClient() {
                     ? `Search in favorites (${activeTagObj?.name})...`
                     : "Search in favorites..."
                   : activeTag
-                  ? `Search in ${activeTagObj?.name}...`
-                  : "Search all notes..."
+                    ? `Search in ${activeTagObj?.name}...`
+                    : "Search all notes..."
               }
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
@@ -1783,8 +1944,8 @@ export function NotesClient() {
                     ? `No posts found in "${activeTagObj?.name}" from your favorites.`
                     : "No posts found in your favorite tags."
                   : activeTag
-                  ? `There are no posts in tag "${activeTagObj?.name}" matching your search.`
-                  : "Start documenting your ideas and resources today."}
+                    ? `There are no posts in tag "${activeTagObj?.name}" matching your search.`
+                    : "Start documenting your ideas and resources today."}
               </p>
               {!tagHasPosts && activeTag && (
                 <button
@@ -1909,7 +2070,9 @@ function QuickSearchModal({
     if (e.key === "ArrowUp") {
       e.preventDefault();
       if (results.length === 0) return;
-      onActiveIndexChange((selectedIndex - 1 + results.length) % results.length);
+      onActiveIndexChange(
+        (selectedIndex - 1 + results.length) % results.length
+      );
       return;
     }
 
@@ -1970,9 +2133,25 @@ function QuickSearchModal({
           </div>
           {isDebouncing ? (
             <div className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground">
-              <svg className="animate-spin h-3.5 w-3.5 text-steel" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              <svg
+                className="animate-spin h-3.5 w-3.5 text-steel"
+                fill="none"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
               </svg>
             </div>
           ) : query ? (
@@ -2005,7 +2184,9 @@ function QuickSearchModal({
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                 <Search className="h-5 w-5" aria-hidden="true" />
               </div>
-              <p className="text-sm font-semibold text-foreground">No matches</p>
+              <p className="text-sm font-semibold text-foreground">
+                No matches
+              </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Try another keyword.
               </p>
@@ -2024,7 +2205,9 @@ function QuickSearchModal({
                   onMouseEnter={() => onActiveIndexChange(index)}
                   className={cn(
                     "flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-steel/40",
-                    isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                    isActive
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   )}
                 >
                   <span
@@ -2035,15 +2218,16 @@ function QuickSearchModal({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-foreground">
-                      <HighlightedText text={item.title} ranges={item.titleMatches} />
+                      <HighlightedText
+                        text={item.title}
+                        ranges={item.titleMatches}
+                      />
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
                       {item.subtitle}
                     </span>
                   </span>
-                  <span
-                    className="shrink-0 rounded-full border border-steel/20 bg-steel/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-steel"
-                  >
+                  <span className="shrink-0 rounded-full border border-steel/20 bg-steel/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-steel">
                     Tag
                   </span>
                 </button>
@@ -2134,10 +2318,18 @@ function Drawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [dragX, setDragX] = useState(0);
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const dragXRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
+    null
+  );
   const isDraggingRef = useRef(false);
   // Direction: "close" (drag right → close) | "next" (drag left → next post) | null
   const dragDirectionRef = useRef<"close" | "next" | null>(null);
+
+  const updateDragX = (nextDragX: number) => {
+    dragXRef.current = nextDragX;
+    setDragX(nextDragX);
+  };
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 640);
@@ -2166,12 +2358,20 @@ function Drawer({
     if (!isMobile) return;
     // Don't hijack touches that originate from scrollable content / interactive elements
     const target = e.target as HTMLElement | null;
-    if (target?.closest('[data-no-swipe], button, a, input, textarea, [contenteditable="true"]')) {
+    if (
+      target?.closest(
+        '[data-no-swipe], button, a, input, textarea, [contenteditable="true"]'
+      )
+    ) {
       touchStartRef.current = null;
       return;
     }
     const touch = e.touches[0];
-    touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now(),
+    };
     isDraggingRef.current = false;
     dragDirectionRef.current = null;
   };
@@ -2195,54 +2395,65 @@ function Drawer({
 
     if (dragDirectionRef.current === "close" && dx > 0) {
       // Drift right while dragging to close (cap at half viewport)
-      setDragX(Math.min(dx, 160));
+      updateDragX(Math.min(dx, 160));
     } else if (dragDirectionRef.current === "next" && dx < 0) {
       if (onNext) {
         // Follow finger up to ~140px leftward
-        setDragX(Math.max(dx, -140));
+        updateDragX(Math.max(dx, -140));
       } else {
         // Last post: rubber-band resistance so user feels "no more posts"
         const resisted = Math.max(-40, dx * 0.3);
-        setDragX(resisted);
+        updateDragX(resisted);
       }
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
     if (!isMobile || !touchStartRef.current) {
       touchStartRef.current = null;
       isDraggingRef.current = false;
       dragDirectionRef.current = null;
-      setDragX(0);
+      updateDragX(0);
       return;
     }
+    const touch = e.changedTouches[0];
+    const finalDx = touch
+      ? touch.clientX - touchStartRef.current.x
+      : dragXRef.current;
     const elapsed = Date.now() - touchStartRef.current.time;
-    const velocity = (dragX / Math.max(elapsed, 1)) * 1000;
+    const velocity = (finalDx / Math.max(elapsed, 1)) * 1000;
 
     if (isDraggingRef.current) {
       if (dragDirectionRef.current === "close") {
         // Swipe-right to close
-        if (dragX > 90 || velocity > 350) {
+        if (finalDx > 90 || velocity > 350) {
           onClose();
         } else {
-          setDragX(0);
+          updateDragX(0);
         }
       } else if (dragDirectionRef.current === "next" && onNext) {
         // Swipe-left to next post: distance OR velocity-based commit
-        if (dragX < -70 || velocity < -350) {
+        if (finalDx < -70 || velocity < -350) {
           onNext();
         }
-        setDragX(0);
+        updateDragX(0);
       } else {
-        setDragX(0);
+        updateDragX(0);
       }
     } else {
-      setDragX(0);
+      updateDragX(0);
     }
 
     touchStartRef.current = null;
     isDraggingRef.current = false;
     dragDirectionRef.current = null;
+  };
+
+  const handleTouchCancel = () => {
+    touchStartRef.current = null;
+    isDraggingRef.current = false;
+    dragDirectionRef.current = null;
+    updateDragX(0);
   };
 
   return (
@@ -2265,16 +2476,21 @@ function Drawer({
       <motion.div
         ref={panelRef}
         className={cn(
-          "relative w-full h-full bg-card border-l border-border/50 shadow-2xl flex flex-col",
-          widthClass,
+          "relative w-full h-full bg-card border-l border-border/50 shadow-2xl flex flex-col touch-pan-y",
+          widthClass
         )}
         initial={{ x: "100%" }}
         animate={{ x: dragX }}
         exit={{ x: "100%" }}
-        transition={dragX !== 0 ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 35 }}
+        transition={
+          dragX !== 0
+            ? { duration: 0 }
+            : { type: "spring", stiffness: 400, damping: 35 }
+        }
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
       >
         {/* Top loader progress bar */}
         <AnimatePresence>
@@ -2356,7 +2572,7 @@ function PostCard({
       className={cn(
         "group relative flex h-full flex-col justify-between rounded-2xl border border-border/30 bg-card p-3 shadow-sm transition-all duration-300 hover:border-steel/30 hover:shadow-md",
         sortable && "cursor-grab active:cursor-grabbing touch-pan-y",
-        isDragging && "ring-2 ring-steel/40 touch-none",
+        isDragging && "ring-2 ring-steel/40 touch-none"
       )}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -2434,7 +2650,10 @@ function PostCardPreview({ post }: { post: PostWithTags }) {
                 color: tag.color,
               }}
             >
-              <span className="w-1 h-1 rounded-full" style={{ background: tag.color }} />
+              <span
+                className="w-1 h-1 rounded-full"
+                style={{ background: tag.color }}
+              />
               {tag.name}
             </span>
           ))}
@@ -2446,6 +2665,325 @@ function PostCardPreview({ post }: { post: PostWithTags }) {
       <h3 className="line-clamp-1 text-base font-bold tracking-tight text-foreground">
         {post.title}
       </h3>
+    </div>
+  );
+}
+
+interface DrawerCommentLayerProps {
+  surface: DrawerCommentSurfaceKind;
+  surfaceRef: React.RefObject<HTMLDivElement | null>;
+  notes: DrawerCommentNote[];
+  activeNoteId: string | null;
+  draftText: string;
+  draftPosition: DrawerCommentPosition | null;
+  errorMessage: string;
+  isCommentMode: boolean;
+  isCompactViewport: boolean;
+  dragOverlay: DrawerCommentDragOverlay | null;
+  onMarkerClick: (note: DrawerCommentNote) => void;
+  onMarkerPointerDown: (
+    note: DrawerCommentNote,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => void;
+  onMarkerPointerMove: (
+    surfaceRef: React.RefObject<HTMLDivElement | null>,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => void;
+  onMarkerPointerUp: (
+    surfaceRef: React.RefObject<HTMLDivElement | null>,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => void;
+  onMarkerPointerCancel: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onDraftChange: (value: string) => void;
+  onSave: () => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}
+
+function DrawerCommentLayer({
+  surface,
+  surfaceRef,
+  notes,
+  activeNoteId,
+  draftText,
+  draftPosition,
+  errorMessage,
+  isCommentMode,
+  isCompactViewport,
+  dragOverlay,
+  onMarkerClick,
+  onMarkerPointerDown,
+  onMarkerPointerMove,
+  onMarkerPointerUp,
+  onMarkerPointerCancel,
+  onDraftChange,
+  onSave,
+  onDelete,
+  onCancel,
+}: DrawerCommentLayerProps) {
+  const activeNote = notes.find((note) => note.id === activeNoteId) ?? null;
+  const popoverPosition =
+    activeNote ?? (draftPosition?.surface === surface ? draftPosition : null);
+  const popoverRef = React.useRef<HTMLDivElement | null>(null);
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
+
+  const handleDraftTextareaBlur = (
+    event: React.FocusEvent<HTMLTextAreaElement>
+  ) => {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (nextTarget && popoverRef.current?.contains(nextTarget)) {
+      return;
+    }
+    onSave();
+  };
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40 block">
+      {notes.map((note, index) => (
+        <React.Fragment key={note.id}>
+          <button
+            type="button"
+            data-no-comment
+            draggable={false}
+            onPointerDown={(event) => onMarkerPointerDown(note, event)}
+            onPointerMove={(event) => onMarkerPointerMove(surfaceRef, event)}
+            onPointerUp={(event) => onMarkerPointerUp(surfaceRef, event)}
+            onPointerCancel={onMarkerPointerCancel}
+            onClick={(event) => {
+              event.stopPropagation();
+              onMarkerClick(note);
+            }}
+            className={cn(
+              "pointer-events-auto absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[11px] font-bold shadow-lg transition touch-none select-none cursor-grab active:cursor-grabbing",
+              dragOverlay?.noteId === note.id
+                ? "border-transparent bg-transparent text-transparent shadow-none opacity-20"
+                : activeNoteId === note.id
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-steel/30 bg-steel text-white hover:scale-105 hover:bg-steel/90"
+            )}
+            style={{ left: `${note.xPercent}%`, top: `${note.yPercent}%` }}
+            aria-label={`Open comment ${index + 1}`}
+            title={note.text}
+          >
+            {index + 1}
+          </button>
+
+          {dragOverlay?.noteId === note.id &&
+          dragOverlay.surface === surface &&
+          portalTarget
+            ? createPortal(
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none fixed z-[120] flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold shadow-2xl"
+                  style={{
+                    left: 0,
+                    top: 0,
+                    transform: `translate3d(${
+                      dragOverlay.clientX - dragOverlay.offsetX
+                    }px, ${dragOverlay.clientY - dragOverlay.offsetY}px, 0)`,
+                    willChange: "transform",
+                  }}
+                >
+                  <motion.span
+                    className={cn(
+                      "flex h-full w-full items-center justify-center rounded-full",
+                      activeNoteId === note.id
+                        ? "border border-foreground bg-foreground text-background"
+                        : "border border-steel/30 bg-steel text-white"
+                    )}
+                    initial={{ scale: 0.96, opacity: 0.9 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.94, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 520, damping: 38 }}
+                  >
+                    {index + 1}
+                  </motion.span>
+                </div>,
+                portalTarget
+              )
+            : null}
+        </React.Fragment>
+      ))}
+
+      {popoverPosition && (
+        <>
+          {isCompactViewport && portalTarget ? (
+            createPortal(
+              <div className="pointer-events-auto fixed inset-0 z-[120] flex items-end justify-center bg-black/25 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+                <div
+                  ref={popoverRef}
+                  data-no-comment
+                  className="w-full max-w-md overflow-hidden rounded-2xl border border-border/50 bg-card shadow-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {activeNote ? "Comment detail" : "New comment"}
+                      </p>
+                      <p className="text-xs text-muted-foreground/70">
+                        Enter saves, blur saves.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onCancel}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      aria-label="Cancel comment"
+                      title="Cancel"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 px-4 py-4">
+                    <textarea
+                      value={draftText}
+                      onChange={(event) => onDraftChange(event.target.value)}
+                      onBlur={handleDraftTextareaBlur}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          onSave();
+                        }
+                      }}
+                      rows={5}
+                      autoFocus
+                      placeholder="Leave a note for next read..."
+                      className="min-h-24 max-h-[32dvh] w-full resize-none rounded-xl border border-border/40 bg-muted/20 px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-steel/50 focus:ring-4 focus:ring-steel/10"
+                    />
+                    {errorMessage && (
+                      <p className="text-[11px] font-medium text-destructive">
+                        {errorMessage}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={onCancel}
+                        className="inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        Cancel
+                      </button>
+                      <div className="flex items-center gap-2">
+                        {activeNote && (
+                          <button
+                            type="button"
+                            onClick={onDelete}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive/20"
+                            aria-label="Delete comment"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={onSave}
+                          disabled={!draftText.trim()}
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-foreground px-3 text-xs font-semibold text-background transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label="Save comment"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>,
+              portalTarget
+            )
+          ) : (
+            <div
+              ref={popoverRef}
+              data-no-comment
+              className={cn(
+                "pointer-events-auto absolute z-50 w-[min(17rem,calc(100vw-1.25rem))] rounded-xl border border-border/50 bg-card p-3 shadow-2xl md:w-64",
+                popoverPosition.xPercent > 72
+                  ? "-translate-x-full"
+                  : "translate-x-3",
+                popoverPosition.yPercent > 72
+                  ? "-translate-y-full"
+                  : "translate-y-3"
+              )}
+              style={{
+                left: `${popoverPosition.xPercent}%`,
+                top: `${popoverPosition.yPercent}%`,
+              }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <textarea
+                value={draftText}
+                onChange={(event) => onDraftChange(event.target.value)}
+                onBlur={handleDraftTextareaBlur}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    onSave();
+                  }
+                }}
+                rows={4}
+                autoFocus
+                placeholder="Leave a note for next read..."
+                className="w-full resize-none rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/40 focus:border-steel/50 focus:ring-4 focus:ring-steel/10"
+              />
+              {errorMessage && (
+                <p className="mt-2 text-[11px] font-medium text-destructive">
+                  {errorMessage}
+                </p>
+              )}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="inline-flex h-8 items-center justify-center rounded-lg px-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Cancel comment"
+                  title="Cancel"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex items-center gap-2">
+                  {activeNote && (
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-3 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/20"
+                      aria-label="Delete comment"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={!draftText.trim()}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-foreground px-3 text-[11px] font-semibold text-background transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="Save comment"
+                    title="Save"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {surface === "content" &&
+        isCommentMode &&
+        notes.length === 0 &&
+        !popoverPosition && (
+          <div className="pointer-events-none absolute inset-x-0 top-20 z-[55] flex justify-center px-4 md:top-24">
+            <div className="max-w-sm rounded-2xl border border-border/40 bg-card/95 px-4 py-3 text-center text-[11px] font-medium leading-5 text-muted-foreground shadow-lg backdrop-blur">
+              Tap once to place a note. Hold a marker to drag it.
+            </div>
+          </div>
+        )}
     </div>
   );
 }
@@ -2473,11 +3011,95 @@ function PostDetailView({
   prevTitle?: string;
   nextTitle?: string;
 }) {
-  const [previewImage, setPreviewImage] = React.useState<{ src: string; alt: string } | null>(null);
+  const [previewImage, setPreviewImage] = React.useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
   const clickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const clickCountRef = React.useRef(0);
   const lastClickedImageRef = React.useRef<HTMLImageElement | null>(null);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const commentContentSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const commentFooterSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const [commentNotes, setCommentNotes] = React.useState<DrawerCommentNote[]>(
+    () => readDrawerCommentNotes(post.id)
+  );
+  const commentNotesRef = React.useRef<DrawerCommentNote[]>(commentNotes);
+  const [activeCommentNoteId, setActiveCommentNoteId] = React.useState<
+    string | null
+  >(null);
+  const [commentDraftText, setCommentDraftText] = React.useState<string>("");
+  const [commentDraftPosition, setCommentDraftPosition] =
+    React.useState<DrawerCommentPosition | null>(null);
+  const [commentDraftSurface, setCommentDraftSurface] =
+    React.useState<DrawerCommentSurfaceKind>("content");
+  const [commentStorageError, setCommentStorageError] =
+    React.useState<string>("");
+  const [isCommentMode, setIsCommentMode] = React.useState<boolean>(false);
+  const [isCompactCommentViewport, setIsCompactCommentViewport] =
+    React.useState<boolean>(
+      () => typeof window !== "undefined" && window.innerWidth < 768
+    );
+  const [commentDragOverlay, setCommentDragOverlay] =
+    React.useState<DrawerCommentDragOverlay | null>(null);
+  const commentDragOverlayFrameRef = React.useRef<number | null>(null);
+  const commentDragOverlayNextRef =
+    React.useRef<DrawerCommentDragOverlay | null>(null);
+  const commentDragRef = React.useRef<{
+    noteId: string;
+    surface: DrawerCommentSurfaceKind;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    offsetX: number;
+    offsetY: number;
+    hasMoved: boolean;
+    isArmed: boolean;
+    holdTimerId: number | null;
+  } | null>(null);
+  const justDraggedCommentIdRef = React.useRef<string | null>(null);
+  const suppressCommentClickIdRef = React.useRef<string | null>(null);
+  const commentSaveLockRef = React.useRef<boolean>(false);
+
+  const scheduleCommentDragOverlay = (
+    nextOverlay: DrawerCommentDragOverlay
+  ) => {
+    commentDragOverlayNextRef.current = nextOverlay;
+    if (commentDragOverlayFrameRef.current !== null) return;
+    commentDragOverlayFrameRef.current = window.requestAnimationFrame(() => {
+      commentDragOverlayFrameRef.current = null;
+      setCommentDragOverlay(commentDragOverlayNextRef.current);
+    });
+  };
+
+  const clearCommentDragOverlay = () => {
+    if (commentDragOverlayFrameRef.current !== null) {
+      window.cancelAnimationFrame(commentDragOverlayFrameRef.current);
+      commentDragOverlayFrameRef.current = null;
+    }
+    commentDragOverlayNextRef.current = null;
+    setCommentDragOverlay(null);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (commentDragOverlayFrameRef.current !== null) {
+        window.cancelAnimationFrame(commentDragOverlayFrameRef.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const updateViewport = () => {
+      setIsCompactCommentViewport(window.innerWidth < 768);
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => {
+      window.removeEventListener("resize", updateViewport);
+    };
+  }, []);
 
   const date = new Date(post.createdAt).toLocaleDateString("en-US", {
     month: "long",
@@ -2498,177 +3120,609 @@ function PostDetailView({
     scrollContainerRef.current?.scrollTo({ top: 0, left: 0 });
   }, [post.id]);
 
+  const applyCommentNotes = (
+    nextNotes: DrawerCommentNote[],
+    shouldPersist: boolean
+  ) => {
+    commentNotesRef.current = nextNotes;
+    setCommentNotes(nextNotes);
+    if (!shouldPersist) return;
+    const saved = writeDrawerCommentNotes(post.id, nextNotes);
+    setCommentStorageError(
+      saved ? "" : "Comment could not be saved in this browser."
+    );
+  };
+
+  const handleCommentSurfaceClick = (
+    surface: DrawerCommentSurfaceKind,
+    surfaceRef: React.RefObject<HTMLDivElement | null>,
+    event: React.MouseEvent<HTMLDivElement>
+  ) => {
+    if (!isCommentMode) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (
+      target?.closest(
+        '[data-no-comment], button, input, textarea, [contenteditable="true"], [data-copy]'
+      )
+    ) {
+      return;
+    }
+
+    const bounds = surfaceRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    if (bounds.width <= 0 || bounds.height <= 0) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    setActiveCommentNoteId(null);
+    setCommentDraftText("");
+    setCommentDraftSurface(surface);
+    setCommentStorageError("");
+    setCommentDraftPosition({
+      surface,
+      xPercent: clampPercent(
+        ((event.clientX - bounds.left) / bounds.width) * 100
+      ),
+      yPercent: clampPercent(
+        ((event.clientY - bounds.top) / bounds.height) * 100
+      ),
+    });
+    setIsCommentMode(false);
+  };
+
+  const handleCommentMarkerClick = (note: DrawerCommentNote) => {
+    if (justDraggedCommentIdRef.current === note.id) {
+      justDraggedCommentIdRef.current = null;
+      return;
+    }
+    if (suppressCommentClickIdRef.current === note.id) {
+      suppressCommentClickIdRef.current = null;
+      return;
+    }
+    setActiveCommentNoteId(note.id);
+    setCommentDraftText(note.text);
+    setCommentDraftPosition(null);
+    setCommentDraftSurface(note.surface);
+    setCommentStorageError("");
+  };
+
+  const updateCommentNotePosition = (
+    noteId: string,
+    surface: DrawerCommentSurfaceKind,
+    xPercent: number,
+    yPercent: number
+  ) => {
+    const now = new Date().toISOString();
+    const nextNotes = commentNotesRef.current.map((note) =>
+      note.id === noteId
+        ? {
+            ...note,
+            surface,
+            xPercent,
+            yPercent,
+            updatedAt: now,
+          }
+        : note
+    );
+    applyCommentNotes(nextNotes, false);
+  };
+
+  const handleCommentMarkerPointerDown = (
+    note: DrawerCommentNote,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    event.stopPropagation();
+    const markerBounds = event.currentTarget.getBoundingClientRect();
+    const holdTimerId = window.setTimeout(() => {
+      const drag = commentDragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.isArmed = true;
+      scheduleCommentDragOverlay({
+        noteId: drag.noteId,
+        surface: drag.surface,
+        clientX: drag.startClientX,
+        clientY: drag.startClientY,
+        offsetX: drag.offsetX,
+        offsetY: drag.offsetY,
+      });
+    }, 180);
+    commentDragRef.current = {
+      noteId: note.id,
+      surface: note.surface,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      offsetX: event.clientX - markerBounds.left,
+      offsetY: event.clientY - markerBounds.top,
+      hasMoved: false,
+      isArmed: false,
+      holdTimerId,
+    };
+    clearCommentDragOverlay();
+    setActiveCommentNoteId(null);
+    setCommentDraftText("");
+    setCommentDraftPosition(null);
+    setCommentStorageError("");
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignore pointer capture failures.
+    }
+  };
+
+  const handleCommentMarkerPointerMove = (
+    surfaceRef: React.RefObject<HTMLDivElement | null>,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    const drag = commentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const bounds = surfaceRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+
+    const movedDistance = Math.max(
+      Math.abs(event.clientX - drag.startClientX),
+      Math.abs(event.clientY - drag.startClientY)
+    );
+    if (!drag.isArmed) {
+      if (movedDistance > 6) {
+        if (drag.holdTimerId) {
+          window.clearTimeout(drag.holdTimerId);
+        }
+        suppressCommentClickIdRef.current = drag.noteId;
+        window.setTimeout(() => {
+          if (suppressCommentClickIdRef.current === drag.noteId) {
+            suppressCommentClickIdRef.current = null;
+          }
+        }, 250);
+        try {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {
+          // Ignore pointer capture release failures.
+        }
+        clearCommentDragOverlay();
+        commentDragRef.current = null;
+      }
+      return;
+    }
+
+    if (movedDistance < 2) return;
+    drag.hasMoved = true;
+    scheduleCommentDragOverlay({
+      noteId: drag.noteId,
+      surface: drag.surface,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      offsetX: drag.offsetX,
+      offsetY: drag.offsetY,
+    });
+  };
+
+  const handleCommentMarkerPointerEnd = (
+    surfaceRef: React.RefObject<HTMLDivElement | null>,
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    const drag = commentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.holdTimerId) {
+      window.clearTimeout(drag.holdTimerId);
+    }
+    const bounds = surfaceRef.current?.getBoundingClientRect();
+
+    if (drag.isArmed && drag.hasMoved && bounds) {
+      const currentNote = commentNotesRef.current.find(
+        (note) => note.id === drag.noteId
+      );
+      if (currentNote) {
+        const nextXPercent = clampPercent(
+          ((event.clientX - bounds.left) / bounds.width) * 100
+        );
+        const nextYPercent = clampPercent(
+          ((event.clientY - bounds.top) / bounds.height) * 100
+        );
+        updateCommentNotePosition(
+          drag.noteId,
+          drag.surface,
+          nextXPercent,
+          nextYPercent
+        );
+        const savedNotes = writeDrawerCommentNotes(
+          post.id,
+          commentNotesRef.current
+        );
+        setCommentStorageError(
+          savedNotes ? "" : "Comment could not be saved in this browser."
+        );
+        justDraggedCommentIdRef.current = currentNote.id;
+        suppressCommentClickIdRef.current = currentNote.id;
+        window.setTimeout(() => {
+          if (justDraggedCommentIdRef.current === currentNote.id) {
+            justDraggedCommentIdRef.current = null;
+          }
+          if (suppressCommentClickIdRef.current === currentNote.id) {
+            suppressCommentClickIdRef.current = null;
+          }
+        }, 250);
+      }
+    } else if (drag.isArmed) {
+      suppressCommentClickIdRef.current = drag.noteId;
+      window.setTimeout(() => {
+        if (suppressCommentClickIdRef.current === drag.noteId) {
+          suppressCommentClickIdRef.current = null;
+        }
+      }, 250);
+    }
+
+    clearCommentDragOverlay();
+    commentDragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore pointer capture release failures.
+    }
+  };
+
+  const handleCommentMarkerPointerCancel = (
+    event: React.PointerEvent<HTMLButtonElement>
+  ) => {
+    const drag = commentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.holdTimerId) {
+      window.clearTimeout(drag.holdTimerId);
+    }
+    clearCommentDragOverlay();
+    commentDragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // Ignore pointer capture release failures.
+    }
+  };
+
+  const handleSaveCommentNote = () => {
+    if (commentSaveLockRef.current) return;
+    commentSaveLockRef.current = true;
+    window.setTimeout(() => {
+      commentSaveLockRef.current = false;
+    }, 0);
+
+    const text = commentDraftText.trim();
+    if (!text) return;
+
+    if (activeCommentNoteId) {
+      const nextNotes = commentNotesRef.current.map((note) =>
+        note.id === activeCommentNoteId
+          ? { ...note, text, updatedAt: new Date().toISOString() }
+          : note
+      );
+      applyCommentNotes(nextNotes, true);
+      setActiveCommentNoteId(null);
+      setCommentDraftText("");
+      return;
+    }
+
+    if (!commentDraftPosition) return;
+
+    const now = new Date().toISOString();
+    const nextNotes = [
+      ...commentNotesRef.current,
+      {
+        id: crypto.randomUUID(),
+        postId: post.id,
+        surface: commentDraftSurface,
+        xPercent: commentDraftPosition.xPercent,
+        yPercent: commentDraftPosition.yPercent,
+        text,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    applyCommentNotes(nextNotes, true);
+    setCommentDraftText("");
+    setCommentDraftPosition(null);
+  };
+
+  const handleDeleteCommentNote = () => {
+    if (!activeCommentNoteId) return;
+    applyCommentNotes(
+      commentNotesRef.current.filter((note) => note.id !== activeCommentNoteId),
+      true
+    );
+    setActiveCommentNoteId(null);
+    setCommentDraftText("");
+  };
+
+  const handleCancelCommentDraft = () => {
+    setActiveCommentNoteId(null);
+    setCommentDraftText("");
+    setCommentDraftPosition(null);
+    setCommentDraftSurface("content");
+    setCommentStorageError("");
+  };
+
   return (
     <div className="flex flex-col h-full">
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-      <div className="sticky top-0 z-30 flex items-start justify-between gap-4 border-b border-border/30 bg-card px-5 pt-4 pb-3 shadow-sm md:px-6 md:pt-5">
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            {post.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
-                style={{
-                  background: `${tag.color}12`,
-                  borderColor: `${tag.color}30`,
-                  color: tag.color,
-                }}
-              >
-                <span
-                  className="w-1 h-1 rounded-full"
-                  style={{ background: tag.color }}
-                />
-                {tag.name}
-              </span>
-            ))}
-          </div>
-          <h2 className="text-lg font-bold text-foreground tracking-tight leading-tight md:text-xl">
-            {post.title}
-          </h2>
-          <p className="text-xs font-mono text-muted-foreground/60 mt-1">
-            {date}
-          </p>
-        </div>
-      </div>
-
-      <div className="px-6 pt-5 pb-6 md:px-8 md:pb-8">
-        {post.content && post.content.trim() ? (
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div className="relative flex min-h-full flex-col">
           <div
-            className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
-            dangerouslySetInnerHTML={{ __html: contentToHtml(post.content) }}
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              
-              // Handle image double-click for preview
-              if (target.tagName === "IMG") {
-                const img = target as HTMLImageElement;
-                
-                // Track clicks for double-click detection
-                if (lastClickedImageRef.current === img) {
-                  clickCountRef.current += 1;
-                } else {
-                  clickCountRef.current = 1;
-                  lastClickedImageRef.current = img;
+            ref={commentContentSurfaceRef}
+            className="relative flex min-h-full flex-1 flex-col"
+            onClickCapture={(event) =>
+              handleCommentSurfaceClick(
+                "content",
+                commentContentSurfaceRef,
+                event
+              )
+            }
+          >
+            <div className="sticky top-0 z-30 flex items-start justify-between gap-3 border-b border-border/30 bg-card px-4 pt-3 pb-2.5 shadow-sm md:px-6 md:pt-4 md:pb-3">
+              <div className="flex-1 min-w-0">
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 md:mb-2 md:gap-2">
+                  {post.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium md:gap-1.5 md:px-2.5 md:text-[11px]"
+                      style={{
+                        background: `${tag.color}12`,
+                        borderColor: `${tag.color}30`,
+                        color: tag.color,
+                      }}
+                    >
+                      <span
+                        className="w-1 h-1 rounded-full"
+                        style={{ background: tag.color }}
+                      />
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+                <h2 className="line-clamp-2 text-base font-bold leading-tight tracking-tight text-foreground md:line-clamp-1 md:text-xl">
+                  {post.title}
+                </h2>
+                <p className="mt-0.5 text-[11px] font-mono text-muted-foreground/60 md:mt-1 md:text-xs">
+                  {date}
+                </p>
+              </div>
+              <button
+                type="button"
+                data-no-comment
+                data-no-swipe
+                onTouchStart={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={() => {
+                  handleCancelCommentDraft();
+                  setIsCommentMode((current) => !current);
+                }}
+                className={cn(
+                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all md:h-9 md:w-9",
+                  isCommentMode
+                    ? "border-steel/40 bg-steel/10 text-steel"
+                    : "border-border/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+                aria-label={
+                  isCommentMode
+                    ? "Turn off comment notes"
+                    : "Turn on comment notes"
                 }
-                
-                if (clickCountRef.current === 1) {
-                  clickTimeoutRef.current = setTimeout(() => {
-                    clickCountRef.current = 0;
-                    lastClickedImageRef.current = null;
-                  }, 300);
-                } else if (clickCountRef.current === 2) {
-                  if (clickTimeoutRef.current) {
-                    clearTimeout(clickTimeoutRef.current);
-                  }
-                  clickCountRef.current = 0;
-                  lastClickedImageRef.current = null;
-                  
-                  // Open preview
-                  setPreviewImage({
-                    src: img.src,
-                    alt: img.alt || 'Image',
-                  });
-                  return;
+                title={
+                  isCommentMode
+                    ? "Turn off comment notes"
+                    : "Turn on comment notes"
                 }
-              }
-              
-              // Handle link clicks
-              const anchor = target.closest("a");
-              if (anchor) {
-                e.preventDefault();
-                window.open(anchor.href, "_blank", "noopener,noreferrer");
-                return;
-              }
-              
-              // Handle copy button clicks
-              const copyBtn = target.closest("[data-copy]") as HTMLButtonElement;
-              if (copyBtn) {
-                e.preventDefault();
-                const callout = copyBtn.closest(".callout");
-                const contentEl = callout?.querySelector(".callout-content");
-                
-                // Get text with line breaks preserved
-                let text = "";
-                if (contentEl) {
-                  // Clone to avoid modifying original
-                  const clone = contentEl.cloneNode(true) as HTMLElement;
-                  // Replace <br> with newlines
-                  clone.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
-                  // Replace block elements with newlines
-                  clone.querySelectorAll("p, div").forEach(el => {
-                    el.prepend(document.createTextNode("\n"));
-                  });
-                  text = clone.textContent || "";
-                } else if (callout) {
-                  text = callout.textContent || "";
-                }
-                
-                navigator.clipboard.writeText(text.trim());
-                
-                // Show checkmark
-                const originalHtml = copyBtn.innerHTML;
-                copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-                setTimeout(() => {
-                  copyBtn.innerHTML = originalHtml;
-                }, 1500);
-              }
-            }}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground/60">No content.</p>
-        )}
-      </div>
-      </div>
+              >
+                <span className="relative flex">
+                  <MessageCircle className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                  {commentNotes.length > 0 && (
+                    <span className="absolute -right-2 -top-2 min-w-4 rounded-full bg-foreground px-1 text-[9px] font-bold leading-4 text-background">
+                      {commentNotes.length}
+                    </span>
+                  )}
+                </span>
+              </button>
+            </div>
 
-      {/* Pinned bottom actions - always visible */}
-      <div
-        className="shrink-0 bg-card border-t border-border/40 px-4 md:px-8 py-3 flex flex-col gap-3"
-        data-no-swipe
-      >
-        {/* Top: Prev/Next navigation */}
-        <div className="flex w-full items-center gap-2">
-          {onPrev ? (
-            <button
-              onClick={onPrev}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer min-w-0"
-              title={prevTitle}
-            >
-              <ChevronLeft className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate min-w-0">{prevTitle}</span>
-            </button>
-          ) : (
-            <div className="flex-1" aria-hidden />
-          )}
-          {onNext ? (
-            <button
-              onClick={onNext}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/80 rounded-xl border border-border/30 transition-all cursor-pointer min-w-0"
-              title={nextTitle}
-            >
-              <span className="truncate min-w-0">{nextTitle}</span>
-              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-            </button>
-          ) : (
-            <div className="flex-1" aria-hidden />
-          )}
+            <div className="flex-1 px-4 pt-3 pb-4 md:px-8 md:pt-4 md:pb-8">
+              {post.content && post.content.trim() ? (
+                <div
+                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/80 [&_a]:text-steel [&_a]:underline [&_a]:underline-offset-2 select-none"
+                  dangerouslySetInnerHTML={{
+                    __html: contentToHtml(post.content),
+                  }}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement;
+
+                    // Handle image double-click for preview
+                    if (target.tagName === "IMG") {
+                      const img = target as HTMLImageElement;
+
+                      // Track clicks for double-click detection
+                      if (lastClickedImageRef.current === img) {
+                        clickCountRef.current += 1;
+                      } else {
+                        clickCountRef.current = 1;
+                        lastClickedImageRef.current = img;
+                      }
+
+                      if (clickCountRef.current === 1) {
+                        clickTimeoutRef.current = setTimeout(() => {
+                          clickCountRef.current = 0;
+                          lastClickedImageRef.current = null;
+                        }, 300);
+                      } else if (clickCountRef.current === 2) {
+                        if (clickTimeoutRef.current) {
+                          clearTimeout(clickTimeoutRef.current);
+                        }
+                        clickCountRef.current = 0;
+                        lastClickedImageRef.current = null;
+
+                        // Open preview
+                        setPreviewImage({
+                          src: img.src,
+                          alt: img.alt || "Image",
+                        });
+                        return;
+                      }
+                    }
+
+                    // Handle link clicks
+                    const anchor = target.closest("a");
+                    if (anchor) {
+                      e.preventDefault();
+                      window.open(anchor.href, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+
+                    // Handle copy button clicks
+                    const copyBtn = target.closest(
+                      "[data-copy]"
+                    ) as HTMLButtonElement;
+                    if (copyBtn) {
+                      e.preventDefault();
+                      const callout = copyBtn.closest(".callout");
+                      const contentEl =
+                        callout?.querySelector(".callout-content");
+
+                      // Get text with line breaks preserved
+                      let text = "";
+                      if (contentEl) {
+                        // Clone to avoid modifying original
+                        const clone = contentEl.cloneNode(true) as HTMLElement;
+                        // Replace <br> with newlines
+                        clone
+                          .querySelectorAll("br")
+                          .forEach((br) => br.replaceWith("\n"));
+                        // Replace block elements with newlines
+                        clone.querySelectorAll("p, div").forEach((el) => {
+                          el.prepend(document.createTextNode("\n"));
+                        });
+                        text = clone.textContent || "";
+                      } else if (callout) {
+                        text = callout.textContent || "";
+                      }
+
+                      navigator.clipboard.writeText(text.trim());
+
+                      // Show checkmark
+                      const originalHtml = copyBtn.innerHTML;
+                      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+                      setTimeout(() => {
+                        copyBtn.innerHTML = originalHtml;
+                      }, 1500);
+                    }
+                  }}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground/60">No content.</p>
+              )}
+            </div>
+
+            <DrawerCommentLayer
+              surface="content"
+              surfaceRef={commentContentSurfaceRef}
+              notes={commentNotes.filter((note) => note.surface === "content")}
+              activeNoteId={activeCommentNoteId}
+              draftText={commentDraftText}
+              draftPosition={commentDraftPosition}
+              errorMessage={commentStorageError}
+              isCommentMode={isCommentMode}
+              isCompactViewport={isCompactCommentViewport}
+              dragOverlay={commentDragOverlay}
+              onMarkerClick={handleCommentMarkerClick}
+              onMarkerPointerDown={handleCommentMarkerPointerDown}
+              onMarkerPointerMove={handleCommentMarkerPointerMove}
+              onMarkerPointerUp={handleCommentMarkerPointerEnd}
+              onMarkerPointerCancel={handleCommentMarkerPointerCancel}
+              onDraftChange={(value) => {
+                setCommentDraftText(value);
+                setCommentStorageError("");
+              }}
+              onSave={handleSaveCommentNote}
+              onDelete={handleDeleteCommentNote}
+              onCancel={handleCancelCommentDraft}
+            />
+          </div>
         </div>
+      </div>
 
-        {/* Bottom: Delete + Edit */}
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={onDelete}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-xs font-semibold rounded-xl border border-destructive/20 transition-all cursor-pointer hover:bg-destructive/20"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete
-          </button>
-          <button
-            onClick={onEdit}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-foreground text-background text-xs font-semibold rounded-xl transition-all cursor-pointer hover:opacity-90"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            Edit
-          </button>
+      <div
+        ref={commentFooterSurfaceRef}
+        className="relative shrink-0 border-t border-border/40 bg-card px-4 py-3 md:px-8"
+        data-no-swipe
+        onClickCapture={(event) =>
+          handleCommentSurfaceClick("footer", commentFooterSurfaceRef, event)
+        }
+      >
+        <DrawerCommentLayer
+          surface="footer"
+          surfaceRef={commentFooterSurfaceRef}
+          notes={commentNotes.filter((note) => note.surface === "footer")}
+          activeNoteId={activeCommentNoteId}
+          draftText={commentDraftText}
+          draftPosition={commentDraftPosition}
+          errorMessage={commentStorageError}
+          isCommentMode={isCommentMode}
+          isCompactViewport={isCompactCommentViewport}
+          dragOverlay={commentDragOverlay}
+          onMarkerClick={handleCommentMarkerClick}
+          onMarkerPointerDown={handleCommentMarkerPointerDown}
+          onMarkerPointerMove={handleCommentMarkerPointerMove}
+          onMarkerPointerUp={handleCommentMarkerPointerEnd}
+          onMarkerPointerCancel={handleCommentMarkerPointerCancel}
+          onDraftChange={(value) => {
+            setCommentDraftText(value);
+            setCommentStorageError("");
+          }}
+          onSave={handleSaveCommentNote}
+          onDelete={handleDeleteCommentNote}
+          onCancel={handleCancelCommentDraft}
+        />
+
+        <div className="flex flex-col gap-2.5">
+          <div className="flex w-full items-center gap-2">
+            {onPrev ? (
+              <button
+                onClick={onPrev}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-border/30 bg-secondary px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-secondary/80 hover:text-foreground"
+                title={prevTitle}
+              >
+                <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 truncate">{prevTitle}</span>
+              </button>
+            ) : (
+              <div className="flex-1" aria-hidden />
+            )}
+            {onNext ? (
+              <button
+                onClick={onNext}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-border/30 bg-secondary px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-secondary/80 hover:text-foreground"
+                title={nextTitle}
+              >
+                <span className="min-w-0 truncate">{nextTitle}</span>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+              </button>
+            ) : (
+              <div className="flex-1" aria-hidden />
+            )}
+          </div>
+
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={onDelete}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition-all hover:bg-destructive/20"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+            <button
+              onClick={onEdit}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-4 py-2 text-xs font-semibold text-background transition-all hover:opacity-90"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2725,7 +3779,7 @@ function PostForm({
 
   const toggleTag = (id: string) =>
     setSelectedTagIds((prev) =>
-      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
     );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2775,103 +3829,103 @@ function PostForm({
           </div>
           <button
             type="button"
-          onClick={onCancel}
-          className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {error && (
-        <motion.p
-          className="text-xs font-medium text-destructive bg-destructive/5 border border-destructive/15 px-4 py-2.5 rounded-xl"
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {error}
-        </motion.p>
-      )}
-
-      <div className="space-y-4">
-        {/* Title */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-            Title
-          </label>
-          <input
-            autoFocus
-            type="text"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              if (!post) setSlug(autoSlug(e.target.value));
-            }}
-            placeholder="My latest dynamic experiment..."
-            className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none placeholder:text-muted-foreground/30"
-            required
-          />
+            onClick={onCancel}
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-all cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Content */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-            Content Body
-          </label>
-          <Editor
-            value={content}
-            onChange={(val) => setContent(val)}
-            minContentHeight={200}
-            namespace="NotesEditor"
-            showTopbar={false}
-          />
-        </div>
-
-        {/* Tags Selection */}
-        {tags.length > 0 && (
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-              Categorize with Tags
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag) => {
-                const sel = selectedTagIds.includes(tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => toggleTag(tag.id)}
-                    className={cn(
-                      "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer",
-                      sel
-                        ? "bg-steel border-steel text-white shadow-sm"
-                        : "bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/80",
-                    )}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full"
-                      style={{ background: sel ? "white" : tag.color }}
-                    />
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        {error && (
+          <motion.p
+            className="text-xs font-medium text-destructive bg-destructive/5 border border-destructive/15 px-4 py-2.5 rounded-xl"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            {error}
+          </motion.p>
         )}
 
-        {/* Slug */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
-            Slug URL
-          </label>
-          <input
-            type="text"
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="my-latest-experiment"
-            className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
-          />
-        </div>
+        <div className="space-y-4">
+          {/* Title */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+              Title
+            </label>
+            <input
+              autoFocus
+              type="text"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (!post) setSlug(autoSlug(e.target.value));
+              }}
+              placeholder="My latest dynamic experiment..."
+              className="w-full px-4 py-3 bg-muted/20 border border-border/30 rounded-xl text-sm focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none placeholder:text-muted-foreground/30"
+              required
+            />
+          </div>
+
+          {/* Content */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+              Content Body
+            </label>
+            <Editor
+              value={content}
+              onChange={(val) => setContent(val)}
+              minContentHeight={200}
+              namespace="NotesEditor"
+              showTopbar={false}
+            />
+          </div>
+
+          {/* Tags Selection */}
+          {tags.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                Categorize with Tags
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => {
+                  const sel = selectedTagIds.includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTag(tag.id)}
+                      className={cn(
+                        "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all border cursor-pointer",
+                        sel
+                          ? "bg-steel border-steel text-white shadow-sm"
+                          : "bg-muted/30 border-border/40 text-muted-foreground hover:bg-muted/80"
+                      )}
+                    >
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: sel ? "white" : tag.color }}
+                      />
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Slug */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+              Slug URL
+            </label>
+            <input
+              type="text"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder="my-latest-experiment"
+              className="w-full px-4 py-2 bg-muted/20 border border-border/30 rounded-xl text-xs font-mono text-muted-foreground focus:border-steel/40 focus:ring-4 focus:ring-steel/5 transition-all focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -2919,7 +3973,7 @@ function TagForm({
 }) {
   const [name, setName] = useState(tag?.name ?? "");
   const [color, setColor] = useState(
-    tag?.color ?? generateContrastColor(existingColors),
+    tag?.color ?? generateContrastColor(existingColors)
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2992,7 +4046,7 @@ function TagForm({
                     "w-7 h-7 rounded-full transition-all border border-black/5 dark:border-white/5 cursor-pointer",
                     color === c
                       ? "ring-2 ring-offset-2 ring-offset-background ring-steel scale-110"
-                      : "hover:scale-105",
+                      : "hover:scale-105"
                   )}
                   style={{ background: c }}
                 />
@@ -3011,7 +4065,7 @@ function TagForm({
                   "block w-7 h-7 rounded-full border-2 border-dashed border-border hover:border-steel/60 transition-all flex items-center justify-center text-muted-foreground",
                   !PRESET_COLORS.includes(color)
                     ? "ring-2 ring-offset-2 ring-offset-background ring-steel"
-                    : "",
+                    : ""
                 )}
                 style={{ background: color }}
                 title="Custom accent"
@@ -3105,7 +4159,7 @@ function generateContrastColor(existingHexColors: string[]): string {
       ...existingHues.map((h) => {
         const diff = Math.abs(candidate - h);
         return Math.min(diff, 360 - diff);
-      }),
+      })
     );
     if (minDist > bestMinDist) {
       bestMinDist = minDist;
@@ -3119,7 +4173,7 @@ function generateContrastColor(existingHexColors: string[]): string {
   return hslToHex(
     finalHue,
     0.6 + Math.random() * 0.15,
-    0.5 + Math.random() * 0.1,
+    0.5 + Math.random() * 0.1
   );
 }
 
@@ -3197,7 +4251,7 @@ function TagManager({
                     "p-1.5 rounded-lg transition-colors",
                     tag.postCount > 0
                       ? "text-muted-foreground/30 hover:bg-muted cursor-not-allowed"
-                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer",
+                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
                   )}
                   title={
                     tag.postCount > 0
