@@ -1829,7 +1829,7 @@ export function NotesClient() {
       {/* -------------------------------------------------------------- */}
       {/* Search & Actions Detail Bar                                    */}
       {/* -------------------------------------------------------------- */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-h-[44px]">
         {/* Mobile Top Row / Desktop Left Side */}
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
