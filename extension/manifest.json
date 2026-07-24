@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "crisne.blog Knowledge OS Web Clipper",
+  "version": "1.0.0",
+  "description": "One-click save articles, technical notes, and web content directly to your AI-First Knowledge OS.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://crisne.blog/*",
+    "http://localhost:3334/*",
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Save to Knowledge OS"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
