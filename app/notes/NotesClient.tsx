@@ -1858,6 +1858,7 @@ export function NotesClient() {
             {activeTag && activeTagObj && (
               <motion.button
                 onClick={() => toggleFavorite(activeTag)}
+                aria-label={favoriteTags.has(activeTag) ? "Remove tag from favorites" : "Add tag to favorites"}
                 className={cn(
                   "inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-semibold rounded-xl transition-all border shadow-sm cursor-pointer shrink-0",
                   favoriteTags.has(activeTag)
