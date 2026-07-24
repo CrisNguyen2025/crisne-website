@@ -1,0 +1,52 @@
+# Cris Nguyen Knowledge OS
+
+> AI-First Knowledge Graph & Portfolio Platform. High-density, machine-readable structured knowledge system for modern engineering practices, Next.js architecture, NestJS backend patterns, Model Context Protocol (MCP) servers, and autonomous AI agents.
+
+## Overview
+Cris Nguyen Knowledge OS exposes structured knowledge entities (Topics, Skills, MCP Servers, AI Agents, Architectures, Projects, Prompts) via interactive web interfaces, REST APIs (/api/v1/...), and standard JSON-LD / LLM discovery protocols.
+
+## Core Navigation & Pages
+- [/](https://crisne.blog/): Home portfolio & Knowledge OS entrypoint
+- [/knowledge](https://crisne.blog/knowledge): Knowledge Graph & Entity Index
+- [/topics](https://crisne.blog/topics): Technical Topics & Deep Dives
+- [/skills](https://crisne.blog/skills): Executable Micro-skills & Code Patterns
+- [/mcps](https://crisne.blog/mcps): Model Context Protocol (MCP) Servers Registry
+- [/agents](https://crisne.blog/agents): Autonomous AI Agent Specifications
+- [/projects](https://crisne.blog/projects): Real-world Project Architectures & Implementations
+- [/architectures](https://crisne.blog/architectures): System Architecture Blueprint Models
+
+## Core Knowledge OS APIs
+All API endpoints return JSON conforming to standard Knowledge OS schemas (`success`, `data`, `meta`).
+
+- `GET /api/v1/topics`: Query and filter knowledge entities by type, tag, category, difficulty, or search query.
+- `GET /api/v1/topics/[slug]`: Fetch full entity details and graph relationships by slug or ID.
+- `GET /api/v1/skills`: List executable skills and pattern recipes.
+- `GET /api/v1/mcps`: Fetch Model Context Protocol server specs and tools.
+- `GET /api/v1/agents`: Inspect AI Agent roles, system prompts, and tool configurations.
+- `GET /api/v1/graph`: Graph dataset containing nodes and edges connecting topics, skills, MCPs, agents, and projects.
+- `GET /api/v1/recommendations?topic=[slug]`: Adaptive learning path generator for AI agents and developers.
+
+## Featured Entities & Topics
+
+### Topics
+- [NestJS Framework & Enterprise Architecture](https://crisne.blog/topics/nestjs): Enterprise Node.js module architecture, dependency injection, and clean boundaries.
+- [Next.js App Router & Server Components OS](https://crisne.blog/topics/nextjs-senior): Modern React Server Components, streaming, ISR, and server actions.
+
+### Micro-Skills
+- [NestJS Validation Pipe & DTO Validation](https://crisne.blog/skills/validation-pipe): Enforcing runtime payload validation via DTOs and class-validator.
+- [Global Exception Filters & Error Handling](https://crisne.blog/skills/exception-filter): Centralized error logging, HTTP error masking, and resilience patterns.
+
+### MCP Servers
+- [Class Validator MCP Server](https://crisne.blog/mcps/class-validator-mcp): Model Context Protocol server for DTO schema validation and generation.
+- [Playwright E2E & Security Testing MCP](https://crisne.blog/mcps/playwright-security-mcp): MCP integration for automated browser testing and visual security audits.
+
+### Autonomous AI Agents
+- [Backend Architecture & Audit Agent](https://crisne.blog/agents/backend-architect-agent): Specialized AI reviewer for security, validation, and clean code compliance.
+- [Frontend & API Security Auditor Agent](https://crisne.blog/agents/security-auditor-agent): Automated agent inspecting HTTP headers, API contracts, and security boundaries.
+
+### Architectures & Projects
+- [Clean Enterprise Backend Architecture](https://crisne.blog/architectures/clean-backend-architecture): Layered DDD architecture for scalable backends.
+- [High-Throughput Banking Ledger System](https://crisne.blog/projects/banking-ledger-system): Production double-entry banking ledger implementation.
+
+## Full Context Export
+- [Consolidated LLM Context Manifest](https://crisne.blog/llms-full.txt): Complete markdown export of initial Knowledge OS entities for context window ingestion.

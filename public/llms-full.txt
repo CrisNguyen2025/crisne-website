@@ -1,0 +1,276 @@
+# Cris Nguyen Knowledge OS - Consolidated Entity Manifest
+
+> Full consolidated export of Knowledge OS entities designed for direct ingestion into LLM context windows. Includes topics, executable skills, MCP servers, AI agents, system architectures, and real-world projects with their full graph relationships.
+
+---
+
+## Entity 1: NestJS Framework & Enterprise Architecture
+
+- **ID**: `topic-nestjs`
+- **Slug**: `nestjs`
+- **Type**: `topic`
+- **Category**: Backend Development
+- **Difficulty**: Intermediate
+- **Tags**: `nestjs`, `nodejs`, `typescript`, `architecture`
+- **Reading Time**: 12 mins
+- **Created**: 2026-01-10T00:00:00.000Z
+- **Updated**: 2026-07-20T00:00:00.000Z
+
+### Summary
+Comprehensive guide and graph of NestJS modules, decorators, dependency injection, and backend patterns.
+
+### Description
+A progressive Node.js framework for building efficient, reliable and scalable server-side applications. Heavily relies on TypeScript, Object Oriented Programming, Functional Programming, and Reactive Programming.
+
+### External Resources
+- Official Docs: https://docs.nestjs.com
+- GitHub Repository: https://github.com/nestjs/nest
+
+### Graph Relationships
+- **Related Topics**: `typescript-senior`
+- **Related Skills**: `skill-validation-pipe` (`validation-pipe`), `skill-exception-filter` (`exception-filter`)
+- **Related Projects**: `project-banking-ledger` (`banking-ledger-system`)
+- **Related Architectures**: `arch-backend-clean` (`clean-backend-architecture`)
+
+---
+
+## Entity 2: NestJS Validation Pipe & DTO Validation
+
+- **ID**: `skill-validation-pipe`
+- **Slug**: `validation-pipe`
+- **Type**: `skill`
+- **Category**: Backend Security & Clean Code
+- **Difficulty**: Intermediate
+- **Tags**: `nestjs`, `validation`, `dto`, `class-validator`
+- **Reading Time**: 8 mins
+- **Created**: 2026-02-01T00:00:00.000Z
+- **Updated**: 2026-07-15T00:00:00.000Z
+
+### Summary
+Learn how to automatically parse and sanitize incoming HTTP request bodies via Data Transfer Objects.
+
+### Description
+Enforcing runtime payload validation using NestJS built-in ValidationPipe and class-validator decorators (`@IsString()`, `@IsNumber()`, `@IsOptional()`, `@ValidateNested()`). Ensures payload integrity before controller action execution.
+
+### External Resources
+- Official Docs: https://docs.nestjs.com/techniques/validation
+
+### Graph Relationships
+- **Related Topics**: `topic-nestjs` (`nestjs`)
+- **Related Skills**: `skill-exception-filter` (`exception-filter`)
+- **Related MCPs**: `mcp-class-validator-gen` (`class-validator-mcp`)
+- **Related Architectures**: `arch-backend-clean` (`clean-backend-architecture`)
+
+---
+
+## Entity 3: Global Exception Filters & Error Handling
+
+- **ID**: `skill-exception-filter`
+- **Slug**: `exception-filter`
+- **Type**: `skill`
+- **Category**: Backend Resilience
+- **Difficulty**: Advanced
+- **Tags**: `nestjs`, `error-handling`, `filters`, `resilience`
+- **Reading Time**: 10 mins
+- **Created**: 2026-02-10T00:00:00.000Z
+- **Updated**: 2026-07-18T00:00:00.000Z
+
+### Summary
+Implement robust centralized error logging, error response formatting, and security masking in NestJS.
+
+### Description
+Catching and standardizing unhandled application exceptions across all HTTP and RPC entrypoints using custom `@Catch()` filters. Prevents sensitive stacktrace leaks in production while maintaining audit logs.
+
+### External Resources
+- Official Docs: https://docs.nestjs.com/exception-filters
+
+### Graph Relationships
+- **Related Topics**: `topic-nestjs` (`nestjs`)
+- **Related Skills**: `skill-validation-pipe` (`validation-pipe`)
+- **Related Agents**: `agent-security-auditor` (`security-auditor-agent`)
+- **Related Projects**: `project-banking-ledger` (`banking-ledger-system`)
+
+---
+
+## Entity 4: Class Validator MCP Server
+
+- **ID**: `mcp-class-validator-gen`
+- **Slug**: `class-validator-mcp`
+- **Type**: `mcp`
+- **Category**: AI Tools & MCP
+- **Difficulty**: Intermediate
+- **Tags**: `mcp`, `class-validator`, `dto`, `ai-tool`
+- **Reading Time**: 5 mins
+- **Created**: 2026-03-05T00:00:00.000Z
+- **Updated**: 2026-07-22T00:00:00.000Z
+
+### Summary
+Enables AI Agents to automatically verify incoming payload schemas and generate boilerplate class-validator decorators.
+
+### Description
+Model Context Protocol server for automatically generating and validating DTO schemas from database entities, OpenAPI specs, or TypeScript interface declarations.
+
+### External Resources
+- GitHub Repository: https://github.com/example/mcp-class-validator
+
+### Graph Relationships
+- **Related Skills**: `skill-validation-pipe` (`validation-pipe`)
+- **Related Agents**: `agent-backend-architect` (`backend-architect-agent`)
+- **Related Projects**: `project-banking-ledger` (`banking-ledger-system`)
+
+---
+
+## Entity 5: Backend Architecture & Audit Agent
+
+- **ID**: `agent-backend-architect`
+- **Slug**: `backend-architect-agent`
+- **Type**: `agent`
+- **Category**: AI Agents
+- **Difficulty**: Advanced
+- **Tags**: `agent`, `architecture`, `code-review`, `backend`
+- **Reading Time**: 7 mins
+- **Created**: 2026-03-15T00:00:00.000Z
+- **Updated**: 2026-07-23T00:00:00.000Z
+
+### Summary
+Evaluates controller endpoints, exception boundaries, and DTO validations automatically.
+
+### Description
+Autonomous AI agent specialized in reviewing backend codebases for security, validation, and clean architecture compliance. Leverages MCP tooling to analyze code quality and enforce module isolation.
+
+### Graph Relationships
+- **Related MCPs**: `mcp-class-validator-gen` (`class-validator-mcp`), `mcp-playwright-security` (`playwright-security-mcp`)
+- **Related Architectures**: `arch-backend-clean` (`clean-backend-architecture`)
+- **Related Projects**: `project-banking-ledger` (`banking-ledger-system`)
+
+---
+
+## Entity 6: Clean Enterprise Backend Architecture
+
+- **ID**: `arch-backend-clean`
+- **Slug**: `clean-backend-architecture`
+- **Type**: `architecture`
+- **Category**: Architecture
+- **Difficulty**: Advanced
+- **Tags**: `architecture`, `ddd`, `clean-architecture`, `backend`
+- **Reading Time**: 15 mins
+- **Created**: 2026-01-20T00:00:00.000Z
+- **Updated**: 2026-07-21T00:00:00.000Z
+
+### Summary
+Combines Domain Driven Design, NestJS dependency injection, DTO validation pipelines, and standardized error responses.
+
+### Description
+Decoupled, layer-based backend architecture pattern enforcing strict domain boundary separation, repository interfaces, use-case controllers, and infrastructure adapter decoupling.
+
+### Graph Relationships
+- **Related Topics**: `topic-nestjs` (`nestjs`)
+- **Related Projects**: `project-banking-ledger` (`banking-ledger-system`)
+- **Related Skills**: `skill-validation-pipe` (`validation-pipe`), `skill-exception-filter` (`exception-filter`)
+
+---
+
+## Entity 7: High-Throughput Banking Ledger System
+
+- **ID**: `project-banking-ledger`
+- **Slug**: `banking-ledger-system`
+- **Type**: `project`
+- **Category**: Projects
+- **Difficulty**: Advanced
+- **Tags**: `project`, `banking`, `ledger`, `nestjs`, `fintech`
+- **Reading Time**: 20 mins
+- **Created**: 2026-04-01T00:00:00.000Z
+- **Updated**: 2026-07-24T00:00:00.000Z
+
+### Summary
+Real-world reference implementation demonstrating double-entry ledger security, idempotent transactions, and automated error filters.
+
+### Description
+Production-grade financial transaction ledger built with NestJS, Prisma, PostgreSQL, and strict DTO validation pipes. Designed to handle double-entry accounting with zero race conditions.
+
+### External Resources
+- GitHub Repository: https://github.com/example/banking-ledger
+
+### Graph Relationships
+- **Related Topics**: `topic-nestjs` (`nestjs`)
+- **Related Architectures**: `arch-backend-clean` (`clean-backend-architecture`)
+- **Related Skills**: `skill-validation-pipe` (`validation-pipe`)
+
+---
+
+## Entity 8: Next.js App Router & Server Components OS
+
+- **ID**: `topic-nextjs-senior`
+- **Slug**: `nextjs-senior`
+- **Type**: `topic`
+- **Category**: Frontend Development
+- **Difficulty**: Advanced
+- **Tags**: `nextjs`, `react`, `typescript`, `app-router`
+- **Reading Time**: 15 mins
+- **Created**: 2026-01-05T00:00:00.000Z
+- **Updated**: 2026-07-24T00:00:00.000Z
+
+### Summary
+Complete guide to building high-performance modern web platforms using React Server Components.
+
+### Description
+Mastery of Next.js 16+ App Router, Server Actions, Dynamic Data Streaming, ISR, SEO optimizations, and structured JSON-LD meta generation.
+
+### External Resources
+- Official Docs: https://nextjs.org/docs
+
+### Graph Relationships
+- **Related Skills**: `skill-server-components`
+- **Related MCPs**: `mcp-playwright-security` (`playwright-security-mcp`)
+- **Related Projects**: `project-crisne-website`
+
+---
+
+## Entity 9: Playwright E2E & Security Testing MCP
+
+- **ID**: `mcp-playwright-security`
+- **Slug**: `playwright-security-mcp`
+- **Type**: `mcp`
+- **Category**: AI Tools & MCP
+- **Difficulty**: Intermediate
+- **Tags**: `mcp`, `playwright`, `security`, `e2e`, `testing`
+- **Reading Time**: 6 mins
+- **Created**: 2026-05-10T00:00:00.000Z
+- **Updated**: 2026-07-24T00:00:00.000Z
+
+### Summary
+Allows AI agents to execute automated browser interactions, verify DOM accessibility, and audit web application endpoints.
+
+### Description
+Model Context Protocol integration providing web testing, visual regression, and security audit tools for modern browser applications.
+
+### External Resources
+- GitHub Repository: https://github.com/example/mcp-playwright
+
+### Graph Relationships
+- **Related Agents**: `agent-security-auditor` (`security-auditor-agent`)
+- **Related Topics**: `topic-nextjs-senior` (`nextjs-senior`)
+
+---
+
+## Entity 10: Frontend & API Security Auditor Agent
+
+- **ID**: `agent-security-auditor`
+- **Slug**: `security-auditor-agent`
+- **Type**: `agent`
+- **Category**: AI Agents
+- **Difficulty**: Advanced
+- **Tags**: `agent`, `security`, `auditor`, `mcp`
+- **Reading Time**: 9 mins
+- **Created**: 2026-05-15T00:00:00.000Z
+- **Updated**: 2026-07-24T00:00:00.000Z
+
+### Summary
+Uses Playwright MCP and REST API OpenAPI contracts to continuously test security posture.
+
+### Description
+Automated agent that inspects HTTP headers, authentication boundaries, cross-site script risks, and API schemas to detect vulnerabilities early in CI/CD pipelines.
+
+### Graph Relationships
+- **Related MCPs**: `mcp-playwright-security` (`playwright-security-mcp`)
+- **Related Skills**: `skill-exception-filter` (`exception-filter`)
