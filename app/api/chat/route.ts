@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { genAI, DEFAULT_CHAT_MODEL } from "@/lib/ai/gemini";
+import { GoogleGenAI } from "@google/genai";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/gemini";
 import {
   findRelevantChunks,
   buildRAGContext,
@@ -29,7 +30,9 @@ export async function POST(req: NextRequest) {
     }
 
     const trimmedQuery = message.trim();
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+    const isApiKeyConfigured =
+      apiKey.length > 10 && !apiKey.includes("your_google_gemini_api_key");
 
     // Use cached vectors if available, otherwise fall back to raw knowledge base
     const knowledgeBase = (
@@ -39,15 +42,22 @@ export async function POST(req: NextRequest) {
     ) as KnowledgeChunk[];
 
     // 1. Generate query embedding (if API key is available)
-    const queryEmbedding = apiKey ? await getQueryEmbedding(trimmedQuery) : null;
+    let queryEmbedding: number[] | null = null;
+    if (isApiKeyConfigured) {
+      try {
+        queryEmbedding = await getQueryEmbedding(trimmedQuery);
+      } catch (embErr) {
+        console.warn("Embedding generation fallback to keyword matching:", embErr);
+      }
+    }
 
     // 2. Hybrid search (vector + keyword) to find top matching chunks
     const relevantChunks = findRelevantChunks(trimmedQuery, queryEmbedding, knowledgeBase, 3);
     const ragContext = buildRAGContext(relevantChunks);
 
     // Fallback if API key is not configured
-    if (!apiKey) {
-      const fallbackIntro = `Xin chào! Hiện tại trang web chưa được cấu hình \`GEMINI_API_KEY\`. Dưới đây là thông tin phù hợp nhất mà tôi tìm thấy trong tài liệu của Cris Nguyen:\n\n`;
+    if (!isApiKeyConfigured) {
+      const fallbackIntro = `Xin chào! Dưới đây là thông tin phù hợp nhất mà tôi tìm thấy về kinh nghiệm và dự án của Cris Nguyen:\n\n`;
       const fallbackStream = new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder();
@@ -80,71 +90,85 @@ Nhiệm vụ của bạn là giải đáp thắc mắc của nhà tuyển dụng
 ${ragContext}
 `.trim();
 
-    // 4. Format conversation history for Gemini
-    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [
-      {
-        role: "user",
-        parts: [{ text: systemPrompt }],
-      },
-      {
-        role: "model",
-        parts: [
-          {
-            text: "Chào bạn! Tôi là AI Assistant của Cris Nguyen. Tôi đã nắm rõ thông tin về kinh nghiệm, dự án và kỹ năng của Cris. Tôi sẵn sàng hỗ trợ bạn!",
-          },
-        ],
-      },
-    ];
+    // 4. Try Gemini streaming, fallback to RAG documents if LLM request fails
+    try {
+      const ai = new GoogleGenAI({ apiKey });
 
-    // Include recent history (up to last 6 messages)
-    const recentHistory = history.slice(-6);
-    for (const h of recentHistory) {
+      // Format conversation history for Gemini contents
+      const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+      const recentHistory = history.slice(-6);
+      for (const h of recentHistory) {
+        contents.push({
+          role: h.role === "assistant" ? "model" : "user",
+          parts: [{ text: h.content }],
+        });
+      }
+
+      // Add current user message
       contents.push({
-        role: h.role === "assistant" ? "model" : "user",
-        parts: [{ text: h.content }],
+        role: "user",
+        parts: [{ text: trimmedQuery }],
+      });
+
+      const responseStream = await ai.models.generateContentStream({
+        model: DEFAULT_CHAT_MODEL,
+        contents,
+        config: {
+          systemInstruction: systemPrompt,
+        },
+      });
+
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of responseStream) {
+              const text = chunk.text;
+              if (text) {
+                controller.enqueue(encoder.encode(text));
+              }
+            }
+          } catch (streamError) {
+            console.error("Stream chunk error:", streamError);
+            controller.enqueue(
+              encoder.encode("\n\n*(Đã xảy ra gián đoạn kết nối)*")
+            );
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache",
+        },
+      });
+    } catch (llmError) {
+      console.error("Gemini LLM Call Error, falling back to direct RAG context:", llmError);
+
+      // Graceful fallback: return RAG context directly so user always gets the answer!
+      const fallbackStream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(
+            encoder.encode(
+              `Dưới đây là thông tin trích xuất từ tài liệu của Cris Nguyen:\n\n${ragContext}`
+            )
+          );
+          controller.close();
+        },
+      });
+
+      return new Response(fallbackStream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache",
+        },
       });
     }
-
-    // Add current user message
-    contents.push({
-      role: "user",
-      parts: [{ text: trimmedQuery }],
-    });
-
-    // 5. Call Gemini Streaming API
-    const responseStream = await genAI.models.generateContentStream({
-      model: DEFAULT_CHAT_MODEL,
-      contents,
-    });
-
-    // 6. Return standard ReadableStream
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of responseStream) {
-            const text = chunk.text;
-            if (text) {
-              controller.enqueue(encoder.encode(text));
-            }
-          }
-        } catch (streamError) {
-          console.error("Error while streaming response:", streamError);
-          controller.enqueue(
-            encoder.encode("\n\n*(Đã xảy ra lỗi gián đoạn kết nối trong lúc phản hồi)*")
-          );
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-      },
-    });
   } catch (error) {
     console.error("Chat API Fatal Error:", error);
     return new Response(
