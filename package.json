@@ -25,6 +25,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@google/genai": "^2.19.0",
+    "@google/generative-ai": "^0.24.1",
     "@lexical/clipboard": "^0.44.0",
     "@lexical/code": "^0.44.0",
     "@lexical/html": "^0.44.0",

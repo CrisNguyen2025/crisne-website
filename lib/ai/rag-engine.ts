@@ -1,5 +1,10 @@
-import { genAI, DEFAULT_EMBEDDING_MODEL } from "./gemini";
 import { PORTFOLIO_KNOWLEDGE_BASE, type KnowledgeChunk } from "./portfolio-knowledge";
+
+const STOP_WORDS = new Set([
+  "có", "làm", "được", "đc", "dc", "không", "k", "ko", "khong", "gì", "như", "thế", "nào",
+  "ở", "và", "của", "cho", "về", "với", "là", "ai", "tôi", "bạn", "mình", "ơi", "hả", "sao",
+  "hay", "các", "những", "một", "này", "đó", "vậy", "nhé", "nha", "ạ", "ạk", "thì", "đã", "sẽ"
+]);
 
 /**
  * Calculates cosine similarity between two numeric vectors.
@@ -23,51 +28,40 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * Keyword match score for hybrid search fallback
+ * Keyword match score for hybrid search with stop-word filtering
  */
 export function keywordMatchScore(query: string, chunk: KnowledgeChunk): number {
   const normalizedQuery = query.toLowerCase();
   let score = 0;
 
+  // Exact keyword match from chunk.keywords
   for (const kw of chunk.keywords) {
-    if (normalizedQuery.includes(kw.toLowerCase())) {
-      score += 0.35;
+    const lowerKw = kw.toLowerCase();
+    if (normalizedQuery.includes(lowerKw)) {
+      score += 0.45;
     }
   }
 
-  const queryWords = normalizedQuery.split(/[\s,?.!]+/).filter((w) => w.length >= 2);
+  // Meaningful query tokens (excluding stop words)
+  const tokens = normalizedQuery
+    .split(/[\s,?.!/\\-]+/)
+    .filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+
   const titleLower = chunk.title.toLowerCase();
   const contentLower = chunk.content.toLowerCase();
 
-  for (const word of queryWords) {
-    if (titleLower.includes(word)) {
-      score += 0.2;
-    } else if (contentLower.includes(word)) {
-      score += 0.1;
+  for (const token of tokens) {
+    if (chunk.keywords.some((k) => k.toLowerCase().includes(token))) {
+      score += 0.35;
+    }
+    if (titleLower.includes(token)) {
+      score += 0.3;
+    } else if (contentLower.includes(token)) {
+      score += 0.15;
     }
   }
 
   return Math.min(score, 1.0);
-}
-
-/**
- * Generates an embedding for a text query using Gemini embedding model.
- */
-export async function getQueryEmbedding(text: string): Promise<number[] | null> {
-  try {
-    const response = await genAI.models.embedContent({
-      model: DEFAULT_EMBEDDING_MODEL,
-      contents: [text],
-    });
-
-    if (response.embeddings && response.embeddings.length > 0) {
-      return response.embeddings[0].values || null;
-    }
-    return null;
-  } catch (error) {
-    console.warn("Failed to generate query embedding:", error);
-    return null;
-  }
 }
 
 /**
@@ -78,7 +72,7 @@ export function findRelevantChunks(
   queryEmbedding: number[] | null,
   knowledgeBase: KnowledgeChunk[],
   topK = 3,
-  minScore = 0.35
+  minScore = 0.2
 ): KnowledgeChunk[] {
   const scoredItems = knowledgeBase.map((chunk) => {
     let vectorScore = 0;
@@ -88,10 +82,10 @@ export function findRelevantChunks(
 
     const keywordScore = keywordMatchScore(query, chunk);
 
-    // Hybrid score: 70% vector + 30% keyword if vector is available, else 100% keyword
+    // Hybrid score: 60% vector + 40% keyword if vector is available, else 100% keyword
     const finalScore =
       queryEmbedding && chunk.embedding
-        ? vectorScore * 0.7 + keywordScore * 0.3
+        ? vectorScore * 0.6 + keywordScore * 0.4
         : keywordScore;
 
     return {
