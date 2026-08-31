@@ -12,6 +12,7 @@ import {
   PageTimer,
 } from "@/components/analytics";
 import { GA_ID } from "@/lib/analytics";
+import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
 import "./styles/globals.css";
 
 const inter = Inter({
@@ -152,7 +153,10 @@ export default function RootLayout({
         <PageTimer />
         <GoogleTagManager />
         <ThemeProvider>
-          <TooltipProvider>{children}</TooltipProvider>
+          <TooltipProvider>
+            {children}
+            <FloatingChatBot />
+          </TooltipProvider>
         </ThemeProvider>
         <Script
           id="Cookiebot"
