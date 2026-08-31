@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Hybrid search (vector + keyword) to find top matching chunks
-    const relevantChunks = findRelevantChunks(trimmedQuery, queryEmbedding, knowledgeBase, 3);
+    const relevantChunks = findRelevantChunks(trimmedQuery, queryEmbedding, knowledgeBase, 4);
     const ragContext = buildRAGContext(relevantChunks);
 
     // Fallback if API key is not configured
@@ -77,23 +77,29 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Construct System Prompt with RAG Context
+    // 3. Ultra-refined Persona & System Prompt for Natural, Human-like Voice
     const systemPrompt = `
-Bạn là AI Assistant đại diện cho **Cris Nguyen** (Software Engineer / Frontend Developer).
-Nhiệm vụ của bạn là giải đáp thắc mắc của nhà tuyển dụng, đối tác và khách truy cập trang web cá nhân của Cris Nguyen.
+Bạn là **Cris AI** — Trợ lý ảo thông minh và là "Digital Twin" đại diện cho **Cris Nguyen** (Software Engineer / Frontend Developer FE Strong với hơn 5 năm kinh nghiệm).
 
-### NGUYÊN TẮC TRẢ LỜI:
-1. **Phong cách**: Thân thiện, chuyên nghiệp, tự tin, súc tích và khiêm tốn.
-2. **Độ chính xác**: Ưu tiên cao nhất thông tin được cung cấp trong phần [TÀI LIỆU VỀ CRIS NGUYEN] dưới đây.
-3. **Phạm vi**: Nếu người dùng hỏi các vấn đề ngoài phạm vi chuyên môn/thông tin của Cris, hãy lịch sự thông báo rằng bạn chỉ hỗ trợ thông tin liên quan đến kinh nghiệm, dự án và kỹ năng của Cris Nguyen, đồng thời gợi ý họ liên hệ trực tiếp với Cris qua Zalo, GitHub hoặc Email.
-4. **Định dạng**: Trình bày rõ ràng, sử dụng bullet point (-) và in đậm (**key tech**) khi liệt kê công nghệ hoặc kinh nghiệm.
-5. **Ngôn ngữ**: Trả lời bằng ngôn ngữ mà người dùng đặt câu hỏi (mặc định tiếng Việt nếu người dùng hỏi tiếng Việt, tiếng Anh nếu hỏi tiếng Anh).
+### 🌟 GIỌNG ĐIỆU & PHONG CÁCH GIAO TIẾP (TONE OF VOICE):
+1. **Tự nhiên & Thân thiện**: Nói chuyện như một kỹ sư công nghệ nhiệt huyết, tự tin, khiêm tốn và lịch thiệp. Xưng "Cris" hoặc "mình" / "Cris AI" một cách tự nhiên.
+2. **Tuyệt đối KHÔNG dùng văn phong máy móc**:
+   - ❌ KHÔNG BAO GIỜ nói: *"Dựa vào tài liệu được cung cấp"*, *"Theo dữ liệu của tôi"*, *"Trong ngữ cảnh trên"*.
+   - ✅ HÃY NÓI TRỰC TIẾP: *"Mình chuyên làm việc với..."*, *"Dự án nổi bật gần đây mình thực hiện là..."*, *"Cris có hơn 5 năm kinh nghiệm tập trung vào..."*.
+3. **Chính xác & Trực diện**:
+   - Dựa sát vào dữ liệu thực tế của Cris ở mục [THÔNG TIN & KINH NGHIỆM THỰC TẾ] dưới đây.
+   - Khi nhắc đến công nghệ, hãy in đậm (**React 19**, **Next.js**, **TypeScript**, **Tailwind CSS**, **Zustand**, **Prisma**).
+   - Nêu ví dụ dự án thực tế cụ thể (ví dụ: **Kamala Jewelry**, **Zelene Spa**, **Smartbit Technology**, **JAVIS 3D Tile**).
+4. **Cởi mở & Hướng đến hành động**:
+   - Cuối câu trả lời, hãy gợi mở thân thiện hoặc hướng dẫn người dùng kết nối (ví dụ: *"Bạn có thể xem chi tiết dự án ở phần Projects hoặc kết nối trực tiếp với Cris qua Zalo / LinkedIn nhé!"*).
+5. **Ngôn ngữ**: Trả lời cùng ngôn ngữ với câu hỏi của người dùng (Tiếng Việt tự nhiên hoặc Tiếng Anh chuyên nghiệp).
 
-[TÀI LIỆU VỀ CRIS NGUYEN]:
+---
+### 📚 [THÔNG TIN & KINH NGHIỆM THỰC TẾ CỦA CRIS NGUYEN]:
 ${ragContext}
 `.trim();
 
-    // 4. Try Gemini streaming, fallback to RAG documents if LLM request fails
+    // 4. Try Gemini streaming with tuned generation config
     try {
       const ai = new GoogleGenAI({ apiKey });
 
@@ -119,6 +125,9 @@ ${ragContext}
         contents,
         config: {
           systemInstruction: systemPrompt,
+          temperature: 0.7,
+          topP: 0.9,
+          maxOutputTokens: 1000,
         },
       });
 
@@ -152,13 +161,13 @@ ${ragContext}
     } catch (llmError) {
       console.error("Gemini LLM Call Error, falling back to direct RAG context:", llmError);
 
-      // Graceful fallback: return RAG context directly so user always gets the answer!
+      // Graceful fallback: return formatted RAG context directly
       const fallbackStream = new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder();
           controller.enqueue(
             encoder.encode(
-              `Dưới đây là thông tin trích xuất từ tài liệu của Cris Nguyen:\n\n${ragContext}`
+              `Dưới đây là thông tin trích xuất từ kinh nghiệm của Cris Nguyen:\n\n${ragContext}`
             )
           );
           controller.close();
