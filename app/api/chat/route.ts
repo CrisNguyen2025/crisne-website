@@ -9,6 +9,9 @@ import {
 import { PORTFOLIO_KNOWLEDGE_BASE, type KnowledgeChunk } from "@/lib/ai/portfolio-knowledge";
 import cachedVectors from "@/lib/ai/data/knowledge-vectors.json";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
 interface ChatRequestPayload {
   message: string;
   history?: Array<{
