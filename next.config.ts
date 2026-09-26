@@ -4,9 +4,6 @@ import withBundleAnalyzer from "@next/bundle-analyzer";
 const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: __dirname,
-  },
   // Generate build ID based on timestamp to force cache invalidation
   generateBuildId: async () => {
     return `build-${Date.now()}`;
