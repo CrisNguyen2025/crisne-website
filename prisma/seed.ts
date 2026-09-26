@@ -1,7 +1,35 @@
-import { PrismaClient } from "@prisma/client";
-import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
+import * as fs from "fs";
+import * as path from "path";
 
-const prisma = new PrismaClient();
+// Tự động nạp .env.local và .env khi chạy prisma db seed độc lập
+function loadEnv() {
+  const envFiles = [".env.local", ".env"];
+  for (const file of envFiles) {
+    const fullPath = path.join(__dirname, "..", file);
+    if (fs.existsSync(fullPath)) {
+      const content = fs.readFileSync(fullPath, "utf8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
+        }
+      }
+    }
+  }
+}
+loadEnv();
+
+import { prisma } from "../lib/prisma";
+import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
 
 async function main() {
   console.log("🌱 Starting seed...");

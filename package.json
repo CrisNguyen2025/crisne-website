@@ -14,6 +14,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
     "postinstall": "prisma generate"
   },
@@ -36,7 +37,9 @@
     "@lexical/selection": "^0.44.0",
     "@lexical/table": "^0.44.0",
     "@lexical/utils": "^0.44.0",
+    "@libsql/client": "^0.18.0",
     "@notionhq/client": "^5.21.0",
+    "@prisma/adapter-libsql": "^5.22.0",
     "@prisma/client": "^5.22.0",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
