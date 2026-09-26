@@ -13,6 +13,7 @@ import {
 } from "@/components/analytics";
 import { GA_ID } from "@/lib/analytics";
 import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
+import { ToastProvider } from "@/components/ui/toast";
 import "./styles/globals.css";
 
 const inter = Inter({
@@ -154,8 +155,10 @@ export default function RootLayout({
         <GoogleTagManager />
         <ThemeProvider>
           <TooltipProvider>
-            {children}
-            <FloatingChatBot />
+            <ToastProvider>
+              {children}
+              <FloatingChatBot />
+            </ToastProvider>
           </TooltipProvider>
         </ThemeProvider>
         <Script

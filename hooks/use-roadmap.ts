@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import dayjs from 'dayjs';
 import { ChecklistItem, RoadmapLayer, RoadmapLevel, RoadmapStats, LevelGroup } from '@/lib/roadmap/types';
 import { INITIAL_ROADMAP_DATA } from '@/lib/roadmap/data';
 
@@ -60,8 +61,8 @@ export function useRoadmap() {
       subtitle: subtitle?.trim() || '',
       groups: [
         { level: 'core', title: '🟢 Core', items: [] },
-        { level: 'intermediate', title: '🟡 Trung cấp', items: [] },
-        { level: 'advanced', title: '🔴 Nâng cao', items: [] },
+        { level: 'intermediate', title: '🟡 Intermediate', items: [] },
+        { level: 'advanced', title: '🔴 Advanced', items: [] },
       ],
     };
 
@@ -143,7 +144,7 @@ export function useRoadmap() {
 
   // Add a new Item dynamically
   const addItem = useCallback((layerId: string, level: RoadmapLevel, title: string, description: string) => {
-    const now = new Date().toISOString();
+    const now = dayjs().toISOString();
     const newItemId = `item-${Date.now()}`;
     const newItem: ChecklistItem = {
       id: newItemId,
@@ -186,7 +187,7 @@ export function useRoadmap() {
     newLevel?: RoadmapLevel,
     content?: string,
   ) => {
-    const now = new Date().toISOString();
+    const now = dayjs().toISOString();
     setLayers((prev) => {
       let targetItem: ChecklistItem | null = null;
       let currentLayerId = '';
@@ -283,7 +284,7 @@ export function useRoadmap() {
 
   // Update notes
   const updateNote = useCallback((id: string, text: string) => {
-    const now = new Date().toISOString();
+    const now = dayjs().toISOString();
     setNotes((prev) => {
       const next = { ...prev, [id]: text };
       try {
@@ -339,7 +340,7 @@ export function useRoadmap() {
 
   // Reset to initial seed data
   const resetToInitialData = useCallback(() => {
-    if (typeof window !== 'undefined' && window.confirm('Khôi phục toàn bộ dữ liệu ban đầu? Mọi tùy chỉnh sẽ bị đặt lại.')) {
+    if (typeof window !== 'undefined' && window.confirm('Reset all roadmap data to default? All custom changes will be lost.')) {
       setLayers(INITIAL_ROADMAP_DATA);
       setSelectedLayerId('all');
       setActiveItemId('kb-core-01');

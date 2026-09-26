@@ -75,6 +75,9 @@ type Props = Readonly<{
   onFocus?: (editor: LexicalEditor) => void;
   onEditorInit?: (editor: LexicalEditor) => void;
   className?: string;
+  shellClassName?: string;
+  placeholder?: string;
+  contentEditableClassName?: string;
   disabled?: boolean;
   autoFocus?: boolean;
   skipValidateUrl?: boolean;
@@ -83,6 +86,7 @@ type Props = Readonly<{
   renderImagePicker?: ImagePickerRenderer;
   minContentHeight?: number;
   showTopbar?: boolean;
+  fillHeight?: boolean;
 }>;
 
 function EditorInitPlugin({
@@ -119,6 +123,9 @@ export default function Editor({
   onFocus,
   onEditorInit,
   className,
+  shellClassName,
+  placeholder,
+  contentEditableClassName,
   disabled,
   autoFocus,
   skipValidateUrl,
@@ -127,6 +134,7 @@ export default function Editor({
   renderImagePicker,
   minContentHeight = 280,
   showTopbar = true,
+  fillHeight = false,
 }: Props) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLinkEditMode, setIsLinkEditMode] = useState<boolean>(false);
@@ -164,13 +172,14 @@ export default function Editor({
   };
 
   return (
-    <div id={id} className='editor-container'>
+    <div id={id} className={cn('editor-container', fillHeight && 'h-full flex flex-col flex-1')}>
       <div
         className={cn(
           'editor-shell',
           'relative flex flex-col overflow-hidden',
-          isFullscreen ? 'h-dvh rounded-none' : 'rounded-3xl',
+          isFullscreen ? 'h-dvh rounded-none' : fillHeight ? 'h-full flex-1 rounded-none border-0 shadow-none' : 'rounded-3xl',
           disabled && 'editor-shell-disabled',
+          shellClassName,
         )}
         ref={containerRef}
       >
@@ -203,31 +212,39 @@ export default function Editor({
             </div>
           )}
 
+          <ToolbarPlugin disabled={disabled} renderImagePicker={renderImagePicker} />
+
           <div
             className={cn(
               'editor-canvas relative w-full overflow-auto',
-              isFullscreen ? 'flex-1' : 'max-h-[520px]',
+              isFullscreen || fillHeight ? 'flex-1 max-h-none' : 'max-h-[520px]',
               className,
             )}
-            style={{ minHeight: isFullscreen ? undefined : minContentHeight }}
+            style={{ minHeight: isFullscreen || fillHeight ? undefined : minContentHeight }}
             aria-disabled={disabled}
           >
             <RichTextPlugin
               contentEditable={
                 <ContentEditable
                   className={cn(
-                    'min-h-full w-full px-4! py-3! outline-none focus:outline-none',
+                    'min-h-full w-full outline-none focus:outline-none',
+                    contentEditableClassName || 'px-4! py-3!',
                     disabled && 'pointer-events-none',
                   )}
                 />
               }
-              placeholder={<Placeholder title='Type your content here' />}
+              placeholder={
+                <Placeholder
+                  title={placeholder || 'Type your content here'}
+                  className={contentEditableClassName}
+                />
+              }
               ErrorBoundary={LexicalErrorBoundary}
             />
           </div>
           <HistoryPlugin />
           <NewMentionsPlugin data={mentionData} />
-          <LinkPlugin skipValidateUrl={skipValidateUrl} />
+          <LinkPlugin hasLinkAttributes={true} skipValidateUrl={skipValidateUrl} />
           <FloatingLinkEditorPlugin
             // eslint-disable-next-line react-hooks/refs
             anchorElem={containerRef?.current || undefined}
@@ -246,6 +263,13 @@ export default function Editor({
   );
 }
 
-function Placeholder({ title }: Readonly<{ title: string }>) {
+function Placeholder({ title, className }: Readonly<{ title: string; className?: string }>) {
+  if (className) {
+    return (
+      <div className={cn('pointer-events-none absolute inset-0 select-none', className)}>
+        <p className='text-muted-foreground/50 text-sm italic'>{title}</p>
+      </div>
+    );
+  }
   return <p className='text-disabled-foreground pointer-events-none absolute top-3 left-4 text-sm'>{title}</p>;
 }

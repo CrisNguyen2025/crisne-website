@@ -7,16 +7,14 @@
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  overflow: visible;
+  overflow: hidden;
   box-shadow: none;
   transition:
-    box-shadow 0.2s ease,
     border-color 0.2s ease;
 }
 
 .editor-shell:focus-within {
-  border-color: color-mix(in srgb, var(--focus) 35%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
 }
 
 .editor-shell-disabled {
@@ -91,9 +89,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
-  padding: 6px 8px;
+  padding: 6px 12px;
   margin: 0;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -580,5 +578,63 @@
   border-bottom: 0 !important;
   background: transparent !important;
   padding: 2px 4px !important;
+}
+
+/* Clean Minimal Callout in Editor */
+.editor-callout {
+  position: relative !important;
+  margin: 1rem 0 !important;
+  padding: 0.875rem 1.25rem !important;
+  border: none !important;
+  border-left-width: 4px !important;
+  border-left-style: solid !important;
+  border-radius: 0 8px 8px 0 !important;
+  line-height: 1.65 !important;
+  font-size: 0.9375rem !important;
+  box-sizing: border-box !important;
+}
+
+.editor-callout-info {
+  border-left-color: #0ea5e9 !important;
+  background: rgba(14, 165, 233, 0.08) !important;
+  color: var(--foreground) !important;
+}
+
+.editor-callout-success {
+  border-left-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+  color: var(--foreground) !important;
+}
+
+.editor-callout-warning {
+  border-left-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.08) !important;
+  color: var(--foreground) !important;
+}
+
+.editor-callout-error {
+  border-left-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: var(--foreground) !important;
+}
+
+:is(.dark) .editor-callout-info {
+  background: rgba(14, 165, 233, 0.12) !important;
+  border-left-color: #38bdf8 !important;
+}
+
+:is(.dark) .editor-callout-success {
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-left-color: #34d399 !important;
+}
+
+:is(.dark) .editor-callout-warning {
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left-color: #fbbf24 !important;
+}
+
+:is(.dark) .editor-callout-error {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-left-color: #f87171 !important;
 }
 

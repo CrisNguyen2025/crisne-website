@@ -1,6 +1,7 @@
 import {
   $applyNodeReplacement,
   $createParagraphNode,
+  $isTextNode,
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
@@ -8,6 +9,8 @@ import {
   ElementNode,
   LexicalNode,
   NodeKey,
+  ParagraphNode,
+  RangeSelection,
   SerializedElementNode,
   Spread,
 } from 'lexical';
@@ -22,8 +25,8 @@ export type SerializedCalloutNode = Spread<
 >;
 
 const CALLOUT_COLORS: Record<CalloutType, { border: string; bg: string }> = {
-  success: { border: '#22c55e', bg: 'rgba(34, 197, 94, 0.08)' },
-  info: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)' },
+  info: { border: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.08)' },
+  success: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
   warning: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
   error: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
 };
@@ -59,12 +62,14 @@ export class CalloutNode extends ElementNode {
     dom.className = `editor-callout editor-callout-${this.__calloutType}`;
     dom.style.cssText = `
       position: relative;
-      margin: 0.5rem 0;
-      padding: 0.75rem 1rem 0.75rem 1.25rem;
-      border: 1.5px solid ${colors.border};
+      margin: 1rem 0;
+      padding: 0.875rem 1.25rem;
+      border: none;
       border-left: 4px solid ${colors.border};
-      border-radius: 10px;
+      border-radius: 0 8px 8px 0;
       background: ${colors.bg};
+      line-height: 1.65;
+      font-size: 0.9375rem;
     `;
     return dom;
   }
@@ -76,9 +81,7 @@ export class CalloutNode extends ElementNode {
   exportDOM(): DOMExportOutput {
     const element = document.createElement('blockquote');
     element.setAttribute('data-callout-type', this.__calloutType);
-    // Prepend [!type] marker for rendering in detail view
-    const marker = document.createTextNode(`[!${this.__calloutType}] `);
-    element.prepend(marker);
+    element.className = `callout callout-${this.__calloutType}`;
     return { element };
   }
 
@@ -87,10 +90,13 @@ export class CalloutNode extends ElementNode {
       blockquote: (node: Node) => {
         const element = node as HTMLElement;
         const calloutType = element.getAttribute('data-callout-type') as CalloutType | null;
-        if (calloutType && ['success', 'info', 'warning', 'error'].includes(calloutType)) {
+        const textContent = element.textContent || '';
+        const hasMarker = /^\s*\[!(success|info|warning|error)\]/i.test(textContent);
+
+        if ((calloutType && ['success', 'info', 'warning', 'error'].includes(calloutType)) || hasMarker) {
           return {
             conversion: convertCalloutElement,
-            priority: 1,
+            priority: 2,
           };
         }
         return null;
@@ -112,10 +118,13 @@ export class CalloutNode extends ElementNode {
     };
   }
 
-  // Enter at end of callout → handled by CalloutTransformPlugin
-  insertNewAfter(): null {
-    // Return null - we handle Enter via KEY_ENTER_COMMAND in plugin
-    return null;
+  // Enter at end of callout → create new paragraph after callout
+  insertNewAfter(_selection?: RangeSelection, restoreSelection = true): ParagraphNode {
+    const paragraph = $createParagraphNode();
+    const direction = this.getDirection();
+    paragraph.setDirection(direction);
+    this.insertAfter(paragraph, restoreSelection);
+    return paragraph;
   }
 
   // Backspace at start → convert callout to paragraph
@@ -130,9 +139,31 @@ export class CalloutNode extends ElementNode {
 
 function convertCalloutElement(domNode: Node): DOMConversionOutput {
   const element = domNode as HTMLElement;
-  const calloutType = (element.getAttribute('data-callout-type') as CalloutType) || 'info';
-  const node = $createCalloutNode(calloutType);
-  return { node };
+  let calloutType = element.getAttribute('data-callout-type') as CalloutType | null;
+  if (!calloutType) {
+    const match = element.textContent?.match(/^\s*\[!(success|info|warning|error)\]/i);
+    if (match) {
+      calloutType = match[1].toLowerCase() as CalloutType;
+    }
+  }
+  const node = $createCalloutNode(calloutType || 'info');
+  return {
+    node,
+    after: (childLexicalNodes) => {
+      // Strip any lingering [!type] marker from the text
+      if (childLexicalNodes.length > 0) {
+        const first = childLexicalNodes[0];
+        if ($isTextNode(first)) {
+          const text = first.getTextContent();
+          const clean = text.replace(/^\s*(?:\[!(?:success|info|warning|error)\]\s*)+/gi, '');
+          if (clean !== text) {
+            first.setTextContent(clean);
+          }
+        }
+      }
+      return childLexicalNodes;
+    },
+  };
 }
 
 export function $createCalloutNode(calloutType: CalloutType = 'info'): CalloutNode {

@@ -7,7 +7,7 @@ type Props = {
   skipValidateUrl?: boolean;
 };
 
-export default function LinkPlugin({ hasLinkAttributes = false, skipValidateUrl = false }: Props) {
+export default function LinkPlugin({ hasLinkAttributes = true, skipValidateUrl = false }: Props) {
   return (
     <LexicalLinkPlugin
       {...(skipValidateUrl ? { validateUrl } : {})}

@@ -25,10 +25,9 @@ export function CreateGroupModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Vui lòng nhập tên Nhóm cấp độ.');
+      setError('Please enter a group title.');
       return;
     }
-
     onSubmit(layer.id, title.trim());
     setTitle('');
     setError('');
@@ -44,9 +43,9 @@ export function CreateGroupModal({
               <FolderPlus className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-sm text-foreground">Tạo Nhóm cấp độ mới (Group)</h3>
+              <h3 className="font-bold text-sm text-foreground">Create level group</h3>
               <p className="text-[11px] text-muted-foreground">
-                Tạo nhóm nằm ngang cấp với Core / Trung cấp trong tầng{' '}
+                Adds a group alongside Core / Intermediate in layer{' '}
                 <span className="font-semibold text-foreground">{layer.shortTag}</span>
               </p>
             </div>
@@ -69,12 +68,12 @@ export function CreateGroupModal({
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="space-y-1.5">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <FolderPlus className="w-3.5 h-3.5 text-primary" /> Tên Nhóm (Group Title) *
+              <FolderPlus className="w-3.5 h-3.5 text-primary" /> Group title *
             </label>
             <input
               type="text"
               autoFocus
-              placeholder="VD: ⚡ Thực hành & Lab, 🛠️ Hệ thống Cache, 📚 Tài liệu..."
+              placeholder="e.g. ⚡ Hands-on Labs, 🛠️ Cache Systems, 📚 References…"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-sm"
@@ -87,13 +86,13 @@ export function CreateGroupModal({
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
             >
-              Hủy
+              Cancel
             </button>
             <button
               type="submit"
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors"
             >
-              Tạo nhóm
+              Create group
             </button>
           </div>
         </form>

@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { useRoadmap } from '@/hooks/use-roadmap';
-import { ResizableLayout } from '@/components/roadmap/ResizableLayout';
-import { MasterPanel } from '@/components/roadmap/MasterPanel';
-import { DetailPanel } from '@/components/roadmap/DetailPanel';
-import { CreateLayerModal } from '@/components/roadmap/CreateLayerModal';
-import { CreateItemModal } from '@/components/roadmap/CreateItemModal';
-import { RoadmapLevel } from '@/lib/roadmap/types';
+import React, { useState } from "react";
+import { useRoadmap } from "@/hooks/use-roadmap";
+import { ResizableLayout } from "@/components/roadmap/ResizableLayout";
+import { MasterPanel } from "@/components/roadmap/MasterPanel";
+import { DetailPanel } from "@/components/roadmap/DetailPanel";
+import { CreateLayerModal } from "@/components/roadmap/CreateLayerModal";
+import { CreateItemModal } from "@/components/roadmap/CreateItemModal";
+import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
+import { RoadmapLevel } from "@/lib/roadmap/types";
 
 export default function Home() {
   const {
@@ -17,6 +18,7 @@ export default function Home() {
     activeItem,
     selectedLayerId,
     stats,
+    isLoaded,
     setSelectedLayerId,
     addLayer,
     editLayer,
@@ -34,8 +36,8 @@ export default function Home() {
   // Modal states
   const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
-  const [targetLayerId, setTargetLayerId] = useState<string>('');
-  const [targetLevel, setTargetLevel] = useState<RoadmapLevel>('core');
+  const [targetLayerId, setTargetLayerId] = useState<string>("");
+  const [targetLevel, setTargetLevel] = useState<RoadmapLevel>("core");
 
   const handleOpenCreateItem = (layerId: string, level: RoadmapLevel) => {
     setTargetLayerId(layerId);
@@ -45,6 +47,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
+      {/* Global loading overlay — shows on initial load / F5, fades after hydration */}
+      <GlobalPageLoader />
+
       {/* Main Split-Pane Workspace (Full Screen, No bulky header) */}
       <main className="flex-1 w-full h-full overflow-hidden relative">
         <ResizableLayout
@@ -58,6 +63,7 @@ export default function Home() {
               activeItemId={activeItemId}
               selectedLayerId={selectedLayerId}
               stats={stats}
+              isLoading={!isLoaded}
               onLayerChange={setSelectedLayerId}
               onSelectItem={selectActiveItem}
               onReorderGroupItems={updateGroupItems}
@@ -67,7 +73,6 @@ export default function Home() {
               onEditLayer={editLayer}
               onDeleteLayer={deleteLayer}
               onDeleteItem={deleteItem}
-              onResetToDefault={resetToInitialData}
             />
           }
           rightContent={

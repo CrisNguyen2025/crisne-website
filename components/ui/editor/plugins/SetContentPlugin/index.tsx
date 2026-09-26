@@ -1,6 +1,6 @@
 import { $generateNodesFromDOM } from '@lexical/html';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $getRoot } from 'lexical';
+import { $getRoot, $createParagraphNode } from 'lexical';
 import { useEffect, useRef } from 'react';
 
 export function SetContentPlugin({ value }: { value?: string }) {
@@ -21,7 +21,11 @@ export function SetContentPlugin({ value }: { value?: string }) {
 
       const root = $getRoot();
       root.clear();
-      root.append(...nodes);
+      if (nodes.length === 0) {
+        root.append($createParagraphNode());
+      } else {
+        root.append(...nodes);
+      }
     });
   }, [editor, value]);
 

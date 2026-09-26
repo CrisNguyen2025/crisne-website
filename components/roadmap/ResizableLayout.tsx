@@ -89,7 +89,7 @@ export function ResizableLayout({
         isDragging ? 'cursor-col-resize select-none' : ''
       }`}
     >
-      {/* Cột trái (Master Panel) */}
+      {/* Left column (Master Panel) */}
       <div
         style={{ width: `${leftWidthPercent}%` }}
         className="h-full overflow-hidden flex flex-col border-r border-border/60 bg-background/50 backdrop-blur-sm"
@@ -97,11 +97,11 @@ export function ResizableLayout({
         {leftContent}
       </div>
 
-      {/* Thanh Splitter Drag Handle */}
+      {/* Drag splitter handle */}
       <div
         onMouseDown={handleMouseDown}
         onDoubleClick={handleDoubleClick}
-        title="Kéo sang hai bên để chỉnh kích thước | Nhấp đúp để đặt lại"
+        title="Drag to resize | Double-click to reset"
         className={`relative z-10 w-2.5 -mx-1.5 flex items-center justify-center cursor-col-resize transition-colors group hover:bg-primary/20 ${
           isDragging ? 'bg-primary/30' : 'bg-transparent'
         }`}
@@ -113,7 +113,7 @@ export function ResizableLayout({
         />
       </div>
 
-      {/* Cột phải (Detail Panel) */}
+      {/* Right column (Detail Panel) */}
       <div
         style={{ width: `${100 - leftWidthPercent}%` }}
         className="h-full overflow-hidden flex flex-col bg-card/30"

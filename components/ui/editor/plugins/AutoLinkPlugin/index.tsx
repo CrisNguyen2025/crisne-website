@@ -12,9 +12,20 @@ const EMAIL_REGEX =
   /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/; // NOSONAR: regex accepted for email auto-link
 
 const MATCHERS = [
-  createLinkMatcherWithRegExp(URL_REGEX, text => {
-    return text.startsWith('http') ? text : `https://${text}`;
-  }),
+  (text: string) => {
+    const match = URL_REGEX.exec(text);
+    if (!match) return null;
+    return {
+      index: match.index,
+      length: match[0].length,
+      text: match[0],
+      url: match[0].startsWith('http') ? match[0] : `https://${match[0]}`,
+      attributes: {
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    };
+  },
   createLinkMatcherWithRegExp(EMAIL_REGEX, text => {
     return `mailto:${text}`;
   }),

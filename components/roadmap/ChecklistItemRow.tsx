@@ -49,20 +49,17 @@ export function ChecklistItemRow({
         {...attributes}
         {...listeners}
         className="opacity-20 group-hover:opacity-80 hover:!opacity-100 cursor-grab active:cursor-grabbing text-muted-foreground p-0.5 -ml-1 transition-opacity touch-none shrink-0"
-        title="Kéo thả sắp xếp trong nhóm"
+        title="Drag to reorder within group"
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="w-3.5 h-3.5" />
       </div>
 
-      {/* Item title and description only */}
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      {/* Item title only */}
+      <div className="flex-1 min-w-0">
         <span className="font-medium text-xs tracking-tight truncate text-foreground">
           {item.title}
         </span>
-        <p className="text-[11px] text-muted-foreground truncate font-normal">
-          {item.description}
-        </p>
       </div>
     </div>
   );

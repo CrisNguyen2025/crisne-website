@@ -20,14 +20,13 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Vui lòng nhập tên Tầng kiến trúc.');
+      setError('Please enter a layer title.');
       return;
     }
     if (!shortTag.trim()) {
-      setError('Vui lòng nhập short-tag (ví dụ: 06-SEC, MLOPS...).');
+      setError('Please enter a short tag (e.g. 06-SEC, MLOPS).');
       return;
     }
-
     onSubmit(title.trim(), shortTag.trim(), subtitle.trim());
     setTitle('');
     setShortTag('');
@@ -44,7 +43,7 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
               <Layers className="w-4 h-4" />
             </div>
-            <h3 className="font-bold text-sm text-foreground">Thêm Tầng Kiến trúc mới</h3>
+            <h3 className="font-bold text-sm text-foreground">Add new layer</h3>
           </div>
           <button
             onClick={onClose}
@@ -63,11 +62,11 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-primary" /> Tên Tầng (Title) *
+              <Layers className="w-3.5 h-3.5 text-primary" /> Layer title *
             </label>
             <input
               type="text"
-              placeholder="VD: 06. Tầng Bảo mật & Compliance (AI Security)"
+              placeholder="e.g. 06. Security & Compliance (AI Security)"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
@@ -76,11 +75,11 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
 
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-primary" /> Mã Short-tag (phục vụ filter segment) *
+              <Tag className="w-3.5 h-3.5 text-primary" /> Short tag (used for filter tabs) *
             </label>
             <input
               type="text"
-              placeholder="VD: 06-SEC hoặc SEC"
+              placeholder="e.g. 06-SEC or SEC"
               value={shortTag}
               onChange={(e) => setShortTag(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground uppercase"
@@ -89,10 +88,10 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
 
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <AlignLeft className="w-3.5 h-3.5 text-primary" /> Mô tả ngắn / Subtitle (Tùy chọn)
+              <AlignLeft className="w-3.5 h-3.5 text-primary" /> Subtitle (optional)
             </label>
             <textarea
-              placeholder="VD: Các tiêu chuẩn bảo mật, cô lập dữ liệu và tuân thủ pháp lý cho AI"
+              placeholder="e.g. Security standards, data isolation, and AI compliance…"
               value={subtitle}
               onChange={(e) => setSubtitle(e.target.value)}
               rows={2}
@@ -106,13 +105,13 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
             >
-              Hủy
+              Cancel
             </button>
             <button
               type="submit"
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors"
             >
-              Tạo Tầng
+              Create layer
             </button>
           </div>
         </form>

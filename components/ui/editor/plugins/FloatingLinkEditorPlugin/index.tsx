@@ -1,7 +1,10 @@
-import { $createLinkNode, $isAutoLinkNode, $isLinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
+import { $createLinkNode, $isAutoLinkNode, $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $findMatchingParent, mergeRegister } from '@lexical/utils';
 import {
+  $createTextNode,
+  $getNearestNodeFromDOMNode,
+  $getNodeByKey,
   $getSelection,
   $isLineBreakNode,
   $isNodeSelection,
@@ -20,7 +23,7 @@ import * as React from 'react';
 import { Dispatch, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Check, Copy, ExternalLink, Pencil, Trash, X } from 'lucide-react';
+import { Copy, Trash } from 'lucide-react';
 import { getSelectedNode } from '../../utils/getSelectedNode';
 import { setFloatingElemPositionForLinkEditor } from '../../utils/setFloatingElemPositionForLinkEditor';
 import { sanitizeUrl } from '../../utils/url';
@@ -73,8 +76,10 @@ function getDomRectForSelection(
   return undefined;
 }
 
-function isLinkInputActive(activeElement: Element | null) {
-  return activeElement?.className === 'link-input';
+interface HoveredLinkState {
+  url: string;
+  nodeKey: string;
+  element: HTMLAnchorElement;
 }
 
 function FloatingLinkEditor({
@@ -82,29 +87,181 @@ function FloatingLinkEditor({
   isLink,
   setIsLink,
   anchorElem,
-  isLinkEditMode,
-  setIsLinkEditMode,
 }: Readonly<{
   editor: LexicalEditor;
   isLink: boolean;
   setIsLink: Dispatch<boolean>;
   anchorElem: HTMLElement;
-  isLinkEditMode: boolean;
-  setIsLinkEditMode: Dispatch<boolean>;
+  isLinkEditMode?: boolean;
+  setIsLinkEditMode?: Dispatch<boolean>;
 }>) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isInputFocusedRef = useRef(false);
+
   const [linkUrl, setLinkUrl] = useState('');
-  const [editedLinkUrl, setEditedLinkUrl] = useState('https://');
-  const [lastSelection, setLastSelection] = useState<BaseSelection | null>(null);
+  const [inputValue, setInputValue] = useState('');
   const [copied, setCopied] = useState(false);
+  const [hoveredLink, setHoveredLink] = useState<HoveredLinkState | null>(null);
+
+  const hoverShowTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverHideTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const activeUrl = hoveredLink ? hoveredLink.url : linkUrl;
+  const isVisible = !!hoveredLink || isLink;
+
+  useEffect(() => {
+    if (!isInputFocusedRef.current) {
+      setInputValue(activeUrl || '');
+    }
+  }, [activeUrl]);
+
+  const clearHideTimer = () => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    }
+  };
+
+  const startHideTimer = () => {
+    clearHideTimer();
+    hoverHideTimerRef.current = setTimeout(() => {
+      // Don't hide if user is currently focused/typing in the input
+      if (isInputFocusedRef.current) return;
+
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        const selUrl = getUrlFromSelection(selection);
+        if (!selUrl) {
+          setHoveredLink(null);
+          const editorElem = editorRef.current;
+          if (editorElem) {
+            setFloatingElemPositionForLinkEditor(null, editorElem, anchorElem);
+          }
+        }
+      });
+    }, 280);
+  };
+
+  // Hover detection on editor root element with debounce
+  useEffect(() => {
+    const rootElement = editor.getRootElement();
+    if (!rootElement) return;
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const linkElem = target?.closest('a') as HTMLAnchorElement | null;
+
+      if (linkElem && rootElement.contains(linkElem)) {
+        clearHideTimer();
+
+        // If hovering over the current active hovered link, keep it
+        if (hoveredLink?.element === linkElem) return;
+
+        if (hoverShowTimerRef.current) {
+          clearTimeout(hoverShowTimerRef.current);
+        }
+
+        // Debounce hover (200ms)
+        hoverShowTimerRef.current = setTimeout(() => {
+          editor.getEditorState().read(() => {
+            const node = $getNearestNodeFromDOMNode(linkElem);
+            if (!node) return;
+            const linkNode = $findMatchingParent(node, $isLinkNode);
+            const targetNode = $isLinkNode(linkNode) ? linkNode : ($isLinkNode(node) ? node : null);
+            if (targetNode) {
+              const url = targetNode.getURL();
+              setHoveredLink({
+                url,
+                nodeKey: targetNode.getKey(),
+                element: linkElem,
+              });
+              if (!isInputFocusedRef.current) {
+                setInputValue(url);
+              }
+
+              const editorElem = editorRef.current;
+              if (editorElem) {
+                const rect = linkElem.getBoundingClientRect();
+                const targetRect = {
+                  top: rect.top + rect.height + 4,
+                  left: rect.left,
+                  bottom: rect.bottom + 4,
+                  right: rect.right,
+                  width: rect.width,
+                  height: rect.height,
+                  x: rect.x,
+                  y: rect.y + rect.height + 4,
+                  toJSON: () => {},
+                } as DOMRect;
+                setFloatingElemPositionForLinkEditor(targetRect, editorElem, anchorElem);
+              }
+            }
+          });
+        }, 200);
+      }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      const linkElem = target?.closest('a') as HTMLAnchorElement | null;
+      const related = e.relatedTarget as HTMLElement | null;
+
+      if (linkElem) {
+        if (hoverShowTimerRef.current) {
+          clearTimeout(hoverShowTimerRef.current);
+          hoverShowTimerRef.current = null;
+        }
+
+        // If moving directly into the floating popover, or typing, do not hide
+        if (isInputFocusedRef.current || (related && editorRef.current?.contains(related))) {
+          return;
+        }
+
+        startHideTimer();
+      }
+    };
+
+    rootElement.addEventListener('mouseover', handleMouseOver);
+    rootElement.addEventListener('mouseout', handleMouseOut);
+
+    return () => {
+      rootElement.removeEventListener('mouseover', handleMouseOver);
+      rootElement.removeEventListener('mouseout', handleMouseOut);
+      if (hoverShowTimerRef.current) clearTimeout(hoverShowTimerRef.current);
+      clearHideTimer();
+    };
+  }, [editor, anchorElem, hoveredLink]);
 
   const $updateLinkEditor = useCallback(() => {
+    // If hoveredLink is active and still connected, position according to hovered link
+    if (hoveredLink && hoveredLink.element.isConnected) {
+      const editorElem = editorRef.current;
+      if (editorElem) {
+        const rect = hoveredLink.element.getBoundingClientRect();
+        const targetRect = {
+          top: rect.top + rect.height + 4,
+          left: rect.left,
+          bottom: rect.bottom + 4,
+          right: rect.right,
+          width: rect.width,
+          height: rect.height,
+          x: rect.x,
+          y: rect.y + rect.height + 4,
+          toJSON: () => {},
+        } as DOMRect;
+        setFloatingElemPositionForLinkEditor(targetRect, editorElem, anchorElem);
+      }
+      return;
+    }
+
     const selection = $getSelection();
     const nextUrl = getUrlFromSelection(selection);
     if (nextUrl !== null) {
       setLinkUrl(nextUrl);
-      if (isLinkEditMode) setEditedLinkUrl(nextUrl);
+      if (!isInputFocusedRef.current) {
+        setInputValue(nextUrl);
+      }
     }
 
     const editorElem = editorRef.current;
@@ -112,23 +269,20 @@ function FloatingLinkEditor({
     if (!editorElem || !rootElement) return;
 
     const nativeSelection = getDOMSelection(editor._window);
-    if (selection && editor.isEditable()) {
+    if (selection && editor.isEditable() && isLink) {
       const domRect = getDomRectForSelection(selection, editor, rootElement, nativeSelection);
       if (domRect) {
         domRect.y += 32;
         setFloatingElemPositionForLinkEditor(domRect, editorElem, anchorElem);
       }
-      setLastSelection(selection);
       return;
     }
 
-    if (isLinkInputActive(document.activeElement)) return;
-
-    setFloatingElemPositionForLinkEditor(null, editorElem, anchorElem);
-    setLastSelection(null);
-    setIsLinkEditMode(false);
-    setLinkUrl('');
-  }, [anchorElem, editor, isLinkEditMode, setIsLinkEditMode]);
+    if (!hoveredLink) {
+      setFloatingElemPositionForLinkEditor(null, editorElem, anchorElem);
+      setLinkUrl('');
+    }
+  }, [anchorElem, editor, hoveredLink, isLink]);
 
   useEffect(() => {
     const scrollerElem = anchorElem.parentElement;
@@ -173,6 +327,7 @@ function FloatingLinkEditor({
       editor.registerCommand(
         KEY_ESCAPE_COMMAND,
         () => {
+          setHoveredLink(null);
           if (isLink) {
             setIsLink(false);
             return true;
@@ -190,159 +345,152 @@ function FloatingLinkEditor({
     });
   }, [editor, $updateLinkEditor]);
 
-  useEffect(() => {
-    if (isLinkEditMode && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isLinkEditMode, isLink]);
-
-  useEffect(() => {
-    const editorElement = editorRef.current;
-    if (editorElement === null) {
+  const handleSaveUrl = (newUrl: string) => {
+    let formattedUrl = newUrl.trim();
+    if (!formattedUrl) {
+      handleClear();
       return;
     }
-    const handleBlur = (event: FocusEvent) => {
-      if (!editorElement.contains(event.relatedTarget as Element) && isLink) {
-        setIsLink(false);
-        setIsLinkEditMode(false);
-      }
-    };
-    editorElement.addEventListener('focusout', handleBlur);
-    return () => {
-      editorElement.removeEventListener('focusout', handleBlur);
-    };
-  }, [editorRef, setIsLink, setIsLinkEditMode, isLink]);
 
-  const monitorInputInteraction = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      handleLinkSubmission(event);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      setIsLinkEditMode(false);
+    if (
+      !/^https?:\/\//i.test(formattedUrl) &&
+      !/^mailto:/i.test(formattedUrl) &&
+      !/^tel:/i.test(formattedUrl) &&
+      !/^#/i.test(formattedUrl) &&
+      !/^\//i.test(formattedUrl)
+    ) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+
+    editor.update(() => {
+      let targetNode: LinkNode | null = null;
+      if (hoveredLink) {
+        const node = $getNodeByKey(hoveredLink.nodeKey);
+        if ($isLinkNode(node)) {
+          targetNode = node;
+        }
+      }
+      if (!targetNode) {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const node = getSelectedNode(selection);
+          const linkParent = $findMatchingParent(node, $isLinkNode);
+          targetNode = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
+        }
+      }
+
+      if (targetNode) {
+        targetNode.setURL(formattedUrl);
+        targetNode.setTarget('_blank');
+        targetNode.setRel('noopener noreferrer');
+      }
+    });
+
+    setLinkUrl(formattedUrl);
+    setInputValue(formattedUrl);
+    if (hoveredLink) {
+      setHoveredLink(prev => prev ? { ...prev, url: formattedUrl } : null);
     }
   };
 
-  const handleLinkSubmission = (event: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    if (lastSelection !== null) {
-      if (linkUrl !== '') {
-        editor.update(() => {
-          editor.dispatchCommand(TOGGLE_LINK_COMMAND, sanitizeUrl(editedLinkUrl));
-          const selection = $getSelection();
-          if ($isRangeSelection(selection)) {
-            const parent = getSelectedNode(selection).getParent();
-            if ($isAutoLinkNode(parent)) {
-              const linkNode = $createLinkNode(parent.getURL(), {
-                rel: parent.__rel,
-                target: parent.__target,
-                title: parent.__title,
-              });
-              parent.replace(linkNode, true);
-            }
-          }
-        });
+  const handleClear = () => {
+    editor.update(() => {
+      let targetNode: LinkNode | null = null;
+      if (hoveredLink) {
+        const node = $getNodeByKey(hoveredLink.nodeKey);
+        if ($isLinkNode(node)) {
+          targetNode = node;
+        }
       }
-      setEditedLinkUrl('https://');
-      setIsLinkEditMode(false);
+      if (!targetNode) {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const node = getSelectedNode(selection);
+          const linkParent = $findMatchingParent(node, $isLinkNode);
+          targetNode = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
+        }
+      }
+
+      if (targetNode) {
+        const textNode = $createTextNode(targetNode.getTextContent());
+        targetNode.replace(textNode);
+      } else {
+        editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
+      }
+    });
+
+    setHoveredLink(null);
+    setIsLink(false);
+    setLinkUrl('');
+    setInputValue('');
+  };
+
+  const handleCopy = (event: React.MouseEvent) => {
+    event.preventDefault();
+    const urlToCopy = inputValue.trim() || activeUrl;
+    if (urlToCopy) {
+      navigator.clipboard?.writeText(urlToCopy);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
     }
   };
 
   const renderContent = () => {
-    if (!isLink) return null;
-    if (isLinkEditMode) {
-      return (
-        <div className='editor-link-popover'>
-          <div className='editor-link-edit-row'>
-          <input
-            ref={inputRef}
-            className='editor-link-input'
-            value={editedLinkUrl}
-            onChange={event => {
-              setEditedLinkUrl(event.target.value);
-            }}
-            onKeyDown={event => {
-              monitorInputInteraction(event);
-            }}
-          />
-          <button
-            type='button'
-            className='editor-link-action editor-link-action-primary'
-            onMouseDown={preventDefault}
-            onClick={handleLinkSubmission}
-            title='Save'
-          >
-            <Check size={12} />
-          </button>
-
-          <button
-            type='button'
-            className='editor-link-action'
-            onMouseDown={preventDefault}
-            onClick={() => {
-              setIsLinkEditMode(false);
-            }}
-            title='Cancel'
-          >
-            <X size={12} />
-          </button>
-          </div>
-        </div>
-      );
-    }
+    if (!isVisible || !activeUrl) return null;
 
     return (
       <div className='editor-link-popover'>
-        <a href={sanitizeUrl(linkUrl)} target='_blank' rel='noopener noreferrer' className='editor-link-url' title={linkUrl}>
-          {linkUrl}
-        </a>
+        <input
+          ref={inputRef}
+          type='text'
+          className='editor-link-input text-xs'
+          value={inputValue}
+          onChange={e => setInputValue(e.target.value)}
+          onFocus={() => {
+            isInputFocusedRef.current = true;
+            clearHideTimer();
+          }}
+          onBlur={() => {
+            isInputFocusedRef.current = false;
+            if (inputValue.trim() && inputValue.trim() !== activeUrl) {
+              handleSaveUrl(inputValue);
+            }
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSaveUrl(inputValue);
+              inputRef.current?.blur();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setInputValue(activeUrl);
+              inputRef.current?.blur();
+            }
+          }}
+          placeholder='https://...'
+          spellCheck={false}
+          autoComplete='off'
+        />
         <div className='editor-link-actions'>
           <button
             type='button'
             className='editor-link-action'
             onMouseDown={preventDefault}
-            onClick={() => window.open(sanitizeUrl(linkUrl), '_blank', 'noopener,noreferrer')}
-            title='Open link'
+            onClick={handleCopy}
+            title='Copy link'
           >
-            <ExternalLink size={12} />
+            <Copy size={13} />
           </button>
           <button
             type='button'
-            className='editor-link-action'
+            className='editor-link-action editor-link-action-danger'
             onMouseDown={preventDefault}
-            onClick={() => {
-              navigator.clipboard?.writeText(linkUrl);
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1200);
-            }}
-            title='Copy link'
+            onClick={handleClear}
+            title='Clear link'
           >
-            <Copy size={12} />
+            <Trash size={13} />
           </button>
-        <button
-          type='button'
-          className='editor-link-action'
-          onMouseDown={preventDefault}
-          onClick={event => {
-            event.preventDefault();
-            setEditedLinkUrl(linkUrl);
-            setIsLinkEditMode(true);
-          }}
-          title='Edit link'
-        >
-          <Pencil size={12} />
-        </button>
-        <button
-          type='button'
-          className='editor-link-action editor-link-action-danger'
-          onMouseDown={preventDefault}
-          onClick={() => {
-            editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
-          }}
-          title='Unlink'
-        >
-          <Trash size={12} />
-        </button>
-        {copied && <span className='editor-link-copied'>Copied!</span>}
+          {copied && <span className='editor-link-copied'>Copied!</span>}
         </div>
       </div>
     );
@@ -352,6 +500,14 @@ function FloatingLinkEditor({
     <div
       ref={editorRef}
       className='editor-link-floating-panel'
+      onMouseEnter={() => {
+        clearHideTimer();
+      }}
+      onMouseLeave={() => {
+        if (!isInputFocusedRef.current) {
+          startHideTimer();
+        }
+      }}
     >
       {renderContent()}
     </div>
@@ -430,7 +586,7 @@ function useFloatingLinkEditorToolbar(
             const node = getSelectedNode(selection);
             const linkNode = $findMatchingParent(node, $isLinkNode);
             if ($isLinkNode(linkNode) && (payload.metaKey || payload.ctrlKey)) {
-              window.open(linkNode.getURL(), '_blank');
+              window.open(linkNode.getURL(), '_blank', 'noopener,noreferrer');
               return true;
             }
           }

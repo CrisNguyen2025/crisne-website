@@ -42,11 +42,11 @@ export function CreateItemModal({
     if (currentGroup?.title) return currentGroup.title;
     switch (targetLevel) {
       case 'core':
-        return '🟢 Core (Nền tảng)';
+        return '🟢 Core';
       case 'intermediate':
-        return '🟡 Trung cấp';
+        return '🟡 Intermediate';
       case 'advanced':
-        return '🔴 Nâng cao';
+        return '🔴 Advanced';
       default:
         return targetLevel;
     }
@@ -55,14 +55,13 @@ export function CreateItemModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Vui lòng nhập tên Khái niệm.');
+      setError('Please enter an item title.');
       return;
     }
     if (!description.trim()) {
-      setError('Vui lòng nhập mô tả / giải thích cho khái niệm.');
+      setError('Please enter a brief description for this item.');
       return;
     }
-
     onSubmit(targetLayerId, targetLevel, title.trim(), description.trim());
     onClose();
   };
@@ -76,11 +75,11 @@ export function CreateItemModal({
               <Sparkles className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="font-bold text-sm text-foreground">Thêm Khái niệm mới</h3>
+              <h3 className="font-bold text-sm text-foreground">Add new item</h3>
               <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
                 <Folder className="w-3 h-3 text-primary shrink-0" />
                 <span className="font-medium text-foreground truncate max-w-[9.375rem]">
-                  {currentLayer?.shortTag || currentLayer?.title || 'Tầng kiến trúc'}
+                  {currentLayer?.shortTag || currentLayer?.title || 'Layer'}
                 </span>
                 <span className="text-muted-foreground/40 shrink-0">›</span>
                 <span className="font-semibold text-primary truncate max-w-[8.75rem]">
@@ -107,12 +106,12 @@ export function CreateItemModal({
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-primary" /> Tên Khái niệm (Title) *
+              <FileText className="w-3.5 h-3.5 text-primary" /> Item title *
             </label>
             <input
               type="text"
               autoFocus
-              placeholder="VD: Speculative Decoding, GraphRAG..."
+              placeholder="e.g. Speculative Decoding, GraphRAG..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-sm"
@@ -121,10 +120,10 @@ export function CreateItemModal({
 
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <AlignLeft className="w-3.5 h-3.5 text-primary" /> Mô tả & Định nghĩa *
+              <AlignLeft className="w-3.5 h-3.5 text-primary" /> Description *
             </label>
             <textarea
-              placeholder="Giải thích ngắn gọn ý nghĩa và ứng dụng của thuật ngữ này..."
+              placeholder="Brief explanation of what this concept is and how it's used…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
@@ -138,13 +137,13 @@ export function CreateItemModal({
               onClick={onClose}
               className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
             >
-              Hủy
+              Cancel
             </button>
             <button
               type="submit"
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors"
             >
-              Tạo Khái niệm
+              Create item
             </button>
           </div>
         </form>
