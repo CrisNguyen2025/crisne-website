@@ -60,18 +60,25 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       })),
     }));
 
-    return NextResponse.json({
-      roadmap: {
-        id: roadmap.id,
-        slug: roadmap.slug,
-        title: roadmap.title,
-        shortCode: roadmap.shortCode,
-        description: roadmap.description,
-        icon: roadmap.icon,
-        order: roadmap.order,
+    return NextResponse.json(
+      {
+        roadmap: {
+          id: roadmap.id,
+          slug: roadmap.slug,
+          title: roadmap.title,
+          shortCode: roadmap.shortCode,
+          description: roadmap.description,
+          icon: roadmap.icon,
+          order: roadmap.order,
+        },
+        layers,
       },
-      layers,
-    });
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        },
+      }
+    );
   } catch (error) {
     console.error('[API /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json({ error: 'Failed to fetch roadmap data' }, { status: 500 });

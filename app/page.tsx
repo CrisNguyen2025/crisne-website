@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense, useCallback } from "react";
-import { useQueryState, parseAsString } from "nuqs";
+import { useQueryState, parseAsString, debounce } from "nuqs";
 import { useRoadmap } from "@/hooks/use-roadmap";
 import { MasterPanel } from "@/components/roadmap/MasterPanel";
 import { DetailPanel } from "@/components/roadmap/DetailPanel";
@@ -23,7 +23,13 @@ function RoadmapWorkspace() {
   // nuqs query state for ?topic and ?item (clean URL: ?topic=ai-architecture&item=...)
   // If topic is null/empty -> Home view. If topic exists -> Topic Roadmap view.
   const [topic, setTopic] = useQueryState("topic", parseAsString);
-  const [item, setItem] = useQueryState("item", parseAsString);
+  const [item, setItem] = useQueryState(
+    "item",
+    parseAsString.withOptions({
+      shallow: true,
+      limitUrlUpdates: debounce(200),
+    })
+  );
 
   const [availableRoadmaps, setAvailableRoadmaps] = useState<RoadmapMeta[]>([]);
 
@@ -189,8 +195,7 @@ function RoadmapWorkspace() {
           </div>
         ) : (
           <main
-            key={`view-roadmap-${activeSlug}`}
-            className="flex-1 w-full h-full overflow-hidden relative flex animate-in fade-in-50 duration-200"
+            className="flex-1 w-full h-full overflow-hidden relative flex"
           >
             {/* Fixed 400px Left column (Master Panel) */}
             <div className="w-[400px] shrink-0 h-full overflow-hidden flex flex-col border-r border-border/60 bg-background/50 backdrop-blur-sm">
@@ -234,6 +239,7 @@ function RoadmapWorkspace() {
             <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-white/80">
               <DetailPanel
                 item={activeItem}
+                isLoading={isLoading}
                 onUpdateNote={updateNote}
                 onEditItem={editItem}
                 onDeleteItem={deleteItem}

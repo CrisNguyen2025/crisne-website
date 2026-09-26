@@ -92,9 +92,9 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Don't cache API routes
+      // API routes default cache settings (allow custom route-level Cache-Control headers)
       {
-        source: "/api/:path*",
+        source: "/api/((?!v1/roadmaps).*)*",
         headers: [
           {
             key: "Cache-Control",

@@ -20,6 +20,7 @@ import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
 
 interface DetailPanelProps {
   item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
+  isLoading?: boolean;
   onUpdateNote?: (id: string, text: string) => void;
   onEditItem?: (
     id: string,
@@ -33,6 +34,7 @@ interface DetailPanelProps {
 
 export function DetailPanel({
   item,
+  isLoading = false,
   onUpdateNote,
   onEditItem,
   onDeleteItem,
@@ -62,6 +64,34 @@ export function DetailPanel({
       behavior: "smooth",
     });
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 relative h-full flex flex-col overflow-hidden animate-pulse">
+        {/* Skeleton Toolbar */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 shrink-0 min-h-[57px]">
+          <div className="flex items-center gap-2 w-1/3">
+            <div className="w-4 h-4 rounded bg-muted/60" />
+            <div className="h-3.5 w-24 rounded bg-muted/60" />
+            <div className="h-3.5 w-16 rounded bg-muted/40" />
+          </div>
+        </div>
+        {/* Skeleton Content */}
+        <div className="p-6 md:p-8 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
+          <div className="space-y-3">
+            <div className="h-7 w-2/3 rounded-lg bg-muted/70" />
+            <div className="h-4 w-5/6 rounded bg-muted/40" />
+            <div className="h-4 w-1/2 rounded bg-muted/30" />
+          </div>
+          <div className="w-full border-t border-border/40 my-4" />
+          <div className="space-y-3 pt-2">
+            <div className="h-4 w-1/4 rounded bg-muted/50" />
+            <div className="h-24 w-full rounded-xl bg-muted/20" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!item) {
     return (

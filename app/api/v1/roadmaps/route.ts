@@ -20,7 +20,14 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ roadmaps });
+    return NextResponse.json(
+      { roadmaps },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
   } catch (error) {
     console.error('[API /api/v1/roadmaps] Error:', error);
     return NextResponse.json({ error: 'Failed to fetch roadmaps' }, { status: 500 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dayjs from 'dayjs';
 import {
   ChecklistItem,
@@ -15,6 +15,13 @@ import { slugify } from '@/lib/utils';
 // In-memory cache across topic switches for instant, smooth transitions
 const roadmapCache = new Map<string, { roadmap: RoadmapMeta; layers: RoadmapLayer[] }>();
 
+function syncCache(slug: string, updater: (cached: { roadmap: RoadmapMeta; layers: RoadmapLayer[] }) => { roadmap: RoadmapMeta; layers: RoadmapLayer[] }) {
+  const current = roadmapCache.get(slug);
+  if (current) {
+    roadmapCache.set(slug, updater(current));
+  }
+}
+
 export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId?: string) {
   const [roadmapMeta, setRoadmapMeta] = useState<RoadmapMeta | null>(() => roadmapCache.get(slug)?.roadmap || null);
   const [layers, setLayers] = useState<RoadmapLayer[]>(() => roadmapCache.get(slug)?.layers || []);
@@ -23,16 +30,42 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   const [isLoading, setIsLoading] = useState<boolean>(() => !roadmapCache.has(slug));
   const [isError, setIsError] = useState<boolean>(false);
 
+  // Keep a ref of initialActiveItemId so loadRoadmap doesn't recreate when clicking items
+  const initialActiveItemIdRef = useRef(initialActiveItemId);
+  useEffect(() => {
+    initialActiveItemIdRef.current = initialActiveItemId;
+  }, [initialActiveItemId]);
+
   // 1. Fetch roadmap hierarchy from API by slug
   const loadRoadmap = useCallback(async (targetSlug: string) => {
+    const targetItemId = initialActiveItemIdRef.current;
     // If cached, apply cache immediately for seamless zero-flicker transition
     const cached = roadmapCache.get(targetSlug);
     if (cached) {
       setRoadmapMeta(cached.roadmap);
       setLayers(cached.layers);
       setIsLoading(false);
+      // Select first item or matching item immediately from cache
+      let matchedId = '';
+      if (targetItemId) {
+        for (const layer of cached.layers) {
+          for (const group of layer.groups) {
+            const found = group.items.find(
+              (i) => i.id === targetItemId || i.slug === targetItemId || slugify(i.title) === targetItemId
+            );
+            if (found) {
+              matchedId = found.id;
+              break;
+            }
+          }
+          if (matchedId) break;
+        }
+      }
+      setActiveItemId(matchedId || cached.layers[0]?.groups[0]?.items[0]?.id || '');
     } else {
       setIsLoading(true);
+      // Giữ layout ổn định, tạm thời clear activeItemId khi load topic mới chưa cache
+      setActiveItemId('');
     }
     setIsError(false);
 
@@ -46,11 +79,12 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
       // Select initial item (match by id OR slug) or first available item
       let matchedId = '';
-      if (initialActiveItemId) {
+      const currentTarget = initialActiveItemIdRef.current;
+      if (currentTarget) {
         for (const layer of data.layers) {
           for (const group of layer.groups) {
             const found = group.items.find(
-              (i) => i.id === initialActiveItemId || i.slug === initialActiveItemId || slugify(i.title) === initialActiveItemId
+              (i) => i.id === currentTarget || i.slug === currentTarget || slugify(i.title) === currentTarget
             );
             if (found) {
               matchedId = found.id;
@@ -65,9 +99,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         setActiveItemId(matchedId);
       } else {
         const firstItem = data.layers[0]?.groups[0]?.items[0];
-        if (firstItem) {
-          setActiveItemId(firstItem.id);
-        }
+        setActiveItemId(firstItem ? firstItem.id : '');
       }
     } catch (err) {
       console.error('[useRoadmap] Failed to load roadmap:', err);
@@ -77,7 +109,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     } finally {
       setIsLoading(false);
     }
-  }, [initialActiveItemId]);
+  }, []);
 
   useEffect(() => {
     loadRoadmap(slug);
@@ -174,14 +206,15 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     async (groupId: string, title: string) => {
       try {
         // Optimistic update
-        setLayers((prev) =>
+        const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => ({
             ...layer,
             groups: layer.groups.map((group) =>
               group.id === groupId ? { ...group, title: title.trim() } : group
             ),
-          }))
-        );
+          }));
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
         await roadmapService.updateGroup(groupId, title.trim());
       } catch (err) {
         console.error('[useRoadmap] Failed to edit group:', err);
@@ -231,7 +264,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     async (id: string, title: string, description: string) => {
       try {
         // Optimistic UI update
-        setLayers((prev) =>
+        const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => ({
             ...layer,
             groups: layer.groups.map((group) => ({
@@ -242,8 +275,9 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
                   : item
               ),
             })),
-          }))
-        );
+          }));
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.updateItemInfo({
           id,
@@ -263,15 +297,16 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     async (itemId: string) => {
       try {
         // Optimistic delete
-        setLayers((prev) =>
+        const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => ({
             ...layer,
             groups: layer.groups.map((group) => ({
               ...group,
               items: group.items.filter((item) => item.id !== itemId),
             })),
-          }))
-        );
+          }));
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.deleteItem(itemId);
       } catch (err) {
@@ -289,7 +324,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       const prevLayers = layers;
 
       // Optimistic update
-      setLayers((prev) =>
+      const updatedLayers = (prev: RoadmapLayer[]) =>
         prev.map((layer) => ({
           ...layer,
           groups: layer.groups.map((group) => ({
@@ -300,8 +335,9 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
                 : item
             ),
           })),
-        }))
-      );
+        }));
+      setLayers(updatedLayers);
+      syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
       try {
         await roadmapService.updateItemContent({
@@ -311,10 +347,11 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       } catch (err) {
         console.error('[useRoadmap] Failed to update item content:', err);
         setLayers(prevLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: prevLayers }));
         throw err;
       }
     },
-    [layers]
+    [layers, slug]
   );
 
   // 9. Reorder items in group
@@ -322,7 +359,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     async (layerId: string, level: RoadmapLevel, newItems: ChecklistItem[]) => {
       try {
         // Optimistic update
-        setLayers((prev) =>
+        const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => {
             if (layer.id !== layerId) return layer;
             return {
@@ -332,8 +369,9 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
                 return { ...g, items: newItems };
               }),
             };
-          })
-        );
+          });
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.reorderGroupItems({
           layerId,
