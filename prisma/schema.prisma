@@ -95,3 +95,66 @@ model Favorite {
   @@index([userId]) // Fast lookup by user
   @@index([tagId]) // Fast lookup by tag
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Roadmap Models (Multi-roadmap architecture: AI, Backend, Frontend, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Roadmap {
+  id          String         @id @default(cuid())
+  slug        String         @unique // e.g. "ai-architecture", "backend-roadmap"
+  title       String         // e.g. "AI & LLM Architecture"
+  shortCode   String?        @default("AI") // e.g. "AI", "BE", "FE", "DEV"
+  description String?
+  icon        String?        @default("Layers")
+  order       Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  layers      RoadmapLayer[]
+}
+
+model RoadmapLayer {
+  id         String         @id @default(cuid())
+  roadmapId  String
+  roadmap    Roadmap        @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  order      Int            @default(0)
+  shortTag   String         // e.g. "01-DB", "02-LLM"
+  title      String
+  subtitle   String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  groups     RoadmapGroup[]
+
+  @@index([roadmapId])
+}
+
+model RoadmapGroup {
+  id        String        @id @default(cuid())
+  layerId   String
+  layer     RoadmapLayer  @relation(fields: [layerId], references: [id], onDelete: Cascade)
+  level     String        // "core" | "intermediate" | "advanced" | custom
+  title     String
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  items     RoadmapItem[]
+
+  @@index([layerId])
+}
+
+model RoadmapItem {
+  id          String       @id @default(cuid())
+  groupId     String
+  group       RoadmapGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  content     String?      // Rich-text HTML content from Lexical editor
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([groupId])
+}

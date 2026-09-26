@@ -33,6 +33,7 @@ interface DetailPanelProps {
 
 export function DetailPanel({
   item,
+  onUpdateNote,
   onEditItem,
   onDeleteItem,
 }: DetailPanelProps) {
@@ -78,20 +79,32 @@ export function DetailPanel({
     );
   }
 
-  const handleSaveItem = (
+  const handleSaveInfo = async (
     id: string,
     title: string,
     description: string,
-    level?: RoadmapLevel,
-    content?: string
+    level?: RoadmapLevel
   ) => {
     try {
       if (onEditItem) {
-        onEditItem(id, title, description, level, content);
-        toast("Updated successfully!", "success");
+        await onEditItem(id, title, description, level);
       }
+      toast("Info updated successfully!", "success");
     } catch {
-      toast("Update failed, please try again!", "error");
+      toast("Failed to update info, please try again!", "error");
+      throw new Error("Failed to update info");
+    }
+  };
+
+  const handleSaveContent = async (id: string, newContent: string) => {
+    try {
+      if (onUpdateNote) {
+        await onUpdateNote(id, newContent);
+      }
+      toast("Content saved successfully!", "success");
+    } catch {
+      toast("Failed to save content, please try again!", "error");
+      throw new Error("Failed to save content");
     }
   };
 
@@ -104,18 +117,33 @@ export function DetailPanel({
       >
         {/* Header Toolbar */}
         <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 min-h-[57px]">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium truncate h-7">
-            <div className="flex items-center gap-1.5 text-foreground/80 hover:text-foreground shrink-0">
-              <Folder className="w-3.5 h-3.5 text-primary" />
-              <span className="truncate max-w-[8.75rem] md:max-w-[13.75rem]">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium min-w-0 flex-1 h-7 overflow-hidden">
+            <div
+              className="flex items-center gap-1.5 text-foreground/80 hover:text-foreground shrink-0 max-w-[40%] truncate"
+              title={item.layerTitle || "Architecture Layer"}
+            >
+              <Folder className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="truncate">
                 {item.layerTitle || "Architecture Layer"}
               </span>
             </div>
 
             <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
 
-            <div className="text-muted-foreground hover:text-foreground shrink-0">
-              <span className="truncate max-w-[7.5rem] md:max-w-[11.25rem] font-medium">
+            <div
+              className="text-muted-foreground hover:text-foreground shrink-0 max-w-[25%] truncate"
+              title={
+                item.groupTitle ||
+                (item.level === "core"
+                  ? "Core"
+                  : item.level === "intermediate"
+                    ? "Intermediate"
+                    : item.level === "advanced"
+                      ? "Advanced"
+                      : item.level)
+              }
+            >
+              <span className="truncate font-medium">
                 {item.groupTitle ||
                   (item.level === "core"
                     ? "Core"
@@ -129,7 +157,10 @@ export function DetailPanel({
 
             <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
 
-            <span className="text-foreground font-semibold truncate max-w-[10rem] md:max-w-[15rem]">
+            <span
+              className="text-foreground font-semibold truncate flex-1 min-w-0"
+              title={item.title}
+            >
               {item.title}
             </span>
           </div>
@@ -139,7 +170,9 @@ export function DetailPanel({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Are you sure you want to delete "${item.title}"?`)) {
+                  if (
+                    confirm(`Are you sure you want to delete "${item.title}"?`)
+                  ) {
                     onDeleteItem(item.id);
                   }
                 }}
@@ -230,7 +263,7 @@ export function DetailPanel({
                 />
               </div>
             ) : (
-              <div className="py-10 px-4 rounded-xl border border-dashed border-border/70 flex flex-col items-center justify-center text-center bg-muted/10">
+              <div className="py-10 rounded-xl border border-dashed border-border/70 flex flex-col items-center justify-center text-center bg-muted/10">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                   <Edit3 className="w-5 h-5 text-primary" />
                 </div>
@@ -238,7 +271,8 @@ export function DetailPanel({
                   No detailed notes yet
                 </p>
                 <p className="text-xs text-muted-foreground max-w-xs mb-4">
-                  Add comprehensive documentation, code examples, callouts, and links using the Notion-like rich editor.
+                  Add comprehensive documentation, code examples, callouts, and
+                  links using the Notion-like rich editor.
                 </p>
                 <button
                   type="button"
@@ -259,7 +293,7 @@ export function DetailPanel({
         isOpen={isContentModalOpen}
         item={item}
         onClose={() => setIsContentModalOpen(false)}
-        onSubmit={handleSaveItem}
+        onSubmit={handleSaveContent}
       />
 
       {/* Drawer: Title / Description / Level */}
@@ -267,7 +301,7 @@ export function DetailPanel({
         isOpen={isInfoModalOpen}
         item={item}
         onClose={() => setIsInfoModalOpen(false)}
-        onSubmit={handleSaveItem}
+        onSubmit={handleSaveInfo}
       />
 
       {showScrollTop && (

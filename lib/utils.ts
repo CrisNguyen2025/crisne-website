@@ -14,3 +14,15 @@ export function getMediaUrl({ url }: { url: string }): string {
   // Relative path — prefix with base URL if available
   return url.startsWith("/") ? url : `/${url}`;
 }
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove accents
+    .replace(/[^\w\s-]/g, "") // remove invalid chars
+    .replace(/[\s_-]+/g, "-") // collapse whitespace and replace by -
+    .replace(/^-+|-+$/g, ""); // trim - from ends
+}
+

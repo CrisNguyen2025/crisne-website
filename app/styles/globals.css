@@ -333,6 +333,18 @@ input[type="search"]::-webkit-search-cancel-button {
   background: color-mix(in srgb, var(--primary) 60%, transparent);
 }
 
+/* Hide scrollbar completely across Chrome, Safari, Firefox, Edge */
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 /* Global page loader — progress bar animation */
 @keyframes loading-bar {
   0%   { width: 0%; opacity: 1; }

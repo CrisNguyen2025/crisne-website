@@ -2,22 +2,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FolderPlus } from 'lucide-react';
-import { RoadmapLayer } from '@/lib/roadmap/types';
+import { X, Pencil } from 'lucide-react';
+import { LevelGroup } from '@/lib/roadmap/types';
 
-interface CreateGroupModalProps {
+interface EditGroupModalProps {
   isOpen: boolean;
-  layer: RoadmapLayer | null;
+  group: LevelGroup | null;
   onClose: () => void;
-  onSubmit: (layerId: string, title: string) => void;
+  onSubmit: (groupId: string, title: string) => void;
 }
 
-export function CreateGroupModal({
+export function EditGroupModal({
   isOpen,
-  layer,
+  group,
   onClose,
   onSubmit,
-}: CreateGroupModalProps) {
+}: EditGroupModalProps) {
   const [title, setTitle] = useState('');
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
@@ -26,7 +26,14 @@ export function CreateGroupModal({
     setMounted(true);
   }, []);
 
-  if (!isOpen || !layer || !mounted) return null;
+  useEffect(() => {
+    if (group) {
+      setTitle(group.title);
+      setError('');
+    }
+  }, [group]);
+
+  if (!isOpen || !group || !mounted) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,29 +41,27 @@ export function CreateGroupModal({
       setError('Please enter a group title.');
       return;
     }
-    onSubmit(layer.id, title.trim());
-    setTitle('');
-    setError('');
+    if (!group.id) {
+      setError('Group ID is missing.');
+      return;
+    }
+    onSubmit(group.id, title.trim());
     onClose();
   };
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div
-        className="fixed inset-0 -z-10"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 -z-10" onClick={onClose} />
       <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-border/50">
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <FolderPlus className="w-4 h-4" />
+            <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <Pencil className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-sm text-foreground">Create level group</h3>
+              <h3 className="font-bold text-sm text-foreground">Edit level group</h3>
               <p className="text-[11px] text-muted-foreground">
-                Adds a group alongside Core / Intermediate in layer{' '}
-                <span className="font-semibold text-foreground">{layer.shortTag}</span>
+                Update the title of this group
               </p>
             </div>
           </div>
@@ -78,12 +83,11 @@ export function CreateGroupModal({
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="space-y-1.5">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <FolderPlus className="w-3.5 h-3.5 text-primary" /> Group title *
+              <Pencil className="w-3.5 h-3.5 text-primary" /> Group title *
             </label>
             <input
               type="text"
               autoFocus
-              placeholder="e.g. ⚡ Hands-on Labs, 🛠️ Cache Systems, 📚 References…"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-sm"
@@ -102,7 +106,7 @@ export function CreateGroupModal({
               type="submit"
               className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors cursor-pointer"
             >
-              Create group
+              Save changes
             </button>
           </div>
         </form>

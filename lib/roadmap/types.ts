@@ -2,6 +2,7 @@ export type RoadmapLevel = 'core' | 'intermediate' | 'advanced' | string;
 
 export interface ChecklistItem {
   id: string;
+  slug?: string;
   title: string;
   description: string;
   level: RoadmapLevel;
@@ -42,8 +43,19 @@ export interface RoadmapStats {
 // DTOs — Data Transfer Objects for API integration
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface RoadmapMeta {
+  id: string;
+  slug: string;
+  title: string;
+  shortCode?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  order: number;
+}
+
 /** Response shape when listing all roadmap layers from the API */
 export interface GetRoadmapResponseDto {
+  roadmap: RoadmapMeta;
   layers: RoadmapLayer[];
 }
 
@@ -90,3 +102,23 @@ export interface UpdateLayerDto {
   shortTag: string;
   subtitle?: string;
 }
+
+/** Payload to create a new Topic / Roadmap */
+export interface CreateRoadmapDto {
+  title: string;
+  shortCode: string;
+  description?: string;
+  layers: {
+    title: string;
+    shortTag: string;
+    subtitle?: string;
+  }[];
+}
+
+/** Payload to update an existing Topic / Roadmap */
+export interface UpdateRoadmapDto {
+  title: string;
+  shortCode: string;
+  description?: string;
+}
+

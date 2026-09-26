@@ -31,13 +31,7 @@ interface EditItemContentDrawerProps {
   isOpen: boolean;
   item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
   onClose: () => void;
-  onSubmit: (
-    id: string,
-    title: string,
-    description: string,
-    level?: RoadmapLevel,
-    content?: string
-  ) => void;
+  onSubmit: (id: string, content: string) => Promise<void> | void;
 }
 
 export function EditItemContentDrawer({
@@ -50,7 +44,9 @@ export function EditItemContentDrawer({
   const [isVisible, setIsVisible] = useState(false);
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [isExpandedWidth, setIsExpandedWidth] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [content, setContent] = useState("");
+  const contentRef = React.useRef("");
 
   // Smooth open / close lifecycle transitions
   useEffect(() => {
@@ -72,6 +68,7 @@ export function EditItemContentDrawer({
     } else {
       setIsVisible(false);
       setIsEditorReady(false);
+      setIsSaving(false);
       const timer = setTimeout(() => {
         setIsMounted(false);
       }, 300);
@@ -79,17 +76,33 @@ export function EditItemContentDrawer({
     }
   }, [isOpen]);
 
+  // Synchronize initial content ONLY once when drawer opens for a given item
+  const itemId = item?.id;
   useEffect(() => {
     if (isOpen && item) {
-      setContent(item.content || "");
+      const initialContent = item.content || "";
+      setContent(initialContent);
+      contentRef.current = initialContent;
     }
-  }, [isOpen, item]);
+  }, [isOpen, itemId]);
 
-  const handleSave = useCallback(() => {
-    if (!item) return;
-    onSubmit(item.id, item.title, item.description, item.level, content);
-    onClose();
-  }, [item, content, onSubmit, onClose]);
+  const handleContentChange = useCallback((val: string) => {
+    contentRef.current = val;
+    setContent(val);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (!item || isSaving) return;
+    try {
+      setIsSaving(true);
+      await onSubmit(item.id, contentRef.current);
+      onClose();
+    } catch (err) {
+      console.error("Failed to save content in drawer:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [item, isSaving, onSubmit, onClose]);
 
   // Handle ESC and Cmd+S / Ctrl+S shortcuts
   useEffect(() => {
@@ -192,7 +205,7 @@ export function EditItemContentDrawer({
               {isEditorReady ? (
                 <Editor
                   value={content}
-                  onChange={(val) => setContent(val)}
+                  onChange={handleContentChange}
                   namespace="RoadmapItemContentDrawerEditor"
                   showTopbar={false}
                   fillHeight={true}
@@ -247,16 +260,28 @@ export function EditItemContentDrawer({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
+                disabled={isSaving}
+                className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98"
+                disabled={isSaving}
+                className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Save content
+                {isSaving ? (
+                  <>
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Save content</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

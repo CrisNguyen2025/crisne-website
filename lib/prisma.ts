@@ -15,9 +15,15 @@ function isCurrentClient(client: PrismaClient) {
     role?: unknown;
     apiEndpoint?: unknown;
     roleApiAccess?: unknown;
+    roadmap?: unknown;
   };
 
-  return Boolean(delegates.role && delegates.apiEndpoint && delegates.roleApiAccess);
+  return Boolean(
+    delegates.role &&
+    delegates.apiEndpoint &&
+    delegates.roleApiAccess &&
+    delegates.roadmap
+  );
 }
 
 export const prisma =

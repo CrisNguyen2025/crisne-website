@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Layers, Tag, AlignLeft } from 'lucide-react';
 import { RoadmapLayer } from '@/lib/roadmap/types';
 
@@ -16,6 +17,11 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
   const [shortTag, setShortTag] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (layer) {
@@ -26,7 +32,7 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
     }
   }, [layer]);
 
-  if (!isOpen || !layer) return null;
+  if (!isOpen || !layer || !mounted) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +49,10 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="fixed inset-0 -z-10" onClick={onClose} />
+      <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
@@ -56,7 +63,7 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -112,13 +119,13 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors"
+              className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors"
+              className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors cursor-pointer"
             >
               Save changes
             </button>
@@ -127,4 +134,6 @@ export function EditLayerModal({ isOpen, layer, onClose, onSubmit }: EditLayerMo
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

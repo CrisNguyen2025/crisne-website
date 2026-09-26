@@ -2,353 +2,354 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import dayjs from 'dayjs';
-import { ChecklistItem, RoadmapLayer, RoadmapLevel, RoadmapStats, LevelGroup } from '@/lib/roadmap/types';
-import { INITIAL_ROADMAP_DATA } from '@/lib/roadmap/data';
+import {
+  ChecklistItem,
+  RoadmapLayer,
+  RoadmapLevel,
+  RoadmapStats,
+  RoadmapMeta,
+} from '@/lib/roadmap/types';
+import * as roadmapService from '@/logic/roadmap/roadmapService';
+import { slugify } from '@/lib/utils';
 
-const STORAGE_KEYS = {
-  NOTES: 'roadmap_item_notes_v1',
-  CUSTOM_DATA: 'roadmap_layers_data_v1',
-  ACTIVE_ITEM: 'roadmap_active_item_id_v1',
-  SPLIT_RATIO: 'roadmap_split_ratio_v1',
-};
+// In-memory cache across topic switches for instant, smooth transitions
+const roadmapCache = new Map<string, { roadmap: RoadmapMeta; layers: RoadmapLayer[] }>();
 
-export function useRoadmap() {
-  const [layers, setLayers] = useState<RoadmapLayer[]>(INITIAL_ROADMAP_DATA);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [activeItemId, setActiveItemId] = useState<string>('kb-core-01');
+export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId?: string) {
+  const [roadmapMeta, setRoadmapMeta] = useState<RoadmapMeta | null>(() => roadmapCache.get(slug)?.roadmap || null);
+  const [layers, setLayers] = useState<RoadmapLayer[]>(() => roadmapCache.get(slug)?.layers || []);
+  const [activeItemId, setActiveItemId] = useState<string>(initialActiveItemId || '');
   const [selectedLayerId, setSelectedLayerId] = useState<string | 'all'>('all');
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !roadmapCache.has(slug));
+  const [isError, setIsError] = useState<boolean>(false);
 
-  // Load state from localStorage on client mount
-  useEffect(() => {
-    try {
-      const savedNotes = localStorage.getItem(STORAGE_KEYS.NOTES);
-      if (savedNotes) {
-        setNotes(JSON.parse(savedNotes));
-      }
-
-      const savedActiveItem = localStorage.getItem(STORAGE_KEYS.ACTIVE_ITEM);
-      if (savedActiveItem) {
-        setActiveItemId(savedActiveItem);
-      }
-
-      const savedLayers = localStorage.getItem(STORAGE_KEYS.CUSTOM_DATA);
-      if (savedLayers) {
-        setLayers(JSON.parse(savedLayers));
-      }
-    } catch {
-      // Fallback silently if storage unavailable
-    } finally {
-      setIsLoaded(true);
+  // 1. Fetch roadmap hierarchy from API by slug
+  const loadRoadmap = useCallback(async (targetSlug: string) => {
+    // If cached, apply cache immediately for seamless zero-flicker transition
+    const cached = roadmapCache.get(targetSlug);
+    if (cached) {
+      setRoadmapMeta(cached.roadmap);
+      setLayers(cached.layers);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
     }
-  }, []);
+    setIsError(false);
 
-  // Persist layers helper
-  const persistLayers = (newLayers: RoadmapLayer[]) => {
     try {
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_DATA, JSON.stringify(newLayers));
-    } catch {}
-  };
+      const data = await roadmapService.fetchRoadmapBySlug(targetSlug);
+      // Update cache
+      roadmapCache.set(targetSlug, data);
 
-  // Add a new Layer dynamically
-  const addLayer = useCallback((title: string, shortTag: string, subtitle?: string) => {
-    const newLayerId = `layer-${Date.now()}`;
-    const newLayer: RoadmapLayer = {
-      id: newLayerId,
-      order: layers.length + 1,
-      title: title.trim(),
-      shortTag: shortTag.trim().toUpperCase(),
-      subtitle: subtitle?.trim() || '',
-      groups: [
-        { level: 'core', title: '🟢 Core', items: [] },
-        { level: 'intermediate', title: '🟡 Intermediate', items: [] },
-        { level: 'advanced', title: '🔴 Advanced', items: [] },
-      ],
-    };
+      setRoadmapMeta(data.roadmap);
+      setLayers(data.layers);
 
-    setLayers((prev) => {
-      const updated = [...prev, newLayer];
-      persistLayers(updated);
-      return updated;
-    });
+      // Select initial item (match by id OR slug) or first available item
+      let matchedId = '';
+      if (initialActiveItemId) {
+        for (const layer of data.layers) {
+          for (const group of layer.groups) {
+            const found = group.items.find(
+              (i) => i.id === initialActiveItemId || i.slug === initialActiveItemId || slugify(i.title) === initialActiveItemId
+            );
+            if (found) {
+              matchedId = found.id;
+              break;
+            }
+          }
+          if (matchedId) break;
+        }
+      }
 
-    setSelectedLayerId(newLayerId);
-    return newLayer;
-  }, [layers.length]);
+      if (matchedId) {
+        setActiveItemId(matchedId);
+      } else {
+        const firstItem = data.layers[0]?.groups[0]?.items[0];
+        if (firstItem) {
+          setActiveItemId(firstItem.id);
+        }
+      }
+    } catch (err) {
+      console.error('[useRoadmap] Failed to load roadmap:', err);
+      if (!cached) {
+        setIsError(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [initialActiveItemId]);
 
-  // Edit an existing Layer
-  const editLayer = useCallback((layerId: string, title: string, shortTag: string, subtitle?: string) => {
-    setLayers((prev) => {
-      const updated = prev.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        return {
-          ...layer,
+  useEffect(() => {
+    loadRoadmap(slug);
+  }, [slug, loadRoadmap]);
+
+  // 2. Add Layer
+  const addLayer = useCallback(
+    async (title: string, shortTag: string, subtitle?: string) => {
+      try {
+        await roadmapService.createLayer(slug, {
           title: title.trim(),
           shortTag: shortTag.trim().toUpperCase(),
-          subtitle: subtitle !== undefined ? subtitle.trim() : layer.subtitle,
-        };
-      });
-      persistLayers(updated);
-      return updated;
-    });
-  }, []);
-
-  // Delete a Layer
-  const deleteLayer = useCallback((layerId: string) => {
-    setLayers((prev) => {
-      const updated = prev.filter((layer) => layer.id !== layerId);
-      persistLayers(updated);
-      return updated;
-    });
-
-    setSelectedLayerId((curr) => (curr === layerId ? 'all' : curr));
-  }, []);
-
-  const addGroup = useCallback((layerId: string, title: string) => {
-    const newGroupId = `group-${Date.now()}`;
-    const newGroup: LevelGroup = {
-      id: newGroupId,
-      level: newGroupId,
-      title: title.trim(),
-      items: [],
-    };
-
-    setLayers((prev) => {
-      const updated = prev.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        return {
-          ...layer,
-          groups: [...layer.groups, newGroup],
-        };
-      });
-      persistLayers(updated);
-      return updated;
-    });
-
-    return newGroup;
-  }, []);
-
-  const deleteGroup = useCallback((layerId: string, groupLevel: string) => {
-    setLayers((prev) => {
-      const updated = prev.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        return {
-          ...layer,
-          groups: layer.groups.filter((g) => g.level !== groupLevel),
-        };
-      });
-      persistLayers(updated);
-      return updated;
-    });
-  }, []);
-
-  // Add a new Item dynamically
-  const addItem = useCallback((layerId: string, level: RoadmapLevel, title: string, description: string) => {
-    const now = dayjs().toISOString();
-    const newItemId = `item-${Date.now()}`;
-    const newItem: ChecklistItem = {
-      id: newItemId,
-      layerId,
-      level,
-      title: title.trim(),
-      description: description.trim(),
-      content: '',
-      createdAt: now,
-      updatedAt: now,
-      notes: '',
-    };
-
-    setLayers((prev) => {
-      const updated = prev.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        return {
-          ...layer,
-          groups: layer.groups.map((group) => {
-            if (group.level !== level) return group;
-            return {
-              ...group,
-              items: [newItem, ...group.items],
-            };
-          }),
-        };
-      });
-      persistLayers(updated);
-      return updated;
-    });
-
-    setActiveItemId(newItemId);
-    return newItem;
-  }, []);
-
-  const editItem = useCallback((
-    itemId: string,
-    title: string,
-    description: string,
-    newLevel?: RoadmapLevel,
-    content?: string,
-  ) => {
-    const now = dayjs().toISOString();
-    setLayers((prev) => {
-      let targetItem: ChecklistItem | null = null;
-      let currentLayerId = '';
-      let currentLevel: RoadmapLevel = 'core';
-
-      for (const layer of prev) {
-        for (const group of layer.groups) {
-          const found = group.items.find((i) => i.id === itemId);
-          if (found) {
-            targetItem = found;
-            currentLayerId = layer.id;
-            currentLevel = group.level;
-            break;
-          }
-        }
-        if (targetItem) break;
+          subtitle: subtitle?.trim(),
+        });
+        await loadRoadmap(slug);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to add layer:', err);
       }
+    },
+    [slug, loadRoadmap]
+  );
 
-      if (!targetItem) return prev;
+  // 2.1 Edit Roadmap
+  const editRoadmap = useCallback(
+    async (title: string, shortCode: string, description?: string) => {
+      try {
+        const { roadmap: updated } = await roadmapService.updateRoadmapBySlug(slug, {
+          title: title.trim(),
+          shortCode: shortCode.trim().toUpperCase(),
+          description: description?.trim(),
+        });
+        setRoadmapMeta((prev) => (prev ? { ...prev, ...updated } : updated));
+        const currentCache = roadmapCache.get(slug);
+        if (currentCache) {
+          roadmapCache.set(slug, {
+            ...currentCache,
+            roadmap: { ...currentCache.roadmap, ...updated },
+          });
+        }
+      } catch (err) {
+        console.error('[useRoadmap] Failed to edit roadmap:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
 
-      if (!newLevel || newLevel === currentLevel) {
-        const updated = prev.map((layer) => ({
+  // 3. Edit Layer
+  const editLayer = useCallback(
+    async (layerId: string, title: string, shortTag: string, subtitle?: string) => {
+      try {
+        await roadmapService.updateLayer({
+          id: layerId,
+          title: title.trim(),
+          shortTag: shortTag.trim().toUpperCase(),
+          subtitle: subtitle?.trim(),
+        });
+        await loadRoadmap(slug);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to edit layer:', err);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 4. Delete Layer
+  const deleteLayer = useCallback(
+    async (layerId: string) => {
+      try {
+        await roadmapService.deleteLayer(layerId);
+        await loadRoadmap(slug);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to delete layer:', err);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 4.1 Add Group to Layer
+  const addGroup = useCallback(
+    async (layerId: string, title: string, level?: string) => {
+      try {
+        await roadmapService.createGroup(layerId, title, level);
+        await loadRoadmap(slug);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to add group:', err);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 4.2 Edit Group Title
+  const editGroup = useCallback(
+    async (groupId: string, title: string) => {
+      try {
+        // Optimistic update
+        setLayers((prev) =>
+          prev.map((layer) => ({
+            ...layer,
+            groups: layer.groups.map((group) =>
+              group.id === groupId ? { ...group, title: title.trim() } : group
+            ),
+          }))
+        );
+        await roadmapService.updateGroup(groupId, title.trim());
+      } catch (err) {
+        console.error('[useRoadmap] Failed to edit group:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 4.3 Delete Group
+  const deleteGroup = useCallback(
+    async (groupId: string) => {
+      try {
+        await roadmapService.deleteGroup(groupId);
+        await loadRoadmap(slug);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to delete group:', err);
+        throw err;
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 5. Add Item
+  const addItem = useCallback(
+    async (layerId: string, level: RoadmapLevel, title: string, description: string) => {
+      try {
+        const { item: created } = await roadmapService.createItem({
+          layerId,
+          level,
+          title: title.trim(),
+          description: description.trim(),
+        });
+        await loadRoadmap(slug);
+        if (created?.id) {
+          setActiveItemId(created.id);
+        }
+      } catch (err) {
+        console.error('[useRoadmap] Failed to add item:', err);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 6. Edit Item (Title / Description)
+  const editItem = useCallback(
+    async (id: string, title: string, description: string) => {
+      try {
+        // Optimistic UI update
+        setLayers((prev) =>
+          prev.map((layer) => ({
+            ...layer,
+            groups: layer.groups.map((group) => ({
+              ...group,
+              items: group.items.map((item) =>
+                item.id === id
+                  ? { ...item, title: title.trim(), description: description.trim(), updatedAt: dayjs().toISOString() }
+                  : item
+              ),
+            })),
+          }))
+        );
+
+        await roadmapService.updateItemInfo({
+          id,
+          title: title.trim(),
+          description: description.trim(),
+        });
+      } catch (err) {
+        console.error('[useRoadmap] Failed to update item info:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 7. Delete Item
+  const deleteItem = useCallback(
+    async (itemId: string) => {
+      try {
+        // Optimistic delete
+        setLayers((prev) =>
+          prev.map((layer) => ({
+            ...layer,
+            groups: layer.groups.map((group) => ({
+              ...group,
+              items: group.items.filter((item) => item.id !== itemId),
+            })),
+          }))
+        );
+
+        await roadmapService.deleteItem(itemId);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to delete item:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
+  // 8. Update Rich-Text Content (Editor)
+  const updateNote = useCallback(
+    async (itemId: string, content: string) => {
+      // Keep previous state in case rollback is needed
+      const prevLayers = layers;
+
+      // Optimistic update
+      setLayers((prev) =>
+        prev.map((layer) => ({
           ...layer,
           groups: layer.groups.map((group) => ({
             ...group,
-            items: group.items.map((item) => {
-              if (item.id !== itemId) return item;
-              return {
-                ...item,
-                title: title.trim(),
-                description: description.trim(),
-                ...(content !== undefined ? { content } : {}),
-                updatedAt: now,
-              };
-            }),
+            items: group.items.map((item) =>
+              item.id === itemId
+                ? { ...item, content, updatedAt: dayjs().toISOString() }
+                : item
+            ),
           })),
-        }));
-        persistLayers(updated);
-        return updated;
-      }
+        }))
+      );
 
-      const updatedItem: ChecklistItem = {
-        ...targetItem,
-        title: title.trim(),
-        description: description.trim(),
-        ...(content !== undefined ? { content } : {}),
-        level: newLevel,
-        updatedAt: now,
-      };
-
-      const updated = prev.map((layer) => {
-        if (layer.id !== currentLayerId) return layer;
-        return {
-          ...layer,
-          groups: layer.groups.map((group) => {
-            if (group.level === currentLevel) {
-              return {
-                ...group,
-                items: group.items.filter((i) => i.id !== itemId),
-              };
-            }
-            if (group.level === newLevel) {
-              return {
-                ...group,
-                items: [updatedItem, ...group.items],
-              };
-            }
-            return group;
-          }),
-        };
-      });
-
-      persistLayers(updated);
-      return updated;
-    });
-  }, []);
-
-  // Delete an Item
-  const deleteItem = useCallback((itemId: string) => {
-    setLayers((prev) => {
-      const updated = prev.map((layer) => ({
-        ...layer,
-        groups: layer.groups.map((group) => ({
-          ...group,
-          items: group.items.filter((item) => item.id !== itemId),
-        })),
-      }));
-      persistLayers(updated);
-      return updated;
-    });
-
-    setActiveItemId((curr) => (curr === itemId ? '' : curr));
-  }, []);
-
-  // Update notes
-  const updateNote = useCallback((id: string, text: string) => {
-    const now = dayjs().toISOString();
-    setNotes((prev) => {
-      const next = { ...prev, [id]: text };
       try {
-        localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+        await roadmapService.updateItemContent({
+          id: itemId,
+          content,
+        });
+      } catch (err) {
+        console.error('[useRoadmap] Failed to update item content:', err);
+        setLayers(prevLayers);
+        throw err;
+      }
+    },
+    [layers]
+  );
 
-    // Also update updatedAt timestamp for the item
-    setLayers((prevLayers) => {
-      const updated = prevLayers.map((layer) => ({
-        ...layer,
-        groups: layer.groups.map((group) => ({
-          ...group,
-          items: group.items.map((item) => {
-            if (item.id !== id) return item;
+  // 9. Reorder items in group
+  const updateGroupItems = useCallback(
+    async (layerId: string, level: RoadmapLevel, newItems: ChecklistItem[]) => {
+      try {
+        // Optimistic update
+        setLayers((prev) =>
+          prev.map((layer) => {
+            if (layer.id !== layerId) return layer;
             return {
-              ...item,
-              updatedAt: now,
+              ...layer,
+              groups: layer.groups.map((g) => {
+                if (g.level !== level) return g;
+                return { ...g, items: newItems };
+              }),
             };
-          }),
-        })),
-      }));
-      persistLayers(updated);
-      return updated;
-    });
-  }, []);
+          })
+        );
+
+        await roadmapService.reorderGroupItems({
+          layerId,
+          level,
+          orderedItemIds: newItems.map((item) => item.id),
+        });
+      } catch (err) {
+        console.error('[useRoadmap] Failed to reorder items:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
 
   const selectActiveItem = useCallback((id: string) => {
     setActiveItemId(id);
-    try {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_ITEM, id);
-    } catch {}
-  }, []);
-
-  // Reorder items in a specific group (strictly within its parent layer and group)
-  const updateGroupItems = useCallback((layerId: string, level: RoadmapLevel, newItems: ChecklistItem[]) => {
-    setLayers((prevLayers) => {
-      const updated = prevLayers.map((layer) => {
-        if (layer.id !== layerId) return layer;
-        return {
-          ...layer,
-          groups: layer.groups.map((group) => {
-            if (group.level !== level) return group;
-            return { ...group, items: newItems };
-          }),
-        };
-      });
-      persistLayers(updated);
-      return updated;
-    });
-  }, []);
-
-  // Reset to initial seed data
-  const resetToInitialData = useCallback(() => {
-    if (typeof window !== 'undefined' && window.confirm('Reset all roadmap data to default? All custom changes will be lost.')) {
-      setLayers(INITIAL_ROADMAP_DATA);
-      setSelectedLayerId('all');
-      setActiveItemId('kb-core-01');
-      try {
-        localStorage.removeItem(STORAGE_KEYS.CUSTOM_DATA);
-        localStorage.removeItem(STORAGE_KEYS.NOTES);
-      } catch {}
-    }
   }, []);
 
   // Compute stats
@@ -362,24 +363,20 @@ export function useRoadmap() {
 
     layers.forEach((layer) => {
       layer.groups.forEach((group) => {
-        const lvl = group.level;
-        group.items.forEach(() => {
-          total += 1;
-          if (lvl === 'core' || lvl === 'intermediate' || lvl === 'advanced') {
-            byLevel[lvl] += 1;
-          }
-        });
+        const count = group.items.length;
+        total += count;
+        if (group.level === 'core') byLevel.core += count;
+        else if (group.level === 'intermediate') byLevel.intermediate += count;
+        else if (group.level === 'advanced') byLevel.advanced += count;
       });
     });
 
-    return {
-      total,
-      byLevel,
-    };
+    return { total, byLevel };
   }, [layers]);
 
-  // Find active item
+  // Compute active item with layer & group metadata
   const activeItem = useMemo(() => {
+    if (!activeItemId) return null;
     for (const layer of layers) {
       for (const group of layer.groups) {
         const found = group.items.find((item) => item.id === activeItemId);
@@ -388,35 +385,36 @@ export function useRoadmap() {
             ...found,
             layerTitle: layer.title,
             groupTitle: group.title,
-            notes: notes[found.id] || '',
-            content: found.content !== undefined ? found.content : (notes[found.id] || ''),
           };
         }
       }
     }
     return null;
-  }, [layers, activeItemId, notes]);
+  }, [layers, activeItemId]);
 
-  // Filtered layers based on selected parent layer (shortTag)
+  // Filtered layers
   const filteredLayers = useMemo(() => {
     if (selectedLayerId === 'all') return layers;
     return layers.filter((layer) => layer.id === selectedLayerId);
   }, [layers, selectedLayerId]);
 
   return {
+    roadmapMeta,
     layers,
     filteredLayers,
-    notes,
     activeItemId,
     activeItem,
     selectedLayerId,
     stats,
-    isLoaded,
+    isLoading,
+    isError,
     setSelectedLayerId,
     addLayer,
     editLayer,
     deleteLayer,
+    editRoadmap,
     addGroup,
+    editGroup,
     deleteGroup,
     addItem,
     editItem,
@@ -424,6 +422,6 @@ export function useRoadmap() {
     updateNote,
     selectActiveItem,
     updateGroupItems,
-    resetToInitialData,
+    refetch: () => loadRoadmap(slug),
   };
 }

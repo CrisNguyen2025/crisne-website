@@ -14,6 +14,7 @@ import {
 import { GA_ID } from "@/lib/analytics";
 import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
 import { ToastProvider } from "@/components/ui/toast";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./styles/globals.css";
 
 const inter = Inter({
@@ -156,7 +157,9 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <ToastProvider>
-              {children}
+              <NuqsAdapter>
+                {children}
+              </NuqsAdapter>
               <FloatingChatBot />
             </ToastProvider>
           </TooltipProvider>

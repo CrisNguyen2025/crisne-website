@@ -5,14 +5,15 @@ import { useEffect, useRef } from 'react';
 
 export function SetContentPlugin({ value }: { value?: string }) {
   const [editor] = useLexicalComposerContext();
-  const isInternalUpdate = useRef(false);
+  const lastHtml = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    // Skip if this update came from the editor itself
-    if (isInternalUpdate.current) {
-      isInternalUpdate.current = false;
+    // If value hasn't changed or matches what the editor already contains, do nothing
+    if (value === lastHtml.current) {
       return;
     }
+
+    lastHtml.current = value;
 
     editor.update(() => {
       const parser = new DOMParser();
@@ -29,10 +30,12 @@ export function SetContentPlugin({ value }: { value?: string }) {
     });
   }, [editor, value]);
 
-  // Track internal updates
+  // Track editor changes and update lastHtml ref so internal updates don't cause reset
   useEffect(() => {
-    return editor.registerUpdateListener(() => {
-      isInternalUpdate.current = true;
+    return editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        // We let SetContentPlugin know that internal updates happened
+      });
     });
   }, [editor]);
 

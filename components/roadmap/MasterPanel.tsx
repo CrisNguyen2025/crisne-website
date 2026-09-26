@@ -18,6 +18,8 @@ function Collapsible({ open, children }: { open: boolean; children: ReactNode })
 
 import {
   ChevronRight,
+  ChevronsRight,
+  ChevronsLeft,
   Plus,
   Trash2,
   Pencil,
@@ -42,10 +44,12 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { RoadmapLayer, RoadmapLevel, ChecklistItem, RoadmapStats } from '@/lib/roadmap/types';
+import { RoadmapLayer, RoadmapLevel, ChecklistItem, RoadmapStats, RoadmapMeta } from '@/lib/roadmap/types';
 import { ChecklistItemRow } from './ChecklistItemRow';
 import { EditLayerModal } from './EditLayerModal';
 import { CreateGroupModal } from './CreateGroupModal';
+import { EditGroupModal } from './EditGroupModal';
+import { EditTopicModal } from './EditTopicModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skeleton loaders — shown while data is fetching from BE
@@ -89,6 +93,7 @@ function SkeletonLayerCard() {
 
 interface SortableGroupProps {
   layerId: string;
+  groupId?: string;
   level: RoadmapLevel;
   title: string;
   items: ChecklistItem[];
@@ -96,6 +101,8 @@ interface SortableGroupProps {
   onSelectItem: (id: string) => void;
   onReorderGroupItems: (layerId: string, level: RoadmapLevel, reorderedItems: ChecklistItem[]) => void;
   onOpenCreateItem: (layerId: string, level: RoadmapLevel) => void;
+  onEditGroup?: (group: { id: string; title: string; level: RoadmapLevel; items: ChecklistItem[] }) => void;
+  onDeleteGroup?: (groupId: string, groupTitle: string, itemCount: number) => void;
   onDeleteItem: (itemId: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -103,6 +110,7 @@ interface SortableGroupProps {
 
 function SortableGroup({
   layerId,
+  groupId,
   level,
   title,
   items,
@@ -110,10 +118,13 @@ function SortableGroup({
   onSelectItem,
   onReorderGroupItems,
   onOpenCreateItem,
+  onEditGroup,
+  onDeleteGroup,
   onDeleteItem,
   isCollapsed,
   onToggleCollapse,
 }: SortableGroupProps) {
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -133,7 +144,7 @@ function SortableGroup({
     <div className="space-y-1.5">
       <div
         onClick={onToggleCollapse}
-        className="group/gh flex items-center justify-between px-2 py-1 rounded-lg hover:bg-muted/40 cursor-pointer select-none text-[11px] font-semibold text-muted-foreground"
+        className="group/gh flex items-center justify-between px-2 py-1 rounded-lg hover:bg-muted/40 cursor-pointer select-none text-[11px] font-semibold text-muted-foreground relative"
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <ChevronRight
@@ -145,14 +156,78 @@ function SortableGroup({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpenCreateItem(layerId, level); }}
-            className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-muted/80 rounded-md transition-colors"
-            title={`Add new item to ${title}`}
-          >
-            <MoreHorizontal className="w-3.5 h-3.5" />
-          </button>
+          {/* Actions popover */}
+          <div className="relative shrink-0" onMouseLeave={() => setIsActionsOpen(false)}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsActionsOpen((prev) => !prev);
+              }}
+              className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-muted/80 rounded-md transition-colors"
+              title="Group actions"
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </button>
+
+            {isActionsOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsActionsOpen(false);
+                  }}
+                />
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseLeave={() => setIsActionsOpen(false)}
+                  className="absolute right-0 top-full mt-1 z-40 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-lg p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsActionsOpen(false);
+                      onOpenCreateItem(layerId, level);
+                    }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-primary" />
+                    <span>Create item</span>
+                  </button>
+
+                  {groupId && onEditGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsOpen(false);
+                        onEditGroup({ id: groupId, title, level, items });
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Edit group</span>
+                    </button>
+                  )}
+
+                  {groupId && onDeleteGroup && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsOpen(false);
+                        onDeleteGroup(groupId, title, items.length);
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete group</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <span className="text-[10px] font-medium text-muted-foreground/70 bg-background/60 px-2 py-0.5 rounded-full border border-border/40">
             {items.length} {items.length === 1 ? 'item' : 'items'}
           </span>
@@ -198,6 +273,11 @@ interface MasterPanelProps {
   activeItemId: string;
   selectedLayerId: string | 'all';
   stats: RoadmapStats;
+  currentRoadmap?: (RoadmapMeta & { [key: string]: any }) | null;
+  roadmaps?: { slug: string; title: string }[];
+  onRoadmapChange?: (slug: string) => void;
+  onEditRoadmap?: (title: string, shortCode: string, description?: string) => Promise<void>;
+  onDeleteRoadmap?: (slug: string) => void;
   /** Pass true while fetching data from API to show skeleton loaders */
   isLoading?: boolean;
   /** Pass true when an API error occurred to show error state */
@@ -208,6 +288,8 @@ interface MasterPanelProps {
   onOpenCreateLayer: () => void;
   onOpenCreateItem: (layerId: string, level: RoadmapLevel) => void;
   onAddGroup?: (layerId: string, title: string) => void;
+  onEditGroup?: (groupId: string, title: string) => void;
+  onDeleteGroup?: (groupId: string) => void;
   onEditLayer?: (layerId: string, title: string, shortTag: string, subtitle?: string) => void;
   onDeleteLayer: (layerId: string) => void;
   onDeleteItem: (itemId: string) => void;
@@ -219,6 +301,10 @@ export function MasterPanel({
   activeItemId,
   selectedLayerId,
   stats,
+  currentRoadmap,
+  roadmaps = [],
+  onRoadmapChange,
+  onEditRoadmap,
   isLoading = false,
   isError = false,
   onLayerChange,
@@ -227,17 +313,65 @@ export function MasterPanel({
   onOpenCreateLayer,
   onOpenCreateItem,
   onAddGroup,
+  onEditGroup,
+  onDeleteGroup,
   onEditLayer,
   onDeleteLayer,
   onDeleteItem,
+  onDeleteRoadmap,
 }: MasterPanelProps) {
   const [collapsedLayers, setCollapsedLayers] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [isRoadmapActionsOpen, setIsRoadmapActionsOpen] = useState(false);
+  const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
   const [activePopoverLayerId, setActivePopoverLayerId] = useState<string | null>(null);
   const [editingLayer, setEditingLayer] = useState<RoadmapLayer | null>(null);
+  const [editingGroup, setEditingGroup] = useState<any | null>(null);
   const [targetGroupLayer, setTargetGroupLayer] = useState<RoadmapLayer | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Layer filter tabs horizontal scroll tracking (for gradient fade + << / >> indicators)
+  const tabsContainerRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkTabsScroll = React.useCallback(() => {
+    const el = tabsContainerRef.current;
+    if (el) {
+      // Allow 2px tolerance for subpixel rounding
+      const hasMoreLeft = el.scrollLeft > 2;
+      const hasMoreRight = el.scrollWidth - el.clientWidth - el.scrollLeft > 2;
+      setCanScrollLeft(hasMoreLeft);
+      setCanScrollRight(hasMoreRight);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    checkTabsScroll();
+    const el = tabsContainerRef.current;
+    if (!el) return;
+
+    el.addEventListener('scroll', checkTabsScroll, { passive: true });
+    window.addEventListener('resize', checkTabsScroll);
+
+    const resizeObserver = new ResizeObserver(() => checkTabsScroll());
+    resizeObserver.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', checkTabsScroll);
+      window.removeEventListener('resize', checkTabsScroll);
+      resizeObserver.disconnect();
+    };
+  }, [checkTabsScroll, allLayers]);
+
+  const handleScrollTabsLeft = () => {
+    tabsContainerRef.current?.scrollBy({ left: -140, behavior: 'smooth' });
+  };
+
+  const handleScrollTabsRight = () => {
+    tabsContainerRef.current?.scrollBy({ left: 140, behavior: 'smooth' });
+  };
 
   const toggleLayer = (layerId: string) =>
     setCollapsedLayers((prev) => ({ ...prev, [layerId]: !prev[layerId] }));
@@ -259,74 +393,167 @@ export function MasterPanel({
   return (
     <div className="flex flex-col h-full w-full overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="px-4 py-3.5 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 space-y-2.5">
+      <div className="px-4 py-3.5 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 space-y-2.5 relative z-30">
         <div className="flex items-center justify-between gap-2 h-7">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div className="flex items-center gap-1.5 truncate">
-              <span className="font-bold text-xs text-foreground tracking-tight truncate">
-                AI Architecture
-              </span>
-              <span className="text-[10px] text-muted-foreground font-medium bg-muted/60 px-1.5 py-0.2 rounded border border-border/40">
-                {isLoading ? '…' : stats.total}
-              </span>
-            </div>
+          <div className="flex items-center gap-1.5 min-w-0 truncate">
+            <span className="font-bold text-xs text-foreground tracking-tight truncate">
+              {currentRoadmap?.title || 'Architecture Roadmap'}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-medium bg-muted/60 px-1.5 py-0.5 rounded border border-border/40 shrink-0">
+              {isLoading ? '…' : stats.total}
+            </span>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="relative shrink-0" onMouseLeave={() => setIsRoadmapActionsOpen(false)}>
             <button
               type="button"
-              onClick={onOpenCreateLayer}
-              className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs transition-colors flex items-center gap-1.5"
-              title="Create a new architecture layer"
+              onClick={() => setIsRoadmapActionsOpen((prev) => !prev)}
+              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-border/40"
+              title="Topic options"
             >
-              <FolderPlus className="w-3.5 h-3.5" />
-              <span>Add layer</span>
+              <MoreHorizontal className="w-4 h-4" />
             </button>
+
+            {isRoadmapActionsOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsRoadmapActionsOpen(false)}
+                />
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseLeave={() => setIsRoadmapActionsOpen(false)}
+                  className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRoadmapActionsOpen(false);
+                      onOpenCreateLayer();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 text-primary" />
+                    <span>Add layer</span>
+                  </button>
+
+                  {onEditRoadmap && currentRoadmap && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRoadmapActionsOpen(false);
+                        setIsEditTopicOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Edit topic</span>
+                    </button>
+                  )}
+
+                  {onDeleteRoadmap && currentRoadmap && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsRoadmapActionsOpen(false);
+                        if (
+                          window.confirm(
+                            `Are you sure you want to delete topic "${currentRoadmap.title}"? All layers and items inside will be deleted.`
+                          )
+                        ) {
+                          onDeleteRoadmap(currentRoadmap.slug);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete topic</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Layer filter tabs */}
-        <div className="flex items-center gap-1 bg-background/80 p-1 rounded-xl border border-border/60 overflow-x-auto scrollbar-none">
-          {isLoading ? (
-            <>
-              <SkeletonPill width="w-16" />
-              <SkeletonPill width="w-12" />
-              <SkeletonPill width="w-12" />
-              <SkeletonPill width="w-14" />
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => onLayerChange('all')}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all shrink-0 ${
-                  selectedLayerId === 'all'
-                    ? 'bg-primary text-primary-foreground shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                }`}
-              >
-                All ({allLayers.length})
-              </button>
-              {allLayers.map((layer) => (
+        {/* Layer filter tabs with horizontal scroll fade & << / >> indicators */}
+        <div className="relative group/tabs flex items-center">
+          {/* Left edge fade gradient & << indicator when scrolled right */}
+          <div
+            className={`absolute left-0 top-0 bottom-0 pl-1 pr-12 flex items-center justify-start bg-gradient-to-r from-background via-background/90 to-transparent rounded-l-xl z-20 transition-all duration-300 pointer-events-none ${
+              canScrollLeft ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={handleScrollTabsLeft}
+              title="Previous layers (scroll left)"
+              disabled={!canScrollLeft}
+              className="pointer-events-auto h-7 px-1.5 min-w-[28px] rounded-lg bg-card/90 hover:bg-primary hover:text-primary-foreground border border-border/80 shadow-sm hover:shadow text-muted-foreground transition-all duration-200 cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 backdrop-blur-sm"
+            >
+              <ChevronsLeft className="w-4 h-4 stroke-[2.2]" />
+            </button>
+          </div>
+
+          <div
+            ref={tabsContainerRef}
+            className="flex-1 flex items-center gap-1 bg-background/80 p-1 rounded-xl border border-border/60 overflow-x-auto scrollbar-none no-scrollbar touch-pan-x scroll-smooth"
+          >
+            {isLoading ? (
+              <>
+                <SkeletonPill width="w-16" />
+                <SkeletonPill width="w-12" />
+                <SkeletonPill width="w-12" />
+                <SkeletonPill width="w-14" />
+              </>
+            ) : (
+              <>
                 <button
-                  key={layer.id}
                   type="button"
-                  onClick={() => onLayerChange(layer.id)}
-                  title={layer.title}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all shrink-0 flex items-center gap-1.5 ${
-                    selectedLayerId === layer.id
+                  onClick={() => onLayerChange('all')}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all shrink-0 ${
+                    selectedLayerId === 'all'
                       ? 'bg-primary text-primary-foreground shadow-xs'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                   }`}
                 >
-                  {layer.shortTag}
+                  All ({allLayers.length})
                 </button>
-              ))}
-            </>
-          )}
+                {allLayers.map((layer) => (
+                  <button
+                    key={layer.id}
+                    type="button"
+                    onClick={() => onLayerChange(layer.id)}
+                    title={layer.title}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all shrink-0 flex items-center gap-1.5 ${
+                      selectedLayerId === layer.id
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                    }`}
+                  >
+                    {layer.shortTag}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Right edge fade gradient & >> indicator when scrollable items remain */}
+          <div
+            className={`absolute right-0 top-0 bottom-0 pr-1 pl-12 flex items-center justify-end bg-gradient-to-l from-background via-background/90 to-transparent rounded-r-xl z-20 transition-all duration-300 pointer-events-none ${
+              canScrollRight ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={handleScrollTabsRight}
+              title="More layers (scroll right)"
+              disabled={!canScrollRight}
+              className="pointer-events-auto h-7 px-1.5 min-w-[28px] rounded-lg bg-card/90 hover:bg-primary hover:text-primary-foreground border border-border/80 shadow-sm hover:shadow text-primary transition-all duration-200 cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 backdrop-blur-sm group/btn"
+            >
+              <ChevronsRight className="w-4 h-4 stroke-[2.2] group-hover:translate-x-0.5 transition-transform duration-200" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -506,25 +733,52 @@ export function MasterPanel({
                 {/* Groups — smooth expand/collapse via Collapsible */}
                 <Collapsible open={!isLayerCollapsed}>
                   <div className="p-2 space-y-2.5 border-t border-border/30">
-                    {layer.groups.map((group) => {
-                      const groupKey = `${layer.id}-${group.level}`;
-                      return (
-                        <SortableGroup
-                          key={groupKey}
-                          layerId={layer.id}
-                          level={group.level}
-                          title={group.title}
-                          items={group.items}
-                          activeItemId={activeItemId}
-                          onSelectItem={onSelectItem}
-                          onReorderGroupItems={onReorderGroupItems}
-                          onOpenCreateItem={onOpenCreateItem}
-                          onDeleteItem={onDeleteItem}
-                          isCollapsed={Boolean(collapsedGroups[groupKey])}
-                          onToggleCollapse={() => toggleGroup(groupKey)}
-                        />
-                      );
-                    })}
+                    {layer.groups.length === 0 ? (
+                      <div className="py-4 px-3 text-center space-y-2 bg-muted/20 rounded-xl border border-dashed border-border/60">
+                        <p className="text-[11px] text-muted-foreground font-medium">
+                          No groups in this layer yet.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setTargetGroupLayer(layer)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5" />
+                          <span>Create level group</span>
+                        </button>
+                      </div>
+                    ) : (
+                      layer.groups.map((group) => {
+                        const groupKey = `${layer.id}-${group.level}`;
+                        return (
+                          <SortableGroup
+                            key={groupKey}
+                            layerId={layer.id}
+                            groupId={group.id}
+                            level={group.level}
+                            title={group.title}
+                            items={group.items}
+                            activeItemId={activeItemId}
+                            onSelectItem={onSelectItem}
+                            onReorderGroupItems={onReorderGroupItems}
+                            onOpenCreateItem={onOpenCreateItem}
+                            onEditGroup={(grp) => setEditingGroup(grp)}
+                            onDeleteGroup={(gId, gTitle, itemCount) => {
+                              if (itemCount > 0) {
+                                alert(`Cannot delete group "${gTitle}": it contains ${itemCount} item(s). Please move or delete items first.`);
+                                return;
+                              }
+                              if (confirm(`Delete group "${gTitle}"? This cannot be undone.`)) {
+                                onDeleteGroup?.(gId);
+                              }
+                            }}
+                            onDeleteItem={onDeleteItem}
+                            isCollapsed={Boolean(collapsedGroups[groupKey])}
+                            onToggleCollapse={() => toggleGroup(groupKey)}
+                          />
+                        );
+                      })
+                    )}
                   </div>
                 </Collapsible>
               </div>
@@ -547,6 +801,27 @@ export function MasterPanel({
         layer={targetGroupLayer}
         onClose={() => setTargetGroupLayer(null)}
         onSubmit={(layerId, title) => onAddGroup?.(layerId, title)}
+      />
+
+      <EditGroupModal
+        isOpen={Boolean(editingGroup)}
+        group={editingGroup}
+        onClose={() => setEditingGroup(null)}
+        onSubmit={(groupId, title) => {
+          onEditGroup?.(groupId, title);
+          setEditingGroup(null);
+        }}
+      />
+
+      <EditTopicModal
+        isOpen={isEditTopicOpen}
+        topic={currentRoadmap || null}
+        onClose={() => setIsEditTopicOpen(false)}
+        onSubmit={async (title, shortCode, description) => {
+          if (onEditRoadmap) {
+            await onEditRoadmap(title, shortCode, description);
+          }
+        }}
       />
 
       {showScrollTop && (
