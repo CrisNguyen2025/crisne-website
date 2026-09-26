@@ -1,117 +1,101 @@
-import dynamic from "next/dynamic";
-import { Navbar } from "@/components/navbar";
-import { HeroSection } from "@/components/hero-section";
-import { SkillsSection } from "@/components/skills-section";
-import { Footer } from "@/components/footer";
-import { TrackedSection } from "@/components/tracked-section";
-import { ErrorBoundary } from "@/components/error-boundary";
-import { SiteLockGate } from "@/components/site-lock-gate";
-import {
-  ExperienceSkeleton,
-  ProjectsSkeleton,
-  TestimonialsSkeleton,
-  FaqSkeleton,
-  CtaSkeleton,
-} from "@/components/ui/skeleton";
+'use client';
 
-// Dynamic imports for heavy components below the fold with skeleton loading states
-const ExperienceSection = dynamic(
-  () =>
-    import("@/components/experience-section").then(
-      (mod) => mod.ExperienceSection
-    ),
-  { loading: () => <ExperienceSkeleton /> }
-);
-
-const ProjectsSection = dynamic(
-  () =>
-    import("@/components/projects-section").then((mod) => mod.ProjectsSection),
-  { loading: () => <ProjectsSkeleton /> }
-);
-
-const TestimonialsSection = dynamic(
-  () =>
-    import("@/components/testimonials-section").then(
-      (mod) => mod.TestimonialsSection
-    ),
-  { loading: () => <TestimonialsSkeleton /> }
-);
-
-const FaqSection = dynamic(
-  () => import("@/components/faq-section").then((mod) => mod.FaqSection),
-  { loading: () => <FaqSkeleton /> }
-);
-
-const CtaSection = dynamic(
-  () => import("@/components/cta-section").then((mod) => mod.CtaSection),
-  { loading: () => <CtaSkeleton /> }
-);
-
-const AnimatedBackground = dynamic(() =>
-  import("@/components/animated-background").then(
-    (mod) => mod.AnimatedBackground
-  )
-);
-
-const FloatingShapes = dynamic(() =>
-  import("@/components/floating-shapes").then((mod) => mod.FloatingShapes)
-);
-
-const UnlockGate = dynamic(() =>
-  import("@/components/unlock-gate").then((mod) => mod.UnlockGate)
-);
+import React, { useState } from 'react';
+import { useRoadmap } from '@/hooks/use-roadmap';
+import { ResizableLayout } from '@/components/roadmap/ResizableLayout';
+import { MasterPanel } from '@/components/roadmap/MasterPanel';
+import { DetailPanel } from '@/components/roadmap/DetailPanel';
+import { CreateLayerModal } from '@/components/roadmap/CreateLayerModal';
+import { CreateItemModal } from '@/components/roadmap/CreateItemModal';
+import { RoadmapLevel } from '@/lib/roadmap/types';
 
 export default function Home() {
+  const {
+    layers,
+    filteredLayers,
+    activeItemId,
+    activeItem,
+    selectedLayerId,
+    stats,
+    setSelectedLayerId,
+    addLayer,
+    editLayer,
+    deleteLayer,
+    addGroup,
+    addItem,
+    editItem,
+    deleteItem,
+    updateNote,
+    selectActiveItem,
+    updateGroupItems,
+    resetToInitialData,
+  } = useRoadmap();
+
+  // Modal states
+  const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
+  const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
+  const [targetLayerId, setTargetLayerId] = useState<string>('');
+  const [targetLevel, setTargetLevel] = useState<RoadmapLevel>('core');
+
+  const handleOpenCreateItem = (layerId: string, level: RoadmapLevel) => {
+    setTargetLayerId(layerId);
+    setTargetLevel(level);
+    setIsCreateItemOpen(true);
+  };
+
   return (
-    <UnlockGate sectionId="home">
-      <AnimatedBackground />
-      <FloatingShapes />
-      <Navbar />
-      <main id="main-content" className="flex-1" tabIndex={-1}>
-        <ErrorBoundary>
-          <TrackedSection sectionId="hero">
-            <HeroSection />
-          </TrackedSection>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <TrackedSection sectionId="skills">
-            <SkillsSection />
-          </TrackedSection>
-        </ErrorBoundary>
-
-        <TrackedSection sectionId="experience">
-          <ErrorBoundary>
-            <ExperienceSection />
-          </ErrorBoundary>
-        </TrackedSection>
-
-        <TrackedSection sectionId="projects">
-          <ErrorBoundary>
-            <ProjectsSection />
-          </ErrorBoundary>
-        </TrackedSection>
-
-        <ErrorBoundary>
-          <TrackedSection sectionId="testimonials">
-            <TestimonialsSection />
-          </TrackedSection>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <TrackedSection sectionId="cta">
-            <CtaSection />
-          </TrackedSection>
-        </ErrorBoundary>
-
-        <ErrorBoundary>
-          <TrackedSection sectionId="faq">
-            <FaqSection />
-          </TrackedSection>
-        </ErrorBoundary>
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden">
+      {/* Main Split-Pane Workspace (Full Screen, No bulky header) */}
+      <main className="flex-1 w-full h-full overflow-hidden relative">
+        <ResizableLayout
+          defaultRatio={0.38}
+          minLeftWidth={320}
+          maxLeftWidthRatio={0.6}
+          leftContent={
+            <MasterPanel
+              layers={filteredLayers}
+              allLayers={layers}
+              activeItemId={activeItemId}
+              selectedLayerId={selectedLayerId}
+              stats={stats}
+              onLayerChange={setSelectedLayerId}
+              onSelectItem={selectActiveItem}
+              onReorderGroupItems={updateGroupItems}
+              onOpenCreateLayer={() => setIsCreateLayerOpen(true)}
+              onOpenCreateItem={handleOpenCreateItem}
+              onAddGroup={addGroup}
+              onEditLayer={editLayer}
+              onDeleteLayer={deleteLayer}
+              onDeleteItem={deleteItem}
+              onResetToDefault={resetToInitialData}
+            />
+          }
+          rightContent={
+            <DetailPanel
+              item={activeItem}
+              onUpdateNote={updateNote}
+              onEditItem={editItem}
+              onDeleteItem={deleteItem}
+            />
+          }
+        />
       </main>
 
-      <Footer />
-    </UnlockGate>
+      {/* Modals for Dynamic Data Creation */}
+      <CreateLayerModal
+        isOpen={isCreateLayerOpen}
+        onClose={() => setIsCreateLayerOpen(false)}
+        onSubmit={addLayer}
+      />
+
+      <CreateItemModal
+        isOpen={isCreateItemOpen}
+        layers={layers}
+        targetLayerId={targetLayerId}
+        targetLevel={targetLevel}
+        onClose={() => setIsCreateItemOpen(false)}
+        onSubmit={addItem}
+      />
+    </div>
   );
 }
