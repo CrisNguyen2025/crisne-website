@@ -8,10 +8,12 @@ import React, { useState, ReactNode } from 'react';
 function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
   return (
     <div
-      className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+      className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+        open ? 'overflow-visible' : 'overflow-hidden'
+      }`}
       style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
     >
-      <div className="overflow-hidden">{children}</div>
+      <div className={open ? 'overflow-visible min-h-0' : 'overflow-hidden min-h-0'}>{children}</div>
     </div>
   );
 }
@@ -141,7 +143,7 @@ function SortableGroup({
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${isActionsOpen ? 'relative z-30' : ''}`}>
       <div
         onClick={onToggleCollapse}
         className="group/gh flex items-center justify-between px-2 py-1 rounded-lg hover:bg-muted/40 cursor-pointer select-none text-[11px] font-semibold text-muted-foreground relative"
@@ -173,7 +175,7 @@ function SortableGroup({
             {isActionsOpen && (
               <>
                 <div
-                  className="fixed inset-0 z-30"
+                  className="fixed inset-0 z-40"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsActionsOpen(false);
@@ -182,7 +184,7 @@ function SortableGroup({
                 <div
                   onClick={(e) => e.stopPropagation()}
                   onMouseLeave={() => setIsActionsOpen(false)}
-                  className="absolute right-0 top-full mt-1 z-40 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-lg p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+                  className="absolute right-0 top-full mt-1 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                 >
                   <button
                     type="button"
@@ -620,7 +622,9 @@ export function MasterPanel({
             return (
               <div
                 key={layer.id}
-                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all overflow-hidden ${
+                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all ${
+                  isLayerCollapsed ? 'overflow-hidden' : ''
+                } ${
                   activePopoverLayerId === layer.id ? 'z-30' : 'z-0'
                 }`}
               >

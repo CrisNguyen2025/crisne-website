@@ -11,7 +11,11 @@ import { CreateTopicModal } from "@/components/roadmap/CreateTopicModal";
 import { CompactSidebar } from "@/components/roadmap/CompactSidebar";
 import { HomeDashboard } from "@/components/roadmap/HomeDashboard";
 import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
-import { RoadmapLevel, RoadmapMeta, CreateRoadmapDto } from "@/lib/roadmap/types";
+import {
+  RoadmapLevel,
+  RoadmapMeta,
+  CreateRoadmapDto,
+} from "@/lib/roadmap/types";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { slugify } from "@/lib/utils";
 
@@ -40,7 +44,11 @@ function RoadmapWorkspace() {
       const url = new URL(window.location.href);
       if (url.searchParams.has("view")) {
         url.searchParams.delete("view");
-        window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        window.history.replaceState(
+          {},
+          "",
+          url.pathname + (url.search ? url.search : "")
+        );
       }
     }
   }, []);
@@ -130,7 +138,9 @@ function RoadmapWorkspace() {
   const handleDeleteRoadmap = async (slugToDelete: string) => {
     try {
       await roadmapService.deleteRoadmapBySlug(slugToDelete);
-      const remaining = availableRoadmaps.filter((r) => r.slug !== slugToDelete);
+      const remaining = availableRoadmaps.filter(
+        (r) => r.slug !== slugToDelete
+      );
       setAvailableRoadmaps(remaining);
       if (remaining.length > 0) {
         setSelectedLayerId("all");
@@ -164,7 +174,10 @@ function RoadmapWorkspace() {
       {/* Main Content Area */}
       <div className="flex-1 h-full overflow-hidden flex flex-col">
         {currentView === "home" ? (
-          <div key="view-home" className="w-full h-full flex-1 overflow-hidden animate-in fade-in-50 duration-200">
+          <div
+            key="view-home"
+            className="w-full h-full flex-1 overflow-hidden animate-in fade-in-50 duration-200"
+          >
             <HomeDashboard
               roadmaps={availableRoadmaps}
               onSelectRoadmap={handleSelectRoadmap}
@@ -175,7 +188,10 @@ function RoadmapWorkspace() {
             />
           </div>
         ) : (
-          <main key={`view-roadmap-${activeSlug}`} className="flex-1 w-full h-full overflow-hidden relative flex animate-in fade-in-50 duration-200">
+          <main
+            key={`view-roadmap-${activeSlug}`}
+            className="flex-1 w-full h-full overflow-hidden relative flex animate-in fade-in-50 duration-200"
+          >
             {/* Fixed 400px Left column (Master Panel) */}
             <div className="w-[400px] shrink-0 h-full overflow-hidden flex flex-col border-r border-border/60 bg-background/50 backdrop-blur-sm">
               <MasterPanel
@@ -215,7 +231,7 @@ function RoadmapWorkspace() {
             </div>
 
             {/* Flexible Right column (Detail Panel) */}
-            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-card/30">
+            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-white/80">
               <DetailPanel
                 item={activeItem}
                 onUpdateNote={updateNote}
