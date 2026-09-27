@@ -9,9 +9,11 @@ import { useLexicalEditable } from '@lexical/react/useLexicalEditable';
 import { useLexicalNodeSelection } from '@lexical/react/useLexicalNodeSelection';
 import { mergeRegister } from '@lexical/utils';
 import {
+  $createParagraphNode,
   $getNodeByKey,
   $getRoot,
   $getSelection,
+  $isElementNode,
   $isNodeSelection,
   $isRangeSelection,
   $setSelection,
@@ -231,15 +233,27 @@ export default function ImageComponent({
           event.preventDefault();
           caption.focus();
           return true;
-        } else if (buttonElem !== null && buttonElem !== document.activeElement) {
+        } else {
           event.preventDefault();
-          buttonElem.focus();
+          editor.update(() => {
+            const node = $getNodeByKey(nodeKey);
+            if ($isImageNode(node)) {
+              const newParagraph = $createParagraphNode();
+              const parent = node.getParent();
+              if (parent && $isElementNode(parent) && parent.getChildrenSize() === 1) {
+                parent.insertAfter(newParagraph);
+              } else {
+                node.insertAfter(newParagraph);
+              }
+              newParagraph.select();
+            }
+          });
           return true;
         }
       }
       return false;
     },
-    [caption, nodeKey, showCaption],
+    [caption, editor, nodeKey, showCaption],
   );
 
   const $onEscape = useCallback(
