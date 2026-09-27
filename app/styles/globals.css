@@ -285,13 +285,20 @@ input[type="search"]::-webkit-search-cancel-button {
 .post-content-view img {
   border-radius: 0.75rem;
   cursor: zoom-in;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   max-width: 100%;
-  height: auto;
+  max-height: 420px;
+  object-fit: cover;
+  display: block;
+  margin: 1.25rem 0;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  background-color: var(--muted);
 }
 
 .post-content-view img:hover {
-  opacity: 0.92;
+  opacity: 0.94;
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
 .post-content-view table {

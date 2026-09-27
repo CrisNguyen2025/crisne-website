@@ -93,9 +93,9 @@ function LazyImage({
     return <BrokenImage />;
   }
 
-  // Calculate final dimensions with proper scaling
+  // Calculate standardized preview format with optimal aspect ratio (16:9 landscape, 3:4 portrait, 4:3 standard)
   const calculateDimensions = () => {
-    // If specific non-zero numeric dimensions are set by resizer
+    // If specific non-zero numeric dimensions are set by manual resizer
     const hasCustomWidth = typeof width === 'number' && width > 0;
     const hasCustomHeight = typeof height === 'number' && height > 0;
 
@@ -104,28 +104,46 @@ function LazyImage({
         width: hasCustomWidth ? width : undefined,
         height: hasCustomHeight ? height : undefined,
         maxWidth: maxWidth ? `${maxWidth}px` : '100%',
+        objectFit: 'contain' as const,
       };
     }
 
-    // Default responsive style: scale down if larger than maxWidth
-    const naturalWidth = status.width;
-    const naturalHeight = status.height;
+    const naturalWidth = status.width || 800;
+    const naturalHeight = status.height || 450;
+    const ratio = naturalWidth / naturalHeight;
 
-    let finalWidth: number | string = naturalWidth || 'auto';
-    let finalHeight: number | string = naturalHeight || 'auto';
-
-    if (typeof finalWidth === 'number' && maxWidth && finalWidth > maxWidth) {
-      const scale = maxWidth / finalWidth;
-      finalWidth = maxWidth;
-      if (typeof finalHeight === 'number') {
-        finalHeight = Math.round(finalHeight * scale);
-      }
+    // Landscape: Width > Height (Ratio >= 1.25) -> Standard 16:9 format
+    if (ratio >= 1.25) {
+      return {
+        width: '100%',
+        maxWidth: maxWidth ? `${maxWidth}px` : '100%',
+        maxHeight: '400px',
+        aspectRatio: '16 / 9',
+        objectFit: 'cover' as const,
+        borderRadius: '0.75rem',
+      };
     }
 
+    // Portrait: Height > Width (Ratio <= 0.85) -> Standard 3:4 format
+    if (ratio <= 0.85) {
+      return {
+        width: 'auto',
+        maxWidth: '360px',
+        maxHeight: '440px',
+        aspectRatio: '3 / 4',
+        objectFit: 'cover' as const,
+        borderRadius: '0.75rem',
+      };
+    }
+
+    // Square-ish / Standard (0.85 < Ratio < 1.25) -> Standard 4:3 format
     return {
-      maxWidth: maxWidth ? `${maxWidth}px` : '100%',
-      width: typeof finalWidth === 'number' ? `${finalWidth}px` : 'auto',
-      height: typeof finalHeight === 'number' ? `${finalHeight}px` : 'auto',
+      width: '100%',
+      maxWidth: '480px',
+      maxHeight: '380px',
+      aspectRatio: '4 / 3',
+      objectFit: 'cover' as const,
+      borderRadius: '0.75rem',
     };
   };
 
