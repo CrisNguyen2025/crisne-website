@@ -43,8 +43,8 @@ export function HomeDashboard({
   onCloseCreateModal: controlledOnClose,
 }: HomeDashboardProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const [storageScan, setStorageScan] = useState<StorageScanResult | null>(
-    () => getCachedStorageScan()
+  const [storageScan, setStorageScan] = useState<StorageScanResult | null>(() =>
+    getCachedStorageScan()
   );
   const [isCleaning, setIsCleaning] = useState(false);
   const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
@@ -79,7 +79,7 @@ export function HomeDashboard({
   const closeModal = controlledOnClose || (() => setInternalIsOpen(false));
 
   return (
-    <div className="flex-1 w-full h-full overflow-y-auto bg-background p-6 md:p-12 space-y-10 select-none">
+    <div className="flex-1 w-full h-full overflow-y-auto bg-white/55 p-6 md:p-12 space-y-10 select-none">
       {/* ── Top Hero Banner centered ─────────────── */}
       <div className="w-full flex flex-col items-center text-center space-y-3 pb-8 border-b border-border/50">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
@@ -101,7 +101,12 @@ export function HomeDashboard({
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Compass className="w-4 h-4 text-primary" />
-            <span>Active Roadmaps {isLoading && roadmaps.length === 0 ? "…" : `(${roadmaps.length})`}</span>
+            <span>
+              Active Roadmaps{" "}
+              {isLoading && roadmaps.length === 0
+                ? "…"
+                : `(${roadmaps.length})`}
+            </span>
           </h2>
 
           <div className="flex items-center gap-2.5 shrink-0">
@@ -125,12 +130,16 @@ export function HomeDashboard({
                 >
                   <HardDrive className="w-3.5 h-3.5 text-primary shrink-0" />
                   <span>
-                    {formatBytes(storageScan.usedBytes + storageScan.unusedBytes)} / {formatBytes(storageScan.totalLimitBytes)}
+                    {formatBytes(
+                      storageScan.usedBytes + storageScan.unusedBytes
+                    )}{" "}
+                    / {formatBytes(storageScan.totalLimitBytes)}
                   </span>
                 </div>
 
                 <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
-                  {storageScan.totalFiles.length} file{storageScan.totalFiles.length === 1 ? "" : "s"}
+                  {storageScan.totalFiles.length} file
+                  {storageScan.totalFiles.length === 1 ? "" : "s"}
                 </span>
 
                 {storageScan.unusedFiles.length > 0 ? (
@@ -196,7 +205,9 @@ export function HomeDashboard({
             </>
           ) : (
             roadmaps.map((r) => {
-              const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
+              const code = (
+                r.shortCode || r.slug.substring(0, 2)
+              ).toUpperCase();
 
               return (
                 <div
@@ -271,4 +282,3 @@ export function HomeDashboard({
     </div>
   );
 }
-

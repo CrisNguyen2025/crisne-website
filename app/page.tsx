@@ -200,9 +200,7 @@ function RoadmapWorkspace() {
             />
           </div>
         ) : (
-          <main
-            className="flex-1 w-full h-full overflow-hidden relative flex"
-          >
+          <main className="flex-1 w-full h-full overflow-hidden relative flex">
             {/* Fixed 400px Left column (Master Panel) */}
             <div className="w-[400px] shrink-0 h-full overflow-hidden flex flex-col border-r border-border/60 bg-background/50 backdrop-blur-sm">
               <MasterPanel
@@ -243,7 +241,7 @@ function RoadmapWorkspace() {
             </div>
 
             {/* Flexible Right column (Detail Panel) */}
-            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-background/40">
+            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-white/55">
               <DetailPanel
                 item={activeItem}
                 isLoading={isLoading}

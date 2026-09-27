@@ -1,9 +1,13 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzer from "@next/bundle-analyzer";
+import path from "path";
 
 const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   // Generate build ID based on timestamp to force cache invalidation
   generateBuildId: async () => {
     return `build-${Date.now()}`;
@@ -49,19 +53,6 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      ...(isProduction
-        ? [
-            {
-              source: "/_next/static/:path*",
-              headers: [
-                {
-                  key: "Cache-Control",
-                  value: "public, max-age=31536000, immutable",
-                },
-              ],
-            },
-          ]
-        : []),
       // Cache fonts
       {
         source: "/fonts/:path*",

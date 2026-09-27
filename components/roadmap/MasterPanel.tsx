@@ -3,17 +3,18 @@
 import React, { useState, ReactNode } from 'react';
 
 // ─── Smooth Collapsible ───────────────────────────────────────────────────────
-// CSS grid-template-rows trick: animates 0fr ↔ 1fr so height transitions
-// without requiring a JS ResizeObserver or fixed pixel measurement.
+// CSS grid-template-rows + opacity with cubic-bezier easing:
+// guarantees zero jitter, perfect clipping, and buttery smooth expand/collapse.
 function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
   return (
     <div
-      className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-        open ? 'overflow-visible' : 'overflow-hidden'
-      }`}
-      style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+      className="grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden"
+      style={{
+        gridTemplateRows: open ? '1fr' : '0fr',
+        opacity: open ? 1 : 0,
+      }}
     >
-      <div className={open ? 'overflow-visible min-h-0' : 'overflow-hidden min-h-0'}>{children}</div>
+      <div className="min-h-0 overflow-hidden">{children}</div>
     </div>
   );
 }
@@ -170,7 +171,7 @@ function SortableGroup({
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <ChevronRight
-            className={`w-3 h-3 text-muted-foreground/70 shrink-0 transition-transform duration-300 ease-in-out ${
+            className={`w-3 h-3 text-muted-foreground/70 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
               isCollapsed ? 'rotate-0' : 'rotate-90'
             }`}
           />
@@ -846,20 +847,18 @@ export function MasterPanel({
             return (
               <div
                 key={layer.id}
-                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all ${
+                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all duration-300 overflow-hidden ${
                   isLayerElevated ? 'z-50' : 'z-0'
                 }`}
               >
                 {/* Layer header row */}
                 <div
                   onClick={() => toggleLayer(layer.id)}
-                  className={`group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-colors relative ${
-                    isLayerCollapsed ? 'rounded-2xl' : 'rounded-t-2xl'
-                  }`}
+                  className="group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-colors relative"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <ChevronRight
-                      className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-300 ease-in-out ${
+                      className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
                         isLayerCollapsed ? 'rotate-0' : 'rotate-90'
                       }`}
                     />

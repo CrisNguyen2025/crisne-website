@@ -120,7 +120,7 @@ export function DetailPanel({
 
   if (!item) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full bg-white/55">
         <div className="w-12 h-12 rounded-2xl bg-muted/50 border border-border/40 flex items-center justify-center mb-3">
           <Folder className="w-6 h-6 text-muted-foreground/60" />
         </div>

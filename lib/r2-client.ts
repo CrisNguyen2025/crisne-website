@@ -133,7 +133,7 @@ export interface StorageScanResult {
 }
 
 /**
- * List all files in storage (R2 or local)
+ * List all files in storage (R2 or local) with pagination support
  */
 export async function listAllStorageFiles(): Promise<StorageFileInfo[]> {
   const files: StorageFileInfo[] = [];
@@ -141,26 +141,34 @@ export async function listAllStorageFiles(): Promise<StorageFileInfo[]> {
   try {
     if (isR2Configured && r2Client) {
       const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
-      const response = await r2Client.send(
-        new ListObjectsV2Command({
-          Bucket: R2_BUCKET_NAME!,
-          Prefix: 'uploads/',
-        })
-      );
+      let continuationToken: string | undefined = undefined;
 
-      if (response.Contents) {
-        for (const item of response.Contents) {
-          if (!item.Key) continue;
-          const filename = item.Key.replace(/^uploads\//, '');
-          if (!filename) continue;
-          files.push({
-            filename,
-            url: `${R2_PUBLIC_URL}/${item.Key}`,
-            size: item.Size || 0,
-            lastModified: item.LastModified,
-          });
+      do {
+        const response: any = await r2Client.send(
+          new ListObjectsV2Command({
+            Bucket: R2_BUCKET_NAME!,
+            Prefix: 'uploads/',
+            ContinuationToken: continuationToken,
+          })
+        );
+
+        if (response.Contents) {
+          for (const item of response.Contents) {
+            if (!item.Key) continue;
+            const filename = item.Key.replace(/^uploads\//, '');
+            if (!filename) continue;
+            files.push({
+              filename,
+              url: `${R2_PUBLIC_URL}/${item.Key}`,
+              size: item.Size || 0,
+              lastModified: item.LastModified,
+            });
+          }
         }
-      }
+
+        continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+      } while (continuationToken);
+
       return files;
     }
 
