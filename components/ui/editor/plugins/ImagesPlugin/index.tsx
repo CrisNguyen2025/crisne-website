@@ -21,6 +21,10 @@ import {
   DRAGOVER_COMMAND,
   DRAGSTART_COMMAND,
   DROP_COMMAND,
+  KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_LEFT_COMMAND,
+  KEY_ARROW_RIGHT_COMMAND,
+  KEY_ARROW_UP_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   PASTE_COMMAND,
@@ -274,6 +278,274 @@ export function ImagesPlugin({ captionsEnabled }: { captionsEnabled?: boolean })
                     if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
                       element.remove();
                     }
+                    const nodeSelection = $createNodeSelection();
+                    nodeSelection.add(targetImageNode.getKey());
+                    $setSelection(nodeSelection);
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_ARROW_RIGHT_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an Image is selected via NodeSelection -> move cursor to after image
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              const parent = imageNode.getParent();
+              const nextSibling =
+                parent && parent.getChildrenSize() === 1
+                  ? parent.getNextSibling()
+                  : imageNode.getNextSibling();
+
+              if (nextSibling) {
+                nextSibling.selectStart();
+              } else {
+                const newParagraph = $createParagraphNode();
+                if (parent && parent.getChildrenSize() === 1) {
+                  parent.insertAfter(newParagraph);
+                } else {
+                  imageNode.insertAfter(newParagraph);
+                }
+                newParagraph.select();
+              }
+              return true;
+            }
+          }
+
+          // 2. If cursor is at the end of block before an image -> select image
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            const anchorNode = anchor.getNode();
+            if (anchor.offset === anchorNode.getTextContentSize()) {
+              const topElement = anchorNode.getTopLevelElement();
+              if (topElement) {
+                const nextTopElement = topElement.getNextSibling();
+                if (nextTopElement) {
+                  let targetImageNode: ImageNode | null = null;
+                  if ($isImageNode(nextTopElement)) {
+                    targetImageNode = nextTopElement;
+                  } else if ($isElementNode(nextTopElement)) {
+                    const firstChild = nextTopElement.getFirstChild();
+                    if ($isImageNode(firstChild)) {
+                      targetImageNode = firstChild;
+                    }
+                  }
+
+                  if (targetImageNode) {
+                    event.preventDefault();
+                    const nodeSelection = $createNodeSelection();
+                    nodeSelection.add(targetImageNode.getKey());
+                    $setSelection(nodeSelection);
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_ARROW_DOWN_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an Image is selected via NodeSelection -> move cursor to after image
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              const parent = imageNode.getParent();
+              const nextSibling =
+                parent && parent.getChildrenSize() === 1
+                  ? parent.getNextSibling()
+                  : imageNode.getNextSibling();
+
+              if (nextSibling) {
+                nextSibling.selectStart();
+              } else {
+                const newParagraph = $createParagraphNode();
+                if (parent && parent.getChildrenSize() === 1) {
+                  parent.insertAfter(newParagraph);
+                } else {
+                  imageNode.insertAfter(newParagraph);
+                }
+                newParagraph.select();
+              }
+              return true;
+            }
+          }
+
+          // 2. If cursor is at the end of block before an image -> select image
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            const anchorNode = anchor.getNode();
+            if (anchor.offset === anchorNode.getTextContentSize()) {
+              const topElement = anchorNode.getTopLevelElement();
+              if (topElement) {
+                const nextTopElement = topElement.getNextSibling();
+                if (nextTopElement) {
+                  let targetImageNode: ImageNode | null = null;
+                  if ($isImageNode(nextTopElement)) {
+                    targetImageNode = nextTopElement;
+                  } else if ($isElementNode(nextTopElement)) {
+                    const firstChild = nextTopElement.getFirstChild();
+                    if ($isImageNode(firstChild)) {
+                      targetImageNode = firstChild;
+                    }
+                  }
+
+                  if (targetImageNode) {
+                    event.preventDefault();
+                    const nodeSelection = $createNodeSelection();
+                    nodeSelection.add(targetImageNode.getKey());
+                    $setSelection(nodeSelection);
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_ARROW_LEFT_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an Image is selected via NodeSelection -> move cursor to before image
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              const parent = imageNode.getParent();
+              const prevSibling =
+                parent && parent.getChildrenSize() === 1
+                  ? parent.getPreviousSibling()
+                  : imageNode.getPreviousSibling();
+
+              if (prevSibling) {
+                prevSibling.selectEnd();
+              } else {
+                const newParagraph = $createParagraphNode();
+                if (parent && parent.getChildrenSize() === 1) {
+                  parent.insertBefore(newParagraph);
+                } else {
+                  imageNode.insertBefore(newParagraph);
+                }
+                newParagraph.select();
+              }
+              return true;
+            }
+          }
+
+          // 2. If cursor is at offset 0 of block after an image -> select image
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            if (anchor.offset === 0) {
+              const anchorNode = anchor.getNode();
+              const topElement = anchorNode.getTopLevelElement();
+              if (topElement) {
+                const prevTopElement = topElement.getPreviousSibling();
+                if (prevTopElement) {
+                  let targetImageNode: ImageNode | null = null;
+                  if ($isImageNode(prevTopElement)) {
+                    targetImageNode = prevTopElement;
+                  } else if ($isElementNode(prevTopElement)) {
+                    const lastChild = prevTopElement.getLastChild();
+                    if ($isImageNode(lastChild)) {
+                      targetImageNode = lastChild;
+                    }
+                  }
+
+                  if (targetImageNode) {
+                    event.preventDefault();
+                    const nodeSelection = $createNodeSelection();
+                    nodeSelection.add(targetImageNode.getKey());
+                    $setSelection(nodeSelection);
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_ARROW_UP_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an Image is selected via NodeSelection -> move cursor to before image
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              const parent = imageNode.getParent();
+              const prevSibling =
+                parent && parent.getChildrenSize() === 1
+                  ? parent.getPreviousSibling()
+                  : imageNode.getPreviousSibling();
+
+              if (prevSibling) {
+                prevSibling.selectEnd();
+              } else {
+                const newParagraph = $createParagraphNode();
+                if (parent && parent.getChildrenSize() === 1) {
+                  parent.insertBefore(newParagraph);
+                } else {
+                  imageNode.insertBefore(newParagraph);
+                }
+                newParagraph.select();
+              }
+              return true;
+            }
+          }
+
+          // 2. If cursor is at offset 0 of block after an image -> select image
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            if (anchor.offset === 0) {
+              const anchorNode = anchor.getNode();
+              const topElement = anchorNode.getTopLevelElement();
+              if (topElement) {
+                const prevTopElement = topElement.getPreviousSibling();
+                if (prevTopElement) {
+                  let targetImageNode: ImageNode | null = null;
+                  if ($isImageNode(prevTopElement)) {
+                    targetImageNode = prevTopElement;
+                  } else if ($isElementNode(prevTopElement)) {
+                    const lastChild = prevTopElement.getLastChild();
+                    if ($isImageNode(lastChild)) {
+                      targetImageNode = lastChild;
+                    }
+                  }
+
+                  if (targetImageNode) {
+                    event.preventDefault();
                     const nodeSelection = $createNodeSelection();
                     nodeSelection.add(targetImageNode.getKey());
                     $setSelection(nodeSelection);

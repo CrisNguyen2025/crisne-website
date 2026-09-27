@@ -7,6 +7,9 @@ interface RouteContext {
   params: Promise<{ slug: string }>;
 }
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // GET /api/v1/roadmaps/[slug] - Fetch full hierarchy of a roadmap
 export async function GET(_req: NextRequest, context: RouteContext) {
   try {
@@ -76,7 +79,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+          'Cache-Control': 'no-store, max-age=0',
         },
       }
     );

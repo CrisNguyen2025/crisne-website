@@ -94,10 +94,10 @@ export function EditItemInfoDrawer({
         )}
       />
 
-      {/* Drawer Sheet: width 60% on desktop, sliding right-to-left */}
+      {/* Drawer Sheet: compact width for info form, sliding right-to-left */}
       <div
         className={cn(
-          "fixed inset-y-0 right-0 w-full md:w-[60%] bg-card border-l border-border shadow-2xl flex flex-col justify-between overflow-hidden transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10",
+          "fixed inset-y-0 right-0 w-full sm:max-w-md md:max-w-[440px] bg-card border-l border-border shadow-2xl flex flex-col justify-between overflow-hidden transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-10",
           isVisible ? "translate-x-0" : "translate-x-full"
         )}
       >

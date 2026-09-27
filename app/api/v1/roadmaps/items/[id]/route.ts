@@ -10,13 +10,47 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const { title, description } = body;
+    const { title, description, level } = body;
+
+    let targetGroupId: string | undefined = undefined;
+
+    if (level) {
+      const existingItem = await prisma.roadmapItem.findUnique({
+        where: { id },
+        include: { group: true },
+      });
+
+      if (existingItem && existingItem.group.level !== level) {
+        const layerId = existingItem.group.layerId;
+        let targetGroup = await prisma.roadmapGroup.findFirst({
+          where: { layerId, level },
+        });
+
+        if (!targetGroup) {
+          targetGroup = await prisma.roadmapGroup.create({
+            data: {
+              layerId,
+              level,
+              title:
+                level === 'core'
+                  ? '🟢 Core'
+                  : level === 'intermediate'
+                    ? '🟡 Intermediate'
+                    : '🔴 Advanced',
+              order: 99,
+            },
+          });
+        }
+        targetGroupId = targetGroup.id;
+      }
+    }
 
     const updated = await prisma.roadmapItem.update({
       where: { id },
       data: {
         ...(title ? { title } : {}),
         ...(description !== undefined ? { description } : {}),
+        ...(targetGroupId ? { groupId: targetGroupId } : {}),
       },
     });
 

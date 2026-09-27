@@ -662,15 +662,15 @@ export function MasterPanel({
               <div
                 key={layer.id}
                 className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all ${
-                  isLayerCollapsed ? 'overflow-hidden' : ''
-                } ${
-                  activePopoverLayerId === layer.id ? 'z-30' : 'z-0'
+                  activePopoverLayerId === layer.id ? 'z-50' : 'z-0'
                 }`}
               >
                 {/* Layer header row */}
                 <div
                   onClick={() => toggleLayer(layer.id)}
-                  className="group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-colors relative rounded-t-2xl"
+                  className={`group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-colors relative ${
+                    isLayerCollapsed ? 'rounded-2xl' : 'rounded-t-2xl'
+                  }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <ChevronRight
@@ -703,13 +703,13 @@ export function MasterPanel({
                       {activePopoverLayerId === layer.id && (
                         <>
                           <div
-                            className="fixed inset-0 z-30"
+                            className="fixed inset-0 z-40"
                             onClick={(e) => { e.stopPropagation(); setActivePopoverLayerId(null); }}
                           />
                           <div
                             onClick={(e) => e.stopPropagation()}
                             onMouseLeave={() => setActivePopoverLayerId(null)}
-                            className="absolute right-0 top-full mt-1 z-40 w-52 bg-popover/95 border border-border/80 rounded-xl shadow-lg p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+                            className="absolute right-0 top-full mt-1 z-50 w-52 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                           >
                             <button
                               type="button"

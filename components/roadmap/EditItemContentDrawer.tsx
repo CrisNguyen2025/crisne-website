@@ -209,7 +209,29 @@ export function EditItemContentDrawer({
 
         {/* Footer Actions & Stats */}
         <div className="flex items-center justify-between px-5 md:px-7 py-3 border-t border-border/50 bg-muted/15 shrink-0">
-          {/* Left: Document stats & Shortcut hints */}
+          {/* Left: Save button */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span>Save content</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Right: Document stats & Shortcut hints */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground min-w-0">
             <div className="flex items-center gap-1.5 font-medium">
               <span>{stats.words} words</span>
@@ -237,36 +259,6 @@ export function EditItemContentDrawer({
                 to save
               </span>
             </div>
-          </div>
-
-          {/* Right: Action buttons */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-98 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <>
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                <>
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                  <span>Save content</span>
-                </>
-              )}
-            </button>
           </div>
         </div>
       </div>

@@ -37,15 +37,15 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   }, [initialActiveItemId]);
 
   // 1. Fetch roadmap hierarchy from API by slug
-  const loadRoadmap = useCallback(async (targetSlug: string) => {
+  const loadRoadmap = useCallback(async (targetSlug: string, silent: boolean = false) => {
     const targetItemId = initialActiveItemIdRef.current;
     // If cached, apply cache immediately for seamless zero-flicker transition
     const cached = roadmapCache.get(targetSlug);
     if (cached) {
       setRoadmapMeta(cached.roadmap);
       setLayers(cached.layers);
-      setIsLoading(false);
-      // Select first item or matching item immediately from cache
+      if (!silent) setIsLoading(false);
+      // Select first item or matching item immediately from cache if no active item
       let matchedId = '';
       if (targetItemId) {
         for (const layer of cached.layers) {
@@ -61,11 +61,14 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           if (matchedId) break;
         }
       }
-      setActiveItemId(matchedId || cached.layers[0]?.groups[0]?.items[0]?.id || '');
+      if (!silent) {
+        setActiveItemId(matchedId || cached.layers[0]?.groups[0]?.items[0]?.id || '');
+      }
     } else {
-      setIsLoading(true);
-      // Giữ layout ổn định, tạm thời clear activeItemId khi load topic mới chưa cache
-      setActiveItemId('');
+      if (!silent) {
+        setIsLoading(true);
+        setActiveItemId('');
+      }
     }
     setIsError(false);
 
@@ -97,17 +100,19 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
       if (matchedId) {
         setActiveItemId(matchedId);
-      } else {
+      } else if (!silent) {
         const firstItem = data.layers[0]?.groups[0]?.items[0];
         setActiveItemId(firstItem ? firstItem.id : '');
       }
     } catch (err) {
       console.error('[useRoadmap] Failed to load roadmap:', err);
-      if (!cached) {
+      if (!cached && !silent) {
         setIsError(true);
       }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -115,21 +120,44 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     loadRoadmap(slug);
   }, [slug, loadRoadmap]);
 
-  // 2. Add Layer
+  // 2. Add Layer with Instant Optimistic UI
   const addLayer = useCallback(
     async (title: string, shortTag: string, subtitle?: string) => {
+      const tempLayerId = `temp-layer-${Date.now()}`;
+      const optimisticLayer: RoadmapLayer = {
+        id: tempLayerId,
+        order: layers.length + 1,
+        shortTag: shortTag.trim().toUpperCase(),
+        title: title.trim(),
+        subtitle: subtitle?.trim() || '',
+        groups: [
+          {
+            id: `temp-grp-core-${Date.now()}`,
+            level: 'core',
+            title: '🟢 Core',
+            items: [],
+          },
+        ],
+      };
+
+      const updatedLayers = (prev: RoadmapLayer[]) => [...prev, optimisticLayer];
+      setLayers(updatedLayers);
+      syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
       try {
         await roadmapService.createLayer(slug, {
           title: title.trim(),
           shortTag: shortTag.trim().toUpperCase(),
           subtitle: subtitle?.trim(),
         });
-        await loadRoadmap(slug);
+        await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to add layer:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
       }
     },
-    [slug, loadRoadmap]
+    [slug, layers.length, loadRoadmap]
   );
 
   // 2.1 Edit Roadmap
@@ -151,6 +179,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         }
       } catch (err) {
         console.error('[useRoadmap] Failed to edit roadmap:', err);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
@@ -175,6 +204,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         await roadmapService.updateRoadmapBySlug(slug, { isLocked: nextLocked });
       } catch (err) {
         console.error('[useRoadmap] Failed to toggle roadmap lock:', err);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
@@ -191,7 +221,8 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           shortTag: shortTag.trim().toUpperCase(),
           subtitle: subtitle?.trim(),
         });
-        await loadRoadmap(slug);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to edit layer:', err);
       }
@@ -203,23 +234,60 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   const deleteLayer = useCallback(
     async (layerId: string) => {
       try {
+        const updatedLayers = (prev: RoadmapLayer[]) => prev.filter((l) => l.id !== layerId);
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
         await roadmapService.deleteLayer(layerId);
-        await loadRoadmap(slug);
+        await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to delete layer:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
       }
     },
     [slug, loadRoadmap]
   );
 
-  // 4.1 Add Group to Layer
+  // 4.1 Add Group to Layer with Instant Optimistic UI
   const addGroup = useCallback(
     async (layerId: string, title: string, level?: string) => {
+      const tempGroupId = `temp-grp-${Date.now()}`;
+      const groupLevel = (level || 'core') as RoadmapLevel;
+      const optimisticGroup = {
+        id: tempGroupId,
+        level: groupLevel,
+        title: title.trim(),
+        items: [],
+      };
+
+      const updatedLayers = (prev: RoadmapLayer[]) =>
+        prev.map((layer) => {
+          if (layer.id !== layerId) return layer;
+          return {
+            ...layer,
+            groups: [...layer.groups, optimisticGroup],
+          };
+        });
+
+      setLayers(updatedLayers);
+      syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
       try {
-        await roadmapService.createGroup(layerId, title, level);
-        await loadRoadmap(slug);
+        const { group: created } = await roadmapService.createGroup(layerId, title, level);
+        if (created?.id) {
+          const replaceGroupIdLayers = (prev: RoadmapLayer[]) =>
+            prev.map((layer) => ({
+              ...layer,
+              groups: layer.groups.map((g) => (g.id === tempGroupId ? { ...g, id: created.id } : g)),
+            }));
+          setLayers(replaceGroupIdLayers);
+          syncCache(slug, (curr) => ({ ...curr, layers: replaceGroupIdLayers(curr.layers) }));
+        }
       } catch (err) {
         console.error('[useRoadmap] Failed to add group:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
       }
     },
     [slug, loadRoadmap]
@@ -242,6 +310,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         await roadmapService.updateGroup(groupId, title.trim());
       } catch (err) {
         console.error('[useRoadmap] Failed to edit group:', err);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
@@ -252,19 +321,78 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   const deleteGroup = useCallback(
     async (groupId: string) => {
       try {
+        const updatedLayers = (prev: RoadmapLayer[]) =>
+          prev.map((layer) => ({
+            ...layer,
+            groups: layer.groups.filter((g) => g.id !== groupId),
+          }));
+        setLayers(updatedLayers);
+        syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
         await roadmapService.deleteGroup(groupId);
-        await loadRoadmap(slug);
+        await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to delete group:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
         throw err;
       }
     },
     [slug, loadRoadmap]
   );
 
-  // 5. Add Item
+  // 5. Add Item with Instant Optimistic UI
   const addItem = useCallback(
     async (layerId: string, level: RoadmapLevel, title: string, description: string) => {
+      const tempId = `temp-item-${Date.now()}`;
+      const optimisticItem: ChecklistItem = {
+        id: tempId,
+        slug: slugify(title),
+        title: title.trim(),
+        description: description.trim(),
+        level,
+        layerId,
+        createdAt: dayjs().toISOString(),
+        updatedAt: dayjs().toISOString(),
+      };
+
+      // 1. Optimistic insert into state immediately (0ms delay)
+      const updatedLayers = (prev: RoadmapLayer[]) =>
+        prev.map((layer) => {
+          if (layer.id !== layerId) return layer;
+          const groupExists = layer.groups.some((g) => g.level === level);
+          if (groupExists) {
+            return {
+              ...layer,
+              groups: layer.groups.map((g) =>
+                g.level === level
+                  ? { ...g, items: [...g.items, optimisticItem] }
+                  : g
+              ),
+            };
+          } else {
+            const newGroup = {
+              id: `temp-group-${Date.now()}`,
+              level,
+              title:
+                level === 'core'
+                  ? '🟢 Core'
+                  : level === 'intermediate'
+                    ? '🟡 Intermediate'
+                    : '🔴 Advanced',
+              items: [optimisticItem],
+            };
+            return {
+              ...layer,
+              groups: [...layer.groups, newGroup],
+            };
+          }
+        });
+
+      setLayers(updatedLayers);
+      setActiveItemId(tempId);
+      syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
       try {
         const { item: created } = await roadmapService.createItem({
           layerId,
@@ -272,20 +400,35 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           title: title.trim(),
           description: description.trim(),
         });
-        await loadRoadmap(slug);
         if (created?.id) {
+          const replaceIdLayers = (prev: RoadmapLayer[]) =>
+            prev.map((layer) => ({
+              ...layer,
+              groups: layer.groups.map((g) => ({
+                ...g,
+                items: g.items.map((i) =>
+                  i.id === tempId
+                    ? { ...i, id: created.id, slug: created.slug || slugify(created.title) }
+                    : i
+                ),
+              })),
+            }));
+          setLayers(replaceIdLayers);
           setActiveItemId(created.id);
+          syncCache(slug, (curr) => ({ ...curr, layers: replaceIdLayers(curr.layers) }));
         }
       } catch (err) {
         console.error('[useRoadmap] Failed to add item:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
       }
     },
     [slug, loadRoadmap]
   );
 
-  // 6. Edit Item (Title / Description)
+  // 6. Edit Item (Title / Description / Level)
   const editItem = useCallback(
-    async (id: string, title: string, description: string) => {
+    async (id: string, title: string, description: string, level?: RoadmapLevel) => {
       try {
         // Optimistic UI update
         const updatedLayers = (prev: RoadmapLayer[]) =>
@@ -295,7 +438,13 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
               ...group,
               items: group.items.map((item) =>
                 item.id === id
-                  ? { ...item, title: title.trim(), description: description.trim(), updatedAt: dayjs().toISOString() }
+                  ? {
+                      ...item,
+                      title: title.trim(),
+                      description: description.trim(),
+                      ...(level ? { level } : {}),
+                      updatedAt: dayjs().toISOString(),
+                    }
                   : item
               ),
             })),
@@ -307,9 +456,17 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           id,
           title: title.trim(),
           description: description.trim(),
+          level,
         });
+
+        // If level changed, reload hierarchy to re-place item in correct group
+        if (level) {
+          roadmapCache.delete(slug);
+          await loadRoadmap(slug);
+        }
       } catch (err) {
         console.error('[useRoadmap] Failed to update item info:', err);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
@@ -333,8 +490,10 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.deleteItem(itemId);
+        roadmapCache.delete(slug);
       } catch (err) {
         console.error('[useRoadmap] Failed to delete item:', err);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
