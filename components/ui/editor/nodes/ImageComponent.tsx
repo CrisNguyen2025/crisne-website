@@ -95,40 +95,37 @@ function LazyImage({
 
   // Calculate final dimensions with proper scaling
   const calculateDimensions = () => {
-    if (!isSVGImage) {
+    // If specific non-zero numeric dimensions are set by resizer
+    const hasCustomWidth = typeof width === 'number' && width > 0;
+    const hasCustomHeight = typeof height === 'number' && height > 0;
+
+    if (hasCustomWidth || hasCustomHeight) {
       return {
-        height,
-        maxWidth,
-        width,
+        width: hasCustomWidth ? width : undefined,
+        height: hasCustomHeight ? height : undefined,
+        maxWidth: maxWidth ? `${maxWidth}px` : '100%',
       };
     }
 
-    // Use natural dimensions if available, otherwise fallback to defaults
+    // Default responsive style: scale down if larger than maxWidth
     const naturalWidth = status.width;
     const naturalHeight = status.height;
 
-    let finalWidth = naturalWidth;
-    let finalHeight = naturalHeight;
+    let finalWidth: number | string = naturalWidth || 'auto';
+    let finalHeight: number | string = naturalHeight || 'auto';
 
-    // Scale down if width exceeds maxWidth while maintaining aspect ratio
-    if (finalWidth > maxWidth) {
+    if (typeof finalWidth === 'number' && maxWidth && finalWidth > maxWidth) {
       const scale = maxWidth / finalWidth;
       finalWidth = maxWidth;
-      finalHeight = Math.round(finalHeight * scale);
-    }
-
-    // Scale down if height exceeds maxHeight while maintaining aspect ratio
-    const maxHeight = 500;
-    if (finalHeight > maxHeight) {
-      const scale = maxHeight / finalHeight;
-      finalHeight = maxHeight;
-      finalWidth = Math.round(finalWidth * scale);
+      if (typeof finalHeight === 'number') {
+        finalHeight = Math.round(finalHeight * scale);
+      }
     }
 
     return {
-      height: finalHeight,
-      maxWidth,
-      width: finalWidth,
+      maxWidth: maxWidth ? `${maxWidth}px` : '100%',
+      width: typeof finalWidth === 'number' ? `${finalWidth}px` : 'auto',
+      height: typeof finalHeight === 'number' ? `${finalHeight}px` : 'auto',
     };
   };
 

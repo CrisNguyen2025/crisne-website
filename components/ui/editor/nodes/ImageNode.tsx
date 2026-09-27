@@ -45,12 +45,12 @@ const ImageComponent = React.lazy(() => import('./ImageComponent'));
 export interface ImagePayload {
   altText: string;
   caption?: LexicalEditor;
-  height?: number;
+  height?: 'inherit' | number;
   key?: NodeKey;
   maxWidth?: number;
   showCaption?: boolean;
   src: string;
-  width?: number;
+  width?: 'inherit' | number;
   captionsEnabled?: boolean;
 }
 
@@ -78,7 +78,11 @@ function $convertImageElement(domNode: Node): null | DOMConversionOutput {
   if (!src || src.startsWith('file:///') || isGoogleDocCheckboxImg(img)) {
     return null;
   }
-  const { alt: altText, width, height } = img;
+  const altText = img.getAttribute('alt') || '';
+  const widthAttr = img.getAttribute('width');
+  const heightAttr = img.getAttribute('height');
+  const width = widthAttr && !isNaN(Number(widthAttr)) && Number(widthAttr) > 0 ? Number(widthAttr) : 'inherit';
+  const height = heightAttr && !isNaN(Number(heightAttr)) && Number(heightAttr) > 0 ? Number(heightAttr) : 'inherit';
   const node = $createImageNode({ altText, height, src, width });
   return { node };
 }
@@ -159,9 +163,15 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
   exportDOM(): DOMExportOutput {
     const imgElement = document.createElement('img');
     imgElement.setAttribute('src', this.__src);
-    imgElement.setAttribute('alt', this.__altText);
-    imgElement.setAttribute('width', this.__width.toString());
-    imgElement.setAttribute('height', this.__height.toString());
+    if (this.__altText) {
+      imgElement.setAttribute('alt', this.__altText);
+    }
+    if (typeof this.__width === 'number' && this.__width > 0) {
+      imgElement.setAttribute('width', this.__width.toString());
+    }
+    if (typeof this.__height === 'number' && this.__height > 0) {
+      imgElement.setAttribute('height', this.__height.toString());
+    }
 
     if (this.__showCaption && this.__caption) {
       const captionEditor = this.__caption;
