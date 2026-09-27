@@ -12,7 +12,7 @@ datasource db {
 }
 
 model Tag {
-  id        String     @id @default(cuid())
+  id        String     @id @default(uuid(7))
   name      String     @unique
   color     String     @default("#6b9ac4")
   prompt    String?    // custom AI prompt for this tag
@@ -22,7 +22,7 @@ model Tag {
 }
 
 model Note {
-  id          String   @id @default(cuid())
+  id          String   @id @default(uuid(7))
   title       String
   link        String?
   description String?
@@ -33,7 +33,7 @@ model Note {
 }
 
 model Role {
-  id          String          @id @default(cuid())
+  id          String          @id @default(uuid(7))
   name        String          @unique
   summary     String
   focusTasks  String?
@@ -43,7 +43,7 @@ model Role {
 }
 
 model ApiEndpoint {
-  id          String          @id @default(cuid())
+  id          String          @id @default(uuid(7))
   method      String
   path        String
   module      String
@@ -62,7 +62,7 @@ model ApiEndpoint {
 }
 
 model Feature {
-  id        String        @id @default(cuid())
+  id        String        @id @default(uuid(7))
   name      String        @unique
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
@@ -70,7 +70,7 @@ model Feature {
 }
 
 model RoleApiAccess {
-  id        String      @id @default(cuid())
+  id        String      @id @default(uuid(7))
   roleId    String
   apiId     String
   access    String      @default("denied")
@@ -87,7 +87,7 @@ model RoleApiAccess {
 // Favorites model - scalable for multi-user
 // Note: tagId references tags from Notion API, not the Tag table
 model Favorite {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid(7))
   userId    String   // User identifier (can be session ID, email, or user ID from auth)
   tagId     String   // Tag ID from Notion API (no foreign key constraint)
   createdAt DateTime @default(now())
@@ -102,7 +102,7 @@ model Favorite {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Roadmap {
-  id          String         @id @default(cuid())
+  id          String         @id @default(uuid(7))
   slug        String         @unique // e.g. "ai-architecture", "backend-roadmap"
   title       String         // e.g. "AI & LLM Architecture"
   shortCode   String?        @default("AI") // e.g. "AI", "BE", "FE", "DEV"
@@ -117,7 +117,7 @@ model Roadmap {
 }
 
 model RoadmapLayer {
-  id         String         @id @default(cuid())
+  id         String         @id @default(uuid(7))
   roadmapId  String
   roadmap    Roadmap        @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
   order      Int            @default(0)
@@ -133,7 +133,7 @@ model RoadmapLayer {
 }
 
 model RoadmapGroup {
-  id        String        @id @default(cuid())
+  id        String        @id @default(uuid(7))
   layerId   String
   layer     RoadmapLayer  @relation(fields: [layerId], references: [id], onDelete: Cascade)
   level     String        // "core" | "intermediate" | "advanced" | custom
@@ -148,7 +148,7 @@ model RoadmapGroup {
 }
 
 model RoadmapItem {
-  id          String       @id @default(cuid())
+  id          String       @id @default(uuid(7))
   groupId     String
   group       RoadmapGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   title       String
