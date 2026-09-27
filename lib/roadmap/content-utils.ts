@@ -74,7 +74,7 @@ export function contentToHtml(content: string): string {
       .replace(/\s*width\s*=\s*["']?[^"'\s>]*["']?/gi, '')
       .replace(/\s*height\s*=\s*["']?[^"'\s>]*["']?/gi, '');
     cleanAttrs +=
-      ' style="max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;"';
+      ' style="max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.25rem 0;cursor:zoom-in;"';
     return `<img${cleanAttrs}>`;
   });
 
