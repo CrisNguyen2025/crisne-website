@@ -172,6 +172,10 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     if (typeof this.__height === 'number' && this.__height > 0) {
       imgElement.setAttribute('height', this.__height.toString());
     }
+    imgElement.setAttribute(
+      'style',
+      'max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:1rem 0;cursor:zoom-in;'
+    );
 
     if (this.__showCaption && this.__caption) {
       const captionEditor = this.__caption;

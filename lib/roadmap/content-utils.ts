@@ -66,6 +66,14 @@ export function contentToHtml(content: string): string {
     return `<a${newAttrs}>`;
   });
 
+  // Ensure all images have exact constrained sizing and square borders matching edit mode
+  html = html.replace(/<img\b([^>]*)>/gi, (_match, attrs: string) => {
+    let cleanAttrs = attrs.replace(/\s*style\s*=\s*["'][^"']*["']/gi, '');
+    cleanAttrs +=
+      ' style="max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:1rem 0;cursor:zoom-in;"';
+    return `<img${cleanAttrs}>`;
+  });
+
   // Sanitize dangerous HTML elements and event handlers
   html = sanitizeDangerousHtml(html);
 

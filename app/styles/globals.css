@@ -278,21 +278,25 @@ input[type="search"]::-webkit-search-cancel-button {
   color: var(--foreground);
 }
 
-.post-content-view {
+.post-content-view,
+.post-content-view.prose {
   overflow-x: auto;
 }
 
-.post-content-view img {
+.post-content-view img,
+.post-content-view.prose img,
+.prose .post-content-view img,
+.post-content-view :where(img) {
   border-radius: 0 !important;
-  cursor: zoom-in;
+  cursor: zoom-in !important;
   transition: opacity 0.15s ease;
   width: auto !important;
   max-width: min(100%, 420px) !important;
   max-height: 320px !important;
   height: auto !important;
   object-fit: contain !important;
-  display: block;
-  margin: 1rem 0;
+  display: block !important;
+  margin: 1rem 0 !important;
 }
 
 .post-content-view img:hover {
