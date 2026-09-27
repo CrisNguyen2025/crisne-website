@@ -316,7 +316,7 @@ export function DetailPanel({
               <div className="relative group">
                 <div
                   onClick={handleContentClick}
-                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/90 select-text leading-relaxed tracking-normal"
+                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/90 select-text leading-relaxed tracking-normal [&_img]:max-w-[420px]! [&_img]:max-h-[320px]! [&_img]:w-auto! [&_img]:h-auto! [&_img]:object-contain! [&_img]:rounded-none! [&_img]:cursor-zoom-in"
                   dangerouslySetInnerHTML={{
                     __html: contentToHtml(item.content),
                   }}
