@@ -1,9 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
-import { Compass, ArrowRight, BookOpen, Sparkles, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Compass,
+  ArrowRight,
+  BookOpen,
+  Sparkles,
+  Plus,
+  HardDrive,
+  Trash2,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 import { RoadmapMeta, CreateRoadmapDto } from "@/lib/roadmap/types";
 import { CreateTopicModal } from "./CreateTopicModal";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import {
+  fetchStorageScan,
+  triggerCleanupUnused,
+  formatBytes,
+  getCachedStorageScan,
+  StorageScanResult,
+} from "@/logic/storage/storageService";
 
 interface HomeDashboardProps {
   roadmaps: RoadmapMeta[];
@@ -25,6 +43,35 @@ export function HomeDashboard({
   onCloseCreateModal: controlledOnClose,
 }: HomeDashboardProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [storageScan, setStorageScan] = useState<StorageScanResult | null>(
+    () => getCachedStorageScan()
+  );
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
+
+  const loadScan = () => {
+    fetchStorageScan()
+      .then((data) => setStorageScan(data))
+      .catch((err) => console.error("Failed to fetch storage scan:", err));
+  };
+
+  useEffect(() => {
+    loadScan();
+  }, []);
+
+  const handleCleanup = async () => {
+    setIsCleaning(true);
+    try {
+      await triggerCleanupUnused();
+      const updated = await fetchStorageScan();
+      setStorageScan(updated);
+      setIsConfirmClearOpen(false);
+    } catch (err) {
+      console.error("Failed to clean up unused files:", err);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const isModalOpen =
     controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
@@ -50,21 +97,77 @@ export function HomeDashboard({
 
       {/* ── Available Topics Grid (Full Width) ───────────────────────────────────── */}
       <div className="w-full space-y-4">
-        {/* Header row: Active Roadmaps on the left, Create Topic button on the right */}
-        <div className="flex items-center justify-between gap-4">
+        {/* Header row: Active Roadmaps on the left, Create Topic + Storage Tracker on the right */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Compass className="w-4 h-4 text-primary" />
             <span>Active Roadmaps {isLoading && roadmaps.length === 0 ? "…" : `(${roadmaps.length})`}</span>
           </h2>
 
-          <button
-            type="button"
-            onClick={openModal}
-            className="px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Create Topic</span>
-          </button>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={openModal}
+              className="h-8 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Create Topic</span>
+            </button>
+
+            {/* 1-Line Storage Usage & Upload Limit Tracker (unified h-8 & rounded-xl size) */}
+            {!storageScan ? (
+              <div className="h-8 w-48 rounded-xl bg-muted/40 border border-border/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent shrink-0" />
+            ) : (
+              <div className="h-8 inline-flex items-center gap-2 px-3 rounded-xl bg-card border border-border/60 text-xs text-muted-foreground transition-all duration-300 hover:border-border shadow-2xs animate-in fade-in shrink-0">
+                <div
+                  className="flex items-center gap-1.5 text-foreground font-semibold cursor-help"
+                  title={`Max upload: ${formatBytes(storageScan.maxFileSizeBytes, 0)}/file • Storage: ${storageScan.isR2 ? "Cloudflare R2" : "Local"}`}
+                >
+                  <HardDrive className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>
+                    {formatBytes(storageScan.usedBytes + storageScan.unusedBytes)} / {formatBytes(storageScan.totalLimitBytes)}
+                  </span>
+                </div>
+
+                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
+                  {storageScan.totalFiles.length} file{storageScan.totalFiles.length === 1 ? "" : "s"}
+                </span>
+
+                {storageScan.unusedFiles.length > 0 ? (
+                  <>
+                    <span className="text-border/80">•</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-amber-500 font-medium text-[11px]">
+                        {storageScan.unusedFiles.length} unused
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmClearOpen(true)}
+                        disabled={isCleaning}
+                        className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        title="Clean up orphaned files"
+                      >
+                        {isCleaning ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                        <span>Clear</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-border/80">•</span>
+                    <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-[11px]">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>All clean</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -152,6 +255,20 @@ export function HomeDashboard({
         onClose={closeModal}
         onSubmit={onCreateRoadmap}
       />
+
+      {/* ── Modal for Confirming Cleanup of Unused Files ────────────── */}
+      <ConfirmDeleteModal
+        isOpen={isConfirmClearOpen}
+        title={`Clean up ${storageScan?.unusedFiles.length || 0} unused image(s)?`}
+        description={`This will permanently remove ${formatBytes(
+          storageScan?.unusedBytes || 0
+        )} of unused/orphaned images from storage. All active images in your roadmap notes and articles are preserved.`}
+        confirmText={isCleaning ? "Cleaning..." : "Clear Unused Files"}
+        isLoading={isCleaning}
+        onClose={() => setIsConfirmClearOpen(false)}
+        onConfirm={handleCleanup}
+      />
     </div>
   );
 }
+

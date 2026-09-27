@@ -113,3 +113,216 @@ export function generateFilename(originalName: string): string {
 
   return `${sanitized}-${timestamp}-${random}.${ext}`;
 }
+
+export interface StorageFileInfo {
+  filename: string;
+  url: string;
+  size: number;
+  lastModified?: Date;
+}
+
+export interface StorageScanResult {
+  totalFiles: StorageFileInfo[];
+  usedFiles: StorageFileInfo[];
+  unusedFiles: StorageFileInfo[];
+  usedBytes: number;
+  unusedBytes: number;
+  totalLimitBytes: number;
+  maxFileSizeBytes: number;
+  isR2: boolean;
+}
+
+/**
+ * List all files in storage (R2 or local)
+ */
+export async function listAllStorageFiles(): Promise<StorageFileInfo[]> {
+  const files: StorageFileInfo[] = [];
+
+  try {
+    if (isR2Configured && r2Client) {
+      const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      const response = await r2Client.send(
+        new ListObjectsV2Command({
+          Bucket: R2_BUCKET_NAME!,
+          Prefix: 'uploads/',
+        })
+      );
+
+      if (response.Contents) {
+        for (const item of response.Contents) {
+          if (!item.Key) continue;
+          const filename = item.Key.replace(/^uploads\//, '');
+          if (!filename) continue;
+          files.push({
+            filename,
+            url: `${R2_PUBLIC_URL}/${item.Key}`,
+            size: item.Size || 0,
+            lastModified: item.LastModified,
+          });
+        }
+      }
+      return files;
+    }
+
+    // Local uploads directory
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+    try {
+      const fileNames = await fs.readdir(uploadsDir);
+      for (const file of fileNames) {
+        if (file.startsWith('.')) continue;
+        const filePath = path.join(uploadsDir, file);
+        const stat = await fs.stat(filePath);
+        if (stat.isFile()) {
+          files.push({
+            filename: file,
+            url: `/uploads/${file}`,
+            size: stat.size,
+            lastModified: stat.mtime,
+          });
+        }
+      }
+    } catch {
+      // Directory may not exist yet
+    }
+
+    return files;
+  } catch (error) {
+    console.error('Failed to list storage files:', error);
+    return [];
+  }
+}
+
+/**
+ * Scan database to detect used vs unused (orphaned) files in storage
+ */
+export async function findUnusedStorageFiles(): Promise<StorageScanResult> {
+  const maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+  const totalLimitBytes = 10 * 1024 * 1024 * 1024; // 10 GB
+
+  const allStorageFiles = await listAllStorageFiles();
+
+  try {
+    const { prisma } = await import('@/lib/prisma');
+
+    // Fetch all contents from RoadmapItem, Roadmap, and Note
+    const [items, roadmaps, notes] = await Promise.all([
+      prisma.roadmapItem.findMany({
+        select: { content: true, description: true },
+      }),
+      prisma.roadmap.findMany({
+        select: { description: true },
+      }),
+      prisma.note.findMany({
+        select: { description: true, link: true },
+      }),
+    ]);
+
+    // Build combined text haystack
+    let haystack = '';
+    for (const item of items) {
+      if (item.content) haystack += ` ${item.content}`;
+      if (item.description) haystack += ` ${item.description}`;
+    }
+    for (const r of roadmaps) {
+      if (r.description) haystack += ` ${r.description}`;
+    }
+    for (const n of notes) {
+      if (n.description) haystack += ` ${n.description}`;
+      if (n.link) haystack += ` ${n.link}`;
+    }
+
+    const usedFiles: StorageFileInfo[] = [];
+    const unusedFiles: StorageFileInfo[] = [];
+    let usedBytes = 0;
+    let unusedBytes = 0;
+
+    for (const file of allStorageFiles) {
+      if (haystack.includes(file.filename)) {
+        usedFiles.push(file);
+        usedBytes += file.size;
+      } else {
+        unusedFiles.push(file);
+        unusedBytes += file.size;
+      }
+    }
+
+    return {
+      totalFiles: allStorageFiles,
+      usedFiles,
+      unusedFiles,
+      usedBytes,
+      unusedBytes,
+      totalLimitBytes,
+      maxFileSizeBytes,
+      isR2: Boolean(isR2Configured),
+    };
+  } catch (error) {
+    console.error('Failed to scan database for unused files:', error);
+    return {
+      totalFiles: allStorageFiles,
+      usedFiles: allStorageFiles,
+      unusedFiles: [],
+      usedBytes: allStorageFiles.reduce((acc, f) => acc + f.size, 0),
+      unusedBytes: 0,
+      totalLimitBytes,
+      maxFileSizeBytes,
+      isR2: Boolean(isR2Configured),
+    };
+  }
+}
+
+/**
+ * Delete unused storage files (permanent cleanup)
+ */
+export async function cleanupUnusedStorageFiles(targetFilenames?: string[]): Promise<{
+  deletedCount: number;
+  freedBytes: number;
+  remainingCount: number;
+  remainingBytes: number;
+}> {
+  const scanResult = await findUnusedStorageFiles();
+  const filesToDelete = targetFilenames
+    ? scanResult.unusedFiles.filter((f) => targetFilenames.includes(f.filename))
+    : scanResult.unusedFiles;
+
+  let deletedCount = 0;
+  let freedBytes = 0;
+
+  for (const file of filesToDelete) {
+    try {
+      await deleteFromStorage(file.url);
+      deletedCount += 1;
+      freedBytes += file.size;
+    } catch (err) {
+      console.error(`Failed to delete file ${file.filename}:`, err);
+    }
+  }
+
+  const remainingFiles = scanResult.totalFiles.filter(
+    (f) => !filesToDelete.some((del) => del.filename === f.filename)
+  );
+  const remainingBytes = remainingFiles.reduce((acc, f) => acc + f.size, 0);
+
+  return {
+    deletedCount,
+    freedBytes,
+    remainingCount: remainingFiles.length,
+    remainingBytes,
+  };
+}
+
+/**
+ * Legacy stats getter
+ */
+export async function getStorageStats() {
+  const scan = await findUnusedStorageFiles();
+  return {
+    usedBytes: scan.usedBytes + scan.unusedBytes,
+    fileCount: scan.totalFiles.length,
+    unusedCount: scan.unusedFiles.length,
+    unusedBytes: scan.unusedBytes,
+    maxFileSizeBytes: scan.maxFileSizeBytes,
+    totalLimitBytes: scan.totalLimitBytes,
+    isR2: scan.isR2,
+  };
+}
