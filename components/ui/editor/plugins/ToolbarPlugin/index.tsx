@@ -42,6 +42,7 @@ import {
   Bold,
   Check,
   Eraser,
+  Image as ImageIcon,
   Italic,
   Link,
   List,
@@ -53,11 +54,11 @@ import {
   Undo,
 } from 'lucide-react';
 
-import React, { Dispatch, useCallback, useEffect, useState } from 'react';
+import React, { Dispatch, useCallback, useEffect, useRef, useState } from 'react';
 import { $createCalloutNode, $isCalloutNode, CalloutType } from '../../nodes/CalloutNode';
 import { getSelectedNode } from '../../utils/getSelectedNode';
 import { sanitizeUrl } from '../../utils/url';
-import { ImagePickerRenderer } from '../ImagesPlugin';
+import { ImagePickerRenderer, INSERT_IMAGE_COMMAND } from '../ImagesPlugin';
 
 export const OPEN_LINK_MODAL_COMMAND: LexicalCommand<void> = createCommand('OPEN_LINK_MODAL_COMMAND');
 
@@ -312,6 +313,64 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled, renderImagePicker 
   const [linkUrl, setLinkUrl] = useState<string>('');
   const [isEditingLink, setIsEditingLink] = useState<boolean>(false);
   const [targetLinkKey, setTargetLinkKey] = useState<string | null>(null);
+
+  // Image Upload Modal States
+  const [isImageModalOpen, setIsImageModalOpen] = useState<boolean>(false);
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [imageAlt, setImageAlt] = useState<string>('');
+  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingImage(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to upload image');
+      }
+
+      const data = await res.json();
+      if (data.url && editor) {
+        editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
+          src: data.url,
+          altText: imageAlt.trim() || file.name || 'Uploaded image',
+          maxWidth: 800,
+        });
+        setIsImageModalOpen(false);
+        setImageUrl('');
+        setImageAlt('');
+      }
+    } catch (err) {
+      console.error('Upload image failed:', err);
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleInsertImageUrl = () => {
+    if (!editor || !imageUrl.trim()) return;
+    editor.dispatchCommand(INSERT_IMAGE_COMMAND, {
+      src: imageUrl.trim(),
+      altText: imageAlt.trim() || 'Image',
+      maxWidth: 800,
+    });
+    setIsImageModalOpen(false);
+    setImageUrl('');
+    setImageAlt('');
+  };
 
   const openLinkDialog = useCallback(() => {
     if (!editor) return;
@@ -627,6 +686,14 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled, renderImagePicker 
         >
           <Link size={16} />
         </ToolbarButton>
+
+        <ToolbarButton
+          disabled={disabled}
+          onClick={() => setIsImageModalOpen(true)}
+          title='Insert Image'
+        >
+          <ImageIcon size={16} />
+        </ToolbarButton>
       </ToolbarButtonGroup>
 
       <ToolbarButtonGroup>
@@ -859,6 +926,99 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled, renderImagePicker 
             </div>
           </div>
         </form>
+      </Modal>
+
+      {/* Insert Image Modal */}
+      <Modal
+        open={isImageModalOpen}
+        onCancel={() => setIsImageModalOpen(false)}
+        footer={null}
+        title={
+          <div className='flex items-center gap-2 text-base font-semibold'>
+            <ImageIcon size={18} className='text-primary' />
+            <span>Insert Image</span>
+          </div>
+        }
+        width={440}
+        centered
+        destroyOnClose
+      >
+        <div className='flex flex-col gap-4 mt-4'>
+          {/* Upload Local File Box */}
+          <div className='p-4 border-2 border-dashed border-border/80 hover:border-primary/60 rounded-2xl bg-muted/20 flex flex-col items-center justify-center text-center transition-colors'>
+            <input
+              type='file'
+              ref={fileInputRef}
+              accept='image/png,image/jpeg,image/jpg,image/webp,image/gif'
+              className='hidden'
+              onChange={handleFileUpload}
+            />
+            <div className='w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2'>
+              <ImageIcon size={20} />
+            </div>
+            <p className='text-xs font-semibold text-foreground mb-0.5'>
+              Upload image from your device
+            </p>
+            <p className='text-[11px] text-muted-foreground mb-3'>
+              Supports PNG, JPG, WebP, GIF (up to 5MB)
+            </p>
+            <Button
+              size='small'
+              type='primary'
+              loading={isUploadingImage}
+              onClick={() => fileInputRef.current?.click()}
+              className='text-xs font-medium'
+            >
+              {isUploadingImage ? 'Uploading...' : 'Choose File'}
+            </Button>
+          </div>
+
+          <div className='relative flex items-center justify-center'>
+            <div className='border-t border-border/60 w-full' />
+            <span className='bg-background px-2 text-[10px] uppercase font-bold text-muted-foreground/60 absolute'>
+              Or via URL
+            </span>
+          </div>
+
+          <div className='flex flex-col gap-2.5'>
+            <div>
+              <label className='block text-xs font-medium text-foreground/80 mb-1'>
+                Image URL
+              </label>
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder='https://example.com/image.png'
+                onPressEnter={handleInsertImageUrl}
+              />
+            </div>
+            <div>
+              <label className='block text-xs font-medium text-foreground/80 mb-1'>
+                Alt Text (Optional)
+              </label>
+              <Input
+                value={imageAlt}
+                onChange={(e) => setImageAlt(e.target.value)}
+                placeholder='Description of the image'
+                onPressEnter={handleInsertImageUrl}
+              />
+            </div>
+          </div>
+
+          <div className='flex items-center justify-end gap-2 pt-3 border-t border-border/50'>
+            <Button size='small' onClick={() => setIsImageModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type='primary'
+              size='small'
+              disabled={!imageUrl.trim()}
+              onClick={handleInsertImageUrl}
+            >
+              Insert Image
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

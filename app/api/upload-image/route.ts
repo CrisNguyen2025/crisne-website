@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadToR2, generateFilename } from '@/lib/r2-client';
+import { uploadToStorage, generateFilename } from '@/lib/r2-client';
 
 export const runtime = 'nodejs';
 
@@ -44,10 +44,10 @@ export async function POST(req: NextRequest) {
     // Generate unique filename
     const filename = generateFilename(file.name);
     
-    // Upload to R2
-    const url = await uploadToR2(buffer, filename, file.type);
+    // Upload to Storage (Cloudflare R2 if configured, otherwise local public/uploads)
+    const url = await uploadToStorage(buffer, filename, file.type);
     
-    console.log(`✅ Uploaded to R2: ${url} (${(file.size / 1024).toFixed(2)}KB)`);
+    console.log(`✅ Uploaded image: ${url} (${(file.size / 1024).toFixed(2)}KB)`);
     
     return NextResponse.json({
       url,
@@ -55,10 +55,10 @@ export async function POST(req: NextRequest) {
       type: file.type,
       filename,
     });
-  } catch (error) {
-    console.error('❌ R2 upload error:', error);
+  } catch (error: any) {
+    console.error('❌ Image upload error:', error);
     return NextResponse.json(
-      { error: 'Upload failed' },
+      { error: error?.message || 'Upload failed' },
       { status: 500 }
     );
   }
