@@ -70,6 +70,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
           description: roadmap.description,
           icon: roadmap.icon,
           order: roadmap.order,
+          isLocked: Boolean(roadmap.isLocked),
         },
         layers,
       },
@@ -112,24 +113,39 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   }
 }
 
-// PATCH /api/v1/roadmaps/[slug] - Update roadmap title, shortCode, and description
+// PATCH /api/v1/roadmaps/[slug] - Update roadmap title, shortCode, description, or isLocked
 export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
     const body = await req.json();
-    const { title, shortCode, description } = body;
+    const { title, shortCode, description, isLocked } = body;
 
-    if (!title?.trim()) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    const updateData: {
+      title?: string;
+      shortCode?: string;
+      description?: string;
+      isLocked?: boolean;
+    } = {};
+
+    if (title !== undefined) {
+      if (!title.trim()) {
+        return NextResponse.json({ error: 'Title cannot be empty' }, { status: 400 });
+      }
+      updateData.title = title.trim();
+    }
+    if (shortCode !== undefined) {
+      updateData.shortCode = shortCode.trim();
+    }
+    if (description !== undefined) {
+      updateData.description = description.trim();
+    }
+    if (isLocked !== undefined) {
+      updateData.isLocked = Boolean(isLocked);
     }
 
     const updated = await prisma.roadmap.update({
       where: { slug },
-      data: {
-        title: title.trim(),
-        ...(shortCode !== undefined && { shortCode: shortCode.trim() }),
-        ...(description !== undefined && { description: description.trim() }),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ roadmap: updated });

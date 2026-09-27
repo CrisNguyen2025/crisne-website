@@ -293,6 +293,7 @@ interface MasterPanelProps {
   onRoadmapChange?: (slug: string) => void;
   onEditRoadmap?: (title: string, shortCode: string, description?: string) => Promise<void>;
   onDeleteRoadmap?: (slug: string) => void;
+  onToggleLock?: (locked?: boolean) => void;
   /** Pass true while fetching data from API to show skeleton loaders */
   isLoading?: boolean;
   /** Pass true when an API error occurred to show error state */
@@ -334,26 +335,18 @@ export function MasterPanel({
   onDeleteLayer,
   onDeleteItem,
   onDeleteRoadmap,
+  onToggleLock,
 }: MasterPanelProps) {
   const [collapsedLayers, setCollapsedLayers] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isRoadmapActionsOpen, setIsRoadmapActionsOpen] = useState(false);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
-  const [isItemsLocked, setIsItemsLocked] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('roadmap_items_locked') === 'true';
-    }
-    return false;
-  });
+
+  // Sync with currentRoadmap?.isLocked, fallback to false
+  const isItemsLocked = Boolean(currentRoadmap?.isLocked);
 
   const toggleItemsLock = () => {
-    setIsItemsLocked((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('roadmap_items_locked', String(next));
-      }
-      return next;
-    });
+    onToggleLock?.(!isItemsLocked);
   };
 
   const [activePopoverLayerId, setActivePopoverLayerId] = useState<string | null>(null);

@@ -157,6 +157,30 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     [slug, loadRoadmap]
   );
 
+  // 2.2 Toggle Roadmap Lock
+  const toggleRoadmapLock = useCallback(
+    async (locked?: boolean) => {
+      const nextLocked = locked !== undefined ? locked : !roadmapMeta?.isLocked;
+      // Optimistic update
+      setRoadmapMeta((prev) => (prev ? { ...prev, isLocked: nextLocked } : null));
+      const currentCache = roadmapCache.get(slug);
+      if (currentCache) {
+        roadmapCache.set(slug, {
+          ...currentCache,
+          roadmap: { ...currentCache.roadmap, isLocked: nextLocked },
+        });
+      }
+
+      try {
+        await roadmapService.updateRoadmapBySlug(slug, { isLocked: nextLocked });
+      } catch (err) {
+        console.error('[useRoadmap] Failed to toggle roadmap lock:', err);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, roadmapMeta?.isLocked, loadRoadmap]
+  );
+
   // 3. Edit Layer
   const editLayer = useCallback(
     async (layerId: string, title: string, shortTag: string, subtitle?: string) => {
@@ -451,6 +475,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     editLayer,
     deleteLayer,
     editRoadmap,
+    toggleRoadmapLock,
     addGroup,
     editGroup,
     deleteGroup,

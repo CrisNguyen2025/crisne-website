@@ -85,6 +85,7 @@ function RoadmapWorkspace() {
     editLayer,
     deleteLayer,
     editRoadmap,
+    toggleRoadmapLock,
     addGroup,
     editGroup,
     deleteGroup,
@@ -237,6 +238,7 @@ function RoadmapWorkspace() {
                 onEditLayer={editLayer}
                 onDeleteLayer={deleteLayer}
                 onDeleteItem={deleteItem}
+                onToggleLock={toggleRoadmapLock}
               />
             </div>
 

@@ -14,6 +14,7 @@ export async function GET() {
         description: true,
         icon: true,
         order: true,
+        isLocked: true,
         _count: {
           select: { layers: true },
         },

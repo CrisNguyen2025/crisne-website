@@ -51,6 +51,7 @@ export interface RoadmapMeta {
   description?: string | null;
   icon?: string | null;
   order: number;
+  isLocked?: boolean;
 }
 
 /** Response shape when listing all roadmap layers from the API */
@@ -117,8 +118,9 @@ export interface CreateRoadmapDto {
 
 /** Payload to update an existing Topic / Roadmap */
 export interface UpdateRoadmapDto {
-  title: string;
-  shortCode: string;
+  title?: string;
+  shortCode?: string;
   description?: string;
+  isLocked?: boolean;
 }
 
