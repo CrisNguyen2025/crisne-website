@@ -170,7 +170,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     // prose/browser from using intrinsic dimensions that override CSS constraints
     imgElement.setAttribute(
       'style',
-      'max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.75rem 0;cursor:zoom-in;'
+      'max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;'
     );
 
     if (this.__showCaption && this.__caption) {

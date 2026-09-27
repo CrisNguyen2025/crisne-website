@@ -350,7 +350,7 @@ input[type="search"]::-webkit-search-cancel-button {
   margin-bottom: 0.75rem !important;
 }
 
-/* Images: my-3 (12px) — clear separation from text */
+/* Images: 0.5rem (8px) margin with block display for unified margin collapsing */
 .post-content-view img,
 .post-content-view.prose img,
 .prose .post-content-view img,
@@ -364,7 +364,7 @@ input[type="search"]::-webkit-search-cancel-button {
   height: auto !important;
   object-fit: contain !important;
   display: block !important;
-  margin: 0.75rem 0 !important;
+  margin: 0.5rem 0 !important;
 }
 
 .post-content-view img:hover {
