@@ -283,6 +283,54 @@ input[type="search"]::-webkit-search-cancel-button {
   overflow-x: auto;
 }
 
+/* Override Tailwind prose spacing to match editor theme (DefaultTheme.ts) */
+.post-content-view.prose p {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.post-content-view.prose :where(h1) {
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+.post-content-view.prose :where(h2) {
+  margin-top: 1rem !important;
+  margin-bottom: 0.625rem !important;
+}
+
+.post-content-view.prose :where(h3) {
+  margin-top: 0.875rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.post-content-view.prose :where(h4),
+.post-content-view.prose :where(h5),
+.post-content-view.prose :where(h6) {
+  margin-top: 0.75rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.post-content-view.prose :where(ul, ol) {
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.post-content-view.prose :where(li) {
+  margin-top: 0.125rem !important;
+  margin-bottom: 0.125rem !important;
+}
+
+.post-content-view.prose :where(blockquote) {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.post-content-view.prose :where(pre) {
+  margin-top: 0.75rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
 .post-content-view img,
 .post-content-view.prose img,
 .prose .post-content-view img,
@@ -296,7 +344,7 @@ input[type="search"]::-webkit-search-cancel-button {
   height: auto !important;
   object-fit: contain !important;
   display: block !important;
-  margin: 1rem 0 !important;
+  margin: 0.5rem 0 !important;
 }
 
 .post-content-view img:hover {
