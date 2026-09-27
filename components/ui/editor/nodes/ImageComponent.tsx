@@ -25,7 +25,7 @@ import {
 } from 'lexical';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageResizer from '../ui/ImageResizer';
-import { ImagePreview } from '@/components/ui/image-preview';
+import { Image as AntImage } from 'antd';
 import { $isImageNode } from './ImageNode';
 type ImageStatus = { error: true } | { error: false; width: number; height: number };
 const imageCache = new Map<string, Promise<ImageStatus> | ImageStatus>();
@@ -449,13 +449,19 @@ export default function ImageComponent({
           />
         )}
 
-        {/* Fullscreen Image Preview with Ant Design features */}
-        <ImagePreview
-          src={getMediaUrl({ url: src })}
-          alt={altText}
-          visible={showFullscreen}
-          onClose={() => setShowFullscreen(false)}
-        />
+        {/* Fullscreen Ant Design Image Preview */}
+        {showFullscreen && (
+          <div style={{ display: 'none' }}>
+            <AntImage
+              src={getMediaUrl({ url: src })}
+              alt={altText}
+              preview={{
+                visible: showFullscreen,
+                onVisibleChange: (vis) => setShowFullscreen(vis),
+              }}
+            />
+          </div>
+        )}
       </>
     </Suspense>
   );

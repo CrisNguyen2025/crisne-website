@@ -15,7 +15,7 @@ import { ChecklistItem, RoadmapLevel } from "@/lib/roadmap/types";
 import { formatFriendlyTime, formatExactDate } from "@/lib/roadmap/date-utils";
 import { contentToHtml } from "@/lib/roadmap/content-utils";
 import { useToast } from "@/components/ui/toast";
-import { ImagePreview } from "@/components/ui/image-preview";
+import { Image as AntImage } from "antd";
 import { EditItemContentDrawer } from "./EditItemContentDrawer";
 import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
 
@@ -44,17 +44,16 @@ export function DetailPanel({
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{
-    src: string;
-    alt: string;
-  } | null>(null);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [allImages, setAllImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (item) {
       setIsContentModalOpen(false);
       setIsInfoModalOpen(false);
-      setPreviewImage(null);
+      setPreviewVisible(false);
       containerRef.current?.scrollTo({ top: 0, behavior: "instant" });
     }
   }, [item?.id]);
@@ -64,10 +63,15 @@ export function DetailPanel({
     const img = target.closest("img");
     if (img && img.src) {
       e.preventDefault();
-      setPreviewImage({
-        src: img.src,
-        alt: img.alt || item?.title || "Image preview",
-      });
+      const container = e.currentTarget;
+      const imgs = Array.from(container.querySelectorAll("img"))
+        .map((el) => el.src)
+        .filter(Boolean);
+      const clickedIndex = imgs.indexOf(img.src);
+
+      setAllImages(imgs.length > 0 ? imgs : [img.src]);
+      setCurrentImageIndex(clickedIndex >= 0 ? clickedIndex : 0);
+      setPreviewVisible(true);
     }
   };
 
@@ -360,14 +364,23 @@ export function DetailPanel({
         onSubmit={handleSaveInfo}
       />
 
-      {/* Image Preview in View Mode */}
-      {previewImage && (
-        <ImagePreview
-          src={previewImage.src}
-          alt={previewImage.alt}
-          visible={!!previewImage}
-          onClose={() => setPreviewImage(null)}
-        />
+      {/* Ant Design Image Preview Group in View Mode */}
+      {previewVisible && (
+        <div style={{ display: "none" }}>
+          <AntImage.PreviewGroup
+            preview={{
+              visible: previewVisible,
+              current: currentImageIndex,
+              onVisibleChange: (vis) => setPreviewVisible(vis),
+              onChange: (current) => setCurrentImageIndex(current),
+            }}
+            items={allImages}
+          >
+            {allImages.map((src, idx) => (
+              <AntImage key={idx} src={src} />
+            ))}
+          </AntImage.PreviewGroup>
+        </div>
       )}
 
       {showScrollTop && (
