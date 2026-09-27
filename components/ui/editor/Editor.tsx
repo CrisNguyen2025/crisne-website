@@ -191,8 +191,9 @@ export default function Editor({
           <SetContentPlugin value={value} />
           <CalloutTransformPlugin />
           <OnChangePlugin
-            onChange={(_, editor) => {
-              editor.update(() => {
+            ignoreSelectionChange={true}
+            onChange={(editorState, editor) => {
+              editorState.read(() => {
                 const html = $generateHtmlFromNodes(editor);
                 onChange?.(checkEmptyHtml(html) ? '' : html); // Detect if HTML is "empty"
               });
