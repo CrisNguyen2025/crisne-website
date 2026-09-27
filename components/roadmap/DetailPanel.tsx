@@ -67,7 +67,7 @@ export function DetailPanel({
 
   if (isLoading) {
     return (
-      <div className="flex-1 relative h-full flex flex-col overflow-hidden animate-pulse">
+      <div className="flex-1 relative h-full flex flex-col overflow-hidden bg-background">
         {/* Skeleton Toolbar */}
         <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 shrink-0 min-h-[57px]">
           <div className="flex items-center gap-2 w-1/3">
@@ -79,14 +79,14 @@ export function DetailPanel({
         {/* Skeleton Content */}
         <div className="p-6 md:p-8 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
           <div className="space-y-3">
-            <div className="h-7 w-2/3 rounded-lg bg-muted/70" />
-            <div className="h-4 w-5/6 rounded bg-muted/40" />
-            <div className="h-4 w-1/2 rounded bg-muted/30" />
+            <div className="h-8 w-2/3 rounded-xl bg-muted/60 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
+            <div className="h-4 w-5/6 rounded-lg bg-muted/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
+            <div className="h-4 w-1/2 rounded-lg bg-muted/30 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
           </div>
           <div className="w-full border-t border-border/40 my-4" />
           <div className="space-y-3 pt-2">
-            <div className="h-4 w-1/4 rounded bg-muted/50" />
-            <div className="h-24 w-full rounded-xl bg-muted/20" />
+            <div className="h-4 w-28 rounded-md bg-muted/50" />
+            <div className="h-36 w-full rounded-2xl border border-border/40 bg-muted/20 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
           </div>
         </div>
       </div>

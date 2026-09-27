@@ -7,6 +7,7 @@ import { CreateTopicModal } from "./CreateTopicModal";
 
 interface HomeDashboardProps {
   roadmaps: RoadmapMeta[];
+  isLoading?: boolean;
   onSelectRoadmap: (slug: string) => void;
   onCreateRoadmap: (payload: CreateRoadmapDto) => Promise<void>;
   isCreateModalOpen?: boolean;
@@ -16,6 +17,7 @@ interface HomeDashboardProps {
 
 export function HomeDashboard({
   roadmaps,
+  isLoading = false,
   onSelectRoadmap,
   onCreateRoadmap,
   isCreateModalOpen: controlledIsOpen,
@@ -52,7 +54,7 @@ export function HomeDashboard({
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <Compass className="w-4 h-4 text-primary" />
-            <span>Active Roadmaps ({roadmaps.length})</span>
+            <span>Active Roadmaps {isLoading && roadmaps.length === 0 ? "…" : `(${roadmaps.length})`}</span>
           </h2>
 
           <button
@@ -66,56 +68,81 @@ export function HomeDashboard({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {roadmaps.map((r) => {
-            const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
+          {isLoading && roadmaps.length === 0 ? (
+            <>
+              {[1, 2, 3].map((idx) => (
+                <div
+                  key={idx}
+                  className="p-6 rounded-2xl border border-border/60 bg-card/60 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent flex flex-col justify-between gap-4 h-[190px]"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-10 h-10 rounded-xl bg-muted/60" />
+                      <div className="w-20 h-3 rounded bg-muted/40" />
+                    </div>
+                    <div className="w-3/4 h-5 rounded-lg bg-muted/70" />
+                    <div className="w-full h-3 rounded bg-muted/40" />
+                    <div className="w-2/3 h-3 rounded bg-muted/30" />
+                  </div>
+                  <div className="pt-3 border-t border-border/30 flex items-center justify-between">
+                    <div className="w-24 h-3 rounded bg-muted/40" />
+                    <div className="w-12 h-3 rounded bg-muted/30" />
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            roadmaps.map((r) => {
+              const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
 
-            return (
-              <div
-                key={r.slug}
-                onClick={() => onSelectRoadmap(r.slug)}
-                className="group relative p-6 rounded-2xl border border-border/70 bg-card hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-4"
-              >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`w-10 h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center p-1 border border-primary/20 shrink-0 text-center truncate ${
-                        code.length <= 2
-                          ? "text-sm"
-                          : code.length === 3
-                            ? "text-xs"
-                            : "text-[10px]"
-                      }`}
-                      title={code}
-                    >
-                      {code}
-                    </span>
-                    <span className="text-[11px] font-semibold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
-                      Open workspace
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                    </span>
+              return (
+                <div
+                  key={r.slug}
+                  onClick={() => onSelectRoadmap(r.slug)}
+                  className="group relative p-6 rounded-2xl border border-border/70 bg-card hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-4"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`w-10 h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center p-1 border border-primary/20 shrink-0 text-center truncate ${
+                          code.length <= 2
+                            ? "text-sm"
+                            : code.length === 3
+                              ? "text-xs"
+                              : "text-[10px]"
+                        }`}
+                        title={code}
+                      >
+                        {code}
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+                        Open workspace
+                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">
+                      {r.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                      {r.description ||
+                        "Explore architecture patterns, core foundations, and checklist items."}
+                    </p>
                   </div>
 
-                  <h3 className="text-base font-bold text-foreground tracking-tight group-hover:text-primary transition-colors">
-                    {r.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                    {r.description ||
-                      "Explore architecture patterns, core foundations, and checklist items."}
-                  </p>
+                  <div className="pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <BookOpen className="w-3 h-3 text-muted-foreground/70" />
+                      Interactive View
+                    </span>
+                    <span className="font-semibold text-foreground/80 uppercase tracking-wider text-[10px]">
+                      {r.slug}
+                    </span>
+                  </div>
                 </div>
-
-                <div className="pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <BookOpen className="w-3 h-3 text-muted-foreground/70" />
-                    Interactive View
-                  </span>
-                  <span className="font-semibold text-foreground/80 uppercase tracking-wider text-[10px]">
-                    {r.slug}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </div>
 

@@ -8,6 +8,7 @@ interface CompactSidebarProps {
   currentView: 'home' | 'roadmap';
   currentSlug: string;
   roadmaps: RoadmapMeta[];
+  isLoading?: boolean;
   onSelectHome: () => void;
   onSelectRoadmap: (slug: string) => void;
   onOpenCreateRoadmap?: () => void;
@@ -17,6 +18,7 @@ export function CompactSidebar({
   currentView,
   currentSlug,
   roadmaps,
+  isLoading = false,
   onSelectHome,
   onSelectRoadmap,
   onOpenCreateRoadmap,
@@ -60,7 +62,17 @@ export function CompactSidebar({
 
         {/* 2. Roadmaps items (AI, BE, FE, ...) */}
         <div className="flex flex-col items-center gap-2.5 w-full">
-          {roadmaps.map((r) => {
+          {isLoading && roadmaps.length === 0 ? (
+            <>
+              <div className="w-12 h-12 rounded-2xl bg-muted/50 border border-border/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent flex items-center justify-center">
+                <div className="w-5 h-3 rounded bg-muted/70" />
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-muted/40 border border-border/30 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent flex items-center justify-center">
+                <div className="w-5 h-3 rounded bg-muted/60" />
+              </div>
+            </>
+          ) : (
+            roadmaps.map((r) => {
             const isSelected = currentView === 'roadmap' && currentSlug === r.slug;
             const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
 
@@ -101,7 +113,8 @@ export function CompactSidebar({
                 </span>
               </button>
             );
-          })}
+          })
+        )}
         </div>
       </div>
 

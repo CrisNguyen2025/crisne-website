@@ -32,8 +32,10 @@ function RoadmapWorkspace() {
   );
 
   const [availableRoadmaps, setAvailableRoadmaps] = useState<RoadmapMeta[]>([]);
+  const [isRoadmapsLoading, setIsRoadmapsLoading] = useState<boolean>(true);
 
   const refreshRoadmaps = useCallback(() => {
+    setIsRoadmapsLoading(true);
     roadmapService
       .fetchAllRoadmaps()
       .then((data) => {
@@ -41,7 +43,8 @@ function RoadmapWorkspace() {
           setAvailableRoadmaps(data.roadmaps);
         }
       })
-      .catch((err) => console.error("Failed to load roadmaps list:", err));
+      .catch((err) => console.error("Failed to load roadmaps list:", err))
+      .finally(() => setIsRoadmapsLoading(false));
   }, []);
 
   // Clean up any stale/legacy ?view param from address bar if present
@@ -172,6 +175,7 @@ function RoadmapWorkspace() {
         currentView={currentView}
         currentSlug={activeSlug}
         roadmaps={availableRoadmaps}
+        isLoading={isRoadmapsLoading}
         onSelectHome={handleSelectHome}
         onSelectRoadmap={handleSelectRoadmap}
         onOpenCreateRoadmap={() => setIsCreateTopicOpen(true)}
@@ -186,6 +190,7 @@ function RoadmapWorkspace() {
           >
             <HomeDashboard
               roadmaps={availableRoadmaps}
+              isLoading={isRoadmapsLoading}
               onSelectRoadmap={handleSelectRoadmap}
               onCreateRoadmap={handleCreateRoadmap}
               isCreateModalOpen={isCreateTopicOpen}

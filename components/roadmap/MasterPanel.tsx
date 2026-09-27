@@ -58,16 +58,20 @@ import { EditTopicModal } from './EditTopicModal';
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SkeletonPill({ width = 'w-14' }: { width?: string }) {
-  return <div className={`${width} h-6 rounded-lg bg-muted/60 animate-pulse shrink-0`} />;
+  return (
+    <div
+      className={`${width} h-7 rounded-lg bg-muted/50 border border-border/30 shrink-0 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent`}
+    />
+  );
 }
 
 function SkeletonItemRow() {
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border/30 bg-card/50">
-      <div className="w-3.5 h-3.5 rounded bg-muted/50 animate-pulse shrink-0" />
+    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border/40 bg-card/60 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent">
+      <div className="w-3.5 h-3.5 rounded bg-muted/60 shrink-0" />
       <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="h-2.5 w-2/3 rounded bg-muted/60 animate-pulse" />
-        <div className="h-2 w-4/5 rounded bg-muted/40 animate-pulse" />
+        <div className="h-3 w-3/5 rounded bg-muted/70" />
+        <div className="h-2 w-4/5 rounded bg-muted/40" />
       </div>
     </div>
   );
@@ -75,12 +79,15 @@ function SkeletonItemRow() {
 
 function SkeletonLayerCard() {
   return (
-    <div className="rounded-2xl border border-border/40 bg-card/60 overflow-hidden">
-      <div className="px-3.5 py-2.5 bg-muted/30 flex items-center justify-between">
-        <div className="h-3 w-32 rounded bg-muted/60 animate-pulse" />
-        <div className="h-4 w-12 rounded-full bg-muted/40 animate-pulse" />
+    <div className="rounded-2xl border border-border/50 bg-card/70 overflow-hidden shadow-xs">
+      <div className="px-3.5 py-3 bg-muted/30 border-b border-border/30 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 rounded-lg bg-muted/60" />
+          <div className="h-3.5 w-32 rounded-md bg-muted/70" />
+        </div>
+        <div className="h-4 w-10 rounded-full bg-muted/50" />
       </div>
-      <div className="p-2 space-y-1.5">
+      <div className="p-2.5 space-y-2">
         <SkeletonItemRow />
         <SkeletonItemRow />
         <SkeletonItemRow />
