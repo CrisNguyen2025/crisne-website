@@ -30,6 +30,8 @@ import {
   MoreHorizontal,
   ChevronUp,
   AlertTriangle,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import {
   DndContext,
@@ -115,6 +117,7 @@ interface SortableGroupProps {
   onDeleteItem: (itemId: string) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isLocked?: boolean;
 }
 
 function SortableGroup({
@@ -132,6 +135,7 @@ function SortableGroup({
   onDeleteItem,
   isCollapsed,
   onToggleCollapse,
+  isLocked = false,
 }: SortableGroupProps) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const sensors = useSensors(
@@ -140,6 +144,7 @@ function SortableGroup({
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (isLocked) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = items.findIndex((item) => item.id === active.id);
@@ -252,6 +257,7 @@ function SortableGroup({
                   key={item.id}
                   item={item}
                   isActive={item.id === activeItemId}
+                  isLocked={isLocked}
                   onSelect={() => onSelectItem(item.id)}
                 />
               ))}
@@ -333,6 +339,23 @@ export function MasterPanel({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [isRoadmapActionsOpen, setIsRoadmapActionsOpen] = useState(false);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
+  const [isItemsLocked, setIsItemsLocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('roadmap_items_locked') === 'true';
+    }
+    return false;
+  });
+
+  const toggleItemsLock = () => {
+    setIsItemsLocked((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('roadmap_items_locked', String(next));
+      }
+      return next;
+    });
+  };
+
   const [activePopoverLayerId, setActivePopoverLayerId] = useState<string | null>(null);
   const [editingLayer, setEditingLayer] = useState<RoadmapLayer | null>(null);
   const [editingGroup, setEditingGroup] = useState<any | null>(null);
@@ -413,15 +436,30 @@ export function MasterPanel({
             </span>
           </div>
 
-          <div className="relative shrink-0" onMouseLeave={() => setIsRoadmapActionsOpen(false)}>
+          <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
-              onClick={() => setIsRoadmapActionsOpen((prev) => !prev)}
-              className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-border/40"
-              title="Topic options"
+              onClick={toggleItemsLock}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
+                isItemsLocked
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 border-border/40'
+              }`}
+              title={isItemsLocked ? 'Unlock item reordering (drag & drop disabled)' : 'Lock item reordering'}
+              aria-label={isItemsLocked ? 'Unlock items' : 'Lock items'}
             >
-              <MoreHorizontal className="w-4 h-4" />
+              {isItemsLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
             </button>
+
+            <div className="relative shrink-0" onMouseLeave={() => setIsRoadmapActionsOpen(false)}>
+              <button
+                type="button"
+                onClick={() => setIsRoadmapActionsOpen((prev) => !prev)}
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-border/40"
+                title="Topic options"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
 
             {isRoadmapActionsOpen && (
               <>
@@ -484,6 +522,7 @@ export function MasterPanel({
             )}
           </div>
         </div>
+      </div>
 
         {/* Layer filter tabs with horizontal scroll fade & << / >> indicators */}
         <div className="relative group/tabs flex items-center">
@@ -784,6 +823,7 @@ export function MasterPanel({
                               }
                             }}
                             onDeleteItem={onDeleteItem}
+                            isLocked={isItemsLocked}
                             isCollapsed={Boolean(collapsedGroups[groupKey])}
                             onToggleCollapse={() => toggleGroup(groupKey)}
                           />
