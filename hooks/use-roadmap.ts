@@ -253,7 +253,22 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         setLayers(updatedLayers);
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
+        setActiveItemId((currentActive) => {
+          const deletedLayer = layers.find((l) => l.id === layerId);
+          const wasActiveInLayer = deletedLayer?.groups.some((g) =>
+            g.items.some((i) => i.id === currentActive)
+          );
+          if (wasActiveInLayer) {
+            const remaining = layers
+              .filter((l) => l.id !== layerId)
+              .flatMap((l) => l.groups.flatMap((g) => g.items));
+            return remaining[0]?.id || '';
+          }
+          return currentActive;
+        });
+
         await roadmapService.deleteLayer(layerId);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to delete layer:', err);
@@ -261,7 +276,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         await loadRoadmap(slug);
       }
     },
-    [slug, loadRoadmap]
+    [slug, loadRoadmap, layers]
   );
 
   // 4.1 Add Group to Layer with Instant Optimistic UI
@@ -339,12 +354,29 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => ({
             ...layer,
-            groups: layer.groups.filter((g) => g.id !== groupId),
+            groups: layer.groups.filter((g) => g.id !== groupId && g.level !== groupId),
           }));
         setLayers(updatedLayers);
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
-        await roadmapService.deleteGroup(groupId);
+        setActiveItemId((currentActive) => {
+          const deletedGroup = layers
+            .flatMap((l) => l.groups)
+            .find((g) => g.id === groupId || g.level === groupId);
+          const wasActiveInGroup = deletedGroup?.items.some((i) => i.id === currentActive);
+          if (wasActiveInGroup) {
+            const remaining = layers
+              .flatMap((l) => l.groups)
+              .filter((g) => g.id !== groupId && g.level !== groupId)
+              .flatMap((g) => g.items);
+            return remaining[0]?.id || '';
+          }
+          return currentActive;
+        });
+
+        if (!groupId.startsWith('temp-group-') && !groupId.startsWith('temp-grp-')) {
+          await roadmapService.deleteGroup(groupId);
+        }
         roadmapCache.delete(slug);
         await loadRoadmap(slug, true);
       } catch (err) {
@@ -354,7 +386,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         throw err;
       }
     },
-    [slug, loadRoadmap]
+    [slug, loadRoadmap, layers]
   );
 
   // 5. Add Item with Instant Optimistic UI

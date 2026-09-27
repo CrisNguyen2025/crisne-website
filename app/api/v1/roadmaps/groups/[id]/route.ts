@@ -38,12 +38,9 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
 
-    const existing = await prisma.roadmapGroup.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: { items: true },
-        },
+    const existing = await prisma.roadmapGroup.findFirst({
+      where: {
+        OR: [{ id }, { level: id }],
       },
     });
 
@@ -51,18 +48,11 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ success: true, message: 'Group not found or already deleted' });
     }
 
-    if (existing._count.items > 0) {
-      return NextResponse.json(
-        { error: `Cannot delete group: it contains ${existing._count.items} item(s). Please move or delete items first.` },
-        { status: 400 }
-      );
-    }
-
     await prisma.roadmapGroup.delete({
-      where: { id },
+      where: { id: existing.id },
     });
 
-    return NextResponse.json({ success: true, deletedId: id });
+    return NextResponse.json({ success: true, deletedId: existing.id });
   } catch (error: any) {
     console.error('[API DELETE /api/v1/roadmaps/groups/[id]] Error:', error);
     return NextResponse.json(

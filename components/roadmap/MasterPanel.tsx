@@ -254,54 +254,32 @@ function SortableGroup({
                     </button>
                   )}
 
-                  {groupId && onDeleteGroup && (
-                    items.length > 0 ? (
-                      <Popconfirm
-                        title="Cannot delete group"
-                        description="Please remove all items first."
-                        showCancel={false}
-                        okText="OK"
-                        okButtonProps={{ size: 'small' }}
-                        icon={<AlertTriangle className="w-4 h-4 text-amber-500 mr-1.5 shrink-0 inline-block" />}
-                        placement="bottomRight"
-                        zIndex={9999}
-                        onConfirm={() => onCloseActions()}
-                        onCancel={() => onCloseActions()}
+                  {onDeleteGroup && (
+                    <Popconfirm
+                      title="Delete group?"
+                      description={items.length > 0 ? "All items inside will be deleted." : "This action cannot be undone."}
+                      onConfirm={() => {
+                        const targetId = groupId || level;
+                        onDeleteGroup(targetId, title, items.length);
+                        onCloseActions();
+                      }}
+                      onCancel={() => onCloseActions()}
+                      okText="Delete"
+                      cancelText="Cancel"
+                      okButtonProps={{ danger: true, size: 'small' }}
+                      cancelButtonProps={{ size: 'small' }}
+                      icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                      placement="bottomRight"
+                      zIndex={9999}
+                    >
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
                       >
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete group</span>
-                        </button>
-                      </Popconfirm>
-                    ) : (
-                      <Popconfirm
-                        title="Delete group?"
-                        description="This action cannot be undone."
-                        onConfirm={() => {
-                          onCloseActions();
-                          onDeleteGroup(groupId, title, 0);
-                        }}
-                        onCancel={() => onCloseActions()}
-                        okText="Delete"
-                        cancelText="Cancel"
-                        okButtonProps={{ danger: true, size: 'small' }}
-                        cancelButtonProps={{ size: 'small' }}
-                        icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
-                        placement="bottomRight"
-                        zIndex={9999}
-                      >
-                        <button
-                          type="button"
-                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete group</span>
-                        </button>
-                      </Popconfirm>
-                    )
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete group</span>
+                      </button>
+                    </Popconfirm>
                   )}
                 </div>
               </>
@@ -519,7 +497,15 @@ export function MasterPanel({
 
     const handlePointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target?.closest('[data-dropdown-trigger]') || target?.closest('[data-dropdown-menu]')) {
+      if (
+        target?.closest('[data-dropdown-trigger]') ||
+        target?.closest('[data-dropdown-menu]') ||
+        target?.closest('.ant-popover') ||
+        target?.closest('.ant-popconfirm') ||
+        target?.closest('.ant-modal') ||
+        target?.closest('.ant-dropdown') ||
+        target?.closest('.ant-tooltip')
+      ) {
         return;
       }
       setActiveDropdownId(null);
@@ -531,18 +517,12 @@ export function MasterPanel({
       }
     };
 
-    const handleScrollAnywhere = () => {
-      setActiveDropdownId(null);
-    };
-
     window.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('scroll', handleScrollAnywhere, true);
 
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('scroll', handleScrollAnywhere, true);
     };
   }, [activeDropdownId]);
 
@@ -1034,54 +1014,31 @@ export function MasterPanel({
                               <span>Edit layer</span>
                             </button>
 
-                            {layerTotal > 0 ? (
-                              <Popconfirm
-                                title="Cannot delete layer"
-                                description="Please remove all items first."
-                                showCancel={false}
-                                okText="OK"
-                                okButtonProps={{ size: 'small' }}
-                                icon={<AlertTriangle className="w-4 h-4 text-amber-500 mr-1.5 shrink-0 inline-block" />}
-                                placement="bottomRight"
-                                zIndex={9999}
-                                onConfirm={() => setActiveDropdownId(null)}
-                                onCancel={() => setActiveDropdownId(null)}
+                            <Popconfirm
+                              title="Delete layer?"
+                              description={layerTotal > 0 ? "All groups and items will be deleted." : "This action cannot be undone."}
+                              onConfirm={() => {
+                                setActiveDropdownId(null);
+                                onDeleteLayer(layer.id);
+                                toast(`Deleted layer "${layer.title}" successfully`, 'success');
+                              }}
+                              onCancel={() => setActiveDropdownId(null)}
+                              okText="Delete"
+                              cancelText="Cancel"
+                              okButtonProps={{ danger: true, size: 'small' }}
+                              cancelButtonProps={{ size: 'small' }}
+                              icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                              placement="bottomRight"
+                              zIndex={9999}
+                            >
+                              <button
+                                type="button"
+                                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
                               >
-                                <button
-                                  type="button"
-                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete layer</span>
-                                </button>
-                              </Popconfirm>
-                            ) : (
-                              <Popconfirm
-                                title="Delete layer?"
-                                description="This action cannot be undone."
-                                onConfirm={() => {
-                                  setActiveDropdownId(null);
-                                  onDeleteLayer(layer.id);
-                                  toast(`Deleted layer "${layer.title}" successfully`, 'success');
-                                }}
-                                onCancel={() => setActiveDropdownId(null)}
-                                okText="Delete"
-                                cancelText="Cancel"
-                                okButtonProps={{ danger: true, size: 'small' }}
-                                cancelButtonProps={{ size: 'small' }}
-                                icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
-                                placement="bottomRight"
-                                zIndex={9999}
-                              >
-                                <button
-                                  type="button"
-                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>Delete layer</span>
-                                </button>
-                              </Popconfirm>
-                            )}
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete layer</span>
+                              </button>
+                            </Popconfirm>
                           </div>
                         </>
                       )}
