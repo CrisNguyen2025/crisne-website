@@ -111,8 +111,8 @@ function LazyImage({
 
     const naturalWidth = status.width || 800;
     const naturalHeight = status.height || 450;
-    const maxBoundWidth = typeof maxWidth === 'number' && maxWidth > 0 ? maxWidth : 650;
-    const maxBoundHeight = 480;
+    const maxBoundWidth = typeof maxWidth === 'number' && maxWidth > 0 ? maxWidth : 540;
+    const maxBoundHeight = 380;
 
     let finalWidth = naturalWidth;
     let finalHeight = naturalHeight;
