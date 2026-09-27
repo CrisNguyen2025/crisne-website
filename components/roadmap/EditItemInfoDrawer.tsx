@@ -84,50 +84,40 @@ export function EditItemInfoDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        className={cn(
-          "fixed inset-0 bg-black/40 transition-opacity duration-300 ease-out",
-          isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-      />
-
-      <div className="fixed inset-y-0 right-0 flex max-w-full pl-10">
-        {/* Drawer Panel slide-in from right */}
-        <div
-          className={cn(
-            "w-screen max-w-md bg-card border-l border-border shadow-2xl flex flex-col justify-between transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-            isVisible ? "translate-x-0" : "translate-x-full"
-          )}
-        >
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-border/50 bg-muted/20 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
-                <Edit3 className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-bold text-sm text-foreground truncate">
-                  Edit Item Info
-                </h3>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <span>Item</span>
-                  <span className="text-muted-foreground/40">•</span>
-                  <span className="font-mono text-[10px]">ID: {item.id}</span>
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+    <div
+      className={cn(
+        "absolute inset-0 z-40 bg-card flex flex-col justify-between transform-gpu will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-xl",
+        isVisible ? "translate-y-0" : "translate-y-full"
+      )}
+    >
+      {/* Header */}
+      <div className="px-6 py-3.5 border-b border-border/50 bg-muted/15 flex items-center justify-between shrink-0 min-h-[57px]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0 shadow-2xs">
+            <Edit3 className="w-4 h-4" />
           </div>
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm text-foreground truncate">
+              Edit Item Info
+            </h3>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <span>Item</span>
+              <span className="text-muted-foreground/40">•</span>
+              <span className="font-mono text-[10px]">ID: {item.id}</span>
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer flex items-center justify-center"
+          title="Close (Esc)"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
 
           {/* Body Form */}
           <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -223,8 +213,6 @@ export function EditItemInfoDrawer({
               <Check className="w-3.5 h-3.5" /> Save changes
             </button>
           </div>
-        </div>
-      </div>
     </div>
   );
 }
