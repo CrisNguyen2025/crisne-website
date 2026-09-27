@@ -68,13 +68,28 @@ export function contentToHtml(content: string): string {
 
   // Ensure all images have exact constrained sizing and square borders matching edit mode
   html = html.replace(/<img\b([^>]*)>/gi, (_match, attrs: string) => {
-    // Strip any existing style, width, and height attributes to prevent intrinsic sizing
+    // Extract existing width/height from style or attributes if present
+    const widthMatch = attrs.match(/width:\s*([0-9]+)px/i) || attrs.match(/\bwidth=["']?([0-9]+)["']?/i);
+    const heightMatch = attrs.match(/height:\s*([0-9]+)px/i) || attrs.match(/\bheight=["']?([0-9]+)["']?/i);
+
     let cleanAttrs = attrs
       .replace(/\s*style\s*=\s*["'][^"']*["']/gi, '')
       .replace(/\s*width\s*=\s*["']?[^"'\s>]*["']?/gi, '')
       .replace(/\s*height\s*=\s*["']?[^"'\s>]*["']?/gi, '');
-    cleanAttrs +=
-      ' style="max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;"';
+
+    let style = 'max-width:100%;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;';
+    if (widthMatch && Number(widthMatch[1]) > 0) {
+      style += `width:${widthMatch[1]}px;`;
+    } else {
+      style += 'max-width:min(100%, 420px);width:auto;';
+    }
+    if (heightMatch && Number(heightMatch[1]) > 0) {
+      style += `height:${heightMatch[1]}px;`;
+    } else {
+      style += 'max-height:320px;height:auto;';
+    }
+
+    cleanAttrs += ` style="${style}"`;
     return `<img${cleanAttrs}>`;
   });
 

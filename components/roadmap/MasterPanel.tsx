@@ -32,6 +32,8 @@ import {
   AlertTriangle,
   Lock,
   Unlock,
+  Search,
+  X,
 } from 'lucide-react';
 import {
   DndContext,
@@ -54,6 +56,7 @@ import { EditLayerModal } from './EditLayerModal';
 import { CreateGroupModal } from './CreateGroupModal';
 import { EditGroupModal } from './EditGroupModal';
 import { EditTopicModal } from './EditTopicModal';
+import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skeleton loaders — shown while data is fetching from BE
@@ -118,6 +121,9 @@ interface SortableGroupProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   isLocked?: boolean;
+  isActionsOpen: boolean;
+  onToggleActions: () => void;
+  onCloseActions: () => void;
 }
 
 function SortableGroup({
@@ -136,8 +142,10 @@ function SortableGroup({
   isCollapsed,
   onToggleCollapse,
   isLocked = false,
+  isActionsOpen,
+  onToggleActions,
+  onCloseActions,
 }: SortableGroupProps) {
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -155,7 +163,7 @@ function SortableGroup({
   };
 
   return (
-    <div className={`space-y-1.5 ${isActionsOpen ? 'relative z-30' : ''}`}>
+    <div className={`space-y-1.5 transition-all ${isActionsOpen ? 'relative z-50' : 'relative z-0'}`}>
       <div
         onClick={onToggleCollapse}
         className="group/gh flex items-center justify-between px-2 py-1 rounded-lg hover:bg-muted/40 cursor-pointer select-none text-[11px] font-semibold text-muted-foreground relative"
@@ -171,14 +179,18 @@ function SortableGroup({
 
         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           {/* Actions popover */}
-          <div className="relative shrink-0" onMouseLeave={() => setIsActionsOpen(false)}>
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsActionsOpen((prev) => !prev);
+                onToggleActions();
               }}
-              className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-muted/80 rounded-md transition-colors"
+              className={`p-1 rounded-md transition-colors ${
+                isActionsOpen
+                  ? 'text-foreground bg-muted'
+                  : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/80'
+              }`}
               title="Group actions"
             >
               <MoreHorizontal className="w-3.5 h-3.5" />
@@ -190,18 +202,17 @@ function SortableGroup({
                   className="fixed inset-0 z-40"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsActionsOpen(false);
+                    onCloseActions();
                   }}
                 />
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  onMouseLeave={() => setIsActionsOpen(false)}
                   className="absolute right-0 top-full mt-1 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                 >
                   <button
                     type="button"
                     onClick={() => {
-                      setIsActionsOpen(false);
+                      onCloseActions();
                       onOpenCreateItem(layerId, level);
                     }}
                     className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
@@ -214,7 +225,7 @@ function SortableGroup({
                     <button
                       type="button"
                       onClick={() => {
-                        setIsActionsOpen(false);
+                        onCloseActions();
                         onEditGroup({ id: groupId, title, level, items });
                       }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
@@ -228,7 +239,7 @@ function SortableGroup({
                     <button
                       type="button"
                       onClick={() => {
-                        setIsActionsOpen(false);
+                        onCloseActions();
                         onDeleteGroup(groupId, title, items.length);
                       }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium"
@@ -339,8 +350,18 @@ export function MasterPanel({
 }: MasterPanelProps) {
   const [collapsedLayers, setCollapsedLayers] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const [isRoadmapActionsOpen, setIsRoadmapActionsOpen] = useState(false);
+  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'topic' | 'layer' | 'group';
+    id: string;
+    title: string;
+    count?: number;
+  } | null>(null);
+  const [warningModal, setWarningModal] = useState<{ title: string; message: string } | null>(null);
 
   // Sync with currentRoadmap?.isLocked, fallback to false
   const isItemsLocked = Boolean(currentRoadmap?.isLocked);
@@ -349,12 +370,99 @@ export function MasterPanel({
     onToggleLock?.(!isItemsLocked);
   };
 
-  const [activePopoverLayerId, setActivePopoverLayerId] = useState<string | null>(null);
   const [editingLayer, setEditingLayer] = useState<RoadmapLayer | null>(null);
   const [editingGroup, setEditingGroup] = useState<any | null>(null);
   const [targetGroupLayer, setTargetGroupLayer] = useState<RoadmapLayer | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Filter layers based on search query
+  const displayLayers = React.useMemo(() => {
+    if (!searchQuery.trim()) return layers;
+    const q = searchQuery.trim().toLowerCase();
+    return layers
+      .map((layer) => {
+        const matchingGroups = layer.groups
+          .map((group) => {
+            const matchingItems = group.items.filter(
+              (item) =>
+                item.title.toLowerCase().includes(q) ||
+                item.description?.toLowerCase().includes(q)
+            );
+            return { ...group, items: matchingItems };
+          })
+          .filter((group) => group.items.length > 0);
+
+        return { ...layer, groups: matchingGroups };
+      })
+      .filter((layer) => layer.groups.length > 0);
+  }, [layers, searchQuery]);
+
+  // Total matching search count
+  const totalSearchMatches = React.useMemo(() => {
+    if (!searchQuery.trim()) return 0;
+    return displayLayers.reduce(
+      (acc, l) => acc + l.groups.reduce((gAcc, g) => gAcc + g.items.length, 0),
+      0
+    );
+  }, [displayLayers, searchQuery]);
+
+  // Flattened visible items list for keyboard arrow navigation
+  const visibleItems = React.useMemo(() => {
+    return displayLayers.flatMap((l) => l.groups.flatMap((g) => g.items));
+  }, [displayLayers]);
+
+  // Quick Ctrl+F / Cmd+F shortcut to open search
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 50);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // ArrowUp / ArrowDown navigation across checklist items
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputActive =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.getAttribute('contenteditable') === 'true';
+
+      if (isInputActive) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (visibleItems.length === 0) return;
+        e.preventDefault();
+
+        const currentIndex = visibleItems.findIndex((i) => i.id === activeItemId);
+        let nextIndex = 0;
+
+        if (e.key === 'ArrowDown') {
+          nextIndex = currentIndex === -1 ? 0 : Math.min(currentIndex + 1, visibleItems.length - 1);
+        } else {
+          nextIndex = currentIndex === -1 ? 0 : Math.max(currentIndex - 1, 0);
+        }
+
+        const targetItem = visibleItems[nextIndex];
+        if (targetItem && targetItem.id !== activeItemId) {
+          onSelectItem(targetItem.id);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [visibleItems, activeItemId, onSelectItem]);
 
   // Layer filter tabs horizontal scroll tracking (for gradient fade + << / >> indicators)
   const tabsContainerRef = React.useRef<HTMLDivElement>(null);
@@ -419,103 +527,163 @@ export function MasterPanel({
     <div className="flex flex-col h-full w-full overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────── */}
       <div className="px-4 py-3.5 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 space-y-2.5 relative z-30">
-        <div className="flex items-center justify-between gap-2 h-7">
-          <div className="flex items-center gap-1.5 min-w-0 truncate">
-            <span className="font-bold text-xs text-foreground tracking-tight truncate">
-              {currentRoadmap?.title || 'Architecture Roadmap'}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-medium bg-muted/60 px-1.5 py-0.5 rounded border border-border/40 shrink-0">
-              {isLoading ? '…' : stats.total}
-            </span>
-          </div>
+        <div className="h-7 relative flex items-center">
+          {!isSearchOpen && !searchQuery ? (
+            /* Standard Header: Topic Title & Action Buttons */
+            <div className="w-full flex items-center justify-between gap-2 animate-in fade-in duration-150">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="font-bold text-xs text-foreground tracking-tight truncate">
+                  {currentRoadmap?.title || 'Architecture Roadmap'}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium bg-muted/60 px-1.5 py-0.5 rounded border border-border/40 shrink-0">
+                  {isLoading ? '…' : stats.total}
+                </span>
+              </div>
 
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={toggleItemsLock}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
-                isItemsLocked
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 border-border/40'
-              }`}
-              title={isItemsLocked ? 'Unlock item reordering (drag & drop disabled)' : 'Lock item reordering'}
-              aria-label={isItemsLocked ? 'Unlock items' : 'Lock items'}
-            >
-              {isItemsLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-            </button>
-
-            <div className="relative shrink-0" onMouseLeave={() => setIsRoadmapActionsOpen(false)}>
-              <button
-                type="button"
-                onClick={() => setIsRoadmapActionsOpen((prev) => !prev)}
-                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-border/40"
-                title="Topic options"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-
-            {isRoadmapActionsOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsRoadmapActionsOpen(false)}
-                />
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseLeave={() => setIsRoadmapActionsOpen(false)}
-                  className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSearchOpen(true);
+                    setTimeout(() => searchInputRef.current?.focus(), 50);
+                  }}
+                  className="p-1.5 rounded-lg transition-colors cursor-pointer border text-muted-foreground hover:text-foreground hover:bg-muted/80 border-border/40"
+                  title="Search items (Ctrl+F / ⌘F)"
+                  aria-label="Search items"
                 >
+                  <Search className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleItemsLock}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
+                    isItemsLocked
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 border-border/40'
+                  }`}
+                  title={isItemsLocked ? 'Unlock item reordering (drag & drop disabled)' : 'Lock item reordering'}
+                  aria-label={isItemsLocked ? 'Unlock items' : 'Lock items'}
+                >
+                  {isItemsLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                </button>
+
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveDropdownId((prev) => (prev === 'topic' ? null : 'topic'))
+                    }
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer border ${
+                      activeDropdownId === 'topic'
+                        ? 'text-foreground bg-muted border-border'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/80 border-border/40'
+                    }`}
+                    title="Topic options"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+
+                  {activeDropdownId === 'topic' && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setActiveDropdownId(null)}
+                      />
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveDropdownId(null);
+                            onOpenCreateLayer();
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
+                        >
+                          <FolderPlus className="w-3.5 h-3.5 text-primary" />
+                          <span>Add layer</span>
+                        </button>
+
+                        {onEditRoadmap && currentRoadmap && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDropdownId(null);
+                              setIsEditTopicOpen(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Edit topic</span>
+                          </button>
+                        )}
+
+                        {onDeleteRoadmap && currentRoadmap && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveDropdownId(null);
+                              setDeleteTarget({
+                                type: 'topic',
+                                id: currentRoadmap.slug,
+                                title: currentRoadmap.title,
+                              });
+                            }}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete topic</span>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Morph in-place Search Bar (Zero layout shift for elements below) */
+            <div className="w-full flex items-center gap-1.5 animate-in fade-in zoom-in-98 duration-150">
+              <div className="relative flex-1 flex items-center">
+                <Search className="w-3.5 h-3.5 text-primary absolute left-2.5 pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSearchQuery('');
+                      setIsSearchOpen(false);
+                    }
+                  }}
+                  placeholder="Search items in topic... (Esc to exit)"
+                  className="w-full h-7 pl-8 pr-16 text-xs bg-muted/50 hover:bg-muted/70 focus:bg-background border border-primary/40 focus:border-primary rounded-lg text-foreground placeholder:text-muted-foreground/60 outline-none transition-all shadow-2xs"
+                />
+                <div className="absolute right-1.5 flex items-center gap-1">
+                  {searchQuery && (
+                    <span className="text-[10px] font-semibold text-primary px-1.5 py-0.5 bg-primary/10 rounded border border-primary/20 leading-none">
+                      {totalSearchMatches}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
-                      setIsRoadmapActionsOpen(false);
-                      onOpenCreateLayer();
+                      setSearchQuery('');
+                      setIsSearchOpen(false);
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
+                    className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted/80 transition-colors cursor-pointer"
+                    title="Close search (Esc)"
                   >
-                    <FolderPlus className="w-3.5 h-3.5 text-primary" />
-                    <span>Add layer</span>
+                    <X className="w-3.5 h-3.5" />
                   </button>
-
-                  {onEditRoadmap && currentRoadmap && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRoadmapActionsOpen(false);
-                        setIsEditTopicOpen(true);
-                      }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left font-medium cursor-pointer"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Edit topic</span>
-                    </button>
-                  )}
-
-                  {onDeleteRoadmap && currentRoadmap && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRoadmapActionsOpen(false);
-                        if (
-                          window.confirm(
-                            `Are you sure you want to delete topic "${currentRoadmap.title}"? All layers and items inside will be deleted.`
-                          )
-                        ) {
-                          onDeleteRoadmap(currentRoadmap.slug);
-                        }
-                      }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete topic</span>
-                    </button>
-                  )}
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
 
         {/* Layer filter tabs with horizontal scroll fade & << / >> indicators */}
         <div className="relative group/tabs flex items-center">
@@ -627,24 +795,38 @@ export function MasterPanel({
           )}
 
           {/* Empty state */}
-          {!isLoading && !isError && layers.length === 0 && (
+          {!isLoading && !isError && displayLayers.length === 0 && (
             <div className="text-center py-12 flex flex-col items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Layers className="w-5 h-5 text-primary" />
+                {searchQuery ? <Search className="w-5 h-5 text-primary" /> : <Layers className="w-5 h-5 text-primary" />}
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">No layers yet</p>
+                <p className="text-sm font-semibold text-foreground">
+                  {searchQuery ? `No results for "${searchQuery}"` : 'No layers yet'}
+                </p>
                 <p className="text-xs text-muted-foreground max-w-xs">
-                  Click &quot;Add layer&quot; to create your first architecture layer.
+                  {searchQuery
+                    ? 'Try searching with different keywords or clear the search.'
+                    : 'Click "Add layer" to create your first architecture layer.'}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={onOpenCreateLayer}
-                className="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
-              >
-                + Add layer
-              </button>
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
+                >
+                  Clear search
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenCreateLayer}
+                  className="px-3.5 py-1.5 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+                >
+                  + Add layer
+                </button>
+              )}
             </div>
           )}
 
@@ -654,15 +836,18 @@ export function MasterPanel({
               key={selectedLayerId}
               className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200"
             >
-              {layers.map((layer) => {
+              {displayLayers.map((layer) => {
             const isLayerCollapsed = collapsedLayers[layer.id];
             const layerTotal = layer.groups.reduce((acc, g) => acc + g.items.length, 0);
+            const isLayerDropdownOpen = activeDropdownId === `layer-${layer.id}`;
+            const isLayerElevated =
+              isLayerDropdownOpen || Boolean(activeDropdownId?.startsWith(`group-${layer.id}-`));
 
             return (
               <div
                 key={layer.id}
                 className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all ${
-                  activePopoverLayerId === layer.id ? 'z-50' : 'z-0'
+                  isLayerElevated ? 'z-50' : 'z-0'
                 }`}
               >
                 {/* Layer header row */}
@@ -685,35 +870,42 @@ export function MasterPanel({
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     {/* Actions popover */}
-                    <div className="relative shrink-0" onMouseLeave={() => setActivePopoverLayerId(null)}>
+                    <div className="relative shrink-0">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActivePopoverLayerId(
-                            activePopoverLayerId === layer.id ? null : layer.id
-                          );
+                          setActiveDropdownId(isLayerDropdownOpen ? null : `layer-${layer.id}`);
                         }}
-                        className="p-1 text-muted-foreground/70 hover:text-foreground hover:bg-background/80 rounded-md transition-colors"
+                        className={`p-1 rounded-md transition-colors ${
+                          isLayerDropdownOpen
+                            ? 'text-foreground bg-background'
+                            : 'text-muted-foreground/70 hover:text-foreground hover:bg-background/80'
+                        }`}
                         title="Layer options"
                       >
                         <MoreHorizontal className="w-3.5 h-3.5" />
                       </button>
 
-                      {activePopoverLayerId === layer.id && (
+                      {isLayerDropdownOpen && (
                         <>
                           <div
                             className="fixed inset-0 z-40"
-                            onClick={(e) => { e.stopPropagation(); setActivePopoverLayerId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveDropdownId(null);
+                            }}
                           />
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            onMouseLeave={() => setActivePopoverLayerId(null)}
                             className="absolute right-0 top-full mt-1 z-50 w-52 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                           >
                             <button
                               type="button"
-                              onClick={() => { setActivePopoverLayerId(null); setTargetGroupLayer(layer); }}
+                              onClick={() => {
+                                setActiveDropdownId(null);
+                                setTargetGroupLayer(layer);
+                              }}
                               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
                             >
                               <FolderPlus className="w-3.5 h-3.5 text-emerald-500" />
@@ -723,7 +915,7 @@ export function MasterPanel({
                             <button
                               type="button"
                               onClick={() => {
-                                setActivePopoverLayerId(null);
+                                setActiveDropdownId(null);
                                 onOpenCreateItem(layer.id, layer.groups[0]?.level || 'core');
                               }}
                               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
@@ -736,7 +928,10 @@ export function MasterPanel({
 
                             <button
                               type="button"
-                              onClick={() => { setActivePopoverLayerId(null); setEditingLayer(layer); }}
+                              onClick={() => {
+                                setActiveDropdownId(null);
+                                setEditingLayer(layer);
+                              }}
                               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
                             >
                               <Pencil className="w-3.5 h-3.5 text-amber-500" />
@@ -746,16 +941,19 @@ export function MasterPanel({
                             <button
                               type="button"
                               onClick={() => {
-                                setActivePopoverLayerId(null);
+                                setActiveDropdownId(null);
                                 if (layerTotal > 0) {
-                                  alert(
-                                    `Cannot delete "${layer.title}" — it has ${layerTotal} item${layerTotal === 1 ? '' : 's'}. Remove all items first.`
-                                  );
+                                  setWarningModal({
+                                    title: 'Cannot delete layer',
+                                    message: `Cannot delete "${layer.title}" — it has ${layerTotal} item${layerTotal === 1 ? '' : 's'}. Remove all items first.`,
+                                  });
                                   return;
                                 }
-                                if (confirm(`Delete layer "${layer.title}"? This cannot be undone.`)) {
-                                  onDeleteLayer(layer.id);
-                                }
+                                setDeleteTarget({
+                                  type: 'layer',
+                                  id: layer.id,
+                                  title: layer.title,
+                                });
                               }}
                               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium"
                             >
@@ -793,6 +991,9 @@ export function MasterPanel({
                     ) : (
                       layer.groups.map((group) => {
                         const groupKey = `${layer.id}-${group.level}`;
+                        const groupDropdownKey = `group-${layer.id}-${group.id || group.level}`;
+                        const isGroupActionsOpen = activeDropdownId === groupDropdownKey;
+
                         return (
                           <SortableGroup
                             key={groupKey}
@@ -808,17 +1009,27 @@ export function MasterPanel({
                             onEditGroup={(grp) => setEditingGroup(grp)}
                             onDeleteGroup={(gId, gTitle, itemCount) => {
                               if (itemCount > 0) {
-                                alert(`Cannot delete group "${gTitle}": it contains ${itemCount} item(s). Please move or delete items first.`);
+                                setWarningModal({
+                                  title: 'Cannot delete group',
+                                  message: `Cannot delete group "${gTitle}": it contains ${itemCount} item(s). Please move or delete items first.`,
+                                });
                                 return;
                               }
-                              if (confirm(`Delete group "${gTitle}"? This cannot be undone.`)) {
-                                onDeleteGroup?.(gId);
-                              }
+                              setDeleteTarget({
+                                type: 'group',
+                                id: gId,
+                                title: gTitle,
+                              });
                             }}
                             onDeleteItem={onDeleteItem}
                             isLocked={isItemsLocked}
                             isCollapsed={Boolean(collapsedGroups[groupKey])}
                             onToggleCollapse={() => toggleGroup(groupKey)}
+                            isActionsOpen={isGroupActionsOpen}
+                            onToggleActions={() =>
+                              setActiveDropdownId(isGroupActionsOpen ? null : groupDropdownKey)
+                            }
+                            onCloseActions={() => setActiveDropdownId(null)}
                           />
                         );
                       })
@@ -866,6 +1077,51 @@ export function MasterPanel({
             await onEditRoadmap(title, shortCode, description);
           }
         }}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={Boolean(deleteTarget)}
+        title={
+          deleteTarget?.type === 'topic'
+            ? `Delete topic "${deleteTarget?.title}"?`
+            : deleteTarget?.type === 'layer'
+            ? `Delete layer "${deleteTarget?.title}"?`
+            : `Delete group "${deleteTarget?.title}"?`
+        }
+        description={
+          deleteTarget?.type === 'topic'
+            ? 'All layers and items inside will be permanently deleted. This action cannot be undone.'
+            : 'This action cannot be undone.'
+        }
+        confirmText={
+          deleteTarget?.type === 'topic'
+            ? 'Delete Topic'
+            : deleteTarget?.type === 'layer'
+            ? 'Delete Layer'
+            : 'Delete Group'
+        }
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.type === 'topic') {
+            onDeleteRoadmap?.(deleteTarget.id);
+          } else if (deleteTarget.type === 'layer') {
+            onDeleteLayer(deleteTarget.id);
+          } else if (deleteTarget.type === 'group') {
+            onDeleteGroup?.(deleteTarget.id);
+          }
+          setDeleteTarget(null);
+        }}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={Boolean(warningModal)}
+        title={warningModal?.title || 'Notice'}
+        description={warningModal?.message || ''}
+        confirmText="OK"
+        cancelText="Close"
+        onClose={() => setWarningModal(null)}
+        onConfirm={() => setWarningModal(null)}
       />
 
       {showScrollTop && (

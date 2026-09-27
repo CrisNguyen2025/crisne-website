@@ -2,52 +2,30 @@ import type { LexicalEditor } from 'lexical';
 import type { JSX } from 'react';
 
 import { calculateZoomLevel } from '@lexical/utils';
-import * as React from 'react';
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-const BASE = Math.trunc(1);
-
-const Direction = {
-  east: BASE,
-  north: BASE << 3,
-  south: BASE << 1,
-  west: BASE << 2,
-};
-
 export default function ImageResizer({
   onResizeStart,
   onResizeEnd,
-  buttonRef,
   imageRef,
   maxWidth,
   editor,
-  showCaption,
-  setShowCaption,
-  captionsEnabled,
+  isFocused = false,
 }: Readonly<{
   editor: LexicalEditor;
-  buttonRef: { current: null | HTMLButtonElement };
   imageRef: { current: null | HTMLElement };
   maxWidth?: number;
   onResizeEnd: (width: 'inherit' | number, height: 'inherit' | number) => void;
   onResizeStart: () => void;
-  setShowCaption: (show: boolean) => void;
-  showCaption: boolean;
-  captionsEnabled: boolean;
+  isFocused?: boolean;
 }>): JSX.Element {
-  const controlWrapperRef = useRef<HTMLDivElement>(null);
-  const userSelect = useRef({
-    priority: '',
-    value: 'default',
-  });
   const positioningRef = useRef<{
-    currentHeight: 'inherit' | number;
-    currentWidth: 'inherit' | number;
-    direction: number;
+    currentHeight: number;
+    currentWidth: number;
     isResizing: boolean;
     ratio: number;
     startHeight: number;
@@ -57,217 +35,127 @@ export default function ImageResizer({
   }>({
     currentHeight: 0,
     currentWidth: 0,
-    direction: 0,
     isResizing: false,
-    ratio: 0,
+    ratio: 1,
     startHeight: 0,
     startWidth: 0,
     startX: 0,
     startY: 0,
   });
+
   const editorRootElement = editor.getRootElement();
-  // Find max width, accounting for editor padding.
   const maxWidthContainer =
-    maxWidth || (editorRootElement === null ? 100 : editorRootElement.getBoundingClientRect().width - 20);
+    maxWidth ||
+    (editorRootElement === null
+      ? 800
+      : Math.max(100, editorRootElement.getBoundingClientRect().width - 32));
 
-  const maxHeightContainer = editorRootElement === null ? 100 : editorRootElement.getBoundingClientRect().height - 20;
+  const minWidth = 80;
 
-  const minWidth = 150;
-  const minHeight = 100;
-
-  const setStartCursor = (direction: number) => {
-    const ew = direction === Direction.east || direction === Direction.west;
-    const ns = direction === Direction.north || direction === Direction.south;
-    const nwse =
-      (direction & Direction.north && direction & Direction.west) ||
-      (direction & Direction.south && direction & Direction.east);
-
-    const cursorDir = ew ? 'ew' : ns ? 'ns' : nwse ? 'nwse' : 'nesw';
-
-    if (editorRootElement !== null) {
-      editorRootElement.style.setProperty('cursor', `${cursorDir}-resize`, 'important');
-    }
-    if (document.body !== null) {
-      document.body.style.setProperty('cursor', `${cursorDir}-resize`, 'important');
-      userSelect.current.value = document.body.style.getPropertyValue('-webkit-user-select');
-      userSelect.current.priority = document.body.style.getPropertyPriority('-webkit-user-select');
-      document.body.style.setProperty('-webkit-user-select', `none`, 'important');
-    }
-  };
-
-  const setEndCursor = () => {
-    if (editorRootElement !== null) {
-      editorRootElement.style.setProperty('cursor', 'text');
-    }
-    if (document.body !== null) {
-      document.body.style.setProperty('cursor', 'default');
-      document.body.style.setProperty('-webkit-user-select', userSelect.current.value, userSelect.current.priority);
-    }
-  };
-
-  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>, direction: number) => {
-    if (!editor.isEditable()) {
-      return;
-    }
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!editor.isEditable()) return;
 
     const image = imageRef.current;
-    const controlWrapper = controlWrapperRef.current;
+    if (!image) return;
 
-    if (image !== null && controlWrapper !== null) {
-      event.preventDefault();
-      const { width, height } = image.getBoundingClientRect();
-      const zoom = calculateZoomLevel(image);
-      const positioning = positioningRef.current;
-      positioning.startWidth = width;
-      positioning.startHeight = height;
-      positioning.ratio = width / height;
-      positioning.currentWidth = width;
-      positioning.currentHeight = height;
-      positioning.startX = event.clientX / zoom;
-      positioning.startY = event.clientY / zoom;
-      positioning.isResizing = true;
-      positioning.direction = direction;
+    event.preventDefault();
+    event.stopPropagation();
 
-      setStartCursor(direction);
-      onResizeStart();
-
-      controlWrapper.classList.add('image-control-wrapper--resizing');
-      image.style.height = `${height}px`;
-      image.style.width = `${width}px`;
-
-      document.addEventListener('pointermove', handlePointerMove);
-      document.addEventListener('pointerup', handlePointerUp);
-    }
-  };
-
-  const handlePointerMove = (event: PointerEvent) => {
-    const image = imageRef.current;
+    const rect = image.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const zoom = calculateZoomLevel(image) || 1;
     const positioning = positioningRef.current;
 
-    if (!image || !positioning?.isResizing) return;
+    positioning.startWidth = width;
+    positioning.startHeight = height;
+    positioning.ratio = width > 0 && height > 0 ? width / height : 16 / 9;
+    positioning.currentWidth = width;
+    positioning.currentHeight = height;
+    positioning.startX = event.clientX / zoom;
+    positioning.startY = event.clientY / zoom;
+    positioning.isResizing = true;
 
-    const zoom = calculateZoomLevel(image);
-    const isHorizontal = positioning.direction & (Direction.east | Direction.west);
-    const isVertical = positioning.direction & (Direction.south | Direction.north);
-
-    const diffX = Math.floor((positioning.startX - event.clientX) / zoom);
-    const diffY = Math.floor((positioning.startY - event.clientY) / zoom);
-
-    const adjustDiff = (diff: number, directionFlag: number) => (positioning.direction & directionFlag ? -diff : diff);
-
-    const updateWidth = (diff: number) => {
-      const width = clamp(positioning.startWidth + diff, minWidth, maxWidthContainer);
-      image.style.width = `${width}px`;
-      positioning.currentWidth = width;
-      return width;
-    };
-
-    const updateHeight = (diff: number) => {
-      const height = clamp(positioning.startHeight + diff, minHeight, maxHeightContainer);
-      image.style.height = `${height}px`;
-      positioning.currentHeight = height;
-      return height;
-    };
-
-    if (isHorizontal && isVertical) {
-      const width = updateWidth(adjustDiff(diffX, Direction.east));
-      const height = width / positioning.ratio;
-      image.style.height = `${height}px`;
-      positioning.currentHeight = height;
-      positioning.currentWidth = width;
-    } else if (isVertical) {
-      updateHeight(adjustDiff(diffY, Direction.south));
-    } else if (isHorizontal) {
-      updateWidth(adjustDiff(diffX, Direction.east));
+    if (editorRootElement !== null) {
+      editorRootElement.style.setProperty('cursor', 'nwse-resize', 'important');
     }
-  };
+    if (document.body !== null) {
+      document.body.style.setProperty('cursor', 'nwse-resize', 'important');
+      document.body.style.setProperty('-webkit-user-select', 'none', 'important');
+    }
 
-  const handlePointerUp = () => {
-    const image = imageRef.current;
-    const positioning = positioningRef.current;
-    const controlWrapper = controlWrapperRef.current;
-    if (image !== null && controlWrapper !== null && positioning.isResizing) {
-      const width = positioning.currentWidth;
-      const height = positioning.currentHeight;
-      positioning.startWidth = 0;
-      positioning.startHeight = 0;
-      positioning.ratio = 0;
-      positioning.startX = 0;
-      positioning.startY = 0;
-      positioning.currentWidth = 0;
-      positioning.currentHeight = 0;
+    onResizeStart();
+
+    image.style.width = `${width}px`;
+    image.style.height = `${height}px`;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!positioning.isResizing || !image) return;
+
+      const currentZoom = calculateZoomLevel(image) || 1;
+      const currentX = moveEvent.clientX / currentZoom;
+
+      // Positive diffX means mouse moved right (scaling up), negative means scaling down
+      const diffX = Math.round(currentX - positioning.startX);
+      const newWidth = clamp(positioning.startWidth + diffX, minWidth, maxWidthContainer);
+      const newHeight = Math.round(newWidth / positioning.ratio);
+
+      image.style.width = `${newWidth}px`;
+      image.style.height = `${newHeight}px`;
+      positioning.currentWidth = newWidth;
+      positioning.currentHeight = newHeight;
+    };
+
+    const handlePointerUp = () => {
+      if (!positioning.isResizing) return;
+
+      const finalWidth = positioning.currentWidth;
+      const finalHeight = positioning.currentHeight;
+
       positioning.isResizing = false;
 
-      controlWrapper.classList.remove('image-control-wrapper--resizing');
+      if (editorRootElement !== null) {
+        editorRootElement.style.removeProperty('cursor');
+      }
+      if (document.body !== null) {
+        document.body.style.removeProperty('cursor');
+        document.body.style.removeProperty('-webkit-user-select');
+      }
 
-      setEndCursor();
-      onResizeEnd(width, height);
+      onResizeEnd(finalWidth, finalHeight);
 
       document.removeEventListener('pointermove', handlePointerMove);
       document.removeEventListener('pointerup', handlePointerUp);
-    }
+    };
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
   };
+
   return (
-    <div ref={controlWrapperRef}>
-      {!showCaption && captionsEnabled && (
-        <button
-          className='image-caption-button'
-          ref={buttonRef}
-          onClick={() => {
-            setShowCaption(!showCaption);
-          }}
-        >
-          Add Caption
-        </button>
-      )}
-      <div
-        className='image-resizer image-resizer-n'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.north);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-ne'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.north | Direction.east);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-e'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.east);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-se'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.south | Direction.east);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-s'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.south);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-sw'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.south | Direction.west);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-w'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.west);
-        }}
-      />
-      <div
-        className='image-resizer image-resizer-nw'
-        onPointerDown={event => {
-          handlePointerDown(event, Direction.north | Direction.west);
-        }}
-      />
+    <div
+      onPointerDown={handlePointerDown}
+      className={`absolute -bottom-2 -right-2 z-30 w-5 h-5 rounded-md bg-primary text-primary-foreground shadow-md border-2 border-background cursor-nwse-resize flex items-center justify-center select-none transition-all duration-150 touch-none hover:scale-110 active:scale-95 ${
+        isFocused ? 'opacity-100 scale-100' : 'opacity-0 group-hover/image-resizer:opacity-100 scale-90'
+      }`}
+      title="Drag to resize image proportionally"
+      aria-label="Resize image handle"
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="text-primary-foreground pointer-events-none"
+      >
+        <path
+          d="M8.5 1.5L1.5 8.5M8.5 5.5L5.5 8.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
     </div>
   );
 }

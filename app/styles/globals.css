@@ -355,16 +355,21 @@ input[type="search"]::-webkit-search-cancel-button {
 .post-content-view.prose img,
 .prose .post-content-view img,
 .post-content-view :where(img) {
-  border-radius: 0 !important;
-  cursor: zoom-in !important;
+  border-radius: 0;
+  cursor: zoom-in;
   transition: opacity 0.15s ease;
-  width: auto !important;
-  max-width: min(100%, 420px) !important;
-  max-height: 320px !important;
-  height: auto !important;
-  object-fit: contain !important;
-  display: block !important;
-  margin: 0.5rem 0 !important;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.post-content-view img:not([style*="width"]),
+.post-content-view.prose img:not([style*="width"]) {
+  width: auto;
+  max-width: min(100%, 420px);
+  max-height: 320px;
+  height: auto;
 }
 
 .post-content-view img:hover {

@@ -103,11 +103,12 @@ function LazyImage({
 
     if (hasCustomWidth || hasCustomHeight) {
       return {
-        width: hasCustomWidth ? width : undefined,
-        height: hasCustomHeight ? height : undefined,
-        maxWidth: maxWidth ? `${maxWidth}px` : '100%',
+        width: hasCustomWidth ? `${width}px` : undefined,
+        height: hasCustomHeight ? `${height}px` : undefined,
+        maxWidth: '100%',
         objectFit: 'contain' as const,
         borderRadius: 0,
+        display: 'block',
       };
     }
 
@@ -445,7 +446,13 @@ export default function ImageComponent({
   return (
     <Suspense fallback={null}>
       <>
-        <div draggable={draggable} onTouchEnd={handleTouchEnd}>
+        <div
+          className={`relative inline-block my-1 max-w-full group/image-resizer select-none ${
+            isFocused ? 'ring-2 ring-primary/60 ring-offset-2 ring-offset-background' : ''
+          }`}
+          draggable={draggable}
+          onTouchEnd={handleTouchEnd}
+        >
           {isLoadError ? (
             <BrokenImage />
           ) : (
@@ -460,21 +467,18 @@ export default function ImageComponent({
               onError={() => setIsLoadError(true)}
             />
           )}
-        </div>
 
-        {resizable && isInNodeSelection && isFocused && (
-          <ImageResizer
-            showCaption={showCaption}
-            setShowCaption={setShowCaption}
-            editor={editor}
-            buttonRef={buttonRef}
-            imageRef={imageRef}
-            maxWidth={maxWidth}
-            onResizeStart={onResizeStart}
-            onResizeEnd={onResizeEnd}
-            captionsEnabled={false}
-          />
-        )}
+          {resizable && isEditable && (
+            <ImageResizer
+              editor={editor}
+              imageRef={imageRef}
+              maxWidth={maxWidth}
+              onResizeStart={onResizeStart}
+              onResizeEnd={onResizeEnd}
+              isFocused={isFocused}
+            />
+          )}
+        </div>
 
         {/* Fullscreen Ant Design Image Preview */}
         {showFullscreen && (

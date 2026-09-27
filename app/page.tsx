@@ -243,7 +243,7 @@ function RoadmapWorkspace() {
             </div>
 
             {/* Flexible Right column (Detail Panel) */}
-            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-white/80">
+            <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col bg-background/40">
               <DetailPanel
                 item={activeItem}
                 isLoading={isLoading}

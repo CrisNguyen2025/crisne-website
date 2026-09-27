@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ChecklistItem, RoadmapLevel } from "@/lib/roadmap/types";
 import { cn } from "@/lib/utils";
+import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
 // Load Editor dynamically to optimize bundle and avoid SSR mismatches
 const Editor = dynamic(() => import("@/components/ui/editor/Editor"), {
@@ -43,12 +44,15 @@ export function EditItemContentDrawer({
   const [isEditorReady, setIsEditorReady] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [content, setContent] = useState("");
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const contentRef = React.useRef("");
+  const initialContentRef = React.useRef("");
 
   // Smooth open / close lifecycle transitions
   useEffect(() => {
     if (isOpen) {
       setIsMounted(true);
+      setShowDiscardConfirm(false);
       const raf = requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           setIsVisible(true);
@@ -66,6 +70,7 @@ export function EditItemContentDrawer({
       setIsVisible(false);
       setIsEditorReady(false);
       setIsSaving(false);
+      setShowDiscardConfirm(false);
       const timer = setTimeout(() => {
         setIsMounted(false);
       }, 300);
@@ -80,6 +85,7 @@ export function EditItemContentDrawer({
       const initialContent = item.content || "";
       setContent(initialContent);
       contentRef.current = initialContent;
+      initialContentRef.current = initialContent;
     }
   }, [isOpen, itemId]);
 
@@ -88,11 +94,21 @@ export function EditItemContentDrawer({
     setContent(val);
   }, []);
 
+  const attemptClose = useCallback(() => {
+    const hasUnsavedChanges = contentRef.current !== initialContentRef.current;
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [onClose]);
+
   const handleSave = useCallback(async () => {
     if (!item || isSaving) return;
     try {
       setIsSaving(true);
       await onSubmit(item.id, contentRef.current);
+      initialContentRef.current = contentRef.current;
       onClose();
     } catch (err) {
       console.error("Failed to save content in drawer:", err);
@@ -107,7 +123,11 @@ export function EditItemContentDrawer({
       if (!isOpen) return;
 
       if (e.key === "Escape") {
-        onClose();
+        if (showDiscardConfirm) {
+          setShowDiscardConfirm(false);
+        } else {
+          attemptClose();
+        }
       }
 
       if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "Enter")) {
@@ -117,7 +137,7 @@ export function EditItemContentDrawer({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose, handleSave]);
+  }, [isOpen, attemptClose, handleSave, showDiscardConfirm]);
 
   // Calculate text statistics
   const stats = useMemo(() => {
@@ -139,7 +159,7 @@ export function EditItemContentDrawer({
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Global Backdrop that dims and blurs the entire screen (including left panel) */}
       <div
-        onClick={onClose}
+        onClick={attemptClose}
         className={cn(
           "fixed inset-0 bg-black/45 backdrop-blur-[2px] transition-opacity duration-300 ease-out",
           isVisible ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -173,7 +193,7 @@ export function EditItemContentDrawer({
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
-              onClick={onClose}
+              onClick={attemptClose}
               className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer flex items-center justify-center"
               title="Close (Esc)"
               aria-label="Close"
@@ -262,6 +282,19 @@ export function EditItemContentDrawer({
           </div>
         </div>
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={showDiscardConfirm}
+        title="Discard unsaved changes?"
+        description="You have modified the document content. If you exit now without saving, your changes will be discarded."
+        confirmText="Discard"
+        cancelText="Keep editing"
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={() => {
+          setShowDiscardConfirm(false);
+          onClose();
+        }}
+      />
     </div>
   );
 }

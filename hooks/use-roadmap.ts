@@ -214,6 +214,21 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   // 3. Edit Layer
   const editLayer = useCallback(
     async (layerId: string, title: string, shortTag: string, subtitle?: string) => {
+      // Optimistic update
+      const updatedLayers = (prev: RoadmapLayer[]) =>
+        prev.map((layer) =>
+          layer.id === layerId
+            ? {
+                ...layer,
+                title: title.trim(),
+                shortTag: shortTag.trim().toUpperCase(),
+                subtitle: subtitle?.trim() || '',
+              }
+            : layer
+        );
+      setLayers(updatedLayers);
+      syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
       try {
         await roadmapService.updateLayer({
           id: layerId,
@@ -221,10 +236,10 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           shortTag: shortTag.trim().toUpperCase(),
           subtitle: subtitle?.trim(),
         });
-        roadmapCache.delete(slug);
-        await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to edit layer:', err);
+        roadmapCache.delete(slug);
+        await loadRoadmap(slug);
       }
     },
     [slug, loadRoadmap]
@@ -488,6 +503,14 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           }));
         setLayers(updatedLayers);
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
+
+        setActiveItemId((currentActive) => {
+          if (currentActive !== itemId) return currentActive;
+          const remaining = layers
+            .flatMap((l) => l.groups.flatMap((g) => g.items))
+            .filter((i) => i.id !== itemId);
+          return remaining[0]?.id || '';
+        });
 
         await roadmapService.deleteItem(itemId);
         roadmapCache.delete(slug);

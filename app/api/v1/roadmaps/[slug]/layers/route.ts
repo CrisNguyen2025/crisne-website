@@ -32,6 +32,15 @@ export async function POST(req: NextRequest, context: RouteContext) {
         shortTag: shortTag.toUpperCase(),
         subtitle: subtitle || '',
         order: roadmap._count.layers + 1,
+        groups: {
+          create: [
+            {
+              level: 'core',
+              title: '🟢 Core',
+              order: 1,
+            },
+          ],
+        },
       },
       include: {
         groups: {

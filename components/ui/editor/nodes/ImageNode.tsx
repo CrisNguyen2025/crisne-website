@@ -79,10 +79,29 @@ function $convertImageElement(domNode: Node): null | DOMConversionOutput {
     return null;
   }
   const altText = img.getAttribute('alt') || '';
-  const widthAttr = img.getAttribute('width');
-  const heightAttr = img.getAttribute('height');
-  const width = widthAttr && !isNaN(Number(widthAttr)) && Number(widthAttr) > 0 ? Number(widthAttr) : 'inherit';
-  const height = heightAttr && !isNaN(Number(heightAttr)) && Number(heightAttr) > 0 ? Number(heightAttr) : 'inherit';
+
+  // Check inline style first (e.g. style="width: 250px; height: 180px")
+  const styleAttr = img.getAttribute('style') || '';
+  const styleWidthMatch = styleAttr.match(/width:\s*([0-9]+)px/i);
+  const styleHeightMatch = styleAttr.match(/height:\s*([0-9]+)px/i);
+
+  const attrWidth = img.getAttribute('width');
+  const attrHeight = img.getAttribute('height');
+
+  const parsedWidth = styleWidthMatch
+    ? parseInt(styleWidthMatch[1], 10)
+    : attrWidth && !isNaN(Number(attrWidth)) && Number(attrWidth) > 0
+    ? Number(attrWidth)
+    : undefined;
+
+  const parsedHeight = styleHeightMatch
+    ? parseInt(styleHeightMatch[1], 10)
+    : attrHeight && !isNaN(Number(attrHeight)) && Number(attrHeight) > 0
+    ? Number(attrHeight)
+    : undefined;
+
+  const width = parsedWidth !== undefined ? parsedWidth : 'inherit';
+  const height = parsedHeight !== undefined ? parsedHeight : 'inherit';
   const node = $createImageNode({ altText, height, src, width });
   return { node };
 }
@@ -166,12 +185,24 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     if (this.__altText) {
       imgElement.setAttribute('alt', this.__altText);
     }
-    // Use inline style only (no width/height HTML attributes) to prevent
-    // prose/browser from using intrinsic dimensions that override CSS constraints
-    imgElement.setAttribute(
-      'style',
-      'max-width:min(100%, 420px);max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;'
-    );
+    const hasCustomWidth = typeof this.__width === 'number' && this.__width > 0;
+    const hasCustomHeight = typeof this.__height === 'number' && this.__height > 0;
+
+    let style = 'max-width:100%;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;';
+    if (hasCustomWidth) {
+      style += `width:${this.__width}px;`;
+      imgElement.setAttribute('width', `${this.__width}`);
+    } else {
+      style += 'max-width:min(100%, 420px);width:auto;';
+    }
+    if (hasCustomHeight) {
+      style += `height:${this.__height}px;`;
+      imgElement.setAttribute('height', `${this.__height}`);
+    } else {
+      style += 'max-height:320px;height:auto;';
+    }
+
+    imgElement.setAttribute('style', style);
 
     if (this.__showCaption && this.__caption) {
       const captionEditor = this.__caption;
