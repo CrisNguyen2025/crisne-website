@@ -282,6 +282,18 @@ input[type="search"]::-webkit-search-cancel-button {
   overflow-x: auto;
 }
 
+.post-content-view img {
+  border-radius: 0.75rem;
+  cursor: zoom-in;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  max-width: 100%;
+  height: auto;
+}
+
+.post-content-view img:hover {
+  opacity: 0.92;
+}
+
 .post-content-view table {
   width: max-content !important;
   min-width: 100% !important;

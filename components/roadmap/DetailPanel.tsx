@@ -15,6 +15,7 @@ import { ChecklistItem, RoadmapLevel } from "@/lib/roadmap/types";
 import { formatFriendlyTime, formatExactDate } from "@/lib/roadmap/date-utils";
 import { contentToHtml } from "@/lib/roadmap/content-utils";
 import { useToast } from "@/components/ui/toast";
+import { ImagePreview } from "@/components/ui/image-preview";
 import { EditItemContentDrawer } from "./EditItemContentDrawer";
 import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
 
@@ -43,15 +44,32 @@ export function DetailPanel({
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{
+    src: string;
+    alt: string;
+  } | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (item) {
       setIsContentModalOpen(false);
       setIsInfoModalOpen(false);
+      setPreviewImage(null);
       containerRef.current?.scrollTo({ top: 0, behavior: "instant" });
     }
   }, [item?.id]);
+
+  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const img = target.closest("img");
+    if (img && img.src) {
+      e.preventDefault();
+      setPreviewImage({
+        src: img.src,
+        alt: img.alt || item?.title || "Image preview",
+      });
+    }
+  };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const currentScrollTop = e.currentTarget.scrollTop;
@@ -267,25 +285,33 @@ export function DetailPanel({
             <div className="w-full border-t border-border/60 my-2" />
 
             {/* Content Header */}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
-                Content
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsContentModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg border border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                title="Edit item detailed notes"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-primary" />
-                <span>{item.content ? "Edit content" : "Add content"}</span>
-              </button>
+            <div className="grid grid-cols-3 items-center pt-1">
+              <div className="flex items-center justify-start">
+                <button
+                  type="button"
+                  onClick={() => setIsContentModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg border border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                  title="Edit item detailed notes"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-primary" />
+                  <span>{item.content ? "Edit content" : "Add content"}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-center">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
+                  Content
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end" />
             </div>
 
             {/* Article Content or Empty State */}
             {item.content ? (
               <div className="relative group">
                 <div
+                  onClick={handleContentClick}
                   className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/90 select-text leading-relaxed tracking-normal"
                   dangerouslySetInnerHTML={{
                     __html: contentToHtml(item.content),
@@ -334,11 +360,21 @@ export function DetailPanel({
         onSubmit={handleSaveInfo}
       />
 
+      {/* Image Preview in View Mode */}
+      {previewImage && (
+        <ImagePreview
+          src={previewImage.src}
+          alt={previewImage.alt}
+          visible={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
+
       {showScrollTop && (
         <button
           type="button"
           onClick={scrollToTop}
-          className="absolute bottom-5 right-5 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 border border-border/20 flex items-center justify-center animate-in fade-in zoom-in-75 cursor-pointer"
+          className="absolute bottom-5 left-5 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 border border-border/20 flex items-center justify-center animate-in fade-in zoom-in-75 cursor-pointer"
           title="Scroll to top"
           aria-label="Scroll to top"
         >
