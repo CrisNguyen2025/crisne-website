@@ -199,6 +199,7 @@
   display: inline-block;
   position: relative;
   user-select: none;
+  margin: 0.75rem 0; /* my-3 — unified spacing system */
 }
 
 .editor-shell .editor-image img {
