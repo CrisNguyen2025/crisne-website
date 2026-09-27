@@ -4,11 +4,14 @@ import { $isAutoLinkNode, $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@le
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $findMatchingParent, $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import {
+  $createNodeSelection,
   $createParagraphNode,
   $createRangeSelection,
   $getSelection,
   $insertNodes,
+  $isElementNode,
   $isNodeSelection,
+  $isRangeSelection,
   $isRootOrShadowRoot,
   $setSelection,
   COMMAND_PRIORITY_EDITOR,
@@ -18,6 +21,8 @@ import {
   DRAGOVER_COMMAND,
   DRAGSTART_COMMAND,
   DROP_COMMAND,
+  KEY_BACKSPACE_COMMAND,
+  KEY_DELETE_COMMAND,
   PASTE_COMMAND,
   getDOMSelectionFromTarget,
   isHTMLElement,
@@ -141,6 +146,114 @@ export function ImagesPlugin({ captionsEnabled }: { captionsEnabled?: boolean })
           }
 
           return true;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_BACKSPACE_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an image is explicitly selected via NodeSelection, delete it
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              imageNode.remove();
+              return true;
+            }
+          }
+
+          // 2. If cursor is at the start of a line (e.g. empty line or line with text below image)
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            if (anchor.offset === 0) {
+              const anchorNode = anchor.getNode();
+              const element = anchorNode.getTopLevelElementOrThrow();
+              const prevSibling = element.getPreviousSibling();
+
+              if (prevSibling) {
+                let targetImageNode: ImageNode | null = null;
+                if ($isImageNode(prevSibling)) {
+                  targetImageNode = prevSibling;
+                } else if ($isElementNode(prevSibling)) {
+                  const lastChild = prevSibling.getLastChild();
+                  if ($isImageNode(lastChild)) {
+                    targetImageNode = lastChild;
+                  }
+                }
+
+                if (targetImageNode) {
+                  event.preventDefault();
+                  // If current line is empty, delete this empty line and focus/select the image above
+                  if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
+                    element.remove();
+                  }
+                  // Select the image instead of deleting it immediately
+                  const nodeSelection = $createNodeSelection();
+                  nodeSelection.add(targetImageNode.getKey());
+                  $setSelection(nodeSelection);
+                  return true;
+                }
+              }
+            }
+          }
+
+          return false;
+        },
+        COMMAND_PRIORITY_EDITOR,
+      ),
+      editor.registerCommand<KeyboardEvent>(
+        KEY_DELETE_COMMAND,
+        event => {
+          const selection = $getSelection();
+
+          // 1. If an image is explicitly selected via NodeSelection, delete it
+          if ($isNodeSelection(selection)) {
+            const nodes = selection.getNodes();
+            const imageNode = nodes.find($isImageNode);
+            if (imageNode) {
+              event.preventDefault();
+              imageNode.remove();
+              return true;
+            }
+          }
+
+          // 2. If cursor is at the end of a line right above an image
+          if ($isRangeSelection(selection) && selection.isCollapsed()) {
+            const anchor = selection.anchor;
+            const anchorNode = anchor.getNode();
+            if (anchor.offset === anchorNode.getTextContentSize()) {
+              const element = anchorNode.getTopLevelElementOrThrow();
+              const nextSibling = element.getNextSibling();
+
+              if (nextSibling) {
+                let targetImageNode: ImageNode | null = null;
+                if ($isImageNode(nextSibling)) {
+                  targetImageNode = nextSibling;
+                } else if ($isElementNode(nextSibling)) {
+                  const firstChild = nextSibling.getFirstChild();
+                  if ($isImageNode(firstChild)) {
+                    targetImageNode = firstChild;
+                  }
+                }
+
+                if (targetImageNode) {
+                  event.preventDefault();
+                  if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
+                    element.remove();
+                  }
+                  const nodeSelection = $createNodeSelection();
+                  nodeSelection.add(targetImageNode.getKey());
+                  $setSelection(nodeSelection);
+                  return true;
+                }
+              }
+            }
+          }
+
+          return false;
         },
         COMMAND_PRIORITY_EDITOR,
       ),
