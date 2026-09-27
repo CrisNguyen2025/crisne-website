@@ -345,6 +345,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.deleteGroup(groupId);
+        roadmapCache.delete(slug);
         await loadRoadmap(slug, true);
       } catch (err) {
         console.error('[useRoadmap] Failed to delete group:', err);

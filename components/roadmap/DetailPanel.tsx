@@ -15,10 +15,9 @@ import { ChecklistItem, RoadmapLevel } from "@/lib/roadmap/types";
 import { formatFriendlyTime, formatExactDate } from "@/lib/roadmap/date-utils";
 import { contentToHtml } from "@/lib/roadmap/content-utils";
 import { useToast } from "@/components/ui/toast";
-import { Image as AntImage } from "antd";
+import { Image as AntImage, Popconfirm } from "antd";
 import { EditItemContentDrawer } from "./EditItemContentDrawer";
 import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
-import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
 interface DetailPanelProps {
   item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
@@ -44,7 +43,6 @@ export function DetailPanel({
   const { toast } = useToast();
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [allImages, setAllImages] = useState<string[]>([]);
@@ -55,7 +53,6 @@ export function DetailPanel({
     if (item) {
       setIsContentModalOpen(false);
       setIsInfoModalOpen(false);
-      setIsDeleteModalOpen(false);
       setPreviewVisible(false);
       containerRef.current?.scrollTo({ top: 0, behavior: "instant" });
     }
@@ -232,15 +229,31 @@ export function DetailPanel({
             </button>
 
             {onDeleteItem && (
-              <button
-                type="button"
-                onClick={() => setIsDeleteModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-lg border border-rose-500/20 hover:bg-rose-500/10 text-rose-500 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                title="Delete this item"
+              <Popconfirm
+                title="Delete item?"
+                description="This action cannot be undone."
+                onConfirm={() => {
+                  const itemTitle = item.title;
+                  onDeleteItem(item.id);
+                  toast(`Deleted item "${itemTitle}" successfully`, "success");
+                }}
+                okText="Delete"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true, size: "small" }}
+                cancelButtonProps={{ size: "small" }}
+                icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                placement="bottomRight"
+                zIndex={9999}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
+                <button
+                  type="button"
+                  className="px-2.5 py-1.5 rounded-lg border border-rose-500/20 hover:bg-rose-500/10 text-rose-500 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Delete this item"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </Popconfirm>
             )}
           </div>
         </div>
@@ -356,20 +369,6 @@ export function DetailPanel({
         item={item}
         onClose={() => setIsInfoModalOpen(false)}
         onSubmit={handleSaveInfo}
-      />
-
-      {/* Delete Item Confirmation Modal */}
-      <ConfirmDeleteModal
-        isOpen={isDeleteModalOpen}
-        title={`Delete "${item.title}"?`}
-        description="Are you sure you want to delete this checklist item? This action will permanently remove its notes and media."
-        confirmText="Delete item"
-        cancelText="Cancel"
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={() => {
-          setIsDeleteModalOpen(false);
-          onDeleteItem?.(item.id);
-        }}
       />
 
       {/* Ant Design Image Preview Group in View Mode */}

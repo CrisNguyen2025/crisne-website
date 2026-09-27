@@ -6,15 +6,30 @@ import React, { useState, ReactNode } from 'react';
 // CSS grid-template-rows + opacity with cubic-bezier easing:
 // guarantees zero jitter, perfect clipping, and buttery smooth expand/collapse.
 function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
+  const [isStableOpen, setIsStableOpen] = useState(open);
+
+  React.useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setIsStableOpen(true), 320);
+      return () => clearTimeout(timer);
+    } else {
+      setIsStableOpen(false);
+    }
+  }, [open]);
+
   return (
     <div
-      className="grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] overflow-hidden"
+      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+        open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'
+      }`}
       style={{
         gridTemplateRows: open ? '1fr' : '0fr',
         opacity: open ? 1 : 0,
       }}
     >
-      <div className="min-h-0 overflow-hidden">{children}</div>
+      <div className={`min-h-0 ${open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -52,12 +67,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { RoadmapLayer, RoadmapLevel, ChecklistItem, RoadmapStats, RoadmapMeta } from '@/lib/roadmap/types';
+import { useToast } from '@/components/ui/toast';
+import { Popconfirm } from 'antd';
 import { ChecklistItemRow } from './ChecklistItemRow';
 import { EditLayerModal } from './EditLayerModal';
 import { CreateGroupModal } from './CreateGroupModal';
 import { EditGroupModal } from './EditGroupModal';
 import { EditTopicModal } from './EditTopicModal';
-import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skeleton loaders — shown while data is fetching from BE
@@ -183,6 +199,7 @@ function SortableGroup({
           <div className="relative shrink-0">
             <button
               type="button"
+              data-dropdown-trigger="true"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleActions();
@@ -207,6 +224,7 @@ function SortableGroup({
                   }}
                 />
                 <div
+                  data-dropdown-menu="true"
                   onClick={(e) => e.stopPropagation()}
                   className="absolute right-0 top-full mt-1 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                 >
@@ -237,17 +255,53 @@ function SortableGroup({
                   )}
 
                   {groupId && onDeleteGroup && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onCloseActions();
-                        onDeleteGroup(groupId, title, items.length);
-                      }}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete group</span>
-                    </button>
+                    items.length > 0 ? (
+                      <Popconfirm
+                        title="Cannot delete group"
+                        description="Please remove all items first."
+                        showCancel={false}
+                        okText="OK"
+                        okButtonProps={{ size: 'small' }}
+                        icon={<AlertTriangle className="w-4 h-4 text-amber-500 mr-1.5 shrink-0 inline-block" />}
+                        placement="bottomRight"
+                        zIndex={9999}
+                        onConfirm={() => onCloseActions()}
+                        onCancel={() => onCloseActions()}
+                      >
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete group</span>
+                        </button>
+                      </Popconfirm>
+                    ) : (
+                      <Popconfirm
+                        title="Delete group?"
+                        description="This action cannot be undone."
+                        onConfirm={() => {
+                          onCloseActions();
+                          onDeleteGroup(groupId, title, 0);
+                        }}
+                        onCancel={() => onCloseActions()}
+                        okText="Delete"
+                        cancelText="Cancel"
+                        okButtonProps={{ danger: true, size: 'small' }}
+                        cancelButtonProps={{ size: 'small' }}
+                        icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                        placement="bottomRight"
+                        zIndex={9999}
+                      >
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete group</span>
+                        </button>
+                      </Popconfirm>
+                    )
                   )}
                 </div>
               </>
@@ -349,6 +403,7 @@ export function MasterPanel({
   onDeleteRoadmap,
   onToggleLock,
 }: MasterPanelProps) {
+  const { toast } = useToast();
   const [collapsedLayers, setCollapsedLayers] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
@@ -356,13 +411,6 @@ export function MasterPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'topic' | 'layer' | 'group';
-    id: string;
-    title: string;
-    count?: number;
-  } | null>(null);
-  const [warningModal, setWarningModal] = useState<{ title: string; message: string } | null>(null);
 
   // Sync with currentRoadmap?.isLocked, fallback to false
   const isItemsLocked = Boolean(currentRoadmap?.isLocked);
@@ -464,6 +512,39 @@ export function MasterPanel({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visibleItems, activeItemId, onSelectItem]);
+
+  // Auto-close active dropdown on click-outside, scroll, or Escape key
+  React.useEffect(() => {
+    if (!activeDropdownId) return;
+
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('[data-dropdown-trigger]') || target?.closest('[data-dropdown-menu]')) {
+        return;
+      }
+      setActiveDropdownId(null);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveDropdownId(null);
+      }
+    };
+
+    const handleScrollAnywhere = () => {
+      setActiveDropdownId(null);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScrollAnywhere, true);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScrollAnywhere, true);
+    };
+  }, [activeDropdownId]);
 
   // Layer filter tabs horizontal scroll tracking (for gradient fade + << / >> indicators)
   const tabsContainerRef = React.useRef<HTMLDivElement>(null);
@@ -572,6 +653,7 @@ export function MasterPanel({
                 <div className="relative shrink-0">
                   <button
                     type="button"
+                    data-dropdown-trigger="true"
                     onClick={() =>
                       setActiveDropdownId((prev) => (prev === 'topic' ? null : 'topic'))
                     }
@@ -592,6 +674,7 @@ export function MasterPanel({
                         onClick={() => setActiveDropdownId(null)}
                       />
                       <div
+                        data-dropdown-menu="true"
                         onClick={(e) => e.stopPropagation()}
                         className="absolute right-0 top-full mt-1.5 z-50 w-44 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                       >
@@ -622,21 +705,31 @@ export function MasterPanel({
                         )}
 
                         {onDeleteRoadmap && currentRoadmap && (
-                          <button
-                            type="button"
-                            onClick={() => {
+                          <Popconfirm
+                            title="Delete topic?"
+                            description="All layers and items will be deleted."
+                            onConfirm={() => {
                               setActiveDropdownId(null);
-                              setDeleteTarget({
-                                type: 'topic',
-                                id: currentRoadmap.slug,
-                                title: currentRoadmap.title,
-                              });
+                              onDeleteRoadmap(currentRoadmap.slug);
+                              toast(`Deleted topic "${currentRoadmap.title}" successfully`, 'success');
                             }}
-                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                            onCancel={() => setActiveDropdownId(null)}
+                            okText="Delete"
+                            cancelText="Cancel"
+                            okButtonProps={{ danger: true, size: 'small' }}
+                            cancelButtonProps={{ size: 'small' }}
+                            icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                            placement="bottomRight"
+                            zIndex={9999}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Delete topic</span>
-                          </button>
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete topic</span>
+                            </button>
+                          </Popconfirm>
                         )}
                       </div>
                     </>
@@ -847,14 +940,16 @@ export function MasterPanel({
             return (
               <div
                 key={layer.id}
-                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all duration-300 overflow-hidden ${
-                  isLayerElevated ? 'z-50' : 'z-0'
+                className={`rounded-2xl border border-border/60 bg-card/60 backdrop-blur-xs shadow-xs relative transition-all duration-300 ${
+                  isLayerElevated ? 'z-50 overflow-visible' : 'z-0 overflow-hidden'
                 }`}
               >
                 {/* Layer header row */}
                 <div
                   onClick={() => toggleLayer(layer.id)}
-                  className="group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-colors relative"
+                  className={`group/lh px-3.5 py-2.5 bg-muted/40 hover:bg-muted/70 flex items-center justify-between cursor-pointer select-none transition-all relative ${
+                    isLayerCollapsed ? 'rounded-2xl' : 'rounded-t-2xl'
+                  }`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <ChevronRight
@@ -872,6 +967,7 @@ export function MasterPanel({
                     <div className="relative shrink-0">
                       <button
                         type="button"
+                        data-dropdown-trigger="true"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdownId(isLayerDropdownOpen ? null : `layer-${layer.id}`);
@@ -896,6 +992,7 @@ export function MasterPanel({
                             }}
                           />
                           <div
+                            data-dropdown-menu="true"
                             onClick={(e) => e.stopPropagation()}
                             className="absolute right-0 top-full mt-1 z-50 w-52 bg-popover/95 border border-border/80 rounded-xl shadow-xl p-1 space-y-0.5 backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 text-xs font-normal"
                           >
@@ -937,28 +1034,54 @@ export function MasterPanel({
                               <span>Edit layer</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveDropdownId(null);
-                                if (layerTotal > 0) {
-                                  setWarningModal({
-                                    title: 'Cannot delete layer',
-                                    message: `Cannot delete "${layer.title}" — it has ${layerTotal} item${layerTotal === 1 ? '' : 's'}. Remove all items first.`,
-                                  });
-                                  return;
-                                }
-                                setDeleteTarget({
-                                  type: 'layer',
-                                  id: layer.id,
-                                  title: layer.title,
-                                });
-                              }}
-                              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete layer</span>
-                            </button>
+                            {layerTotal > 0 ? (
+                              <Popconfirm
+                                title="Cannot delete layer"
+                                description="Please remove all items first."
+                                showCancel={false}
+                                okText="OK"
+                                okButtonProps={{ size: 'small' }}
+                                icon={<AlertTriangle className="w-4 h-4 text-amber-500 mr-1.5 shrink-0 inline-block" />}
+                                placement="bottomRight"
+                                zIndex={9999}
+                                onConfirm={() => setActiveDropdownId(null)}
+                                onCancel={() => setActiveDropdownId(null)}
+                              >
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete layer</span>
+                                </button>
+                              </Popconfirm>
+                            ) : (
+                              <Popconfirm
+                                title="Delete layer?"
+                                description="This action cannot be undone."
+                                onConfirm={() => {
+                                  setActiveDropdownId(null);
+                                  onDeleteLayer(layer.id);
+                                  toast(`Deleted layer "${layer.title}" successfully`, 'success');
+                                }}
+                                onCancel={() => setActiveDropdownId(null)}
+                                okText="Delete"
+                                cancelText="Cancel"
+                                okButtonProps={{ danger: true, size: 'small' }}
+                                cancelButtonProps={{ size: 'small' }}
+                                icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                                placement="bottomRight"
+                                zIndex={9999}
+                              >
+                                <button
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-500 transition-colors text-left font-medium cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Delete layer</span>
+                                </button>
+                              </Popconfirm>
+                            )}
                           </div>
                         </>
                       )}
@@ -1006,19 +1129,13 @@ export function MasterPanel({
                             onReorderGroupItems={onReorderGroupItems}
                             onOpenCreateItem={onOpenCreateItem}
                             onEditGroup={(grp) => setEditingGroup(grp)}
-                            onDeleteGroup={(gId, gTitle, itemCount) => {
-                              if (itemCount > 0) {
-                                setWarningModal({
-                                  title: 'Cannot delete group',
-                                  message: `Cannot delete group "${gTitle}": it contains ${itemCount} item(s). Please move or delete items first.`,
-                                });
-                                return;
+                            onDeleteGroup={async (gId, gTitle) => {
+                              try {
+                                await onDeleteGroup?.(gId);
+                                toast(`Deleted group "${gTitle}" successfully`, 'success');
+                              } catch (err: any) {
+                                toast(err?.message || `Failed to delete group "${gTitle}"`, 'error');
                               }
-                              setDeleteTarget({
-                                type: 'group',
-                                id: gId,
-                                title: gTitle,
-                              });
                             }}
                             onDeleteItem={onDeleteItem}
                             isLocked={isItemsLocked}
@@ -1076,51 +1193,6 @@ export function MasterPanel({
             await onEditRoadmap(title, shortCode, description);
           }
         }}
-      />
-
-      <ConfirmDeleteModal
-        isOpen={Boolean(deleteTarget)}
-        title={
-          deleteTarget?.type === 'topic'
-            ? `Delete topic "${deleteTarget?.title}"?`
-            : deleteTarget?.type === 'layer'
-            ? `Delete layer "${deleteTarget?.title}"?`
-            : `Delete group "${deleteTarget?.title}"?`
-        }
-        description={
-          deleteTarget?.type === 'topic'
-            ? 'All layers and items inside will be permanently deleted. This action cannot be undone.'
-            : 'This action cannot be undone.'
-        }
-        confirmText={
-          deleteTarget?.type === 'topic'
-            ? 'Delete Topic'
-            : deleteTarget?.type === 'layer'
-            ? 'Delete Layer'
-            : 'Delete Group'
-        }
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => {
-          if (!deleteTarget) return;
-          if (deleteTarget.type === 'topic') {
-            onDeleteRoadmap?.(deleteTarget.id);
-          } else if (deleteTarget.type === 'layer') {
-            onDeleteLayer(deleteTarget.id);
-          } else if (deleteTarget.type === 'group') {
-            onDeleteGroup?.(deleteTarget.id);
-          }
-          setDeleteTarget(null);
-        }}
-      />
-
-      <ConfirmDeleteModal
-        isOpen={Boolean(warningModal)}
-        title={warningModal?.title || 'Notice'}
-        description={warningModal?.message || ''}
-        confirmText="OK"
-        cancelText="Close"
-        onClose={() => setWarningModal(null)}
-        onConfirm={() => setWarningModal(null)}
       />
 
       {showScrollTop && (

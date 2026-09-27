@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 
 interface ConfirmDeleteModalProps {
@@ -24,20 +25,27 @@ export function ConfirmDeleteModal({
   onClose,
   onConfirm,
 }: ConfirmDeleteModalProps) {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Backdrop */}
       <div
         onClick={isLoading ? undefined : onClose}
-        className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
+        className="fixed inset-0 -z-10 bg-black/40 backdrop-blur-xs transition-opacity duration-200"
       />
 
       {/* Modal Card */}
       <div
         role="dialog"
         aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-10 animate-in fade-in zoom-in-95 duration-200"
       >
         {/* Header with red warning badge */}
@@ -99,4 +107,6 @@ export function ConfirmDeleteModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

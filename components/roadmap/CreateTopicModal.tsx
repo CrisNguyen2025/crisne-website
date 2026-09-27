@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Popconfirm } from 'antd';
 import {
   X,
   Plus,
@@ -32,6 +34,11 @@ export function CreateTopicModal({
   onClose,
   onSubmit,
 }: CreateTopicModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [name, setName] = useState('');
   const [shortName, setShortName] = useState('');
   const [description, setDescription] = useState('');
@@ -144,10 +151,12 @@ export function CreateTopicModal({
     }
   };
 
-  return (
+  if (!isOpen || !mounted) return null;
+
+  const modalContent = (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -284,14 +293,26 @@ export function CreateTopicModal({
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveLayerRow(layer.id)}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
-                    title="Remove layer"
+                  <Popconfirm
+                    title="Remove layer?"
+                    description="Remove this row from the draft?"
+                    onConfirm={() => handleRemoveLayerRow(layer.id)}
+                    okText="Remove"
+                    cancelText="Cancel"
+                    okButtonProps={{ danger: true, size: 'small' }}
+                    cancelButtonProps={{ size: 'small' }}
+                    icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                    placement="left"
+                    zIndex={9999}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      type="button"
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                      title="Remove layer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </Popconfirm>
                 </div>
               ))}
             </div>
@@ -328,4 +349,6 @@ export function CreateTopicModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

@@ -18,8 +18,10 @@ import {
 } from "@/lib/roadmap/types";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { slugify } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
 
 function RoadmapWorkspace() {
+  const { toast } = useToast();
   // nuqs query state for ?topic and ?item (clean URL: ?topic=ai-architecture&item=...)
   // If topic is null/empty -> Home view. If topic exists -> Topic Roadmap view.
   const [topic, setTopic] = useQueryState("topic", parseAsString);
@@ -162,7 +164,7 @@ function RoadmapWorkspace() {
       }
     } catch (err) {
       console.error("Failed to delete roadmap:", err);
-      alert("Failed to delete topic. Please try again.");
+      toast("Failed to delete topic. Please try again.", "error");
     }
   };
 

@@ -141,7 +141,11 @@ export default function RootLayout({
       <head>
         {/* Performance: Preconnect to external domains */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
         <link rel="preconnect" href="https://www.googletagmanager.com" />
         <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
         <link rel="preconnect" href="https://consent.cookiebot.com" />
@@ -157,10 +161,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <ToastProvider>
-              <NuqsAdapter>
-                {children}
-              </NuqsAdapter>
-              <FloatingChatBot />
+              <NuqsAdapter>{children}</NuqsAdapter>
             </ToastProvider>
           </TooltipProvider>
         </ThemeProvider>

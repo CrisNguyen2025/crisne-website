@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Layers, Tag, AlignLeft } from 'lucide-react';
 
 interface CreateLayerModalProps {
@@ -14,8 +15,13 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
   const [shortTag, setShortTag] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [error, setError] = useState('');
+  const [mounted, setMounted] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +41,9 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="fixed inset-0 -z-10" onClick={onClose} />
       <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-border/50">
           <div className="flex items-center gap-2">
@@ -118,4 +125,6 @@ export function CreateLayerModal({ isOpen, onClose, onSubmit }: CreateLayerModal
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

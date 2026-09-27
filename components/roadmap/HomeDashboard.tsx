@@ -13,8 +13,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { RoadmapMeta, CreateRoadmapDto } from "@/lib/roadmap/types";
+import { useToast } from "@/components/ui/toast";
+import { Popconfirm } from "antd";
 import { CreateTopicModal } from "./CreateTopicModal";
-import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import {
   fetchStorageScan,
   triggerCleanupUnused,
@@ -42,12 +43,12 @@ export function HomeDashboard({
   onOpenCreateModal: controlledOnOpen,
   onCloseCreateModal: controlledOnClose,
 }: HomeDashboardProps) {
+  const { toast } = useToast();
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [storageScan, setStorageScan] = useState<StorageScanResult | null>(() =>
     getCachedStorageScan()
   );
   const [isCleaning, setIsCleaning] = useState(false);
-  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false);
 
   const loadScan = () => {
     fetchStorageScan()
@@ -61,13 +62,15 @@ export function HomeDashboard({
 
   const handleCleanup = async () => {
     setIsCleaning(true);
+    const count = storageScan?.unusedFiles.length || 0;
     try {
       await triggerCleanupUnused();
       const updated = await fetchStorageScan();
       setStorageScan(updated);
-      setIsConfirmClearOpen(false);
+      toast(`Cleaned up ${count} unused file(s) successfully`, "success");
     } catch (err) {
       console.error("Failed to clean up unused files:", err);
+      toast("Failed to clean up unused files. Please try again.", "error");
     } finally {
       setIsCleaning(false);
     }
@@ -149,20 +152,34 @@ export function HomeDashboard({
                       <span className="text-amber-500 font-medium text-[11px]">
                         {storageScan.unusedFiles.length} unused
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsConfirmClearOpen(true)}
-                        disabled={isCleaning}
-                        className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                        title="Clean up orphaned files"
+                      <Popconfirm
+                        title="Clear unused files?"
+                        description={`Permanently delete ${storageScan.unusedFiles.length} file(s) (${formatBytes(
+                          storageScan.unusedBytes
+                        )})?`}
+                        onConfirm={handleCleanup}
+                        okText="Clear Unused"
+                        cancelText="Cancel"
+                        okButtonProps={{ danger: true, size: "small", loading: isCleaning }}
+                        cancelButtonProps={{ size: "small", disabled: isCleaning }}
+                        icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
+                        placement="bottomRight"
+                        zIndex={9999}
                       >
-                        {isCleaning ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3 h-3" />
-                        )}
-                        <span>Clear</span>
-                      </button>
+                        <button
+                          type="button"
+                          disabled={isCleaning}
+                          className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                          title="Clean up orphaned files"
+                        >
+                          {isCleaning ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
+                          )}
+                          <span>Clear</span>
+                        </button>
+                      </Popconfirm>
                     </div>
                   </>
                 ) : (
@@ -265,19 +282,6 @@ export function HomeDashboard({
         isOpen={isModalOpen}
         onClose={closeModal}
         onSubmit={onCreateRoadmap}
-      />
-
-      {/* ── Modal for Confirming Cleanup of Unused Files ────────────── */}
-      <ConfirmDeleteModal
-        isOpen={isConfirmClearOpen}
-        title={`Clean up ${storageScan?.unusedFiles.length || 0} unused image(s)?`}
-        description={`This will permanently remove ${formatBytes(
-          storageScan?.unusedBytes || 0
-        )} of unused/orphaned images from storage. All active images in your roadmap notes and articles are preserved.`}
-        confirmText={isCleaning ? "Cleaning..." : "Clear Unused Files"}
-        isLoading={isCleaning}
-        onClose={() => setIsConfirmClearOpen(false)}
-        onConfirm={handleCleanup}
       />
     </div>
   );
