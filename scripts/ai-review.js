@@ -6,17 +6,20 @@
  * Env:
  *   SKIP_AI_REVIEW=1        bỏ qua review
  *   AI_REVIEW_ENGINE        copilot | claude (mặc định: tự detect, ưu tiên copilot)
+ *   AI_REVIEW_MODEL         model cho engine (mặc định: model nhỏ của từng engine, xem DEFAULT_MODELS)
  *   AI_REVIEW_MOCK=<file>   đọc kết quả AI từ file JSON (test không gọi AI)
- *   AI_REVIEW_TIMEOUT       ms, mặc định 120000
+ *   AI_REVIEW_TIMEOUT       ms, mặc định 60000
  */
-const { execSync, spawnSync } = require('child_process')
+const { execSync, spawn, spawnSync } = require('child_process')
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
 
 const RULES_FILE = 'AGENTS.md'
 const MAX_PROMPT_CHARS = 100_000
-const TIMEOUT = Number(process.env.AI_REVIEW_TIMEOUT) || 120_000
+const TIMEOUT = Number(process.env.AI_REVIEW_TIMEOUT) || 60_000
+// Đối chiếu diff với rules là task nhẹ → dùng model nhỏ cho nhanh và ít tốn quota
+const DEFAULT_MODELS = { copilot: 'gpt-5-mini', claude: 'haiku' }
 const EXCLUDES = [
   ':!*.lock',
   ':!package-lock.json',
@@ -94,27 +97,57 @@ function hasCommand(cmd) {
 }
 
 function runEngine(prompt) {
-  if (process.env.AI_REVIEW_MOCK) return fs.readFileSync(process.env.AI_REVIEW_MOCK, 'utf8')
+  if (process.env.AI_REVIEW_MOCK) return Promise.resolve(fs.readFileSync(process.env.AI_REVIEW_MOCK, 'utf8'))
 
   const engine = process.env.AI_REVIEW_ENGINE || ['copilot', 'claude'].find(hasCommand)
-  if (!engine || !hasCommand(engine)) throw new Error('không tìm thấy AI CLI (copilot/claude)')
+  if (!engine || !hasCommand(engine)) return Promise.reject(new Error('không tìm thấy AI CLI (copilot/claude)'))
 
+  const model = process.env.AI_REVIEW_MODEL || DEFAULT_MODELS[engine]
   const args = {
-    copilot: ['-p', prompt],
-    claude: ['-p', prompt, '--output-format', 'text', '--tools', '', '--strict-mcp-config'],
+    copilot: ['-p', prompt, '-s', '--no-ask-user', '--model', model],
+    claude: ['-p', prompt, '--model', model, '--output-format', 'text', '--tools', '', '--strict-mcp-config'],
   }[engine]
-  if (!args) throw new Error(`engine không hỗ trợ: ${engine}`)
+  if (!args) return Promise.reject(new Error(`engine không hỗ trợ: ${engine}`))
 
-  info(`đang review bằng ${engine}...`)
-  const res = spawnSync(engine, args, {
-    encoding: 'utf8',
-    timeout: TIMEOUT,
-    maxBuffer: 10 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
+  return new Promise((resolve, reject) => {
+    const label = `đang review bằng ${engine} (${model})...`
+    const startedAt = Date.now()
+    const ticker = process.stderr.isTTY
+      ? setInterval(() => process.stderr.write(`\r🤖 [ai-review] ${label} ${Math.round((Date.now() - startedAt) / 1000)}s`), 1000)
+      : info(label)
+    const done = (fn, value) => {
+      clearInterval(ticker)
+      clearTimeout(timer)
+      if (process.stderr.isTTY) process.stderr.write('\n')
+      fn(value)
+    }
+
+    const child = spawn(engine, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (d) => (stdout += d))
+    child.stderr.on('data', (d) => (stderr += d))
+    const timer = setTimeout(() => {
+      child.kill()
+      done(reject, new Error(`timeout sau ${TIMEOUT / 1000}s`))
+    }, TIMEOUT)
+    child.on('error', (e) => done(reject, e))
+    child.on('close', (code) => {
+      if (code === 0) return done(resolve, stdout)
+      done(reject, new Error(`${engine} exit ${code}: ${(stderr || stdout).trim().slice(0, 300)}`))
+    })
   })
-  if (res.error) throw new Error(res.error.code === 'ETIMEDOUT' ? `timeout sau ${TIMEOUT}ms` : res.error.message)
-  if (res.status !== 0) throw new Error(`${engine} exit ${res.status}: ${(res.stderr || res.stdout || '').trim().slice(0, 300)}`)
-  return res.stdout
+}
+
+async function confirmOnError(message) {
+  const prompts = require('prompts')
+  const { proceed } = await prompts({
+    type: 'confirm',
+    name: 'proceed',
+    message: `AI review lỗi (${message}). Vẫn commit?`,
+    initial: false,
+  })
+  return proceed === true
 }
 
 function parseFindings(output) {
@@ -175,9 +208,12 @@ async function main() {
 
   let raw
   try {
-    raw = parseFindings(runEngine(prompt))
+    raw = parseFindings(await runEngine(prompt))
   } catch (e) {
-    return warn(`${e.message} → cho phép commit (fail-open)`), 0
+    // Có người ngồi trước terminal → để dev quyết định; GUI/non-TTY → fail-open
+    if (!process.stdin.isTTY) return warn(`${e.message} → cho phép commit (fail-open)`), 0
+    if (await confirmOnError(e.message)) return 0
+    return warn('chặn commit'), 1
   }
 
   // Anti-hallucination: chỉ giữ finding có rule hợp lệ và trỏ đúng dòng được thêm mới
