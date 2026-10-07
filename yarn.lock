@@ -3499,6 +3499,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/prompts@npm:^2":
+  version: 2.4.9
+  resolution: "@types/prompts@npm:2.4.9"
+  dependencies:
+    "@types/node": "npm:*"
+    kleur: "npm:^3.0.3"
+  checksum: 10c0/22fe0da6807681c85e88ba283184f4be4c8a95c744ea12a638865c98c4e0c22e7f733542f6b0f1fbca02245cdc3fe84feacf9c9adf4ddd8bc98a337fd679d8d2
+  languageName: node
+  linkType: hard
+
 "@types/react-dom@npm:^19":
   version: 19.2.3
   resolution: "@types/react-dom@npm:19.2.3"
@@ -4632,6 +4642,7 @@ __metadata:
     "@tailwindcss/postcss": "npm:^4"
     "@types/canvas-confetti": "npm:^1.9.0"
     "@types/node": "npm:^20"
+    "@types/prompts": "npm:^2"
     "@types/react": "npm:^19"
     "@types/react-dom": "npm:^19"
     "@types/uuid": "npm:^11.0.0"
@@ -4657,6 +4668,7 @@ __metadata:
     nuqs: "npm:^2.10.1"
     prettier: "npm:^3.8.4"
     prisma: "npm:^5.22.0"
+    prompts: "npm:^2.4.2"
     react: "npm:19.2.4"
     react-dom: "npm:19.2.4"
     react-toastify: "npm:^10.0.6"

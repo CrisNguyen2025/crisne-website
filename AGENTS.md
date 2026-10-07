@@ -40,6 +40,20 @@ Global Codex rules and skills are vendored in this repository so they can be use
 - Use Server Components by default — add "use client" only when needed
 - Use Suspense and Error Boundaries for async operations
 
+## 🔍 AI Pre-commit Review Rules
+
+> Đọc bởi `scripts/ai-review.js` (pre-commit). Format: `- [ID][error|warn] mô tả`. Chỉ đặt concept rules mà ESLint không bắt được.
+
+<!-- review-rules:start -->
+- [R01][error] Không import server-only code (prisma, fs, biến env không có NEXT_PUBLIC_) vào file có "use client"
+- [R02][error] Không hardcode secret, API key, token, password trong code
+- [R03][warn] Không fetch data trong useEffect — dùng Server Component hoặc server action
+- [R04][warn] useEffect có subscription/listener/timer phải return cleanup function
+- [R05][warn] Không để console.log/debug log trong code commit
+- [R06][warn] Naming props/biến theo đúng single component/func, không gắn use-case (sai: isChatLoading, đúng: isLoading)
+- [R07][warn] Giá trị optional khi hiển thị phải qua hàm format tương ứng (formatString, formatDateTime, ...)
+<!-- review-rules:end -->
+
 ## ⚡ Available Tools (ON-DEMAND only)
 - `save(title, content, category)` — Save a note + auto-detect conflicts
 - `batch_save(items[])` — Save multiple notes in 1 call

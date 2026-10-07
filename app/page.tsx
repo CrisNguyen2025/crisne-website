@@ -65,6 +65,8 @@ function RoadmapWorkspace() {
   }, []);
 
   // Fetch list of roadmaps on mount for sidebar & switcher
+  console.log("🚀 ~ RoadmapWorkspace ~ refreshRoadmaps:", refreshRoadmaps);
+  // 123
   useEffect(() => {
     refreshRoadmaps();
   }, [refreshRoadmaps]);

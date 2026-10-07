@@ -1,0 +1,4 @@
+#!/bin/sh
+# Gắn stdin vào terminal để hiện checkbox; commit từ GUI (không có tty) sẽ bỏ qua bước này
+if sh -c ': < /dev/tty' 2>/dev/null; then exec < /dev/tty; fi
+node scripts/ai-review.js
