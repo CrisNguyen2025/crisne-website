@@ -1,0 +1,51 @@
+{
+  "id": "nextjs-fullstack",
+  "title": "Next.js Fullstack Master Roadmap",
+  "shortCode": "NEXT",
+  "domain": "Frontend, Fullstack, React 19, Server Components, SSR",
+  "description": "Lộ trình làm chủ Next.js App Router, React Server Components, Server Actions và tối ưu hóa Production.",
+  "layers": [
+    {
+      "title": "Foundation & App Router",
+      "shortTag": "01-ROUTE",
+      "subtitle": "Cơ chế định tuyến và kết cấu thư mục App Router",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "Routing & Dynamic Segments",
+              "description": "Cơ chế layout, template, page, params và parallel routes."
+            },
+            {
+              "title": "Server vs Client Components",
+              "description": "Quy tắc ranh giới 'use client' và Server Component lifecycle."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Data Fetching & Server Actions",
+      "shortTag": "02-DATA",
+      "subtitle": "Xử lý dữ liệu và mutation phía máy chủ",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "Server Actions & Form Handling",
+              "description": "Gọi logic server không qua REST API rời, dùng useActionState."
+            },
+            {
+              "title": "Caching & Revalidation",
+              "description": "revalidatePath, revalidateTag, fetch cache layers."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

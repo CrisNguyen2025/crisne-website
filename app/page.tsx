@@ -49,6 +49,15 @@ function RoadmapWorkspace() {
       .finally(() => setIsRoadmapsLoading(false));
   }, []);
 
+  // Real-time refresh when Roadmap Assistant executes CUD tools
+  useEffect(() => {
+    const handleUpdate = () => {
+      refreshRoadmaps();
+    };
+    window.addEventListener("roadmap:updated", handleUpdate);
+    return () => window.removeEventListener("roadmap:updated", handleUpdate);
+  }, [refreshRoadmaps]);
+
   // Clean up any stale/legacy ?view param from address bar if present
   useEffect(() => {
     if (typeof window !== "undefined") {

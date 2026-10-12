@@ -1,0 +1,71 @@
+{
+  "id": "ai-engineering",
+  "title": "AI & LLM Architecture Roadmap",
+  "shortCode": "AI",
+  "domain": "Artificial Intelligence, Large Language Models, Generative AI",
+  "description": "Lộ trình toàn diện làm chủ AI Engineering từ nền tảng Model, Prompting, RAG đến Agentic Frameworks.",
+  "layers": [
+    {
+      "title": "LLM Fundamentals & Prompt Engineering",
+      "shortTag": "01-LLM",
+      "subtitle": "Nền tảng mô hình ngôn ngữ lớn và kỹ nghệ câu lệnh",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "Tokenization & Context Windows",
+              "description": "Hiểu cách tokenizer hoạt động, BPE, WordPiece và giới hạn context."
+            },
+            {
+              "title": "Prompt Techniques",
+              "description": "Zero-shot, Few-shot, Chain-of-Thought (CoT), ReAct prompting."
+            }
+          ]
+        },
+        {
+          "level": "intermediate",
+          "title": "🟡 Intermediate",
+          "items": [
+            {
+              "title": "Structured Outputs & JSON Schema",
+              "description": "Ràng buộc mô hình trả về JSON có định dạng chặt chẽ."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Retrieval Augmented Generation (RAG)",
+      "shortTag": "02-RAG",
+      "subtitle": "Kiến trúc tìm kiếm và tăng cường tri thức cho LLM",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "Chunking & Embedding Models",
+              "description": "Chiến lược phân đoạn văn bản và embedding representations."
+            },
+            {
+              "title": "Vector Databases",
+              "description": "Chroma, Pinecone, Qdrant, FAISS và index thuật toán HNSW."
+            }
+          ]
+        },
+        {
+          "level": "advanced",
+          "title": "🔴 Advanced",
+          "items": [
+            {
+              "title": "Hybrid Search & Reranking",
+              "description": "Kết hợp BM25 + Dense vector và Cross-Encoder reranking."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

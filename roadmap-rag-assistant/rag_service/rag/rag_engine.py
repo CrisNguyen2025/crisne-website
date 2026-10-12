@@ -1,0 +1,165 @@
+"""Hybrid RAG Engine — Knowledge retrieval for live database and roadmap templates.
+
+Indexes:
+1. Live Database: All Roadmaps, Layers, Groups, and Items (including rich-text content).
+2. Blueprints: JSON roadmap templates for rapid document and plan generation.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+import re
+from typing import List, Optional, Tuple
+
+from rag_service.rag.ingestion import DatabaseIngestionWorker, KnowledgeDocument
+from rag_service.rag.vector_store import HybridVectorStore
+
+
+class HybridRagEngine:
+    """Enterprise RAG engine supporting live database search and blueprint generation."""
+
+    def __init__(self, blueprints_dir: Path | None = None) -> None:
+        if blueprints_dir is None:
+            blueprints_dir = Path(__file__).resolve().parent.parent / "data" / "blueprints"
+        self._blueprints_dir = Path(blueprints_dir)
+        self._templates: dict[str, dict] = {}
+        self._ingestion_worker = DatabaseIngestionWorker()
+        self._vector_store = HybridVectorStore()
+        self._is_synced = False
+        self.reload_blueprints()
+
+    def reload_blueprints(self) -> None:
+        """Load or reload all JSON blueprint templates from disk."""
+        self._templates.clear()
+        if not self._blueprints_dir.exists():
+            return
+
+        for p in self._blueprints_dir.glob("*.json"):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    tid = data.get("id") or p.stem
+                    self._templates[tid] = data
+            except Exception as exc:
+                print(f"[HybridRagEngine] Error loading template {p}: {exc}")
+
+    async def sync_live_database(self) -> int:
+        """Sync and re-index all live Roadmaps, Layers, Groups, and Items."""
+        try:
+            docs = await self._ingestion_worker.ingest_all()
+            self._vector_store.index_documents(docs)
+            self._is_synced = True
+            print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
+            return len(docs)
+        except Exception as exc:
+            print(f"[HybridRagEngine] Error syncing live database: {exc}")
+            return 0
+
+    async def search_live_knowledge(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
+        """Search across live database entities (Roadmaps, Layers, Items, Content)."""
+        if not self._is_synced:
+            await self.sync_live_database()
+        return self._vector_store.hybrid_search(query, limit=limit)
+
+    def format_knowledge_context(self, matches: List[Tuple[KnowledgeDocument, float]]) -> str:
+        """Format retrieved live knowledge into structured markdown context for the LLM."""
+        if not matches:
+            return "Không tìm thấy tài liệu phù hợp trong cơ sở dữ liệu hệ thống."
+
+        lines = ["### 📚 Thông Tin Tìm Thấy Trong Hệ Thống:"]
+        for doc, score in matches:
+            if doc.doc_type == "item":
+                lines.append(
+                    f"\n#### 📖 Bài học: [{doc.title}](/roadmaps/{doc.topic_slug})\n"
+                    f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
+                    f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Cấp độ: `{doc.level}`)\n"
+                    f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"
+                )
+                if doc.content_text:
+                    lines.append(f"- **Nội dung tóm tắt:** {doc.content_text[:300]}...")
+            elif doc.doc_type == "layer":
+                lines.append(
+                    f"\n#### 📑 Mảng kiến thức: [{doc.layer_tag}] {doc.title}\n"
+                    f"- **Thuộc Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
+                    f"- **Chi tiết:** {doc.description or 'N/A'}\n"
+                )
+            elif doc.doc_type == "topic":
+                lines.append(
+                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/roadmaps/{doc.topic_slug})\n"
+                    f"- **Mô tả:** {doc.description or 'N/A'}\n"
+                )
+
+        return "\n".join(lines)
+
+    # ── Blueprint Methods for /plan and /goal ─────────────────────────────
+
+    def list_templates(self) -> list[dict]:
+        return [
+            {
+                "id": t.get("id", k),
+                "title": t.get("title", ""),
+                "shortCode": t.get("shortCode", ""),
+                "domain": t.get("domain", ""),
+                "description": t.get("description", ""),
+                "layers_count": len(t.get("layers", [])),
+            }
+            for k, t in self._templates.items()
+        ]
+
+    def get_template(self, template_id: str) -> dict | None:
+        if template_id in self._templates:
+            return self._templates[template_id]
+        query_norm = template_id.lower().strip()
+        for k, t in self._templates.items():
+            if k.lower() == query_norm or t.get("title", "").lower() == query_norm:
+                return t
+        return None
+
+    def search_templates(self, query: str, limit: int = 3) -> list[tuple[dict, float]]:
+        tokens = set(re.findall(r"\w+", query.lower()))
+        if not tokens:
+            return [(t, 1.0) for t in list(self._templates.values())[:limit]]
+
+        scored: list[tuple[dict, float]] = []
+        for t in self._templates.values():
+            score = 0.0
+            searchable_text = f"{t.get('title', '')} {t.get('shortCode', '')} {t.get('domain', '')} {t.get('description', '')}".lower()
+            doc_tokens = set(re.findall(r"\w+", searchable_text))
+            intersection = tokens.intersection(doc_tokens)
+            if intersection:
+                score = len(intersection) / len(tokens)
+                if query.lower() in t.get("title", "").lower() or query.lower() == t.get("shortCode", "").lower():
+                    score += 2.0
+                scored.append((t, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:limit]
+
+    # Alias for backward compatibility
+    search = search_templates
+
+    def format_plan_preview(self, template: dict) -> str:
+        lines = [
+            f"### 📋 Kế Hoạch Lộ Trình: {template.get('title', 'Tài liệu')}",
+            f"- **Short Code**: `{template.get('shortCode', 'DOC')}`",
+            f"- **Mô tả**: {template.get('description', '')}",
+            f"- **Cấu trúc phân cấp dự kiến**:\n",
+        ]
+
+        for i, layer in enumerate(template.get("layers", []), 1):
+            lines.append(f"  **Layer {i}: [{layer.get('shortTag', '')}] {layer.get('title', '')}**")
+            if layer.get("subtitle"):
+                lines.append(f"  _{layer.get('subtitle')}_")
+            for group in layer.get("groups", []):
+                lines.append(f"    - **Group**: {group.get('title', group.get('level', ''))}")
+                for item in group.get("items", []):
+                    lines.append(f"      • {item.get('title', '')}: {item.get('description', '')}")
+
+        return "\n".join(lines)
+
+
+# Global singleton instance
+rag_engine = HybridRagEngine()
+MiniRagEngine = HybridRagEngine

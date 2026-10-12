@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
 
-    const roadmap = await prisma.roadmap.findUnique({
+    let roadmap = await prisma.roadmap.findUnique({
       where: { slug },
       include: {
         layers: {
@@ -33,6 +33,36 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         },
       },
     });
+
+    if (!roadmap) {
+      const all = await prisma.roadmap.findMany();
+      const norm = slug.trim().toLowerCase();
+      const match =
+        all.find((r) => r.slug.toLowerCase() === norm) ||
+        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
+        all.find((r) => r.title.toLowerCase() === norm);
+
+      if (match) {
+        roadmap = await prisma.roadmap.findUnique({
+          where: { id: match.id },
+          include: {
+            layers: {
+              orderBy: { order: 'asc' },
+              include: {
+                groups: {
+                  orderBy: { order: 'asc' },
+                  include: {
+                    items: {
+                      orderBy: { order: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+    }
 
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
@@ -89,24 +119,39 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE /api/v1/roadmaps/[slug] - Delete an entire roadmap topic
+// DELETE /api/v1/roadmaps/[slug] - Delete an entire roadmap topic by slug, shortCode, or title
 export async function DELETE(_req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
 
-    const roadmap = await prisma.roadmap.findUnique({
+    let roadmap = await prisma.roadmap.findUnique({
       where: { slug },
     });
+
+    if (!roadmap) {
+      const all = await prisma.roadmap.findMany();
+      const norm = slug.trim().toLowerCase();
+      roadmap =
+        all.find((r) => r.slug.toLowerCase() === norm) ||
+        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
+        all.find((r) => r.title.toLowerCase() === norm) ||
+        null;
+    }
 
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
     await prisma.roadmap.delete({
-      where: { slug },
+      where: { id: roadmap.id },
     });
 
-    return NextResponse.json({ success: true, deletedSlug: slug });
+    return NextResponse.json({
+      success: true,
+      deletedSlug: roadmap.slug,
+      deletedTitle: roadmap.title,
+      deletedShortCode: roadmap.shortCode,
+    });
   } catch (error: any) {
     console.error('[API DELETE /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
@@ -122,6 +167,24 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const { slug } = await context.params;
     const body = await req.json();
     const { title, shortCode, description, isLocked } = body;
+
+    let roadmap = await prisma.roadmap.findUnique({
+      where: { slug },
+    });
+
+    if (!roadmap) {
+      const all = await prisma.roadmap.findMany();
+      const norm = slug.trim().toLowerCase();
+      roadmap =
+        all.find((r) => r.slug.toLowerCase() === norm) ||
+        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
+        all.find((r) => r.title.toLowerCase() === norm) ||
+        null;
+    }
+
+    if (!roadmap) {
+      return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
+    }
 
     const updateData: {
       title?: string;
@@ -147,7 +210,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     const updated = await prisma.roadmap.update({
-      where: { slug },
+      where: { id: roadmap.id },
       data: updateData,
     });
 

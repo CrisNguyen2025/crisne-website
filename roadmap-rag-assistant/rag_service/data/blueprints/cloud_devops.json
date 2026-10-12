@@ -1,0 +1,51 @@
+{
+  "id": "cloud-devops",
+  "title": "Cloud DevOps & Platform Roadmap",
+  "shortCode": "DEVOPS",
+  "domain": "DevOps, SRE, Cloud, Kubernetes, CI/CD, Infrastructure as Code",
+  "description": "Lộ trình thực chiến DevOps, tự động hóa hạ tầng và triển khai hệ thống có tính sẵn sàng cao.",
+  "layers": [
+    {
+      "title": "Containers & Orchestration",
+      "shortTag": "01-K8S",
+      "subtitle": "Đóng gói ứng dụng và điều phối container",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "Docker & Multi-stage Builds",
+              "description": "Tối ưu hóa dung lượng image, layer caching và bảo mật container."
+            },
+            {
+              "title": "Kubernetes Architecture",
+              "description": "Pod, Deployment, Service, Ingress và ConfigMaps/Secrets."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "CI/CD & GitOps",
+      "shortTag": "02-CICD",
+      "subtitle": "Quy trình tích hợp và triển khai liên tục",
+      "groups": [
+        {
+          "level": "core",
+          "title": "🟢 Core",
+          "items": [
+            {
+              "title": "GitHub Actions Automation",
+              "description": "Viết workflow kiểm thử, build và push image tự động."
+            },
+            {
+              "title": "ArgoCD & GitOps",
+              "description": "Quản lý trạng thái cluster đồng bộ theo mã nguồn Git."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
