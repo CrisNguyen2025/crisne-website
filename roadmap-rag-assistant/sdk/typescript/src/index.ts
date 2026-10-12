@@ -6,7 +6,7 @@
 
 export { RoadmapChatClient } from './client';
 export type { RoadmapChatClientOptions } from './client';
-export type { ChatResponse, ChatRequest, HealthResponse, ToolCallResult } from './types';
+export type { ChatResponse, ChatRequest, HealthResponse, ToolCallResult, PageContext } from './types';
 
 // React Chatbot Widget & Hooks
 export { RoadmapChatbotWidget } from './react/RoadmapChatbotWidget';

@@ -9,6 +9,8 @@ Tools:
 
 from __future__ import annotations
 
+import re
+
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
@@ -28,6 +30,15 @@ class CreateItemInput(BaseModel):
     )
     title: str = Field(description="Tên item, ví dụ: 'Prompt Engineering'")
     description: str = Field(default="", description="Mô tả ngắn cho item")
+    content: str = Field(default="", description="Nội dung chi tiết (HTML/markdown) nếu người dùng cung cấp")
+
+
+class ImportItemsFromTextInput(BaseModel):
+    """Input for importing many items from a pasted list."""
+
+    layer_id: str = Field(description="ID của layer nhận các item")
+    level: str = Field(default="core", description="Level/group cho các item")
+    text: str = Field(description="Danh sách item, mỗi dòng một item (bullet '-', '*', '•' hoặc số thứ tự)")
 
 
 class CreateItemsBatchInput(BaseModel):
@@ -80,6 +91,7 @@ async def create_item(
     level: str,
     title: str,
     description: str = "",
+    content: str = "",
 ) -> str:
     """Tạo một Item mới trong một Layer.
 
@@ -91,7 +103,7 @@ async def create_item(
 
     real_layer_id = await resolve_layer_id(layer_id)
     adapter = get_adapter()
-    result = await adapter.create_item(real_layer_id, level, title, description)
+    result = await adapter.create_item(real_layer_id, level, title, description, content)
     return (
         f"✅ Đã tạo item '{result.get('title', title)}' "
         f"(level: {level}) trong layer '{layer_id}'"
@@ -117,13 +129,38 @@ async def create_items_batch(
     for item in items:
         item_title = item.get("title", "")
         result = await adapter.create_item(
-            real_layer_id, level, item_title, item.get("description", "")
+            real_layer_id, level, item_title, item.get("description", ""), item.get("content", "")
         )
         created.append(result.get("title", item_title))
     return (
         f"✅ Đã tạo {len(created)} item (level: {level}): "
         f"{', '.join(created)}"
     )
+
+
+_LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+(.+?)\s*$")
+
+
+def parse_item_list(text: str) -> list[str]:
+    """Return titles from bullet or numbered lines. Plain lines are ignored to avoid guessing."""
+    titles: list[str] = []
+    for line in text.splitlines():
+        m = _LIST_LINE.match(line)
+        if m and m.group(1).strip():
+            titles.append(m.group(1).strip())
+    return titles
+
+
+@tool(args_schema=ImportItemsFromTextInput)
+async def import_items_from_text(layer_id: str, level: str, text: str) -> str:
+    """Nhập nhiều item từ một danh sách dán vào, mỗi dòng bắt đầu bằng '-' hoặc số thứ tự.
+
+    Ví dụ: 'thêm các bài sau vào layer này:\n- Docker\n- Kubernetes'.
+    """
+    titles = parse_item_list(text)
+    if not titles:
+        return "⚠️ Không tìm thấy dòng item nào. Hãy dùng dạng '- Tên bài' hoặc '1. Tên bài' mỗi dòng."
+    return await create_items_batch.coroutine(layer_id=layer_id, level=level, items=[{"title": t} for t in titles])
 
 
 @tool(args_schema=UpdateItemInput)

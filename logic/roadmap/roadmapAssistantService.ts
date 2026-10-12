@@ -7,7 +7,7 @@
  */
 
 import { RoadmapChatClient } from '@/roadmap-rag-assistant/sdk/typescript/src';
-import type { ChatResponse, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src';
+import type { ChatResponse, PageContext, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src';
 
 const RAG_SERVICE_URL =
   process.env.NEXT_PUBLIC_RAG_SERVICE_URL || 'http://localhost:8000';
@@ -42,3 +42,17 @@ export async function checkRoadmapAssistantHealth(): Promise<boolean> {
 }
 
 export type { ChatResponse, ToolCallResult };
+
+/**
+ * Page the user is viewing, read from the URL (?topic=<slug>&layer=<id>&item=<id>).
+ * Returns undefined on the server so SSR never reads window.
+ */
+export function getRoadmapPageContext(): PageContext | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const params = new URLSearchParams(window.location.search);
+  const roadmapSlug = params.get('topic') || undefined;
+  const itemId = params.get('item') || undefined;
+  const layerId = params.get('layer') || undefined;
+  if (!roadmapSlug && !itemId && !layerId) return undefined;
+  return { roadmapSlug, itemId, layerId };
+}

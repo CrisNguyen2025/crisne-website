@@ -30,6 +30,8 @@ from rag_service.router import (
     StructuredRoadmapAction,
     normalize_vietnamese,
 )
+from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, with_grounding
+from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import ALL_TOOLS
 from rag_service.tools.rag_tools import (
@@ -44,18 +46,20 @@ class NextGenRoadmapAgent:
 
     def __init__(self, llm_model: Optional[object] = None, tools: Optional[list] = None) -> None:
         self.llm = llm_model
+        self.typing_delay = float(os.getenv("RAG_TYPING_DELAY_MS", "5")) / 1000
         self.tools = {t.name: t for t in (tools or ALL_TOOLS)}
         self.router = IntentRouter(llm_model=llm_model)
         self.extractor = StructuredEntityExtractor(llm_model=llm_model)
         self.executor = ActionExecutor()
 
-    async def _stream_text(self, text: str) -> AsyncGenerator[dict, None]:
-        """Stream words progressively over SSE to create smooth human-readable typing effect."""
+    async def _stream_text(self, text: str, delay: float) -> AsyncGenerator[dict, None]:
+        """Stream words over SSE. `delay` (seconds per word) adds an optional typing effect; 0 disables it."""
         words = text.split(" ")
         for i, word in enumerate(words):
             delta = word + (" " if i < len(words) - 1 else "")
             yield {"type": "token", "delta": delta}
-            await asyncio.sleep(0.025)
+            if delay:
+                await asyncio.sleep(delay)
 
     async def ainvoke(self, input_dict: dict, config: dict | None = None) -> dict:
         events = []
@@ -92,6 +96,9 @@ class NextGenRoadmapAgent:
     ) -> AsyncGenerator[dict, None]:
         """Stream SSE events with tool start/end and paced progressive text tokens."""
         raw_content = input_dict.get("messages", [{}])[-1].get("content", "").strip()
+        page_context = input_dict.get("context")
+        # Typing effect only for streaming clients; fast=True (sync /chat) skips it entirely.
+        delay = 0.0 if input_dict.get("fast") else self.typing_delay
         content = normalize_vietnamese(raw_content)
         session_id = (config or {}).get("configurable", {}).get("thread_id", "default")
         lower = content.lower()
@@ -106,13 +113,13 @@ class NextGenRoadmapAgent:
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id)
                 yield {"type": "tool_end", "name": tool_name, "result": res_msg}
-                async for ev in self._stream_text(res_msg):
+                async for ev in self._stream_text(res_msg, delay):
                     yield ev
                 return
             elif lower in ["hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi"]:
                 session_ctx.pending_confirmation = None
                 cancel_msg = "Đã hủy bỏ thao tác theo yêu cầu của bạn."
-                async for ev in self._stream_text(cancel_msg):
+                async for ev in self._stream_text(cancel_msg, delay):
                     yield ev
                 return
 
@@ -121,7 +128,7 @@ class NextGenRoadmapAgent:
             yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
             res = await preview_roadmap_plan.ainvoke({"query_or_template_id": content})
             yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
-            async for ev in self._stream_text(res):
+            async for ev in self._stream_text(res, delay):
                 yield ev
             return
 
@@ -131,7 +138,7 @@ class NextGenRoadmapAgent:
             yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
             res = await generate_roadmap_from_template.ainvoke({"template_id": tid})
             yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
-            async for ev in self._stream_text(res):
+            async for ev in self._stream_text(res, delay):
                 yield ev
             return
 
@@ -140,16 +147,45 @@ class NextGenRoadmapAgent:
             yield {"type": "tool_start", "name": "list_topics", "args": {}}
             res = await self.tools["list_topics"].ainvoke({})
             yield {"type": "tool_end", "name": "list_topics", "result": res}
-            async for ev in self._stream_text(res):
+            async for ev in self._stream_text(res, delay):
+                yield ev
+            return
+
+        # ── 2b. Bulk import: a pasted list while a layer is open ──────────────
+        bulk_titles = parse_item_list(raw_content)
+        layer_in_view = (page_context or {}).get("layerId")
+        if layer_in_view and len(bulk_titles) >= 2:
+            tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
+            yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
+            res = await import_items_from_text.coroutine(**tool_args)
+            yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
+            async for ev in self._stream_text(res + "\n\n_Các item được thêm vào level `core`. Nói rõ level nếu muốn khác._", delay):
+                yield ev
+            return
+        if not layer_in_view and len(bulk_titles) >= 2 and re.search(r"\bthêm\b|\badd\b", lower):
+            ask = (
+                f"Tôi thấy {len(bulk_titles)} dòng item nhưng chưa biết thêm vào layer nào. "
+                "Hãy mở layer đích trên trang rồi gửi lại danh sách, hoặc nói rõ tên layer."
+            )
+            async for ev in self._stream_text(ask, delay):
                 yield ev
             return
 
         # ── 3. Classify Intent via IntentRouter ───────────────────────────────
         intent_res: IntentClassificationResult = await self.router.aclassify(content)
 
+        # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
+        if intent_res.intent == IntentType.OUT_OF_SCOPE:
+            async for ev in self._stream_text(OUT_OF_SCOPE_REPLY, delay):
+                yield ev
+            return
+
         # ── 4. ROADMAP CUD OPERATIONS ─────────────────────────────────────────
         if intent_res.intent == IntentType.ROADMAP_CUD or intent_res.needs_cud_extraction:
-            action: StructuredRoadmapAction = await self.extractor.aextract(content)
+            # Page context is added only for the LLM extractor; heuristics keep the raw text.
+            action: StructuredRoadmapAction = await self.extractor.aextract(
+                with_grounding(content, page_context)
+            )
             resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
 
             # Dry-run confirmation for DELETE operations unless 'ngay'/'immediately' is specified
@@ -162,7 +198,7 @@ class NextGenRoadmapAgent:
                     "action_id": session_id,
                     "preview": preview_text,
                 }
-                async for ev in self._stream_text(preview_text):
+                async for ev in self._stream_text(preview_text, delay):
                     yield ev
                 return
 
@@ -186,7 +222,7 @@ class NextGenRoadmapAgent:
             if note:
                 full_reply = f"> 💡 _{note}_\n\n" + full_reply
 
-            async for ev in self._stream_text(full_reply):
+            async for ev in self._stream_text(full_reply, delay):
                 yield ev
             return
 
@@ -216,7 +252,7 @@ class NextGenRoadmapAgent:
                         print(f"[Agent] LLM synthesis warning ({exc}). Falling back to formatted context.")
 
                 # Fallback directly to formatted markdown context
-                async for ev in self._stream_text(rag_context):
+                async for ev in self._stream_text(rag_context, delay):
                     yield ev
                 return
             else:
@@ -224,7 +260,7 @@ class NextGenRoadmapAgent:
                     f"Tôi đã tìm kiếm trong toàn bộ cơ sở dữ liệu Roadmap nhưng chưa thấy bài học hoặc tài liệu nào phù hợp với từ khóa **\"{content}\"**.\n\n"
                     f"Bạn có thể yêu cầu tôi tạo mới bằng lệnh: `tạo topic ...` hoặc `thêm bài học ... vào layer ...`!"
                 )
-                async for ev in self._stream_text(resp):
+                async for ev in self._stream_text(resp, delay):
                     yield ev
                 return
 
@@ -234,6 +270,8 @@ class NextGenRoadmapAgent:
                 chat_prompt = (
                     "Bạn là Roadmap AI Assistant — trợ lý thông minh quản lý hệ thống lộ trình học tập.\n"
                     "Người dùng vừa gửi tin nhắn: " + repr(content) + "\n"
+                    "Chỉ trả lời về lộ trình học tập, topic, layer, nhóm và bài học. "
+                    "Nếu câu hỏi nằm ngoài phạm vi này, lịch sự từ chối và gợi ý các việc bạn có thể làm.\n"
                     "Hãy trả lời ngắn gọn, lịch sự, thân thiện và gợi ý các tính năng tạo Topic/Layer/Item nếu phù hợp."
                 )
                 async for chunk in self.llm.astream(chat_prompt):
@@ -252,7 +290,7 @@ class NextGenRoadmapAgent:
             f"- 🧠 **Tra cứu tri thức**: `Tìm kiếm kiến thức về Vector Database trong lộ trình AI`\n"
             f"- 📋 **Lập kế hoạch**: `/plan tạo lộ trình Next.js Fullstack`"
         )
-        async for ev in self._stream_text(resp):
+        async for ev in self._stream_text(resp, delay):
             yield ev
 
 

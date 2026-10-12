@@ -13,6 +13,7 @@ import {
 } from "@/components/analytics";
 import { GA_ID } from "@/lib/analytics";
 import { RoadmapAssistantChatbot } from "@/components/roadmap/RoadmapAssistantChatbotWrapper";
+import { RoadmapWebMcpRegistrar } from "@/components/roadmap/RoadmapWebMcpRegistrar";
 import { ToastProvider } from "@/components/ui/toast";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./styles/globals.css";
@@ -163,6 +164,7 @@ export default function RootLayout({
             <ToastProvider>
               <NuqsAdapter>{children}</NuqsAdapter>
               <RoadmapAssistantChatbot position="bottom-right" />
+              <RoadmapWebMcpRegistrar />
             </ToastProvider>
           </TooltipProvider>
         </ThemeProvider>

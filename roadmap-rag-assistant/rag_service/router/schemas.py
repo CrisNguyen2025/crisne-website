@@ -16,6 +16,7 @@ class IntentType(str, Enum):
     KNOWLEDGE_QUERY = "knowledge_query" # Ask about existing lessons, concepts, search docs
     PLAN_GOAL = "plan_goal"             # /plan preview outline or /goal end-to-end generation
     CHITCHAT = "chitchat"               # Greetings, thanks, identity questions
+    OUT_OF_SCOPE = "out_of_scope"       # Unrelated to roadmaps (weather, finance, general coding...)
 
 
 class ActionType(str, Enum):

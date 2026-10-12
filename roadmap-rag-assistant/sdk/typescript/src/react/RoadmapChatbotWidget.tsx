@@ -412,6 +412,7 @@ export function RoadmapChatbotWidget({
   baseUrl = "http://localhost:8000",
   initialOpen = false,
   onToolExecuted,
+  getContext,
   className = "",
 }: ChatbotConfig) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -434,6 +435,7 @@ export function RoadmapChatbotWidget({
   } = useRoadmapAssistantChat({
     baseUrl,
     onToolExecuted,
+    getContext,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);

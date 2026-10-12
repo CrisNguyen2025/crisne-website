@@ -56,6 +56,11 @@ export async function fetchAllRoadmaps(): Promise<{ roadmaps: (RoadmapMeta & { _
   return apiFetch<{ roadmaps: (RoadmapMeta & { _count: { layers: number } })[] }>('/api/v1/roadmaps');
 }
 
+/** Export all roadmaps with full layer, group and item data */
+export async function exportAllRoadmaps(): Promise<unknown> {
+  return apiFetch<unknown>('/api/v1/roadmaps/full-export');
+}
+
 /** Fetch full roadmap with nested layers, groups, and items by slug */
 export async function fetchRoadmapBySlug(slug: string): Promise<GetRoadmapResponseDto> {
   return apiFetch<GetRoadmapResponseDto>(`/api/v1/roadmaps/${slug}`);

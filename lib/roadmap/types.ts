@@ -66,6 +66,8 @@ export interface CreateItemDto {
   level: RoadmapLevel;
   title: string;
   description?: string;
+  /** Optional rich-text (HTML) body, saved in the same request */
+  content?: string;
 }
 
 /** Payload to update item title, description, and level */

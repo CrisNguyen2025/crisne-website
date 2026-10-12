@@ -16,6 +16,14 @@ from rag_service.router.schemas import IntentClassificationResult, IntentType
 from rag_service.router.vietnamese import normalize_vietnamese
 
 
+# Subjects clearly outside the roadmap domain. Matched only when no roadmap entity word is present.
+OFF_TOPIC_HINTS = [
+    "thời tiết", "dự báo thời tiết", "giá vàng", "tỷ giá", "tỉ giá", "chứng khoán", "bitcoin", "crypto",
+    "bóng đá", "tỷ số", "tỉ số", "phim", "bài hát", "nấu ăn", "công thức nấu", "du lịch",
+    "weather", "stock price", "football score", "recipe",
+]
+
+
 class IntentRouter:
     """Fast Intent Classifier with deterministic heuristics and LLM fallback."""
 
@@ -34,6 +42,19 @@ class IntentRouter:
             return IntentClassificationResult(
                 intent=IntentType.PLAN_GOAL,
                 confidence=0.98,
+                needs_cud_extraction=False,
+            )
+
+        # 1b. Off-topic guardrail: clearly unrelated subjects without any roadmap entity word
+        has_roadmap_entity = any(
+            re.search(rf"\b{pat}\b", lower)
+            for pat in [r"topics?c*", r"chủ\s+đề", r"lộ\s+trình", r"roadmaps?", r"layers?r*",
+                        r"mảng", r"groups?", r"nhóm", r"items?m*", r"bài", r"mục", r"lessons?"]
+        )
+        if not has_roadmap_entity and any(hint in lower for hint in OFF_TOPIC_HINTS):
+            return IntentClassificationResult(
+                intent=IntentType.OUT_OF_SCOPE,
+                confidence=0.90,
                 needs_cud_extraction=False,
             )
 
@@ -110,7 +131,8 @@ class IntentRouter:
                     "- ROADMAP_CUD: khi người dùng muốn tạo, thêm, sửa, xóa topic/layer/group/item\n"
                     "- KNOWLEDGE_QUERY: khi người dùng hỏi về kiến thức, tìm kiếm bài học, tra cứu roadmap hiện có\n"
                     "- PLAN_GOAL: khi người dùng muốn lập kế hoạch hoặc sinh lộ trình trọn gói\n"
-                    "- CHITCHAT: chào hỏi, cảm ơn, hỏi thông tin trợ lý\n\n"
+                    "- CHITCHAT: chào hỏi, cảm ơn, hỏi thông tin trợ lý\n"
+                    "- OUT_OF_SCOPE: nội dung không liên quan đến roadmap/topic/layer/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n\n"
                     f"Tin nhắn: \"{text}\""
                 )
                 res = await structured_llm.ainvoke(prompt)

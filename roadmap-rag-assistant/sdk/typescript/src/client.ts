@@ -2,7 +2,7 @@
  * RoadmapChatClient — TypeScript SDK for the Roadmap RAG Assistant with SSE streaming.
  */
 
-import type { ChatResponse, HealthResponse, ToolCallResult } from './types';
+import type { ChatResponse, HealthResponse, PageContext, ToolCallResult } from './types';
 
 export interface RoadmapChatClientOptions {
   baseUrl?: string;
@@ -35,12 +35,14 @@ export class RoadmapChatClient {
    * @param message - User prompt
    * @param callbacks - Event callbacks for real-time tokens and tool events
    * @param threadId - Conversation thread ID
+   * @param context - Optional page context (current roadmap, layer, item)
    * @returns AbortController to allow canceling the stream
    */
   streamChat(
     message: string,
     callbacks: StreamCallbacks,
-    threadId: string = 'default'
+    threadId: string = 'default',
+    context?: PageContext
   ): AbortController {
     const controller = new AbortController();
 
@@ -49,7 +51,7 @@ export class RoadmapChatClient {
         const resp = await fetch(`${this.baseUrl}/chat/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, thread_id: threadId }),
+          body: JSON.stringify({ message, thread_id: threadId, context }),
           signal: controller.signal,
         });
 
@@ -139,7 +141,8 @@ export class RoadmapChatClient {
    */
   async chat(
     message: string,
-    threadId: string = 'default'
+    threadId: string = 'default',
+    context?: PageContext
   ): Promise<ChatResponse> {
     return new Promise((resolve, reject) => {
       this.streamChat(
@@ -148,7 +151,8 @@ export class RoadmapChatClient {
           onDone: (resp) => resolve(resp),
           onError: (err) => reject(err),
         },
-        threadId
+        threadId,
+        context
       );
     });
   }

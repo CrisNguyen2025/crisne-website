@@ -415,6 +415,7 @@ class SqliteAdapter:
         level: str,
         title: str,
         description: str = "",
+        content: str = "",
     ) -> dict:
         item_id = _uuid7()
         now = _now_iso()
@@ -456,10 +457,10 @@ class SqliteAdapter:
 
             await db.execute(
                 """
-                INSERT INTO RoadmapItem (id, groupId, title, description, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO RoadmapItem (id, groupId, title, description, content, "order", createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (item_id, group_id, title.strip(), description.strip(), order, now, now),
+                (item_id, group_id, title.strip(), description.strip(), content or None, order, now, now),
             )
             await db.commit()
 

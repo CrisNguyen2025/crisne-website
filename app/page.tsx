@@ -25,6 +25,7 @@ function RoadmapWorkspace() {
   // nuqs query state for ?topic and ?item (clean URL: ?topic=ai-architecture&item=...)
   // If topic is null/empty -> Home view. If topic exists -> Topic Roadmap view.
   const [topic, setTopic] = useQueryState("topic", parseAsString);
+  const [layerParam, setLayerParam] = useQueryState("layer", parseAsString);
   const [item, setItem] = useQueryState(
     "item",
     parseAsString.withOptions({
@@ -109,6 +110,12 @@ function RoadmapWorkspace() {
     selectActiveItem,
     updateGroupItems,
   } = useRoadmap(activeSlug, item || undefined);
+
+  // Mirror the selected layer into ?layer= so the assistant knows which layer is open
+  useEffect(() => {
+    const next = selectedLayerId === "all" ? null : selectedLayerId;
+    if (next !== layerParam) setLayerParam(next);
+  }, [selectedLayerId, layerParam, setLayerParam]);
 
   // Modal states
   const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);

@@ -99,6 +99,7 @@ class BaseAdapter(Protocol):
         level: str,
         title: str,
         description: str = "",
+        content: str = "",
     ) -> dict:
         """Create a new item in a layer/group. Returns the created item dict."""
         ...

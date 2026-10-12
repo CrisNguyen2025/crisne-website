@@ -1,5 +1,6 @@
 "use client";
 
+import { getRoadmapPageContext } from "@/logic/roadmap/roadmapAssistantService";
 import React from "react";
 import {
   RoadmapChatbotWidget,
@@ -106,6 +107,7 @@ export function RoadmapAssistantChatbot({
       baseUrl={baseUrl}
       className={className}
       onToolExecuted={handleToolExecuted}
+      getContext={getRoadmapPageContext}
     />
   );
 }

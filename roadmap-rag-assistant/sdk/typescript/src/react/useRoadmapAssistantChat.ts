@@ -1,11 +1,14 @@
 import { useState, useCallback, useRef } from 'react';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
+import type { PageContext } from '../types';
 
 export interface UseRoadmapAssistantChatOptions {
   baseUrl?: string;
   threadId?: string;
   onToolExecuted?: (toolName: string, result: string) => void;
+  /** Returns the page the user is viewing; read at send time. */
+  getContext?: () => PageContext | undefined;
 }
 
 export function useRoadmapAssistantChat(
@@ -15,7 +18,12 @@ export function useRoadmapAssistantChat(
     baseUrl = 'http://localhost:8000',
     threadId = 'roadmap-web-session',
     onToolExecuted,
+    getContext,
   } = options;
+
+  // Keep the latest getter without re-creating sendMessage on every render.
+  const getContextRef = useRef(getContext);
+  getContextRef.current = getContext;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -168,7 +176,8 @@ export function useRoadmapAssistantChat(
               setActiveTool(null);
             },
           },
-          threadId
+          threadId,
+          getContextRef.current?.()
         );
       } catch (err: unknown) {
         const errMsg =

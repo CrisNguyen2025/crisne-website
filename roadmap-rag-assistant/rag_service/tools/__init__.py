@@ -32,6 +32,7 @@ from rag_service.tools.group_tools import (
 from rag_service.tools.item_tools import (
     create_item,
     create_items_batch,
+    import_items_from_text,
     delete_item,
     update_item,
 )
@@ -61,6 +62,7 @@ ALL_TOOLS = [
     # Items
     create_item,
     create_items_batch,
+    import_items_from_text,
     update_item,
     delete_item,
     # Mini-RAG & Document Generation

@@ -193,6 +193,7 @@ class HttpApiAdapter:
         level: str,
         title: str,
         description: str = "",
+        content: str = "",
     ) -> dict:
         """POST /api/v1/roadmaps/items"""
         payload = {
@@ -200,6 +201,7 @@ class HttpApiAdapter:
             "level": level,
             "title": title,
             "description": description,
+            "content": content or None,
         }
         data = await self._request("POST", "/api/v1/roadmaps/items", json=payload)
         return data.get("item", data)

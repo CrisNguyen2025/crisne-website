@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -12,6 +14,10 @@ class ChatRequest(BaseModel):
     thread_id: str = Field(
         default="default",
         description="Conversation thread ID for memory continuity",
+    )
+    context: Optional[dict] = Field(
+        default=None,
+        description="Page context from the web client: roadmapSlug, layerId, itemId",
     )
 
 

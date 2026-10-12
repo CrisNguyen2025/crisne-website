@@ -57,3 +57,9 @@ CLAUDE.md
 
 # Favorites data (user-specific)
 /data/favorites.json
+
+# Roadmap RAG: cached embedding vectors (regenerated on demand)
+roadmap-rag-assistant/rag_service/data/embedding_cache.json
+
+# Local dev launch config
+.claude/

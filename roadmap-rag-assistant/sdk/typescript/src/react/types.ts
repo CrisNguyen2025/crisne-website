@@ -1,3 +1,4 @@
+import type { PageContext } from '../types';
 /**
  * Configuration and state types for the Roadmap Assistant Chatbot Widget.
  */
@@ -62,6 +63,11 @@ export interface ChatbotConfig {
    * Default: 'http://localhost:8000'
    */
   baseUrl?: string;
+
+  /**
+   * Returns the page the user is viewing (roadmap, layer, item), sent with each message.
+   */
+  getContext?: () => PageContext | undefined;
 
   /**
    * Whether the chat window starts open.

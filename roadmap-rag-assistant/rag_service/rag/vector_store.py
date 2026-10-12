@@ -1,20 +1,63 @@
 """Hybrid Vector & Full-Text Search Store for Roadmap Knowledge.
 
 Uses SQLite FTS5 for BM25 keyword retrieval combined with vector embeddings
-(Google text-embedding-004 or TF-IDF/cosine similarity) via Reciprocal Rank Fusion (RRF).
+(Google gemini-embedding-001 or TF-IDF/cosine similarity) via Reciprocal Rank Fusion (RRF).
 """
 
 from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
 
 import math
 import os
 import re
 import sqlite3
+import time
 from typing import List, Optional, Tuple
 
 from rag_service.config import settings
 from rag_service.rag.ingestion import KnowledgeDocument
 
+
+EMBEDDING_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "embedding_cache.json"
+EMBEDDING_MODEL = "models/gemini-embedding-001"
+# Seconds between embed requests (~90/min, under the 100/min free-tier limit)
+EMBEDDING_REQUEST_INTERVAL = 0.67
+
+
+def _embedding_key(text: str) -> str:
+    """Cache key covers both the text and the model, so switching models invalidates old vectors."""
+    return hashlib.sha1(f"{EMBEDDING_MODEL}\n{text[:1000]}".encode("utf-8")).hexdigest()
+
+
+def _load_embedding_cache() -> dict:
+    try:
+        return json.loads(EMBEDDING_CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_embedding_cache(cache: dict) -> None:
+    try:
+        EMBEDDING_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        EMBEDDING_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError as exc:
+        print(f"[VectorStore] Could not write embedding cache: {exc}")
+
+
+
+def _embed_with_quota_retry(embedder, text: str, attempts: int = 8) -> list[float]:
+    """Embed one text; on a 429 quota error wait for the window to reset and retry."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return embedder.embed_documents([text])[0]
+        except Exception as exc:
+            if "RESOURCE_EXHAUSTED" not in str(exc) or attempt == attempts:
+                raise
+            time.sleep(40)
+    raise RuntimeError("unreachable")
 
 def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
     dot = sum(a * b for a, b in zip(v1, v2))
@@ -65,7 +108,7 @@ class HybridVectorStore:
             try:
                 from langchain_google_genai import GoogleGenerativeAIEmbeddings
                 self._embedder = GoogleGenerativeAIEmbeddings(
-                    model="models/text-embedding-004",
+                    model=EMBEDDING_MODEL,
                     google_api_key=api_key,
                 )
             except Exception as exc:
@@ -98,18 +141,25 @@ class HybridVectorStore:
 
         embedder = self._get_embedder()
         if embedder is not None:
+            cache = _load_embedding_cache()
+            keys = [_embedding_key(d.searchable_text) for d in docs]
+            missing = [i for i, k in enumerate(keys) if k not in cache]
             try:
-                texts = [d.searchable_text[:1000] for d in docs]
-                # Embed in batches of 50
-                batch_size = 50
-                all_embeddings: list[list[float]] = []
-                for i in range(0, len(texts), batch_size):
-                    batch = texts[i:i + batch_size]
-                    all_embeddings.extend(embedder.embed_documents(batch))
-                for d, emb in zip(docs, all_embeddings):
-                    self._vectors[d.id] = emb
+                # Only embed texts not yet cached. Free tier allows ~100 embed requests/min,
+                # so pace requests and save progress; the next start continues where this stopped.
+                for n, i in enumerate(missing, start=1):
+                    vec = _embed_with_quota_retry(embedder, docs[i].searchable_text[:1000])
+                    cache[keys[i]] = vec
+                    if n % 20 == 0:
+                        _save_embedding_cache(cache)
+                    time.sleep(EMBEDDING_REQUEST_INTERVAL)
+                _save_embedding_cache(cache)
             except Exception as exc:
-                print(f"[VectorStore] Vector embedding generation warning ({exc}). Using FTS5 search.")
+                _save_embedding_cache(cache)
+                print(f"[VectorStore] Vector embedding generation warning ({exc}). Partial vectors kept; rest uses FTS5.")
+            for d, k in zip(docs, keys):
+                if k in cache:
+                    self._vectors[d.id] = cache[k]
 
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
         """Search via SQLite FTS5 BM25 ranking."""

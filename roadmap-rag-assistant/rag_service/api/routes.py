@@ -33,7 +33,7 @@ def _get_agent():
     return _agent
 
 
-async def _sse_stream_generator(message: str, thread_id: str) -> AsyncGenerator[str, None]:
+async def _sse_stream_generator(message: str, thread_id: str, context: dict | None = None) -> AsyncGenerator[str, None]:
     """Universal SSE generator that handles both LangChain and FallbackAgent streaming."""
     agent = _get_agent()
     accumulated_tokens: list[str] = []
@@ -43,7 +43,7 @@ async def _sse_stream_generator(message: str, thread_id: str) -> AsyncGenerator[
 
     async def _stream_from_fallback(f_agent: FallbackAgent):
         async for ev in f_agent.astream_events(
-            {"messages": [{"role": "user", "content": message}]},
+            {"messages": [{"role": "user", "content": message}], "context": context},
             config=config,
         ):
             ev_type = ev.get("type")
@@ -67,7 +67,7 @@ async def _sse_stream_generator(message: str, thread_id: str) -> AsyncGenerator[
             # LangGraph / LangChain Gemini Agent
             try:
                 async for event in agent.astream_events(
-                    {"messages": [{"role": "user", "content": message}]},
+                    {"messages": [{"role": "user", "content": message}], "context": context},
                     config=config,
                     version="v2",
                 ):
@@ -115,7 +115,7 @@ async def _sse_stream_generator(message: str, thread_id: str) -> AsyncGenerator[
 async def chat_stream(req: ChatRequest):
     """Server-Sent Events (SSE) streaming endpoint for real-time tokens and tool events."""
     return StreamingResponse(
-        _sse_stream_generator(req.message, req.thread_id),
+        _sse_stream_generator(req.message, req.thread_id, req.context),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -133,7 +133,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
     try:
         if isinstance(agent, FallbackAgent):
             res = await agent.ainvoke(
-                {"messages": [{"role": "user", "content": req.message}]},
+                {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
                 config={"configurable": {"thread_id": req.thread_id}},
             )
             msgs = res.get("messages", [])
@@ -145,7 +145,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
             return ChatResponse(message=last_content, tool_calls=tool_calls)
 
         result = agent.invoke(
-            {"messages": [{"role": "user", "content": req.message}]},
+            {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
             config={"configurable": {"thread_id": req.thread_id}},
         )
 
@@ -169,7 +169,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         print(f"[Routes] Chat error ({exc}), using fallback agent...")
         fallback = FallbackAgent(tools=ALL_TOOLS)
         res = await fallback.ainvoke(
-            {"messages": [{"role": "user", "content": req.message}]},
+            {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
             config={"configurable": {"thread_id": req.thread_id}},
         )
         msgs = res.get("messages", [])

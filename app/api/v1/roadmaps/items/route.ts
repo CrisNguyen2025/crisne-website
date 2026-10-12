@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { layerId, level, title, description } = body;
+    const { layerId, level, title, description, content } = body;
 
     if (!layerId || !level || !title) {
       return NextResponse.json({ error: 'layerId, level, and title are required' }, { status: 400 });
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         groupId: group.id,
         title,
         description: description || '',
+        content: content || null,
         order: group._count.items + 1,
       },
     });
