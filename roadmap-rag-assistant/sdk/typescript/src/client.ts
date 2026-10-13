@@ -2,7 +2,14 @@
  * RoadmapChatClient — TypeScript SDK for the Roadmap RAG Assistant with SSE streaming.
  */
 
-import type { ChatResponse, HealthResponse, PageContext, ToolCallResult } from './types';
+import type {
+  ChatResponse,
+  HealthResponse,
+  PageContext,
+  PlanResponse,
+  ToolCallResult,
+  WebMcpToolSpec,
+} from './types';
 
 export interface RoadmapChatClientOptions {
   baseUrl?: string;
@@ -155,6 +162,25 @@ export class RoadmapChatClient {
         context
       );
     });
+  }
+
+  /**
+   * Ask the service to choose one WebMCP tool for a message. Nothing is executed server-side.
+   */
+  async plan(
+    message: string,
+    tools: WebMcpToolSpec[],
+    context?: PageContext
+  ): Promise<PlanResponse> {
+    const resp = await fetch(`${this.baseUrl}/chat/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, tools, context }),
+    });
+    if (!resp.ok) {
+      throw new Error(`Plan request failed (${resp.status})`);
+    }
+    return (await resp.json()) as PlanResponse;
   }
 
   /**

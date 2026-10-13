@@ -46,6 +46,9 @@ Nhiệm vụ của bạn là bóc tách câu lệnh CUD của người dùng th�
 4. **ĐẠI TỪ CHỈ ĐỊNH / NGỮ CẢNH LIÊN TIẾP**:
    - Nếu người dùng nói "vào đó", "trong đó", "vào topic trên", "vào layer vừa tạo" -> gán target_parent_identifier = "CONTEXT_ACTIVE".
 
+## NGỮ CẢNH TRANG (chỉ để hiểu đại từ, KHÔNG phải nội dung cần tạo):
+{page_context}
+
 Câu lệnh của người dùng:
 "{user_prompt}"
 """
@@ -79,12 +82,17 @@ class StructuredEntityExtractor:
             except Exception as exc:
                 print(f"[EntityExtractor] Warning: with_structured_output failed: {exc}")
 
-    async def aextract(self, prompt: str, default_parent: Optional[str] = None) -> StructuredRoadmapAction:
+    async def aextract(
+        self, prompt: str, default_parent: Optional[str] = None, page_context: str = ""
+    ) -> StructuredRoadmapAction:
         """Extract structured CUD action from user prompt."""
         # 1. Try Gemini Structured Output if available
         if self._structured_llm is not None:
             try:
-                formatted = EXTRACTION_PROMPT.format(user_prompt=prompt)
+                formatted = EXTRACTION_PROMPT.format(
+                    user_prompt=prompt,
+                    page_context=page_context or "(không có)",
+                )
                 res: StructuredRoadmapAction = await self._structured_llm.ainvoke(formatted)
                 if isinstance(res, StructuredRoadmapAction):
                     # Sanitize any accidental verb leakage
@@ -107,6 +115,8 @@ class StructuredEntityExtractor:
     def _sanitize_title(self, title: str) -> str:
         """Strip verbs and entity words from title strictly, while preserving numbered names like 'Bài 1'."""
         cleaned = normalize_vietnamese(title).strip()
+        # Drop bracketed metadata (e.g. page-context hints) that must never become part of a name
+        cleaned = re.sub(r"\[[^\]]*\]", " ", cleaned).strip()
         cleaned = clean_conversational_fillers(cleaned)
 
         # Always strip action verbs at start (including pleasantry wrappers like 'xóa giúp mình')

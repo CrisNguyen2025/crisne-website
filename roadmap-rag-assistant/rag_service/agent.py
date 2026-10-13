@@ -30,7 +30,7 @@ from rag_service.router import (
     StructuredRoadmapAction,
     normalize_vietnamese,
 )
-from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, with_grounding
+from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, build_grounding
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import ALL_TOOLS
@@ -184,7 +184,7 @@ class NextGenRoadmapAgent:
         if intent_res.intent == IntentType.ROADMAP_CUD or intent_res.needs_cud_extraction:
             # Page context is added only for the LLM extractor; heuristics keep the raw text.
             action: StructuredRoadmapAction = await self.extractor.aextract(
-                with_grounding(content, page_context)
+                content, page_context=build_grounding(page_context)
             )
             resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
 

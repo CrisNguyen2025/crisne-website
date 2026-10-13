@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolveRoadmapId } from '@/lib/roadmap/resolveRoadmap';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -16,10 +17,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Title and shortTag are required' }, { status: 400 });
     }
 
-    const roadmap = await prisma.roadmap.findUnique({
-      where: { slug },
-      include: { _count: { select: { layers: true } } },
-    });
+    const roadmapId = await resolveRoadmapId(slug);
+    const roadmap = roadmapId
+      ? await prisma.roadmap.findUnique({
+          where: { id: roadmapId },
+          include: { _count: { select: { layers: true } } },
+        })
+      : null;
 
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });

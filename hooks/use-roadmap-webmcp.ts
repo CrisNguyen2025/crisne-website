@@ -32,8 +32,16 @@ interface WebMcpTool {
   execute: (args: Record<string, any>) => Promise<unknown>;
 }
 
+interface WebMcpRegisteredTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
 interface WebMcpModelContext {
   registerTool(tool: WebMcpTool, options?: { signal?: AbortSignal }): Promise<void>;
+  getTools(): Promise<WebMcpRegisteredTool[]>;
+  executeTool(tool: WebMcpRegisteredTool, args: Record<string, unknown>): Promise<unknown>;
 }
 
 declare global {

@@ -9,6 +9,8 @@ export interface UseRoadmapAssistantChatOptions {
   onToolExecuted?: (toolName: string, result: string) => void;
   /** Returns the page the user is viewing; read at send time. */
   getContext?: () => PageContext | undefined;
+  /** Handles "/webmcp <request>" messages; returns the text to show. */
+  onWebMcpMessage?: (request: string) => Promise<string>;
 }
 
 export function useRoadmapAssistantChat(
@@ -19,7 +21,11 @@ export function useRoadmapAssistantChat(
     threadId = 'roadmap-web-session',
     onToolExecuted,
     getContext,
+    onWebMcpMessage,
   } = options;
+
+  const onWebMcpRef = useRef(onWebMcpMessage);
+  onWebMcpRef.current = onWebMcpMessage;
 
   // Keep the latest getter without re-creating sendMessage on every render.
   const getContextRef = useRef(getContext);
@@ -86,10 +92,33 @@ export function useRoadmapAssistantChat(
 
       setMessages((prev) => [...prev, userMsg, initialBotMsg]);
       setInput('');
-      setIsLoading(true);
-      setIsStreaming(true);
       setError(null);
       setActiveTool(null);
+
+      // "/webmcp <request>" runs one WebMCP tool in the browser instead of the server chat
+      if (/^\/webmcp\b/i.test(content) && onWebMcpRef.current) {
+        const request = content.replace(/^\/webmcp\b\s*/i, '');
+        setIsLoading(true);
+        try {
+          const reply = await onWebMcpRef.current(request);
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === botMsgId ? { ...msg, content: reply } : msg))
+          );
+        } catch (err: unknown) {
+          const errMsg = err instanceof Error ? err.message : 'Lỗi không xác định';
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === botMsgId ? { ...msg, content: `⚠️ **Lỗi WebMCP**: ${errMsg}` } : msg
+            )
+          );
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setIsStreaming(true);
 
       try {
         const client = clientRef.current!;

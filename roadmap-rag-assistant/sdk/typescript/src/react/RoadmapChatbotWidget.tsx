@@ -413,6 +413,7 @@ export function RoadmapChatbotWidget({
   initialOpen = false,
   onToolExecuted,
   getContext,
+  onWebMcpMessage,
   className = "",
 }: ChatbotConfig) {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -436,6 +437,7 @@ export function RoadmapChatbotWidget({
     baseUrl,
     onToolExecuted,
     getContext,
+    onWebMcpMessage,
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);

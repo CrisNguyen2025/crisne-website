@@ -27,6 +27,18 @@ export interface ChatResponse {
   tool_calls: ToolCallResult[];
 }
 
+export interface WebMcpToolSpec {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface PlanResponse {
+  tool: string | null;
+  args: Record<string, unknown>;
+  reply: string;
+}
+
 export interface HealthResponse {
   status: string;
   adapter_mode: string;

@@ -61,3 +61,12 @@ def test_chat_request_accepts_context():
     req = ChatRequest(message="thêm item", context={"roadmapSlug": "fe", "layerId": "L1"})
     assert req.context["layerId"] == "L1"
     assert ChatRequest(message="hi").context is None
+
+
+def test_sanitize_title_strips_page_context_hint():
+    from rag_service.router.entity_extractor import StructuredEntityExtractor
+
+    extractor = StructuredEntityExtractor(llm_model=None)
+    title = extractor._sanitize_title("Frontend Basics [Ngữ cảnh trang hiện tại: roadmap='kkkk'. Khi người dùng nói 'này']")
+    assert "[" not in title and "Ngữ cảnh" not in title and "roadmap=" not in title
+    assert "Frontend Basics" in title

@@ -69,6 +69,9 @@ export interface ChatbotConfig {
    */
   getContext?: () => PageContext | undefined;
 
+  /** Handles "/webmcp <request>" messages by running a WebMCP tool in the browser. */
+  onWebMcpMessage?: (request: string) => Promise<string>;
+
   /**
    * Whether the chat window starts open.
    * Default: false

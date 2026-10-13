@@ -15,6 +15,8 @@ from rag_service.api.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
+    PlanRequest,
+    PlanResponse,
     ToolCallResult,
 )
 from rag_service.config import settings
@@ -179,6 +181,16 @@ async def chat(req: ChatRequest) -> ChatResponse:
         ]
         last_content = msgs[-1].content if msgs else ""
         return ChatResponse(message=last_content, tool_calls=tool_calls)
+
+
+@router.post("/chat/plan", response_model=PlanResponse)
+async def plan(req: PlanRequest):
+    """Choose one WebMCP tool for the browser to execute. Does not execute anything itself."""
+    from rag_service.webmcp_planner import plan_webmcp_call
+
+    agent = _get_agent()
+    result = await plan_webmcp_call(getattr(agent, "llm", None), req.message, req.tools, req.context)
+    return PlanResponse(**result)
 
 
 @router.get("/health", response_model=HealthResponse)

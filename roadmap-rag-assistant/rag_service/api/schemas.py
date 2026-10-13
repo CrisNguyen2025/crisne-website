@@ -61,3 +61,17 @@ class ActionConfirmResponse(BaseModel):
     success: bool
     message: str
 
+
+
+class PlanRequest(BaseModel):
+    """POST /chat/plan: choose one WebMCP tool for a message (the browser runs it)."""
+
+    message: str
+    tools: list[dict] = Field(default_factory=list, description="WebMCP tools: name, description, inputSchema")
+    context: Optional[dict] = None
+
+
+class PlanResponse(BaseModel):
+    tool: Optional[str] = None
+    args: dict = Field(default_factory=dict)
+    reply: str = ""

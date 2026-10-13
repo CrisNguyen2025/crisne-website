@@ -1,6 +1,6 @@
 "use client";
 
-import { getRoadmapPageContext } from "@/logic/roadmap/roadmapAssistantService";
+import { getRoadmapPageContext, runWebMcpCommand } from "@/logic/roadmap/roadmapAssistantService";
 import React from "react";
 import {
   RoadmapChatbotWidget,
@@ -108,6 +108,7 @@ export function RoadmapAssistantChatbot({
       className={className}
       onToolExecuted={handleToolExecuted}
       getContext={getRoadmapPageContext}
+      onWebMcpMessage={runWebMcpCommand}
     />
   );
 }
