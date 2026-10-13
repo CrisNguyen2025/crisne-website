@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const SITE_URL = "https://crisne.blog";
 
-// Define all sections with their update frequencies and priorities
+// Define all pages with their update frequencies and priorities
 const staticRoutes: MetadataRoute.Sitemap = [
   {
     url: SITE_URL,
@@ -10,54 +10,29 @@ const staticRoutes: MetadataRoute.Sitemap = [
     changeFrequency: "weekly",
     priority: 1.0,
   },
-  // Anchor links to sections (for SEO - Google may use these)
   {
-    url: `${SITE_URL}/#hero`,
+    url: `${SITE_URL}/portfolio`,
     lastModified: new Date(),
-    changeFrequency: "monthly",
-    priority: 0.9,
+    changeFrequency: "weekly",
+    priority: 1.0,
   },
   {
-    url: `${SITE_URL}/#about`,
-    lastModified: new Date(),
-    changeFrequency: "monthly",
-    priority: 0.8,
-  },
-  {
-    url: `${SITE_URL}/#experience`,
+    url: `${SITE_URL}/notes`,
     lastModified: new Date(),
     changeFrequency: "weekly",
     priority: 0.8,
   },
   {
-    url: `${SITE_URL}/#skills`,
-    lastModified: new Date(),
-    changeFrequency: "monthly",
-    priority: 0.7,
-  },
-  {
-    url: `${SITE_URL}/#projects`,
+    url: `${SITE_URL}/knowledge`,
     lastModified: new Date(),
     changeFrequency: "weekly",
-    priority: 0.9,
+    priority: 0.8,
   },
   {
-    url: `${SITE_URL}/#testimonials`,
+    url: `${SITE_URL}/docs`,
     lastModified: new Date(),
-    changeFrequency: "monthly",
+    changeFrequency: "weekly",
     priority: 0.6,
-  },
-  {
-    url: `${SITE_URL}/#faq`,
-    lastModified: new Date(),
-    changeFrequency: "monthly",
-    priority: 0.5,
-  },
-  {
-    url: `${SITE_URL}/#contact`,
-    lastModified: new Date(),
-    changeFrequency: "monthly",
-    priority: 0.7,
   },
 ];
 
