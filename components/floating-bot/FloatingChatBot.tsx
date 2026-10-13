@@ -12,6 +12,8 @@ import {
   Square,
   ArrowDown,
   User,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { useFloatingChat } from "@/hooks/use-floating-chat";
 import { cn } from "@/lib/utils";
@@ -89,8 +91,16 @@ function parseInlineMarkdown(text: string) {
 
 export function FloatingChatBot() {
   const [isOpen, setIsOpen] = useState(false);
-  const { messages, input, setInput, isLoading, sendMessage, resetChat, stopResponse } =
-    useFloatingChat();
+  const {
+    messages,
+    input,
+    setInput,
+    isLoading,
+    sendMessage,
+    sendFeedback,
+    resetChat,
+    stopResponse,
+  } = useFloatingChat();
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -269,24 +279,66 @@ export function FloatingChatBot() {
                           )}
                         </div>
 
-                        {/* Bubble */}
                         <div
                           className={cn(
-                            "p-3.5 rounded-2xl max-w-[85%] shadow-sm",
-                            msg.role === "user"
-                              ? "bg-steel text-white rounded-tr-xs"
-                              : "bg-card text-card-foreground border border-border/70 rounded-tl-xs"
+                            "flex flex-col gap-1 max-w-[85%]",
+                            msg.role === "user" ? "items-end" : "items-start"
                           )}
                         >
-                          {msg.content ? (
-                            <FormattedMessage content={msg.content} />
-                          ) : (
-                            <div className="flex items-center gap-1.5 py-1 px-0.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce" />
-                              <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce [animation-delay:0.2s]" />
-                              <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce [animation-delay:0.4s]" />
-                            </div>
-                          )}
+                          {/* Bubble */}
+                          <div
+                            className={cn(
+                              "p-3.5 rounded-2xl shadow-sm",
+                              msg.role === "user"
+                                ? "bg-steel text-white rounded-tr-xs"
+                                : "bg-card text-card-foreground border border-border/70 rounded-tl-xs"
+                            )}
+                          >
+                            {msg.content ? (
+                              <FormattedMessage content={msg.content} />
+                            ) : (
+                              <div className="flex items-center gap-1.5 py-1 px-0.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce [animation-delay:0.2s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-steel animate-bounce [animation-delay:0.4s]" />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Feedback: shown once the answer has finished streaming */}
+                          {msg.role === "assistant" &&
+                            msg.traceId &&
+                            msg.content &&
+                            !(isLoading && msg.id === messages[messages.length - 1]?.id) && (
+                              <div className="flex items-center gap-0.5 pl-1">
+                                <button
+                                  onClick={() => sendFeedback(msg, 1)}
+                                  className={cn(
+                                    "p-1 rounded-md transition-colors cursor-pointer hover:bg-muted/80",
+                                    msg.feedback === 1
+                                      ? "text-steel"
+                                      : "text-muted-foreground/60 hover:text-foreground"
+                                  )}
+                                  aria-label="Câu trả lời hữu ích"
+                                  aria-pressed={msg.feedback === 1}
+                                >
+                                  <ThumbsUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => sendFeedback(msg, 0)}
+                                  className={cn(
+                                    "p-1 rounded-md transition-colors cursor-pointer hover:bg-muted/80",
+                                    msg.feedback === 0
+                                      ? "text-red-500"
+                                      : "text-muted-foreground/60 hover:text-foreground"
+                                  )}
+                                  aria-label="Câu trả lời chưa tốt"
+                                  aria-pressed={msg.feedback === 0}
+                                >
+                                  <ThumbsDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
                         </div>
                       </div>
                     ))}

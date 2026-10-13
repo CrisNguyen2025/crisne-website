@@ -7,6 +7,9 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: Date;
+  // Langfuse trace of the assistant answer, used to attach feedback
+  traceId?: string;
+  feedback?: 0 | 1;
 }
 
 export function useFloatingChat() {
@@ -14,6 +17,8 @@ export function useFloatingChat() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  // Groups all turns of one conversation into a Langfuse session; renewed on reset
+  const sessionIdRef = useRef<string>(crypto.randomUUID());
 
   const stopResponse = useCallback(() => {
     if (abortControllerRef.current) {
@@ -27,7 +32,28 @@ export function useFloatingChat() {
     stopResponse();
     setMessages([]);
     setInput("");
+    sessionIdRef.current = crypto.randomUUID();
   }, [stopResponse]);
+
+  const sendFeedback = useCallback(async (message: ChatMessage, value: 0 | 1) => {
+    const { id, traceId } = message;
+    if (!traceId) return;
+
+    setMessages((prev) =>
+      prev.map((msg) => (msg.id === id ? { ...msg, feedback: value } : msg))
+    );
+
+    try {
+      await fetch("/api/chat/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ traceId, value }),
+      });
+    } catch (err) {
+      // Feedback is best-effort; keep the optimistic UI state
+      console.error("Feedback error:", err);
+    }
+  }, []);
 
   const sendMessage = useCallback(
     async (contentToSend?: string) => {
@@ -63,6 +89,7 @@ export function useFloatingChat() {
           body: JSON.stringify({
             message: text,
             history: historyPayload,
+            sessionId: sessionIdRef.current,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -70,6 +97,13 @@ export function useFloatingChat() {
         if (!res.ok || !res.body) {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || "Không thể kết nối với máy chủ AI");
+        }
+
+        const traceId = res.headers.get("X-Trace-Id") ?? undefined;
+        if (traceId) {
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === botMsgId ? { ...msg, traceId } : msg))
+          );
         }
 
         const reader = res.body.getReader();
@@ -118,6 +152,7 @@ export function useFloatingChat() {
     setInput,
     isLoading,
     sendMessage,
+    sendFeedback,
     resetChat,
     stopResponse,
   };
