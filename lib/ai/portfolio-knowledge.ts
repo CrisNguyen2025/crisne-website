@@ -13,7 +13,7 @@ export const PORTFOLIO_KNOWLEDGE_BASE: KnowledgeChunk[] = [
     id: "bio-overview",
     title: "About Cris Nguyen - Overview & Role",
     category: "bio",
-    keywords: ["cris nguyen", "ai là ai", "developer", "profile", "giới thiệu", "kinh nghiệm"],
+    keywords: ["cris nguyen", "ai là ai", "developer", "profile", "giới thiệu"],
     content: `Cris Nguyen là một Software Engineer / Frontend Developer (FE Strong) với hơn 5 năm kinh nghiệm thực chiến.
 Cris chuyên sâu về React, Next.js và TypeScript, xây dựng các giải pháp web hiệu năng cao, chuẩn SEO, responsive cho các sản phẩm SaaS đa người dùng (multi-tenant), Enterprise CMS, CRM, HRM và các hệ thống Booking quy mô lớn.
 Cris sống và làm việc tại Thành phố Hồ Chí Minh, Việt Nam.`,
@@ -22,7 +22,7 @@ Cris sống và làm việc tại Thành phố Hồ Chí Minh, Việt Nam.`,
     id: "bio-summary-stats",
     title: "Cris Nguyen Key Highlights & Stats",
     category: "bio",
-    keywords: ["stats", "thống kê", "nổi bật", "kinh nghiệm", "năm"],
+    keywords: ["stats", "thống kê", "nổi bật", "số năm kinh nghiệm", "năm"],
     content: `Các chỉ số và kinh nghiệm nổi bật của Cris Nguyen:
 - 5+ năm kinh nghiệm trong phát triển phần mềm và xây dựng giao diện người dùng.
 - Đã bàn giao và vận hành hơn 10+ dự án lớn nhỏ cho các khách hàng tại Việt Nam và quốc tế (US, Nhật Bản).
@@ -35,7 +35,7 @@ Cris sống và làm việc tại Thành phố Hồ Chí Minh, Việt Nam.`,
     id: "exp-smartbit",
     title: "Kinh nghiệm tại Smartbit Technology (3/2024 - Hiện tại)",
     category: "experience",
-    keywords: ["smartbit", "công việc hiện tại", "saas", "multi-tenant", "rbac", "ekyc", "paystack"],
+    keywords: ["smartbit", "công việc hiện tại", "hiện tại", "saas", "multi-tenant", "rbac", "ekyc", "paystack"],
     content: `Vai trò: Middle Frontend Developer tại Smartbit Technology (Tháng 3/2024 - Hiện tại, TP. Hồ Chí Minh).
 Trọng tâm công việc:
 - Front Office (FO): Phát triển các trang web khách hàng tối ưu SEO bằng Next.js App Router, cải thiện tỷ lệ chuyển đổi, tích hợp quy trình xác thực danh tính điện tử eKYC và cổng thanh toán Paystack.
@@ -48,23 +48,20 @@ Trọng tâm công việc:
     id: "exp-bearabyte-zelene",
     title: "Kinh nghiệm tại BearaByte - Dự án Zelene Spa (7/2024 - 5/2025)",
     category: "experience",
-    keywords: ["bearabyte", "zelene", "spa", "booking", "clover", "react native", "expo"],
+    keywords: ["bearabyte", "công ty", "làm việc", "remote us", "làm việc từ xa"],
     content: `Vai trò: Software Engineer (Frontend & Mobile) tại BearaByte (Tháng 7/2024 - Tháng 5/2025, Remote US).
-Dự án trọng điểm: Hệ sinh thái Zelene Head Spa Booking (Mỹ).
-- Phase 1 (Web & CMS): Phát triển website đặt lịch chăm sóc tóc/spa cho khách hàng và CMS Dashboard cho quản trị viên vận hành spa. Tích hợp cổng thanh toán Clover, Socket.io cho thông báo thời gian thực và đo lường sự kiện GA4.
-- Phase 2 (Mobile App): Xây dựng ứng dụng di động đa nền tảng bằng React Native & Expo cho phép người dùng tìm kiếm dịch vụ, đặt lịch và thanh toán tiện lợi trên điện thoại.
-- Công nghệ sử dụng: ReactJS, Next.js, React Native, Expo, React Query, Zustand, NativeWind, TypeScript, NestJS, Strapi CMS, Socket.io, Clover Payment Gateway, GA4.`,
+- Hình thức: Làm việc từ xa (remote) cho thị trường Mỹ.
+- Phạm vi phụ trách: Phát triển Web, CMS Dashboard và Mobile App.
+- Dự án đảm nhận: Zelene Head Spa Booking (chi tiết tính năng và tech stack nằm ở mục dự án Zelene).`,
   },
   {
     id: "exp-kamala",
     title: "Kinh nghiệm tại Kamala (1/2023 - 6/2024)",
     category: "experience",
-    keywords: ["kamala", "jewelry", "tour", "đá quý", "strapi", "mantine"],
+    keywords: ["kamala", "công ty", "làm việc"],
     content: `Vai trò: Software Engineer (Frontend & Mobile) tại Kamala (Tháng 1/2023 - Tháng 6/2024, TP. Hồ Chí Minh).
-Dự án: Nền tảng Thương mại Trang sức Đá phong thủy & Đặt tour trải nghiệm Kamala.
-- Phase 1: Xây dựng cổng nội dung Kamala News và ứng dụng di động hỗ trợ đội ngũ Sales tra cứu nhanh thông tin sản phẩm khi tư vấn cho khách hàng.
-- Phase 2: Phát triển website đặt tour du lịch trải nghiệm Kamala, tập trung vào giao diện responsive, tích hợp API Strapi CMS v4, quản lý bảng dữ liệu lớn với TanStack Table và tối ưu SEO.
-- Công nghệ sử dụng: Next.js, ReactJS, React Native Expo, Mantine UI, Tailwind CSS, TypeScript, TanStack Table, Strapi CMS, Tiptap Editor, React Query, Zustand.`,
+- Phạm vi phụ trách: Phát triển Web, CMS và Mobile App cho sản phẩm của công ty.
+- Dự án đảm nhận: Kamala Jewelry & Tour Platform (chi tiết tính năng và tech stack nằm ở mục dự án Kamala).`,
   },
   {
     id: "exp-javis",
@@ -90,22 +87,26 @@ Trọng tâm: Xây dựng ứng dụng web mô phỏng ốp lát gạch 3D. Ngư
     id: "proj-kamala",
     title: "Dự án nổi bật: Kamala Jewelry & Tour Platform",
     category: "project",
-    keywords: ["kamala", "dự án", "jewelry", "tour", "trang sức", "ecommerce"],
+    keywords: ["kamala", "dự án", "jewelry", "tour", "trang sức", "đá quý", "ecommerce", "strapi", "mantine", "mobile"],
     content: `Dự án Kamala Jewelry & Tour Platform (2024):
-- Mô tả: Nền tảng thương mại điện tử kết hợp cổng nội dung về trang sức đá quý tự nhiên và trải nghiệm Tour Kamala.
+- Mô tả: Nền tảng thương mại điện tử kết hợp cổng nội dung về trang sức đá phong thủy / đá quý tự nhiên và đặt Tour trải nghiệm Kamala.
+- Phase 1: Xây dựng cổng nội dung Kamala News và ứng dụng di động (React Native Expo) hỗ trợ đội ngũ Sales tra cứu nhanh thông tin sản phẩm khi tư vấn cho khách hàng.
+- Phase 2: Phát triển website đặt tour du lịch trải nghiệm Kamala, tập trung vào giao diện responsive, tích hợp API Strapi CMS v4, quản lý bảng dữ liệu lớn với TanStack Table và tối ưu SEO.
 - Đóng góp: Xây dựng toàn bộ giao diện phía khách hàng và các luồng làm việc CMS, thiết kế component hướng dữ liệu (data-driven), tối ưu hóa SEO và tốc độ tải trang.
-- Tech Stack: Next.js, ReactJS, TypeScript, Mantine UI, Tailwind CSS, React Query, Strapi CMS, TanStack Table.
+- Tech Stack: Next.js, ReactJS, React Native Expo, TypeScript, Mantine UI, Tailwind CSS, TanStack Table, Strapi CMS, Tiptap Editor, React Query, Zustand.
 - Live Website: https://kamala.vn/`,
   },
   {
     id: "proj-zelene",
     title: "Dự án nổi bật: Zelene Head Spa Booking Ecosystem",
     category: "project",
-    keywords: ["zelene", "spa", "booking", "đặt lịch", "clover", "mobile app"],
+    keywords: ["zelene", "spa", "booking", "đặt lịch", "clover", "mobile", "react native", "expo"],
     content: `Dự án Zelene Head Spa Booking (2025):
 - Mô tả: Hệ sinh thái đặt lịch chăm sóc tóc và spa cao cấp tại Mỹ, bao gồm trang đích marketing, luồng đặt chỗ, dashboard quản trị vận hành và ứng dụng di động.
-- Đóng góp: Thiết kế giao diện đặt lịch hẹn trực tuyến, tích hợp thanh toán thẻ với Clover Gateway, cập nhật trạng thái đơn hẹn realtime bằng Socket.io và hỗ trợ phiên bản Mobile App React Native Expo.
-- Tech Stack: Next.js, React Native, Expo, TypeScript, React Query, Zustand, NestJS, Strapi, Clover API, GA4.`,
+- Phase 1 (Web & CMS): Website đặt lịch chăm sóc tóc/spa cho khách hàng và CMS Dashboard cho quản trị viên vận hành spa. Tích hợp cổng thanh toán Clover, Socket.io cho thông báo thời gian thực và đo lường sự kiện GA4.
+- Phase 2 (Mobile App): Ứng dụng di động đa nền tảng bằng React Native & Expo cho phép người dùng tìm kiếm dịch vụ, đặt lịch và thanh toán tiện lợi trên điện thoại.
+- Đóng góp: Thiết kế giao diện đặt lịch hẹn trực tuyến, tích hợp thanh toán thẻ với Clover Gateway, cập nhật trạng thái đơn hẹn realtime bằng Socket.io và phát triển phiên bản Mobile App React Native Expo.
+- Tech Stack: ReactJS, Next.js, React Native, Expo, TypeScript, React Query, Zustand, NativeWind, NestJS, Strapi CMS, Socket.io, Clover Payment Gateway, GA4.`,
   },
 
   // --- SKILLS & TECH STACK ---

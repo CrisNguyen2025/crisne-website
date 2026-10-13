@@ -16,6 +16,7 @@
     "db:seed": "prisma db seed",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
+    "eval:rag": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/eval-retrieval.ts",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks"
   },

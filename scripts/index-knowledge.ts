@@ -1,17 +1,20 @@
 import * as fs from "fs";
 import * as path from "path";
-import { GoogleGenAI } from "@google/genai";
+import { embedText } from "../lib/ai/gemini";
 import { PORTFOLIO_KNOWLEDGE_BASE } from "../lib/ai/portfolio-knowledge";
 
-const apiKey = process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  console.warn("⚠️  GEMINI_API_KEY is not set. Chunks will be saved without vector embeddings.");
+// ts-node does not load Next.js env files, so read .env.local explicitly
+const envPath = path.join(__dirname, "../.env.local");
+if (fs.existsSync(envPath)) {
+  process.loadEnvFile(envPath);
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey || "" });
-
 async function generateKnowledgeVectors() {
+  if (!process.env.GEMINI_API_KEY) {
+    // Writing chunks without embeddings silently disables vector search at runtime
+    throw new Error("GEMINI_API_KEY is not set. Aborting to keep existing vectors intact.");
+  }
+
   console.log(`🚀 Indexing ${PORTFOLIO_KNOWLEDGE_BASE.length} knowledge chunks...`);
 
   const updatedChunks = [];
@@ -20,28 +23,14 @@ async function generateKnowledgeVectors() {
     const chunk = PORTFOLIO_KNOWLEDGE_BASE[i];
     console.log(`[${i + 1}/${PORTFOLIO_KNOWLEDGE_BASE.length}] Embedding: "${chunk.title}"`);
 
-    let embedding: number[] | undefined = undefined;
+    const textToEmbed = `${chunk.title}\n${chunk.keywords.join(", ")}\n${chunk.content}`;
+    const embedding = await embedText(textToEmbed, "RETRIEVAL_DOCUMENT");
 
-    if (apiKey) {
-      try {
-        const textToEmbed = `${chunk.title}\n${chunk.keywords.join(", ")}\n${chunk.content}`;
-        const response = await ai.models.embedContent({
-          model: "text-embedding-004",
-          contents: [textToEmbed],
-        });
-
-        if (response.embeddings && response.embeddings.length > 0) {
-          embedding = response.embeddings[0].values;
-        }
-      } catch (err) {
-        console.error(`❌ Failed to embed chunk ${chunk.id}:`, err);
-      }
+    if (!embedding) {
+      throw new Error(`Empty embedding for chunk ${chunk.id}`);
     }
 
-    updatedChunks.push({
-      ...chunk,
-      embedding: embedding || undefined,
-    });
+    updatedChunks.push({ ...chunk, embedding });
   }
 
   const outputPath = path.join(__dirname, "../lib/ai/data/knowledge-vectors.json");
