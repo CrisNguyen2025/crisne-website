@@ -372,6 +372,8 @@ export function FloatingChatBot() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Nhập câu hỏi của bạn..."
+                    // Matches MAX_MESSAGE_LENGTH in app/api/chat/route.ts
+                    maxLength={1000}
                     disabled={isLoading}
                     // text-base on mobile prevents iOS Safari zoom; sm:text-xs on desktop
                     className="flex-1 px-3.5 py-2.5 sm:py-2.5 rounded-2xl bg-muted/60 border border-border/80 text-base sm:text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-steel/60 focus:ring-1 focus:ring-steel/30 transition-all disabled:opacity-60"

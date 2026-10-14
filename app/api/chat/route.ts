@@ -19,11 +19,15 @@ import {
 } from "@/lib/ai/gemini";
 import { flushLangfuse } from "@/lib/ai/langfuse";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { PORTFOLIO_KNOWLEDGE_BASE, type KnowledgeChunk } from "@/lib/ai/portfolio-knowledge";
-import cachedVectors from "@/lib/ai/data/knowledge-vectors.json";
+import { loadKnowledgeBase } from "@/lib/ai/knowledge-base";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
+
+// Input caps: bound prompt size (and Gemini cost) per request
+const MAX_MESSAGE_LENGTH = 1000;
+const MAX_HISTORY_TURNS = 6;
+const MAX_HISTORY_CONTENT_LENGTH = 2000;
 
 interface ChatRequestPayload {
   message: string;
@@ -58,7 +62,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as ChatRequestPayload;
-    const { message, history = [], sessionId } = body;
+    const { message, sessionId } = body;
 
     if (!message || typeof message !== "string" || !message.trim()) {
       return new Response(
@@ -66,6 +70,23 @@ export async function POST(req: NextRequest) {
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return new Response(
+        JSON.stringify({
+          error: `Câu hỏi hơi dài, bạn rút gọn dưới ${MAX_MESSAGE_LENGTH} ký tự giúp Cris nhé!`,
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Keep only well-formed recent turns, truncated, so clients cannot inflate the prompt
+    const history = (Array.isArray(body.history) ? body.history : [])
+      .filter(
+        (h) => (h?.role === "user" || h?.role === "assistant") && typeof h.content === "string"
+      )
+      .slice(-MAX_HISTORY_TURNS)
+      .map((h) => ({ role: h.role, content: h.content.slice(0, MAX_HISTORY_CONTENT_LENGTH) }));
 
     const trimmedQuery = message.trim();
     traceSpan = startObservation("chat", {
@@ -84,12 +105,7 @@ export async function POST(req: NextRequest) {
     const isApiKeyConfigured =
       apiKey.length > 10 && !apiKey.includes("your_google_gemini_api_key");
 
-    // Use cached vectors if available, otherwise fall back to raw knowledge base
-    const knowledgeBase = (
-      Array.isArray(cachedVectors) && cachedVectors.length > 0
-        ? cachedVectors
-        : PORTFOLIO_KNOWLEDGE_BASE
-    ) as KnowledgeChunk[];
+    const knowledgeBase = loadKnowledgeBase();
 
     // Fallback if API key is not configured (keyword-only retrieval)
     if (!isApiKeyConfigured) {
@@ -202,7 +218,7 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
     try {
       // Gemini expects conversation to start with a user turn and alternate roles
       const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
-      for (const h of history.slice(-6)) {
+      for (const h of history) {
         const text = h.content?.trim();
         if (!text) continue;
 

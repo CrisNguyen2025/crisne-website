@@ -1227,13 +1227,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@google/generative-ai@npm:^0.24.1":
-  version: 0.24.1
-  resolution: "@google/generative-ai@npm:0.24.1"
-  checksum: 10c0/8da77fc648b04fc2ecef53e75230e2ee67a8fd29a34b6b8874e77a7332b2a1e4b51d44dd9eb604fb063ed8ea46d293aac5b1e2a955ae2435e2582a265f2cb80d
-  languageName: node
-  linkType: hard
-
 "@hono/node-server@npm:^1.19.9":
   version: 1.19.14
   resolution: "@hono/node-server@npm:1.19.14"
@@ -4831,7 +4824,6 @@ __metadata:
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
     "@google/genai": "npm:^2.19.0"
-    "@google/generative-ai": "npm:^0.24.1"
     "@langfuse/client": "npm:^5.13.1"
     "@langfuse/otel": "npm:^5.13.1"
     "@langfuse/tracing": "npm:^5.13.1"

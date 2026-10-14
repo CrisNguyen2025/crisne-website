@@ -173,6 +173,26 @@ Trọng tâm: Xây dựng ứng dụng web mô phỏng ốp lát gạch 3D. Ngư
 - Tư vấn giải pháp kỹ thuật và tối ưu dự án sẵn có.
 - Hình thức làm việc: Linh hoạt (Remote, Hybrid hoặc Onsite tại TP. Hồ Chí Minh).`,
   },
+  // Translated from components/faq-section.tsx — keep in sync when the UI FAQ changes
+  {
+    id: "faq-design-collaboration",
+    title: "Làm việc với team design / Khả năng thiết kế UI của Cris Nguyen",
+    category: "faq",
+    keywords: ["design", "thiết kế", "figma", "sketch", "adobe xd", "ui/ux", "designer"],
+    content: `Làm việc với thiết kế:
+- Phối hợp chặt chẽ với team design, triển khai chính xác từ file Figma, Sketch hoặc Adobe XD (pixel-perfect).
+- Cris chủ yếu là developer nhưng có con mắt tốt về UI/UX và có thể đề xuất cải thiện thiết kế.
+- Với dự án chưa có designer, Cris có thể tự dựng giao diện sạch, hiện đại theo best practices.`,
+  },
+  {
+    id: "faq-post-launch-support",
+    title: "Hỗ trợ & Bảo trì sau khi bàn giao dự án",
+    category: "faq",
+    keywords: ["bảo trì", "maintenance", "hỗ trợ", "support", "sau bàn giao", "bảo hành", "sửa lỗi"],
+    content: `Hỗ trợ sau khi dự án go-live:
+- Có gói bảo trì định kỳ gồm: sửa lỗi, cập nhật bảo mật, giám sát hiệu năng và bổ sung tính năng.
+- Cris ưu tiên xây dựng quan hệ hợp tác lâu dài và luôn sẵn sàng hỗ trợ sau khi dự án đi vào vận hành.`,
+  },
 
   // --- CONTACT & SOCIAL ---
   {

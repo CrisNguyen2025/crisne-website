@@ -170,11 +170,13 @@ export function buildRAGContext(chunks: KnowledgeChunk[]): string {
 /**
  * Rewrites a follow-up question into a standalone query using recent conversation,
  * so retrieval works for questions like "dự án đó dùng stack gì?".
- * Falls back to the original query on any error.
+ * Falls back to the original query on any error, unless `throwOnError` is set
+ * (used by the eval script so quota/API failures are not silently ignored).
  */
 export async function rewriteQuery(
   query: string,
-  history: Array<{ role: "user" | "assistant"; content: string }>
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+  { throwOnError = false }: { throwOnError?: boolean } = {}
 ): Promise<string> {
   const recentHistory = history.filter((h) => h.content?.trim()).slice(-4);
   if (!recentHistory.some((h) => h.role === "user")) return query;
@@ -198,6 +200,7 @@ export async function rewriteQuery(
 
     return response.text?.trim() || query;
   } catch (error) {
+    if (throwOnError) throw error;
     console.error("Query rewrite error:", error);
     return query;
   }

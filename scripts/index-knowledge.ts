@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { embedText } from "../lib/ai/gemini";
 import { PORTFOLIO_KNOWLEDGE_BASE } from "../lib/ai/portfolio-knowledge";
+import { computeKnowledgeHash } from "../lib/ai/knowledge-base";
 
 // ts-node does not load Next.js env files, so read .env.local explicitly
 const envPath = path.join(__dirname, "../.env.local");
@@ -36,6 +37,11 @@ async function generateKnowledgeVectors() {
   const outputPath = path.join(__dirname, "../lib/ai/data/knowledge-vectors.json");
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(updatedChunks, null, 2), "utf-8");
+
+  // Lets `yarn eval:rag` detect when the knowledge base changed without re-indexing
+  const metaPath = path.join(__dirname, "../lib/ai/data/knowledge-vectors.meta.json");
+  const meta = { hash: computeKnowledgeHash(PORTFOLIO_KNOWLEDGE_BASE), indexedAt: new Date().toISOString() };
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2) + "\n", "utf-8");
 
   console.log(`✅ Successfully wrote ${updatedChunks.length} chunks to ${outputPath}`);
 }

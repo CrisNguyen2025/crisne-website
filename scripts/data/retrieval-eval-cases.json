@@ -21,9 +21,21 @@
   {"query": "Is Cris open to remote contract work?", "expected": ["faq-freelance-availability"]},
   {"query": "Liên hệ Cris thế nào?", "expected": ["contact-info"]},
   {"query": "Cho mình xin email hoặc Zalo của Cris", "expected": ["contact-info"]},
+  {"query": "Cris có làm việc với designer không?", "expected": ["faq-design-collaboration"]},
+  {"query": "Can Cris work from Figma designs?", "expected": ["faq-design-collaboration"]},
+  {"query": "Sau khi bàn giao Cris có bảo trì không?", "expected": ["faq-post-launch-support", "faq-timeline-process"]},
+  {"query": "Do you offer maintenance after launch?", "expected": ["faq-post-launch-support", "faq-timeline-process"]},
+  {"query": "Cris có GitHub không?", "expected": ["contact-info"]},
+  {"query": "Which companies has Cris worked for?", "expected": ["exp-smartbit", "exp-bearabyte-zelene", "exp-kamala", "exp-javis", "exp-early-career", "bio-overview", "bio-summary-stats"]},
+  {"query": "dự án đó dùng stack gì?", "history": [{"role": "user", "content": "Kể về dự án Zelene"}, {"role": "assistant", "content": "Zelene Head Spa Booking là hệ sinh thái đặt lịch spa tại Mỹ."}], "expected": ["proj-zelene"]},
+  {"query": "có app mobile không?", "history": [{"role": "user", "content": "Kể về dự án Zelene"}, {"role": "assistant", "content": "Zelene Head Spa Booking là hệ sinh thái đặt lịch spa tại Mỹ."}], "expected": ["proj-zelene"]},
+  {"query": "nó dùng CMS gì?", "history": [{"role": "user", "content": "Kể về dự án Kamala"}, {"role": "assistant", "content": "Kamala là nền tảng thương mại trang sức đá quý và đặt tour."}], "expected": ["proj-kamala", "exp-kamala"]},
+  {"query": "Cris làm ở đó từ khi nào?", "history": [{"role": "user", "content": "Cris đang làm ở đâu?"}, {"role": "assistant", "content": "Cris đang là Middle Frontend Developer tại Smartbit Technology."}], "expected": ["exp-smartbit"]},
+  {"query": "công ty đó làm về gì?", "history": [{"role": "user", "content": "Cris đang làm ở đâu?"}, {"role": "assistant", "content": "Cris đang là Middle Frontend Developer tại Smartbit Technology."}], "expected": ["exp-smartbit"]},
   {"query": "Công thức nấu phở bò?", "expected": []},
   {"query": "Giá bitcoin hôm nay?", "expected": []},
   {"query": "Thời tiết Sài Gòn mai thế nào?", "expected": []},
   {"query": "Ai là tổng thống Mỹ?", "expected": []},
-  {"query": "Write me a poem about the sea", "expected": []}
+  {"query": "Write me a poem about the sea", "expected": []},
+  {"query": "còn món ăn nào ngon không?", "history": [{"role": "user", "content": "Kể về dự án Zelene"}, {"role": "assistant", "content": "Zelene Head Spa Booking là hệ sinh thái đặt lịch spa tại Mỹ."}], "expected": []}
 ]
