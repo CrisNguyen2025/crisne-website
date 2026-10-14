@@ -410,30 +410,61 @@ def _resolve_gemini_api_key() -> str:
     return ""
 
 
+def _build_gemini():
+    api_key = _resolve_gemini_api_key()
+    if not api_key:
+        return None
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    return ChatGoogleGenerativeAI(
+        model=settings.llm_model,
+        api_key=api_key,
+        temperature=0.1,
+        max_retries=1,
+        timeout=25.0,
+        streaming=True,
+    )
+
+
+def _build_groq():
+    api_key = settings.groq_api_key or os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        print("[Agent] LLM_PROVIDER=groq but GROQ_API_KEY is not set.")
+        return None
+    from langchain_groq import ChatGroq
+
+    return ChatGroq(
+        model=settings.llm_model,
+        api_key=api_key,
+        temperature=0.1,
+        # Groq's free tier answers 429 when the per-minute limit is hit; retry with backoff.
+        max_retries=2,
+        timeout=25.0,
+        streaming=True,
+    )
+
+
+_PROVIDERS = {"google_genai": _build_gemini, "groq": _build_groq}
+
+
 def build_agent():
     """Create and return the NextGenRoadmapAgent.
 
-    Equipped with Gemini if key is provided, or executes offline with deterministic
-    two-stage precision.
+    LLM_PROVIDER picks the chat model (google_genai | groq); LLM_MODEL names it.
+    Without a usable key the agent runs offline with deterministic two-stage precision.
     """
-    api_key = _resolve_gemini_api_key()
+    provider = settings.llm_provider.strip().lower()
+    builder = _PROVIDERS.get(provider)
     llm_model = None
-
-    if api_key:
+    if builder is None:
+        print(f"[Agent] Unknown LLM_PROVIDER '{provider}' (use {', '.join(_PROVIDERS)}). Using offline mode.")
+    else:
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-
-            llm_model = ChatGoogleGenerativeAI(
-                model=settings.llm_model,
-                api_key=api_key,
-                temperature=0.1,
-                max_retries=1,
-                timeout=25.0,
-                streaming=True,
-            )
-            print("🤖 NextGen Gemini Agent successfully initialized with Live RAG & State!")
+            llm_model = builder()
+            if llm_model is not None:
+                print(f"🤖 Agent initialized: provider={provider}, model={settings.llm_model}, Live RAG & State on.")
         except Exception as exc:
-            print(f"[Agent] Warning: Failed to init Gemini model ({exc}). Using offline mode.")
+            print(f"[Agent] Warning: Failed to init {provider} model ({type(exc).__name__}: {exc}). Using offline mode.")
 
     return NextGenRoadmapAgent(llm_model=llm_model, tools=ALL_TOOLS)
 

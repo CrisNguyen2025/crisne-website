@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     llm_model: str = "gemini-flash-latest"
     llm_provider: str = "google_genai"
+    groq_api_key: str = ""
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")
