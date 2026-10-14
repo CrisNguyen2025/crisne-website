@@ -1,0 +1,98 @@
+[
+  {
+    "id": "q1",
+    "query": "How are workflows executed in topological order?",
+    "expectedHeading": "Directed Acyclic Graph Execution",
+    "expectedKeywords": ["topological", "dag", "nodes"]
+  },
+  {
+    "id": "q2",
+    "query": "What happens to downstream nodes when a node fails?",
+    "expectedHeading": "Directed Acyclic Graph Execution",
+    "expectedKeywords": ["cancelled", "failure", "downstream"]
+  },
+  {
+    "id": "q3",
+    "query": "Which condition branch is taken if no rules match?",
+    "expectedHeading": "Condition Evaluation and Branching",
+    "expectedKeywords": ["else", "branch", "skipped"]
+  },
+  {
+    "id": "q4",
+    "query": "What operators can be configured on condition branches?",
+    "expectedHeading": "Condition Evaluation and Branching",
+    "expectedKeywords": ["contains", "equals", "length_gt"]
+  },
+  {
+    "id": "q5",
+    "query": "How does the merge node handle first active branch?",
+    "expectedHeading": "Merge Node Logic",
+    "expectedKeywords": ["first_active", "merge", "skipped"]
+  },
+  {
+    "id": "q6",
+    "query": "What modes are supported by the merge node?",
+    "expectedHeading": "Merge Node Logic",
+    "expectedKeywords": ["first_active", "join_strings", "concat_documents"]
+  },
+  {
+    "id": "q7",
+    "query": "What Langfuse trace name is used for workflow execution?",
+    "expectedHeading": "Observability and Langfuse Tracing",
+    "expectedKeywords": ["workflow-run", "langfuse", "trace"]
+  },
+  {
+    "id": "q8",
+    "query": "What metadata does a RAG node record in Langfuse?",
+    "expectedHeading": "Observability and Langfuse Tracing",
+    "expectedKeywords": ["chunks", "scores", "rag"]
+  },
+  {
+    "id": "q9",
+    "query": "What are the allowed file formats and maximum file size for documents?",
+    "expectedHeading": "Document Parsing and Size Constraints",
+    "expectedKeywords": ["markdown", "1 mb", "50 documents"]
+  },
+  {
+    "id": "q10",
+    "query": "What HTTP status code is returned when an unsupported file type is uploaded?",
+    "expectedHeading": "Document Parsing and Size Constraints",
+    "expectedKeywords": ["400", "bad request", "pdf"]
+  },
+  {
+    "id": "q11",
+    "query": "How does heading aware chunking determine chunk boundaries?",
+    "expectedHeading": "Heading Aware Chunking",
+    "expectedKeywords": ["heading", "1,500", "ordinal"]
+  },
+  {
+    "id": "q12",
+    "query": "How does content hash deduplication reuse embeddings?",
+    "expectedHeading": "Content Deduplication and Embedding Cache",
+    "expectedKeywords": ["sha-256", "content hash", "embedding"]
+  },
+  {
+    "id": "q13",
+    "query": "What weights are assigned to vector similarity and keyword scoring?",
+    "expectedHeading": "Hybrid Retrieval Scoring",
+    "expectedKeywords": ["0.7", "0.3", "cosine"]
+  },
+  {
+    "id": "q14",
+    "query": "How is multi-tenant project isolation enforced in retrieval?",
+    "expectedHeading": "Project and Owner Multi-Tenant Isolation",
+    "expectedKeywords": ["projectid", "owner", "isolation"]
+  },
+  {
+    "id": "q15",
+    "query": "Why are workflow documents safe from the storage cleanup job?",
+    "expectedHeading": "Storage Isolation and Cleanup Protection",
+    "expectedKeywords": ["workflow-kb", "uploads", "cleanup"]
+  },
+  {
+    "id": "q16",
+    "query": "How is daily LLM quota tracked atomically?",
+    "expectedHeading": "Atomic Daily Quota Management",
+    "expectedKeywords": ["quota", "sqlite", "transaction"]
+  }
+]

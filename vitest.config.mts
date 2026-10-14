@@ -20,6 +20,8 @@ export default defineConfig({
       LANGFUSE_PUBLIC_KEY: "",
       LANGFUSE_SECRET_KEY: "",
       LANGFUSE_RELEASE: "test-release",
+      TURSO_DATABASE_URL: "",
+      TURSO_AUTH_TOKEN: "",
     },
   },
 });

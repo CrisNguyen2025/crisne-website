@@ -63,3 +63,6 @@ roadmap-rag-assistant/rag_service/data/embedding_cache.json
 
 # Local dev launch config
 .claude/
+
+# Workflow KB local storage
+.data/workflow-kb/

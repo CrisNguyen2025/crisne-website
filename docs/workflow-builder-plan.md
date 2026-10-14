@@ -1,166 +1,215 @@
-# Workflow Builder — Kế hoạch thực thi (giai đoạn 0 → 4)
+# Workflow Builder — Kế hoạch theo mốc
 
-> Kế hoạch triển khai cho [`workflow-builder-design.md`](./workflow-builder-design.md). Thiết kế là nguồn sự thật; file này chỉ chia việc.
-> Cập nhật: 2026-10-14.
+> Triển khai [`workflow-builder-design.md`](./workflow-builder-design.md). Thiết kế là nguồn sự thật; file này chia việc.
+> Cập nhật: 2026-10-14. **Mỗi mốc kết thúc bằng thứ bạn tự thử được bằng tay**, không chỉ unit test.
 
-## Quy ước
+## Tổng quan
 
-- **Mỗi task = 1 PR**, ≤ ~1 ngày công. Mã task `P<giai đoạn>.<số>`.
-- Mỗi PR: `yarn test` + `yarn lint` + `yarn tsc --noEmit` xanh; chạy GitNexus `impact` trước khi sửa symbol có sẵn, `detect_changes` trước khi commit (CLAUDE.md).
-- **Không sửa** `lib/ai/*`, `lib/r2-client.ts`, `/api/chat`, 11 bảng Prisma cũ. Env server-only (không `NEXT_PUBLIC_`). UI chỉ Tailwind + shadcn/@base-ui. Node AI chỉ `gemini-2.5-flash-lite`. State cần chính xác nằm trong DB.
-- "Phụ thuộc" = task phải merge trước. Task không phụ thuộc nhau có thể làm song song.
+| Mốc | Bạn thử được gì khi xong | Ước lượng | Trạng thái |
+|---|---|---|---|
+| **M0. Nền tảng** | Đăng nhập Google vào `/workflows`; engine chạy được trong unit test | — | ✅ (còn việc tay ở mục M0) |
+| **M1. Chạy qua API** | Gọi API → workflow chạy thật bằng Gemini, thấy kết quả trong DB + trace trên Langfuse | 2–3 ngày | ⏭ tiếp theo |
+| **M2. Canvas chạy được** | **Kéo thả workflow trên trình duyệt, bấm Run, thấy từng node xanh/xám/đỏ** | 1–1,5 tuần | |
+| **M3. Knowledge Base** | Upload `.md`, dựng workflow `input → rag → llm → output`, hỏi đáp trên tài liệu của mình | 1–1,5 tuần | |
+| **M4. Publish + Production** | Publish version, chạy trên domain thật (Vercel) | 2–3 ngày | |
+| **M5. Gia cố** | Tách Gemini key, nút Cancel, Sentry — theo nhu cầu | — | |
 
-## Hiện trạng (đã xong)
+Thứ tự đổi so với lộ trình gốc: **Canvas (M2) làm trước Knowledge Base (M3)** để có giao diện thử sớm; canvas chỉ cần engine, không cần KB. Node `rewrite`/`rag` hiện trên canvas từ M2 nhưng báo "chưa có" tới M3.
 
-| Hạng mục | Bằng chứng |
+Quy ước chung (mọi mốc):
+- Mỗi mốc 1 nhánh, commit theo từng phần; `yarn test`, `yarn lint`, `tsc` xanh trước khi commit.
+- Không sửa `lib/ai/*`, `lib/r2-client.ts`, `/api/chat`, 11 bảng cũ. Env server-only. UI chỉ Tailwind + shadcn/@base-ui. Node AI chỉ `gemini-2.5-flash-lite`. State cần chính xác nằm trong DB.
+- ⚠️ `.env` chứa `TURSO_*`: script chạy local qua `lib/prisma` sẽ trỏ **Turso thật**. Script thử dùng `PrismaClient({ datasourceUrl: "file:./dev.db" })` hoặc bỏ 2 biến khỏi `.env`.
+
+---
+
+## M0. Nền tảng ✅
+
+| Phần | File | Kiểm chứng |
+|---|---|---|
+| Auth Google + allowlist + `proxy.ts` | `auth.ts`, `proxy.ts`, `lib/auth/*` | Đăng nhập local OK |
+| Mọi route ghi trả 401 khi ẩn danh; route công khai có chủ ý: `chat`, `chat/feedback`, `favorites` (rate limit) | `tests/route/write-routes-guard.test.ts`, `tests/route/write-access.test.ts` | 37 handler → 401; bỏ guard thử → test fail |
+| 8 bảng workflow (local + SQL Turso) | `prisma/schema.prisma`, `prisma/init-turso.sql` | SQL chạy 2 lần trên SQLite trống, khớp schema; cascade OK |
+| DSL types + `graphHash` | `lib/workflow/dsl-types.ts`, `graph-hash.ts` | Kéo thả không đổi hash |
+| Node registry (port theo type + config) | `lib/workflow/node-registry.ts` | 9 test |
+| Validator (cấu trúc JSON + 9 quy tắc) | `lib/workflow/dsl-validator.ts` | 40 test + mutation |
+| Executor (SKIPPED, merge, dừng khi lỗi, timeout) | `lib/workflow/dag-executor.ts` | 12 test + mutation |
+| Handler `input`/`condition`/`merge`/`llm`/`output` (provider truyền vào, không dùng `setLlmProvider` toàn cục) | `lib/workflow/nodes/*` | 20 test, chạy workflow mẫu với LLM giả |
+
+**Việc tay còn lại (bạn làm, không chặn M1):**
+- [ ] Đăng nhập bằng email ngoài allowlist → phải bị từ chối.
+- [ ] `yarn db:turso:init` để tạo 8 bảng trên Turso (chỉ `CREATE … IF NOT EXISTS`).
+- [ ] Vercel: thêm `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_OWNER_EMAILS`; thêm redirect URI domain thật trong Google Console; xem Fluid compute đã bật chưa, gói Hobby hay Pro.
+- [ ] Langfuse: xem giới hạn trace/tháng của gói đang dùng.
+
+---
+
+## M1. Chạy qua API (2–3 ngày)
+
+**Mục tiêu:** workflow lưu trong DB, chạy thật bằng Gemini qua HTTP, mỗi lần chạy để lại `WorkflowRun` + `NodeExecution` và 1 trace Langfuse.
+
+### Phần việc
+
+**1. Quota** — `lib/workflow/quota.ts`
+- `withQuota(provider)` bọc `LlmProvider`: trước mỗi `generate`, tăng `WorkflowQuotaUsage(day UTC, model)` trong transaction; vượt hạn mức → lỗi `QUOTA_EXCEEDED`, **không** gọi Gemini.
+- Hạn mức qua env `WORKFLOW_DAILY_LLM_LIMIT` (mặc định 15/ngày cho `flash-lite`, chừa quota cho chatbot).
+- Dry-run dùng provider giả, không đi qua quota.
+
+**2. Trace Langfuse** — `lib/workflow/tracing.ts`
+- 1 run = 1 trace (`workflow-run`); mỗi node 1 observation qua hook `onNodeStart`/`onNodeFinish`: `llm` → generation (model, token), còn lại → span; node SKIPPED/CANCELLED vẫn có span với `level` tương ứng.
+- Metadata `{ projectId, workflowId, runId, trigger, dryRun }`, `userId` = email chủ. Dùng lại `lib/ai/langfuse` (chỉ import, không sửa).
+
+**3. Repository** — `lib/workflow/repository.ts`
+- `listProjects`, `createProject`, `listWorkflows`, `createWorkflow`, `getWorkflow`, `saveDraft(graph, ui)` (tính `draftGraphHash`).
+- `runWorkflow({ workflowId, input, dryRun })`: validate bản nháp → tạo `WorkflowRun` (snapshot + hash) → `executeWorkflow` với hook ghi `NodeExecution` → cập nhật trạng thái run, output, `traceId`.
+- Mọi hàm lọc theo `ownerId` (email trong session).
+
+**4. API** — `app/api/workflows/**/route.ts` (đã được `proxy.ts` chặn khi chưa đăng nhập)
+
+| Method | Đường dẫn | Việc |
+|---|---|---|
+| `GET` / `POST` | `/api/workflows/projects` | Liệt kê / tạo project |
+| `GET` / `POST` | `/api/workflows?projectId=` | Liệt kê / tạo workflow |
+| `GET` / `PUT` | `/api/workflows/[id]` | Lấy / lưu nháp (validate, trả `errors[]` nếu sai — vẫn lưu nháp) |
+| `POST` | `/api/workflows/[id]/runs` | Chạy (`{ input: { query }, dryRun? }`), `maxDuration = 120`, `after(flushLangfuse)` |
+| `GET` | `/api/workflows/[id]/runs/[runId]` | Trạng thái run + từng node |
+
+**5. Dữ liệu mẫu + script** — `scripts/seed-sample-workflow.ts`
+- Tạo 1 project + workflow mẫu `input → condition → (greeting | else) → merge → llm → output` trong `dev.db`.
+
+### Tự thử khi xong M1
+1. `npx tsx scripts/seed-sample-workflow.ts` → in ra `workflowId`.
+2. Mở `/workflows` để có session, rồi trong DevTools Console:
+   ```js
+   await (await fetch("/api/workflows/<id>/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: { query: "Hello Cris" }, dryRun: true }) })).json()
+   ```
+   → `status: "SUCCEEDED"`, nhánh `else` bị `SKIPPED`.
+3. Bỏ `dryRun` → câu trả lời thật từ Gemini; xem trace trên Langfuse.
+4. Đặt `WORKFLOW_DAILY_LLM_LIMIT=1`, chạy 2 lần → lần 2 lỗi `QUOTA_EXCEEDED`; chatbot `/portfolio` vẫn trả lời.
+
+### Xong khi
+- [ ] Test route: run dry-run ghi đủ `NodeExecution`; draft sai → `errors[]`; vượt quota → không gọi provider; trace có đúng cây span (Langfuse mock).
+- [ ] Chạy thật 1 lần, thấy trace trên Langfuse.
+- [ ] Không có session → 401.
+
+---
+
+## M2. Canvas chạy được (1–1,5 tuần)
+
+**Mục tiêu:** dựng và chạy workflow hoàn toàn trên trình duyệt.
+
+### Phần việc
+
+**1. Trang danh sách** — `app/(workflow-builder)/workflows/page.tsx`
+- Chọn/tạo project, danh sách workflow, nút "Tạo workflow" (tạo sẵn `input → output`). `loading.tsx` + `error.tsx`.
+
+**2. Store + chuyển đổi** — `lib/workflow/canvas-store.ts`, `canvas-mapping.ts`
+- Cài `@xyflow/react`, `zustand`. Store giữ `graph` và `ui` tách riêng; kéo node chỉ đổi `ui`.
+- Chuyển DSL ↔ node/edge của React Flow; test round-trip giữ nguyên `graphHash`.
+
+**3. Canvas** — `app/(workflow-builder)/workflows/[id]/page.tsx`, `components/workflow-canvas/*`
+- `Canvas.tsx` import động (`ssr: false`); 7 custom node, handle lấy từ `resolveNodePorts` (port `condition` đổi theo nhánh).
+- `Palette.tsx` kéo thả thêm node; chặn nối sai kiểu port ngay khi kéo (`isValidConnection`).
+- Xoá node/edge bằng phím Delete.
+
+**4. Cấu hình node** — `components/workflow-canvas/NodeConfigPanel.tsx`
+- Form theo loại: danh sách nhánh `condition` (thêm/xoá/sắp xếp), `mode` của `merge`, `prompt`/`system`/`temperature` của `llm`.
+
+**5. Lưu + validate** — dùng `PUT /api/workflows/[id]`
+- Tự lưu nháp (debounce ~1s); lỗi validate hiện viền đỏ trên node/edge + danh sách lỗi; nút Run bị khoá khi còn lỗi.
+
+**6. Chạy thử** — `components/workflow-canvas/RunPanel.tsx`
+- Ô nhập query, công tắc dry-run, nút Run; tô màu node theo trạng thái (xanh SUCCEEDED, xám SKIPPED, đỏ FAILED); bấm node xem input/output/thời gian/token; hiện output cuối.
+
+### Tự thử khi xong M2
+1. Vào `/workflows` → tạo workflow.
+2. Kéo `condition`, `merge`, `llm` vào, nối `input → condition → 2 nhánh → merge → llm → output`.
+3. Thử nối `llm.text` vào port sai kiểu → không nối được. Bỏ một edge bắt buộc → thấy lỗi, Run bị khoá.
+4. Run với "Hello" và "Something else" → thấy nhánh không chạy chuyển xám.
+5. Kéo node đi chỗ khác, tải lại trang → vị trí giữ nguyên.
+
+### Xong khi
+- [ ] Dựng và chạy được workflow mẫu từ UI, thấy rõ nhánh SKIPPED.
+- [ ] Kéo thả không đổi `graphHash` (test).
+- [ ] Không lỗi console; dùng được trên màn hình ≥1024px.
+
+---
+
+## M3. Knowledge Base (1–1,5 tuần)
+
+**Mục tiêu:** hỏi đáp trên tài liệu riêng của từng project.
+
+### Phần việc
+
+**1. Lưu file** — `lib/workflow/kb/storage.ts`
+- R2 prefix `workflow-kb/{projectId}/{documentId}` (dùng lại `r2Client`, `isR2Configured`); dev không có R2 → thư mục local riêng. Nằm ngoài `uploads/` nên job dọn file không xoá nhầm.
+
+**2. Đọc + chia đoạn** — `lib/workflow/kb/parser.ts`, `chunker.ts`
+- `.md`, `.txt` (interface `DocumentParser` để thêm PDF sau); chia theo heading, giữ `heading`.
+
+**3. Ingest** — `lib/workflow/kb/ingest.ts`
+- Lưu file → chunk → `contentHash` → chỉ embed chunk mới (768 chiều, lưu `Bytes`). Đi qua quota.
+
+**4. Retrieval** — `lib/workflow/kb/retrieval.ts`
+- Keyword + vector (dùng lại `normalizeText`, `cosineSimilarity`), `topK`, `minScore`; **luôn lọc `projectId`**.
+
+**5. Node `rewrite` + `rag`** — `lib/workflow/nodes/rewrite.ts`, `rag.ts`
+- Thay handler "chưa có"; span Langfuse của `rag` ghi điểm từng chunk.
+
+**6. API + UI tài liệu** — `app/api/workflows/projects/[projectId]/documents/**`, `components/workflow-canvas/DocumentsPanel.tsx`
+- Upload/xoá/liệt kê; giới hạn kích thước + định dạng. Panel cấu hình `rag` chọn tài liệu.
+
+**7. Eval** — `scripts/eval-kb.ts`, `lib/workflow/fixtures/kb-eval/*.json`
+- Bộ câu hỏi mẫu + chunk kỳ vọng, đo Hit@4.
+
+### Tự thử khi xong M3
+1. Upload 2–3 file `.md` vào project A.
+2. Dựng `input → rag → llm → output` (nối `rag.documents` vào `llm.context`), hỏi một câu có trong tài liệu → trả lời đúng; bấm node `rag` xem chunk + điểm.
+3. Upload lại file cũ → không tốn lượt embed.
+4. Project B hỏi cùng câu → không thấy tài liệu của A.
+
+### Xong khi
+- [ ] Project A không bao giờ trả chunk của B (test).
+- [ ] Upload lại tài liệu không đổi → 0 lần `embed()` (test).
+- [ ] Job dọn file không đụng `workflow-kb/` (test).
+- [ ] Hit@4 ≥ 0.8 trên bộ câu hỏi mẫu.
+
+**Rủi ro:** quá ~2.000 chunk/project thì tính cosine trong RAM chậm → thử vector native trên Turso thật.
+
+---
+
+## M4. Publish + Production (2–3 ngày)
+
+**Phần việc**
+- Publish → `WorkflowVersion` bất biến (`POST /api/workflows/[id]/versions`); danh sách version; chạy theo version; sửa nháp không đổi version cũ.
+- Deploy Vercel: env đủ, Turso đã có bảng, R2 cho KB, `maxDuration` 120s.
+- Rà `loading.tsx`/`error.tsx`, thông báo lỗi thân thiện (quota, timeout).
+
+**Tự thử:** publish v1, sửa nháp, chạy lại v1 → kết quả theo v1; mở domain thật, đăng nhập, chạy workflow có `rag`.
+
+**Xong khi:** chạy được trên production; email ngoài allowlist bị từ chối trên production.
+
+---
+
+## M5. Gia cố (theo nhu cầu)
+
+| Việc | Khi nào làm |
 |---|---|
-| Auth.js v5 + Google, session JWT | `auth.ts` |
-| Allowlist `AUTH_OWNER_EMAILS`, fail-closed | `lib/auth/owner-access.ts` |
-| `proxy.ts` chặn `/workflows/*`, `/api/workflows/*` | `proxy.ts` |
-| Guard route ghi (`requireWriteAccess`, session hoặc `x-admin-key` fail-closed) | `lib/auth/write-access.ts`, 27 route dùng — commit `6d9b849` |
-| Đăng nhập Google trên localhost:3334 → vào `/workflows` | Kiểm tra tay 2026-10-14 |
+| Tách Gemini key: `createGeminiProvider(apiKey)` (chỉ thêm export trong `lib/ai/gemini.ts`), project Google riêng + billing + hạn mức | Khi builder hay hết quota |
+| Huỷ thật: `signal?` trong `LlmProvider`, nút Cancel | Khi run dài hay bị treo |
+| Chạy song song các nhánh độc lập | Khi run gần chạm 120s |
+| Rate limit dùng chung (DB/KV) thay `Map` theo instance | Khi route công khai bị lạm dụng |
+| Sentry cho `/api/workflows/*` | Khi có người dùng ngoài chủ repo |
 
 ---
-
-## Giai đoạn 0 — Hoàn tất tiền đề (1–2 ngày)
-
-| Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
-|---|---|---|---|---|
-| ~~**P0.1**~~ ✅ | Test allowlist + admin key: đã có sẵn. | `tests/unit/owner-access.test.ts` (4 test), `tests/route/write-access.test.ts` (12 test) | — | `npx vitest run tests/unit/owner-access.test.ts tests/route/write-access.test.ts` → 16 pass |
-| ~~**P0.2**~~ ✅ | Route ghi không dùng `requireWriteAccess` đều **công khai có chủ ý + rate limit theo IP**: `chat` (20/5 phút), `chat/feedback` (60/5 phút), `favorites` (30). Comment quyết định trong code, có test 429. | `app/api/chat/feedback/route.ts`, `tests/route/write-access.test.ts` | — | `yarn test` → 298 pass |
-| ~~**P0.3**~~ ✅ | Test tự quét `app/api/**/route.ts`, gọi mọi handler `POST/PUT/PATCH/DELETE` (trừ 3 route công khai) không session/key, kỳ vọng 401. Prisma/Notion/R2/image-upload/`fetch` bị mock ném lỗi → route thiếu guard làm test fail, không ghi thật. *(Đổi từ script gọi dev server sang test để chạy trong CI và tránh ghi DB dev.)* | `tests/route/write-routes-guard.test.ts` | P0.2 | `yarn test` → 37 handler trả 401; thử bỏ guard `POST /api/notes` → test fail |
-| **P0.4** | Kiểm tra tay luồng từ chối: email ngoài allowlist → `AccessDenied`; `AUTH_OWNER_EMAILS=` trống → mọi email bị từ chối. Ghi kết quả. | `docs/workflow-builder-plan.md` (mục Nhật ký) | — | Ảnh chụp/ghi chú |
-| **P0.5** | Vercel: thêm 4 biến `AUTH_*` (Preview + Production), redirect URI domain chính, chọn apex hoặc `www` và redirect cái còn lại; xác minh Fluid compute + gói Hobby/Pro. | Dashboard Vercel, Google Console | — | Đăng nhập được trên Preview URL; ghi gói + trạng thái Fluid vào Nhật ký |
-| **P0.6** | Kiểm tra giới hạn trace/observation của gói Langfuse đang dùng. | Nhật ký | — | Ghi con số |
-
-**Xong khi:** đăng nhập bằng email trong allowlist vào được `/workflows`, email khác bị từ chối, allowlist trống → từ chối tất cả; mọi route ghi trả 401 khi không có session/key; toàn bộ test pass (mốc 2026-10-14: 296 pass, 8 skip).
-
-**Rủi ro:**
-- Rate limit (`lib/rate-limit.ts`) là `Map` in-memory theo instance → trên Vercel nhiều instance, hạn mức thực tế cao hơn. Chấp nhận cho portfolio; chuyển sang store dùng chung (DB/KV) ở giai đoạn 4 nếu bị lạm dụng.
-- Auth.js beta lỗi trên Vercel → dự phòng `next-auth` v4 + `getToken()` trong proxy (chỉ đổi `auth.ts`, `proxy.ts`, `write-access.ts`).
-
----
-
-## Giai đoạn 1 — Engine headless (1–2 tuần)
-
-```mermaid
-graph LR
-  P1.1 --> P1.2 --> P1.3 --> P1.4 --> P1.5 --> P1.9
-  P1.2 --> P1.6
-  P1.1 --> P1.7
-  P1.4 --> P1.8
-  P1.6 --> P1.9
-  P1.7 --> P1.9
-  P1.8 --> P1.9 --> P1.10
-```
-
-| Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
-|---|---|---|---|---|
-| **P1.1** ✅ (chờ Turso) | 8 bảng: `WorkflowProject`, `ProjectDocument`, `ProjectChunk`, `Workflow`, `WorkflowVersion`, `WorkflowRun`, `NodeExecution`, `WorkflowQuotaUsage` (trạng thái = `String`, graph/ui = JSON text vì Prisma 5 + SQLite không có enum/Json). Local: `prisma db push`. Turso: 21 lệnh `CREATE … IF NOT EXISTS` nối vào `init-turso.sql`. `isCurrentClient` nhận delegate `workflow`. **Còn lại:** chạy `yarn db:turso:init` trên Turso. | `prisma/schema.prisma`, `prisma/init-turso.sql`, `lib/prisma.ts` | — | Diff schema chỉ có dòng thêm; `init-turso.sql` chạy 2 lần trên SQLite trống + `migrate diff` với schema → rỗng; smoke test cascade trên `dev.db` → 0 bản ghi sót |
-| ~~**P1.2**~~ ✅ | DSL types: union phân biệt theo `type` (thu hẹp `config`), hằng `NODE_TYPES`, `AI_NODE_TYPES`, `CONDITION_OPERATORS`, `MERGE_MODES`, `ELSE_BRANCH`. `canonicalizeGraph()` sắp key + sắp node/edge theo id (giữ thứ tự mảng trong config, vd nhánh `condition`); `graphHash()` = sha256. | `lib/workflow/dsl-types.ts`, `lib/workflow/graph-hash.ts`, `tests/unit/workflow-graph-hash.test.ts` | — | 5 test: đổi `ui` không đổi hash; đổi thứ tự key/node/edge không đổi hash; `undefined` = vắng; đổi prompt/edge/thứ tự nhánh → đổi hash |
-| ~~**P1.3**~~ ✅ | `resolveNodePorts(node)` → `{inputs, outputs}`; kiểu port `text` \| `documents`. `input`→`query`; `rewrite` `query`→`query`; `rag` `query`→`documents`; `condition` `value`→ một port mỗi nhánh (theo thứ tự) + `else`; `merge` `items` (nhiều edge, kiểu theo `mode`)→`value`; `llm` `question` (bắt buộc) + `context` (documents, tuỳ chọn)→`text`; `output` `value`. Kèm `findInputPort`/`findOutputPort`, `NODE_LABELS`. | `lib/workflow/node-registry.ts`, `tests/unit/workflow-node-registry.test.ts` | P1.2 | 9 test |
-| ~~**P1.4**~~ ✅ | `validateWorkflowGraph(raw: unknown)` → `{ok, graph}` \| `{ok:false, errors[]}`. Bước 0 kiểm tra cấu trúc JSON (`INVALID_SHAPE` + `path`, gồm config từng node: `topK` 1–20, `temperature` 0–2, `length_gt` là số, không có `regex`). Sau đó 9 quy tắc, gom mọi lỗi một lượt; mỗi lỗi có `code` + `nodeId`/`edgeId`; `CYCLE` trả đúng node trên chu trình (Kahn + bóc ngược). | `lib/workflow/dsl-validator.ts`, `tests/unit/workflow-dsl-validator.test.ts` | P1.3 | 40 test; tắt thử quy tắc 3, 4, 5, 9 → test tương ứng fail |
-| ~~**P1.5**~~ ✅ | `executeWorkflow(graph, runInput, deps)`: chạy tuần tự theo thứ tự topo; node chạy khi mọi port `required` có ≥1 edge `ACTIVE`, ngược lại `SKIPPED` + mọi edge ra `SKIPPED`; port ra mà handler không trả → `SKIPPED` (cách `condition` chọn nhánh); port nhiều edge nhận mảng giá trị ACTIVE theo thứ tự edge; lỗi đầu tiên → node `FAILED`, phần còn lại `CANCELLED`, run `FAILED`; timeout theo node (mặc định 60s) huỷ `signal`. Hook `onNodeStart`/`onNodeFinish` cho P1.8/P1.9. Handler từng loại node truyền qua `deps.handlers` (P1.6). | `lib/workflow/dag-executor.ts`, `tests/unit/workflow-dag-executor.test.ts` | P1.4 | 12 test; tắt thử luật skip / cancel / skip theo nhánh → test fail |
-| **P1.6** | Node `input`, `condition` (`contains`/`equals`/`length_gt`), `merge`, `llm` (template `{{inputs.<port>}}`, `flash-lite`), `output`. | `lib/workflow/nodes/*.ts` | P1.3 | Test từng node; template tham chiếu port không có → lỗi |
-| **P1.7** | Bộ đếm quota trong DB (theo ngày + model), kiểm tra **trước** khi gọi LLM, tăng bằng transaction. | `lib/workflow/quota.ts` | P1.1 | Test: vượt hạn mức → lỗi `QUOTA_EXCEEDED`, không gọi provider |
-| **P1.8** | Trace Langfuse: 1 run = 1 trace, mỗi node 1 observation (generation/span), metadata + tags theo mục 3.5; hằng số tên dùng chung. | `lib/workflow/tracing.ts`, `lib/workflow/constants.ts` | P1.5 | Test với Langfuse mock: cây span đúng thứ tự, có trạng thái SKIPPED |
-| **P1.9** | Repository + API: CRUD `Workflow`, `POST /api/workflows/[id]/runs` (validate server → tạo `WorkflowRun` → execute → ghi `NodeExecution`; `maxDuration=120`; `after(flushLangfuse)`), chế độ `dryRun` dùng `setLlmProvider()` giả. | `lib/workflow/repository.ts`, `app/api/workflows/**/route.ts` | P1.5, P1.6, P1.7, P1.8 | Test route; `curl` không session → 401 (proxy) |
-| **P1.10** | Chạy thật 1 workflow `input → condition → 2 nhánh → merge → llm → output` bằng script, kiểm tra trace trên Langfuse. | `scripts/run-sample-workflow.ts`, `lib/workflow/fixtures/` | P1.9 | Trace hiện trên Langfuse; `WorkflowRun` có đủ `NodeExecution` |
-
-**Song song:** P1.1 ∥ P1.2; P1.6 ∥ P1.4; P1.7 ∥ chuỗi P1.3→P1.5.
-
-**Xong khi:** test dùng provider giả kiểm chứng đủ 9 quy tắc validate, `SKIPPED` lan truyền, `merge` khi một nhánh bị bỏ qua, dừng run khi node lỗi, cây span đúng; chạy thật 1 workflow và thấy trace trên Langfuse.
-
-**Rủi ro:**
-- Quota free tier (~20 req/ngày/model) cạnh tranh với chatbot → chỉ `flash-lite`, dry-run mặc định trong test/dev.
-- Chạy quá 120s → timeout theo node; nếu thường xuyên vượt, đẩy job queue lên giai đoạn 4.
-- Migration Turso lệch local → luôn cập nhật `init-turso.sql` cùng PR với `schema.prisma`.
-
----
-
-## Giai đoạn 2 — Knowledge Base (1–2 tuần)
-
-| Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
-|---|---|---|---|---|
-| **P2.1** | Storage KB: prefix `workflow-kb/{projectId}/{documentId}`, dùng lại `r2Client`/`isR2Configured`; dev không R2 → ghi thư mục local riêng (`mkdir -p`). | `lib/workflow/kb-storage.ts` | P1.1 | Test với R2 mock; xác nhận `findUnusedStorageFiles` không quét `workflow-kb/` |
-| **P2.2** | `DocumentParser` interface + parser `.md`, `.txt`; chunk theo heading, giữ `heading`. | `lib/workflow/kb/parser.ts`, `lib/workflow/kb/chunker.ts` | — | Test chunk cho file mẫu |
-| **P2.3** | Ingest: upload → lưu storage → chunk → `contentHash` → embed chunk mới (768d `Float32Array` → `Bytes`). | `lib/workflow/kb/ingest.ts` | P2.1, P2.2 | Test: upload lại tài liệu không đổi → **0** lần `embed()` |
-| **P2.4** | API upload/list/delete tài liệu theo project; giới hạn kích thước + định dạng. | `app/api/workflows/projects/[projectId]/documents/**` | P2.3 | Test route; file `.pdf` → 400 |
-| **P2.5** | Retrieval mới: dùng lại `normalizeText`, `cosineSimilarity`; keyword + vector, `topK`, ngưỡng, trọng số, stop-words theo config; **luôn lọc `projectId`**. | `lib/workflow/kb/retrieval.ts` | P2.3 | Test: project A không bao giờ trả chunk project B |
-| **P2.6** | Node `rewrite` (LLM viết lại câu hỏi) + `rag` (retrieval → `documents`); span Langfuse có điểm từng chunk. | `lib/workflow/nodes/rewrite.ts`, `lib/workflow/nodes/rag.ts` | P2.5, P1.6 | Test với provider/embedding giả |
-| **P2.7** | Eval theo project: tập câu hỏi mẫu + chunk kỳ vọng, đo Hit@4. | `lib/workflow/kb/eval.ts`, `lib/workflow/fixtures/kb-eval/*.json`, `scripts/eval-kb.ts` | P2.5 | Hit@4 ≥ 0.8 |
-
-**Song song:** P2.1 ∥ P2.2; P2.4 ∥ P2.5.
-
-**Xong khi:** project A không bao giờ trả chunk của project B; upload lại tài liệu không đổi → 0 lần `embed()`; job dọn file không đụng `workflow-kb/`; eval trên tập câu hỏi mẫu đạt Hit@4 ≥ 0.8.
-
-**Rủi ro:** tính cosine trong RAM chậm khi nhiều chunk → khi >~2.000 chunk/project, spike vector native **trên Turso thật** (local không có hàm vector).
-
----
-
-## Giai đoạn 3 — Canvas (2–3 tuần)
-
-| Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
-|---|---|---|---|---|
-| **P3.1** | Cài `@xyflow/react`, `zustand`; trang danh sách workflow + tạo mới. | `package.json`, `app/(workflow-builder)/workflows/page.tsx` | P1.9 | Tạo workflow từ UI, thấy trong danh sách |
-| **P3.2** | Store Zustand: `graph` + `ui` tách riêng; chuyển đổi DSL ↔ node/edge của React Flow. | `lib/workflow/canvas-store.ts`, `lib/workflow/canvas-mapping.ts` | P1.2 | Test: round-trip DSL → canvas → DSL giữ nguyên `graphHash`; kéo node chỉ đổi `ui` |
-| **P3.3** | Canvas import động (`ssr: false`), custom node 7 loại, handle theo `resolveNodePorts`, palette kéo thả. | `components/workflow-canvas/Canvas.tsx`, `components/workflow-canvas/nodes/*.tsx`, `components/workflow-canvas/Palette.tsx` | P3.2, P1.3 | Kéo thả đủ 7 loại; nối edge sai kiểu bị chặn |
-| **P3.4** | Panel cấu hình node (form theo loại; nhánh `condition`, chế độ `merge`, template `llm`, chọn tài liệu `rag`). | `components/workflow-canvas/NodeConfigPanel.tsx` | P3.3 | Sửa config → port `condition`/`merge` cập nhật trên canvas |
-| **P3.5** | Lưu nháp (debounce) `draftGraph`/`draftUi`; validate realtime gọi validator, hiện lỗi trên node/edge. | `components/workflow-canvas/*`, `app/api/workflows/[id]/route.ts` | P3.4, P1.4 | Tạo chu trình → node trong chu trình bị đánh dấu |
-| **P3.6** | Run draft: nhập input, gọi API run, hiện trạng thái từng node từ DB (`ACTIVE`/`SKIPPED`/`FAILED`), xem output. | `components/workflow-canvas/RunPanel.tsx` | P3.5 | Nhánh `SKIPPED` hiện khác màu |
-| **P3.7** | Publish: tạo `WorkflowVersion` bất biến; danh sách version; chạy theo version. | `app/api/workflows/[id]/versions/route.ts`, `components/workflow-canvas/VersionList.tsx` | P3.6 | Sửa nháp sau publish không đổi version cũ |
-| **P3.8** | Có `loading.tsx` + `error.tsx` cho route `/workflows/**`; kiểm tra màn hình hẹp. | `app/(workflow-builder)/workflows/**` | P3.3 | Ngắt mạng → error boundary hiện ra |
-
-**Song song:** P3.1 ∥ P3.2; P3.8 ∥ P3.4–P3.7.
-
-**Xong khi:** kéo thả không đổi `graphHash`; dựng và chạy được `input → condition → 2 nhánh → merge → llm → output` từ UI, thấy rõ nhánh `SKIPPED`.
-
-**Rủi ro:** `@xyflow/react` với React/Next mới → spike ở P3.1 trước; luôn import động để tránh lỗi SSR.
-
----
-
-## Giai đoạn 4 — Gia cố (theo nhu cầu)
-
-| Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
-|---|---|---|---|---|
-| **P4.1** | Tách Gemini key: factory `createGeminiProvider(apiKey)` tương thích ngược (`geminiProvider` giữ nguyên), Google project riêng + billing + hạn mức. *(Ngoại lệ có chủ đích với quy tắc không sửa `lib/ai/*` — chỉ thêm export.)* | `lib/ai/gemini.ts` (chỉ thêm) | P1.9 | Chatbot `/portfolio` không đổi hành vi; builder dùng key riêng |
-| **P4.2** | Huỷ thật: `signal?` trong `LlmProvider`, nút Cancel run. | `lib/ai/*` (thêm tham số tuỳ chọn), executor | P3.6 | Cancel → request đang chạy bị huỷ, node `CANCELLED` |
-| **P4.3** | Sentry cho route `/api/workflows/*`. | config Sentry | — | Lỗi thử xuất hiện trên Sentry |
-| **P4.4** | Job queue nếu run thường xuyên >120s. | [cần đánh giá] | số liệu từ P1/P3 | — |
-
----
-
-## Thứ tự PR tổng
-
-```mermaid
-graph TD
-  G0[P0.1–P0.6] --> P11[P1.1 schema] & P12[P1.2 DSL]
-  P12 --> P13[P1.3 registry] --> P14[P1.4 validator] --> P15[P1.5 executor]
-  P13 --> P16[P1.6 nodes]
-  P11 --> P17[P1.7 quota]
-  P15 --> P18[P1.8 tracing]
-  P15 & P16 & P17 & P18 --> P19[P1.9 API] --> P110[P1.10 chạy thật]
-  P11 --> P21[P2.1 storage]
-  P21 & P22[P2.2 parser] --> P23[P2.3 ingest] --> P24[P2.4 API] & P25[P2.5 retrieval]
-  P25 --> P26[P2.6 rewrite/rag] & P27[P2.7 eval]
-  P19 --> P31[P3.1 deps+list]
-  P12 --> P32[P3.2 store]
-  P31 & P32 --> P33[P3.3 canvas] --> P34[P3.4 config] --> P35[P3.5 lưu+validate] --> P36[P3.6 run] --> P37[P3.7 publish]
-  P37 --> G4[P4.x]
-```
-
-Canvas (P3.1–P3.5) có thể bắt đầu ngay sau P1.9, song song với giai đoạn 2; node `rag` chỉ cần ở P3.4 khi P2.6 đã xong.
 
 ## Nhật ký kiểm chứng
 
-| Ngày | Task | Kết quả |
+| Ngày | Phần | Kết quả |
 |---|---|---|
-| 2026-10-14 | — | Đăng nhập Google local OK, vào `/workflows` |
-| 2026-10-14 | P1.5 | Executor, 12 test + mutation check 3 luật; suite 402 pass / 8 skip |
-| 2026-10-14 | P1.4 | Validator, 40 test + mutation check 4 quy tắc |
-| 2026-10-14 | P1.3 | Node registry, 9 test; suite 350 pass / 8 skip |
-| 2026-10-14 | P1.2 | DSL types + graphHash, 5 test; suite 341 pass / 8 skip |
-| 2026-10-14 | P1.1 | Schema + SQL Turso kiểm chứng trên SQLite trống; `dev.db` đã push (backup trước); cascade OK. ⚠️ `.env` chứa `TURSO_*` → script dùng `lib/prisma` chạy local sẽ trỏ Turso. Chưa áp lên Turso |
-| 2026-10-14 | P0.3 | 37 handler ghi trả 401 khi ẩn danh; mutation test xác nhận bắt được route thiếu guard; suite 336 pass / 8 skip |
-| 2026-10-14 | P0.2 | Danh sách route công khai: `chat`, `chat/feedback`, `favorites`; thêm 2 test 429 → 298 pass / 8 skip |
-| 2026-10-14 | P0.1 | Test đã có sẵn, 16 pass; toàn bộ suite 296 pass / 8 skip (không phải 66 như thiết kế ghi) |
+| 2026-10-14 | M0 · handlers | 5 node, 20 test; suite 422 pass / 8 skip |
+| 2026-10-14 | M0 · executor | 12 test + mutation 3 luật |
+| 2026-10-14 | M0 · validator | 40 test + mutation 4 quy tắc |
+| 2026-10-14 | M0 · registry, DSL | 9 + 5 test |
+| 2026-10-14 | M0 · schema | SQL Turso khớp schema trên SQLite trống; `dev.db` đã push (có backup); cascade OK. Chưa áp lên Turso |
+| 2026-10-14 | M0 · auth | 37 handler ghi → 401; 3 route công khai có rate limit + test; đăng nhập Google local OK |
