@@ -71,22 +71,21 @@ describe("Tier 1 — R1: Headless AI SDK & React 19 Compliance", () => {
   });
 
   describe("F02: Icon & Asset Isolation", () => {
-    it.runIf(fileExistsInProject(iconsPath))("icons.tsx exports the 13 required SVG icon components", () => {
+    it.runIf(fileExistsInProject(iconsPath))("icons.tsx exports the 12 required SVG icon components", () => {
       const iconsContent = readProjectFile(iconsPath);
       const expectedIcons = [
-        "ModernSparklesIcon",
-        "TelegramPaperPlaneIcon",
-        "VerifiedBadgeIcon",
-        "DoubleCheckIcon",
-        "QuadrantArrowsIcon",
-        "ResetChatIcon",
+        "SparklesIcon",
+        "ArrowUpIcon",
+        "StopIcon",
+        "NewChatIcon",
         "CloseIcon",
         "CopyIcon",
         "CheckIcon",
-        "LoaderIcon",
         "CheckCircleIcon",
         "ChevronDownIcon",
-        "PromptSparkleIcon",
+        "ThumbsUpIcon",
+        "ThumbsDownIcon",
+        "ArrowDownIcon",
       ];
       for (const icon of expectedIcons) {
         expect(iconsContent).toContain(`export function ${icon}`);
@@ -96,8 +95,8 @@ describe("Tier 1 — R1: Headless AI SDK & React 19 Compliance", () => {
     it.runIf(fileExistsInProject(iconsPath))("RoadmapChatbotWidget.tsx imports icons instead of inlining SVG blocks", () => {
       const widgetContent = readProjectFile(widgetPath);
       expect(widgetContent).toMatch(/from\s+["'].\/icons["']/);
-      expect(widgetContent).not.toContain("export function ModernSparklesIcon");
-      expect(widgetContent).not.toContain("export function TelegramPaperPlaneIcon");
+      expect(widgetContent).not.toContain("export function SparklesIcon");
+      expect(widgetContent).not.toContain("export function ArrowUpIcon");
     });
 
     it.runIf(fileExistsInProject(iconsPath))("icons file contains only visual SVG components without stateful logic", () => {

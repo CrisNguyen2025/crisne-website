@@ -2,19 +2,18 @@ import { describe, it, expect } from "vitest";
 import React from "react";
 import ReactDOMServer from "react-dom/server";
 import {
-  ModernSparklesIcon,
-  TelegramPaperPlaneIcon,
-  VerifiedBadgeIcon,
-  DoubleCheckIcon,
-  QuadrantArrowsIcon,
-  ResetChatIcon,
+  SparklesIcon,
+  ArrowUpIcon,
+  StopIcon,
+  NewChatIcon,
   CloseIcon,
   CopyIcon,
   CheckIcon,
-  LoaderIcon,
   CheckCircleIcon,
   ChevronDownIcon,
-  PromptSparkleIcon,
+  ThumbsUpIcon,
+  ThumbsDownIcon,
+  ArrowDownIcon,
 } from "../../roadmap-rag-assistant/sdk/typescript/src/react/icons";
 import {
   formatMarkdownText,
@@ -29,30 +28,29 @@ import {
 
 describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
   const allIcons = [
-    { name: "ModernSparklesIcon", component: ModernSparklesIcon, defaultClass: "w-5 h-5" },
-    { name: "TelegramPaperPlaneIcon", component: TelegramPaperPlaneIcon, defaultClass: "w-6 h-6" },
-    { name: "VerifiedBadgeIcon", component: VerifiedBadgeIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "DoubleCheckIcon", component: DoubleCheckIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "QuadrantArrowsIcon", component: QuadrantArrowsIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "ResetChatIcon", component: ResetChatIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "CloseIcon", component: CloseIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "CopyIcon", component: CopyIcon, defaultClass: "w-3 h-3" },
-    { name: "CheckIcon", component: CheckIcon, defaultClass: "w-3 h-3" },
-    { name: "LoaderIcon", component: LoaderIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "CheckCircleIcon", component: CheckCircleIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "ChevronDownIcon", component: ChevronDownIcon, defaultClass: "w-3.5 h-3.5" },
-    { name: "PromptSparkleIcon", component: PromptSparkleIcon, defaultClass: "w-3.5 h-3.5" },
+    { name: "SparklesIcon", component: SparklesIcon, defaultClass: "w-4 h-4" },
+    { name: "ArrowUpIcon", component: ArrowUpIcon, defaultClass: "w-4 h-4" },
+    { name: "StopIcon", component: StopIcon, defaultClass: "w-4 h-4" },
+    { name: "NewChatIcon", component: NewChatIcon, defaultClass: "w-4 h-4" },
+    { name: "CloseIcon", component: CloseIcon, defaultClass: "w-4 h-4" },
+    { name: "CopyIcon", component: CopyIcon, defaultClass: "w-4 h-4" },
+    { name: "CheckIcon", component: CheckIcon, defaultClass: "w-4 h-4" },
+    { name: "CheckCircleIcon", component: CheckCircleIcon, defaultClass: "w-4 h-4" },
+    { name: "ChevronDownIcon", component: ChevronDownIcon, defaultClass: "w-4 h-4" },
+    { name: "ThumbsUpIcon", component: ThumbsUpIcon, defaultClass: "w-4 h-4" },
+    { name: "ThumbsDownIcon", component: ThumbsDownIcon, defaultClass: "w-4 h-4" },
+    { name: "ArrowDownIcon", component: ArrowDownIcon, defaultClass: "w-4 h-4" },
   ];
 
-  describe("Mission Item 1: Icon Isolation & Rendering Verification (All 13 Icons)", () => {
-    it("all 13 icons are exported as valid React function components", () => {
-      expect(allIcons).toHaveLength(13);
+  describe("Mission Item 1: Icon Isolation & Rendering Verification (All 12 Icons)", () => {
+    it("all 12 icons are exported as valid React function components", () => {
+      expect(allIcons).toHaveLength(12);
       for (const { name, component } of allIcons) {
         expect(typeof component, `${name} should be a function`).toBe("function");
       }
     });
 
-    it("renders each of the 13 icons to valid SVG markup with default className", () => {
+    it("renders each of the 12 icons to valid SVG markup with default className", () => {
       for (const { name, component, defaultClass } of allIcons) {
         const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(component));
         expect(markup, `${name} markup should start with <svg`).toContain("<svg");
@@ -61,7 +59,7 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
       }
     });
 
-    it("renders each of the 13 icons with custom classNames applied directly to the svg", () => {
+    it("renders each of the 12 icons with custom classNames applied directly to the svg", () => {
       const customClass = "test-custom-icon-class-xyz-987";
       for (const { name, component } of allIcons) {
         const markup = ReactDOMServer.renderToStaticMarkup(
@@ -82,20 +80,14 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
       }
     });
 
-    it("VerifiedBadgeIcon preserves its brand color while applying custom classes", () => {
-      const markup = ReactDOMServer.renderToStaticMarkup(
-        React.createElement(VerifiedBadgeIcon, { className: "brand-override-class" })
-      );
-      expect(markup).toContain("text-[#2AABEE]");
-      expect(markup).toContain("brand-override-class");
-    });
-
-    it("LoaderIcon preserves spin animation while applying custom classes", () => {
-      const markup = ReactDOMServer.renderToStaticMarkup(
-        React.createElement(LoaderIcon, { className: "custom-spinner-class" })
-      );
-      expect(markup).toContain("animate-spin");
-      expect(markup).toContain("custom-spinner-class");
+    it("every icon shares the outline frame: 1.5 stroke, currentColor, aria-hidden, no hex colors", () => {
+      for (const { name, component } of allIcons) {
+        const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(component));
+        expect(markup, `${name} stroke width`).toContain('stroke-width="1.5"');
+        expect(markup, `${name} stroke color`).toContain('stroke="currentColor"');
+        expect(markup, `${name} aria-hidden`).toContain('aria-hidden="true"');
+        expect(markup, `${name} hex color`).not.toMatch(/#[0-9A-Fa-f]{6}/);
+      }
     });
 
     it("handles empty string className gracefully", () => {
@@ -110,16 +102,19 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
 
     it("confirms RoadmapChatbotWidget has zero inline svg tags", () => {
       const widgetPath = "roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget.tsx";
-      const stepRowPath = "roadmap-rag-assistant/sdk/typescript/src/react/ToolStepRow.tsx";
-      const widgetContent = readProjectFile(widgetPath);
-      const stepRowContent = readProjectFile(stepRowPath);
-      for (const content of [widgetContent, stepRowContent]) {
-        expect(content).not.toMatch(/<svg[\s>]/);
-        expect(content).toContain('from "./icons"');
+      const sdkDir = "roadmap-rag-assistant/sdk/typescript/src/react";
+      const sdkFiles = [widgetPath, `${sdkDir}/ToolStepRow.tsx`, `${sdkDir}/ChatMarkdown.tsx`];
+      for (const file of sdkFiles) {
+        const content = readProjectFile(file);
+        expect(content, file).not.toMatch(/<svg[\s>]/);
+        expect(content, file).toContain('from "./icons"');
       }
-      // Icons may be used by the widget or by its step-row child component.
+      // Every shared icon is used by one of the two chatbots (no dead icons).
+      const portfolio = readProjectFile("components/floating-bot/FloatingChatBot.tsx");
+      expect(portfolio).not.toMatch(/<svg[\s>]/);
+      const allUsage = sdkFiles.map(readProjectFile).join("\n") + portfolio;
       for (const { name } of allIcons) {
-        expect(widgetContent + stepRowContent).toContain(name);
+        expect(allUsage).toContain(name);
       }
     });
   });
@@ -130,12 +125,13 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         const emptyResult = ReactDOMServer.renderToStaticMarkup(
           React.createElement("div", null, formatMarkdownText(""))
         );
-        expect(emptyResult).toContain("h-1.5");
+        // Blank input renders an empty container: no spacer divs, no stray text.
+        expect(emptyResult).not.toMatch(/<(p|li|h\d)/);
 
         const multiNewlineResult = ReactDOMServer.renderToStaticMarkup(
           React.createElement("div", null, formatMarkdownText("\n\n\n"))
         );
-        expect(multiNewlineResult).toBe("<div><div class=\"h-1.5\"></div><div class=\"h-1.5\"></div><div class=\"h-1.5\"></div><div class=\"h-1.5\"></div></div>");
+        expect(multiNewlineResult).not.toMatch(/<(p|li|h\d)/);
       });
 
       it("handles all bullet point prefixes (- , * , • )", () => {
@@ -146,7 +142,10 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         expect(markup).toContain("Item Dash");
         expect(markup).toContain("Item Asterisk");
         expect(markup).toContain("Item Bullet");
-        expect(markup).toContain("text-[#2AABEE]");
+        // One <ul> with three items, marker in the muted token colour
+        expect(markup.match(/<ul/g)).toHaveLength(1);
+        expect(markup.match(/<li/g)).toHaveLength(3);
+        expect(markup).toContain("text-muted-foreground");
       });
 
       it("handles numbered lists with single, multiple digits, and zero", () => {
@@ -173,8 +172,8 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         expect(markup).toContain("Version 3.14 is released today.");
       });
 
-      it("handles ## (h3) and ### (h4) headers correctly", () => {
-        const content = "## Major Section\n### Minor Section\n#### Level 4 (fallback to p)";
+      it("handles # to #### headers without leaking '#' characters", () => {
+        const content = "## Major Section\n### Minor Section\n#### Level 4";
         const markup = ReactDOMServer.renderToStaticMarkup(
           React.createElement("div", null, formatMarkdownText(content))
         );
@@ -182,29 +181,51 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         expect(markup).toContain("Major Section");
         expect(markup).toContain("<h4");
         expect(markup).toContain("Minor Section");
-        expect(markup).toContain("<p");
-        expect(markup).toContain("#### Level 4 (fallback to p)");
+        expect(markup).toContain("<h5");
+        expect(markup).toContain("Level 4");
+        expect(markup).not.toContain("#");
       });
 
-      it("renders distinct theme styles when isUser = true vs isUser = false", () => {
-        const sample = "## Header\n- Bullet point\n1. Numbered item\nParagraph **bold** and `code`";
-        
-        const assistantMarkup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(sample, false))
+      it("uses design tokens only: no hard-coded hex colours or slate/white palette", () => {
+        const sample = "## Header\n- Bullet point\n1. Numbered item\nParagraph **bold** and `code`\n> quote\n```ts\nconst x = 1;\n```";
+        const markup = ReactDOMServer.renderToStaticMarkup(
+          React.createElement("div", null, formatMarkdownText(sample))
         );
-        const userMarkup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(sample, true))
+        expect(markup).not.toMatch(/#[0-9A-Fa-f]{6}/);
+        expect(markup).not.toMatch(/text-slate-|bg-slate-|text-white/);
+        expect(markup).toContain("text-foreground");
+        expect(markup).toContain("bg-muted");
+      });
+
+      it("renders nested lists, code blocks, blockquotes and safe links", () => {
+        const sample = [
+          "1. Parent",
+          "   - Child A",
+          "   - Child B",
+          "2. Next",
+          "",
+          "> Quoted line",
+          "",
+          "```bash",
+          "npm test",
+          "```",
+          "",
+          "[Docs](/roadmaps/fe) [Ext](https://example.com) [Bad](javascript:alert(1))",
+        ].join("\n");
+        const markup = ReactDOMServer.renderToStaticMarkup(
+          React.createElement("div", null, formatMarkdownText(sample))
         );
-
-        // Assistant theme assertions
-        expect(assistantMarkup).toContain("text-slate-900");
-        expect(assistantMarkup).toContain("text-[#2AABEE]");
-        expect(assistantMarkup).toContain("bg-slate-100");
-
-        // User theme assertions
-        expect(userMarkup).toContain("text-white");
-        expect(userMarkup).toContain("text-white/80");
-        expect(userMarkup).toContain("bg-white/20");
+        expect(markup.match(/<ol/g)).toHaveLength(1);
+        expect(markup).toContain("Child A");
+        expect(markup).toContain("Child B");
+        expect(markup).toContain("<blockquote");
+        expect(markup).toContain("<pre");
+        expect(markup).toContain("npm test");
+        expect(markup).toContain("Sao chép code");
+        expect(markup).toContain('href="/roadmaps/fe"');
+        expect(markup).toContain('href="https://example.com" target="_blank" rel="noopener noreferrer"');
+        expect(markup).not.toContain("javascript:");
+        expect(markup).toContain("Bad");
       });
 
       it("escapes raw HTML tags to prevent XSS injection attacks", () => {
@@ -243,14 +264,14 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         const markup = ReactDOMServer.renderToStaticMarkup(
           React.createElement("span", null, renderInlineStyles("This is **bold** text"))
         );
-        expect(markup).toContain("<strong class=\"font-semibold text-slate-900\">bold</strong>");
+        expect(markup).toContain("<strong class=\"font-semibold text-foreground\">bold</strong>");
       });
 
       it("renders code `text` in <code> tags", () => {
         const markup = ReactDOMServer.renderToStaticMarkup(
           React.createElement("span", null, renderInlineStyles("Run `npm test` here"))
         );
-        expect(markup).toContain("<code class=\"rounded-md px-1.5 py-0.5 font-mono text-[11px] bg-slate-100 text-[#1e88e5] border border-slate-200/80\">npm test</code>");
+        expect(markup).toContain("<code class=\"rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground selection:bg-primary/20\">npm test</code>");
       });
 
       it("handles adjacent and mixed formatting", () => {
@@ -270,6 +291,16 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
           React.createElement("span", null, renderInlineStyles(unclosed))
         );
         expect(markup).toContain("Single `backtick and unclosed **bold text without end");
+      });
+
+      it("renders _italic_ and *italic* but leaves snake_case identifiers untouched", () => {
+        const markup = ReactDOMServer.renderToStaticMarkup(
+          React.createElement("span", null, renderInlineStyles("_Hỗ trợ English._ *nhấn* create_topics_batch"))
+        );
+        expect(markup.match(/<em/g)).toHaveLength(2);
+        expect(markup).toContain("Hỗ trợ English.");
+        expect(markup).toContain("create_topics_batch");
+        expect(markup).not.toContain("_Hỗ");
       });
 
       it("handles empty bold tags **** cleanly", () => {
@@ -319,23 +350,23 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
     });
 
     describe("formatToolDisplayName", () => {
-      it("maps all 14 roadmap & knowledge tool names to descriptive labels", () => {
+      it("maps all 14 roadmap & knowledge tool names to plain labels (no emoji)", () => {
         const mappings: Record<string, string> = {
-          search_live_knowledge: "🔍 Tra cứu cơ sở tri thức Live",
-          create_topic: "🗺️ Tạo Topic Roadmap",
-          create_topics_batch: "🗺️ Tạo Topic Roadmap",
-          create_layer: "📑 Tạo Layer mảng kiến thức",
-          create_layers_batch: "📑 Tạo Layer mảng kiến thức",
-          create_group: "🏷️ Tạo Nhóm phân loại (Group)",
-          create_item: "📖 Thêm Bài học (Item)",
-          create_items_batch: "📖 Thêm Bài học (Item)",
-          delete_topic: "🗑️ Xóa thực thể Roadmap",
-          delete_layer: "🗑️ Xóa thực thể Roadmap",
-          delete_group: "🗑️ Xóa thực thể Roadmap",
-          delete_item: "🗑️ Xóa thực thể Roadmap",
-          preview_roadmap_plan: "📋 Phác thảo kế hoạch Roadmap (/plan)",
-          generate_roadmap_from_template: "⚡ Sinh nhanh từ Blueprint (/goal)",
-          list_topics: "📚 Liệt kê danh sách Topic",
+          search_live_knowledge: "Tra cứu cơ sở tri thức Live",
+          create_topic: "Tạo Topic Roadmap",
+          create_topics_batch: "Tạo Topic Roadmap",
+          create_layer: "Tạo Layer mảng kiến thức",
+          create_layers_batch: "Tạo Layer mảng kiến thức",
+          create_group: "Tạo Nhóm phân loại (Group)",
+          create_item: "Thêm Bài học (Item)",
+          create_items_batch: "Thêm Bài học (Item)",
+          delete_topic: "Xóa thực thể Roadmap",
+          delete_layer: "Xóa thực thể Roadmap",
+          delete_group: "Xóa thực thể Roadmap",
+          delete_item: "Xóa thực thể Roadmap",
+          preview_roadmap_plan: "Phác thảo kế hoạch Roadmap (/plan)",
+          generate_roadmap_from_template: "Sinh nhanh từ Blueprint (/goal)",
+          list_topics: "Liệt kê danh sách Topic",
         };
 
         for (const [tool, expected] of Object.entries(mappings)) {

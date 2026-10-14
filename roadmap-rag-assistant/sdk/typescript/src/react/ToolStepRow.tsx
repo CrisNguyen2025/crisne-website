@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { CheckCircleIcon, ChevronDownIcon } from "./icons";
+import { CheckIcon, ChevronDownIcon } from "./icons";
 
 export function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -35,13 +35,13 @@ function ElapsedTimer({
 function StepSpinner() {
   return (
     <span
-      className="grid grid-cols-2 gap-[2px] w-3 h-3 shrink-0"
+      className="grid h-3 w-3 shrink-0 grid-cols-2 gap-0.5"
       aria-hidden="true"
     >
-      <span className="rounded-full bg-[#2AABEE] animate-pulse" />
-      <span className="rounded-full bg-[#2AABEE] animate-pulse [animation-delay:150ms]" />
-      <span className="rounded-full bg-[#2AABEE] animate-pulse [animation-delay:450ms]" />
-      <span className="rounded-full bg-[#2AABEE] animate-pulse [animation-delay:300ms]" />
+      <span className="animate-pulse rounded-full bg-primary" />
+      <span className="animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
+      <span className="animate-pulse rounded-full bg-primary [animation-delay:450ms]" />
+      <span className="animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
     </span>
   );
 }
@@ -69,29 +69,27 @@ export function ToolStepRow({
   const canExpand = !running && !!detail && !!onToggle;
 
   return (
-    <div className="text-xs">
+    <div className="font-mono text-xs">
       <button
         type="button"
         onClick={canExpand ? onToggle : undefined}
         disabled={!canExpand}
         aria-expanded={canExpand ? expanded : undefined}
-        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left select-none transition-colors ${
-          canExpand ? "cursor-pointer hover:bg-slate-100/80" : "cursor-default"
+        className={`flex w-full select-none items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors ${
+          canExpand ? "cursor-pointer hover:bg-muted" : "cursor-default"
         }`}
       >
         {running ? (
           <StepSpinner />
         ) : (
-          <CheckCircleIcon className="w-3 h-3 text-emerald-600 shrink-0" />
+          <CheckIcon className="h-3 w-3 text-muted-foreground" />
         )}
         <span
-          className={`truncate text-[11.5px] ${
-            running ? "text-slate-700" : "text-slate-500"
-          }`}
+          className={`truncate ${running ? "text-foreground" : "text-muted-foreground"}`}
         >
           {label}
         </span>
-        <span className="ml-auto flex items-center gap-1 text-[10.5px] text-slate-400 shrink-0">
+        <span className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground">
           {startedAt !== undefined && (running || endedAt !== undefined) && (
             <ElapsedTimer
               startedAt={startedAt}
@@ -100,16 +98,14 @@ export function ToolStepRow({
           )}
           {canExpand && (
             <ChevronDownIcon
-              className={`w-3 h-3 transition-transform duration-200 ${
-                expanded ? "rotate-180" : "-rotate-90"
-              }`}
+              className={`h-3 w-3 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
             />
           )}
         </span>
       </button>
 
       {canExpand && expanded && (
-        <div className="ml-5 mt-1 rounded-lg border border-slate-100 bg-slate-50/70 p-2.5 text-[11px] text-slate-700 whitespace-pre-wrap font-mono leading-relaxed">
+        <div className="ml-5 mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-muted/40 p-2.5 leading-relaxed text-muted-foreground">
           {detail}
         </div>
       )}
