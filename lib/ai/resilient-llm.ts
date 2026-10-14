@@ -1,7 +1,6 @@
-import { CHAT_MODEL_CHAIN } from "./gemini";
 import { isCircuitOpen, recordLlmFailure } from "./llm-circuit-breaker";
 import type { LlmErrorKind } from "./llm-errors";
-import { getLlmProvider, type LlmGenerateParams } from "./llm-provider";
+import { getChatModelChain, getLlmProvider, type LlmGenerateParams } from "./llm-provider";
 
 // Only these are worth retrying on another model; e.g. a bad request would fail everywhere
 const FALLBACK_ON: LlmErrorKind[] = ["quota", "upstream", "timeout"];
@@ -25,7 +24,7 @@ async function runWithFallback<T>(
   const fallbackFrom: string[] = [];
   let lastError: unknown;
 
-  for (const model of CHAT_MODEL_CHAIN) {
+  for (const model of getChatModelChain()) {
     if (isCircuitOpen(model)) {
       fallbackFrom.push(model);
       continue;

@@ -12,8 +12,14 @@ import {
   shouldRewriteQuery,
   type ScoredChunk,
 } from "@/lib/ai/rag-engine";
-import { DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai/gemini";
-import { getLlmProvider, type LlmMessage, type LlmUsage } from "@/lib/ai/llm-provider";
+import { DEFAULT_EMBEDDING_MODEL } from "@/lib/ai/gemini";
+import {
+  getChatModelChain,
+  getLlmProvider,
+  isLlmConfigured,
+  type LlmMessage,
+  type LlmUsage,
+} from "@/lib/ai/llm-provider";
 import { classifyLlmError } from "@/lib/ai/llm-errors";
 import { generateStreamWithFallback } from "@/lib/ai/resilient-llm";
 import { getCachedAnswer, isCacheableQuery, setCachedAnswer } from "@/lib/ai/response-cache";
@@ -118,7 +124,7 @@ export async function POST(req: NextRequest) {
   // Runs after the response (including the stream) has finished
   after(flushLangfuse);
 
-  // Public endpoint backed by Gemini quota
+  // Public endpoint backed by LLM provider quota (Gemini or Groq)
   const rateLimit = checkRateLimit(req, { key: "chat", limit: 20, windowMs: 5 * 60_000 });
   if (!rateLimit.isAllowed) {
     return new Response(
@@ -186,9 +192,7 @@ export async function POST(req: NextRequest) {
           "Cache-Control": "no-cache",
           "X-Trace-Id": rootSpan.traceId,
         };
-        const apiKey = (process.env.GEMINI_API_KEY || "").trim();
-        const isApiKeyConfigured =
-          apiKey.length > 10 && !apiKey.includes("your_google_gemini_api_key");
+        const isApiKeyConfigured = isLlmConfigured();
 
         const knowledgeBase = loadKnowledgeBase();
 
@@ -233,7 +237,7 @@ export async function POST(req: NextRequest) {
         if (shouldRewriteQuery(history)) {
           const rewriteGeneration = rootSpan.startObservation(
             CHAT_OBSERVATION.rewrite,
-            { model: DEFAULT_CHAT_MODEL, input: { query: trimmedQuery, history } },
+            { model: getChatModelChain()[0], input: { query: trimmedQuery, history } },
             { asType: "generation" }
           );
           const rewrite = await rewriteQuery(trimmedQuery, history);
@@ -336,7 +340,7 @@ export async function POST(req: NextRequest) {
           answerGeneration = rootSpan.startObservation(
             CHAT_OBSERVATION.answer,
             {
-              model: DEFAULT_CHAT_MODEL,
+              model: getChatModelChain()[0],
               modelParameters: generationConfig,
               input: { systemPrompt, contents },
               metadata: { hasContext: !!ragContext },

@@ -1,4 +1,5 @@
-import { geminiProvider } from "./gemini";
+import { CHAT_MODEL_CHAIN, geminiProvider } from "./gemini";
+import { GROQ_CHAT_MODEL_CHAIN, groqProvider } from "./groq";
 
 export interface LlmUsage {
   input: number;
@@ -45,6 +46,26 @@ export function setLlmProvider(provider: LlmProvider | null): void {
   overrideProvider = provider;
 }
 
+type ProviderName = "gemini" | "groq";
+
+/** LLM_PROVIDER=groq switches chat generation to Groq; anything else keeps Gemini. */
+export function getProviderName(): ProviderName {
+  return (process.env.LLM_PROVIDER || "").trim().toLowerCase() === "groq" ? "groq" : "gemini";
+}
+
+/** Models tried in order by the resilient wrapper, for the active provider. */
+export function getChatModelChain(): string[] {
+  return getProviderName() === "groq" ? GROQ_CHAT_MODEL_CHAIN : CHAT_MODEL_CHAIN;
+}
+
+/** Whether the active provider has a usable API key (otherwise the route answers offline). */
+export function isLlmConfigured(): boolean {
+  if (getProviderName() === "groq") return (process.env.GROQ_API_KEY || "").trim().length > 10;
+  const key = (process.env.GEMINI_API_KEY || "").trim();
+  return key.length > 10 && !key.includes("your_google_gemini_api_key");
+}
+
 export function getLlmProvider(): LlmProvider {
-  return overrideProvider ?? geminiProvider;
+  if (overrideProvider) return overrideProvider;
+  return getProviderName() === "groq" ? groqProvider : geminiProvider;
 }

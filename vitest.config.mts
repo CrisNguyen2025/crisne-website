@@ -15,6 +15,8 @@ export default defineConfig({
     // Tests must never hit Gemini or Langfuse: no keys from .env.local leak in
     env: {
       GEMINI_API_KEY: "test-gemini-key-not-real",
+      // Route tests assert the Gemini model chain
+      LLM_PROVIDER: "",
       LANGFUSE_PUBLIC_KEY: "",
       LANGFUSE_SECRET_KEY: "",
       LANGFUSE_RELEASE: "test-release",
