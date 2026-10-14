@@ -12,6 +12,8 @@ interface FeedbackRequestPayload {
 // W3C trace id format used by Langfuse
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
 
+// Public on purpose: portfolio visitors rate answers without signing in.
+// Abuse is bounded by the rate limit and the trace id check below.
 export async function POST(req: NextRequest) {
   const rateLimit = checkRateLimit(req, { key: "chat-feedback", limit: 60, windowMs: 5 * 60_000 });
   if (!rateLimit.isAllowed) {

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
+// after() needs a Next.js request scope; the chat route registers a Langfuse flush with it
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: vi.fn(),
+}));
+
 // Auth.js is replaced by a controllable session; no Google round-trip in tests
 const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
@@ -25,6 +31,8 @@ import { POST as createRoadmap } from "@/app/api/v1/roadmaps/route";
 import { POST as cleanupStorage } from "@/app/api/storage/cleanup/route";
 import { POST as clip } from "@/app/api/v1/clipper/route";
 import { POST as addFavorite } from "@/app/api/favorites/route";
+import { POST as chat } from "@/app/api/chat/route";
+import { POST as sendChatFeedback } from "@/app/api/chat/feedback/route";
 
 const OWNER = "owner@example.com";
 let ip = 0;
@@ -129,5 +137,35 @@ describe("favorites (public, rate limited)", () => {
 
     expect(statuses.slice(0, 30).every((s) => s !== 401 && s !== 429)).toBe(true);
     expect(statuses[30]).toBe(429);
+  });
+});
+
+describe("chat (public, rate limited)", () => {
+  // Empty bodies are rejected with 400 before any LLM or Langfuse call
+  const statusesFrom = async (route: (req: NextRequest) => Promise<Response>, url: string, count: number) => {
+    const statuses: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const res = await route(
+        new NextRequest(`http://localhost${url}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-forwarded-for": "198.51.100.88" },
+          body: "{}",
+        })
+      );
+      statuses.push(res.status);
+    }
+    return statuses;
+  };
+
+  it("POST /api/chat stays public but returns 429 after 20 requests from one IP", async () => {
+    const statuses = await statusesFrom(chat, "/api/chat", 21);
+    expect(statuses.slice(0, 20).every((s) => s === 400)).toBe(true);
+    expect(statuses[20]).toBe(429);
+  });
+
+  it("POST /api/chat/feedback stays public but returns 429 after 60 requests from one IP", async () => {
+    const statuses = await statusesFrom(sendChatFeedback, "/api/chat/feedback", 61);
+    expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
+    expect(statuses[60]).toBe(429);
   });
 });
