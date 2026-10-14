@@ -14,6 +14,7 @@ const navLinks = [
   { label: "Testimonials", href: "#testimonials" },
   { label: "FAQ", href: "#faq" },
   { label: "Contact", href: "mailto:hello@crisne.dev" },
+  { label: "Roadmaps", href: "/" },
 ];
 
 const sectionIds = ["skills", "experience", "projects", "testimonials", "faq"];
@@ -92,6 +93,8 @@ export function Navbar() {
     e: React.MouseEvent<HTMLAnchorElement>,
     href: string
   ) => {
+    // Page links (e.g. "/") navigate normally; only in-page anchors scroll
+    if (href.startsWith("/")) return;
     e.preventDefault();
     scrollToSection(href);
   };
@@ -100,6 +103,7 @@ export function Navbar() {
     e: React.MouseEvent<HTMLAnchorElement>,
     href: string
   ) => {
+    if (href.startsWith("/")) return;
     e.preventDefault();
     setMobileOpen(false);
 

@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Home, Plus, Layers, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { Home, Plus, Layers, Sparkles, UserRound } from 'lucide-react';
 import { RoadmapMeta } from '@/lib/roadmap/types';
 
 interface CompactSidebarProps {
@@ -120,6 +121,13 @@ export function CompactSidebar({
 
       {/* Bottom: Quick Add Roadmap or Info */}
       <div className="flex flex-col items-center gap-2">
+        <Link
+          href="/portfolio"
+          title="Portfolio"
+          className="w-10 h-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center transition-colors"
+        >
+          <UserRound className="w-4 h-4" />
+        </Link>
         {onOpenCreateRoadmap && (
           <button
             type="button"

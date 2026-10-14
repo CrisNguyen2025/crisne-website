@@ -1,4 +1,9 @@
 import type { MetadataRoute } from "next";
+import { getPosts } from "@/lib/notion";
+import { INITIAL_KNOWLEDGE_BASE } from "@/lib/knowledge/data";
+
+// Regenerate at most hourly (notes change in Notion)
+export const revalidate = 3600;
 
 const SITE_URL = "https://crisne.blog";
 
@@ -36,38 +41,35 @@ const staticRoutes: MetadataRoute.Sitemap = [
   },
 ];
 
-// Future dynamic routes - when projects have individual pages
-// This is a placeholder for when you add /projects/[slug] routes
-// async function getProjectRoutes(): Promise<MetadataRoute.Sitemap> {
-//   const projects = await fetchProjects(); // Your data fetching
-//   return projects.map((project) => ({
-//     url: `${SITE_URL}/projects/${project.slug}`,
-//     lastModified: project.updatedAt,
-//     changeFrequency: "monthly",
-//     priority: 0.8,
-//   }));
-// }
-
-export default function sitemap(): MetadataRoute.Sitemap {
-  // Combine static and dynamic routes when available
-  // const projectRoutes = await getProjectRoutes();
-  // return [...staticRoutes, ...projectRoutes];
-
-  return staticRoutes;
+// Notes come from Notion; a Notion outage must not break the sitemap
+async function getNoteRoutes(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const posts = await getPosts();
+    return posts
+      .filter((post) => post.published)
+      .map((post) => ({
+        // Detail page resolves slug first, then falls back to the Notion id
+        url: `${SITE_URL}/notes/${post.slug || post.id}`,
+        lastModified: new Date(post.updatedAt),
+        changeFrequency: "monthly",
+        priority: 0.6,
+      }));
+  } catch (error) {
+    console.error("Sitemap: failed to load notes", error);
+    return [];
+  }
 }
 
-// For future dynamic sitemap generation with projects
-export async function generateSitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseRoutes = staticRoutes;
+function getKnowledgeRoutes(): MetadataRoute.Sitemap {
+  return INITIAL_KNOWLEDGE_BASE.map((entity) => ({
+    url: `${SITE_URL}/knowledge/${entity.type}/${entity.slug}`,
+    lastModified: new Date(entity.updatedAt),
+    changeFrequency: "monthly",
+    priority: 0.5,
+  }));
+}
 
-  // Add dynamic project routes when implemented
-  // const projects = await getProjects();
-  // const projectRoutes = projects.map((project) => ({
-  //   url: `${SITE_URL}/projects/${project.slug}`,
-  //   lastModified: new Date(project.updatedAt),
-  //   changeFrequency: "monthly" as const,
-  //   priority: 0.8,
-  // }));
-
-  return baseRoutes;
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const noteRoutes = await getNoteRoutes();
+  return [...staticRoutes, ...noteRoutes, ...getKnowledgeRoutes()];
 }

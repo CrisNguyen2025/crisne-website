@@ -155,7 +155,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <SkipLink />
         <WebVitals />
-        <JsonLd schemas={["website", "person", "professionalService"]} />
+        <JsonLd schemas={["website"]} />
         <ScrollTracker />
         <PageTimer />
         <GoogleTagManager />

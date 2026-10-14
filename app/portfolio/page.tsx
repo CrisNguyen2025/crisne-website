@@ -1,11 +1,12 @@
 import dynamic from "next/dynamic";
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { HeroSection } from "@/components/hero-section";
 import { SkillsSection } from "@/components/skills-section";
 import { Footer } from "@/components/footer";
 import { TrackedSection } from "@/components/tracked-section";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { SiteLockGate } from "@/components/site-lock-gate";
+import { JsonLd } from "@/components/json-ld";
 import {
   ExperienceSkeleton,
   ProjectsSkeleton,
@@ -57,13 +58,17 @@ const FloatingShapes = dynamic(() =>
   import("@/components/floating-shapes").then((mod) => mod.FloatingShapes)
 );
 
-const UnlockGate = dynamic(() =>
-  import("@/components/unlock-gate").then((mod) => mod.UnlockGate)
-);
+export const metadata: Metadata = {
+  title: "Portfolio",
+  description:
+    "Cris Nguyen — Frontend Developer with 5+ years building scalable, high-performance web and mobile apps with React, Next.js, React Native and TypeScript.",
+  alternates: { canonical: "/portfolio" },
+};
 
 export default function Home() {
   return (
-    <UnlockGate sectionId="home">
+    <>
+      <JsonLd schemas={["person", "professionalService"]} />
       <AnimatedBackground />
       <FloatingShapes />
       <Navbar />
@@ -112,6 +117,6 @@ export default function Home() {
       </main>
 
       <Footer />
-    </UnlockGate>
+    </>
   );
 }
