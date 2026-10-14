@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { createSmoothStream, type SmoothStream } from './utils/smoothStream';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
 import type { PageContext } from '../types';
@@ -52,8 +53,13 @@ export function useRoadmapAssistantChat(
   }
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const smoothRef = useRef<SmoothStream | null>(null);
+
+  // Stop revealing text into a widget that is gone
+  useEffect(() => () => smoothRef.current?.cancel(), []);
 
   const stopStreaming = useCallback(() => {
+    smoothRef.current?.flush();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -69,6 +75,7 @@ export function useRoadmapAssistantChat(
       if (!content) return;
 
       // Abort any in-flight stream before starting new message
+      smoothRef.current?.flush();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -120,6 +127,16 @@ export function useRoadmapAssistantChat(
       setIsLoading(true);
       setIsStreaming(true);
 
+      // Tokens arrive in bursts; reveal them word by word at a steady pace.
+      const smooth = createSmoothStream((chunk) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMsgId ? { ...msg, content: msg.content + chunk } : msg
+          )
+        );
+      });
+      smoothRef.current = smooth;
+
       try {
         const client = clientRef.current!;
 
@@ -158,17 +175,9 @@ export function useRoadmapAssistantChat(
               onToolExecuted?.(name, result);
             },
 
-            onToken: (delta) => {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === botMsgId
-                    ? { ...msg, content: msg.content + delta }
-                    : msg
-                )
-              );
-            },
+            onToken: (delta) => smooth.push(delta),
 
-            onDone: (finalResp) => {
+            onDone: (finalResp) => smooth.finish(() => {
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === botMsgId
@@ -183,9 +192,10 @@ export function useRoadmapAssistantChat(
               setIsLoading(false);
               setIsStreaming(false);
               setActiveTool(null);
-            },
+            }),
 
             onError: (err) => {
+              smooth.flush();
               const errMsg = err.message || 'Lỗi kết nối tới Assistant service';
               setError(errMsg);
               setMessages((prev) =>

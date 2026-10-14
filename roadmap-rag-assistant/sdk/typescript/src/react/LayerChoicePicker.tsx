@@ -18,20 +18,20 @@ export function LayerChoicePicker({
   };
 
   return (
-    <div className="flex flex-col gap-2 pt-1">
+    <div className="flex items-center gap-1.5 pt-1">
       <button
         type="button"
         onClick={() => onSend("tạo layer mặc định")}
         disabled={disabled}
-        className="self-start rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="shrink-0 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        Tạo layer mặc định (General)
+        Layer mặc định
       </button>
-      <form onSubmit={submitName} className="flex items-center gap-1.5">
+      <form onSubmit={submitName} className="flex min-w-0 flex-1 items-center gap-1">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Hoặc nhập tên layer mới…"
+          placeholder="Hoặc tên layer mới…"
           disabled={disabled}
           className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs outline-none focus:border-primary disabled:opacity-50"
         />

@@ -563,8 +563,8 @@ export function RoadmapChatbotWidget({
       {/* ── Telegram Style Chat Window ── */}
       {isOpen && (
         <div
-          style={{ width: "410px", height: "585px", maxHeight: "82vh" }}
-          className="pointer-events-auto mb-3.5 flex flex-col overflow-hidden rounded-[26px] border border-slate-200/90 bg-[#edf2f6] text-slate-800 shadow-[0_16px_48px_-8px_rgba(0,0,0,0.18)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200"
+          style={{ width: "410px", height: "720px", maxHeight: "calc(100vh - 3rem)" }}
+          className="pointer-events-auto flex flex-col overflow-hidden rounded-[26px] border border-slate-200/90 bg-[#edf2f6] text-slate-800 shadow-[0_16px_48px_-8px_rgba(0,0,0,0.18)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ── Telegram Top Header ── */}
           <div className="relative flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-3 shadow-2xs backdrop-blur-md">
@@ -872,7 +872,8 @@ export function RoadmapChatbotWidget({
         </div>
       )}
 
-      {/* ── Telegram Floating Action Button (FAB) ── */}
+      {/* ── Telegram Floating Action Button (FAB): hidden while open, the window takes its corner ── */}
+      {!isOpen && (
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -899,6 +900,7 @@ export function RoadmapChatbotWidget({
           </span>
         )}
       </button>
+      )}
     </div>
   );
 }
