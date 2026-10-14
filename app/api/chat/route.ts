@@ -15,6 +15,8 @@ import {
 import { DEFAULT_CHAT_MODEL, DEFAULT_EMBEDDING_MODEL } from "@/lib/ai/gemini";
 import { getLlmProvider, type LlmMessage, type LlmUsage } from "@/lib/ai/llm-provider";
 import { classifyLlmError } from "@/lib/ai/llm-errors";
+import { generateStreamWithFallback } from "@/lib/ai/resilient-llm";
+import { getCachedAnswer, isCacheableQuery, setCachedAnswer } from "@/lib/ai/response-cache";
 import { CHAT_OBSERVATION, CHAT_TRACE_NAME, RETRIEVAL_TOP_K } from "@/lib/ai/chat-config";
 import { flushLangfuse } from "@/lib/ai/langfuse";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -160,6 +162,20 @@ export async function POST(req: NextRequest) {
           return new Response(textStream(fallbackText), { headers: responseHeaders });
         }
 
+        // 0. Repeated standalone questions are served from cache: no embedding / generation quota
+        const isCacheable = isCacheableQuery(trimmedQuery, history.length);
+        const cached = isCacheable ? getCachedAnswer(trimmedQuery) : null;
+        if (cached) {
+          rootSpan
+            .update({
+              output: cached.answer,
+              statusMessage: "cache-hit",
+              metadata: { isCacheHit: true, model: cached.model },
+            })
+            .end();
+          return new Response(textStream(cached.answer), { headers: responseHeaders });
+        }
+
         const llm = getLlmProvider();
 
         // 1. Rewrite follow-up questions into standalone queries (only when there is history)
@@ -176,6 +192,7 @@ export async function POST(req: NextRequest) {
             .update({
               output: rewrite.query,
               usageDetails: toUsageDetails(rewrite.usage),
+              ...(rewrite.model ? { model: rewrite.model } : {}),
               metadata: { isRewritten: rewrite.query !== trimmedQuery },
               // Retrieval still runs with the original query, so this is degraded, not failed
               ...(rewrite.errorKind
@@ -302,11 +319,19 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
             { asType: "generation" }
           );
 
-          const answerStream = await llm.generateStream({
-            model: DEFAULT_CHAT_MODEL,
+          const {
+            result: answerStream,
+            model: answerModel,
+            fallbackFrom,
+          } = await generateStreamWithFallback({
             systemInstruction: systemPrompt,
             contents,
             ...generationConfig,
+          });
+          // Record the model that actually answers (fallback model when the primary is out of quota)
+          answerGeneration.update({
+            model: answerModel,
+            metadata: { hasContext: !!ragContext, fallbackFrom },
           });
 
           const generation = answerGeneration;
@@ -354,9 +379,13 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
                     output: answerText,
                     level: streamErrorKind ? "ERROR" : "DEFAULT",
                     statusMessage: rootStatusMessage,
-                    metadata: { hasContext: !!ragContext, isCancelled },
+                    metadata: { hasContext: !!ragContext, isCancelled, model: answerModel },
                   })
                   .end();
+                // Cache only complete AI answers (never fallbacks, broken or cancelled streams)
+                if (isCacheable && answerText && !streamErrorKind && !isCancelled) {
+                  setCachedAnswer(trimmedQuery, answerText, answerModel);
+                }
                 if (!isCancelled) controller.close();
               }
             },

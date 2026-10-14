@@ -36,6 +36,8 @@ export function createLangfuseSpanProcessor(
     environment:
       process.env.LANGFUSE_TRACING_ENVIRONMENT ??
       (process.env.NODE_ENV === "production" ? "production" : "development"),
+    // Compare metrics before/after a deploy; Vercel exposes the commit SHA automatically
+    release: process.env.LANGFUSE_RELEASE ?? process.env.VERCEL_GIT_COMMIT_SHA,
     // Input/output/metadata arrive as serialized strings; strip visitor emails and phone numbers
     mask: ({ data }) => (typeof data === "string" ? maskPII(data) : data),
     ...overrides,

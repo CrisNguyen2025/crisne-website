@@ -1,6 +1,6 @@
 import { type KnowledgeChunk } from "./portfolio-knowledge";
-import { DEFAULT_CHAT_MODEL } from "./gemini";
-import { getLlmProvider, type LlmUsage } from "./llm-provider";
+import type { LlmUsage } from "./llm-provider";
+import { generateWithFallback } from "./resilient-llm";
 import { classifyLlmError, type LlmErrorKind } from "./llm-errors";
 
 /**
@@ -187,6 +187,8 @@ export function shouldRewriteQuery(history: ChatTurn[]): boolean {
 export interface RewriteResult {
   query: string;
   usage?: LlmUsage;
+  // Model that produced the rewrite (may be the fallback model)
+  model?: string;
   // Set when the LLM call failed and the original query was kept
   errorKind?: LlmErrorKind;
 }
@@ -204,8 +206,7 @@ export async function rewriteQuery(query: string, history: ChatTurn[]): Promise<
     .join("\n");
 
   try {
-    const { text, usage } = await getLlmProvider().generate({
-      model: DEFAULT_CHAT_MODEL,
+    const { result, model } = await generateWithFallback({
       contents: `Hội thoại:\n${transcript}\n\nCâu hỏi mới: ${query}`,
       systemInstruction:
         "Viết lại câu hỏi mới thành một câu hỏi độc lập, đầy đủ ngữ cảnh (thay đại từ như 'đó', 'nó', 'dự án này' bằng tên cụ thể từ hội thoại). Giữ nguyên ngôn ngữ của câu hỏi. Nếu câu hỏi đã độc lập thì giữ nguyên. Chỉ trả về câu hỏi, không giải thích.",
@@ -213,7 +214,7 @@ export async function rewriteQuery(query: string, history: ChatTurn[]): Promise<
       maxOutputTokens: 120,
     });
 
-    return { query: text.trim() || query, usage };
+    return { query: result.text.trim() || query, usage: result.usage, model };
   } catch (error) {
     console.error("Query rewrite error:", error);
     return { query, errorKind: classifyLlmError(error) };

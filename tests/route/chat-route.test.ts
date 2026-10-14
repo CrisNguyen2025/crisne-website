@@ -7,6 +7,9 @@ import { createLangfuseSpanProcessor } from "@/lib/ai/langfuse";
 import { setLlmProvider, type LlmProvider, type LlmStreamChunk } from "@/lib/ai/llm-provider";
 import { loadKnowledgeBase } from "@/lib/ai/knowledge-base";
 import { CHAT_OBSERVATION, CHAT_TRACE_NAME } from "@/lib/ai/chat-config";
+import { DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL } from "@/lib/ai/gemini";
+import { resetLlmCircuitBreaker } from "@/lib/ai/llm-circuit-breaker";
+import { clearResponseCache } from "@/lib/ai/response-cache";
 import { POST } from "@/app/api/chat/route";
 
 // after() needs a Next.js request scope; flushing is driven by the test instead
@@ -39,7 +42,9 @@ const quotaError = () =>
 interface FakeOptions {
   answerChunks?: string[];
   chunkDelayMs?: number;
+  // Applies to every model; use streamErrorByModel to fail only some of them
   generateStreamError?: Error;
+  streamErrorByModel?: Record<string, Error>;
   midStreamError?: Error;
   rewriteText?: string;
   rewriteError?: Error;
@@ -47,16 +52,27 @@ interface FakeOptions {
 }
 
 function createFakeLlm(options: FakeOptions = {}) {
-  const calls = { generate: 0, generateStream: 0, embed: 0, yieldedChunks: 0 };
+  const calls = {
+    generate: 0,
+    generateStream: 0,
+    embed: 0,
+    yieldedChunks: 0,
+    // Model of every generate / generateStream call, in order
+    generateModels: [] as string[],
+    streamModels: [] as string[],
+  };
   const provider: LlmProvider = {
-    async generate() {
+    async generate({ model }) {
       calls.generate++;
+      calls.generateModels.push(model);
       if (options.rewriteError) throw options.rewriteError;
       return { text: options.rewriteText ?? "", usage: { input: 50, output: 10, total: 60 } };
     },
-    async generateStream() {
+    async generateStream({ model }) {
       calls.generateStream++;
-      if (options.generateStreamError) throw options.generateStreamError;
+      calls.streamModels.push(model);
+      const error = options.streamErrorByModel?.[model] ?? options.generateStreamError;
+      if (error) throw error;
       const chunks = options.answerChunks ?? ["Chào bạn! ", "Cris có thể ", "giúp bạn."];
       return (async function* (): AsyncGenerator<LlmStreamChunk> {
         for (const [index, text] of chunks.entries()) {
@@ -108,7 +124,12 @@ function metadata(span: ReadableSpan, key: string): unknown {
   return typeof whole === "string" ? JSON.parse(whole)[key] : undefined;
 }
 
-beforeEach(() => exporter.reset());
+beforeEach(() => {
+  exporter.reset();
+  // Module-level state shared across requests: start every test from a clean slate
+  clearResponseCache();
+  resetLlmCircuitBreaker();
+});
 afterEach(() => setLlmProvider(null));
 
 // ---------- Tests ----------
@@ -180,15 +201,30 @@ describe("POST /api/chat — follow-up questions", () => {
     expect(attr(spanByName(spans, CHAT_OBSERVATION.retrieve), ATTR.OBSERVATION_INPUT)).toContain("Dự án Zelene");
   });
 
-  it("keeps answering with the original query when the rewrite hits quota (M4)", async () => {
-    createFakeLlm({ rewriteError: quotaError() });
+  it("keeps answering with the original query when the rewrite times out (M4)", async () => {
+    createFakeLlm({ rewriteError: Object.assign(new Error("Request timed out"), { name: "TimeoutError" }) });
     const res = await POST(chatRequest({ message: "dự án đó dùng stack gì?", history }));
     expect(await res.text()).toBe("Chào bạn! Cris có thể giúp bạn.");
     const spans = await exportedSpans();
 
     const rewrite = spanByName(spans, CHAT_OBSERVATION.rewrite);
     expect(attr(rewrite, ATTR.OBSERVATION_LEVEL)).toBe("WARNING");
-    expect(attr(rewrite, ATTR.OBSERVATION_STATUS_MESSAGE)).toBe("rewrite-fallback-quota");
+    expect(attr(rewrite, ATTR.OBSERVATION_STATUS_MESSAGE)).toBe("rewrite-fallback-timeout");
+  });
+
+  it("skips the answer call once the rewrite proves every model is out of quota", async () => {
+    const calls = createFakeLlm({ rewriteError: quotaError() });
+    const text = await (await POST(chatRequest({ message: "dự án đó dùng stack gì?", history }))).text();
+
+    expect(text).toContain("Cris AI đang tạm quá tải");
+    // Both models tried once for the rewrite, then the open circuit spares the answer call
+    expect(calls.generateModels).toEqual([DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL]);
+    expect(calls.generateStream).toBe(0);
+    const spans = await exportedSpans();
+    expect(attr(spanByName(spans, CHAT_OBSERVATION.rewrite), ATTR.OBSERVATION_STATUS_MESSAGE)).toBe(
+      "rewrite-fallback-quota"
+    );
+    expect(attr(spanByName(spans, CHAT_TRACE_NAME), ATTR.OBSERVATION_STATUS_MESSAGE)).toBe("llm-error-quota");
   });
 });
 
@@ -288,5 +324,87 @@ describe("POST /api/chat — privacy", () => {
     expect(exported).not.toMatch(/987[\s.]?654[\s.]?321/);
     expect(exported).toContain("[email]");
     expect(exported).toContain("[phone]");
+  });
+});
+
+describe("POST /api/chat — quota resilience", () => {
+  it("answers with the fallback model when the primary model is out of quota", async () => {
+    const calls = createFakeLlm({ streamErrorByModel: { [DEFAULT_CHAT_MODEL]: quotaError() } });
+    const text = await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
+
+    expect(text).toBe("Chào bạn! Cris có thể giúp bạn.");
+    expect(calls.streamModels).toEqual([DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL]);
+    const answer = spanByName(await exportedSpans(), CHAT_OBSERVATION.answer);
+    expect(attr(answer, ATTR.OBSERVATION_MODEL)).toBe(FALLBACK_CHAT_MODEL);
+    expect(metadata(answer, "fallbackFrom")).toEqual([DEFAULT_CHAT_MODEL]);
+  });
+
+  it("stops calling an exhausted model while its circuit is open", async () => {
+    const calls = createFakeLlm({ streamErrorByModel: { [DEFAULT_CHAT_MODEL]: quotaError() } });
+    await (await POST(chatRequest({ message: "Cris là ai?" }))).text();
+    await (await POST(chatRequest({ message: "Cris dùng công nghệ gì?" }))).text();
+
+    // Second request goes straight to the fallback model
+    expect(calls.streamModels).toEqual([DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL, FALLBACK_CHAT_MODEL]);
+  });
+
+  it("does not fall back to another model on a non-retryable error", async () => {
+    const calls = createFakeLlm({
+      streamErrorByModel: { [DEFAULT_CHAT_MODEL]: Object.assign(new Error("bad request"), { status: 400 }) },
+    });
+    const text = await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
+
+    expect(text).toContain("Cris AI đang tạm quá tải");
+    expect(calls.streamModels).toEqual([DEFAULT_CHAT_MODEL]);
+  });
+});
+
+describe("POST /api/chat — response cache", () => {
+  it("serves a repeated standalone question without calling the model again", async () => {
+    const calls = createFakeLlm();
+    const first = await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
+    exporter.reset();
+    const second = await (await POST(chatRequest({ message: "  liên hệ CRIS thế nào? " }))).text();
+
+    expect(second).toBe(first);
+    expect(calls.generateStream).toBe(1);
+    expect(calls.embed).toBe(1);
+    const root = spanByName(await exportedSpans(), CHAT_TRACE_NAME);
+    expect(attr(root, ATTR.OBSERVATION_STATUS_MESSAGE)).toBe("cache-hit");
+  });
+
+  it.each([
+    [
+      "with conversation history",
+      { message: "Liên hệ Cris thế nào?", history: [{ role: "user", content: "Chào" }] },
+      {},
+    ],
+    ["containing personal data", { message: "Liên hệ Cris, email mình là a@b.co" }, {}],
+    ["after a broken stream", { message: "Liên hệ Cris thế nào?" }, { midStreamError: new Error("UNAVAILABLE") }],
+  ])("does not cache answers %s", async (_, body, fakeOptions) => {
+    const calls = createFakeLlm(fakeOptions as FakeOptions);
+    await (await POST(chatRequest(body))).text();
+    await (await POST(chatRequest(body))).text();
+    expect(calls.generateStream).toBe(2);
+  });
+
+  it("does not cache a cancelled answer", async () => {
+    const calls = createFakeLlm({ answerChunks: ["một ", "hai ", "ba "], chunkDelayMs: 20 });
+    const res = await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }));
+    const reader = res.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+    await new Promise((r) => setTimeout(r, 100));
+
+    await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
+    expect(calls.generateStream).toBe(2);
+  });
+});
+
+describe("POST /api/chat — release tagging", () => {
+  it("tags traces with the deploy release", async () => {
+    createFakeLlm();
+    await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
+    expect(attr(spanByName(await exportedSpans(), CHAT_TRACE_NAME), ATTR.RELEASE)).toBe("test-release");
   });
 });

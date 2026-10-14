@@ -2,6 +2,9 @@ import { GoogleGenAI, type GenerateContentResponseUsageMetadata } from "@google/
 import type { EmbeddingTaskType, LlmGenerateParams, LlmProvider, LlmUsage } from "./llm-provider";
 
 export const DEFAULT_CHAT_MODEL = "gemini-2.5-flash";
+// Separate free-tier quota: keeps answering when the primary model is exhausted
+export const FALLBACK_CHAT_MODEL = "gemini-2.5-flash-lite";
+export const CHAT_MODEL_CHAIN = [DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL];
 export const DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001";
 // Index script and runtime query must share this dimension, otherwise cosine similarity returns 0
 export const EMBEDDING_DIMENSION = 768;

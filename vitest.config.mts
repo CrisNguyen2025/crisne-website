@@ -13,6 +13,11 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     // Tests must never hit Gemini or Langfuse: no keys from .env.local leak in
-    env: { GEMINI_API_KEY: "test-gemini-key-not-real", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" },
+    env: {
+      GEMINI_API_KEY: "test-gemini-key-not-real",
+      LANGFUSE_PUBLIC_KEY: "",
+      LANGFUSE_SECRET_KEY: "",
+      LANGFUSE_RELEASE: "test-release",
+    },
   },
 });
