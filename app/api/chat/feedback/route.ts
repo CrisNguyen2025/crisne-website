@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createFeedbackScore } from "@/lib/ai/langfuse";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,14 @@ interface FeedbackRequestPayload {
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
 
 export async function POST(req: NextRequest) {
+  const rateLimit = checkRateLimit(req, { key: "chat-feedback", limit: 60, windowMs: 5 * 60_000 });
+  if (!rateLimit.isAllowed) {
+    return new Response(null, {
+      status: 429,
+      headers: { "Retry-After": String(rateLimit.retryAfterSeconds) },
+    });
+  }
+
   try {
     const { traceId, value } = (await req.json()) as FeedbackRequestPayload;
 

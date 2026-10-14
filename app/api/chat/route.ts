@@ -18,6 +18,7 @@ import {
   getGenAI,
 } from "@/lib/ai/gemini";
 import { flushLangfuse } from "@/lib/ai/langfuse";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { PORTFOLIO_KNOWLEDGE_BASE, type KnowledgeChunk } from "@/lib/ai/portfolio-knowledge";
 import cachedVectors from "@/lib/ai/data/knowledge-vectors.json";
 
@@ -39,6 +40,21 @@ export async function POST(req: NextRequest) {
   let traceSpan: LangfuseSpan | undefined;
   // Runs after the response (including the stream) has finished
   after(flushLangfuse);
+
+  // Public endpoint backed by paid Gemini quota
+  const rateLimit = checkRateLimit(req, { key: "chat", limit: 20, windowMs: 5 * 60_000 });
+  if (!rateLimit.isAllowed) {
+    return new Response(
+      JSON.stringify({ error: "Bạn hỏi hơi nhanh rồi, thử lại sau ít phút nhé!" }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+      }
+    );
+  }
 
   try {
     const body = (await req.json()) as ChatRequestPayload;

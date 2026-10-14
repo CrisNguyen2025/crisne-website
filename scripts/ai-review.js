@@ -26,6 +26,8 @@ const EXCLUDES = [
   ':!pnpm-lock.yaml',
   ':!*.tsbuildinfo',
   ':!*.md',
+  // Generated embedding vectors: huge and not reviewable
+  ':!lib/ai/data/*.json',
   ...['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'pdf', 'woff', 'woff2'].map((ext) => `:!*.${ext}`),
 ]
 
