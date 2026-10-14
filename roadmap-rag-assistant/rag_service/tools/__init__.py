@@ -89,7 +89,7 @@ def get_adapter() -> BaseAdapter:
         from rag_service.config import settings
         if settings.rag_adapter_mode == "http":
             from rag_service.adapters.http_adapter import HttpApiAdapter
-            _adapter = HttpApiAdapter(settings.nextjs_api_base_url)
+            _adapter = HttpApiAdapter(settings.nextjs_api_base_url, settings.admin_api_key)
         else:
             from rag_service.adapters.sqlite_adapter import SqliteAdapter
             _adapter = SqliteAdapter(settings.sqlite_db_path)

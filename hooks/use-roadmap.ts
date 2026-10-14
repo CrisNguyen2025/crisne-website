@@ -120,6 +120,13 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     loadRoadmap(slug);
   }, [slug, loadRoadmap]);
 
+  // Re-fetch the open roadmap when the assistant creates/updates/deletes data
+  useEffect(() => {
+    const handleUpdate = () => loadRoadmap(slug, true);
+    window.addEventListener('roadmap:updated', handleUpdate);
+    return () => window.removeEventListener('roadmap:updated', handleUpdate);
+  }, [slug, loadRoadmap]);
+
   // 2. Add Layer with Instant Optimistic UI
   const addLayer = useCallback(
     async (title: string, shortTag: string, subtitle?: string) => {

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import type { ChatbotConfig, ChatbotPosition } from "./types";
 import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
+import { LayerChoicePicker } from "./LayerChoicePicker";
 
 // ── Ultra-Modern Refined Vector Icons (Linear / Telegram Aesthetics) ──────────
 
@@ -697,6 +698,16 @@ export function RoadmapChatbotWidget({
                               <CloseIcon className="w-3.5 h-3.5 text-slate-400" />
                               <span>Hủy bỏ</span>
                             </button>
+                          </div>
+                        )}
+
+                      {/* Pick or create a layer for an item that has none */}
+                      {!isUser &&
+                        !isStreaming &&
+                        msg.id === messages[messages.length - 1]?.id &&
+                        msg.content.includes("Chọn layer cho bài học") && (
+                          <div className="mt-3 border-t border-slate-100 pt-2.5">
+                            <LayerChoicePicker onSend={sendMessage} disabled={isLoading} />
                           </div>
                         )}
                     </div>
