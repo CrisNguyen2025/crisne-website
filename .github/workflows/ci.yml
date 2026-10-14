@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so changed files can be diffed against the PR base
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Yarn 4 is pinned via "packageManager" in package.json
+      - run: corepack enable
+
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Lint changed files
+        # The repo still has pre-existing lint errors in untouched files,
+        # so only files changed by the PR are linted (no new debt gets in).
+        if: github.event_name == 'pull_request'
+        run: |
+          # Pure moves (R100) keep their old content, so they are not "changed" code
+          git diff --name-status -M --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" \
+            -- '*.ts' '*.tsx' '*.js' '*.mjs' '*.mts' \
+            | awk '$1 == "R100" { next } $1 ~ /^R/ { print $3; next } { print $2 }' > changed-files.txt
+          if [ -s changed-files.txt ]; then
+            xargs -a changed-files.txt yarn eslint
+          else
+            echo "No lintable files changed."
+          fi
+
+      - name: Typecheck
+        run: yarn tsc --noEmit -p .
+
+      - name: Unit & route contract tests
+        run: yarn test
+
+      - name: Knowledge vector index is up to date
+        run: yarn check:knowledge-index
+
+      - name: Build
+        run: yarn build
+
+  rag-eval:
+    name: RAG retrieval eval
+    # Calls the Gemini API: only when the RAG code/data changes and the secret exists.
+    # Non-blocking for now — the free-tier quota can make it fail or skip cases.
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect RAG changes
+        id: changes
+        env:
+          HAS_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+        run: |
+          if [ "$HAS_GEMINI_KEY" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "GEMINI_API_KEY secret not set — skipping eval."; exit 0
+          fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qE '^(lib/ai/|scripts/(eval-retrieval|index-knowledge)\.ts|scripts/data/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "No RAG changes — skipping eval."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.run == 'true'
+        with:
+          node-version: 22
+
+      - if: steps.changes.outputs.run == 'true'
+        run: corepack enable && yarn install --immutable
+
+      - name: Retrieval eval
+        if: steps.changes.outputs.run == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: yarn eval:rag

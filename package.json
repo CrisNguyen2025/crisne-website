@@ -18,6 +18,7 @@
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
     "eval:rag": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/eval-retrieval.ts",
+    "check:knowledge-index": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-knowledge-index.ts",
     "setup:langfuse-dashboard": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/setup-langfuse-dashboard.ts",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks"
