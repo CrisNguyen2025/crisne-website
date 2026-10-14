@@ -1,18 +1,16 @@
 import * as fs from "fs";
 import * as path from "path";
-import { embedText } from "../lib/ai/gemini";
-import { findRelevantChunks, rewriteQuery } from "../lib/ai/rag-engine";
+import { getLlmProvider } from "../lib/ai/llm-provider";
+import { findRelevantChunks, rewriteQuery, shouldRewriteQuery } from "../lib/ai/rag-engine";
 import { computeKnowledgeHash, loadKnowledgeBase } from "../lib/ai/knowledge-base";
 import { PORTFOLIO_KNOWLEDGE_BASE } from "../lib/ai/portfolio-knowledge";
+import { RETRIEVAL_TOP_K as TOP_K } from "../lib/ai/chat-config";
 
 // ts-node does not load Next.js env files, so read .env.local explicitly
 const envPath = path.join(__dirname, "../.env.local");
 if (fs.existsSync(envPath)) {
   process.loadEnvFile(envPath);
 }
-
-// Must match topK used in app/api/chat/route.ts
-const TOP_K = 4;
 
 interface EvalCase {
   query: string;
@@ -54,17 +52,17 @@ async function evaluateRetrieval() {
 
   for (const { query, expected, history } of cases) {
     let retrievalQuery = query;
-    if (history) {
-      try {
-        retrievalQuery = await rewriteQuery(query, history, { throwOnError: true });
-      } catch (error) {
-        const reason = error instanceof Error ? error.message.slice(0, 80) : String(error);
-        console.log(`⚠️  ${query}\n   → skipped: rewrite failed (${reason})`);
+    if (history && shouldRewriteQuery(history)) {
+      const rewrite = await rewriteQuery(query, history);
+      // A failed rewrite silently keeps the original query; that would not test the rewrite path
+      if (rewrite.errorKind) {
+        console.log(`⚠️  ${query}\n   → skipped: rewrite failed (${rewrite.errorKind})`);
         skipped.push(query);
         continue;
       }
+      retrievalQuery = rewrite.query;
     }
-    const embedding = await embedText(retrievalQuery, "RETRIEVAL_QUERY");
+    const embedding = await getLlmProvider().embed(retrievalQuery, "RETRIEVAL_QUERY");
     const retrievedIds = findRelevantChunks(retrievalQuery, embedding, knowledgeBase, TOP_K).map(
       (c) => c.id
     );

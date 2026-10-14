@@ -76,6 +76,8 @@ export function useFloatingChat() {
       setIsLoading(true);
 
       abortControllerRef.current = new AbortController();
+      // Friendly message from the API (e.g. rate limit, message too long), shown instead of the generic error
+      let serverErrorMessage: string | undefined;
 
       try {
         const historyPayload = messages.map((m) => ({
@@ -96,6 +98,7 @@ export function useFloatingChat() {
 
         if (!res.ok || !res.body) {
           const errData = await res.json().catch(() => ({}));
+          serverErrorMessage = errData.error;
           throw new Error(errData.error || "Không thể kết nối với máy chủ AI");
         }
 
@@ -133,6 +136,7 @@ export function useFloatingChat() {
                   ...msg,
                   content:
                     msg.content ||
+                    serverErrorMessage ||
                     "Xin lỗi, đã xảy ra lỗi kết nối. Vui lòng thử lại sau ít giây hoặc kết nối qua Zalo/GitHub nhé!",
                 }
               : msg

@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start -p 33343",
     "lint": "eslint",
+    "test": "vitest run",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "analyze": "cross-env ANALYZE=true next build",
@@ -17,6 +18,7 @@
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
     "eval:rag": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/eval-retrieval.ts",
+    "setup:langfuse-dashboard": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/setup-langfuse-dashboard.ts",
     "postinstall": "prisma generate",
     "prepare": "git config core.hooksPath .githooks"
   },
@@ -44,6 +46,7 @@
     "@libsql/client": "^0.18.0",
     "@notionhq/client": "^5.21.0",
     "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.12.0",
     "@opentelemetry/core": "^2.12.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
     "@opentelemetry/otlp-exporter-base": "^0.223.0",
@@ -98,7 +101,9 @@
     "prompts": "^2.4.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
   },
   "resolutions": {
     "enhanced-resolve": "5.20.1"

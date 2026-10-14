@@ -1,5 +1,7 @@
 import { type KnowledgeChunk } from "./portfolio-knowledge";
-import { DEFAULT_CHAT_MODEL, getGenAI } from "./gemini";
+import { DEFAULT_CHAT_MODEL } from "./gemini";
+import { getLlmProvider, type LlmUsage } from "./llm-provider";
+import { classifyLlmError, type LlmErrorKind } from "./llm-errors";
 
 /**
  * Lowercases and strips Vietnamese diacritics so "kinh nghiem" matches "kinh nghiệm".
@@ -167,41 +169,53 @@ export function buildRAGContext(chunks: KnowledgeChunk[]): string {
     .join("\n\n");
 }
 
+type ChatTurn = { role: "user" | "assistant"; content: string };
+
+const REWRITE_HISTORY_TURNS = 4;
+
+function getRewriteHistory(history: ChatTurn[]): ChatTurn[] {
+  return history.filter((h) => h.content?.trim()).slice(-REWRITE_HISTORY_TURNS);
+}
+
+/**
+ * Rewriting only makes sense when there is a previous user turn to resolve references against.
+ */
+export function shouldRewriteQuery(history: ChatTurn[]): boolean {
+  return getRewriteHistory(history).some((h) => h.role === "user");
+}
+
+export interface RewriteResult {
+  query: string;
+  usage?: LlmUsage;
+  // Set when the LLM call failed and the original query was kept
+  errorKind?: LlmErrorKind;
+}
+
 /**
  * Rewrites a follow-up question into a standalone query using recent conversation,
  * so retrieval works for questions like "dự án đó dùng stack gì?".
- * Falls back to the original query on any error, unless `throwOnError` is set
- * (used by the eval script so quota/API failures are not silently ignored).
+ * Never throws: on failure it keeps the original query and reports `errorKind`.
  */
-export async function rewriteQuery(
-  query: string,
-  history: Array<{ role: "user" | "assistant"; content: string }>,
-  { throwOnError = false }: { throwOnError?: boolean } = {}
-): Promise<string> {
-  const recentHistory = history.filter((h) => h.content?.trim()).slice(-4);
-  if (!recentHistory.some((h) => h.role === "user")) return query;
+export async function rewriteQuery(query: string, history: ChatTurn[]): Promise<RewriteResult> {
+  if (!shouldRewriteQuery(history)) return { query };
 
-  const transcript = recentHistory
+  const transcript = getRewriteHistory(history)
     .map((h) => `${h.role === "user" ? "User" : "Assistant"}: ${h.content.trim().slice(0, 500)}`)
     .join("\n");
 
   try {
-    const response = await getGenAI().models.generateContent({
+    const { text, usage } = await getLlmProvider().generate({
       model: DEFAULT_CHAT_MODEL,
       contents: `Hội thoại:\n${transcript}\n\nCâu hỏi mới: ${query}`,
-      config: {
-        systemInstruction:
-          "Viết lại câu hỏi mới thành một câu hỏi độc lập, đầy đủ ngữ cảnh (thay đại từ như 'đó', 'nó', 'dự án này' bằng tên cụ thể từ hội thoại). Giữ nguyên ngôn ngữ của câu hỏi. Nếu câu hỏi đã độc lập thì giữ nguyên. Chỉ trả về câu hỏi, không giải thích.",
-        temperature: 0,
-        maxOutputTokens: 120,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
+      systemInstruction:
+        "Viết lại câu hỏi mới thành một câu hỏi độc lập, đầy đủ ngữ cảnh (thay đại từ như 'đó', 'nó', 'dự án này' bằng tên cụ thể từ hội thoại). Giữ nguyên ngôn ngữ của câu hỏi. Nếu câu hỏi đã độc lập thì giữ nguyên. Chỉ trả về câu hỏi, không giải thích.",
+      temperature: 0,
+      maxOutputTokens: 120,
     });
 
-    return response.text?.trim() || query;
+    return { query: text.trim() || query, usage };
   } catch (error) {
-    if (throwOnError) throw error;
     console.error("Query rewrite error:", error);
-    return query;
+    return { query, errorKind: classifyLlmError(error) };
   }
 }

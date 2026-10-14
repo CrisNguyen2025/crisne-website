@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { embedText } from "../lib/ai/gemini";
+import { getLlmProvider } from "../lib/ai/llm-provider";
 import { PORTFOLIO_KNOWLEDGE_BASE } from "../lib/ai/portfolio-knowledge";
 import { computeKnowledgeHash } from "../lib/ai/knowledge-base";
 
@@ -25,7 +25,7 @@ async function generateKnowledgeVectors() {
     console.log(`[${i + 1}/${PORTFOLIO_KNOWLEDGE_BASE.length}] Embedding: "${chunk.title}"`);
 
     const textToEmbed = `${chunk.title}\n${chunk.keywords.join(", ")}\n${chunk.content}`;
-    const embedding = await embedText(textToEmbed, "RETRIEVAL_DOCUMENT");
+    const embedding = await getLlmProvider().embed(textToEmbed, "RETRIEVAL_DOCUMENT");
 
     if (!embedding) {
       throw new Error(`Empty embedding for chunk ${chunk.id}`);
