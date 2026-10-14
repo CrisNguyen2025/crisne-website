@@ -26,7 +26,7 @@ function useRoadmapAssistantChat(options = {}) {
             {
                 id: 'welcome-msg',
                 role: 'assistant',
-                content: 'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n💡 **Bạn có thể yêu cầu tôi:**\n• **Thao tác nhanh**: `tạo ABC topic`, `tạo 2 layer mock 1 và 2 trong be topic`\n• **Tra cứu tri thức**: `Website có bài nào về Docker hay Database không?`\n• **Lập kế hoạch**: `/plan lộ trình Next.js Fullstack`\n\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
+                content: 'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n**Thao tác nhanh**\n```text\ntạo 2 layer mock 1 và 2 trong be topic\n```\n**Tra cứu tri thức**\n```text\nWebsite có bài nào về Docker hay Database không?\n```\n**Lập kế hoạch**\n```text\n/plan lộ trình Next.js Fullstack\n```\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
                 timestamp: new Date(),
             },
         ];
@@ -115,7 +115,7 @@ function useRoadmapAssistantChat(options = {}) {
                             ...msg,
                             toolCalls: [
                                 ...currentCalls,
-                                { name, args: {}, result: 'Đang thực thi...' },
+                                { name, args: {}, result: 'Đang thực thi...', startedAt: Date.now() },
                             ],
                         };
                     }));
@@ -126,14 +126,20 @@ function useRoadmapAssistantChat(options = {}) {
                         if (msg.id !== botMsgId)
                             return msg;
                         const currentCalls = msg.toolCalls || [];
-                        const updated = currentCalls.map((tc) => tc.name === name ? { ...tc, result } : tc);
+                        // Close the oldest still-running call with this name.
+                        const idx = currentCalls.findIndex((tc) => tc.name === name && tc.endedAt === undefined);
+                        const updated = currentCalls.map((tc, i) => i === idx ? { ...tc, result, endedAt: Date.now() } : tc);
                         return { ...msg, toolCalls: updated };
                     }));
                     onToolExecutedRef.current?.(name, result);
                 },
                 onToken: (delta) => {
                     setMessages((prev) => prev.map((msg) => msg.id === botMsgId
-                        ? { ...msg, content: msg.content + delta }
+                        ? {
+                            ...msg,
+                            content: msg.content + delta,
+                            firstTokenAt: msg.firstTokenAt ?? Date.now(),
+                        }
                         : msg));
                 },
                 onDone: (finalResp) => {
@@ -141,7 +147,10 @@ function useRoadmapAssistantChat(options = {}) {
                         ? {
                             ...msg,
                             content: finalResp.message || msg.content,
-                            toolCalls: finalResp.tool_calls || msg.toolCalls,
+                            // Keep streamed calls: they carry the step timings.
+                            toolCalls: msg.toolCalls?.length
+                                ? msg.toolCalls
+                                : finalResp.tool_calls,
                         }
                         : msg));
                     setIsLoading(false);

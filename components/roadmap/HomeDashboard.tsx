@@ -16,6 +16,7 @@ import { RoadmapMeta, CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useToast } from "@/components/ui/toast";
 import { Popconfirm } from "antd";
 import { CreateTopicModal } from "./CreateTopicModal";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   fetchStorageScan,
   triggerCleanupUnused,
@@ -193,6 +194,8 @@ export function HomeDashboard({
                 )}
               </div>
             )}
+
+            <ThemeToggle className="h-8 w-8 rounded-xl border border-border/60 bg-card hover:bg-muted/80 text-foreground shadow-2xs" />
           </div>
         </div>
 

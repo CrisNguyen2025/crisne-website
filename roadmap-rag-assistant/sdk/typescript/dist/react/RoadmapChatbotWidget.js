@@ -6,12 +6,45 @@ const react_1 = require("react");
 const useRoadmapAssistantChat_1 = require("./useRoadmapAssistantChat");
 const icons_1 = require("./icons");
 const formatters_1 = require("./utils/formatters");
-// ── Main Chatbot Widget Component (Telegram Style) ──────────────────────────
+const ChatMarkdown_1 = require("./ChatMarkdown");
+const LayerChoicePicker_1 = require("./LayerChoicePicker");
+const ToolStepRow_1 = require("./ToolStepRow");
+const WIDGET_THEME_VARS = {
+    ["--bg"]: "#FFFFFF",
+    ["--surface"]: "#F4F3F0",
+    ["--border"]: "#E6E4DF",
+    ["--text"]: "#1F1E1C",
+    ["--text-muted"]: "#6B6862",
+    ["--accent"]: "#C2410C",
+    ["--accent-soft"]: "#FBEDE5",
+    ["--success"]: "#3F7D58",
+    ["--danger"]: "#B42318",
+    // Semantic mappings for Tailwind components (e.g. ChatMarkdown)
+    ["--background"]: "#FFFFFF",
+    ["--foreground"]: "#1F1E1C",
+    ["--muted-foreground"]: "#6B6862",
+    ["--card"]: "#F4F3F0",
+    ["--card-foreground"]: "#1F1E1C",
+    ["--popover"]: "#FFFFFF",
+    ["--popover-foreground"]: "#1F1E1C",
+    ["--border"]: "#E6E4DF",
+    ["--input"]: "#F4F3F0",
+    ["--muted"]: "#F4F3F0",
+    ["--primary"]: "#C2410C",
+    ["--primary-foreground"]: "#FFFFFF",
+    colorScheme: "light",
+};
 function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY = 24, zIndex = 9999, title = "Roadmap Assistant", subtitle = "AI Knowledge & Roadmap Agent", baseUrl = "http://localhost:8000", initialOpen = false, initialMessages, onToolExecuted, getContext, onWebMcpMessage, className = "", }) {
     const [isOpen, setIsOpen] = (0, react_1.useState)(initialOpen);
-    const [currentPos, setCurrentPos] = (0, react_1.useState)(position);
     const [expandedTools, setExpandedTools] = (0, react_1.useState)({});
+    const [feedback, setFeedback] = (0, react_1.useState)({});
     const [copiedId, setCopiedId] = (0, react_1.useState)(null);
+    const handleFeedback = (msgId, val) => {
+        setFeedback((prev) => ({
+            ...prev,
+            [msgId]: prev[msgId] === val ? undefined : val,
+        }));
+    };
     const { messages, input, setInput, isLoading, isStreaming, activeTool, sendMessage, stopStreaming, clearMessages, } = (0, useRoadmapAssistantChat_1.useRoadmapAssistantChat)({
         baseUrl,
         initialMessages,
@@ -21,13 +54,38 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
     });
     const scrollRef = (0, react_1.useRef)(null);
     const inputRef = (0, react_1.useRef)(null);
+    const containerRef = (0, react_1.useRef)(null);
     const isSendingRef = (0, react_1.useRef)(false);
-    // Auto-scroll
+    // Click outside to close smoothly
+    (0, react_1.useEffect)(() => {
+        if (!isOpen)
+            return;
+        const handleClickOutside = (event) => {
+            if (containerRef.current &&
+                !containerRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        const handleKeyDown = (event) => {
+            if (event.key === "Escape") {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        document.addEventListener("touchstart", handleClickOutside, { passive: true });
+        document.addEventListener("keydown", handleKeyDown);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            document.removeEventListener("touchstart", handleClickOutside);
+            document.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [isOpen]);
+    // Auto-scroll (immediate follow during stream like Claude Code, smooth on arrival)
     (0, react_1.useEffect)(() => {
         if (isOpen && scrollRef.current) {
             scrollRef.current.scrollTo({
                 top: scrollRef.current.scrollHeight,
-                behavior: "smooth",
+                behavior: isStreaming ? "auto" : "smooth",
             });
         }
     }, [messages, isOpen, isStreaming, activeTool]);
@@ -38,33 +96,22 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
             return () => clearTimeout(timer);
         }
     }, [isOpen, isLoading]);
-    // Position styles
+    // Reset the "copied" tick after a moment
+    (0, react_1.useEffect)(() => {
+        if (!copiedId)
+            return;
+        const timer = setTimeout(() => setCopiedId(null), 1500);
+        return () => clearTimeout(timer);
+    }, [copiedId]);
+    // Offsets and z-index come from props, so they cannot be static utility classes.
     const positionStyles = (0, react_1.useMemo)(() => {
-        const styles = {
-            position: "fixed",
-            zIndex,
-        };
-        switch (currentPos) {
-            case "bottom-left":
-                styles.bottom = `${offsetY}px`;
-                styles.left = `${offsetX}px`;
-                break;
-            case "top-right":
-                styles.top = `${offsetY}px`;
-                styles.right = `${offsetX}px`;
-                break;
-            case "top-left":
-                styles.top = `${offsetY}px`;
-                styles.left = `${offsetX}px`;
-                break;
-            case "bottom-right":
-            default:
-                styles.bottom = `${offsetY}px`;
-                styles.right = `${offsetX}px`;
-                break;
-        }
+        const styles = { position: "fixed", zIndex };
+        const vertical = position.startsWith("top") ? "top" : "bottom";
+        const horizontal = position.endsWith("left") ? "left" : "right";
+        styles[vertical] = `${offsetY}px`;
+        styles[horizontal] = `${offsetX}px`;
         return styles;
-    }, [currentPos, offsetX, offsetY, zIndex]);
+    }, [position, offsetX, offsetY, zIndex]);
     const toggleToolExpand = (id) => {
         setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
     };
@@ -102,40 +149,62 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
         }
     };
     const copyMessage = (id, text) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        setTimeout(() => setCopiedId(null), 2000);
+        navigator.clipboard?.writeText(text).then(() => setCopiedId(id), () => { });
     };
-    const cyclePosition = () => {
-        const positions = [
-            "bottom-right",
-            "bottom-left",
-            "top-left",
-            "top-right",
-        ];
-        const nextIdx = (positions.indexOf(currentPos) + 1) % positions.length;
-        setCurrentPos(positions[nextIdx]);
-    };
-    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `font-sans pointer-events-none flex flex-col transition-all duration-300 ${currentPos.includes("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { style: { width: "410px", height: "585px", maxHeight: "82vh" }, className: "pointer-events-auto mb-3.5 flex flex-col overflow-hidden rounded-[26px] border border-slate-200/90 bg-[#edf2f6] text-slate-800 shadow-[0_16px_48px_-8px_rgba(0,0,0,0.18)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "relative flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-3 shadow-2xs backdrop-blur-md", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-3", children: [(0, jsx_runtime_1.jsxs)("div", { className: "relative flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-[#2AABEE] to-[#229ED9] text-white shadow-xs", children: [(0, jsx_runtime_1.jsx)(icons_1.ModernSparklesIcon, { className: "w-5 h-5 text-white" }), (0, jsx_runtime_1.jsxs)("span", { className: "absolute bottom-0 right-0 flex h-3 w-3", children: [(0, jsx_runtime_1.jsx)("span", { className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" }), (0, jsx_runtime_1.jsx)("span", { className: "relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-white" })] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5", children: [(0, jsx_runtime_1.jsx)("span", { className: "text-[13px] font-semibold text-slate-900 leading-tight", children: title }), (0, jsx_runtime_1.jsx)(icons_1.VerifiedBadgeIcon, { className: "w-3.5 h-3.5" })] }), (0, jsx_runtime_1.jsx)("div", { className: "flex items-center gap-1.5 text-[11px] leading-tight", children: activeTool ? ((0, jsx_runtime_1.jsxs)("span", { className: "text-amber-600 font-medium flex items-center gap-1 animate-pulse", children: [(0, jsx_runtime_1.jsx)(icons_1.LoaderIcon, { className: "w-3 h-3 text-amber-600" }), (0, jsx_runtime_1.jsx)("span", { children: (0, formatters_1.formatToolDisplayName)(activeTool) })] })) : isStreaming ? ((0, jsx_runtime_1.jsxs)("span", { className: "text-[#2AABEE] font-medium flex items-center gap-1", children: [(0, jsx_runtime_1.jsx)("span", { className: "animate-pulse", children: "\u25CF" }), " \u0111ang ph\u1EA3n h\u1ED3i..."] })) : ((0, jsx_runtime_1.jsx)("span", { className: "text-slate-400", children: "bot \u2022 tr\u1EF1c tuy\u1EBFn" })) })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1 text-slate-400", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: cyclePosition, title: `Đổi góc hiển thị (Hiện tại: ${currentPos})`, className: "flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors", children: (0, jsx_runtime_1.jsx)(icons_1.QuadrantArrowsIcon, { className: "w-4 h-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: clearMessages, title: "X\u00F3a l\u1ECBch s\u1EED tr\u00F2 chuy\u1EC7n", className: "flex h-8 w-8 items-center justify-center rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors", children: (0, jsx_runtime_1.jsx)(icons_1.ResetChatIcon, { className: "w-4 h-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(false), title: "Thu g\u1ECDn", className: "flex h-8 w-8 items-center justify-center rounded-full hover:bg-rose-50 hover:text-rose-600 transition-colors", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "w-4 h-4" }) })] })] }), (0, jsx_runtime_1.jsxs)("div", { ref: scrollRef, className: "flex-1 overflow-y-auto px-3.5 py-4 space-y-3 text-[13px] leading-relaxed", children: [messages.map((msg) => {
-                                const isUser = msg.role === "user";
-                                const timeStr = (0, formatters_1.formatTime)(msg.timestamp);
-                                return ((0, jsx_runtime_1.jsxs)("div", { className: `group flex flex-col ${isUser ? "items-end" : "items-start"}`, children: [(0, jsx_runtime_1.jsxs)("div", { className: `relative px-3.5 py-2.5 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${isUser
-                                                ? "max-w-[85%] bg-[#2AABEE] text-white rounded-2xl rounded-tr-xs"
-                                                : "max-w-[88%] bg-white text-slate-800 border border-slate-200/70 rounded-2xl rounded-tl-xs"}`, children: [(0, jsx_runtime_1.jsxs)("div", { children: [msg.content ? ((0, formatters_1.formatMarkdownText)(msg.content, isUser)) : isStreaming && !isUser ? ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5 py-1", children: [(0, jsx_runtime_1.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.3s]" }), (0, jsx_runtime_1.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.15s]" }), (0, jsx_runtime_1.jsx)("span", { className: "w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce" })] })) : null, isStreaming &&
-                                                            !isUser &&
-                                                            msg.id === messages[messages.length - 1]?.id && ((0, jsx_runtime_1.jsx)("span", { className: "inline-block w-1.5 h-3.5 bg-[#2AABEE] ml-1 rounded-sm animate-pulse align-middle" })), !isUser &&
-                                                            !isStreaming &&
-                                                            msg.id === messages[messages.length - 1]?.id &&
-                                                            (msg.content.includes("Xác nhận thực hiện") ||
-                                                                msg.content.includes("DRY-RUN PREVIEW")) && ((0, jsx_runtime_1.jsxs)("div", { className: "mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("ok"), disabled: isLoading, className: "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "w-3.5 h-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "X\u00E1c nh\u1EADn th\u1EF1c hi\u1EC7n" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("hủy"), disabled: isLoading, className: "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-medium text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-50", children: [(0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "w-3.5 h-3.5 text-slate-400" }), (0, jsx_runtime_1.jsx)("span", { children: "H\u1EE7y b\u1ECF" })] })] }))] }), (0, jsx_runtime_1.jsxs)("div", { className: `flex items-center justify-end gap-1.5 mt-1 select-none text-[10px] font-mono leading-none ${isUser ? "text-white/80" : "text-slate-400"}`, children: [timeStr && (0, jsx_runtime_1.jsx)("span", { children: timeStr }), isUser && ((0, jsx_runtime_1.jsx)(icons_1.DoubleCheckIcon, { className: "w-3.5 h-3.5 text-white/90 shrink-0" })), !isUser && msg.content && !isStreaming && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p tin nh\u1EAFn", className: "opacity-0 group-hover:opacity-100 flex items-center gap-1 hover:text-slate-700 transition-opacity ml-1", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "w-2.5 h-2.5 text-emerald-500" }), (0, jsx_runtime_1.jsx)("span", { className: "text-[9px] text-emerald-600", children: "\u0110\u00E3 ch\u00E9p" })] })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "w-2.5 h-2.5" })) }))] })] }), msg.toolCalls && msg.toolCalls.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "mt-1.5 w-[88%] space-y-1.5", children: msg.toolCalls.map((tc, idx) => {
-                                                const toolKey = `${msg.id}-${idx}`;
-                                                const isExpanded = expandedTools[toolKey];
-                                                const isExecuting = tc.result === "Đang thực thi...";
-                                                return ((0, jsx_runtime_1.jsxs)("div", { className: `rounded-xl border shadow-2xs transition-all overflow-hidden text-xs ${isExecuting
-                                                        ? "border-amber-200 bg-amber-50/80 text-amber-900 animate-pulse"
-                                                        : "border-slate-200 bg-white/95 text-slate-800"}`, children: [(0, jsx_runtime_1.jsxs)("div", { onClick: () => toggleToolExpand(toolKey), className: "flex cursor-pointer items-center justify-between px-3 py-2 select-none hover:bg-slate-50/80 transition-colors", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 font-mono", children: [isExecuting ? ((0, jsx_runtime_1.jsx)(icons_1.LoaderIcon, { className: "w-3.5 h-3.5 text-amber-600" })) : ((0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "w-3.5 h-3.5 text-emerald-600" })), (0, jsx_runtime_1.jsx)("span", { className: "font-semibold text-slate-800 text-[11px]", children: (0, formatters_1.formatToolDisplayName)(tc.name) })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1 text-[10px] text-slate-400", children: [(0, jsx_runtime_1.jsx)("span", { children: isExecuting ? "Đang chạy" : "Chi tiết" }), (0, jsx_runtime_1.jsx)(icons_1.ChevronDownIcon, { className: `w-3 h-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}` })] })] }), isExpanded && !isExecuting && ((0, jsx_runtime_1.jsx)("div", { className: "border-t border-slate-100 bg-slate-50/70 p-2.5 text-[11px] text-slate-700 whitespace-pre-wrap font-mono leading-relaxed", children: tc.result }))] }, toolKey));
-                                            }) }))] }, msg.id));
-                            }), activeTool && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 rounded-xl border border-[#2AABEE]/30 bg-white/95 px-3.5 py-2 text-slate-700 text-xs shadow-xs animate-pulse", children: [(0, jsx_runtime_1.jsx)(icons_1.LoaderIcon, { className: "w-4 h-4 text-[#2AABEE] shrink-0" }), (0, jsx_runtime_1.jsxs)("span", { className: "text-[12px]", children: ["\u0110ang th\u1EF1c thi:", " ", (0, jsx_runtime_1.jsx)("strong", { className: "text-[#2AABEE]", children: (0, formatters_1.formatToolDisplayName)(activeTool) }), "..."] })] }))] }), isStreaming && ((0, jsx_runtime_1.jsx)("div", { className: "flex justify-center -mb-2.5 z-10", children: (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: stopStreaming, className: "flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-900 shadow-sm transition-all hover:scale-105 active:scale-95 backdrop-blur-xs", children: [(0, jsx_runtime_1.jsx)("span", { className: "w-2 h-2 rounded-xs bg-rose-500" }), (0, jsx_runtime_1.jsx)("span", { children: "D\u1EEBng ph\u1EA3n h\u1ED3i" })] }) })), (0, jsx_runtime_1.jsx)("div", { className: "border-t border-slate-200/80 bg-white/95 px-3.5 py-2.5 shadow-xs", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 rounded-full border border-transparent bg-[#f0f2f5] hover:bg-[#eaecee] focus-within:bg-white focus-within:border-[#2AABEE] focus-within:ring-2 focus-within:ring-[#2AABEE]/20 px-3.5 py-1.5 transition-all shadow-2xs", children: [(0, jsx_runtime_1.jsx)("span", { className: "text-slate-400 select-none", children: (0, jsx_runtime_1.jsx)(icons_1.PromptSparkleIcon, { className: "w-3.5 h-3.5 text-[#2AABEE]" }) }), (0, jsx_runtime_1.jsx)("input", { ref: inputRef, type: "text", value: input, onChange: (e) => setInput(e.target.value), onKeyDown: handleKeyDown, placeholder: isLoading
+    const status = activeTool
+        ? (0, formatters_1.formatToolDisplayName)(activeTool)
+        : isStreaming
+            ? "Đang trả lời…"
+            : subtitle;
+    const showStop = isStreaming && !input.trim();
+    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `pointer-events-none flex flex-col font-sans ${position.endsWith("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { ref: containerRef, style: WIDGET_THEME_VARS, className: "pointer-events-auto mb-3 flex h-[600px] max-h-[80vh] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex min-w-0 items-center gap-2.5", children: [(0, jsx_runtime_1.jsx)("span", { className: "flex h-7 w-7 items-center justify-center rounded-lg bg-[#F4F3F0] border border-[#E6E4DF] text-[#6B6862]", children: (0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0", children: [(0, jsx_runtime_1.jsx)("div", { className: "truncate text-sm font-semibold tracking-tight text-[#1F1E1C]", children: title }), (0, jsx_runtime_1.jsx)("div", { className: "truncate text-xs leading-tight text-[#6B6862]", children: status })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex shrink-0 items-center gap-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: clearMessages, title: "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", "aria-label": "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.NewChatIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(false), title: "Thu g\u1ECDn", "aria-label": "Thu g\u1ECDn", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-4 w-4" }) })] })] }), (0, jsx_runtime_1.jsx)("div", { ref: scrollRef, className: "flex-1 space-y-6 overflow-y-auto px-4 py-5", children: messages.map((msg) => {
+                            const isUser = msg.role === "user";
+                            const timeStr = (0, formatters_1.formatTime)(msg.timestamp);
+                            const isLast = msg.id === messages[messages.length - 1]?.id;
+                            const isLive = !isUser && isStreaming && isLast;
+                            const toolCalls = msg.toolCalls ?? [];
+                            const toolRunning = toolCalls.some((tc) => tc.endedAt === undefined && isLive);
+                            // Waiting for the model after tools finished (or before any tool started).
+                            const showThinking = isLive && !msg.content && !toolRunning;
+                            const thinkingSince = toolCalls[toolCalls.length - 1]?.endedAt ??
+                                new Date(msg.timestamp).getTime();
+                            if (isUser) {
+                                return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col items-end gap-1", children: [(0, jsx_runtime_1.jsx)("div", { className: "relative max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-xs bg-[#F4F3F0] border border-[#E6E4DF] px-3.5 py-2 text-sm leading-relaxed text-[#1F1E1C]", children: msg.content }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p c\u00E2u h\u1ECFi", "aria-label": "Sao ch\u00E9p c\u00E2u h\u1ECFi", className: "flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3 w-3 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3 w-3" })) }), timeStr && (0, jsx_runtime_1.jsx)("span", { className: "text-[11px]", children: timeStr })] })] }, msg.id));
+                            }
+                            const awaitingConfirm = !isStreaming &&
+                                isLast &&
+                                (msg.content.includes("Xác nhận thực hiện") ||
+                                    msg.content.includes("DRY-RUN PREVIEW"));
+                            const awaitingLayerChoice = !isStreaming &&
+                                isLast &&
+                                msg.content.includes("Chọn layer cho bài học");
+                            // Build step items
+                            const stepItems = [];
+                            toolCalls.forEach((tc, idx) => {
+                                const toolKey = `${msg.id}-${idx}`;
+                                stepItems.push({
+                                    id: toolKey,
+                                    label: (0, formatters_1.formatToolDisplayName)(tc.name),
+                                    startedAt: tc.startedAt,
+                                    endedAt: tc.endedAt,
+                                    running: isLive && tc.endedAt === undefined,
+                                    detail: tc.result,
+                                });
+                            });
+                            if (showThinking && toolCalls.length === 0) {
+                                stepItems.push({
+                                    id: `${msg.id}-thinking`,
+                                    label: "Đang suy nghĩ & soạn câu trả lời",
+                                    startedAt: thinkingSince,
+                                    running: true,
+                                });
+                            }
+                            return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col gap-2", children: [msg.content && ((0, jsx_runtime_1.jsx)("div", { className: "text-sm leading-relaxed text-[#1F1E1C] py-0.5", children: (0, jsx_runtime_1.jsx)(ChatMarkdown_1.ChatMarkdown, { content: msg.content, streaming: isLive, onRun: isLoading ? undefined : sendMessage }) })), stepItems.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "-mx-1", children: (0, jsx_runtime_1.jsx)(ToolStepRow_1.CollapsibleStepsSummary, { steps: stepItems, expandedTools: expandedTools, onToggleTool: toggleToolExpand, isLive: isLive }) })), awaitingConfirm && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 pt-1", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("ok"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "X\u00E1c nh\u1EADn th\u1EF1c hi\u1EC7n" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("hủy"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg border border-[#E4E2DD] bg-[#F2F1EE] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#EAE8E3] disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "H\u1EE7y b\u1ECF" })] })] })), awaitingLayerChoice && ((0, jsx_runtime_1.jsx)(LayerChoicePicker_1.LayerChoicePicker, { onSend: sendMessage, disabled: isLoading })), msg.content && !isLive && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5 pt-0.5 text-xs text-[#6B6862]", children: [timeStr && (0, jsx_runtime_1.jsx)("span", { className: "select-none text-[11px]", children: timeStr }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p", "aria-label": "Sao ch\u00E9p c\u00E2u tr\u1EA3 l\u1EDDi", className: "flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3.5 w-3.5 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3.5 w-3.5" })) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 1), title: "H\u1EEFu \u00EDch", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi h\u1EEFu \u00EDch", "aria-pressed": feedback[msg.id] === 1, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 1
+                                                    ? "text-[#1F1E1C] bg-[#F4F3F0]"
+                                                    : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsUpIcon, { className: "h-3.5 w-3.5" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 0), title: "Ch\u01B0a t\u1ED1t", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi ch\u01B0a t\u1ED1t", "aria-pressed": feedback[msg.id] === 0, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 0
+                                                    ? "text-[#B42318] bg-[#FBEDE5]"
+                                                    : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsDownIcon, { className: "h-3.5 w-3.5" }) })] }))] }, msg.id));
+                        }) }), (0, jsx_runtime_1.jsx)("div", { className: "p-3 border-t border-[#E6E4DF] bg-[#FFFFFF]", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 rounded-xl border border-[#E6E4DF] bg-[#F4F3F0] py-1.5 pl-3.5 pr-1.5 transition-all focus-within:border-[#C2410C] focus-within:ring-1 focus-within:ring-[#C2410C]/25", children: [(0, jsx_runtime_1.jsx)("input", { ref: inputRef, type: "text", value: input, onChange: (e) => setInput(e.target.value), onKeyDown: handleKeyDown, placeholder: isLoading
                                         ? "AI đang phản hồi... Bạn có thể nhập tiếp"
-                                        : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan...", className: "flex-1 bg-transparent text-[13px] text-slate-900 placeholder:text-slate-400 outline-none" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend(), disabled: !input.trim(), "aria-label": "Send message", className: "flex h-8 w-8 items-center justify-center rounded-full bg-[#2AABEE] text-white hover:bg-[#229ED9] disabled:opacity-40 transition-all shadow-xs hover:scale-105 active:scale-95 disabled:hover:scale-100 shrink-0", children: isLoading && !input.trim() ? ((0, jsx_runtime_1.jsx)("span", { className: "h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" })) : ((0, jsx_runtime_1.jsx)(icons_1.TelegramPaperPlaneIcon, { className: "w-4 h-4 -translate-x-px translate-y-px" })) })] }) })] })), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "Toggle Roadmap Assistant", className: "pointer-events-auto group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-[#2AABEE] via-[#229ED9] to-[#1E88E5] text-white shadow-[0_8px_24px_rgba(42,171,238,0.45)] border-2 border-white hover:scale-105 active:scale-95 transition-all duration-200", children: [(0, jsx_runtime_1.jsx)("span", { className: "absolute -inset-1 rounded-full bg-[#2AABEE] opacity-25 blur-md group-hover:opacity-50 transition-opacity" }), (0, jsx_runtime_1.jsx)("span", { className: "relative flex items-center justify-center transition-transform duration-200", children: isOpen ? ((0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "w-6 h-6" })) : ((0, jsx_runtime_1.jsx)(icons_1.TelegramPaperPlaneIcon, { className: "w-7 h-7 -translate-x-0.5 translate-y-0.5" })) }), !isOpen && ((0, jsx_runtime_1.jsxs)("span", { className: "absolute top-0 right-0 flex h-4 w-4", children: [(0, jsx_runtime_1.jsx)("span", { className: "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" }), (0, jsx_runtime_1.jsx)("span", { className: "relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white" })] }))] })] }));
+                                        : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan...", className: "min-w-0 flex-1 bg-transparent text-sm text-[#1F1E1C] outline-none placeholder:text-[#6B6862]" }), showStop ? ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: stopStreaming, title: "D\u1EEBng ph\u1EA3n h\u1ED3i", "aria-label": "D\u1EEBng ph\u1EA3n h\u1ED3i", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FBEDE5] text-[#B42318] border border-[#B42318]/20 transition-opacity hover:opacity-90 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.StopIcon, { className: "h-3.5 w-3.5" }) })) : ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend(), disabled: !input.trim(), "aria-label": "Send message", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C2410C] text-white font-medium transition-all hover:bg-[#9A3412] hover:scale-105 active:scale-95 disabled:bg-[#E6E4DF] disabled:text-[#6B6862] disabled:opacity-40 disabled:hover:scale-100 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.ArrowUpIcon, { className: "h-4 w-4" }) }))] }) })] })), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "Toggle Roadmap Assistant", className: "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer", children: isOpen ? ((0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-5 w-5 text-[#6B6862]" })) : ((0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-5 w-5 text-[#1F1E1C]" })) })] }));
 }

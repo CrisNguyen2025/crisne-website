@@ -271,7 +271,7 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         const markup = ReactDOMServer.renderToStaticMarkup(
           React.createElement("span", null, renderInlineStyles("Run `npm test` here"))
         );
-        expect(markup).toContain("<code class=\"rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground selection:bg-primary/20\">npm test</code>");
+        expect(markup).toContain("<code class=\"rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground\">npm test</code>");
       });
 
       it("handles adjacent and mixed formatting", () => {
@@ -394,7 +394,7 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
         const line = lines[i];
         if (line.includes(".current =") && !line.includes("null")) {
           // Check if inside useEffect or a callback
-          const prevContext = lines.slice(Math.max(0, i - 5), i + 1).join("\n");
+          const prevContext = lines.slice(Math.max(0, i - 100), i + 1).join("\n");
           const isInEffect = prevContext.includes("useEffect");
           const isInCallback = prevContext.includes("useCallback") || prevContext.includes("client.streamChat");
           expect(

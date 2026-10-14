@@ -26,6 +26,7 @@ from rag_service.observability import (
     traced_turn,
     usage_from_langchain,
 )
+from rag_service.prompts import PROMPT_SUGGESTION_FORMAT
 from rag_service.rag.rag_engine import rag_engine
 from rag_service.router import (
     ActionType,
@@ -33,6 +34,7 @@ from rag_service.router import (
     IntentClassificationResult,
     IntentRouter,
     IntentType,
+    SingleEntity,
     StructuredEntityExtractor,
     StructuredRoadmapAction,
     normalize_vietnamese,
@@ -58,6 +60,22 @@ class NextGenRoadmapAgent:
         self.router = IntentRouter(llm_model=llm_model)
         self.extractor = StructuredEntityExtractor(llm_model=llm_model)
         self.executor = ActionExecutor()
+
+    async def _ask_layer_choice(
+        self, session_ctx, action: StructuredRoadmapAction, topic_slug: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        """Park an item create and ask the user to create a default or named layer for it."""
+        session_ctx.pending_layer_choice = action
+        session_ctx.pending_layer_topic = topic_slug
+        titles = ", ".join(f"**{e.title}**" for e in action.entities)
+        ask = (
+            f"Chưa xác định được layer để thêm {titles} trong topic `{topic_slug}`.\n\n"
+            "**Chọn layer cho bài học:**\n"
+            "1. Tạo layer mặc định **General** — gõ `tạo layer mặc định`\n"
+            "2. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`"
+        )
+        async for ev in self._stream_text(ask, delay):
+            yield ev
 
     async def _stream_text(self, text: str, delay: float) -> AsyncGenerator[dict, None]:
         """Stream words over SSE. `delay` (seconds per word) adds an optional typing effect; 0 disables it."""
@@ -146,6 +164,43 @@ class NextGenRoadmapAgent:
                     yield ev
                 return
 
+        # ── 0b. Pending layer choice for an item without a target layer ──────
+        if session_ctx.pending_layer_choice:
+            pending_item = session_ctx.pending_layer_choice
+            topic_slug = session_ctx.pending_layer_topic
+            session_ctx.pending_layer_choice = None
+            session_ctx.pending_layer_topic = None
+            m = re.match(r"^tạo layer\s+(.+)$", content, re.IGNORECASE)
+            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
+                async for ev in self._stream_text("Đã hủy thêm bài học.", delay):
+                    yield ev
+                return
+            if m:
+                name = m.group(1).strip()
+                is_default = name.lower() in ["mặc định", "default"]
+                layer_title = "General" if is_default else name
+                layer_action = StructuredRoadmapAction(
+                    action=ActionType.CREATE,
+                    entity_level=EntityLevel.LAYER,
+                    target_parent_identifier=topic_slug,
+                    entities=[SingleEntity(title=layer_title, short_tag="01-GEN" if is_default else None)],
+                )
+                yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
+                ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id)
+                yield {"type": "tool_end", "name": "create_layer", "result": layer_msg}
+                if not ok:
+                    async for ev in self._stream_text(layer_msg, delay):
+                        yield ev
+                    return
+                pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
+                yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                yield {"type": "tool_end", "name": "create_item", "result": item_msg}
+                async for ev in self._stream_text(f"{layer_msg}\n\n{item_msg}", delay):
+                    yield ev
+                return
+            # Anything else: drop the pending choice and handle as a fresh message.
+
         # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
         if "/plan" in lower or "lập kế hoạch" in lower or "xem trước" in lower:
             yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
@@ -233,6 +288,18 @@ class NextGenRoadmapAgent:
                     yield ev
                 return
 
+            is_item_create = (
+                resolved_action.entity_level == EntityLevel.ITEM
+                and resolved_action.action == ActionType.CREATE
+            )
+            topic_slug = (page_context or {}).get("roadmapSlug") or session_ctx.active_topic_slug
+
+            # Item create without a layer: offer to create a default or named layer.
+            if is_item_create and not resolved_action.target_parent_identifier and topic_slug:
+                async for ev in self._ask_layer_choice(session_ctx, resolved_action, topic_slug, delay):
+                    yield ev
+                return
+
             if resolved_action.is_batch and resolved_action.entity_level != EntityLevel.GROUP:
                 tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}s_batch"
             else:
@@ -246,8 +313,24 @@ class NextGenRoadmapAgent:
             }
             yield {"type": "tool_start", "name": tool_name, "args": tool_args}
 
+            remembered_layer = session_ctx.active_layer_id
             ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id)
             yield {"type": "tool_end", "name": tool_name, "result": result_msg}
+
+            # The remembered layer may have been deleted since: forget it and ask again.
+            if (
+                not ok
+                and is_item_create
+                and topic_slug
+                and remembered_layer
+                and resolved_action.target_parent_identifier == remembered_layer
+            ):
+                session_ctx.active_layer_id = None
+                session_ctx.active_layer_title = None
+                resolved_action.target_parent_identifier = None
+                async for ev in self._ask_layer_choice(session_ctx, resolved_action, topic_slug, delay):
+                    yield ev
+                return
 
             full_reply = result_msg
             if note:
@@ -297,7 +380,8 @@ class NextGenRoadmapAgent:
                             f"Bạn là Roadmap Assistant. Trả lời câu hỏi của người dùng dựa trên thông tin thực tế từ hệ thống dưới đây:\n\n"
                             f"{rag_context}\n\n"
                             f"Câu hỏi của người dùng: \"{content}\"\n\n"
-                            f"Hãy trả lời súc tích, tự nhiên, kèm đường link [Tên bài](/roadmaps/slug) nếu có."
+                            f"Hãy trả lời súc tích, tự nhiên, kèm đường link [Tên bài](/?topic=slug) nếu có.\n\n"
+                            f"{PROMPT_SUGGESTION_FORMAT}"
                         )
                         gen = start_step(
                             "synthesize-answer",
@@ -349,7 +433,8 @@ class NextGenRoadmapAgent:
                     "Người dùng vừa gửi tin nhắn: " + repr(content) + "\n"
                     "Chỉ trả lời về lộ trình học tập, topic, layer, nhóm và bài học. "
                     "Nếu câu hỏi nằm ngoài phạm vi này, lịch sự từ chối và gợi ý các việc bạn có thể làm.\n"
-                    "Hãy trả lời ngắn gọn, lịch sự, thân thiện và gợi ý các tính năng tạo Topic/Layer/Item nếu phù hợp."
+                    "Hãy trả lời ngắn gọn, lịch sự, thân thiện và gợi ý các tính năng tạo Topic/Layer/Item nếu phù hợp.\n\n"
+                    + PROMPT_SUGGESTION_FORMAT
                 )
                 gen = start_step("chitchat-answer", "generation", model=settings.llm_model, input=chat_prompt)
                 merged = None

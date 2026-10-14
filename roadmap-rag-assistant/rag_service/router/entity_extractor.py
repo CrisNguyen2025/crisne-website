@@ -137,7 +137,7 @@ class StructuredEntityExtractor:
 
         # Strip trailing reference pronouns (e.g. "goroutines vào đó" -> "goroutines")
         cleaned = re.sub(
-            r"\s+(?:vào|trong|cho)?\s*(?:đó|nó|it|this|here)\s*$",
+            r"\s+(?:vào|trong|cho|to|in|into)?\s*(?:layers?|topics?|chủ\s+đề|lộ\s+trình)?\s*(?:đó|nó|này|it|this|here)\s*$",
             "",
             cleaned,
             flags=re.IGNORECASE,

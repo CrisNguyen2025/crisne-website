@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     else:
         from rag_service.adapters.http_adapter import HttpApiAdapter
 
-        adapter = HttpApiAdapter(settings.nextjs_api_base_url)
+        adapter = HttpApiAdapter(settings.nextjs_api_base_url, settings.admin_api_key)
 
     init_adapter(adapter)
     observability.get_langfuse()  # log once at startup whether tracing is on

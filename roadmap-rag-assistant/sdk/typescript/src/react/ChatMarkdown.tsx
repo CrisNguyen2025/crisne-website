@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { CheckIcon, CopyIcon } from "./icons";
+import { CheckIcon, CopyIcon, PlayIcon } from "./icons";
 
 /**
  * Dependency-free Markdown for chat answers (shared by both chatbots).
@@ -144,7 +144,28 @@ function safeHref(url: string): { href: string; external: boolean } | null {
   return null; // javascript:, data:, relative junk — rendered as plain text
 }
 
-export function renderInline(text: string): React.ReactNode[] {
+/**
+ * Wraps each word of plain text in a span keyed by its offset. Words already on screen keep
+ * their key and stay put; only newly streamed words mount, so only they play the fade-in.
+ */
+function fadeWords(text: string, base: number): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  const re = /(\S+)(\s*)/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    out.push(
+      <span key={`w${base + m.index}`} className="animate-in fade-in duration-300">
+        {m[1]}
+      </span>
+    );
+    if (m[2]) out.push(m[2]);
+  }
+  return out;
+}
+
+/** `fade`: animate newly streamed words (used for the block still being written). */
+export function renderInline(text: string, fade = false): React.ReactNode[] {
+  const plain = (start: number, end: number) =>
+    fade ? fadeWords(text.slice(start, end), start) : [text.slice(start, end)];
   const out: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -152,12 +173,12 @@ export function renderInline(text: string): React.ReactNode[] {
   // global regex would have its lastIndex reset under the outer loop.
   const re = new RegExp(INLINE.source, "g");
   for (let m = re.exec(text); m; m = re.exec(text)) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) out.push(...plain(last, m.index));
     if (m[1]) {
       out.push(
         <code
           key={key++}
-          className="rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground selection:bg-primary/20"
+          className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground"
         >
           {m[1].slice(1, -1)}
         </code>
@@ -165,7 +186,7 @@ export function renderInline(text: string): React.ReactNode[] {
     } else if (m[2] !== undefined) {
       out.push(
         <strong key={key++} className="font-semibold text-foreground">
-          {renderInline(m[3])}
+          {renderInline(m[3], fade)}
         </strong>
       );
     } else if (m[4]) {
@@ -189,19 +210,27 @@ export function renderInline(text: string): React.ReactNode[] {
     } else if (m[7] || m[9]) {
       out.push(
         <em key={key++} className="italic">
-          {renderInline(m[8] ?? m[10])}
+          {renderInline(m[8] ?? m[10], fade)}
         </em>
       );
     }
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(...plain(last, text.length));
   return out;
 }
 
 // ── Blocks ────────────────────────────────────────────────────────────────
 
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
+function CodeBlock({
+  lang,
+  code,
+  onRun,
+}: {
+  lang: string;
+  code: string;
+  onRun?: (code: string) => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -216,6 +245,39 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
       () => {}
     );
   };
+
+  const Icon = copied ? CheckIcon : CopyIcon;
+
+  // One-line snippet (e.g. a prompt suggestion): compact row, icon-only copy.
+  if ((!lang || lang === "text") && !code.includes("\n")) {
+    return (
+      <div className="group flex min-w-0 items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5">
+        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-xs text-foreground">
+          {code}
+        </code>
+        {onRun && (
+          <button
+            type="button"
+            onClick={() => onRun(code.trim())}
+            aria-label="Gửi lệnh này"
+            title="Gửi"
+            className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <PlayIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={copy}
+          aria-label={copied ? "Đã sao chép" : "Sao chép"}
+          title={copied ? "Đã chép" : "Chép"}
+          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-muted/40">
@@ -256,10 +318,12 @@ function ListView({
   ordered,
   items,
   trailing,
+  fade = false,
 }: {
   ordered: boolean;
   items: ListItem[];
   trailing?: React.ReactNode;
+  fade?: boolean;
 }) {
   const Tag = ordered ? "ol" : "ul";
   return (
@@ -272,7 +336,7 @@ function ListView({
               {ordered ? `${item.num}.` : "•"}
             </span>
             <div className="min-w-0 flex-1">
-              {renderInline(item.text)}
+              {renderInline(item.text, fade)}
               {isLast && !item.children.length && trailing}
               {item.children.length > 0 && (
                 <div className="mt-1">
@@ -280,6 +344,7 @@ function ListView({
                     ordered={item.children[0].ordered}
                     items={item.children}
                     trailing={isLast ? trailing : undefined}
+                    fade={fade}
                   />
                 </div>
               )}
@@ -294,9 +359,13 @@ function ListView({
 function BlockView({
   block,
   trailing,
+  onRun,
+  fade = false,
 }: {
   block: Block;
   trailing?: React.ReactNode;
+  onRun?: (code: string) => void;
+  fade?: boolean;
 }) {
   switch (block.kind) {
     case "heading": {
@@ -305,7 +374,7 @@ function BlockView({
         <Tag
           className={`pt-1 text-foreground ${HEADING_CLASS[block.level - 1]}`}
         >
-          {renderInline(block.text)}
+          {renderInline(block.text, fade)}
           {trailing}
         </Tag>
       );
@@ -316,7 +385,7 @@ function BlockView({
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line)}
+              {renderInline(line, fade)}
             </React.Fragment>
           ))}
           {trailing}
@@ -328,17 +397,18 @@ function BlockView({
           ordered={block.ordered}
           items={block.items}
           trailing={trailing}
+          fade={fade}
         />
       );
     case "code":
-      return <CodeBlock lang={block.lang} code={block.code} />;
+      return <CodeBlock lang={block.lang} code={block.code} onRun={onRun} />;
     case "quote":
       return (
         <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line)}
+              {renderInline(line, fade)}
             </React.Fragment>
           ))}
           {trailing}
@@ -364,14 +434,19 @@ export interface ChatMarkdownProps {
   /** Show a caret after the last character (inline when the last block allows it). */
   streaming?: boolean;
   className?: string;
+  /** Adds a run button to one-line snippets; called with the snippet text. */
+  onRun?: (code: string) => void;
 }
 
 export function ChatMarkdown({
   content,
   streaming = false,
   className = "",
+  onRun,
 }: ChatMarkdownProps) {
-  const blocks = parseBlocks(content);
+  // While streaming, hide a half-typed closing fence ("`" or "``") so it never flashes in a code block.
+  const visible = streaming ? content.replace(/\n[ \t]*`{1,2}$/, "") : content;
+  const blocks = parseBlocks(visible);
   const caret = streaming ? <StreamingCaret /> : null;
   const last = blocks[blocks.length - 1];
   const caretInline = !!last && last.kind !== "code" && last.kind !== "rule";
@@ -384,6 +459,8 @@ export function ChatMarkdown({
         <BlockView
           key={idx}
           block={block}
+          onRun={onRun}
+          fade={streaming && idx === blocks.length - 1}
           trailing={
             idx === blocks.length - 1 && caretInline ? caret : undefined
           }

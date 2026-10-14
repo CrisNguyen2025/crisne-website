@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { createSmoothStream, type SmoothStream } from './utils/smoothStream';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
 import type { PageContext } from '../types';
@@ -65,7 +66,7 @@ export function useRoadmapAssistantChat(
         id: 'welcome-msg',
         role: 'assistant',
         content:
-          'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n💡 **Bạn có thể yêu cầu tôi:**\n• **Thao tác nhanh**: `tạo ABC topic`, `tạo 2 layer mock 1 và 2 trong be topic`\n• **Tra cứu tri thức**: `Website có bài nào về Docker hay Database không?`\n• **Lập kế hoạch**: `/plan lộ trình Next.js Fullstack`\n\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
+          'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n**Thao tác nhanh**\n```text\ntạo 2 layer mock 1 và 2 trong be topic\n```\n**Tra cứu tri thức**\n```text\nWebsite có bài nào về Docker hay Database không?\n```\n**Lập kế hoạch**\n```text\n/plan lộ trình Next.js Fullstack\n```\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
         timestamp: new Date(),
       },
     ];
@@ -80,10 +81,12 @@ export function useRoadmapAssistantChat(
   const client = useMemo(() => new RoadmapChatClient({ baseUrl }), [baseUrl]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const smoothRef = useRef<SmoothStream | null>(null);
 
   // Clean up in-flight abort controller on unmount
   useEffect(() => {
     return () => {
+      smoothRef.current?.cancel();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -92,6 +95,7 @@ export function useRoadmapAssistantChat(
   }, []);
 
   const stopStreaming = useCallback(() => {
+    smoothRef.current?.flush();
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -107,6 +111,7 @@ export function useRoadmapAssistantChat(
       if (!content) return;
 
       // Abort any in-flight stream before starting new message
+      smoothRef.current?.flush();
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -158,6 +163,22 @@ export function useRoadmapAssistantChat(
       setIsLoading(true);
       setIsStreaming(true);
 
+      // Tokens arrive in bursts; reveal them at a steady pace.
+      const smooth = createSmoothStream((chunk) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === botMsgId
+              ? {
+                  ...msg,
+                  content: msg.content + chunk,
+                  firstTokenAt: msg.firstTokenAt ?? Date.now(),
+                }
+              : msg
+          )
+        );
+      });
+      smoothRef.current = smooth;
+
       try {
         abortControllerRef.current = client.streamChat(
           content,
@@ -198,21 +219,9 @@ export function useRoadmapAssistantChat(
               onToolExecutedRef.current?.(name, result);
             },
 
-            onToken: (delta) => {
-              setMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === botMsgId
-                    ? {
-                        ...msg,
-                        content: msg.content + delta,
-                        firstTokenAt: msg.firstTokenAt ?? Date.now(),
-                      }
-                    : msg
-                )
-              );
-            },
+            onToken: (delta) => smooth.push(delta),
 
-            onDone: (finalResp) => {
+            onDone: (finalResp) => smooth.finish(() => {
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === botMsgId
@@ -230,9 +239,10 @@ export function useRoadmapAssistantChat(
               setIsLoading(false);
               setIsStreaming(false);
               setActiveTool(null);
-            },
+            }),
 
             onError: (err) => {
+              smooth.flush();
               const errMsg = err.message || 'Lỗi kết nối tới Assistant service';
               setError(errMsg);
               setMessages((prev) =>

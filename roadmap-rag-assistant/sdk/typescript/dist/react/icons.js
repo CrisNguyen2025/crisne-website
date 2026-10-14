@@ -1,55 +1,62 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ModernSparklesIcon = ModernSparklesIcon;
-exports.TelegramPaperPlaneIcon = TelegramPaperPlaneIcon;
-exports.VerifiedBadgeIcon = VerifiedBadgeIcon;
-exports.DoubleCheckIcon = DoubleCheckIcon;
-exports.QuadrantArrowsIcon = QuadrantArrowsIcon;
-exports.ResetChatIcon = ResetChatIcon;
+exports.SparklesIcon = SparklesIcon;
+exports.PlayIcon = PlayIcon;
+exports.ArrowUpIcon = ArrowUpIcon;
+exports.StopIcon = StopIcon;
+exports.NewChatIcon = NewChatIcon;
 exports.CloseIcon = CloseIcon;
 exports.CopyIcon = CopyIcon;
 exports.CheckIcon = CheckIcon;
-exports.LoaderIcon = LoaderIcon;
 exports.CheckCircleIcon = CheckCircleIcon;
 exports.ChevronDownIcon = ChevronDownIcon;
-exports.PromptSparkleIcon = PromptSparkleIcon;
+exports.ThumbsUpIcon = ThumbsUpIcon;
+exports.ThumbsDownIcon = ThumbsDownIcon;
+exports.ArrowDownIcon = ArrowDownIcon;
 const jsx_runtime_1 = require("react/jsx-runtime");
-function ModernSparklesIcon({ className = 'w-5 h-5' }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" }) }));
+/**
+ * Shared outline icon frame: 24×24 viewBox, 1.5 stroke, 16px by default.
+ * Paths follow lucide (ISC) so the set stays visually consistent.
+ */
+function Icon({ className = 'w-4 h-4', children, }) {
+    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", className: `shrink-0 ${className}`, children: children }));
 }
-function TelegramPaperPlaneIcon({ className = 'w-6 h-6', }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "currentColor", className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "m20.665 3.717-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701h-.002l-.313 4.673c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.785l3.019-14.228c.309-1.239-.473-1.8-1.282-1.414z" }) }));
+function SparklesIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0l1.58 6.13a2 2 0 0 0 1.44 1.44l6.13 1.58a.5.5 0 0 1 0 .96l-6.13 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z" }), (0, jsx_runtime_1.jsx)("path", { d: "M20 3v4" }), (0, jsx_runtime_1.jsx)("path", { d: "M22 5h-4" })] }));
 }
-function VerifiedBadgeIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "currentColor", className: `text-[#2AABEE] ${className}`, children: [(0, jsx_runtime_1.jsx)("path", { d: "M10.29 2.29a2.42 2.42 0 0 1 3.42 0l.71.71a2.42 2.42 0 0 0 1.71.71h1a2.42 2.42 0 0 1 2.42 2.42v1a2.42 2.42 0 0 0 .71 1.71l.71.71a2.42 2.42 0 0 1 0 3.42l-.71.71a2.42 2.42 0 0 0-.71 1.71v1a2.42 2.42 0 0 1-2.42 2.42h-1a2.42 2.42 0 0 0-1.71.71l-.71.71a2.42 2.42 0 0 1-3.42 0l-.71-.71a2.42 2.42 0 0 0-1.71-.71h-1a2.42 2.42 0 0 1-2.42-2.42v-1a2.42 2.42 0 0 0-.71-1.71l-.71-.71a2.42 2.42 0 0 1 0-3.42l.71-.71a2.42 2.42 0 0 0 .71-1.71v-1a2.42 2.42 0 0 1 2.42-2.42h1a2.42 2.42 0 0 0 1.71-.71l.71-.71z" }), (0, jsx_runtime_1.jsx)("path", { d: "m9 12 2 2 4-4", stroke: "#ffffff", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", fill: "none" })] }));
+function PlayIcon({ className }) {
+    return ((0, jsx_runtime_1.jsx)(Icon, { className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "M7 4.5v15l12-7.5z" }) }));
 }
-function DoubleCheckIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.2", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M18 6 7 17l-5-5" }), (0, jsx_runtime_1.jsx)("path", { d: "m22 10-7.5 7.5L13 16" })] }));
+function ArrowUpIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "m5 12 7-7 7 7" }), (0, jsx_runtime_1.jsx)("path", { d: "M12 19V5" })] }));
 }
-function QuadrantArrowsIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "m15 3 6 0 0 6" }), (0, jsx_runtime_1.jsx)("path", { d: "m21 3-6.5 6.5" }), (0, jsx_runtime_1.jsx)("path", { d: "m9 21-6 0 0-6" }), (0, jsx_runtime_1.jsx)("path", { d: "m3 21 6.5-6.5" })] }));
+function StopIcon({ className }) {
+    return ((0, jsx_runtime_1.jsx)(Icon, { className: className, children: (0, jsx_runtime_1.jsx)("rect", { x: "6", y: "6", width: "12", height: "12", rx: "2", fill: "currentColor" }) }));
 }
-function ResetChatIcon({ className = 'w-3.5 h-3.5' }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }), (0, jsx_runtime_1.jsx)("path", { d: "M21 3v5h-5" }), (0, jsx_runtime_1.jsx)("path", { d: "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }), (0, jsx_runtime_1.jsx)("path", { d: "M8 16H3v5" })] }));
+function NewChatIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" }), (0, jsx_runtime_1.jsx)("path", { d: "M18.38 2.62a2.12 2.12 0 1 1 3 3L12.37 14.63a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z" })] }));
 }
-function CloseIcon({ className = 'w-3.5 h-3.5' }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M18 6 6 18" }), (0, jsx_runtime_1.jsx)("path", { d: "m6 6 12 12" })] }));
+function CloseIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M18 6 6 18" }), (0, jsx_runtime_1.jsx)("path", { d: "m6 6 12 12" })] }));
 }
-function CopyIcon({ className = 'w-3 h-3' }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" }), (0, jsx_runtime_1.jsx)("path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" })] }));
+function CopyIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("rect", { width: "14", height: "14", x: "8", y: "8", rx: "2", ry: "2" }), (0, jsx_runtime_1.jsx)("path", { d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" })] }));
 }
-function CheckIcon({ className = 'w-3 h-3' }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "M20 6 9 17l-5-5" }) }));
+function CheckIcon({ className }) {
+    return ((0, jsx_runtime_1.jsx)(Icon, { className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "M20 6 9 17l-5-5" }) }));
 }
-function LoaderIcon({ className = 'w-3.5 h-3.5' }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: `animate-spin ${className}`, children: (0, jsx_runtime_1.jsx)("path", { d: "M21 12a9 9 0 1 1-6.219-8.56" }) }));
+function CheckCircleIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("circle", { cx: "12", cy: "12", r: "10" }), (0, jsx_runtime_1.jsx)("path", { d: "m9 12 2 2 4-4" })] }));
 }
-function CheckCircleIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: [(0, jsx_runtime_1.jsx)("circle", { cx: "12", cy: "12", r: "10" }), (0, jsx_runtime_1.jsx)("path", { d: "m9 12 2 2 4-4" })] }));
+function ChevronDownIcon({ className }) {
+    return ((0, jsx_runtime_1.jsx)(Icon, { className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "m6 9 6 6 6-6" }) }));
 }
-function ChevronDownIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: (0, jsx_runtime_1.jsx)("polyline", { points: "6 9 12 15 18 9" }) }));
+function ThumbsUpIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M7 10v12" }), (0, jsx_runtime_1.jsx)("path", { d: "M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" })] }));
 }
-function PromptSparkleIcon({ className = 'w-3.5 h-3.5', }) {
-    return ((0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", className: className, children: (0, jsx_runtime_1.jsx)("path", { d: "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" }) }));
+function ThumbsDownIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M17 14V2" }), (0, jsx_runtime_1.jsx)("path", { d: "M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" })] }));
+}
+function ArrowDownIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M12 5v14" }), (0, jsx_runtime_1.jsx)("path", { d: "m19 12-7 7-7-7" })] }));
 }

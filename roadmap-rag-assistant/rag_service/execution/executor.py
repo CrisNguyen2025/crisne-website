@@ -9,6 +9,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from rag_service.rag.rag_engine import rag_engine
+from rag_service.router.entity_extractor import _generate_clean_short_code
 from rag_service.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
 from rag_service.state.session_store import session_store
 from rag_service.tools import get_adapter
@@ -113,8 +114,11 @@ class ActionExecutor:
 
             if act_type == ActionType.CREATE:
                 created_layers = []
+                topic = await adapter.get_topic(topic_slug)
+                existing = len((topic or {}).get("layers") or [])
                 for idx, ent in enumerate(action.entities, 1):
-                    short_tag = ent.short_tag or f"{idx:02d}-{(ent.short_code or 'LAY')[:3].upper()}"
+                    code = (ent.short_code or _generate_clean_short_code(ent.title))[:3].upper()
+                    short_tag = ent.short_tag or f"{existing + idx:02d}-{code}"
                     res = await adapter.create_layer(
                         topic_slug=topic_slug,
                         title=ent.title,
@@ -198,8 +202,14 @@ class ActionExecutor:
 
                 asyncio.create_task(rag_engine.sync_live_database())
                 bullets = "\n".join([f"- **{i}**" for i in created_items])
+                ctx = session_store.get_or_create(session_id)
+                layer_label = (
+                    f"**{ctx.active_layer_title}**"
+                    if ctx.active_layer_id == layer_id and ctx.active_layer_title
+                    else f"`{layer_id}`"
+                )
                 return True, (
-                    f"✅ Đã thêm thành công {len(created_items)} bài học vào layer `{layer_id}`:\n{bullets}\n\n"
+                    f"✅ Đã thêm thành công {len(created_items)} bài học vào layer {layer_label}:\n{bullets}\n\n"
                     f"Nội dung đã được lưu vào hệ thống."
                 )
 

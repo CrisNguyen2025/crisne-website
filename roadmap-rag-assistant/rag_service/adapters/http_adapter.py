@@ -11,12 +11,15 @@ import httpx
 class HttpApiAdapter:
     """Adapter that proxies all CUD operations through the Next.js REST API."""
 
-    def __init__(self, base_url: str = "http://localhost:3000") -> None:
+    def __init__(self, base_url: str = "http://localhost:3000", admin_key: str = "") -> None:
         self._base_url = base_url.rstrip("/")
+        headers = {"Content-Type": "application/json"}
+        if admin_key:
+            headers["x-admin-key"] = admin_key
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=10.0,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
 
     async def close(self) -> None:

@@ -10,13 +10,40 @@ import {
   CopyIcon,
   CheckIcon,
   CheckCircleIcon,
+  ThumbsUpIcon,
+  ThumbsDownIcon,
 } from "./icons";
 import { formatTime, formatToolDisplayName } from "./utils/formatters";
 import { ChatMarkdown } from "./ChatMarkdown";
-import { ToolStepRow } from "./ToolStepRow";
+import { LayerChoicePicker } from "./LayerChoicePicker";
+import { ToolStepRow, CollapsibleStepsSummary, StepItem } from "./ToolStepRow";
 
-const ICON_BUTTON =
-  "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+const WIDGET_THEME_VARS: React.CSSProperties = {
+  ["--bg" as any]: "#FFFFFF",
+  ["--surface" as any]: "#F4F3F0",
+  ["--border" as any]: "#E6E4DF",
+  ["--text" as any]: "#1F1E1C",
+  ["--text-muted" as any]: "#6B6862",
+  ["--accent" as any]: "#C2410C",
+  ["--accent-soft" as any]: "#FBEDE5",
+  ["--success" as any]: "#3F7D58",
+  ["--danger" as any]: "#B42318",
+
+  // Semantic mappings for Tailwind components (e.g. ChatMarkdown)
+  ["--background" as any]: "#FFFFFF",
+  ["--foreground" as any]: "#1F1E1C",
+  ["--muted-foreground" as any]: "#6B6862",
+  ["--card" as any]: "#F4F3F0",
+  ["--card-foreground" as any]: "#1F1E1C",
+  ["--popover" as any]: "#FFFFFF",
+  ["--popover-foreground" as any]: "#1F1E1C",
+  ["--border" as any]: "#E6E4DF",
+  ["--input" as any]: "#F4F3F0",
+  ["--muted" as any]: "#F4F3F0",
+  ["--primary" as any]: "#C2410C",
+  ["--primary-foreground" as any]: "#FFFFFF",
+  colorScheme: "light",
+};
 
 export function RoadmapChatbotWidget({
   position = "bottom-right",
@@ -37,7 +64,15 @@ export function RoadmapChatbotWidget({
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
+  const [feedback, setFeedback] = useState<Record<string, 1 | 0>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleFeedback = (msgId: string, val: 1 | 0) => {
+    setFeedback((prev) => ({
+      ...prev,
+      [msgId]: prev[msgId] === val ? undefined! : val,
+    }));
+  };
 
   const {
     messages,
@@ -92,12 +127,12 @@ export function RoadmapChatbotWidget({
     };
   }, [isOpen]);
 
-  // Auto-scroll
+  // Auto-scroll (immediate follow during stream like Claude Code, smooth on arrival)
   useEffect(() => {
     if (isOpen && scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: isStreaming ? "auto" : "smooth",
       });
     }
   }, [messages, isOpen, isStreaming, activeTool]);
@@ -194,17 +229,20 @@ export function RoadmapChatbotWidget({
       {isOpen && (
         <div
           ref={containerRef}
-          className="pointer-events-auto mb-3 flex h-[600px] max-h-[80vh] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-border/80 bg-background/95 text-foreground shadow-2xl ring-1 ring-black/5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 dark:ring-white/10"
+          style={WIDGET_THEME_VARS}
+          className="pointer-events-auto flex h-[720px] max-h-[calc(100vh-3rem)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ── Header ── */}
-          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3">
             <div className="flex min-w-0 items-center gap-2.5">
-              <SparklesIcon className="h-4 w-4 text-primary" />
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#F4F3F0] border border-[#E6E4DF] text-[#6B6862]">
+                <SparklesIcon className="h-4 w-4" />
+              </span>
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium leading-tight">
+                <div className="truncate text-sm font-semibold tracking-tight text-[#1F1E1C]">
                   {title}
                 </div>
-                <div className="truncate text-xs leading-tight text-muted-foreground">
+                <div className="truncate text-xs leading-tight text-[#6B6862]">
                   {status}
                 </div>
               </div>
@@ -216,18 +254,18 @@ export function RoadmapChatbotWidget({
                 onClick={clearMessages}
                 title="Cuộc trò chuyện mới"
                 aria-label="Cuộc trò chuyện mới"
-                className={ICON_BUTTON}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
               >
-                <NewChatIcon />
+                <NewChatIcon className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
                 title="Thu gọn"
                 aria-label="Thu gọn"
-                className={ICON_BUTTON}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
               >
-                <CloseIcon />
+                <CloseIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -258,14 +296,25 @@ export function RoadmapChatbotWidget({
                     key={msg.id}
                     className="group flex flex-col items-end gap-1"
                   >
-                    <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed">
+                    <div className="relative max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-xs bg-[#F4F3F0] border border-[#E6E4DF] px-3.5 py-2 text-sm leading-relaxed text-[#1F1E1C]">
                       {msg.content}
                     </div>
-                    {timeStr && (
-                      <span className="pr-1 text-xs text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                        {timeStr}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]">
+                      <button
+                        type="button"
+                        onClick={() => copyMessage(msg.id, msg.content)}
+                        title="Sao chép câu hỏi"
+                        aria-label="Sao chép câu hỏi"
+                        className="flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+                      >
+                        {copiedId === msg.id ? (
+                          <CheckIcon className="h-3 w-3 text-[#3F7D58]" />
+                        ) : (
+                          <CopyIcon className="h-3 w-3" />
+                        )}
+                      </button>
+                      {timeStr && <span className="text-[11px]">{timeStr}</span>}
+                    </div>
                   </div>
                 );
               }
@@ -276,49 +325,56 @@ export function RoadmapChatbotWidget({
                 (msg.content.includes("Xác nhận thực hiện") ||
                   msg.content.includes("DRY-RUN PREVIEW"));
 
+              const awaitingLayerChoice =
+                !isStreaming &&
+                isLast &&
+                msg.content.includes("Chọn layer cho bài học");
+
+              // Build step items
+              const stepItems: StepItem[] = [];
+              toolCalls.forEach((tc, idx) => {
+                const toolKey = `${msg.id}-${idx}`;
+                stepItems.push({
+                  id: toolKey,
+                  label: formatToolDisplayName(tc.name),
+                  startedAt: tc.startedAt,
+                  endedAt: tc.endedAt,
+                  running: isLive && tc.endedAt === undefined,
+                  detail: tc.result,
+                });
+              });
+
+              if (showThinking && toolCalls.length === 0) {
+                stepItems.push({
+                  id: `${msg.id}-thinking`,
+                  label: "Đang suy nghĩ & soạn câu trả lời",
+                  startedAt: thinkingSince,
+                  running: true,
+                });
+              }
+
               return (
                 <div key={msg.id} className="group flex flex-col gap-2">
-                  {/* Step list (tool calls + thinking), above the answer */}
-                  {(toolCalls.length > 0 ||
-                    showThinking ||
-                    msg.firstTokenAt !== undefined) && (
-                    <div className="-mx-1.5 space-y-0.5">
-                      {toolCalls.map((tc, idx) => {
-                        const toolKey = `${msg.id}-${idx}`;
-                        return (
-                          <ToolStepRow
-                            key={toolKey}
-                            label={formatToolDisplayName(tc.name)}
-                            startedAt={tc.startedAt}
-                            endedAt={tc.endedAt}
-                            running={isLive && tc.endedAt === undefined}
-                            detail={tc.result}
-                            expanded={!!expandedTools[toolKey]}
-                            onToggle={() => toggleToolExpand(toolKey)}
-                          />
-                        );
-                      })}
-                      {showThinking && (
-                        <ToolStepRow
-                          label="Đang soạn câu trả lời"
-                          startedAt={thinkingSince}
-                          running
-                        />
-                      )}
-                      {!showThinking && msg.firstTokenAt !== undefined && (
-                        <ToolStepRow
-                          label="Soạn câu trả lời"
-                          startedAt={thinkingSince}
-                          endedAt={msg.firstTokenAt}
-                          running={false}
-                        />
-                      )}
+                  {/* Main answer content rendered directly on canvas without a bubble card */}
+                  {msg.content && (
+                    <div className="text-sm leading-relaxed text-[#1F1E1C] py-0.5">
+                      <ChatMarkdown
+                        content={msg.content}
+                        streaming={isLive}
+                        onRun={isLoading ? undefined : sendMessage}
+                      />
                     </div>
                   )}
 
-                  {msg.content && (
-                    <div className="rounded-2xl border border-border/60 bg-muted/30 p-3.5 shadow-xs transition-colors">
-                      <ChatMarkdown content={msg.content} streaming={isLive} />
+                  {/* Step summary (collapsible, defaults to last action + total time), placed at bottom of response */}
+                  {stepItems.length > 0 && (
+                    <div className="-mx-1">
+                      <CollapsibleStepsSummary
+                        steps={stepItems}
+                        expandedTools={expandedTools}
+                        onToggleTool={toggleToolExpand}
+                        isLive={isLive}
+                      />
                     </div>
                   )}
 
@@ -329,7 +385,7 @@ export function RoadmapChatbotWidget({
                         type="button"
                         onClick={() => sendMessage("ok")}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                        className="flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
                       >
                         <CheckCircleIcon className="h-3.5 w-3.5" />
                         <span>Xác nhận thực hiện</span>
@@ -338,7 +394,7 @@ export function RoadmapChatbotWidget({
                         type="button"
                         onClick={() => sendMessage("hủy")}
                         disabled={isLoading}
-                        className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        className="flex items-center gap-1.5 rounded-lg border border-[#E4E2DD] bg-[#F2F1EE] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#EAE8E3] disabled:opacity-50 cursor-pointer"
                       >
                         <CloseIcon className="h-3.5 w-3.5" />
                         <span>Hủy bỏ</span>
@@ -346,23 +402,55 @@ export function RoadmapChatbotWidget({
                     </div>
                   )}
 
-                  {/* Copy + time, revealed on hover once the answer is complete */}
+                  {awaitingLayerChoice && (
+                    <LayerChoicePicker onSend={sendMessage} disabled={isLoading} />
+                  )}
+
+                  {/* Actions bar (Time, Copy, Thumbs Up, Thumbs Down) - visible by default */}
                   {msg.content && !isLive && (
-                    <div className="-ml-1.5 flex items-center gap-1 text-xs text-muted-foreground opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                    <div className="flex items-center gap-1.5 pt-0.5 text-xs text-[#6B6862]">
+                      {timeStr && <span className="select-none text-[11px]">{timeStr}</span>}
                       <button
                         type="button"
                         onClick={() => copyMessage(msg.id, msg.content)}
                         title="Sao chép"
                         aria-label="Sao chép câu trả lời"
-                        className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground"
+                        className="flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
                       >
                         {copiedId === msg.id ? (
-                          <CheckIcon className="h-3.5 w-3.5" />
+                          <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
                         ) : (
                           <CopyIcon className="h-3.5 w-3.5" />
                         )}
                       </button>
-                      {timeStr && <span>{timeStr}</span>}
+                      <button
+                        type="button"
+                        onClick={() => handleFeedback(msg.id, 1)}
+                        title="Hữu ích"
+                        aria-label="Câu trả lời hữu ích"
+                        aria-pressed={feedback[msg.id] === 1}
+                        className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${
+                          feedback[msg.id] === 1
+                            ? "text-[#1F1E1C] bg-[#F4F3F0]"
+                            : "text-[#6B6862] hover:text-[#1F1E1C]"
+                        }`}
+                      >
+                        <ThumbsUpIcon className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFeedback(msg.id, 0)}
+                        title="Chưa tốt"
+                        aria-label="Câu trả lời chưa tốt"
+                        aria-pressed={feedback[msg.id] === 0}
+                        className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${
+                          feedback[msg.id] === 0
+                            ? "text-[#B42318] bg-[#FBEDE5]"
+                            : "text-[#6B6862] hover:text-[#1F1E1C]"
+                        }`}
+                      >
+                        <ThumbsDownIcon className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -371,8 +459,8 @@ export function RoadmapChatbotWidget({
           </div>
 
           {/* ── Composer ── */}
-          <div className="p-3">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-background py-1.5 pl-3.5 pr-1.5 transition-colors focus-within:border-ring">
+          <div className="p-3 border-t border-[#E6E4DF] bg-[#FFFFFF]">
+            <div className="flex items-center gap-2 rounded-xl border border-[#E6E4DF] bg-[#F4F3F0] py-1.5 pl-3.5 pr-1.5 transition-all focus-within:border-[#C2410C] focus-within:ring-1 focus-within:ring-[#C2410C]/25">
               <input
                 ref={inputRef}
                 type="text"
@@ -384,7 +472,7 @@ export function RoadmapChatbotWidget({
                     ? "AI đang phản hồi... Bạn có thể nhập tiếp"
                     : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan..."
                 }
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                className="min-w-0 flex-1 bg-transparent text-sm text-[#1F1E1C] outline-none placeholder:text-[#6B6862]"
               />
               {showStop ? (
                 <button
@@ -392,7 +480,7 @@ export function RoadmapChatbotWidget({
                   onClick={stopStreaming}
                   title="Dừng phản hồi"
                   aria-label="Dừng phản hồi"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-foreground text-background transition-opacity hover:opacity-90"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FBEDE5] text-[#B42318] border border-[#B42318]/20 transition-opacity hover:opacity-90 cursor-pointer"
                 >
                   <StopIcon className="h-3.5 w-3.5" />
                 </button>
@@ -402,9 +490,9 @@ export function RoadmapChatbotWidget({
                   onClick={() => handleSend()}
                   disabled={!input.trim()}
                   aria-label="Send message"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C2410C] text-white font-medium transition-all hover:bg-[#9A3412] hover:scale-105 active:scale-95 disabled:bg-[#E6E4DF] disabled:text-[#6B6862] disabled:opacity-40 disabled:hover:scale-100 cursor-pointer"
                 >
-                  <ArrowUpIcon />
+                  <ArrowUpIcon className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -412,19 +500,21 @@ export function RoadmapChatbotWidget({
         </div>
       )}
 
-      {/* ── Launcher ── */}
+      {/* ── Launcher (hidden while open: the panel takes its corner; header has a close button) ── */}
+      {!isOpen && (
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Toggle Roadmap Assistant"
-        className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+        className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer"
       >
         {isOpen ? (
-          <CloseIcon className="h-5 w-5" />
+          <CloseIcon className="h-5 w-5 text-[#6B6862]" />
         ) : (
-          <SparklesIcon className="h-5 w-5" />
+          <SparklesIcon className="h-5 w-5 text-[#1F1E1C]" />
         )}
       </button>
+      )}
     </div>
   );
 }

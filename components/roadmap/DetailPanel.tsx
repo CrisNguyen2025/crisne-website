@@ -18,6 +18,7 @@ import { useToast } from "@/components/ui/toast";
 import { Image as AntImage, Popconfirm } from "antd";
 import { EditItemContentDrawer } from "./EditItemContentDrawer";
 import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface DetailPanelProps {
   item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
@@ -117,7 +118,10 @@ export function DetailPanel({
 
   if (!item) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full bg-white/55">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full bg-white/55 relative">
+        <div className="absolute top-3.5 right-4">
+          <ThemeToggle className="h-8 w-8 rounded-xl border border-border/60 bg-card hover:bg-muted/80 text-foreground shadow-2xs" />
+        </div>
         <div className="w-12 h-12 rounded-2xl bg-muted/50 border border-border/40 flex items-center justify-center mb-3">
           <Folder className="w-6 h-6 text-muted-foreground/60" />
         </div>
@@ -255,6 +259,10 @@ export function DetailPanel({
                 </button>
               </Popconfirm>
             )}
+
+            <div className="h-4 w-px bg-border/60 mx-0.5" />
+
+            <ThemeToggle className="h-7 w-7 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs" />
           </div>
         </div>
 

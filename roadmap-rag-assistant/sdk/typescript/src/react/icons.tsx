@@ -38,6 +38,14 @@ export function SparklesIcon({ className }: IconProps) {
   );
 }
 
+export function PlayIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M7 4.5v15l12-7.5z" />
+    </Icon>
+  );
+}
+
 export function ArrowUpIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

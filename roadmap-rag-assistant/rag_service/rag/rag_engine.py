@@ -72,7 +72,7 @@ class HybridRagEngine:
         for doc, score in matches:
             if doc.doc_type == "item":
                 lines.append(
-                    f"\n#### 📖 Bài học: [{doc.title}](/roadmaps/{doc.topic_slug})\n"
+                    f"\n#### 📖 Bài học: [{doc.title}](/?topic={doc.topic_slug})\n"
                     f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
                     f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Cấp độ: `{doc.level}`)\n"
                     f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"
@@ -87,7 +87,7 @@ class HybridRagEngine:
                 )
             elif doc.doc_type == "topic":
                 lines.append(
-                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/roadmaps/{doc.topic_slug})\n"
+                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/?topic={doc.topic_slug})\n"
                     f"- **Mô tả:** {doc.description or 'N/A'}\n"
                 )
 
