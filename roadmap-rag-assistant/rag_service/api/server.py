@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from rag_service import observability
 from rag_service.config import settings
 from rag_service.tools import init_adapter
 
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
         adapter = HttpApiAdapter(settings.nextjs_api_base_url)
 
     init_adapter(adapter)
+    observability.get_langfuse()  # log once at startup whether tracing is on
     print(
         f"🚀 Roadmap RAG Assistant started "
         f"(adapter={settings.rag_adapter_mode}, model={settings.llm_model})"
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
+    observability.flush()
     if hasattr(adapter, "close"):
         await adapter.close()
     print("👋 Roadmap RAG Assistant stopped")
