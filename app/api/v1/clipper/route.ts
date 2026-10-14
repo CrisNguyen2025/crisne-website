@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createPost } from '@/lib/notion';
 import { KnowledgeEntity } from '@/types/knowledge';
+import { hasValidAdminKey } from '@/lib/auth/owner-access';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,10 +41,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const adminKey = process.env.ADMIN_API_KEY;
-    const reqKey = request.headers.get('x-admin-key');
-
-    if (adminKey && reqKey !== adminKey) {
+    // Fail-closed: without ADMIN_API_KEY configured, no request is accepted
+    if (!hasValidAdminKey(request)) {
       return NextResponse.json(
         { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid Admin API Key' } },
         { status: 401, headers: corsHeaders }

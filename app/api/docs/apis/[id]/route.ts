@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 type ApiUpdateBody = {
   method?: string;
@@ -40,6 +41,9 @@ function normalizeJsonExample(value: string | null | undefined): string | null {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const body = (await req.json()) as ApiUpdateBody;
@@ -91,6 +95,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = await requireWriteAccess(_req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     await prisma.$executeRaw`DELETE FROM ApiEndpoint WHERE id = ${id}`;

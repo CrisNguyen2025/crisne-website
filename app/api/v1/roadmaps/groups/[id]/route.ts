@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -7,6 +8,9 @@ interface RouteContext {
 
 // PATCH /api/v1/roadmaps/groups/[id] - Update group title
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { id } = await context.params;
     const body = await req.json();
@@ -24,10 +28,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
 
     return NextResponse.json({ group: updated });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/groups/[id]] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to update group' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to update group' },
       { status: 500 }
     );
   }
@@ -35,6 +39,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
 // DELETE /api/v1/roadmaps/groups/[id] - Delete group
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(_req);
+  if (denied) return denied;
+
   try {
     const { id } = await context.params;
 
@@ -53,10 +60,10 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     });
 
     return NextResponse.json({ success: true, deletedId: existing.id });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/groups/[id]] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to delete group' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to delete group' },
       { status: 500 }
     );
   }

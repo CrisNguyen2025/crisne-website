@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTagById, updateTag, deleteTag, getPosts, getTags } from "@/lib/notion";
 import type { PostWithTags } from "@/lib/notion-types";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,6 +9,9 @@ type Params = { params: Promise<{ id: string }> };
 // PATCH /api/tags/:id
 // Body: { name?, color? }
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -27,6 +31,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
 // DELETE /api/tags/:id — archives the Notion page
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  const denied = await requireWriteAccess(_req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     

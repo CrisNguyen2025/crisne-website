@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToStorage, generateFilename } from '@/lib/r2-client';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export const runtime = 'nodejs';
 
@@ -44,6 +45,9 @@ function isValidImageSignature(buffer: Buffer, mimeType: string): boolean {
  * Upload image to Cloudflare R2
  */
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -99,10 +103,10 @@ export async function POST(req: NextRequest) {
       type: file.type,
       filename,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Image upload error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Upload failed' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Upload failed' },
       { status: 500 }
     );
   }

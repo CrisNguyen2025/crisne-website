@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -40,6 +41,9 @@ export async function GET() {
 
 // POST /api/v1/roadmaps - Create new Topic / Roadmap with initial layers
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { title, shortCode, description, layers } = body;
@@ -83,7 +87,7 @@ export async function POST(req: NextRequest) {
         description: description?.trim() || null,
         order: count + 1,
         layers: {
-          create: layers.map((layer: any, idx: number) => ({
+          create: layers.map((layer: { title: string; shortTag: string; subtitle?: string }, idx: number) => ({
             order: idx + 1,
             title: layer.title.trim(),
             shortTag: layer.shortTag.trim().toUpperCase(),
@@ -101,10 +105,10 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ roadmap: createdRoadmap }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API POST /api/v1/roadmaps] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to create topic / roadmap' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to create topic / roadmap' },
       { status: 500 }
     );
   }

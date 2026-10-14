@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 // POST /api/v1/roadmaps/items - Create item in a group
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { layerId, level, title, description, content } = body;

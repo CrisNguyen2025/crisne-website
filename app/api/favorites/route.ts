@@ -4,8 +4,23 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getFavorites, addFavorite, removeFavorite } from "@/lib/notion";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Public per-visitor feature: rate limit writes so anonymous clients cannot flood Notion
+function rateLimitResponse(req: NextRequest): NextResponse | null {
+  const { isAllowed, retryAfterSeconds } = checkRateLimit(req, {
+    key: "favorites",
+    limit: 30,
+    windowMs: 5 * 60_000,
+  });
+  if (isAllowed) return null;
+  return NextResponse.json(
+    { error: "Too many requests" },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+  );
+}
 
 // Helper: Get or generate anonymous user ID from header
 function getUserId(request: NextRequest): string {
@@ -38,6 +53,9 @@ export async function GET(req: NextRequest) {
 // POST /api/favorites
 // Body: { tagId: string }
 export async function POST(req: NextRequest) {
+  const limited = rateLimitResponse(req);
+  if (limited) return limited;
+
   try {
     const userId = getUserId(req);
     const { tagId } = await req.json();
@@ -69,6 +87,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/favorites?tagId=xxx
 export async function DELETE(req: NextRequest) {
+  const limited = rateLimitResponse(req);
+  if (limited) return limited;
+
   try {
     const userId = getUserId(req);
     const { searchParams } = new URL(req.url);

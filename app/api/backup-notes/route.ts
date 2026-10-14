@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 async function getNextBackupIndex(docsDir: string): Promise<number> {
   let files: string[] = [];
@@ -18,6 +19,9 @@ async function getNextBackupIndex(docsDir: string): Promise<number> {
 }
 
 export async function POST(request: Request) {
+  const denied = await requireWriteAccess(request);
+  if (denied) return denied;
+
   try {
     const { posts, tags } = await request.json();
 

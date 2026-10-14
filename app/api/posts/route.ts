@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getPosts, getTags, createPost } from "@/lib/notion";
 import { replaceBase64WithUrls, estimateContentSize } from "@/lib/image-upload";
 import type { PostWithTags, TagWithPostCount } from "@/lib/notion-types";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,9 @@ export async function GET(req: NextRequest) {
 // POST /api/posts
 // Body: { title, slug?, content?, published?, tagIds? }
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { title, slug, content, published, tagIds } = body as {

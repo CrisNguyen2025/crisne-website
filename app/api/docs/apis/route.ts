@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureDocsSchema } from "@/app/api/docs/_shared/ensure-docs-schema";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 type ApiRow = {
   id: string;
@@ -51,6 +52,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     await ensureDocsSchema();
     const body = await req.json();

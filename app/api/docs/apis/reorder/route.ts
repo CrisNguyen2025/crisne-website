@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export async function PUT(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { ids } = body as { ids: string[] };

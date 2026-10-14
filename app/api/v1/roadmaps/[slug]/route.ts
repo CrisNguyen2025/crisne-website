@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { RoadmapLayer } from '@/lib/roadmap/types';
 import { slugify } from '@/lib/utils';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -121,6 +122,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
 // DELETE /api/v1/roadmaps/[slug] - Delete an entire roadmap topic by slug, shortCode, or title
 export async function DELETE(_req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(_req);
+  if (denied) return denied;
+
   try {
     const { slug } = await context.params;
 
@@ -152,10 +156,10 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       deletedTitle: roadmap.title,
       deletedShortCode: roadmap.shortCode,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to delete roadmap' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to delete roadmap' },
       { status: 500 }
     );
   }
@@ -163,6 +167,9 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
 
 // PATCH /api/v1/roadmaps/[slug] - Update roadmap title, shortCode, description, or isLocked
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { slug } = await context.params;
     const body = await req.json();
@@ -215,10 +222,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     });
 
     return NextResponse.json({ roadmap: updated });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to update roadmap' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to update roadmap' },
       { status: 500 }
     );
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -7,6 +8,9 @@ interface RouteContext {
 
 // PATCH /api/v1/roadmaps/items/[id]/content - Update Notion-like Lexical content
 export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { id } = await context.params;
     const body = await req.json();

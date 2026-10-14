@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findUnusedStorageFiles, cleanupUnusedStorageFiles } from '@/lib/r2-client';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,10 +13,10 @@ export async function GET() {
   try {
     const scan = await findUnusedStorageFiles();
     return NextResponse.json(scan);
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Failed to scan unused storage files:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to scan unused files' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to scan unused files' },
       { status: 500 }
     );
   }
@@ -27,6 +28,9 @@ export async function GET() {
  * Body (optional): { filenames?: string[] }
  */
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     let body: { filenames?: string[] } = {};
     try {
@@ -37,10 +41,10 @@ export async function POST(req: NextRequest) {
 
     const result = await cleanupUnusedStorageFiles(body.filenames);
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error) {
     console.error('❌ Failed to clean up unused storage files:', error);
     return NextResponse.json(
-      { error: error?.message || 'Failed to clean up unused files' },
+      { error: (error instanceof Error ? error.message : undefined) || 'Failed to clean up unused files' },
       { status: 500 }
     );
   }

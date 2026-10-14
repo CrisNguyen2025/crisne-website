@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { resolveRoadmapId } from '@/lib/roadmap/resolveRoadmap';
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -8,6 +9,9 @@ interface RouteContext {
 
 // POST /api/v1/roadmaps/[slug]/layers - Create a layer in roadmap
 export async function POST(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const { slug } = await context.params;
     const body = await req.json();

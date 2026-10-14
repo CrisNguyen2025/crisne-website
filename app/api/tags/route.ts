@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTags, createTag } from "@/lib/notion";
 import type { TagWithPostCount } from "@/lib/notion-types";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,9 @@ export async function GET() {
 // POST /api/tags
 // Body: { name, color? }
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { name, color } = body as { name: string; color?: string };

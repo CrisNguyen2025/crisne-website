@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireWriteAccess } from "@/lib/auth/write-access";
 
 // GET /api/notes?tagId=xxx — list notes, optionally filtered by tag
 export async function GET(req: NextRequest) {
@@ -21,6 +22,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/notes — create a note
 export async function POST(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { title, link, description, tagId } = body as {
