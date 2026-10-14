@@ -16,6 +16,10 @@ export interface ToolCall {
   name: string;
   args?: Record<string, unknown>;
   result: string;
+  /** Epoch ms when the tool started (client clock). */
+  startedAt?: number;
+  /** Epoch ms when the tool finished; undefined while running. */
+  endedAt?: number;
 }
 
 export interface ChatMessage {
@@ -25,6 +29,8 @@ export interface ChatMessage {
   toolCalls?: ToolCall[];
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
+  /** Epoch ms of the first streamed token; ends the "thinking" step. */
+  firstTokenAt?: number;
   timestamp: Date;
 }
 

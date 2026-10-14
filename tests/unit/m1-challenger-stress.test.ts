@@ -110,11 +110,16 @@ describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
 
     it("confirms RoadmapChatbotWidget has zero inline svg tags", () => {
       const widgetPath = "roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget.tsx";
+      const stepRowPath = "roadmap-rag-assistant/sdk/typescript/src/react/ToolStepRow.tsx";
       const widgetContent = readProjectFile(widgetPath);
-      expect(widgetContent).not.toMatch(/<svg[\s>]/);
-      expect(widgetContent).toContain('from "./icons"');
+      const stepRowContent = readProjectFile(stepRowPath);
+      for (const content of [widgetContent, stepRowContent]) {
+        expect(content).not.toMatch(/<svg[\s>]/);
+        expect(content).toContain('from "./icons"');
+      }
+      // Icons may be used by the widget or by its step-row child component.
       for (const { name } of allIcons) {
-        expect(widgetContent).toContain(name);
+        expect(widgetContent + stepRowContent).toContain(name);
       }
     });
   });

@@ -172,7 +172,7 @@ export function useRoadmapAssistantChat(
                     ...msg,
                     toolCalls: [
                       ...currentCalls,
-                      { name, args: {}, result: 'Đang thực thi...' },
+                      { name, args: {}, result: 'Đang thực thi...', startedAt: Date.now() },
                     ],
                   };
                 })
@@ -185,8 +185,12 @@ export function useRoadmapAssistantChat(
                 prev.map((msg) => {
                   if (msg.id !== botMsgId) return msg;
                   const currentCalls = msg.toolCalls || [];
-                  const updated = currentCalls.map((tc) =>
-                    tc.name === name ? { ...tc, result } : tc
+                  // Close the oldest still-running call with this name.
+                  const idx = currentCalls.findIndex(
+                    (tc) => tc.name === name && tc.endedAt === undefined
+                  );
+                  const updated = currentCalls.map((tc, i) =>
+                    i === idx ? { ...tc, result, endedAt: Date.now() } : tc
                   );
                   return { ...msg, toolCalls: updated };
                 })
@@ -198,7 +202,11 @@ export function useRoadmapAssistantChat(
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === botMsgId
-                    ? { ...msg, content: msg.content + delta }
+                    ? {
+                        ...msg,
+                        content: msg.content + delta,
+                        firstTokenAt: msg.firstTokenAt ?? Date.now(),
+                      }
                     : msg
                 )
               );
@@ -211,7 +219,10 @@ export function useRoadmapAssistantChat(
                     ? {
                         ...msg,
                         content: finalResp.message || msg.content,
-                        toolCalls: finalResp.tool_calls || msg.toolCalls,
+                        // Keep streamed calls: they carry the step timings.
+                        toolCalls: msg.toolCalls?.length
+                          ? msg.toolCalls
+                          : finalResp.tool_calls,
                       }
                     : msg
                 )

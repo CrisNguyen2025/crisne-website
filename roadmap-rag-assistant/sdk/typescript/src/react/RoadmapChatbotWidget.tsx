@@ -13,7 +13,6 @@ import {
   CheckIcon,
   LoaderIcon,
   CheckCircleIcon,
-  ChevronDownIcon,
   PromptSparkleIcon,
 } from "./icons";
 import {
@@ -21,6 +20,7 @@ import {
   formatTime,
   formatToolDisplayName,
 } from "./utils/formatters";
+import { ToolStepRow } from "./ToolStepRow";
 
 // ── Main Chatbot Widget Component (Telegram Style) ──────────────────────────
 
@@ -262,6 +262,20 @@ export function RoadmapChatbotWidget({
             {messages.map((msg) => {
               const isUser = msg.role === "user";
               const timeStr = formatTime(msg.timestamp);
+              const isLive =
+                !isUser &&
+                isStreaming &&
+                msg.id === messages[messages.length - 1]?.id;
+              const toolCalls = msg.toolCalls ?? [];
+              const toolRunning = toolCalls.some(
+                (tc) => tc.endedAt === undefined && isLive
+              );
+              // Waiting for the model after tools finished (or before any tool started).
+              const showThinking = isLive && !msg.content && !toolRunning;
+              const thinkingSince =
+                toolCalls[toolCalls.length - 1]?.endedAt ??
+                new Date(msg.timestamp).getTime();
+              const showBubble = isUser || !!msg.content || !isLive;
 
               return (
                 <div
@@ -270,168 +284,141 @@ export function RoadmapChatbotWidget({
                     isUser ? "items-end" : "items-start"
                   }`}
                 >
+                  {/* Step list (tool calls + thinking), above the answer */}
+                  {!isUser &&
+                    (toolCalls.length > 0 ||
+                      showThinking ||
+                      msg.firstTokenAt !== undefined) && (
+                      <div className="mb-1.5 w-[88%] space-y-0.5">
+                        {toolCalls.map((tc, idx) => {
+                          const toolKey = `${msg.id}-${idx}`;
+                          const running = isLive && tc.endedAt === undefined;
+                          return (
+                            <ToolStepRow
+                              key={toolKey}
+                              label={formatToolDisplayName(tc.name)}
+                              startedAt={tc.startedAt}
+                              endedAt={tc.endedAt}
+                              running={running}
+                              detail={tc.result}
+                              expanded={!!expandedTools[toolKey]}
+                              onToggle={() => toggleToolExpand(toolKey)}
+                            />
+                          );
+                        })}
+                        {showThinking && (
+                          <ToolStepRow
+                            label="Đang soạn câu trả lời"
+                            startedAt={thinkingSince}
+                            running
+                          />
+                        )}
+                        {!showThinking && msg.firstTokenAt !== undefined && (
+                          <ToolStepRow
+                            label="Soạn câu trả lời"
+                            startedAt={thinkingSince}
+                            endedAt={msg.firstTokenAt}
+                            running={false}
+                          />
+                        )}
+                      </div>
+                    )}
+
                   {/* Telegram Bubble */}
-                  <div
-                    className={`relative px-3.5 py-2.5 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${
-                      isUser
-                        ? "max-w-[85%] bg-[#2AABEE] text-white rounded-2xl rounded-tr-xs"
-                        : "max-w-[88%] bg-white text-slate-800 border border-slate-200/70 rounded-2xl rounded-tl-xs"
-                    }`}
-                  >
-                    <div>
-                      {msg.content ? (
-                        formatMarkdownText(msg.content, isUser)
-                      ) : isStreaming && !isUser ? (
-                        <div className="flex items-center gap-1.5 py-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.3s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.15s]" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce" />
-                        </div>
-                      ) : null}
-
-                      {/* Blinking progressive cursor during streaming */}
-                      {isStreaming &&
-                        !isUser &&
-                        msg.id === messages[messages.length - 1]?.id && (
-                          <span className="inline-block w-1.5 h-3.5 bg-[#2AABEE] ml-1 rounded-sm animate-pulse align-middle" />
-                        )}
-
-                      {/* Interactive Confirmation Action Bar (Phase 4) */}
-                      {!isUser &&
-                        !isStreaming &&
-                        msg.id === messages[messages.length - 1]?.id &&
-                        (msg.content.includes("Xác nhận thực hiện") ||
-                          msg.content.includes("DRY-RUN PREVIEW")) && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => sendMessage("ok")}
-                              disabled={isLoading}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                            >
-                              <CheckCircleIcon className="w-3.5 h-3.5" />
-                              <span>Xác nhận thực hiện</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => sendMessage("hủy")}
-                              disabled={isLoading}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-medium text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-                            >
-                              <CloseIcon className="w-3.5 h-3.5 text-slate-400" />
-                              <span>Hủy bỏ</span>
-                            </button>
-                          </div>
-                        )}
-                    </div>
-
-                    {/* Telegram Timestamp & Meta Row */}
+                  {showBubble && (
                     <div
-                      className={`flex items-center justify-end gap-1.5 mt-1 select-none text-[10px] font-mono leading-none ${
-                        isUser ? "text-white/80" : "text-slate-400"
+                      className={`relative px-3.5 py-2.5 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.06)] ${
+                        isUser
+                          ? "max-w-[85%] bg-[#2AABEE] text-white rounded-2xl rounded-tr-xs"
+                          : "max-w-[88%] bg-white text-slate-800 border border-slate-200/70 rounded-2xl rounded-tl-xs"
                       }`}
                     >
-                      {timeStr && <span>{timeStr}</span>}
-
-                      {/* Double Checkmark for User messages */}
-                      {isUser && (
-                        <DoubleCheckIcon className="w-3.5 h-3.5 text-white/90 shrink-0" />
-                      )}
-
-                      {/* Copy Button for Assistant messages */}
-                      {!isUser && msg.content && !isStreaming && (
-                        <button
-                          type="button"
-                          onClick={() => copyMessage(msg.id, msg.content)}
-                          title="Sao chép tin nhắn"
-                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1 hover:text-slate-700 transition-opacity ml-1"
-                        >
-                          {copiedId === msg.id ? (
-                            <>
-                              <CheckIcon className="w-2.5 h-2.5 text-emerald-500" />
-                              <span className="text-[9px] text-emerald-600">
-                                Đã chép
-                              </span>
-                            </>
-                          ) : (
-                            <CopyIcon className="w-2.5 h-2.5" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Telegram Inline Tool Execution Cards */}
-                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                    <div className="mt-1.5 w-[88%] space-y-1.5">
-                      {msg.toolCalls.map((tc, idx) => {
-                        const toolKey = `${msg.id}-${idx}`;
-                        const isExpanded = expandedTools[toolKey];
-                        const isExecuting = tc.result === "Đang thực thi...";
-
-                        return (
-                          <div
-                            key={toolKey}
-                            className={`rounded-xl border shadow-2xs transition-all overflow-hidden text-xs ${
-                              isExecuting
-                                ? "border-amber-200 bg-amber-50/80 text-amber-900 animate-pulse"
-                                : "border-slate-200 bg-white/95 text-slate-800"
-                            }`}
-                          >
-                            <div
-                              onClick={() => toggleToolExpand(toolKey)}
-                              className="flex cursor-pointer items-center justify-between px-3 py-2 select-none hover:bg-slate-50/80 transition-colors"
-                            >
-                              <div className="flex items-center gap-2 font-mono">
-                                {isExecuting ? (
-                                  <LoaderIcon className="w-3.5 h-3.5 text-amber-600" />
-                                ) : (
-                                  <CheckCircleIcon className="w-3.5 h-3.5 text-emerald-600" />
-                                )}
-                                <span className="font-semibold text-slate-800 text-[11px]">
-                                  {formatToolDisplayName(tc.name)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                                <span>
-                                  {isExecuting ? "Đang chạy" : "Chi tiết"}
-                                </span>
-                                <ChevronDownIcon
-                                  className={`w-3 h-3 transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Expanded Result Box */}
-                            {isExpanded && !isExecuting && (
-                              <div className="border-t border-slate-100 bg-slate-50/70 p-2.5 text-[11px] text-slate-700 whitespace-pre-wrap font-mono leading-relaxed">
-                                {tc.result}
-                              </div>
-                            )}
+                      <div>
+                        {msg.content ? (
+                          formatMarkdownText(msg.content, isUser)
+                        ) : isStreaming && !isUser ? (
+                          <div className="flex items-center gap-1.5 py-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.3s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce [animation-delay:-0.15s]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2AABEE] animate-bounce" />
                           </div>
-                        );
-                      })}
+                        ) : null}
+
+                        {/* Blinking progressive cursor during streaming */}
+                        {isStreaming &&
+                          !isUser &&
+                          msg.id === messages[messages.length - 1]?.id && (
+                            <span className="inline-block w-1.5 h-3.5 bg-[#2AABEE] ml-1 rounded-sm animate-pulse align-middle" />
+                          )}
+
+                        {/* Interactive Confirmation Action Bar (Phase 4) */}
+                        {!isUser &&
+                          !isStreaming &&
+                          msg.id === messages[messages.length - 1]?.id &&
+                          (msg.content.includes("Xác nhận thực hiện") ||
+                            msg.content.includes("DRY-RUN PREVIEW")) && (
+                            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => sendMessage("ok")}
+                                disabled={isLoading}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-medium text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                <CheckCircleIcon className="w-3.5 h-3.5" />
+                                <span>Xác nhận thực hiện</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => sendMessage("hủy")}
+                                disabled={isLoading}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-98 text-slate-700 font-medium text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                              >
+                                <CloseIcon className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Hủy bỏ</span>
+                              </button>
+                            </div>
+                          )}
+                      </div>
+
+                      {/* Telegram Timestamp & Meta Row */}
+                      <div
+                        className={`flex items-center justify-end gap-1.5 mt-1 select-none text-[10px] font-mono leading-none ${
+                          isUser ? "text-white/80" : "text-slate-400"
+                        }`}
+                      >
+                        {timeStr && <span>{timeStr}</span>}
+
+                        {/* Double Checkmark for User messages */}
+                        {isUser && (
+                          <DoubleCheckIcon className="w-3.5 h-3.5 text-white/90 shrink-0" />
+                        )}
+
+                        {/* Copy Button for Assistant messages */}
+                        {!isUser && msg.content && !isStreaming && (
+                          <button
+                            type="button"
+                            onClick={() => copyMessage(msg.id, msg.content)}
+                            title="Sao chép tin nhắn"
+                            className="opacity-0 group-hover:opacity-100 flex items-center gap-1 hover:text-slate-700 transition-opacity ml-1"
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <CheckIcon className="w-2.5 h-2.5 text-emerald-500" />
+                                <span className="text-[9px] text-emerald-600">
+                                  Đã chép
+                                </span>
+                              </>
+                            ) : (
+                              <CopyIcon className="w-2.5 h-2.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               );
             })}
-
-            {/* Active Live Tool Badge */}
-            {activeTool && (
-              <div className="flex items-center gap-2 rounded-xl border border-[#2AABEE]/30 bg-white/95 px-3.5 py-2 text-slate-700 text-xs shadow-xs animate-pulse">
-                <LoaderIcon className="w-4 h-4 text-[#2AABEE] shrink-0" />
-                <span className="text-[12px]">
-                  Đang thực thi:{" "}
-                  <strong className="text-[#2AABEE]">
-                    {formatToolDisplayName(activeTool)}
-                  </strong>
-                  ...
-                </span>
-              </div>
-            )}
           </div>
 
           {/* ── Stop Generation Float Button ── */}
