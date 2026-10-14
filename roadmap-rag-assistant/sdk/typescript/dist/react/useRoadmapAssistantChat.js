@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.useRoadmapAssistantChat = useRoadmapAssistantChat;
 const react_1 = require("react");
+const smoothStream_1 = require("./utils/smoothStream");
 const client_1 = require("../client");
 function useRoadmapAssistantChat(options = {}) {
     const { baseUrl = 'http://localhost:8000', threadId = 'roadmap-web-session', initialMessages, onToolExecuted, getContext, onWebMcpMessage, } = options;
@@ -39,9 +40,11 @@ function useRoadmapAssistantChat(options = {}) {
     // Pure useMemo instantiates client reactively without render-phase ref mutations/reads
     const client = (0, react_1.useMemo)(() => new client_1.RoadmapChatClient({ baseUrl }), [baseUrl]);
     const abortControllerRef = (0, react_1.useRef)(null);
+    const smoothRef = (0, react_1.useRef)(null);
     // Clean up in-flight abort controller on unmount
     (0, react_1.useEffect)(() => {
         return () => {
+            smoothRef.current?.cancel();
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
                 abortControllerRef.current = null;
@@ -49,6 +52,7 @@ function useRoadmapAssistantChat(options = {}) {
         };
     }, []);
     const stopStreaming = (0, react_1.useCallback)(() => {
+        smoothRef.current?.flush();
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -62,6 +66,7 @@ function useRoadmapAssistantChat(options = {}) {
         if (!content)
             return;
         // Abort any in-flight stream before starting new message
+        smoothRef.current?.flush();
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
@@ -103,6 +108,17 @@ function useRoadmapAssistantChat(options = {}) {
         }
         setIsLoading(true);
         setIsStreaming(true);
+        // Tokens arrive in bursts; reveal them at a steady pace.
+        const smooth = (0, smoothStream_1.createSmoothStream)((chunk) => {
+            setMessages((prev) => prev.map((msg) => msg.id === botMsgId
+                ? {
+                    ...msg,
+                    content: msg.content + chunk,
+                    firstTokenAt: msg.firstTokenAt ?? Date.now(),
+                }
+                : msg));
+        });
+        smoothRef.current = smooth;
         try {
             abortControllerRef.current = client.streamChat(content, {
                 onToolStart: (name) => {
@@ -133,16 +149,8 @@ function useRoadmapAssistantChat(options = {}) {
                     }));
                     onToolExecutedRef.current?.(name, result);
                 },
-                onToken: (delta) => {
-                    setMessages((prev) => prev.map((msg) => msg.id === botMsgId
-                        ? {
-                            ...msg,
-                            content: msg.content + delta,
-                            firstTokenAt: msg.firstTokenAt ?? Date.now(),
-                        }
-                        : msg));
-                },
-                onDone: (finalResp) => {
+                onToken: (delta) => smooth.push(delta),
+                onDone: (finalResp) => smooth.finish(() => {
                     setMessages((prev) => prev.map((msg) => msg.id === botMsgId
                         ? {
                             ...msg,
@@ -156,8 +164,9 @@ function useRoadmapAssistantChat(options = {}) {
                     setIsLoading(false);
                     setIsStreaming(false);
                     setActiveTool(null);
-                },
+                }),
                 onError: (err) => {
+                    smooth.flush();
                     const errMsg = err.message || 'Lỗi kết nối tới Assistant service';
                     setError(errMsg);
                     setMessages((prev) => prev.map((msg) => msg.id === botMsgId

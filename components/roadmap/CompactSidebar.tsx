@@ -13,6 +13,8 @@ interface CompactSidebarProps {
   onSelectHome: () => void;
   onSelectRoadmap: (slug: string) => void;
   onOpenCreateRoadmap?: () => void;
+  onOpenTriage?: () => void;
+  triageBadgeCount?: number;
 }
 
 export function CompactSidebar({
@@ -23,6 +25,8 @@ export function CompactSidebar({
   onSelectHome,
   onSelectRoadmap,
   onOpenCreateRoadmap,
+  onOpenTriage,
+  triageBadgeCount,
 }: CompactSidebarProps) {
   return (
     <aside className="w-[80px] h-full shrink-0 flex flex-col items-center justify-between py-4 bg-card/60 backdrop-blur-md border-r border-border/60 select-none z-20">
@@ -121,6 +125,21 @@ export function CompactSidebar({
 
       {/* Bottom: Quick Add Roadmap or Info */}
       <div className="flex flex-col items-center gap-2">
+        {onOpenTriage && (
+          <button
+            type="button"
+            onClick={onOpenTriage}
+            title="Knowledge Triage (Lỗ hổng tri thức)"
+            className="group relative w-10 h-10 rounded-xl text-muted-foreground hover:text-[#C2410C] hover:bg-[#FBEDE5] flex items-center justify-center transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 text-muted-foreground group-hover:text-[#C2410C]" />
+            {typeof triageBadgeCount === "number" && triageBadgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#C2410C] text-[9px] font-bold text-white shadow-xs">
+                {triageBadgeCount}
+              </span>
+            )}
+          </button>
+        )}
         <Link
           href="/portfolio"
           title="Portfolio"

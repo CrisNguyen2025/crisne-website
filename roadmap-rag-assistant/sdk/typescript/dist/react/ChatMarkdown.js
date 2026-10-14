@@ -145,7 +145,23 @@ function safeHref(url) {
         return { href: url, external: false };
     return null; // javascript:, data:, relative junk — rendered as plain text
 }
-function renderInline(text) {
+/**
+ * Wraps each word of plain text in a span keyed by its offset. Words already on screen keep
+ * their key and stay put; only newly streamed words mount, so only they play the fade-in.
+ */
+function fadeWords(text, base) {
+    const out = [];
+    const re = /(\S+)(\s*)/g;
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+        out.push((0, jsx_runtime_1.jsx)("span", { className: "animate-in fade-in duration-300", children: m[1] }, `w${base + m.index}`));
+        if (m[2])
+            out.push(m[2]);
+    }
+    return out;
+}
+/** `fade`: animate newly streamed words (used for the block still being written). */
+function renderInline(text, fade = false) {
+    const plain = (start, end) => fade ? fadeWords(text.slice(start, end), start) : [text.slice(start, end)];
     const out = [];
     let last = 0;
     let key = 0;
@@ -154,12 +170,12 @@ function renderInline(text) {
     const re = new RegExp(INLINE.source, "g");
     for (let m = re.exec(text); m; m = re.exec(text)) {
         if (m.index > last)
-            out.push(text.slice(last, m.index));
+            out.push(...plain(last, m.index));
         if (m[1]) {
             out.push((0, jsx_runtime_1.jsx)("code", { className: "rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground", children: m[1].slice(1, -1) }, key++));
         }
         else if (m[2] !== undefined) {
-            out.push((0, jsx_runtime_1.jsx)("strong", { className: "font-semibold text-foreground", children: renderInline(m[3]) }, key++));
+            out.push((0, jsx_runtime_1.jsx)("strong", { className: "font-semibold text-foreground", children: renderInline(m[3], fade) }, key++));
         }
         else if (m[4]) {
             const link = safeHref(m[6]);
@@ -168,12 +184,12 @@ function renderInline(text) {
                     : {}), className: "font-medium text-foreground underline decoration-primary/50 underline-offset-2 hover:decoration-primary", children: m[5] }, key++)) : (m[5]));
         }
         else if (m[7] || m[9]) {
-            out.push((0, jsx_runtime_1.jsx)("em", { className: "italic", children: renderInline(m[8] ?? m[10]) }, key++));
+            out.push((0, jsx_runtime_1.jsx)("em", { className: "italic", children: renderInline(m[8] ?? m[10], fade) }, key++));
         }
         last = m.index + m[0].length;
     }
     if (last < text.length)
-        out.push(text.slice(last));
+        out.push(...plain(last, text.length));
     return out;
 }
 // ── Blocks ────────────────────────────────────────────────────────────────
@@ -202,27 +218,27 @@ const HEADING_CLASS = [
     "text-sm font-semibold",
     "text-sm font-medium",
 ];
-function ListView({ ordered, items, trailing, }) {
+function ListView({ ordered, items, trailing, fade = false, }) {
     const Tag = ordered ? "ol" : "ul";
     return ((0, jsx_runtime_1.jsx)(Tag, { className: "space-y-1", children: items.map((item, idx) => {
             const isLast = idx === items.length - 1;
-            return ((0, jsx_runtime_1.jsxs)("li", { className: "flex gap-2", children: [(0, jsx_runtime_1.jsx)("span", { className: "shrink-0 select-none tabular-nums text-muted-foreground", children: ordered ? `${item.num}.` : "•" }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0 flex-1", children: [renderInline(item.text), isLast && !item.children.length && trailing, item.children.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "mt-1", children: (0, jsx_runtime_1.jsx)(ListView, { ordered: item.children[0].ordered, items: item.children, trailing: isLast ? trailing : undefined }) }))] })] }, idx));
+            return ((0, jsx_runtime_1.jsxs)("li", { className: "flex gap-2", children: [(0, jsx_runtime_1.jsx)("span", { className: "shrink-0 select-none tabular-nums text-muted-foreground", children: ordered ? `${item.num}.` : "•" }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0 flex-1", children: [renderInline(item.text, fade), isLast && !item.children.length && trailing, item.children.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "mt-1", children: (0, jsx_runtime_1.jsx)(ListView, { ordered: item.children[0].ordered, items: item.children, trailing: isLast ? trailing : undefined, fade: fade }) }))] })] }, idx));
         }) }));
 }
-function BlockView({ block, trailing, onRun, }) {
+function BlockView({ block, trailing, onRun, fade = false, }) {
     switch (block.kind) {
         case "heading": {
             const Tag = HEADING_TAG[block.level - 1];
-            return ((0, jsx_runtime_1.jsxs)(Tag, { className: `pt-1 text-foreground ${HEADING_CLASS[block.level - 1]}`, children: [renderInline(block.text), trailing] }));
+            return ((0, jsx_runtime_1.jsxs)(Tag, { className: `pt-1 text-foreground ${HEADING_CLASS[block.level - 1]}`, children: [renderInline(block.text, fade), trailing] }));
         }
         case "paragraph":
-            return ((0, jsx_runtime_1.jsxs)("p", { children: [block.lines.map((line, idx) => ((0, jsx_runtime_1.jsxs)(react_1.default.Fragment, { children: [idx > 0 && (0, jsx_runtime_1.jsx)("br", {}), renderInline(line)] }, idx))), trailing] }));
+            return ((0, jsx_runtime_1.jsxs)("p", { children: [block.lines.map((line, idx) => ((0, jsx_runtime_1.jsxs)(react_1.default.Fragment, { children: [idx > 0 && (0, jsx_runtime_1.jsx)("br", {}), renderInline(line, fade)] }, idx))), trailing] }));
         case "list":
-            return ((0, jsx_runtime_1.jsx)(ListView, { ordered: block.ordered, items: block.items, trailing: trailing }));
+            return ((0, jsx_runtime_1.jsx)(ListView, { ordered: block.ordered, items: block.items, trailing: trailing, fade: fade }));
         case "code":
             return (0, jsx_runtime_1.jsx)(CodeBlock, { lang: block.lang, code: block.code, onRun: onRun });
         case "quote":
-            return ((0, jsx_runtime_1.jsxs)("blockquote", { className: "border-l-2 border-border pl-3 text-muted-foreground", children: [block.lines.map((line, idx) => ((0, jsx_runtime_1.jsxs)(react_1.default.Fragment, { children: [idx > 0 && (0, jsx_runtime_1.jsx)("br", {}), renderInline(line)] }, idx))), trailing] }));
+            return ((0, jsx_runtime_1.jsxs)("blockquote", { className: "border-l-2 border-border pl-3 text-muted-foreground", children: [block.lines.map((line, idx) => ((0, jsx_runtime_1.jsxs)(react_1.default.Fragment, { children: [idx > 0 && (0, jsx_runtime_1.jsx)("br", {}), renderInline(line, fade)] }, idx))), trailing] }));
         case "rule":
             return (0, jsx_runtime_1.jsx)("hr", { className: "border-border" });
     }
@@ -232,9 +248,11 @@ function StreamingCaret() {
     return ((0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", className: "ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-foreground align-text-bottom" }));
 }
 function ChatMarkdown({ content, streaming = false, className = "", onRun, }) {
-    const blocks = parseBlocks(content);
+    // While streaming, hide a half-typed closing fence ("`" or "``") so it never flashes in a code block.
+    const visible = streaming ? content.replace(/\n[ \t]*`{1,2}$/, "") : content;
+    const blocks = parseBlocks(visible);
     const caret = streaming ? (0, jsx_runtime_1.jsx)(StreamingCaret, {}) : null;
     const last = blocks[blocks.length - 1];
     const caretInline = !!last && last.kind !== "code" && last.kind !== "rule";
-    return ((0, jsx_runtime_1.jsxs)("div", { className: `min-w-0 space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`, children: [blocks.map((block, idx) => ((0, jsx_runtime_1.jsx)(BlockView, { block: block, onRun: onRun, trailing: idx === blocks.length - 1 && caretInline ? caret : undefined }, idx))), !caretInline && caret] }));
+    return ((0, jsx_runtime_1.jsxs)("div", { className: `min-w-0 space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`, children: [blocks.map((block, idx) => ((0, jsx_runtime_1.jsx)(BlockView, { block: block, onRun: onRun, fade: streaming && idx === blocks.length - 1, trailing: idx === blocks.length - 1 && caretInline ? caret : undefined }, idx))), !caretInline && caret] }));
 }

@@ -34,16 +34,77 @@ const WIDGET_THEME_VARS = {
     ["--primary-foreground"]: "#FFFFFF",
     colorScheme: "light",
 };
-function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY = 24, zIndex = 9999, title = "Roadmap Assistant", subtitle = "AI Knowledge & Roadmap Agent", baseUrl = "http://localhost:8000", initialOpen = false, initialMessages, onToolExecuted, getContext, onWebMcpMessage, className = "", }) {
+const UNLIKE_REASONS = [
+    "Ảo giác / Sai kiến thức",
+    "Lạc đề / Chưa đúng trọng tâm",
+    "Lỗi cú pháp / Lộ trình hỏng",
+    "Khó hiểu / Quá dài dòng",
+];
+function FeedbackReasonSheet({ onSubmit, onClose, }) {
+    const [selectedReason, setSelectedReason] = (0, react_1.useState)(null);
+    const [comment, setComment] = (0, react_1.useState)("");
+    const [isSubmitted, setIsSubmitted] = (0, react_1.useState)(false);
+    const handleSubmit = (e) => {
+        e?.preventDefault();
+        setIsSubmitted(true);
+        onSubmit(selectedReason || undefined, comment.trim() || undefined);
+        setTimeout(() => {
+            onClose();
+        }, 1200);
+    };
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-[#E6E4DF] bg-[#FFFFFF] p-3.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between pb-2 border-b border-[#E6E4DF]/60", children: [(0, jsx_runtime_1.jsx)("span", { className: "text-xs font-semibold text-[#1F1E1C]", children: "G\u00F3p \u00FD c\u00E2u tr\u1EA3 l\u1EDDi ch\u01B0a t\u1ED1t" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: onClose, title: "\u0110\u00F3ng", "aria-label": "\u0110\u00F3ng b\u1EA3ng g\u00F3p \u00FD", className: "flex h-5 w-5 items-center justify-center rounded text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }) })] }), isSubmitted ? ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-center gap-1.5 py-6 text-xs font-medium text-[#3F7D58]", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-4 w-4" }), (0, jsx_runtime_1.jsx)("span", { children: "\u0110\u00E3 ghi nh\u1EADn g\u00F3p \u00FD, c\u1EA3m \u01A1n b\u1EA1n!" })] })) : ((0, jsx_runtime_1.jsxs)("form", { onSubmit: handleSubmit, className: "flex flex-col gap-2.5 pt-2.5", children: [(0, jsx_runtime_1.jsx)("div", { className: "flex flex-wrap gap-1.5", children: UNLIKE_REASONS.map((opt) => {
+                            const isSelected = selectedReason === opt;
+                            return ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setSelectedReason(isSelected ? null : opt), className: `rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${isSelected
+                                    ? "border border-[#C2410C] bg-[#FBEDE5] text-[#C2410C] font-medium"
+                                    : "border border-[#E6E4DF] bg-[#F4F3F0] text-[#1F1E1C] hover:bg-[#ECEAE5]"}`, children: opt }, opt));
+                        }) }), (0, jsx_runtime_1.jsx)("textarea", { value: comment, onChange: (e) => setComment(e.target.value), placeholder: "AI c\u1EA7n c\u1EA3i thi\u1EC7n \u0111i\u1EC3m n\u00E0o? (t\u00F9y ch\u1ECDn)...", rows: 2, maxLength: 300, className: "w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] p-2 text-xs text-[#1F1E1C] outline-none placeholder:text-[#6B6862] focus:border-[#C2410C] focus:bg-[#FFFFFF]" }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-end gap-2 pt-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: onClose, className: "rounded-md px-2.5 py-1 text-xs text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: "B\u1ECF qua" }), (0, jsx_runtime_1.jsx)("button", { type: "submit", className: "rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 cursor-pointer", children: "G\u1EEDi g\u00F3p \u00FD" })] })] }))] }));
+}
+function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY = 24, zIndex = 9999, title = "Roadmap Assistant", subtitle = "AI Knowledge & Roadmap Agent", baseUrl = "http://localhost:8000", initialOpen = false, initialMessages, onToolExecuted, onFeedback, getContext, onWebMcpMessage, className = "", }) {
     const [isOpen, setIsOpen] = (0, react_1.useState)(initialOpen);
     const [expandedTools, setExpandedTools] = (0, react_1.useState)({});
     const [feedback, setFeedback] = (0, react_1.useState)({});
+    const [activeFeedbackMsgId, setActiveFeedbackMsgId] = (0, react_1.useState)(null);
     const [copiedId, setCopiedId] = (0, react_1.useState)(null);
     const handleFeedback = (msgId, val) => {
-        setFeedback((prev) => ({
-            ...prev,
-            [msgId]: prev[msgId] === val ? undefined : val,
-        }));
+        if (val === 1) {
+            const isRemoving = feedback[msgId] === 1;
+            setFeedback((prev) => {
+                const next = { ...prev };
+                if (isRemoving) {
+                    delete next[msgId];
+                }
+                else {
+                    next[msgId] = 1;
+                }
+                return next;
+            });
+            if (activeFeedbackMsgId === msgId) {
+                setActiveFeedbackMsgId(null);
+            }
+            if (!isRemoving) {
+                onFeedback?.(msgId, 1);
+            }
+        }
+        else {
+            const isRemoving = feedback[msgId] === 0;
+            setFeedback((prev) => {
+                const next = { ...prev };
+                if (isRemoving) {
+                    delete next[msgId];
+                }
+                else {
+                    next[msgId] = 0;
+                }
+                return next;
+            });
+            if (isRemoving) {
+                setActiveFeedbackMsgId(null);
+            }
+            else {
+                onFeedback?.(msgId, 0);
+                setActiveFeedbackMsgId(msgId);
+            }
+        }
     };
     const { messages, input, setInput, isLoading, isStreaming, activeTool, sendMessage, stopStreaming, clearMessages, } = (0, useRoadmapAssistantChat_1.useRoadmapAssistantChat)({
         baseUrl,
@@ -157,7 +218,7 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
             ? "Đang trả lời…"
             : subtitle;
     const showStop = isStreaming && !input.trim();
-    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `pointer-events-none flex flex-col font-sans ${position.endsWith("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { ref: containerRef, style: WIDGET_THEME_VARS, className: "pointer-events-auto mb-3 flex h-[600px] max-h-[80vh] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex min-w-0 items-center gap-2.5", children: [(0, jsx_runtime_1.jsx)("span", { className: "flex h-7 w-7 items-center justify-center rounded-lg bg-[#F4F3F0] border border-[#E6E4DF] text-[#6B6862]", children: (0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0", children: [(0, jsx_runtime_1.jsx)("div", { className: "truncate text-sm font-semibold tracking-tight text-[#1F1E1C]", children: title }), (0, jsx_runtime_1.jsx)("div", { className: "truncate text-xs leading-tight text-[#6B6862]", children: status })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex shrink-0 items-center gap-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: clearMessages, title: "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", "aria-label": "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.NewChatIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(false), title: "Thu g\u1ECDn", "aria-label": "Thu g\u1ECDn", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-4 w-4" }) })] })] }), (0, jsx_runtime_1.jsx)("div", { ref: scrollRef, className: "flex-1 space-y-6 overflow-y-auto px-4 py-5", children: messages.map((msg) => {
+    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `pointer-events-none flex flex-col font-sans ${position.endsWith("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { ref: containerRef, style: WIDGET_THEME_VARS, className: "pointer-events-auto relative flex h-[720px] max-h-[calc(100vh-3rem)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex min-w-0 items-center gap-2.5", children: [(0, jsx_runtime_1.jsx)("span", { className: "flex h-7 w-7 items-center justify-center rounded-lg bg-[#F4F3F0] border border-[#E6E4DF] text-[#6B6862]", children: (0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0", children: [(0, jsx_runtime_1.jsx)("div", { className: "truncate text-sm font-semibold tracking-tight text-[#1F1E1C]", children: title }), (0, jsx_runtime_1.jsx)("div", { className: "truncate text-xs leading-tight text-[#6B6862]", children: status })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex shrink-0 items-center gap-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: clearMessages, title: "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", "aria-label": "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.NewChatIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(false), title: "Thu g\u1ECDn", "aria-label": "Thu g\u1ECDn", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-4 w-4" }) })] })] }), (0, jsx_runtime_1.jsx)("div", { ref: scrollRef, className: "flex-1 space-y-6 overflow-y-auto px-4 py-5", children: messages.map((msg) => {
                             const isUser = msg.role === "user";
                             const timeStr = (0, formatters_1.formatTime)(msg.timestamp);
                             const isLast = msg.id === messages[messages.length - 1]?.id;
@@ -199,12 +260,30 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
                                     running: true,
                                 });
                             }
-                            return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col gap-2", children: [msg.content && ((0, jsx_runtime_1.jsx)("div", { className: "text-sm leading-relaxed text-[#1F1E1C] py-0.5", children: (0, jsx_runtime_1.jsx)(ChatMarkdown_1.ChatMarkdown, { content: msg.content, streaming: isLive, onRun: isLoading ? undefined : sendMessage }) })), stepItems.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "-mx-1", children: (0, jsx_runtime_1.jsx)(ToolStepRow_1.CollapsibleStepsSummary, { steps: stepItems, expandedTools: expandedTools, onToggleTool: toggleToolExpand, isLive: isLive }) })), awaitingConfirm && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 pt-1", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("ok"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "X\u00E1c nh\u1EADn th\u1EF1c hi\u1EC7n" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("hủy"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg border border-[#E4E2DD] bg-[#F2F1EE] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#EAE8E3] disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "H\u1EE7y b\u1ECF" })] })] })), awaitingLayerChoice && ((0, jsx_runtime_1.jsx)(LayerChoicePicker_1.LayerChoicePicker, { onSend: sendMessage, disabled: isLoading })), msg.content && !isLive && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5 pt-0.5 text-xs text-[#6B6862]", children: [timeStr && (0, jsx_runtime_1.jsx)("span", { className: "select-none text-[11px]", children: timeStr }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p", "aria-label": "Sao ch\u00E9p c\u00E2u tr\u1EA3 l\u1EDDi", className: "flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3.5 w-3.5 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3.5 w-3.5" })) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 1), title: "H\u1EEFu \u00EDch", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi h\u1EEFu \u00EDch", "aria-pressed": feedback[msg.id] === 1, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 1
+                            return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col gap-2", children: [msg.content && ((0, jsx_runtime_1.jsx)("div", { className: "text-sm leading-relaxed text-[#1F1E1C] py-0.5", children: (0, jsx_runtime_1.jsx)(ChatMarkdown_1.ChatMarkdown, { content: msg.content, streaming: isLive, onRun: isLoading ? undefined : sendMessage }) })), stepItems.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "-mx-1", children: (0, jsx_runtime_1.jsx)(ToolStepRow_1.CollapsibleStepsSummary, { steps: stepItems, expandedTools: expandedTools, onToggleTool: toggleToolExpand, isLive: isLive }) })), awaitingConfirm && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 pt-1", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("ok"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "X\u00E1c nh\u1EADn th\u1EF1c hi\u1EC7n" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("hủy"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg border border-[#E4E2DD] bg-[#F2F1EE] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#EAE8E3] disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "H\u1EE7y b\u1ECF" })] })] })), awaitingLayerChoice && ((0, jsx_runtime_1.jsx)(LayerChoicePicker_1.LayerChoicePicker, { onSend: sendMessage, disabled: isLoading })), msg.content && !isLive && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-end gap-1.5 pt-0.5 text-xs text-[#6B6862]", children: [timeStr && (0, jsx_runtime_1.jsx)("span", { className: "select-none text-[11px]", children: timeStr }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p", "aria-label": "Sao ch\u00E9p c\u00E2u tr\u1EA3 l\u1EDDi", className: "flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3.5 w-3.5 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3.5 w-3.5" })) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 1), title: "H\u1EEFu \u00EDch", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi h\u1EEFu \u00EDch", "aria-pressed": feedback[msg.id] === 1, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 1
                                                     ? "text-[#1F1E1C] bg-[#F4F3F0]"
                                                     : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsUpIcon, { className: "h-3.5 w-3.5" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 0), title: "Ch\u01B0a t\u1ED1t", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi ch\u01B0a t\u1ED1t", "aria-pressed": feedback[msg.id] === 0, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 0
                                                     ? "text-[#B42318] bg-[#FBEDE5]"
                                                     : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsDownIcon, { className: "h-3.5 w-3.5" }) })] }))] }, msg.id));
                         }) }), (0, jsx_runtime_1.jsx)("div", { className: "p-3 border-t border-[#E6E4DF] bg-[#FFFFFF]", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 rounded-xl border border-[#E6E4DF] bg-[#F4F3F0] py-1.5 pl-3.5 pr-1.5 transition-all focus-within:border-[#C2410C] focus-within:ring-1 focus-within:ring-[#C2410C]/25", children: [(0, jsx_runtime_1.jsx)("input", { ref: inputRef, type: "text", value: input, onChange: (e) => setInput(e.target.value), onKeyDown: handleKeyDown, placeholder: isLoading
                                         ? "AI đang phản hồi... Bạn có thể nhập tiếp"
-                                        : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan...", className: "min-w-0 flex-1 bg-transparent text-sm text-[#1F1E1C] outline-none placeholder:text-[#6B6862]" }), showStop ? ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: stopStreaming, title: "D\u1EEBng ph\u1EA3n h\u1ED3i", "aria-label": "D\u1EEBng ph\u1EA3n h\u1ED3i", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FBEDE5] text-[#B42318] border border-[#B42318]/20 transition-opacity hover:opacity-90 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.StopIcon, { className: "h-3.5 w-3.5" }) })) : ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend(), disabled: !input.trim(), "aria-label": "Send message", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C2410C] text-white font-medium transition-all hover:bg-[#9A3412] hover:scale-105 active:scale-95 disabled:bg-[#E6E4DF] disabled:text-[#6B6862] disabled:opacity-40 disabled:hover:scale-100 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.ArrowUpIcon, { className: "h-4 w-4" }) }))] }) })] })), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "Toggle Roadmap Assistant", className: "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer", children: isOpen ? ((0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-5 w-5 text-[#6B6862]" })) : ((0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-5 w-5 text-[#1F1E1C]" })) })] }));
+                                        : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan...", className: "min-w-0 flex-1 bg-transparent text-sm text-[#1F1E1C] outline-none placeholder:text-[#6B6862]" }), showStop ? ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: stopStreaming, title: "D\u1EEBng ph\u1EA3n h\u1ED3i", "aria-label": "D\u1EEBng ph\u1EA3n h\u1ED3i", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FBEDE5] text-[#B42318] border border-[#B42318]/20 transition-opacity hover:opacity-90 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.StopIcon, { className: "h-3.5 w-3.5" }) })) : ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend(), disabled: !input.trim(), "aria-label": "Send message", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C2410C] text-white font-medium transition-all hover:bg-[#9A3412] hover:scale-105 active:scale-95 disabled:bg-[#E6E4DF] disabled:text-[#6B6862] disabled:opacity-40 disabled:hover:scale-100 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.ArrowUpIcon, { className: "h-4 w-4" }) }))] }) }), activeFeedbackMsgId && ((0, jsx_runtime_1.jsx)(FeedbackReasonSheet, { messageId: activeFeedbackMsgId, onSubmit: (reason, comment) => {
+                            const targetMsg = messages.find((m) => m.id === activeFeedbackMsgId);
+                            const targetIdx = messages.findIndex((m) => m.id === activeFeedbackMsgId);
+                            let userQuery = "";
+                            if (targetIdx > 0) {
+                                for (let i = targetIdx - 1; i >= 0; i--) {
+                                    if (messages[i].role === "user") {
+                                        userQuery = messages[i].content;
+                                        break;
+                                    }
+                                }
+                            }
+                            onFeedback?.(activeFeedbackMsgId, 0, {
+                                reason,
+                                comment,
+                                query: userQuery,
+                                assistantMsg: targetMsg?.content,
+                            });
+                        }, onClose: () => setActiveFeedbackMsgId(null) }))] })), !isOpen && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "Toggle Roadmap Assistant", className: "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer", children: isOpen ? ((0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-5 w-5 text-[#6B6862]" })) : ((0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-5 w-5 text-[#1F1E1C]" })) }))] }));
 }

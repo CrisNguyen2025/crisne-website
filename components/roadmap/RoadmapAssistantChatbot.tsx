@@ -1,11 +1,14 @@
 "use client";
 
 import { getRoadmapPageContext, runWebMcpCommand } from "@/logic/roadmap/roadmapAssistantService";
+import { submitChatFeedback } from "@/logic/roadmap/knowledgeTriageService";
 import React from "react";
 import {
   RoadmapChatbotWidget,
   ChatbotPosition,
+  FeedbackDetail,
 } from "@/roadmap-rag-assistant/sdk/typescript/src";
+
 
 export interface RoadmapAssistantChatbotProps {
   /**
@@ -94,6 +97,35 @@ export function RoadmapAssistantChatbot({
     }
   };
 
+  const handleFeedback = async (
+    msgId: string,
+    value: 0 | 1,
+    detail?: FeedbackDetail
+  ) => {
+    try {
+      const traceId = Array.from(new TextEncoder().encode(msgId))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .padEnd(32, "0")
+        .slice(0, 32);
+
+      await submitChatFeedback({
+        traceId,
+        value,
+        reason: detail?.reason,
+        comment: detail?.comment,
+        query: detail?.query,
+        assistantMsg: detail?.assistantMsg,
+      }).catch(() => {});
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("roadmap:triage-updated"));
+      }
+    } catch {
+      // Best-effort network request
+    }
+  };
+
   const baseUrl =
     process.env.NEXT_PUBLIC_RAG_SERVICE_URL || "http://localhost:8000";
 
@@ -107,6 +139,7 @@ export function RoadmapAssistantChatbot({
       baseUrl={baseUrl}
       className={className}
       onToolExecuted={handleToolExecuted}
+      onFeedback={handleFeedback}
       getContext={getRoadmapPageContext}
       onWebMcpMessage={runWebMcpCommand}
     />

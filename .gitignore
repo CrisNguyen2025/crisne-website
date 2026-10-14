@@ -66,3 +66,7 @@ roadmap-rag-assistant/rag_service/data/embedding_cache.json
 
 # Workflow KB local storage
 .data/workflow-kb/
+
+# Python bytecode
+__pycache__/
+*.pyc

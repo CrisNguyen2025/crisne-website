@@ -168,4 +168,35 @@ describe("chat (public, rate limited)", () => {
     expect(statuses.slice(0, 60).every((s) => s === 400)).toBe(true);
     expect(statuses[60]).toBe(429);
   });
+
+  it("POST /api/chat/feedback accepts reason and comment with 204", async () => {
+    const req = new NextRequest("http://localhost:3000/api/chat/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-forwarded-for": "10.0.0.99" },
+      body: JSON.stringify({
+        traceId: "0123456789abcdef0123456789abcdef",
+        value: 0,
+        reason: "Ảo giác / Sai kiến thức",
+        comment: "Sai thông tin lộ trình Docker layer 1",
+      }),
+    });
+    const res = await sendChatFeedback(req);
+    expect(res.status).toBe(204);
+  });
+
+  it("POST /api/chat/feedback rejects comment longer than 500 characters", async () => {
+    const req = new NextRequest("http://localhost:3000/api/chat/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-forwarded-for": "10.0.0.100" },
+      body: JSON.stringify({
+        traceId: "0123456789abcdef0123456789abcdef",
+        value: 0,
+        comment: "a".repeat(501),
+      }),
+    });
+    const res = await sendChatFeedback(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("Feedback comment too long.");
+  });
 });

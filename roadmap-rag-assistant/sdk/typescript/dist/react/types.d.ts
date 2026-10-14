@@ -84,7 +84,17 @@ export interface ChatbotConfig {
      */
     onToolExecuted?: (toolName: string, result: string) => void;
     /**
+     * Callback fired when user rates an answer (1 for like, 0 for unlike) with optional detail.
+     */
+    onFeedback?: (messageId: string, value: 0 | 1, detail?: FeedbackDetail) => void | Promise<void>;
+    /**
      * Optional custom CSS class name for the wrapper container.
      */
     className?: string;
+}
+export interface FeedbackDetail {
+    reason?: string;
+    comment?: string;
+    query?: string;
+    assistantMsg?: string;
 }

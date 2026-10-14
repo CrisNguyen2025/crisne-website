@@ -11,6 +11,9 @@ import { CreateTopicModal } from "@/components/roadmap/CreateTopicModal";
 import { CompactSidebar } from "@/components/roadmap/CompactSidebar";
 import { HomeDashboard } from "@/components/roadmap/HomeDashboard";
 import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
+import { KnowledgeTriageDrawer } from "@/components/roadmap/KnowledgeTriageDrawer";
+import { fetchTriageItems } from "@/logic/roadmap/knowledgeTriageService";
+
 import {
   RoadmapLevel,
   RoadmapMeta,
@@ -119,8 +122,29 @@ function RoadmapWorkspace() {
   const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);
   const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
+  const [isTriageDrawerOpen, setIsTriageDrawerOpen] = useState(false);
+  const [triageBadgeCount, setTriageBadgeCount] = useState<number>(0);
   const [targetLayerId, setTargetLayerId] = useState<string>("");
   const [targetLevel, setTargetLevel] = useState<RoadmapLevel>("core");
+
+  const refreshTriageBadge = useCallback(() => {
+    fetchTriageItems()
+      .then((items) => {
+        const pendingCount = items.filter((i) => i.status === "PENDING").length;
+        setTriageBadgeCount(pendingCount);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshTriageBadge();
+    const handleTriageUpdate = () => {
+      refreshTriageBadge();
+    };
+    window.addEventListener("roadmap:triage-updated", handleTriageUpdate);
+    return () => window.removeEventListener("roadmap:triage-updated", handleTriageUpdate);
+  }, [refreshTriageBadge]);
+
 
   const handleOpenCreateItem = (layerId: string, level: RoadmapLevel) => {
     setTargetLayerId(layerId);
@@ -198,6 +222,8 @@ function RoadmapWorkspace() {
         onSelectHome={handleSelectHome}
         onSelectRoadmap={handleSelectRoadmap}
         onOpenCreateRoadmap={() => setIsCreateTopicOpen(true)}
+        onOpenTriage={() => setIsTriageDrawerOpen(true)}
+        triageBadgeCount={triageBadgeCount}
       />
 
       {/* Main Content Area */}
@@ -292,6 +318,19 @@ function RoadmapWorkspace() {
         targetLevel={targetLevel}
         onClose={() => setIsCreateItemOpen(false)}
         onSubmit={addItem}
+      />
+
+      {/* Missing Knowledge Triage Drawer */}
+      <KnowledgeTriageDrawer
+        isOpen={isTriageDrawerOpen}
+        onClose={() => {
+          setIsTriageDrawerOpen(false);
+          refreshTriageBadge();
+        }}
+        onRoadmapUpdated={() => {
+          refreshRoadmaps();
+          refreshTriageBadge();
+        }}
       />
     </div>
   );

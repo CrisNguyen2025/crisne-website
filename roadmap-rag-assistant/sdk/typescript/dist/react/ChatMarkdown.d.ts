@@ -37,7 +37,8 @@ type Block = {
     kind: "rule";
 };
 export declare function parseBlocks(content: string): Block[];
-export declare function renderInline(text: string): React.ReactNode[];
+/** `fade`: animate newly streamed words (used for the block still being written). */
+export declare function renderInline(text: string, fade?: boolean): React.ReactNode[];
 /** Thin caret shown at the end of a streaming answer. */
 export declare function StreamingCaret(): import("react/jsx-runtime").JSX.Element;
 export interface ChatMarkdownProps {

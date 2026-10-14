@@ -326,3 +326,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS "NodeExecution_runId_nodeId_key" ON "NodeExecu
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "WorkflowQuotaUsage_day_model_key" ON "WorkflowQuotaUsage"("day", "model");
 
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "KnowledgeTriage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "traceId" TEXT,
+    "query" TEXT NOT NULL,
+    "assistantMsg" TEXT,
+    "reason" TEXT,
+    "comment" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'PENDING',
+    "roadmapSlug" TEXT,
+    "layerId" TEXT,
+    "layerTag" TEXT,
+    "level" TEXT DEFAULT 'core',
+    "draftTitle" TEXT,
+    "draftContent" TEXT,
+    "verifyScore" INTEGER,
+    "verifyNote" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeTriage_status_idx" ON "KnowledgeTriage"("status");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeTriage_createdAt_idx" ON "KnowledgeTriage"("createdAt");
+
+

@@ -30,6 +30,7 @@ export type {
   UseRoadmapAssistantChatOptions,
   UseRoadmapAssistantChatReturn,
   ToolCall,
+  FeedbackDetail,
 } from './react';
 
 // Icons & Formatters for UI customizers

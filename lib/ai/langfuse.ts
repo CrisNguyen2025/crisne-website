@@ -74,10 +74,14 @@ function getLangfuseClient(): LangfuseClient | undefined {
 }
 
 /**
- * Records a user's thumbs up (1) / down (0) on a chat trace.
+ * Records a user's thumbs up (1) / down (0) on a chat trace, optionally with detail comments.
  * Uses a deterministic score id so changing the vote overwrites the previous one.
  */
-export async function createFeedbackScore(traceId: string, value: 0 | 1): Promise<void> {
+export async function createFeedbackScore(
+  traceId: string,
+  value: 0 | 1,
+  comment?: string
+): Promise<void> {
   const langfuseClient = getLangfuseClient();
   if (!langfuseClient) return;
 
@@ -87,6 +91,7 @@ export async function createFeedbackScore(traceId: string, value: 0 | 1): Promis
     name: FEEDBACK_SCORE_NAME,
     value,
     dataType: "BOOLEAN",
+    comment: comment?.trim() || undefined,
   });
   await langfuseClient.score.flush();
 }

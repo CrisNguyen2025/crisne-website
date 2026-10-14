@@ -318,3 +318,28 @@ model WorkflowQuotaUsage {
 
   @@unique([day, model])
 }
+
+// Missing Knowledge Triage for Real-Time Learning & LLM Observability
+model KnowledgeTriage {
+  id           String   @id @default(uuid(7))
+  traceId      String?
+  query        String
+  assistantMsg String?
+  reason       String?  // e.g. "Ảo giác / Sai kiến thức"
+  comment      String?  // Detail feedback from user
+  status       String   @default("PENDING") // PENDING | DRAFTED | APPROVED | DISMISSED
+  roadmapSlug  String?  // Target topic/roadmap slug
+  layerId      String?  // Target layer id
+  layerTag     String?  // Target layer short tag e.g. "02-LLM"
+  level        String?  @default("core") // core | intermediate | advanced
+  draftTitle   String?
+  draftContent String?  // Rich text or markdown content
+  verifyScore  Int?     // 0 - 100
+  verifyNote   String?  // Agent Admin verification review note
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+

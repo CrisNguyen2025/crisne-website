@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import type { ChatbotConfig } from "./types";
+import type { ChatbotConfig, FeedbackDetail } from "./types";
 import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
 import {
   SparklesIcon,
@@ -45,6 +45,110 @@ const WIDGET_THEME_VARS: React.CSSProperties = {
   colorScheme: "light",
 };
 
+const UNLIKE_REASONS = [
+  "Ảo giác / Sai kiến thức",
+  "Lạc đề / Chưa đúng trọng tâm",
+  "Lỗi cú pháp / Lộ trình hỏng",
+  "Khó hiểu / Quá dài dòng",
+] as const;
+
+interface FeedbackReasonSheetProps {
+  messageId: string;
+  onSubmit: (reason?: string, comment?: string) => void;
+  onClose: () => void;
+}
+
+function FeedbackReasonSheet({
+  onSubmit,
+  onClose,
+}: FeedbackReasonSheetProps) {
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setIsSubmitted(true);
+    onSubmit(selectedReason || undefined, comment.trim() || undefined);
+    setTimeout(() => {
+      onClose();
+    }, 1200);
+  };
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-[#E6E4DF] bg-[#FFFFFF] p-3.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200">
+      <div className="flex items-center justify-between pb-2 border-b border-[#E6E4DF]/60">
+        <span className="text-xs font-semibold text-[#1F1E1C]">
+          Góp ý câu trả lời chưa tốt
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          title="Đóng"
+          aria-label="Đóng bảng góp ý"
+          className="flex h-5 w-5 items-center justify-center rounded text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+        >
+          <CloseIcon className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {isSubmitted ? (
+        <div className="flex items-center justify-center gap-1.5 py-6 text-xs font-medium text-[#3F7D58]">
+          <CheckIcon className="h-4 w-4" />
+          <span>Đã ghi nhận góp ý, cảm ơn bạn!</span>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 pt-2.5">
+          <div className="flex flex-wrap gap-1.5">
+            {UNLIKE_REASONS.map((opt) => {
+              const isSelected = selectedReason === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setSelectedReason(isSelected ? null : opt)}
+                  className={`rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
+                    isSelected
+                      ? "border border-[#C2410C] bg-[#FBEDE5] text-[#C2410C] font-medium"
+                      : "border border-[#E6E4DF] bg-[#F4F3F0] text-[#1F1E1C] hover:bg-[#ECEAE5]"
+                  }`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="AI cần cải thiện điểm nào? (tùy chọn)..."
+            rows={2}
+            maxLength={300}
+            className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] p-2 text-xs text-[#1F1E1C] outline-none placeholder:text-[#6B6862] focus:border-[#C2410C] focus:bg-[#FFFFFF]"
+          />
+
+          <div className="flex items-center justify-end gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-2.5 py-1 text-xs text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+            >
+              Bỏ qua
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 cursor-pointer"
+            >
+              Gửi góp ý
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 export function RoadmapChatbotWidget({
   position = "bottom-right",
   offsetX = 24,
@@ -56,6 +160,7 @@ export function RoadmapChatbotWidget({
   initialOpen = false,
   initialMessages,
   onToolExecuted,
+  onFeedback,
   getContext,
   onWebMcpMessage,
   className = "",
@@ -65,13 +170,45 @@ export function RoadmapChatbotWidget({
     {}
   );
   const [feedback, setFeedback] = useState<Record<string, 1 | 0>>({});
+  const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleFeedback = (msgId: string, val: 1 | 0) => {
-    setFeedback((prev) => ({
-      ...prev,
-      [msgId]: prev[msgId] === val ? undefined! : val,
-    }));
+    if (val === 1) {
+      const isRemoving = feedback[msgId] === 1;
+      setFeedback((prev) => {
+        const next = { ...prev };
+        if (isRemoving) {
+          delete next[msgId];
+        } else {
+          next[msgId] = 1;
+        }
+        return next;
+      });
+      if (activeFeedbackMsgId === msgId) {
+        setActiveFeedbackMsgId(null);
+      }
+      if (!isRemoving) {
+        onFeedback?.(msgId, 1);
+      }
+    } else {
+      const isRemoving = feedback[msgId] === 0;
+      setFeedback((prev) => {
+        const next = { ...prev };
+        if (isRemoving) {
+          delete next[msgId];
+        } else {
+          next[msgId] = 0;
+        }
+        return next;
+      });
+      if (isRemoving) {
+        setActiveFeedbackMsgId(null);
+      } else {
+        onFeedback?.(msgId, 0);
+        setActiveFeedbackMsgId(msgId);
+      }
+    }
   };
 
   const {
@@ -230,7 +367,7 @@ export function RoadmapChatbotWidget({
         <div
           ref={containerRef}
           style={WIDGET_THEME_VARS}
-          className="pointer-events-auto flex h-[720px] max-h-[calc(100vh-3rem)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200"
+          className="pointer-events-auto relative flex h-[720px] max-h-[calc(100vh-3rem)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200"
         >
           {/* ── Header ── */}
           <div className="flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3">
@@ -406,9 +543,9 @@ export function RoadmapChatbotWidget({
                     <LayerChoicePicker onSend={sendMessage} disabled={isLoading} />
                   )}
 
-                  {/* Actions bar (Time, Copy, Thumbs Up, Thumbs Down) - visible by default */}
+                  {/* Actions bar (Time and action buttons grouped on the right) */}
                   {msg.content && !isLive && (
-                    <div className="flex items-center gap-1.5 pt-0.5 text-xs text-[#6B6862]">
+                    <div className="flex items-center justify-end gap-1.5 pt-0.5 text-xs text-[#6B6862]">
                       {timeStr && <span className="select-none text-[11px]">{timeStr}</span>}
                       <button
                         type="button"
@@ -497,6 +634,33 @@ export function RoadmapChatbotWidget({
               )}
             </div>
           </div>
+
+          {/* ── Feedback Reason Bottom Sheet ── */}
+          {activeFeedbackMsgId && (
+            <FeedbackReasonSheet
+              messageId={activeFeedbackMsgId}
+              onSubmit={(reason, comment) => {
+                const targetMsg = messages.find((m) => m.id === activeFeedbackMsgId);
+                const targetIdx = messages.findIndex((m) => m.id === activeFeedbackMsgId);
+                let userQuery = "";
+                if (targetIdx > 0) {
+                  for (let i = targetIdx - 1; i >= 0; i--) {
+                    if (messages[i].role === "user") {
+                      userQuery = messages[i].content;
+                      break;
+                    }
+                  }
+                }
+                onFeedback?.(activeFeedbackMsgId, 0, {
+                  reason,
+                  comment,
+                  query: userQuery,
+                  assistantMsg: targetMsg?.content,
+                });
+              }}
+              onClose={() => setActiveFeedbackMsgId(null)}
+            />
+          )}
         </div>
       )}
 

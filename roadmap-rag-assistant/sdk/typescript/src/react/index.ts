@@ -10,6 +10,7 @@ export type {
   ChatMessage,
   ChatActionChip,
   ToolCall,
+  FeedbackDetail,
 } from './types';
 
 // Icons & Presentation Assets
