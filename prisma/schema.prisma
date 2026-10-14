@@ -160,3 +160,161 @@ model RoadmapItem {
 
   @@index([groupId])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workflow Builder (docs/workflow-builder-design.md)
+// Owner-only for now; projectId + ownerId (owner email) keep multi-user open.
+// SQLite on Prisma 5 has no enums or Json: statuses are strings, graphs are JSON text.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model WorkflowProject {
+  id          String   @id @default(uuid(7))
+  ownerId     String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  documents ProjectDocument[]
+  chunks    ProjectChunk[]
+  workflows Workflow[]
+  runs      WorkflowRun[]
+
+  @@index([ownerId])
+}
+
+model ProjectDocument {
+  id          String          @id @default(uuid(7))
+  projectId   String
+  project     WorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId     String
+  filename    String
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String          @unique // workflow-kb/{projectId}/{documentId}
+  contentHash String // sha256 of the raw file; unchanged re-upload skips embedding
+  status      String          @default("PENDING") // PENDING | READY | FAILED
+  error       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  chunks ProjectChunk[]
+
+  @@index([projectId])
+  @@index([projectId, contentHash])
+}
+
+model ProjectChunk {
+  id             String          @id @default(uuid(7))
+  // Denormalized so every retrieval query filters by project
+  projectId      String
+  project        WorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentId     String
+  document       ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  ordinal        Int
+  heading        String?
+  content        String
+  contentHash    String // sha256 of content; reuse the embedding when unchanged
+  embedding      Bytes? // Float32Array, 768 dims
+  embeddingModel String?
+  createdAt      DateTime        @default(now())
+
+  @@index([projectId])
+  @@index([documentId])
+  @@index([projectId, contentHash])
+}
+
+model Workflow {
+  id             String          @id @default(uuid(7))
+  projectId      String
+  project        WorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId        String
+  name           String
+  description    String?
+  draftGraph     String // JSON: WorkflowGraph (runtime semantics)
+  draftUi        String // JSON: WorkflowUi (positions, labels, viewport)
+  draftGraphHash String // sha256(canonical(draftGraph)); UI-only edits keep it
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  versions WorkflowVersion[]
+  runs     WorkflowRun[]
+
+  @@index([projectId])
+}
+
+// Immutable once published
+model WorkflowVersion {
+  id            String   @id @default(uuid(7))
+  workflowId    String
+  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  versionNumber Int
+  graph         String // JSON: WorkflowGraph
+  graphHash     String
+  ui            String // JSON: WorkflowUi
+  createdAt     DateTime @default(now())
+
+  runs WorkflowRun[]
+
+  @@unique([workflowId, versionNumber])
+}
+
+model WorkflowRun {
+  id                String           @id @default(uuid(7))
+  projectId         String
+  project           WorkflowProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerId           String
+  workflowId        String
+  workflow          Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  // Set when running a published version; otherwise the draft is snapshotted below
+  workflowVersionId String?
+  workflowVersion   WorkflowVersion? @relation(fields: [workflowVersionId], references: [id])
+  graphSnapshot     String? // JSON: draft graph at run time
+  graphHash         String
+  status            String           @default("PENDING") // PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED
+  trigger           String // MANUAL | API
+  dryRun            Boolean          @default(false)
+  input             String // JSON
+  output            String? // JSON
+  error             String?
+  traceId           String? // Langfuse trace id
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime         @default(now())
+
+  nodeExecutions NodeExecution[]
+
+  @@index([workflowId, createdAt])
+  @@index([projectId])
+}
+
+model NodeExecution {
+  id           String      @id @default(uuid(7))
+  runId        String
+  run          WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  nodeId       String // id inside the graph
+  nodeType     String
+  status       String      @default("PENDING") // PENDING | RUNNING | SUCCEEDED | SKIPPED | FAILED | CANCELLED
+  input        String? // JSON
+  output       String? // JSON
+  error        String?
+  model        String?
+  inputTokens  Int?
+  outputTokens Int?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  durationMs   Int?
+
+  @@unique([runId, nodeId])
+}
+
+// Gemini free-tier quota is per Google project + model, shared by every workflow
+model WorkflowQuotaUsage {
+  id        String   @id @default(uuid(7))
+  day       String // UTC date, YYYY-MM-DD
+  model     String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, model])
+}

@@ -56,7 +56,7 @@ graph LR
 
 | Task | Nội dung | File | Phụ thuộc | Kiểm chứng |
 |---|---|---|---|---|
-| **P1.1** | Thêm 8 bảng: `WorkflowProject`, `ProjectDocument`, `ProjectChunk`, `Workflow` (`draftGraph`, `draftUi`), `WorkflowVersion`, `WorkflowRun`, `NodeExecution`, `WorkflowQuotaUsage`. Mọi bảng có `projectId` + `ownerId` khi hợp lý. Migration local + SQL Turso. | `prisma/schema.prisma`, `prisma/init-turso.sql` | — | `npx prisma migrate dev`; diff không chạm 11 bảng cũ; chạy SQL trên Turso dev |
+| **P1.1** 🟡 | 8 bảng: `WorkflowProject`, `ProjectDocument`, `ProjectChunk`, `Workflow`, `WorkflowVersion`, `WorkflowRun`, `NodeExecution`, `WorkflowQuotaUsage` (trạng thái = `String`, graph/ui = JSON text vì Prisma 5 + SQLite không có enum/Json). Local: `prisma db push`. Turso: 21 lệnh `CREATE … IF NOT EXISTS` nối vào `init-turso.sql`. `isCurrentClient` nhận delegate `workflow`. **Còn lại:** chạy `yarn db:turso:init` trên Turso. | `prisma/schema.prisma`, `prisma/init-turso.sql`, `lib/prisma.ts` | — | Diff schema chỉ có dòng thêm; `init-turso.sql` chạy 2 lần trên SQLite trống + `migrate diff` với schema → rỗng; smoke test cascade trên `dev.db` → 0 bản ghi sót |
 | **P1.2** | DSL types: `WorkflowGraph`, `WorkflowUi`, `NodeType` (7 loại), `Edge`, config theo từng node; `canonicalize()` + `graphHash()` (sha256). | `lib/workflow/dsl-types.ts`, `lib/workflow/graph-hash.ts` | — | Test: đổi `ui` không đổi hash; đổi thứ tự key không đổi hash |
 | **P1.3** | Node registry + `resolveNodePorts(node)` (port, kiểu, `required`, `allowMultiple`); `condition`/`merge` sinh port từ config. | `lib/workflow/node-registry.ts` | P1.2 | Test port cho cả 7 loại |
 | **P1.4** | Validator 9 quy tắc (mục 3.2 thiết kế), trả lỗi có `code` + `nodeId`/`edgeId`; Kahn trả danh sách node trong chu trình. | `lib/workflow/dsl-validator.ts` | P1.3 | ≥1 test hợp lệ + ≥1 test vi phạm cho **mỗi** quy tắc |
@@ -156,6 +156,7 @@ Canvas (P3.1–P3.5) có thể bắt đầu ngay sau P1.9, song song với giai 
 | Ngày | Task | Kết quả |
 |---|---|---|
 | 2026-10-14 | — | Đăng nhập Google local OK, vào `/workflows` |
+| 2026-10-14 | P1.1 | Schema + SQL Turso kiểm chứng trên SQLite trống; `dev.db` đã push (backup trước); cascade OK. ⚠️ `.env` chứa `TURSO_*` → script dùng `lib/prisma` chạy local sẽ trỏ Turso. Chưa áp lên Turso |
 | 2026-10-14 | P0.3 | 37 handler ghi trả 401 khi ẩn danh; mutation test xác nhận bắt được route thiếu guard; suite 336 pass / 8 skip |
 | 2026-10-14 | P0.2 | Danh sách route công khai: `chat`, `chat/feedback`, `favorites`; thêm 2 test 429 → 298 pass / 8 skip |
 | 2026-10-14 | P0.1 | Test đã có sẵn, 16 pass; toàn bộ suite 296 pass / 8 skip (không phải 66 như thiết kế ghi) |

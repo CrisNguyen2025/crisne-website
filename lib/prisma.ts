@@ -33,13 +33,15 @@ function isCurrentClient(client: PrismaClient) {
     apiEndpoint?: unknown;
     roleApiAccess?: unknown;
     roadmap?: unknown;
+    workflow?: unknown;
   };
 
   return Boolean(
     delegates.role &&
     delegates.apiEndpoint &&
     delegates.roleApiAccess &&
-    delegates.roadmap
+    delegates.roadmap &&
+    delegates.workflow
   );
 }
 
