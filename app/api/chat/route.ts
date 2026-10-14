@@ -21,6 +21,7 @@ import { CHAT_OBSERVATION, CHAT_TRACE_NAME, RETRIEVAL_TOP_K } from "@/lib/ai/cha
 import { flushLangfuse } from "@/lib/ai/langfuse";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { loadKnowledgeBase } from "@/lib/ai/knowledge-base";
+import { createAntiSlopTransformStream } from "@/lib/ai/anti-slop";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -61,6 +62,55 @@ const toReadableContext = (chunks: ScoredChunk[]) =>
 
 const toUsageDetails = (usage?: LlmUsage) =>
   usage ? { input: usage.input, output: usage.output, total: usage.total } : undefined;
+
+export const ANTI_SLOP_SYSTEM_PROMPT = `
+Bạn là **Cris AI** — đại diện kỹ thuật số (Digital Twin) của **Cris Nguyen** (Senior Frontend Engineer với hơn 5 năm kinh nghiệm chuyên sâu về Next.js, React, TypeScript).
+
+### ⚡ QUY TẮC BẮT BUỘC SỐ 1: DIRECT ANSWER FIRST (< 20 TỪ)
+- Câu đầu tiên PHẢI là câu trả lời trực tiếp vào trọng tâm, nêu ngay dữ kiện, con số hoặc câu trả lời có/không.
+- Câu đầu tiên KHÔNG ĐƯỢC vượt quá 20 từ.
+- TUYỆT ĐỐI KHÔNG mở đầu bằng lời chào ("Chào bạn", "Xin chào", "Hello"), lời cảm ơn, lời khen ("Tuyệt vời", "Câu hỏi hay") hoặc câu dẫn ("Về vấn đề này", "Để trả lời câu hỏi").
+
+### 🚫 DANH SÁCH BỊ CẤM HOÀN TOÀN (ANTI-SLOP RULES):
+1. **CẤM Throat-clearing openers**: "Chào bạn", "Xin chào", "Tuyệt vời", "Rất vui được hỗ trợ", "Cảm ơn câu hỏi", "Về câu hỏi của bạn", "Dưới đây là thông tin".
+2. **CẤM Sycophantic praise**: "Tuyệt vời!", "Câu hỏi rất hay!", "Thật thú vị!", "Ý kiến rất sáng suốt!".
+3. **CẤM Robotic meta-discourse**: "Dựa vào tài liệu được cung cấp", "Theo dữ liệu của tôi", "Trong ngữ cảnh trên", "Là một mô hình AI".
+4. **CẤM Summary-recap kickers ở cuối bài**: "Tóm lại...", "Tổng kết lại...", "Nhìn chung...", "Hy vọng câu trả lời này giúp ích cho bạn!", "Nếu bạn có thắc mắc gì đừng ngần ngại hỏi nhé!", "Chúc bạn một ngày tốt lành!". Hãy dừng câu trả lời ngay khi hết ý kỹ thuật.
+5. **CẤM Banned buzzwords**: "tận dụng tối đa", "đột phá", "tiên tiến nhất", "toàn diện", "đóng vai trò then chốt", "delve", "leverage", "streamline", "robust", "game-changer".
+
+### 🎯 PHÁT SINH ACTION CHIPS CHO GIAO DIỆN:
+Khi câu trả lời đề cập đến dự án, tầng kiến thức lộ trình, hoặc kênh liên hệ, BẮT BUỘC chèn thẻ Action theo cú pháp:
+- Dự án:
+  • Kamala: \`[[action:project|kamala-commerce-tour|Khám phá Kamala]]\`
+  • Zelene Spa: \`[[action:project|zelene-spa-booking|Xem Zelene Spa]]\`
+  • Smartbit: \`[[action:project|smartbit-saas-platform|Xem Smartbit SaaS]]\`
+  • JAVIS: \`[[action:project|javis-3d-tile-simulation|Xem JAVIS 3D]]\`
+- Tầng lộ trình (Roadmap Layers):
+  • Tầng 1: \`[[action:roadmap|layer-01|Tầng 01: Knowledge Base]]\`
+  • Tầng 2: \`[[action:roadmap|layer-02|Tầng 02: LLM Application]]\`
+  • Tầng 3: \`[[action:roadmap|layer-03|Tầng 03: RAG + Agent]]\`
+  • Tầng 4: \`[[action:roadmap|layer-04|Tầng 04: LLMOps]]\`
+  • Tầng 5: \`[[action:roadmap|layer-05|Tầng 05: Production Deployment]]\`
+- Kênh liên hệ:
+  • Zalo: \`[[action:contact|zalo|Kết nối Zalo]]\`
+  • GitHub: \`[[action:contact|github|GitHub @crisne]]\`
+  • Tải CV: \`[[action:contact|cv|Tải CV Cris Nguyen]]\`
+  • Mục liên hệ: \`[[action:contact|contact|Mục Liên hệ]]\`
+
+### 🔒 NGUYÊN TẮC DỮ KIỆN (GROUNDING):
+- Mọi dữ kiện chỉ lấy từ phần THÔNG TIN bên dưới. Không suy đoán, không bịa thêm.
+- Nếu không có thông tin: Trả lời ngắn gọn ngay câu đầu rằng Cris chưa có thông tin về vấn đề này và gợi ý hỏi về dự án, kỹ năng của Cris.
+- Với câu hỏi không liên quan đến Cris: lịch sự từ chối và quay về chủ đề năng lực của Cris.
+
+---
+### 📚 [THÔNG TIN THỰC TẾ]:
+{RAG_CONTEXT}
+`.trim();
+
+export function buildAntiSlopSystemPrompt(ragContext: string): string {
+  const context = ragContext || "(Không có thông tin liên quan đến câu hỏi này.)";
+  return ANTI_SLOP_SYSTEM_PROMPT.replace("{RAG_CONTEXT}", () => context);
+}
 
 export async function POST(req: NextRequest) {
   // Root observation of the Langfuse trace; ended when the response (or stream) finishes
@@ -148,8 +198,8 @@ export async function POST(req: NextRequest) {
             findRelevantChunks(trimmedQuery, null, knowledgeBase, RETRIEVAL_TOP_K)
           );
           const fallbackText = readableContext
-            ? `Xin chào! Hiện tại chưa cấu hình \`GEMINI_API_KEY\`. Dưới đây là thông tin về Cris Nguyen liên quan đến câu hỏi của bạn:\n\n${readableContext}`
-            : `Xin chào! Hiện tại chưa cấu hình \`GEMINI_API_KEY\` và Cris chưa có thông tin cho câu hỏi này. Bạn có thể liên hệ trực tiếp với Cris qua Zalo hoặc LinkedIn nhé!`;
+            ? `Hiện tại chưa cấu hình \`GEMINI_API_KEY\`. Dưới đây là thông tin về Cris Nguyen liên quan đến câu hỏi của bạn:\n\n${readableContext}`
+            : `Hiện tại chưa cấu hình \`GEMINI_API_KEY\` và Cris chưa có thông tin cho câu hỏi này. Bạn có thể liên hệ trực tiếp với Cris qua Zalo hoặc LinkedIn.`;
           rootSpan
             .update({
               output: fallbackText,
@@ -249,32 +299,7 @@ export async function POST(req: NextRequest) {
           })
           .end();
 
-        // 3. Ultra-refined Persona & System Prompt for Natural, Human-like Voice
-        const systemPrompt = `
-Bạn là **Cris AI** — Trợ lý ảo thông minh và là "Digital Twin" đại diện cho **Cris Nguyen** (Software Engineer / Frontend Developer FE Strong với hơn 5 năm kinh nghiệm).
-
-### 🌟 NGUYÊN TẮC GIAO TIẾP (TONE OF VOICE):
-1. **Tự nhiên & Thân thiện**: Nói chuyện như một kỹ sư công nghệ cởi mở, tự tin, nhiệt tình và khiêm tốn. Xưng "Cris" hoặc "mình" / "Cris AI" một cách tự nhiên.
-2. **Tuyệt đối KHÔNG dùng văn phong máy móc**:
-   - ❌ KHÔNG BAO GIỜ nói: *"Dựa vào tài liệu được cung cấp"*, *"Theo dữ liệu của tôi"*, *"Trong ngữ cảnh trên"*, *"Dưới đây là thông tin..."*.
-   - ✅ HÃY NÓI TRỰC TIẾP: *"Chào bạn! Về mảng mobile thì Cris có kinh nghiệm phát triển..."*, *"Mình từng xây dựng ứng dụng mobile bằng React Native & Expo cho dự án..."*.
-3. **Chính xác & Trực diện**:
-   - Trả lời thẳng vào câu hỏi, nêu tên dự án / công ty / công nghệ cụ thể có trong phần THÔNG TIN bên dưới.
-   - In đậm các từ khóa công nghệ (ví dụ **Next.js**, **TypeScript**, **React Native**).
-4. **Cởi mở & Hướng đến hành động**:
-   - Gợi ý người dùng xem thêm chi tiết ở mục Projects trên trang web hoặc kết nối qua Zalo / LinkedIn / tải CV.
-5. **Ngôn ngữ**: Trả lời bằng ngôn ngữ câu hỏi của người dùng (Tiếng Việt tự nhiên hoặc Tiếng Anh chuyên nghiệp).
-
-### 🔒 NGUYÊN TẮC DỮ KIỆN (BẮT BUỘC):
-- Mọi dữ kiện về Cris (dự án, công ty, thời gian, công nghệ, con số, liên hệ) CHỈ được lấy từ phần THÔNG TIN bên dưới. Không suy đoán, không bịa thêm.
-- Nếu phần THÔNG TIN trống hoặc không chứa câu trả lời: nói tự nhiên rằng Cris chưa có thông tin về vấn đề này, rồi gợi ý người dùng hỏi về kinh nghiệm / dự án / kỹ năng của Cris hoặc liên hệ trực tiếp.
-- Không khẳng định phủ định (ví dụ "Cris chưa từng làm ở X") khi THÔNG TIN không nói rõ điều đó — hãy nói là chưa có thông tin.
-- Với câu hỏi không liên quan đến Cris (nấu ăn, giá coin, kiến thức chung...): lịch sự từ chối và quay về chủ đề Cris.
-
----
-### 📚 [THÔNG TIN & KINH NGHIỆM THỰC TẾ CỦA CRIS NGUYEN]:
-${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
-`.trim();
+        const systemPrompt = buildAntiSlopSystemPrompt(ragContext);
 
         // 4. Stream the answer
         let answerGeneration: LangfuseGeneration | undefined;
@@ -339,20 +364,53 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
           // Set when the client disconnects (stop button, closed tab): the controller can no
           // longer be written to, and we stop pulling tokens from the model
           let isCancelled = false;
-          const stream = new ReadableStream({
-            async start(controller) {
-              let answerText = "";
-              let usage: LlmUsage | undefined;
-              let streamErrorKind: string | undefined;
+          let usage: LlmUsage | undefined;
+          let cancelUpstream: (() => void) | undefined;
+
+          const rawStream = new ReadableStream<string>({
+            async start(rawController) {
               try {
                 for await (const chunk of answerStream) {
                   if (isCancelled) break;
                   if (chunk.text) {
-                    if (!answerText) generation.update({ completionStartTime: new Date() });
-                    answerText += chunk.text;
-                    controller.enqueue(encoder.encode(chunk.text));
+                    rawController.enqueue(chunk.text);
                   }
                   if (chunk.usage) usage = chunk.usage;
+                }
+                rawController.close();
+              } catch (err) {
+                rawController.error(err);
+              }
+            },
+            cancel() {
+              isCancelled = true;
+            },
+          });
+
+          const sanitizedStream = rawStream.pipeThrough(createAntiSlopTransformStream<string>());
+          const sanitizedReader = sanitizedStream.getReader();
+          cancelUpstream = () => {
+            isCancelled = true;
+            sanitizedReader.cancel().catch(() => {});
+          };
+
+          const stream = new ReadableStream({
+            async start(controller) {
+              let answerText = "";
+              let streamErrorKind: string | undefined;
+              try {
+                while (true) {
+                  if (isCancelled) break;
+                  const { done, value } = await sanitizedReader.read();
+                  if (done || isCancelled) break;
+                  if (value) {
+                    const text = typeof value === "string" ? value : new TextDecoder().decode(value);
+                    if (text) {
+                      if (!answerText) generation.update({ completionStartTime: new Date() });
+                      answerText += text;
+                      controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
+                    }
+                  }
                 }
               } catch (streamError) {
                 if (!isCancelled) {
@@ -391,6 +449,7 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
             },
             cancel() {
               isCancelled = true;
+              cancelUpstream?.();
             },
           });
 
@@ -404,7 +463,7 @@ ${ragContext || "(Không có thông tin liên quan đến câu hỏi này.)"}
 
           // Graceful natural fallback if the model is unavailable (quota, outage, ...)
           const readableContext = toReadableContext(relevantChunks);
-          const naturalFallback = `Chào bạn! Cris AI đang tạm quá tải nên chưa trả lời chi tiết được. ${readableContext ? `Dưới đây là thông tin liên quan về Cris Nguyen:\n\n${readableContext}\n\n` : "Cris chưa có thông tin cho câu hỏi này. "}Bạn có thể kết nối trực tiếp với Cris qua Zalo hoặc thử hỏi lại sau ít phút nhé!`;
+          const naturalFallback = `Cris AI đang tạm quá tải nên chưa trả lời chi tiết được. ${readableContext ? `Dưới đây là thông tin liên quan về Cris Nguyen:\n\n${readableContext}\n\n` : "Cris chưa có thông tin cho câu hỏi này. "}Bạn có thể kết nối trực tiếp với Cris qua Zalo hoặc thử lại sau ít phút.`;
           rootSpan
             .update({
               output: naturalFallback,

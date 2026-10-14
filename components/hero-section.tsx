@@ -190,13 +190,9 @@ export function HeroSection() {
 
         <motion.h1
           variants={itemVariants}
-          className="mb-4 text-4xl font-bold leading-tight tracking-tight sm:mb-6 sm:text-6xl md:text-7xl lg:text-8xl"
-          style={{ fontFamily: "var(--font-display)" }}
+          className="mb-4 font-display text-4xl font-bold leading-tight tracking-tight sm:mb-6 sm:text-6xl md:text-7xl lg:text-8xl"
         >
-          <span
-            className="block font-light italic"
-            style={{ fontFamily: "var(--font-display)", fontWeight: 600 }}
-          >
+          <span className="block font-display font-semibold italic">
             Hi, I&apos;m
           </span>
           <SparklesText

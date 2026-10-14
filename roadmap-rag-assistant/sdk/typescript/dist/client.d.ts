@@ -1,7 +1,7 @@
 /**
  * RoadmapChatClient — TypeScript SDK for the Roadmap RAG Assistant with SSE streaming.
  */
-import type { ChatResponse, HealthResponse } from './types';
+import type { ChatResponse, HealthResponse, PageContext, PlanResponse, WebMcpToolSpec } from './types';
 export interface RoadmapChatClientOptions {
     baseUrl?: string;
     timeout?: number;
@@ -23,13 +23,18 @@ export declare class RoadmapChatClient {
      * @param message - User prompt
      * @param callbacks - Event callbacks for real-time tokens and tool events
      * @param threadId - Conversation thread ID
+     * @param context - Optional page context (current roadmap, layer, item)
      * @returns AbortController to allow canceling the stream
      */
-    streamChat(message: string, callbacks: StreamCallbacks, threadId?: string): AbortController;
+    streamChat(message: string, callbacks: StreamCallbacks, threadId?: string, context?: PageContext): AbortController;
     /**
      * Synchronous chat request (waits until response completes).
      */
-    chat(message: string, threadId?: string): Promise<ChatResponse>;
+    chat(message: string, threadId?: string, context?: PageContext): Promise<ChatResponse>;
+    /**
+     * Ask the service to choose one WebMCP tool for a message. Nothing is executed server-side.
+     */
+    plan(message: string, tools: WebMcpToolSpec[], context?: PageContext): Promise<PlanResponse>;
     /**
      * Check health of the Assistant service.
      */

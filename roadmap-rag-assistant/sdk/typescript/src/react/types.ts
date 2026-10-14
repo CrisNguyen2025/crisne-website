@@ -1,4 +1,7 @@
-import type { PageContext } from '../types';
+import type { PageContext, ChatActionChip } from '../types';
+
+export type { ChatActionChip };
+
 /**
  * Configuration and state types for the Roadmap Assistant Chatbot Widget.
  */
@@ -9,15 +12,19 @@ export type ChatbotPosition =
   | 'top-right'
   | 'top-left';
 
+export interface ToolCall {
+  name: string;
+  args?: Record<string, unknown>;
+  result: string;
+}
+
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
-  toolCalls?: Array<{
-    name: string;
-    args?: Record<string, unknown>;
-    result: string;
-  }>;
+  toolCalls?: ToolCall[];
+  actionChips?: ChatActionChip[];
+  status?: 'sending' | 'streaming' | 'complete' | 'error';
   timestamp: Date;
 }
 
@@ -82,6 +89,11 @@ export interface ChatbotConfig {
    * Suggested quick prompts displayed in the empty state.
    */
   suggestedPrompts?: string[];
+
+  /**
+   * Initial messages to populate the chat history.
+   */
+  initialMessages?: ChatMessage[];
 
   /**
    * Callback fired whenever the agent invokes a tool successfully.

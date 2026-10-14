@@ -1,39 +1,6 @@
 'use client';
 
 import React, { useState, ReactNode } from 'react';
-
-// ─── Smooth Collapsible ───────────────────────────────────────────────────────
-// CSS grid-template-rows + opacity with cubic-bezier easing:
-// guarantees zero jitter, perfect clipping, and buttery smooth expand/collapse.
-function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
-  const [isStableOpen, setIsStableOpen] = useState(open);
-
-  React.useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => setIsStableOpen(true), 320);
-      return () => clearTimeout(timer);
-    } else {
-      setIsStableOpen(false);
-    }
-  }, [open]);
-
-  return (
-    <div
-      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
-        open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'
-      }`}
-      style={{
-        gridTemplateRows: open ? '1fr' : '0fr',
-        opacity: open ? 1 : 0,
-      }}
-    >
-      <div className={`min-h-0 ${open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 import {
   ChevronRight,
   ChevronsRight,
@@ -74,6 +41,38 @@ import { EditLayerModal } from './EditLayerModal';
 import { CreateGroupModal } from './CreateGroupModal';
 import { EditGroupModal } from './EditGroupModal';
 import { EditTopicModal } from './EditTopicModal';
+
+// ─── Smooth Collapsible ───────────────────────────────────────────────────────
+// CSS grid-template-rows + opacity with cubic-bezier easing:
+// guarantees zero jitter, perfect clipping, and buttery smooth expand/collapse.
+function Collapsible({ open, children }: { open: boolean; children: ReactNode }) {
+  const [isStableOpen, setIsStableOpen] = useState(open);
+
+  React.useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setIsStableOpen(true), 320);
+      return () => clearTimeout(timer);
+    } else {
+      setIsStableOpen(false);
+    }
+  }, [open]);
+
+  return (
+    <div
+      className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+        open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'
+      }`}
+      style={{
+        gridTemplateRows: open ? '1fr' : '0fr',
+        opacity: open ? 1 : 0,
+      }}
+    >
+      <div className={`min-h-0 ${open && isStableOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Skeleton loaders — shown while data is fetching from BE

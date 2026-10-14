@@ -1,14 +1,26 @@
 /**
- * Roadmap Chat SDK — TypeScript client for the Roadmap RAG Assistant.
+ * Roadmap Chat SDK — TypeScript client and Headless React SDK for the Roadmap RAG Assistant.
  *
  * @module roadmap-chat-sdk
  */
 
+// Core HTTP & Streaming Client
 export { RoadmapChatClient } from './client';
 export type { RoadmapChatClientOptions } from './client';
-export type { ChatResponse, ChatRequest, HealthResponse, ToolCallResult, PageContext, PlanResponse, WebMcpToolSpec } from './types';
 
-// React Chatbot Widget & Hooks
+// Core Protocol & Schema Types
+export type {
+  ChatResponse,
+  ChatRequest,
+  HealthResponse,
+  ToolCallResult,
+  PageContext,
+  PlanResponse,
+  WebMcpToolSpec,
+  ChatActionChip,
+} from './types';
+
+// React Chatbot Widget & Headless Hooks
 export { RoadmapChatbotWidget } from './react/RoadmapChatbotWidget';
 export { useRoadmapAssistantChat } from './react/useRoadmapAssistantChat';
 export type {
@@ -16,5 +28,10 @@ export type {
   ChatbotPosition,
   ChatMessage,
   UseRoadmapAssistantChatOptions,
+  UseRoadmapAssistantChatReturn,
+  ToolCall,
 } from './react';
 
+// Icons & Formatters for UI customizers
+export * from './react/icons';
+export * from './react/utils/formatters';

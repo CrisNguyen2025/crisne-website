@@ -1,13 +1,20 @@
 import type { ChatMessage } from './types';
+import type { PageContext } from '../types';
 export interface UseRoadmapAssistantChatOptions {
     baseUrl?: string;
     threadId?: string;
+    initialMessages?: ChatMessage[];
     onToolExecuted?: (toolName: string, result: string) => void;
+    /** Returns the page the user is viewing; read at send time. */
+    getContext?: () => PageContext | undefined;
+    /** Handles "/webmcp <request>" messages; returns the text to show. */
+    onWebMcpMessage?: (request: string) => Promise<string>;
 }
-export declare function useRoadmapAssistantChat(options?: UseRoadmapAssistantChatOptions): {
+export interface UseRoadmapAssistantChatReturn {
     messages: ChatMessage[];
+    setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
     input: string;
-    setInput: import("react").Dispatch<import("react").SetStateAction<string>>;
+    setInput: React.Dispatch<React.SetStateAction<string>>;
     isLoading: boolean;
     isStreaming: boolean;
     activeTool: string | null;
@@ -15,4 +22,5 @@ export declare function useRoadmapAssistantChat(options?: UseRoadmapAssistantCha
     sendMessage: (textToSend?: string) => Promise<void>;
     stopStreaming: () => void;
     clearMessages: () => void;
-};
+}
+export declare function useRoadmapAssistantChat(options?: UseRoadmapAssistantChatOptions): UseRoadmapAssistantChatReturn;

@@ -17,16 +17,17 @@ class RoadmapChatClient {
      * @param message - User prompt
      * @param callbacks - Event callbacks for real-time tokens and tool events
      * @param threadId - Conversation thread ID
+     * @param context - Optional page context (current roadmap, layer, item)
      * @returns AbortController to allow canceling the stream
      */
-    streamChat(message, callbacks, threadId = 'default') {
+    streamChat(message, callbacks, threadId = 'default', context) {
         const controller = new AbortController();
         (async () => {
             try {
                 const resp = await fetch(`${this.baseUrl}/chat/stream`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message, thread_id: threadId }),
+                    body: JSON.stringify({ message, thread_id: threadId, context }),
                     signal: controller.signal,
                 });
                 if (!resp.ok) {
@@ -109,13 +110,27 @@ class RoadmapChatClient {
     /**
      * Synchronous chat request (waits until response completes).
      */
-    async chat(message, threadId = 'default') {
+    async chat(message, threadId = 'default', context) {
         return new Promise((resolve, reject) => {
             this.streamChat(message, {
                 onDone: (resp) => resolve(resp),
                 onError: (err) => reject(err),
-            }, threadId);
+            }, threadId, context);
         });
+    }
+    /**
+     * Ask the service to choose one WebMCP tool for a message. Nothing is executed server-side.
+     */
+    async plan(message, tools, context) {
+        const resp = await fetch(`${this.baseUrl}/chat/plan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, tools, context }),
+        });
+        if (!resp.ok) {
+            throw new Error(`Plan request failed (${resp.status})`);
+        }
+        return (await resp.json());
     }
     /**
      * Check health of the Assistant service.

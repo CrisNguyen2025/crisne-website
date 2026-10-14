@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
 import type { PageContext } from '../types';
@@ -6,6 +6,7 @@ import type { PageContext } from '../types';
 export interface UseRoadmapAssistantChatOptions {
   baseUrl?: string;
   threadId?: string;
+  initialMessages?: ChatMessage[];
   onToolExecuted?: (toolName: string, result: string) => void;
   /** Returns the page the user is viewing; read at send time. */
   getContext?: () => PageContext | undefined;
@@ -13,45 +14,82 @@ export interface UseRoadmapAssistantChatOptions {
   onWebMcpMessage?: (request: string) => Promise<string>;
 }
 
+export interface UseRoadmapAssistantChatReturn {
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  input: string;
+  setInput: React.Dispatch<React.SetStateAction<string>>;
+  isLoading: boolean;
+  isStreaming: boolean;
+  activeTool: string | null;
+  error: string | null;
+  sendMessage: (textToSend?: string) => Promise<void>;
+  stopStreaming: () => void;
+  clearMessages: () => void;
+}
+
 export function useRoadmapAssistantChat(
   options: UseRoadmapAssistantChatOptions = {}
-) {
+): UseRoadmapAssistantChatReturn {
   const {
     baseUrl = 'http://localhost:8000',
     threadId = 'roadmap-web-session',
+    initialMessages,
     onToolExecuted,
     getContext,
     onWebMcpMessage,
   } = options;
 
+  // React 19 compliance: Synchronize callbacks and getters in useEffect
   const onWebMcpRef = useRef(onWebMcpMessage);
-  onWebMcpRef.current = onWebMcpMessage;
+  useEffect(() => {
+    onWebMcpRef.current = onWebMcpMessage;
+  }, [onWebMcpMessage]);
 
-  // Keep the latest getter without re-creating sendMessage on every render.
   const getContextRef = useRef(getContext);
-  getContextRef.current = getContext;
+  useEffect(() => {
+    getContextRef.current = getContext;
+  }, [getContext]);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome-msg',
-      role: 'assistant',
-      content:
-        'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n💡 **Bạn có thể yêu cầu tôi:**\n• **Thao tác nhanh**: `tạo ABC topic`, `tạo 2 layer mock 1 và 2 trong be topic`\n• **Tra cứu tri thức**: `Website có bài nào về Docker hay Database không?`\n• **Lập kế hoạch**: `/plan lộ trình Next.js Fullstack`\n\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
-      timestamp: new Date(),
-    },
-  ]);
+  const onToolExecutedRef = useRef(onToolExecuted);
+  useEffect(() => {
+    onToolExecutedRef.current = onToolExecuted;
+  }, [onToolExecuted]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (initialMessages && initialMessages.length > 0) {
+      return initialMessages;
+    }
+    return [
+      {
+        id: 'welcome-msg',
+        role: 'assistant',
+        content:
+          'Xin chào! Tôi là **Roadmap AI Assistant** ⚡\nTrợ lý thông minh hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức chuyên sâu.\n\n💡 **Bạn có thể yêu cầu tôi:**\n• **Thao tác nhanh**: `tạo ABC topic`, `tạo 2 layer mock 1 và 2 trong be topic`\n• **Tra cứu tri thức**: `Website có bài nào về Docker hay Database không?`\n• **Lập kế hoạch**: `/plan lộ trình Next.js Fullstack`\n\n_Hỗ trợ tương tác tự nhiên cả Tiếng Việt & English._',
+        timestamp: new Date(),
+      },
+    ];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const clientRef = useRef<RoadmapChatClient | null>(null);
-  if (!clientRef.current) {
-    clientRef.current = new RoadmapChatClient({ baseUrl });
-  }
+  // Pure useMemo instantiates client reactively without render-phase ref mutations/reads
+  const client = useMemo(() => new RoadmapChatClient({ baseUrl }), [baseUrl]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Clean up in-flight abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -121,8 +159,6 @@ export function useRoadmapAssistantChat(
       setIsStreaming(true);
 
       try {
-        const client = clientRef.current!;
-
         abortControllerRef.current = client.streamChat(
           content,
           {
@@ -155,7 +191,7 @@ export function useRoadmapAssistantChat(
                   return { ...msg, toolCalls: updated };
                 })
               );
-              onToolExecuted?.(name, result);
+              onToolExecutedRef.current?.(name, result);
             },
 
             onToken: (delta) => {
@@ -218,7 +254,7 @@ export function useRoadmapAssistantChat(
         setIsStreaming(false);
       }
     },
-    [input, isLoading, threadId, onToolExecuted, baseUrl]
+    [input, isLoading, threadId, client, baseUrl]
   );
 
   const clearMessages = useCallback(() => {
@@ -228,6 +264,7 @@ export function useRoadmapAssistantChat(
 
   return {
     messages,
+    setMessages,
     input,
     setInput,
     isLoading,

@@ -1,16 +1,21 @@
+import type { PageContext, ChatActionChip } from '../types';
+export type { ChatActionChip };
 /**
  * Configuration and state types for the Roadmap Assistant Chatbot Widget.
  */
 export type ChatbotPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+export interface ToolCall {
+    name: string;
+    args?: Record<string, unknown>;
+    result: string;
+}
 export interface ChatMessage {
     id: string;
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
     content: string;
-    toolCalls?: Array<{
-        name: string;
-        args?: Record<string, unknown>;
-        result: string;
-    }>;
+    toolCalls?: ToolCall[];
+    actionChips?: ChatActionChip[];
+    status?: 'sending' | 'streaming' | 'complete' | 'error';
     timestamp: Date;
 }
 export interface ChatbotConfig {
@@ -50,6 +55,12 @@ export interface ChatbotConfig {
      */
     baseUrl?: string;
     /**
+     * Returns the page the user is viewing (roadmap, layer, item), sent with each message.
+     */
+    getContext?: () => PageContext | undefined;
+    /** Handles "/webmcp <request>" messages by running a WebMCP tool in the browser. */
+    onWebMcpMessage?: (request: string) => Promise<string>;
+    /**
      * Whether the chat window starts open.
      * Default: false
      */
@@ -58,6 +69,10 @@ export interface ChatbotConfig {
      * Suggested quick prompts displayed in the empty state.
      */
     suggestedPrompts?: string[];
+    /**
+     * Initial messages to populate the chat history.
+     */
+    initialMessages?: ChatMessage[];
     /**
      * Callback fired whenever the agent invokes a tool successfully.
      */

@@ -42,6 +42,21 @@ const floatingVariants = {
   },
 };
 
+const floatingDelayedVariants = {
+  animate: {
+    y: [-8, 8, -8],
+    rotate: [-3, 3, -3],
+    transition: {
+      duration: 6,
+      repeat: Infinity,
+      ease: "easeInOut" as const,
+      delay: 2,
+    },
+  },
+};
+
+const ZALO_URL = process.env.NEXT_PUBLIC_ZALO_URL || "https://zalo.me";
+
 export function CtaSection() {
   return (
     <section id="contact" className="relative section-padding overflow-hidden">
@@ -60,9 +75,8 @@ export function CtaSection() {
       </motion.div>
       <motion.div
         className="absolute bottom-20 left-[12%] hidden md:block text-steel-light/20"
-        variants={floatingVariants}
+        variants={floatingDelayedVariants}
         animate="animate"
-        style={{ animationDelay: "2s" }}
       >
         <MessageSquare className="w-7 h-7" />
       </motion.div>
@@ -97,9 +111,7 @@ export function CtaSection() {
               variants={itemVariants}
               className="text-muted-foreground body-lg max-w-2xl mx-auto mb-10 leading-relaxed"
             >
-              Whether you need a stunning landing page, a complex web
-              application, or a creative partner for your next big idea —
-              I&apos;m here to help bring your vision to life.
+              Available for frontend architecture consulting, Next.js web application delivery, and high-impact product engineering.
             </motion.p>
 
             <motion.div
@@ -110,11 +122,11 @@ export function CtaSection() {
                 whileHover={{ scale: 1.03, y: -2 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={() =>
-                  trackCTAClick("zalo_connect", "https://zalo.me/12345")
+                  trackCTAClick("zalo_connect", ZALO_URL)
                 }
               >
                 <ShinyButton
-                  href="https://zalo.me/12345"
+                  href={ZALO_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="gap-2.5 px-8 py-4 rounded-2xl text-base font-semibold"

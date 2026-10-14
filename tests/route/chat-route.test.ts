@@ -73,7 +73,7 @@ function createFakeLlm(options: FakeOptions = {}) {
       calls.streamModels.push(model);
       const error = options.streamErrorByModel?.[model] ?? options.generateStreamError;
       if (error) throw error;
-      const chunks = options.answerChunks ?? ["Chào bạn! ", "Cris có thể ", "giúp bạn."];
+      const chunks = options.answerChunks ?? ["Cris có thể ", "giúp bạn."];
       return (async function* (): AsyncGenerator<LlmStreamChunk> {
         for (const [index, text] of chunks.entries()) {
           if (options.chunkDelayMs) await new Promise((r) => setTimeout(r, options.chunkDelayMs));
@@ -140,7 +140,7 @@ describe("POST /api/chat — happy path", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("X-Trace-Id")).toMatch(/^[0-9a-f]{32}$/);
-    expect(await res.text()).toBe("Chào bạn! Cris có thể giúp bạn.");
+    expect(await res.text()).toBe("Cris có thể giúp bạn.");
   });
 
   it("emits the trace contract the Langfuse dashboard relies on", async () => {
@@ -204,7 +204,7 @@ describe("POST /api/chat — follow-up questions", () => {
   it("keeps answering with the original query when the rewrite times out (M4)", async () => {
     createFakeLlm({ rewriteError: Object.assign(new Error("Request timed out"), { name: "TimeoutError" }) });
     const res = await POST(chatRequest({ message: "dự án đó dùng stack gì?", history }));
-    expect(await res.text()).toBe("Chào bạn! Cris có thể giúp bạn.");
+    expect(await res.text()).toBe("Cris có thể giúp bạn.");
     const spans = await exportedSpans();
 
     const rewrite = spanByName(spans, CHAT_OBSERVATION.rewrite);
@@ -332,7 +332,7 @@ describe("POST /api/chat — quota resilience", () => {
     const calls = createFakeLlm({ streamErrorByModel: { [DEFAULT_CHAT_MODEL]: quotaError() } });
     const text = await (await POST(chatRequest({ message: "Liên hệ Cris thế nào?" }))).text();
 
-    expect(text).toBe("Chào bạn! Cris có thể giúp bạn.");
+    expect(text).toBe("Cris có thể giúp bạn.");
     expect(calls.streamModels).toEqual([DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL]);
     const answer = spanByName(await exportedSpans(), CHAT_OBSERVATION.answer);
     expect(attr(answer, ATTR.OBSERVATION_MODEL)).toBe(FALLBACK_CHAT_MODEL);
@@ -408,3 +408,37 @@ describe("POST /api/chat — release tagging", () => {
     expect(attr(spanByName(await exportedSpans(), CHAT_TRACE_NAME), ATTR.RELEASE)).toBe("test-release");
   });
 });
+
+describe("POST /api/chat — anti-slop & action metadata", () => {
+  it("strips conversational greetings and sycophantic praise from raw LLM chunks", async () => {
+    createFakeLlm({
+      answerChunks: ["Chào bạn! Tuyệt vời! ", "Cris có hơn 5 năm kinh nghiệm với Next.js."],
+    });
+    const res = await POST(chatRequest({ message: "Cris có kinh nghiệm gì?" }));
+    expect(await res.text()).toBe("Cris có hơn 5 năm kinh nghiệm với Next.js.");
+  });
+
+  it("strips trailing summary kickers from response stream", async () => {
+    createFakeLlm({
+      answerChunks: ["Cris chuyên về Next.js. ", "Tóm lại, nếu bạn có thắc mắc hãy liên hệ nhé!"],
+    });
+    const res = await POST(chatRequest({ message: "Kinh nghiệm của Cris?" }));
+    const text = await res.text();
+    expect(text.trim()).toBe("Cris chuyên về Next.js.");
+    expect(text).not.toContain("Tóm lại");
+  });
+
+  it("preserves embedded action tags while pruning filler", async () => {
+    createFakeLlm({
+      answerChunks: [
+        "Xin chào! ",
+        "Cris đã phát triển dự án Kamala [[action:project|kamala-commerce-tour|Khám phá Kamala]] với Next.js.",
+      ],
+    });
+    const res = await POST(chatRequest({ message: "Dự án Kamala là gì?" }));
+    const text = await res.text();
+    expect(text).not.toContain("Xin chào!");
+    expect(text).toContain("[[action:project|kamala-commerce-tour|Khám phá Kamala]]");
+  });
+});
+

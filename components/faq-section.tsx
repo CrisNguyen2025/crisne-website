@@ -25,35 +25,35 @@ const faqs: FaqItem[] = [
     id: "availability",
     question: "Are you available for freelance or contract work?",
     answer:
-      "Yes! I'm open to freelance projects, contract work, and consulting engagements. Whether you need a full website build, a specific feature implementation, or technical consulting on frontend architecture, I'd love to discuss your project. Feel free to reach out via email or through the contact section.",
+      "I take on freelance contracts, frontend architecture reviews, and product engineering engagements. Reach out via email or Zalo to discuss scope and timelines.",
     icon: "📅",
   },
   {
     id: "timeline",
     question: "What's your typical project timeline?",
     answer:
-      "Timelines vary based on project scope and complexity. A landing page typically takes 1–2 weeks, while a full web application can range from 4–12 weeks. I always provide a detailed estimate after our initial discussion, and I prioritize transparent communication throughout the development process.",
+      "Delivery timelines depend on scope: focused landing pages take 1–2 weeks, while full-stack web platforms and complex dashboards range from 4–10 weeks with weekly sprint updates.",
     icon: "⏱️",
   },
   {
     id: "process",
     question: "What does your development process look like?",
     answer:
-      "My process follows an iterative approach: Discovery & Planning → Design Review → Development Sprints → Testing & QA → Deployment & Handoff. I use Git for version control, provide regular progress updates, and ensure thorough documentation. I also set up CI/CD pipelines for smooth deployments.",
+      "Discovery & planning → Design and API contract review → Development sprints with staging deploys → Automated testing & QA → Production rollout and handover documentation.",
     icon: "🔄",
   },
   {
     id: "collab",
     question: "Do you work with design teams or provide design as well?",
     answer:
-      "I collaborate seamlessly with design teams and can work from Figma, Sketch, or Adobe XD files to deliver pixel-perfect implementations. While I'm primarily a developer, I have a strong eye for UI/UX and can provide design suggestions. For projects without a designer, I can create clean, modern interfaces based on best practices.",
+      "I work directly from Figma to build responsive interfaces, handle breakpoint edge cases, and maintain design tokens. For projects without dedicated design, I compose clean UIs using Tailwind and standard design systems.",
     icon: "🎨",
   },
   {
     id: "support",
     question: "Do you offer post-launch support & maintenance?",
     answer:
-      "Absolutely. I offer ongoing maintenance packages that include bug fixes, security updates, performance monitoring, and feature enhancements. I believe in building long-term relationships with my clients, and I'm always available for support after a project goes live.",
+      "Yes. Post-launch support covers bug fixes, dependency updates, Core Web Vitals monitoring, and developer handover documentation for internal teams.",
     icon: "🛡️",
   },
 ];

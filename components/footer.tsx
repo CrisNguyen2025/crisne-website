@@ -25,7 +25,6 @@ function LinkedInIcon({ className }: { readonly className?: string }) {
 
 const footerLinks = [
   { icon: GitHubIcon, href: "https://github.com/crisne", label: "GitHub" },
-  { icon: LinkedInIcon, href: "#", label: "LinkedIn" },
   { icon: Mail, href: "mailto:hello@crisne.dev", label: "Email" },
 ];
 

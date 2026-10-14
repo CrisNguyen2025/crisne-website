@@ -26,22 +26,22 @@ const testimonials: Testimonial[] = [
   {
     id: "minh-tran",
     name: "Minh Trần",
-    role: "CTO",
-    company: "TechViet Solutions",
+    role: "Engineering Lead",
+    company: "Smartbit Technology",
     avatar: "MT",
     content:
-      "Cris delivered an exceptional frontend architecture for our SaaS platform. His attention to detail, deep knowledge of Next.js, and ability to translate complex designs into pixel-perfect UIs made him an invaluable asset to our team.",
+      "Cris built our core front-office onboarding and back-office RBAC modules in Next.js. He handled Paystack and eKYC integrations cleanly and kept release cycles predictable.",
     rating: 5,
-    relation: "Direct manager",
+    relation: "Team lead",
   },
   {
     id: "sarah-chen",
     name: "Sarah Chen",
     role: "Product Manager",
-    company: "Innovate Labs",
+    company: "Zelene Spa",
     avatar: "SC",
     content:
-      "Working with Cris was a fantastic experience. He proactively flagged UX improvements we hadn't considered, and delivered every sprint on time. The performance optimizations he implemented reduced our load time by 60%.",
+      "Cris delivered the spa booking flow and mobile app integration on schedule. His performance optimizations cut our initial page load time in half.",
     rating: 5,
     relation: "Cross-functional collaborator",
   },
@@ -49,23 +49,23 @@ const testimonials: Testimonial[] = [
     id: "duc-hoang",
     name: "Đức Hoàng",
     role: "Lead Engineer",
-    company: "Fintech Corp",
+    company: "Fintech Systems",
     avatar: "ĐH",
     content:
-      "Cris is one of the most meticulous frontend developers I've worked with. His TypeScript skills are top-notch and he always writes clean, maintainable code. He elevated our entire team's coding standards.",
+      "Strong TypeScript fundamentals and disciplined component architecture. His clean API contracts made frontend and backend collaboration straightforward.",
     rating: 5,
     relation: "Senior colleague",
   },
   {
     id: "emma-rodriguez",
     name: "Emma Rodriguez",
-    role: "Founder",
-    company: "DesignForward",
+    role: "Product Owner",
+    company: "Kamala Platform",
     avatar: "ER",
     content:
-      "I hired Cris to rebuild our company website and the result blew us away. He combined beautiful Framer Motion animations with a lightning-fast architecture. Our conversion rate improved by 35% after the relaunch.",
+      "Cris rebuilt our product catalog with Next.js App Router and Strapi. The page speed and SEO improvements were immediately apparent after launch.",
     rating: 5,
-    relation: "Client",
+    relation: "Client collaborator",
   },
   {
     id: "khoa-nguyen",
@@ -74,18 +74,18 @@ const testimonials: Testimonial[] = [
     company: "CloudBase",
     avatar: "KN",
     content:
-      "Cris is the kind of frontend dev every backend engineer dreams of partnering with — he understands APIs deeply, asks the right questions, and never requires repeated explanations. A true full-stack mindset.",
+      "Understands REST and real-time state management thoroughly. He clarifies edge cases before building, saving considerable debugging time during sprint deliveries.",
     rating: 5,
-    relation: "Team member",
+    relation: "Backend partner",
   },
   {
     id: "linh-pham",
     name: "Linh Phạm",
-    role: "UX Designer",
+    role: "UI/UX Designer",
     company: "Pixel Studio",
     avatar: "LP",
     content:
-      "Rarely do you meet a developer who truly respects design intent. Cris treated every pixel as intentional and even suggested micro-interactions that made the final product feel alive. A designer's dream collaborator.",
+      "Translates complex Figma component variants into responsive code accurately. He regularly catches layout edge cases on smaller screens before QA reviews.",
     rating: 5,
     relation: "Design partner",
   },
@@ -109,17 +109,12 @@ function TestimonialCard({ testimonial, gradientIndex }: TestimonialCardProps) {
   return (
     <div className="flex flex-col self-stretch shrink-0 w-72 sm:w-80">
       <motion.div
-        className="group relative flex-1 flex flex-col p-6 rounded-2xl border border-border/50 bg-background/60 backdrop-blur-md cursor-default"
+        className="group relative flex-1 flex flex-col p-6 rounded-2xl border border-border/50 bg-background/60 backdrop-blur-md cursor-default shadow-[0_2px_12px_0_rgba(0,0,0,0.06)]"
         whileHover={{ y: -6, borderColor: "rgba(212,168,83,0.4)" }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        style={{ boxShadow: "0 2px 12px 0 rgba(0,0,0,0.06)" }}
       >
         <motion.div
-          className="absolute inset-0 rounded-2xl opacity-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 30% 20%, rgba(212,168,83,0.07) 0%, transparent 70%)",
-          }}
+          className="absolute inset-0 rounded-2xl opacity-0 pointer-events-none bg-[radial-gradient(ellipse_at_30%_20%,rgba(212,168,83,0.07)_0%,transparent_70%)]"
           whileHover={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         />

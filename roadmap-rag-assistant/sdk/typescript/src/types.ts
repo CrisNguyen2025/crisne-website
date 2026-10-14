@@ -45,3 +45,26 @@ export interface HealthResponse {
   llm_model: string;
   tools_count: number;
 }
+
+/**
+ * Action chip metadata for interactive generative UI.
+ * Compatible with the action tag protocol [[action:type|id|label]].
+ */
+export interface ChatActionChip {
+  type: 'project' | 'roadmap' | 'contact' | 'link';
+  id: string;
+  label: string;
+  data?: Record<string, unknown>;
+  action?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  toolCalls?: ToolCallResult[];
+  actionChips?: ChatActionChip[];
+  status?: 'sending' | 'streaming' | 'complete' | 'error';
+  timestamp: Date;
+}
