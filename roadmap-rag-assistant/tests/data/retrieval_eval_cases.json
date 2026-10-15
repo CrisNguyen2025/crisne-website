@@ -1,0 +1,286 @@
+[
+  {
+    "query": "RAG là gì",
+    "expected": [
+      "Retrieval-Augmented Generation (RAG)"
+    ]
+  },
+  {
+    "query": "cách cắt nhỏ tài liệu trước khi đưa vào vector db",
+    "expected": [
+      "Chunking Strategy",
+      "Sliding Window / Overlap Chunking"
+    ]
+  },
+  {
+    "query": "kết hợp tìm theo từ khóa và tìm theo ngữ nghĩa",
+    "expected": [
+      "Hybrid Search",
+      "Sparse vs. Dense Retrieval"
+    ]
+  },
+  {
+    "query": "sắp xếp lại kết quả tìm kiếm bằng cross encoder",
+    "expected": [
+      "Reranking (Cross-Encoder)"
+    ]
+  },
+  {
+    "query": "làm sao để mô hình trả về JSON đúng schema",
+    "expected": [
+      "Structured Output / JSON Mode",
+      "Schema Validation"
+    ]
+  },
+  {
+    "query": "người dùng lừa LLM bỏ qua quy tắc bảo mật",
+    "expected": [
+      "Prompt Injection / Jailbreak",
+      "Red Teaming",
+      "Guardrails"
+    ]
+  },
+  {
+    "query": "dùng một LLM khác để chấm điểm câu trả lời",
+    "expected": [
+      "LLM-as-a-Judge"
+    ]
+  },
+  {
+    "query": "đo faithfulness và answer relevancy cho RAG",
+    "expected": [
+      "RAGAS (RAG Assessment)"
+    ]
+  },
+  {
+    "query": "thời gian tới token đầu tiên",
+    "expected": [
+      "Latency & TTFT (Time to First Token)"
+    ]
+  },
+  {
+    "query": "lưu đệm câu trả lời cho các câu hỏi giống nhau về ý nghĩa",
+    "expected": [
+      "Semantic Caching"
+    ]
+  },
+  {
+    "query": "giới hạn số request mỗi phút",
+    "expected": [
+      "Rate Limiting & Concurrency"
+    ]
+  },
+  {
+    "query": "con người phải duyệt trước khi agent thực hiện hành động",
+    "expected": [
+      "Human-in-the-loop (HITL)"
+    ]
+  },
+  {
+    "query": "tránh bị trừ tiền hai lần khi agent gọi lại API",
+    "expected": [
+      "Idempotency (cho Agent Actions)"
+    ]
+  },
+  {
+    "query": "ngắt tạm thời khi service phía sau đang lỗi",
+    "expected": [
+      "Circuit Breaker Pattern",
+      "Graceful Degradation / Fallback"
+    ]
+  },
+  {
+    "query": "che thông tin cá nhân trong dữ liệu",
+    "expected": [
+      "PII Redaction / Masking"
+    ]
+  },
+  {
+    "query": "loại bỏ tài liệu bị trùng",
+    "expected": [
+      "Deduplication"
+    ]
+  },
+  {
+    "query": "đọc chữ từ file PDF scan",
+    "expected": [
+      "Document Parsing / OCR"
+    ]
+  },
+  {
+    "query": "bắt mô hình suy luận từng bước",
+    "expected": [
+      "Chain-of-Thought (CoT) Prompting"
+    ]
+  },
+  {
+    "query": "đưa vài ví dụ mẫu vào prompt",
+    "expected": [
+      "Few-shot Prompting",
+      "In-Context Learning"
+    ]
+  },
+  {
+    "query": "chỉnh độ sáng tạo ngẫu nhiên của output",
+    "expected": [
+      "Temperature & Top-P"
+    ]
+  },
+  {
+    "query": "LLM gọi hàm bên ngoài để lấy dữ liệu",
+    "expected": [
+      "Function / Tool Calling",
+      "Tool/Function Schema"
+    ]
+  },
+  {
+    "query": "giao thức chuẩn kết nối AI app với tools và dữ liệu",
+    "expected": [
+      "Model Context Protocol (MCP)"
+    ]
+  },
+  {
+    "query": "agent tự kiểm tra và sửa câu trả lời của mình",
+    "expected": [
+      "Self-Reflection / Self-Correction"
+    ]
+  },
+  {
+    "query": "nhiều agent chuyên trách phối hợp với nhau",
+    "expected": [
+      "Multi-Agent System"
+    ]
+  },
+  {
+    "query": "truy xuất theo quan hệ giữa các thực thể bằng đồ thị",
+    "expected": [
+      "GraphRAG",
+      "Knowledge Graph / Ontology"
+    ]
+  },
+  {
+    "query": "chuyển câu hỏi dễ cho model rẻ, câu khó cho model mạnh",
+    "expected": [
+      "Model Routing / Cascading"
+    ]
+  },
+  {
+    "query": "phát hành phiên bản mới cho một phần nhỏ traffic trước",
+    "expected": [
+      "Blue-Green / Canary Deployment",
+      "Canary Analysis cho Model",
+      "Shadow Deployment"
+    ]
+  },
+  {
+    "query": "tắt khẩn cấp tính năng AI khi có sự cố",
+    "expected": [
+      "Kill Switch"
+    ]
+  },
+  {
+    "query": "theo dõi chi phí token",
+    "expected": [
+      "Token Burn Rate & Cost Tracking",
+      "Cost per Query / Unit Economics"
+    ]
+  },
+  {
+    "query": "vector embedding thay đổi theo thời gian làm retrieval kém đi",
+    "expected": [
+      "Embedding Drift"
+    ]
+  },
+  {
+    "query": "embedding là gì",
+    "expected": [
+      "Embedding Model"
+    ]
+  },
+  {
+    "query": "tìm kiếm vector gần đúng HNSW",
+    "expected": [
+      "Approximate Nearest Neighbor (ANN)",
+      "Vector Database"
+    ]
+  },
+  {
+    "query": "viết lại câu hỏi của người dùng cho rõ hơn trước khi tìm",
+    "expected": [
+      "Query Rewriting / Expansion"
+    ]
+  },
+  {
+    "query": "chia câu hỏi phức tạp thành nhiều câu hỏi con",
+    "expected": [
+      "Query Decomposition",
+      "Planning / Task Decomposition (Agent)"
+    ]
+  },
+  {
+    "query": "giới hạn độ dài ngữ cảnh mô hình đọc được",
+    "expected": [
+      "Context Window"
+    ]
+  },
+  {
+    "query": "tokenization",
+    "expected": [
+      "Token & Tokenization"
+    ]
+  },
+  {
+    "query": "framework LangChain LlamaIndex LangGraph",
+    "expected": [
+      "Orchestration Framework"
+    ]
+  },
+  {
+    "query": "ghi lại mọi hành động của agent để truy vết",
+    "expected": [
+      "Audit Log (cho Agent Actions)",
+      "Tracing & Observability"
+    ]
+  },
+  {
+    "query": "tầng LLMOps gồm những gì",
+    "expected": [
+      "04. Tầng Ops & Đánh giá (LLMOps)",
+      "LLMOps"
+    ]
+  },
+  {
+    "query": "bộ dữ liệu kiểm thử chuẩn để đánh giá",
+    "expected": [
+      "Golden Dataset / Benchmark Suite"
+    ]
+  },
+  {
+    "query": "thời tiết Hà Nội hôm nay",
+    "expected": []
+  },
+  {
+    "query": "công thức nấu phở bò",
+    "expected": []
+  },
+  {
+    "query": "giá bitcoin hôm nay bao nhiêu",
+    "expected": []
+  },
+  {
+    "query": "fine-tuning mô hình bằng LoRA",
+    "expected": []
+  },
+  {
+    "query": "lượng tử hóa model xuống 4-bit",
+    "expected": []
+  },
+  {
+    "query": "autoscaling GPU trên Kubernetes",
+    "expected": []
+  },
+  {
+    "query": "knowledge distillation từ model lớn sang model nhỏ",
+    "expected": []
+  }
+]

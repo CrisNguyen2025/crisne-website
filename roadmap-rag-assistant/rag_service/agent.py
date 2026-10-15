@@ -402,7 +402,10 @@ class NextGenRoadmapAgent:
                             f"Bạn là Roadmap Assistant. Trả lời câu hỏi của người dùng dựa trên thông tin thực tế từ hệ thống dưới đây:\n\n"
                             f"{rag_context}\n\n"
                             f"Câu hỏi của người dùng: \"{content}\"\n\n"
-                            f"Hãy trả lời súc tích, tự nhiên, kèm đường link [Tên bài](/?topic=slug) nếu có.\n\n"
+                            f"Hãy trả lời súc tích, tự nhiên, kèm đường link [Tên bài](/?topic=slug) nếu có.\n"
+                            f"Các bài trên chỉ là kết quả tìm gần nhất, có thể không nói về đúng chủ đề được hỏi. "
+                            f"Nếu không bài nào nói trực tiếp về chủ đề đó, hãy nói rõ hệ thống chưa có bài về chủ đề này, "
+                            f"chỉ giới thiệu các bài liên quan như gợi ý đọc thêm, và không tự giải thích chủ đề như thể có trong hệ thống.\n\n"
                             f"{PROMPT_SUGGESTION_FORMAT}"
                         )
                         gen = start_step(

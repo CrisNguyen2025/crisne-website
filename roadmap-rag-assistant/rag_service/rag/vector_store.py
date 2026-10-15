@@ -25,6 +25,17 @@ EMBEDDING_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "embedd
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 # Seconds between embed requests (~90/min, under the 100/min free-tier limit)
 EMBEDDING_REQUEST_INTERVAL = 0.67
+# Hybrid results below this cosine similarity are dropped. On tests/eval_retrieval.py the lowest
+# on-topic match scored 0.688 and the highest off-topic query 0.654. Re-check with the eval
+# when changing the embedding model.
+VECTOR_MIN_SIMILARITY = 0.665
+
+# Question words and fillers that match nearly every document under BM25 OR-queries.
+FTS_STOPWORDS = {
+    "là", "gì", "của", "và", "các", "những", "cho", "có", "không", "được", "trong", "về", "với",
+    "này", "đó", "thế", "nào", "sao", "làm", "như", "một", "bao", "nhiêu", "hãy", "giúp", "tôi",
+    "mình", "bạn", "ạ", "nhé", "the", "a", "an", "is", "what", "how", "of", "to", "in", "for",
+}
 
 
 def _embedding_key(text: str) -> str:
@@ -163,7 +174,9 @@ class HybridVectorStore:
 
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
         """Search via SQLite FTS5 BM25 ranking."""
-        tokens = re.findall(r"\w+", query.lower())
+        all_tokens = re.findall(r"\w+", query.lower())
+        # Keep stopwords only when the query has nothing else (e.g. a one-word query).
+        tokens = [t for t in all_tokens if t not in FTS_STOPWORDS] or all_tokens
         if not tokens:
             return []
 
@@ -201,27 +214,47 @@ class HybridVectorStore:
             rows = cur.fetchall()
             return [(self._docs_map[r["id"]], 1.0) for r in rows if r["id"] in self._docs_map]
 
-    def search_vector(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
-        """Search via dense vector cosine similarity."""
+    def _similarities(self, query: str) -> dict[str, float] | None:
+        """Cosine similarity of the query to every embedded doc; None when vectors are unavailable."""
         embedder = self._get_embedder()
         if not embedder or not self._vectors:
-            return []
+            return None
         try:
             q_emb = embedder.embed_query(query)
-            scored = []
-            for doc_id, emb in self._vectors.items():
-                sim = _cosine_similarity(q_emb, emb)
-                if doc_id in self._docs_map:
-                    scored.append((self._docs_map[doc_id], sim))
-            scored.sort(key=lambda x: x[1], reverse=True)
-            return scored[:limit]
         except Exception:
+            return None
+        return {
+            doc_id: _cosine_similarity(q_emb, emb)
+            for doc_id, emb in self._vectors.items()
+            if doc_id in self._docs_map
+        }
+
+    def search_vector(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
+        """Search via dense vector cosine similarity."""
+        sims = self._similarities(query)
+        if not sims:
             return []
+        scored = sorted(sims.items(), key=lambda x: x[1], reverse=True)[:limit]
+        return [(self._docs_map[doc_id], sim) for doc_id, sim in scored]
 
     def hybrid_search(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
-        """Combine FTS5 BM25 and Vector Search using Reciprocal Rank Fusion (RRF)."""
+        """Combine FTS5 BM25 and Vector Search using Reciprocal Rank Fusion (RRF).
+
+        With embeddings, docs below VECTOR_MIN_SIMILARITY are dropped, so an off-topic query
+        returns nothing instead of the closest unrelated docs. Without them it is FTS only.
+        """
         fts_res = self.search_fts(query, limit=limit * 2)
-        vec_res = self.search_vector(query, limit=limit * 2)
+        sims = self._similarities(query)
+        if not sims:
+            return fts_res[:limit]
+
+        def relevant(doc: KnowledgeDocument) -> bool:
+            # Docs left unembedded (e.g. quota ran out mid-index) cannot be judged, so keep them.
+            return doc.id not in sims or sims[doc.id] >= VECTOR_MIN_SIMILARITY
+
+        fts_res = [(d, s) for d, s in fts_res if relevant(d)]
+        top = sorted(sims.items(), key=lambda x: x[1], reverse=True)[: limit * 2]
+        vec_res = [(self._docs_map[i], s) for i, s in top if s >= VECTOR_MIN_SIMILARITY]
 
         if not vec_res:
             return fts_res[:limit]
