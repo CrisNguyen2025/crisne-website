@@ -6,7 +6,14 @@ import { NextRequest } from "next/server";
 // Every mutating handler under app/api must reject anonymous callers with 401,
 // except routes that are public on purpose (rate limited, see their own tests).
 // New routes are discovered from disk, so forgetting a guard fails this test.
-const PUBLIC_WRITE_ROUTES = new Set(["chat/route.ts", "chat/feedback/route.ts", "favorites/route.ts"]);
+const PUBLIC_WRITE_ROUTES = new Set([
+  "chat/route.ts",
+  "chat/feedback/route.ts",
+  "favorites/route.ts",
+  // Visitors chat without signing in; the proxy tags them x-actor=visitor and the Python
+  // service refuses every write for them (see roadmap-assistant-proxy.test.ts)
+  "roadmap-assistant/[...path]/route.ts",
+]);
 const MUTATING_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
 // Any data access means the guard did not run first: fail loudly instead of writing.

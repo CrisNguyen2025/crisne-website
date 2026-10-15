@@ -7,7 +7,29 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from rag_service.auth import current_actor
+from rag_service.config import settings
 from rag_service.tools import init_adapter
+
+TEST_INTERNAL_KEY = "test-internal-key"
+
+
+@pytest.fixture(autouse=True)
+def owner_access(monkeypatch):
+    """Tests act as the site owner behind the Next.js proxy unless they opt out.
+
+    Access control itself is covered in test_auth.py, which switches to a visitor.
+    """
+    monkeypatch.setattr(settings, "internal_api_key", TEST_INTERNAL_KEY)
+    token = current_actor.set("owner")
+    yield
+    current_actor.reset(token)
+
+
+@pytest.fixture
+def owner_headers() -> dict[str, str]:
+    """Headers the Next.js proxy sends for the signed-in owner."""
+    return {"x-internal-key": TEST_INTERNAL_KEY, "x-actor": "owner"}
 
 
 @pytest.fixture

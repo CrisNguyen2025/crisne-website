@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     admin_api_key: str = ""
     sqlite_db_path: str = "../prisma/dev.db"
 
+    # ── Access ──
+    # Shared with the Next.js proxy (RAG_INTERNAL_KEY there); empty = every request is rejected.
+    internal_api_key: str = ""
+    # Comma-separated browser origins; empty because browsers go through the Next.js proxy.
+    cors_origins: str = ""
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

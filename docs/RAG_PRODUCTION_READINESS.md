@@ -19,6 +19,9 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 
 ## 🚨 Blocker: Roadmap Assistant cho phép người ẩn danh ghi dữ liệu với quyền admin
 
+> ✅ **Đã sửa trong code (chưa commit/deploy):** proxy `app/api/roadmap-assistant/[...path]`, Python chỉ nhận request có `x-internal-key`, ghi bị chặn ở agent và adapter khi `x-actor` không phải owner. Đã kiểm tra: test (Next.js + pytest) và chạy thật ở local.
+> ⚠️ **Còn phải deploy theo đúng thứ tự** (xem mục *Deploy blocker* bên dưới). Khi khảo sát còn phát hiện thêm: create/update chạy ngay không qua xác nhận, delete bỏ qua xác nhận được bằng "ngay"/"luôn". Owner vẫn giữ hành vi này; chuẩn hoá HITL nằm trong `RAG_LONG_MEMORY_HITL_ROADMAP.md`.
+
 **Bằng chứng (đã đọc code, chưa thử tấn công thật):**
 - [`roadmap-rag-assistant/rag_service/api/routes.py`](../roadmap-rag-assistant/rag_service/api/routes.py): `/chat`, `/chat/stream`, `/chat/confirm` **không có xác thực**.
 - [`server.py`](../roadmap-rag-assistant/rag_service/api/server.py): `allow_origins=["*"]`; `HttpApiAdapter` được khởi tạo với `settings.admin_api_key`.
@@ -96,10 +99,10 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 | Hạng mục | Trạng thái | Việc cần làm |
 |---|---|---|
 | CI: tsc, test, kiểm tra index, build, eval | ✅ | — |
-| Test ghi vào `prisma/dev.db` | ❌ | Từ khi `prisma generate` chạy lại, các test workflow ghi thật vào DB. Dùng `DATABASE_URL=file:./test.db` cho test |
+| Test ghi vào `prisma/dev.db` | ✅ (chưa commit) | Test dùng `prisma/test.db` (`tests/setup/test-db.ts` + `vitest.config.mts`). Nguyên nhân gốc: `scripts/seed-sample-workflow.ts` tự chạy `seed()` khi bị import; giờ chỉ seed khi chạy trực tiếp |
 | Migration Prisma trên Turso | 🟡 | Đưa bước migrate vào quy trình deploy |
 | Đánh version cho prompt/model, feature flag, rollback | ❌ | Version cho prompt; tách lưu lượng một phần để thử model mới |
-| `prisma/dev.db-shm` / `-wal` | ❌ | Thêm vào `.gitignore` |
+| `prisma/dev.db-shm` / `-wal` | ✅ (chưa commit) | Đã thêm vào `.gitignore` cùng `prisma/test.db*` |
 | Hook AI review trước commit | ⚠️ | Đang báo "Invalid API key" và vẫn cho commit đi qua; cần đăng nhập lại |
 
 ## 8. Feedback loop (👎 → triage)
@@ -127,3 +130,14 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 3. Trace id thật, cảnh báo, ngân sách chi phí.
 4. Eval câu trả lời trong CI, trích dẫn nguồn.
 5. Feedback loop P1 → P2 → P3, chính sách lưu dữ liệu.
+
+---
+
+## Deploy blocker (thứ tự quan trọng)
+
+1. Sinh key: `openssl rand -base64 32`.
+2. **Service Python** (Render/Railway): set `INTERNAL_API_KEY=<key>`; `CORS_ORIGINS` để trống.
+3. **Vercel:** set `RAG_SERVICE_URL=<URL service Python>` và `RAG_INTERNAL_KEY=<key>` (cho cả Preview nếu cần).
+4. Deploy Python trước. Widget cũ gọi thẳng sẽ nhận 401, nên chat bị gián đoạn cho tới bước 5.
+5. Deploy Next.js, rồi xoá `NEXT_PUBLIC_RAG_SERVICE_URL` trên Vercel.
+6. Kiểm tra: `curl -X POST <URL Python>/chat/stream` không có key phải trả 401; trên site, visitor gõ "xóa topic X ngay" phải nhận lời từ chối.

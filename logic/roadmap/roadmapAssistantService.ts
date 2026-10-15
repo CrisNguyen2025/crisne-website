@@ -9,11 +9,12 @@
 import { RoadmapChatClient } from '@/roadmap-rag-assistant/sdk/typescript/src';
 import type { ChatResponse, PageContext, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src';
 
-const RAG_SERVICE_URL =
-  process.env.NEXT_PUBLIC_RAG_SERVICE_URL || 'http://localhost:8000';
+// Same-origin proxy (app/api/roadmap-assistant): the browser never calls the Python service
+// directly; the proxy decides whether the caller is the owner before forwarding.
+export const ROADMAP_ASSISTANT_BASE_URL = '/api/roadmap-assistant';
 
 export const roadmapChatClient = new RoadmapChatClient({
-  baseUrl: RAG_SERVICE_URL,
+  baseUrl: ROADMAP_ASSISTANT_BASE_URL,
 });
 
 /**

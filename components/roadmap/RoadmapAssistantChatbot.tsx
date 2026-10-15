@@ -1,6 +1,10 @@
 "use client";
 
-import { getRoadmapPageContext, runWebMcpCommand } from "@/logic/roadmap/roadmapAssistantService";
+import {
+  getRoadmapPageContext,
+  ROADMAP_ASSISTANT_BASE_URL,
+  runWebMcpCommand,
+} from "@/logic/roadmap/roadmapAssistantService";
 import { submitChatFeedback } from "@/logic/roadmap/knowledgeTriageService";
 import React from "react";
 import {
@@ -126,8 +130,8 @@ export function RoadmapAssistantChatbot({
     }
   };
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_RAG_SERVICE_URL || "http://localhost:8000";
+  // Same-origin proxy: it checks who the caller is before forwarding to the Python service
+  const baseUrl = ROADMAP_ASSISTANT_BASE_URL;
 
   return (
     <RoadmapChatbotWidget

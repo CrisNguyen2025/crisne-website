@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import httpx
 
+from rag_service.auth import require_owner
+
 
 class HttpApiAdapter:
     """Adapter that proxies all CUD operations through the Next.js REST API."""
@@ -34,6 +36,9 @@ class HttpApiAdapter:
         path: str,
         json: dict | None = None,
     ) -> dict:
+        # Every write sends ADMIN_API_KEY: only the site owner may trigger one
+        if method.upper() != "GET":
+            require_owner()
         resp = await self._client.request(method, path, json=json)
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:

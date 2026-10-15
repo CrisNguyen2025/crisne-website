@@ -9,9 +9,9 @@ from rag_service.api.server import app
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_endpoint_returns_sse(mock_adapter):
+async def test_chat_stream_endpoint_returns_sse(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
         resp = await client.post(
             "/chat/stream",
             json={"message": "tạo cho tôi 3 topic A, B và C", "thread_id": "test-stream"},
@@ -28,9 +28,9 @@ async def test_chat_stream_endpoint_returns_sse(mock_adapter):
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_plan_mode(mock_adapter):
+async def test_chat_stream_plan_mode(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
         resp = await client.post(
             "/chat/stream",
             json={"message": "/plan tạo lộ trình AI", "thread_id": "test-plan"},
@@ -43,7 +43,7 @@ async def test_chat_stream_plan_mode(mock_adapter):
 
 
 @pytest.mark.asyncio
-async def test_chat_confirm_and_cancel_endpoints(mock_adapter):
+async def test_chat_confirm_and_cancel_endpoints(mock_adapter, owner_headers):
     from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
     from rag_service.state.session_store import session_store
 
@@ -59,7 +59,7 @@ async def test_chat_confirm_and_cancel_endpoints(mock_adapter):
     session_store.set_pending_confirmation(thread_id, act)
 
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
         # Confirm
         resp = await client.post("/chat/confirm", json={"thread_id": thread_id})
         assert resp.status_code == 200

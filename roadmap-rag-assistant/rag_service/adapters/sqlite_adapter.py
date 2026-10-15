@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 import aiosqlite
 import uuid_utils
 
+from rag_service.auth import owner_only
+
 
 def _uuid7() -> str:
     return str(uuid_utils.uuid7())
@@ -143,6 +145,7 @@ class SqliteAdapter:
             topic["layers"] = layers
             return topic
 
+    @owner_only
     async def create_topic(
         self,
         title: str,
@@ -202,6 +205,7 @@ class SqliteAdapter:
             "description": description.strip(),
         }
 
+    @owner_only
     async def update_topic(self, slug: str, **kwargs: object) -> dict:
         now = _now_iso()
         async with self._connect() as db:
@@ -233,6 +237,7 @@ class SqliteAdapter:
             row = await cursor.fetchone()
             return dict(row) if row else {}
 
+    @owner_only
     async def delete_topic(self, slug: str) -> bool:
         norm_slug = _slugify(slug)
         async with self._connect() as db:
@@ -257,6 +262,7 @@ class SqliteAdapter:
 
     # ── Layers ───────────────────────────────────────────────────────────
 
+    @owner_only
     async def create_layer(
         self,
         topic_slug: str,
@@ -314,6 +320,7 @@ class SqliteAdapter:
             "order": order,
         }
 
+    @owner_only
     async def update_layer(self, layer_id: str, **kwargs: object) -> dict:
         now = _now_iso()
         async with self._connect() as db:
@@ -342,6 +349,7 @@ class SqliteAdapter:
             row = await cursor.fetchone()
             return dict(row) if row else {}
 
+    @owner_only
     async def delete_layer(self, layer_id: str) -> bool:
         async with self._connect() as db:
             await db.execute("DELETE FROM RoadmapLayer WHERE id = ?", (layer_id,))
@@ -350,6 +358,7 @@ class SqliteAdapter:
 
     # ── Groups ───────────────────────────────────────────────────────────
 
+    @owner_only
     async def create_group(
         self,
         layer_id: str,
@@ -385,6 +394,7 @@ class SqliteAdapter:
             "order": order,
         }
 
+    @owner_only
     async def update_group(self, group_id: str, title: str) -> dict:
         now = _now_iso()
         async with self._connect() as db:
@@ -399,6 +409,7 @@ class SqliteAdapter:
             row = await cursor.fetchone()
             return dict(row) if row else {}
 
+    @owner_only
     async def delete_group(self, group_id: str) -> bool:
         async with self._connect() as db:
             await db.execute(
@@ -409,6 +420,7 @@ class SqliteAdapter:
 
     # ── Items ────────────────────────────────────────────────────────────
 
+    @owner_only
     async def create_item(
         self,
         layer_id: str,
@@ -474,6 +486,7 @@ class SqliteAdapter:
             "updatedAt": now,
         }
 
+    @owner_only
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         now = _now_iso()
         async with self._connect() as db:
@@ -539,6 +552,7 @@ class SqliteAdapter:
             row = await cursor.fetchone()
             return dict(row) if row else {}
 
+    @owner_only
     async def delete_item(self, item_id: str) -> bool:
         async with self._connect() as db:
             await db.execute("DELETE FROM RoadmapItem WHERE id = ?", (item_id,))

@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
+from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.config import settings
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.execution.executor import ActionExecutor
@@ -150,6 +151,10 @@ class NextGenRoadmapAgent:
             if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
                 pending_act = session_ctx.pending_confirmation
                 session_ctx.pending_confirmation = None
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    return
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id)
@@ -173,6 +178,10 @@ class NextGenRoadmapAgent:
             m = re.match(r"^tạo layer\s+(.+)$", content, re.IGNORECASE)
             if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
                 async for ev in self._stream_text("Đã hủy thêm bài học.", delay):
+                    yield ev
+                return
+            if m and not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                     yield ev
                 return
             if m:
@@ -211,6 +220,10 @@ class NextGenRoadmapAgent:
             return
 
         if "/goal" in lower or "sinh nhanh" in lower or ("template" in lower and ("tạo" in lower or "lộ trình" in lower)):
+            if not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                return
             m = re.search(r"template\s+([\w-]+)", lower)
             tid = m.group(1) if m else "ai-engineering"
             yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
@@ -233,6 +246,10 @@ class NextGenRoadmapAgent:
         bulk_titles = parse_item_list(raw_content)
         layer_in_view = (page_context or {}).get("layerId")
         if layer_in_view and len(bulk_titles) >= 2:
+            if not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                return
             tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
             yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
             res = await import_items_from_text.coroutine(**tool_args)
@@ -268,6 +285,11 @@ class NextGenRoadmapAgent:
 
         # ── 4. ROADMAP CUD OPERATIONS ─────────────────────────────────────────
         if intent_res.intent == IntentType.ROADMAP_CUD or intent_res.needs_cud_extraction:
+            # Visitors may read roadmaps but never change them (writes use ADMIN_API_KEY)
+            if not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                return
             # Page context is added only for the LLM extractor; heuristics keep the raw text.
             action: StructuredRoadmapAction = await self.extractor.aextract(
                 content, page_context=build_grounding(page_context)

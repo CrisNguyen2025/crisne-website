@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from rag_service.agent import build_agent, FallbackAgent
@@ -19,6 +19,7 @@ from rag_service.api.schemas import (
     PlanResponse,
     ToolCallResult,
 )
+from rag_service.auth import Actor, OWNER_ONLY_MESSAGE, is_owner, parse_actor, set_actor
 from rag_service.config import settings
 from rag_service.tools import ALL_TOOLS
 
@@ -35,8 +36,18 @@ def _get_agent():
     return _agent
 
 
-async def _sse_stream_generator(message: str, thread_id: str, context: dict | None = None) -> AsyncGenerator[str, None]:
+def _actor_of(request: Request) -> Actor:
+    """Caller as stated by the Next.js proxy (the auth middleware already checked the key)."""
+    return parse_actor(request.headers.get("x-actor"))
+
+
+async def _sse_stream_generator(
+    message: str, thread_id: str, context: dict | None = None, actor: Actor | None = None
+) -> AsyncGenerator[str, None]:
     """Universal SSE generator that handles both LangChain and FallbackAgent streaming."""
+    # The body is streamed after the handler returns: set the caller where the agent runs
+    if actor is not None:
+        set_actor(actor)
     agent = _get_agent()
     accumulated_tokens: list[str] = []
     executed_tools: list[dict] = []
@@ -114,10 +125,10 @@ async def _sse_stream_generator(message: str, thread_id: str, context: dict | No
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: ChatRequest):
+async def chat_stream(req: ChatRequest, request: Request):
     """Server-Sent Events (SSE) streaming endpoint for real-time tokens and tool events."""
     return StreamingResponse(
-        _sse_stream_generator(req.message, req.thread_id, req.context),
+        _sse_stream_generator(req.message, req.thread_id, req.context, _actor_of(request)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -128,8 +139,9 @@ async def chat_stream(req: ChatRequest):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Synchronous chat endpoint (compatible with legacy SDK callers)."""
+    set_actor(_actor_of(request))
     agent = _get_agent()
 
     try:
@@ -205,10 +217,14 @@ async def health() -> HealthResponse:
 
 
 @router.post("/chat/confirm", response_model=ActionConfirmResponse)
-async def confirm_action(req: ActionConfirmRequest) -> ActionConfirmResponse:
+async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionConfirmResponse:
     """Confirm and execute a pending dry-run CUD action."""
     from rag_service.execution.executor import ActionExecutor
     from rag_service.state.session_store import session_store
+
+    set_actor(_actor_of(request))
+    if not is_owner():
+        return ActionConfirmResponse(success=False, message=OWNER_ONLY_MESSAGE)
 
     tid = req.action_id or req.thread_id
     ctx = session_store.get_or_create(tid)

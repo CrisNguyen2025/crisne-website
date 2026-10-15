@@ -9,10 +9,12 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from rag_service import observability
+from rag_service.auth import is_valid_internal_key, parse_actor, set_actor
 from rag_service.config import settings
 from rag_service.tools import init_adapter
 
@@ -55,10 +57,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow all origins for development
+# Only requests forwarded by the Next.js proxy are served; /health stays open for uptime checks
+PUBLIC_PATHS = {"/health"}
+
+
+@app.middleware("http")
+async def require_internal_key(request: Request, call_next):
+    if request.method != "OPTIONS" and request.url.path not in PUBLIC_PATHS:
+        if not is_valid_internal_key(request.headers.get("x-internal-key"), settings.internal_api_key):
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    # The proxy decides who the caller is; route handlers read it via rag_service.auth
+    set_actor(parse_actor(request.headers.get("x-actor")))
+    return await call_next(request)
+
+
+# Added after the auth middleware so it runs first and can answer preflight requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
