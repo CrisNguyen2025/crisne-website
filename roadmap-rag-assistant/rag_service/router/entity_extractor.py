@@ -29,13 +29,13 @@ Nhiệm vụ của bạn là bóc tách câu lệnh CUD của người dùng th�
      (TUYỆT ĐỐI CẤM title = "tạo ABC topic", TUYỆT ĐỐI CẤM short_code = "TAT").
    - Câu: "create AI Engineering topic" -> title = "AI Engineering", short_code = "AIE" hoặc "AI".
    - Câu: "thêm topic Backend Go" -> title = "Backend Go", short_code = "BAC" hoặc "BG".
-   - Câu: "create aaa layer on fe" -> entity_level = "layer", title = "aaa", target_parent = "fe".
+   - Câu: "create aaa layer on fe" -> entity_level = "layer", title = "aaa", target_parent_identifier = "fe".
 
 2. **MỞ RỘNG DANH SÁCH RÚT GỌN (CONTRACTED ENUMERATIONS)**:
-   - "tạo 2 layer mock 1 và 2 trong be topic" -> entities = [{"title": "mock 1"}, {"title": "mock 2"}], target_parent = "be".
-   - "create mock 1 and 2 layers on be" -> entities = [{"title": "mock 1"}, {"title": "mock 2"}], target_parent = "be".
-   - "thêm 3 item bài 1, 2 và 3" -> entities = [{"title": "bài 1"}, {"title": "bài 2"}, {"title": "bài 3"}].
-   - "tạo 2 group Core và Advanced" -> entities = [{"title": "Core", "level": "core"}, {"title": "Advanced", "level": "advanced"}].
+   - "tạo 2 layer mock 1 và 2 trong be topic" -> entities = [{{"title": "mock 1"}}, {{"title": "mock 2"}}], target_parent_identifier = "be".
+   - "create mock 1 and 2 layers on be" -> entities = [{{"title": "mock 1"}}, {{"title": "mock 2"}}], target_parent_identifier = "be".
+   - "thêm 3 item bài 1, 2 và 3" -> entities = [{{"title": "bài 1"}}, {{"title": "bài 2"}}, {{"title": "bài 3"}}].
+   - "tạo 2 group Core và Advanced" -> entities = [{{"title": "Core", "level": "core"}}, {{"title": "Advanced", "level": "advanced"}}].
 
 3. **PHÂN BIỆT RÕ CẤP BẬC (ENTITY LEVEL)**:
    - Nếu câu chứa "layer", "mảng": entity_level = "layer" (topic đi kèm là target_parent_identifier).
@@ -295,7 +295,7 @@ class StructuredEntityExtractor:
 
         # Strip out action verb, conversational wrapper, and level keyword
         clause = re.sub(
-            r"^(?:tạo|thêm|xóa|xoá|sửa|đổi tên|cập nhật|create|add|delete|remove)\s+(?:(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|mục|bài(?:\s+học)?|roadmaps?|lessons?)?\s*",
+            r"^(?:tạo|thêm|xóa|xoá|sửa|đổi tên|cập nhật|create|add|delete|remove)\s+(?:(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|mục|bài(?:\s+học)?|roadmaps?|lessons?)?\s*(?:(?:về|about)\s+)?",
             "",
             clause.strip(),
             flags=re.IGNORECASE,
