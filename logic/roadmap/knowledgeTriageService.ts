@@ -26,15 +26,12 @@ export interface TriageItem {
 }
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_KEY ?? "";
 
+// Owner routes authenticate with the session cookie; never ship an admin key to the browser
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (ADMIN_KEY) {
-    defaultHeaders["x-admin-key"] = ADMIN_KEY;
-  }
 
   const res = await fetch(`${BASE_URL}${path}`, {
     cache: "no-store",
@@ -51,7 +48,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       const text = await res.text().catch(() => "");
       if (text) errorDetail = text;
     }
-    throw new Error(errorDetail || `Request failed with status ${res.status}`);
+    // `status` lets the UI tell "not signed in" (401) apart from other failures
+    throw Object.assign(new Error(errorDetail || `Request failed with status ${res.status}`), {
+      status: res.status,
+    });
   }
 
   if (res.status === 204) {

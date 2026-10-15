@@ -30,6 +30,7 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
   },
   roadmap: {
     findMany: vi.fn(),
@@ -45,9 +46,12 @@ const prismaMock = vi.hoisted(() => ({
   roadmapItem: {
     create: vi.fn(),
   },
+  // Interactive transaction: run the callback against the same mock
+  $transaction: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock));
 
 import { GET as getTriage, POST as createTriage } from "@/app/api/v1/roadmaps/triage/route";
 import { POST as generateDraft } from "@/app/api/v1/roadmaps/triage/[id]/generate/route";
@@ -81,14 +85,49 @@ describe("Knowledge Triage API Routes", () => {
     vi.unstubAllEnvs();
   });
 
+  const listRequest = (headers: HeadersInit = ADMIN_HEADER) =>
+    new NextRequest("http://localhost/api/v1/roadmaps/triage", { headers });
+
   it("GET /api/v1/roadmaps/triage returns triage items list", async () => {
     prismaMock.knowledgeTriage.findMany.mockResolvedValueOnce([mockTriageItem]);
 
-    const res = await getTriage();
+    const res = await getTriage(listRequest());
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.items).toHaveLength(1);
     expect(data.items[0].id).toBe("triage-123");
+  });
+
+  it("GET /api/v1/roadmaps/triage rejects visitors: items hold their questions and comments", async () => {
+    const res = await getTriage(listRequest({}));
+
+    expect(res.status).toBe(401);
+    expect(prismaMock.knowledgeTriage.findMany).not.toHaveBeenCalled();
+  });
+
+  it("GET /api/v1/roadmaps/triage never writes, even when the list is empty", async () => {
+    prismaMock.knowledgeTriage.findMany.mockResolvedValueOnce([]);
+
+    const res = await getTriage(listRequest());
+    expect((await res.json()).items).toEqual([]);
+    expect(prismaMock.knowledgeTriage.create).not.toHaveBeenCalled();
+  });
+
+  it("POST /api/v1/roadmaps/triage masks emails and phone numbers before saving", async () => {
+    prismaMock.knowledgeTriage.create.mockResolvedValueOnce({ ...mockTriageItem, id: "triage-pii" });
+
+    await createTriage(
+      new NextRequest("http://localhost/api/v1/roadmaps/triage", {
+        method: "POST",
+        headers: ADMIN_HEADER,
+        body: JSON.stringify({ query: "Liên hệ a.b@gmail.com", comment: "Gọi 0912 345 678 nhé" }),
+      })
+    );
+
+    expect(prismaMock.knowledgeTriage.create.mock.calls[0][0].data).toMatchObject({
+      query: "Liên hệ [email]",
+      comment: "Gọi [phone] nhé",
+    });
   });
 
   it("POST /api/v1/roadmaps/triage creates a new triage record", async () => {
@@ -170,6 +209,17 @@ describe("Knowledge Triage API Routes", () => {
     });
 
     afterEach(() => setLlmProvider(null));
+
+    it("returns 409 for an approved item instead of moving it back to DRAFTED", async () => {
+      prismaMock.knowledgeTriage.findUnique.mockReset();
+      prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce({ ...mockTriageItem, status: "APPROVED" });
+
+      const res = await generateRequest();
+
+      expect(res.status).toBe(409);
+      expect(llm.generate).not.toHaveBeenCalled();
+      expect(prismaMock.knowledgeTriage.update).not.toHaveBeenCalled();
+    });
 
     it("asks the primary chat model for JSON and saves the parsed draft", async () => {
       llm.generate.mockResolvedValueOnce({
@@ -260,40 +310,95 @@ describe("Knowledge Triage API Routes", () => {
     });
   });
 
-  it("POST /api/v1/roadmaps/triage/[id]/approve creates RoadmapItem and updates status to APPROVED", async () => {
-    prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce({
+  describe("approve", () => {
+    const approveRequest = () =>
+      approveDraft(
+        new NextRequest("http://localhost/api/v1/roadmaps/triage/triage-123/approve", {
+          method: "POST",
+          headers: ADMIN_HEADER,
+        }),
+        { params: Promise.resolve({ id: "triage-123" }) }
+      );
+
+    const draftedItem = (draftContent: string) => ({
       ...mockTriageItem,
+      status: "DRAFTED",
       draftTitle: "Tối ưu hóa pipeline RAG với Reranker",
-      draftContent: "Nội dung bài học chuẩn...",
-    });
-    prismaMock.roadmap.findFirst.mockResolvedValueOnce({
-      id: "rm-1",
-      layers: [{ id: "l1", order: 1 }],
-    });
-    prismaMock.roadmapGroup.findFirst.mockResolvedValueOnce({
-      id: "group-1",
-      layerId: "l1",
-      _count: { items: 2 },
-    });
-    prismaMock.roadmapItem.create.mockResolvedValueOnce({
-      id: "item-new",
-      title: "Tối ưu hóa pipeline RAG với Reranker",
-    });
-    prismaMock.knowledgeTriage.update.mockResolvedValueOnce({
-      ...mockTriageItem,
-      status: "APPROVED",
+      draftContent,
     });
 
-    const req = new NextRequest("http://localhost/api/v1/roadmaps/triage/triage-123/approve", {
-      method: "POST",
-      headers: ADMIN_HEADER,
+    beforeEach(() => {
+      prismaMock.roadmapGroup.findFirst.mockResolvedValueOnce({ id: "group-1", layerId: "l1", _count: { items: 2 } });
+      prismaMock.roadmapItem.create.mockImplementationOnce(async ({ data }) => ({ id: "item-new", ...data }));
     });
 
-    const res = await approveDraft(req, { params: Promise.resolve({ id: "triage-123" }) });
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.triage.status).toBe("APPROVED");
+    it("claims the drafted item and creates the RoadmapItem in one transaction", async () => {
+      prismaMock.knowledgeTriage.findUnique
+        .mockResolvedValueOnce(draftedItem("Nội dung bài học chuẩn..."))
+        .mockResolvedValueOnce({ ...mockTriageItem, status: "APPROVED" });
+      prismaMock.knowledgeTriage.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      const res = await approveRequest();
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.triage.status).toBe("APPROVED");
+
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+      expect(prismaMock.knowledgeTriage.updateMany).toHaveBeenCalledWith({
+        where: { id: "triage-123", status: "DRAFTED" },
+        data: { status: "APPROVED" },
+      });
+      expect(prismaMock.roadmapItem.create.mock.calls[0][0].data).toMatchObject({ groupId: "group-1", order: 3 });
+    });
+
+    it("returns 409 and creates nothing when the item was already approved (double click, retry)", async () => {
+      prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce(draftedItem("Nội dung"));
+      prismaMock.knowledgeTriage.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const res = await approveRequest();
+
+      expect(res.status).toBe(409);
+      expect(prismaMock.roadmapItem.create).not.toHaveBeenCalled();
+    });
+
+    it("publishes a description from the draft, never the visitor's comment", async () => {
+      prismaMock.knowledgeTriage.findUnique
+        .mockResolvedValueOnce(draftItemWithComment())
+        .mockResolvedValueOnce({ ...mockTriageItem, status: "APPROVED" });
+      prismaMock.knowledgeTriage.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await approveRequest();
+
+      const { description } = prismaMock.roadmapItem.create.mock.calls[0][0].data;
+      expect(description).toBe("Reranker sắp xếp lại các chunk đã truy xuất.");
+      expect(description).not.toContain(mockTriageItem.comment);
+    });
+
+    it("stores the draft as sanitized HTML: Markdown rendered, scripts and javascript: links dropped", async () => {
+      prismaMock.knowledgeTriage.findUnique
+        .mockResolvedValueOnce(
+          draftedItem(
+            "## Cấu hình\n\n<script>alert(1)</script>\n\n[x](javascript:alert(1))\n\n```cpp\nstd::vector<int> v;\n```"
+          )
+        )
+        .mockResolvedValueOnce({ ...mockTriageItem, status: "APPROVED" });
+      prismaMock.knowledgeTriage.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      await approveRequest();
+
+      const { content } = prismaMock.roadmapItem.create.mock.calls[0][0].data;
+      expect(content).toContain("<h2>Cấu hình</h2>");
+      expect(content).toContain("std::vector&lt;int&gt; v;");
+      expect(content).not.toMatch(/<script|alert\(1\)|javascript:/i);
+    });
+
+    function draftItemWithComment() {
+      return {
+        ...draftedItem("## Tổng quan\n\nReranker sắp xếp lại các chunk đã truy xuất.\n\nĐoạn hai"),
+        comment: "Email tôi là a.b@gmail.com",
+      };
+    }
   });
 
   it("POST /api/v1/roadmaps/triage/[id]/dismiss marks item as DISMISSED", async () => {

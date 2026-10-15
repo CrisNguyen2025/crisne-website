@@ -26,6 +26,14 @@ interface KnowledgeTriageDrawerProps {
   onRoadmapUpdated?: () => void;
 }
 
+// Triage routes are owner-only: a visitor gets 401 instead of the list
+function toErrorMessage(error: unknown): string {
+  const status = (error as { status?: number } | null)?.status;
+  if (status === 401) return "Bạn cần đăng nhập bằng tài khoản owner để xem và xử lý triage.";
+  if (error instanceof Error && error.message) return error.message;
+  return "Đã có lỗi xảy ra, vui lòng thử lại.";
+}
+
 export function KnowledgeTriageDrawer({
   isOpen,
   onClose,
@@ -36,14 +44,16 @@ export function KnowledgeTriageDrawer({
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DRAFTED" | "APPROVED">("ALL");
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await fetchTriageItems();
       setItems(data);
-    } catch {
-      // Best-effort load
+    } catch (err) {
+      setError(toErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -59,12 +69,13 @@ export function KnowledgeTriageDrawer({
 
   const handleGenerate = async (id: string) => {
     setActionLoadingId(id);
+    setError(null);
     try {
       const updated = await generateTriageDraft(id);
       setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
       setExpandedDraftId(id);
-    } catch {
-      // Handled gracefully
+    } catch (err) {
+      setError(toErrorMessage(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -72,14 +83,15 @@ export function KnowledgeTriageDrawer({
 
   const handleApprove = async (id: string) => {
     setActionLoadingId(id);
+    setError(null);
     try {
       const { triage } = await approveTriageDraft(id);
       setItems((prev) => prev.map((item) => (item.id === id ? triage : item)));
       if (onRoadmapUpdated) {
         onRoadmapUpdated();
       }
-    } catch {
-      // Handled gracefully
+    } catch (err) {
+      setError(toErrorMessage(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -87,11 +99,12 @@ export function KnowledgeTriageDrawer({
 
   const handleDismiss = async (id: string) => {
     setActionLoadingId(id);
+    setError(null);
     try {
       await dismissTriageItem(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
-    } catch {
-      // Handled gracefully
+    } catch (err) {
+      setError(toErrorMessage(err));
     } finally {
       setActionLoadingId(null);
     }
@@ -175,9 +188,19 @@ export function KnowledgeTriageDrawer({
           })}
         </div>
 
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 border-b border-[#C2410C]/20 bg-[#FBEDE5] px-5 py-2.5 text-xs text-[#C2410C]"
+          >
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
         {/* List of Triage Cards */}
         <div className="flex-1 space-y-3.5 overflow-y-auto p-5 bg-[#FFFFFF]">
-          {isLoading && items.length === 0 ? (
+          {error && items.length === 0 ? null : isLoading && items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-[#6B6862]">
               <Loader2 className="h-6 w-6 animate-spin text-[#C2410C] mb-2" />
               <span className="text-xs">Đang tải danh sách triage...</span>

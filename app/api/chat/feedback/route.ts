@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createFeedbackScore } from "@/lib/ai/langfuse";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
+import { maskPII } from "@/lib/ai/pii-mask";
 
 export const dynamic = "force-dynamic";
 
@@ -60,13 +61,14 @@ export async function POST(req: NextRequest) {
 
     if (value === 0 && (reason || comment || query)) {
       try {
+        // Visitor text is shown to the admin and fed to the LLM: strip emails / phone numbers first
         await prisma.knowledgeTriage.create({
           data: {
             traceId,
-            query: query ? String(query).trim() : (reason || comment || "Câu hỏi cần cải thiện chất lượng"),
-            assistantMsg: assistantMsg ? String(assistantMsg).trim() : null,
-            reason: reason ? String(reason).trim() : null,
-            comment: comment ? String(comment).trim() : null,
+            query: maskPII(query ? String(query).trim() : (reason || comment || "Câu hỏi cần cải thiện chất lượng")),
+            assistantMsg: assistantMsg ? maskPII(String(assistantMsg).trim()) : null,
+            reason: reason ? maskPII(String(reason).trim()) : null,
+            comment: comment ? maskPII(String(comment).trim()) : null,
             roadmapSlug: roadmapSlug ? String(roadmapSlug).trim() : "ai-architecture",
             status: "PENDING",
           },

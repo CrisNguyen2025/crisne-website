@@ -35,6 +35,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Triage item not found" }, { status: 404 });
     }
 
+    // Regenerating would move the item back to DRAFTED and allow approving it a second time
+    if (triage.status === "APPROVED" || triage.status === "DISMISSED") {
+      return NextResponse.json(
+        { error: `Item is already ${triage.status.toLowerCase()}; it cannot be regenerated.` },
+        { status: 409 }
+      );
+    }
+
     // 1. Fetch available roadmaps and layers to automatically map destination
     const roadmaps = await prisma.roadmap.findMany({
       include: {

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { markdownToPlainText, markdownToSafeHtml } from "@/lib/roadmap/markdown";
+
+const DESCRIPTION_MAX_LENGTH = 200;
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -75,24 +78,40 @@ export async function POST(req: NextRequest, context: RouteContext) {
       });
     }
 
-    // 3. Create the real RoadmapItem in database
-    const createdItem = await prisma.roadmapItem.create({
-      data: {
-        groupId: group.id,
-        title: triage.draftTitle,
-        description: triage.comment || triage.reason || "",
-        content: triage.draftContent || null,
-        order: group._count.items + 1,
-      },
+    const targetGroup = group;
+    const { draftTitle, draftContent } = triage;
+
+    // 3–4. Claim the item and create the lesson in one transaction: a second approve (double
+    // click, retry) finds no DRAFTED row and creates nothing; a failed create rolls the claim back
+    const approved = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.knowledgeTriage.updateMany({
+        where: { id, status: "DRAFTED" },
+        data: { status: "APPROVED" },
+      });
+      if (claimed.count === 0) return null;
+
+      const createdItem = await tx.roadmapItem.create({
+        data: {
+          groupId: targetGroup.id,
+          title: draftTitle,
+          // From the draft, never the visitor's comment: this text is public
+          description: markdownToPlainText(draftContent ?? "", DESCRIPTION_MAX_LENGTH),
+          // Stored as sanitized HTML (the editor's format): the page renders it as HTML
+          content: draftContent ? markdownToSafeHtml(draftContent) : null,
+          order: targetGroup._count.items + 1,
+        },
+      });
+      const updatedTriage = await tx.knowledgeTriage.findUnique({ where: { id } });
+      return { createdItem, updatedTriage };
     });
 
-    // 4. Mark triage as APPROVED
-    const updatedTriage = await prisma.knowledgeTriage.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-      },
-    });
+    if (!approved) {
+      return NextResponse.json(
+        { error: "Item is not awaiting approval (already approved or dismissed)." },
+        { status: 409 }
+      );
+    }
+    const { createdItem, updatedTriage } = approved;
 
     return NextResponse.json({
       success: true,
