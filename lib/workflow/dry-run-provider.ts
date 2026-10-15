@@ -1,20 +1,14 @@
 import type {
   LlmGenerateParams,
-  LlmMessage,
   LlmProvider,
   LlmStreamChunk,
   LlmUsage,
 } from "@/lib/ai/llm-provider";
+import { contentsToText } from "@/lib/ai/chat-messages";
 import { EMBEDDING_DIMENSION } from "@/lib/ai/gemini";
 
-export function extractPromptPreview(contents: string | LlmMessage[], maxChars = 80): string {
-  const raw =
-    typeof contents === "string"
-      ? contents
-      : contents
-          .map((m) => m.parts.map((p) => p.text).join(" "))
-          .join(" ");
-  return raw.trim().slice(0, maxChars);
+export function extractPromptPreview(contents: LlmGenerateParams["contents"], maxChars = 80): string {
+  return contentsToText(contents).trim().slice(0, maxChars);
 }
 
 const ZERO_USAGE: LlmUsage = { input: 0, output: 0, total: 0 };

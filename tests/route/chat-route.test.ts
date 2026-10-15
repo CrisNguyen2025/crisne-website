@@ -4,8 +4,14 @@ import { LangfuseOtelSpanAttributes, setLangfuseTracerProvider } from "@langfuse
 import { InMemorySpanExporter, type ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { createLangfuseSpanProcessor } from "@/lib/ai/langfuse";
-import { setLlmProvider, type LlmProvider, type LlmStreamChunk } from "@/lib/ai/llm-provider";
+import {
+  setLlmProvider,
+  type LlmGenerateParams,
+  type LlmProvider,
+  type LlmStreamChunk,
+} from "@/lib/ai/llm-provider";
 import { loadKnowledgeBase } from "@/lib/ai/knowledge-base";
+import { isChatMessages, toAlternatingTurns } from "@/lib/ai/chat-messages";
 import { CHAT_OBSERVATION, CHAT_TRACE_NAME } from "@/lib/ai/chat-config";
 import { DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL } from "@/lib/ai/gemini";
 import { resetLlmCircuitBreaker } from "@/lib/ai/llm-circuit-breaker";
@@ -60,6 +66,8 @@ function createFakeLlm(options: FakeOptions = {}) {
     // Model of every generate / generateStream call, in order
     generateModels: [] as string[],
     streamModels: [] as string[],
+    // Full params of every generateStream call, to lock the request the route builds
+    streamParams: [] as LlmGenerateParams[],
   };
   const provider: LlmProvider = {
     async generate({ model }) {
@@ -68,9 +76,11 @@ function createFakeLlm(options: FakeOptions = {}) {
       if (options.rewriteError) throw options.rewriteError;
       return { text: options.rewriteText ?? "", usage: { input: 50, output: 10, total: 60 } };
     },
-    async generateStream({ model }) {
+    async generateStream(params) {
+      const { model } = params;
       calls.generateStream++;
       calls.streamModels.push(model);
+      calls.streamParams.push(params);
       const error = options.streamErrorByModel?.[model] ?? options.generateStreamError;
       if (error) throw error;
       const chunks = options.answerChunks ?? ["Cris có thể ", "giúp bạn."];
@@ -228,6 +238,63 @@ describe("POST /api/chat — follow-up questions", () => {
   });
 });
 
+// Baseline for the AI-layer refactor: the turns the provider ends up sending. The route now
+// passes neutral ChatMessage[]; the adapters normalize them with toAlternatingTurns.
+describe("POST /api/chat — answer request", () => {
+  const userTurns = ({ contents }: LlmGenerateParams) =>
+    isChatMessages(contents) ? toAlternatingTurns(contents) : contents;
+
+  it("sends a single user turn and the generation config when there is no history", async () => {
+    const calls = createFakeLlm();
+    await (await POST(chatRequest({ message: "  Liên hệ Cris thế nào?  " }))).text();
+
+    const [params] = calls.streamParams;
+    expect(params.contents).toEqual([{ role: "user", content: [{ type: "text", text: "Liên hệ Cris thế nào?" }] }]);
+    expect(userTurns(params)).toEqual([{ role: "user", parts: [{ text: "Liên hệ Cris thế nào?" }] }]);
+    expect(params).toMatchObject({ temperature: 0.3, topP: 0.9, maxOutputTokens: 1000 });
+    expect(params.model).toBe(DEFAULT_CHAT_MODEL);
+    expect(params.systemInstruction).toContain("Cris AI");
+    expect(params.systemInstruction).not.toContain("{RAG_CONTEXT}");
+  });
+
+  it("drops a leading assistant turn, merges same-role turns and skips blank ones", async () => {
+    const calls = createFakeLlm();
+    await (
+      await POST(
+        chatRequest({
+          message: "Còn dự án khác?",
+          history: [
+            { role: "assistant", content: "Xin chào" },
+            { role: "user", content: "Kể về Zelene" },
+            { role: "user", content: "   " },
+            { role: "user", content: "và Kamala" },
+            { role: "assistant", content: "Zelene và Kamala là hai dự án." },
+          ],
+        })
+      )
+    ).text();
+
+    expect(userTurns(calls.streamParams[0])).toEqual([
+      { role: "user", parts: [{ text: "Kể về Zelene" }, { text: "và Kamala" }] },
+      { role: "model", parts: [{ text: "Zelene và Kamala là hai dự án." }] },
+      { role: "user", parts: [{ text: "Còn dự án khác?" }] },
+    ]);
+  });
+
+  it("appends the question to a trailing user turn instead of adding a new one", async () => {
+    const calls = createFakeLlm();
+    await (
+      await POST(
+        chatRequest({ message: "Stack là gì?", history: [{ role: "user", content: "Kể về Zelene" }] })
+      )
+    ).text();
+
+    expect(userTurns(calls.streamParams[0])).toEqual([
+      { role: "user", parts: [{ text: "Kể về Zelene" }, { text: "Stack là gì?" }] },
+    ]);
+  });
+});
+
 describe("POST /api/chat — failures", () => {
   it("falls back to readable context when the model is out of quota (M4)", async () => {
     createFakeLlm({ generateStreamError: quotaError() });
@@ -337,6 +404,8 @@ describe("POST /api/chat — quota resilience", () => {
     const answer = spanByName(await exportedSpans(), CHAT_OBSERVATION.answer);
     expect(attr(answer, ATTR.OBSERVATION_MODEL)).toBe(FALLBACK_CHAT_MODEL);
     expect(metadata(answer, "fallbackFrom")).toEqual([DEFAULT_CHAT_MODEL]);
+    // Plain strings are exported as-is (not JSON), so read the flattened attribute directly
+    expect(attr(answer, `${ATTR.OBSERVATION_METADATA}.provider`)).toBe("gemini");
   });
 
   it("stops calling an exhausted model while its circuit is open", async () => {

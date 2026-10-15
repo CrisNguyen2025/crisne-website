@@ -17,7 +17,7 @@ import {
   getChatModelChain,
   getLlmProvider,
   isLlmConfigured,
-  type LlmMessage,
+  type ChatMessage,
   type LlmUsage,
 } from "@/lib/ai/llm-provider";
 import { classifyLlmError } from "@/lib/ai/llm-errors";
@@ -308,29 +308,11 @@ export async function POST(req: NextRequest) {
         // 4. Stream the answer
         let answerGeneration: LangfuseGeneration | undefined;
         try {
-          // Gemini expects conversation to start with a user turn and alternate roles
-          const contents: LlmMessage[] = [];
-          for (const h of history) {
-            const text = h.content?.trim();
-            if (!text) continue;
-
-            const role = h.role === "assistant" ? "model" : "user";
-            if (contents.length === 0 && role === "model") continue;
-
-            const last = contents[contents.length - 1];
-            if (last && last.role === role) {
-              last.parts.push({ text });
-            } else {
-              contents.push({ role, parts: [{ text }] });
-            }
-          }
-
-          const lastTurn = contents[contents.length - 1];
-          if (lastTurn && lastTurn.role === "user") {
-            lastTurn.parts.push({ text: trimmedQuery });
-          } else {
-            contents.push({ role: "user", parts: [{ text: trimmedQuery }] });
-          }
+          // Vendor rules (e.g. Gemini's alternating roles) are applied by the adapter
+          const contents: ChatMessage[] = [
+            ...history.map((h) => ({ role: h.role, content: [{ type: "text" as const, text: h.content }] })),
+            { role: "user", content: [{ type: "text", text: trimmedQuery }] },
+          ];
 
           const generationConfig = {
             temperature: 0.3,
@@ -351,6 +333,7 @@ export async function POST(req: NextRequest) {
           const {
             result: answerStream,
             model: answerModel,
+            provider: answerProvider,
             fallbackFrom,
           } = await generateStreamWithFallback({
             systemInstruction: systemPrompt,
@@ -360,7 +343,7 @@ export async function POST(req: NextRequest) {
           // Record the model that actually answers (fallback model when the primary is out of quota)
           answerGeneration.update({
             model: answerModel,
-            metadata: { hasContext: !!ragContext, fallbackFrom },
+            metadata: { hasContext: !!ragContext, fallbackFrom, provider: answerProvider },
           });
 
           const generation = answerGeneration;
@@ -441,7 +424,12 @@ export async function POST(req: NextRequest) {
                     output: answerText,
                     level: streamErrorKind ? "ERROR" : "DEFAULT",
                     statusMessage: rootStatusMessage,
-                    metadata: { hasContext: !!ragContext, isCancelled, model: answerModel },
+                    metadata: {
+                      hasContext: !!ragContext,
+                      isCancelled,
+                      model: answerModel,
+                      provider: answerProvider,
+                    },
                   })
                   .end();
                 // Cache only complete AI answers (never fallbacks, broken or cancelled streams)

@@ -5,7 +5,8 @@ const MAX_QUOTA_COOLDOWN_MS = 60 * 60_000;
 const DEFAULT_QUOTA_COOLDOWN_MS = 60_000;
 const UPSTREAM_COOLDOWN_MS = 30_000;
 
-// Per model, per server instance (same trade-off as the in-memory rate limiter)
+// Per model, per server instance (same trade-off as the in-memory rate limiter).
+// resilient-llm keys it as "provider:model"; any string works as the key.
 const openUntilByModel = new Map<string, number>();
 
 /** True while calls to this model should be skipped instead of failing slowly. */

@@ -188,6 +188,32 @@ describe("withQuota", () => {
     }
   });
 
+  it("checks quota on generateStream before opening the stream", async () => {
+    const mockDb = createMockPrisma();
+    const mock = createMockProvider();
+    const stream = (async function* () {})();
+    vi.mocked(mock.provider.generateStream).mockResolvedValue(stream);
+    const providerWithQuota = withQuota(mock.provider, {
+      limit: 1,
+      now: () => new Date("2026-10-15T12:00:00Z"),
+      prisma: mockDb,
+    });
+    const params: LlmGenerateParams = {
+      model: "gemini-2.5-flash",
+      systemInstruction: "",
+      contents: "test",
+      temperature: 0.3,
+      maxOutputTokens: 100,
+    };
+
+    await expect(providerWithQuota.generateStream(params)).resolves.toBe(stream);
+    await expect(providerWithQuota.generateStream(params)).rejects.toMatchObject({
+      code: "QUOTA_EXCEEDED",
+      model: "gemini-2.5-flash",
+    });
+    expect(mock.provider.generateStream).toHaveBeenCalledTimes(1);
+  });
+
   it("checks quota on embed calls for DEFAULT_EMBEDDING_MODEL", async () => {
     const mockDb = createMockPrisma();
     const mock = createMockProvider();

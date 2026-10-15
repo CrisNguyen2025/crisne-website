@@ -1,5 +1,6 @@
 import { GoogleGenAI, type GenerateContentResponseUsageMetadata } from "@google/genai";
 import type { EmbeddingTaskType, LlmGenerateParams, LlmProvider, LlmUsage } from "./llm-provider";
+import { isChatMessages, toAlternatingTurns } from "./chat-messages";
 
 export const DEFAULT_CHAT_MODEL = "gemini-2.5-flash";
 // Separate free-tier quota: keeps answering when the primary model is exhausted
@@ -23,10 +24,19 @@ function toUsage(usageMetadata?: GenerateContentResponseUsageMetadata): LlmUsage
   };
 }
 
-function toRequest({ model, systemInstruction, contents, temperature, topP, maxOutputTokens }: LlmGenerateParams) {
+function toRequest({
+  model,
+  systemInstruction,
+  contents,
+  temperature,
+  topP,
+  maxOutputTokens,
+  responseFormat,
+}: LlmGenerateParams) {
   return {
     model,
-    contents,
+    // Legacy turns and plain strings pass through unchanged
+    contents: isChatMessages(contents) ? toAlternatingTurns(contents) : contents,
     config: {
       systemInstruction,
       temperature,
@@ -34,6 +44,7 @@ function toRequest({ model, systemInstruction, contents, temperature, topP, maxO
       maxOutputTokens,
       // Thinking tokens would eat into maxOutputTokens and add latency
       thinkingConfig: { thinkingBudget: 0 },
+      ...(responseFormat === "json" ? { responseMimeType: "application/json" } : {}),
     },
   };
 }

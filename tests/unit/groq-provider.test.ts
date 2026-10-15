@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GROQ_CHAT_MODEL_CHAIN, groqProvider } from "@/lib/ai/groq";
-import { CHAT_MODEL_CHAIN } from "@/lib/ai/gemini";
-import { getChatModelChain, isLlmConfigured } from "@/lib/ai/llm-provider";
+import { CHAT_MODEL_CHAIN, geminiProvider } from "@/lib/ai/gemini";
+import {
+  getChatModelChain,
+  getChatModelRefs,
+  getLlmProvider,
+  getProviderFor,
+  isLlmConfigured,
+} from "@/lib/ai/llm-provider";
 import { classifyLlmError } from "@/lib/ai/llm-errors";
 
 const params = {
@@ -57,6 +63,41 @@ describe("groqProvider", () => {
     expect(res).toEqual({ text: "ok", usage: { input: 3, output: 1, total: 4 } });
   });
 
+  it("sends the same messages for neutral ChatMessage[] as for the equivalent legacy turns", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await groqProvider.generate(params);
+    await groqProvider.generate({
+      ...params,
+      contents: [
+        { role: "user", content: [{ type: "text", text: "Hi" }] },
+        { role: "assistant", content: [{ type: "text", text: "Hello" }] },
+        { role: "assistant", content: [{ type: "text", text: "there" }] },
+        { role: "user", content: [{ type: "text", text: "Docker?" }] },
+      ],
+    });
+
+    const [legacy, neutral] = fetchMock.mock.calls.map((call) => JSON.parse(call[1]?.body as string).messages);
+    expect(neutral).toEqual(legacy);
+  });
+
+  it("sends response_format json_object only when responseFormat is json", async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await groqProvider.generate({ ...params, responseFormat: "json" });
+    await groqProvider.generate(params);
+
+    const [json, text] = fetchMock.mock.calls.map((call) => JSON.parse(call[1]?.body as string));
+    expect(json.response_format).toEqual({ type: "json_object" });
+    expect(text).not.toHaveProperty("response_format");
+  });
+
   it("streams text deltas and reports usage from the final chunk", async () => {
     vi.stubGlobal(
       "fetch",
@@ -92,6 +133,19 @@ describe("provider selection", () => {
 
     vi.stubEnv("LLM_PROVIDER", "groq");
     expect(getChatModelChain()).toEqual(GROQ_CHAT_MODEL_CHAIN);
+  });
+
+  it("pairs every chain model with its provider and resolves the provider per ref", () => {
+    vi.stubEnv("LLM_PROVIDER", "");
+    expect(getChatModelRefs()).toEqual(CHAT_MODEL_CHAIN.map((model) => ({ provider: "gemini", model })));
+
+    vi.stubEnv("LLM_PROVIDER", "groq");
+    expect(getChatModelRefs()).toEqual(GROQ_CHAT_MODEL_CHAIN.map((model) => ({ provider: "groq", model })));
+
+    expect(getProviderFor({ provider: "groq", model: "x" })).toBe(groqProvider);
+    expect(getProviderFor({ provider: "gemini", model: "x" })).toBe(geminiProvider);
+    // getLlmProvider keeps following LLM_PROVIDER
+    expect(getLlmProvider()).toBe(groqProvider);
   });
 
   it("requires GROQ_API_KEY when Groq is selected", () => {

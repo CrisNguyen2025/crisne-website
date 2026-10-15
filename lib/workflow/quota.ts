@@ -1,6 +1,14 @@
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import type { PrismaClient } from "@prisma/client";
-import type { EmbeddingTaskType, LlmGenerateParams, LlmProvider, LlmStreamChunk, LlmUsage } from "@/lib/ai/llm-provider";
+import {
+  wrapProvider,
+  type EmbeddingTaskType,
+  type LlmGenerateParams,
+  type LlmMiddleware,
+  type LlmProvider,
+  type LlmStreamChunk,
+  type LlmUsage,
+} from "@/lib/ai/llm-provider";
 import { DEFAULT_EMBEDDING_MODEL } from "@/lib/ai/gemini";
 import { DEFAULT_WORKFLOW_DAILY_LLM_LIMIT } from "./constants";
 
@@ -67,10 +75,10 @@ export async function recordAndCheckQuota(
 }
 
 /**
- * Wraps an LlmProvider with atomic quota enforcement on each generate, generateStream and embed call.
+ * Middleware enforcing the atomic daily quota on each generate, generateStream and embed call.
  * If quota is exceeded, QuotaExceededError is thrown immediately and the underlying provider is not called.
  */
-export function withQuota(provider: LlmProvider, options: WithQuotaOptions = {}): LlmProvider {
+export const quotaMiddleware = (options: WithQuotaOptions = {}): LlmMiddleware => (provider) => {
   const limit = getWorkflowDailyLimit(options.limit);
   const now = options.now ?? (() => new Date());
   const db = options.prisma ?? defaultPrisma;
@@ -91,4 +99,9 @@ export function withQuota(provider: LlmProvider, options: WithQuotaOptions = {})
       return provider.embed(text, taskType);
     },
   };
+};
+
+/** Same as `wrapProvider(provider, quotaMiddleware(options))`; kept for existing callers. */
+export function withQuota(provider: LlmProvider, options: WithQuotaOptions = {}): LlmProvider {
+  return wrapProvider(provider, quotaMiddleware(options));
 }

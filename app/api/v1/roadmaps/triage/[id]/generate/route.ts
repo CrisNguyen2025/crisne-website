@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { geminiProvider, FALLBACK_CHAT_MODEL } from "@/lib/ai/gemini";
+import { generateJsonWithFallback } from "@/lib/ai/generate-json";
+import { isLlmConfigured } from "@/lib/ai/llm-provider";
+import { classifyLlmError } from "@/lib/ai/llm-errors";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
+
+interface LessonDraft {
+  title?: string;
+  content?: string;
+}
+
+const isLessonDraft = (value: unknown): value is LessonDraft => {
+  if (typeof value !== "object" || value === null) return false;
+  const { title, content } = value as Record<string, unknown>;
+  return (title === undefined || typeof title === "string") && (content === undefined || typeof content === "string");
+};
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
@@ -43,9 +56,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
     let verifyScore = 95;
     let verifyNote = `✓ Agent Admin xác nhận: Giải quyết đúng lỗ hổng "${triage.reason || "Kiến thức"}". Không phát hiện ảo giác. Đã gắn vào Layer ${targetLayer?.shortTag || "01-CORE"}.`;
 
-    try {
-      if (process.env.GEMINI_API_KEY) {
-        const prompt = `Bạn là Chuyên gia Kỹ thuật và Giảng viên AI cấp cao.
+    // Why the built-in draft is used instead of an LLM one; shown to the admin in verifyNote
+    let builtInReason = "chưa cấu hình LLM API key";
+
+    if (isLlmConfigured()) {
+      const prompt = `Bạn là Chuyên gia Kỹ thuật và Giảng viên AI cấp cao.
 Người dùng phản hồi câu trả lời của AI bị lỗi:
 - Câu hỏi người dùng: "${triage.query}"
 - Vấn đề gặp phải / Lý do: "${triage.reason || "Chưa rõ"}"
@@ -64,21 +79,31 @@ Trả về định dạng JSON thuần:
   "content": "Nội dung markdown chi tiết..."
 }`;
 
-        const res = await geminiProvider.generate({
-          model: FALLBACK_CHAT_MODEL,
+      // Active provider's model chain: falls back to the next model on quota / outage / timeout
+      const draft = await generateJsonWithFallback(
+        {
           systemInstruction: "Bạn là Chuyên gia Kỹ thuật và Giảng viên AI cấp cao.",
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           temperature: 0.3,
           maxOutputTokens: 1200,
-        });
+        },
+        isLessonDraft
+      );
 
-        const cleaned = res.text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const parsed = JSON.parse(cleaned);
-        if (parsed.title) draftTitle = parsed.title;
-        if (parsed.content) draftContent = parsed.content;
+      if (draft.ok) {
+        if (draft.value.title) draftTitle = draft.value.title;
+        if (draft.value.content) draftContent = draft.value.content;
+        builtInReason = "LLM trả về nội dung trống";
+      } else {
+        // A reply that is not the expected JSON vs. a call that failed on every model
+        builtInReason =
+          draft.text !== undefined ? "LLM trả về JSON không hợp lệ" : `LLM lỗi: ${classifyLlmError(draft.error)}`;
       }
-    } catch {
-      // Fallback structured synthesis when API is unavailable in offline dev
+    }
+
+    // Do not present a built-in draft as an LLM answer verified by the agent
+    if (!draftContent) {
+      verifyNote = `⚠ Bản nháp dựng sẵn (${builtInReason}). Cần biên soạn lại nội dung trước khi duyệt.`;
     }
 
     if (!draftContent) {

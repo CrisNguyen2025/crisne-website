@@ -1,4 +1,5 @@
 import { geminiProvider } from "./gemini";
+import { isChatMessages, toAlternatingTurns } from "./chat-messages";
 import type { LlmGenerateParams, LlmProvider, LlmStreamChunk, LlmUsage } from "./llm-provider";
 
 // Groq's free tier needs no card. Fallback is a smaller model with its own rate limit.
@@ -23,7 +24,9 @@ function toUsage(usage?: OpenAiUsage): LlmUsage | undefined {
 }
 
 function toBody(params: LlmGenerateParams, stream: boolean) {
-  const { model, systemInstruction, contents, temperature, topP, maxOutputTokens } = params;
+  const { model, systemInstruction, temperature, topP, maxOutputTokens } = params;
+  // Same turns Gemini gets, so the prompt does not change with the provider
+  const contents = isChatMessages(params.contents) ? toAlternatingTurns(params.contents) : params.contents;
   const turns =
     typeof contents === "string"
       ? [{ role: "user", content: contents }]
@@ -40,6 +43,8 @@ function toBody(params: LlmGenerateParams, stream: boolean) {
     // gpt-oss reasons before answering; reasoning tokens count against this cap
     max_completion_tokens: maxOutputTokens,
     ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
+    // OpenAI-style JSON mode: the prompt itself must still mention JSON
+    ...(params.responseFormat === "json" ? { response_format: { type: "json_object" } } : {}),
     stream,
     ...(stream ? { stream_options: { include_usage: true } } : {}),
   };
