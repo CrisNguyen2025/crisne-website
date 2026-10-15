@@ -282,5 +282,15 @@
   {
     "query": "knowledge distillation từ model lớn sang model nhỏ",
     "expected": []
+  },
+  {
+    "query": "Website có bài nào về Docker không?",
+    "expected": []
+  },
+  {
+    "query": "Website có bài nào về vector database không?",
+    "expected": [
+      "Vector Database"
+    ]
   }
 ]

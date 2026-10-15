@@ -67,3 +67,25 @@ def test_fts_ignores_question_stopwords():
 
 def test_fts_keeps_stopwords_when_query_has_nothing_else():
     assert _store(with_vectors=False).search_fts("là gì")
+
+
+def test_thin_docs_are_not_returned_on_cosine_alone():
+    thin = KnowledgeDocument(
+        id="general", doc_type="layer", title="General", topic_slug="fe", topic_title="fe",
+        searchable_text="Mảng kiến thức Layer: [01-GEN] General trong Lộ trình fe.",
+    )
+    store = HybridVectorStore()
+    store._get_embedder = lambda: None
+    store.index_documents(DOCS + [thin])
+    store._vectors = {"general": [0.9, 0.1, 0.0], "rag": [1.0, 0.0, 0.0]}
+    store._get_embedder = lambda: _FakeEmbedder()
+    # cos("rag" query, general) ≈ 0.99 but the layer has no text of its own
+    assert [d.title for d, _ in store.hybrid_search("rag")] == ["Retrieval-Augmented Generation (RAG)"]
+
+
+def test_reindex_replaces_the_previous_index():
+    store = _store(with_vectors=False)
+    old_conn = store.conn
+    store.index_documents(DOCS[:1])
+    assert store.conn is not old_conn
+    assert [d.title for d, _ in store.search_fts("cache")] == []

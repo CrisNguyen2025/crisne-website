@@ -31,11 +31,27 @@ EMBEDDING_REQUEST_INTERVAL = 0.67
 VECTOR_MIN_SIMILARITY = 0.665
 
 # Question words and fillers that match nearly every document under BM25 OR-queries.
+# "bài", "website", "trang"... describe the site itself; every item's searchable_text starts with "Bài học".
 FTS_STOPWORDS = {
     "là", "gì", "của", "và", "các", "những", "cho", "có", "không", "được", "trong", "về", "với",
     "này", "đó", "thế", "nào", "sao", "làm", "như", "một", "bao", "nhiêu", "hãy", "giúp", "tôi",
     "mình", "bạn", "ạ", "nhé", "the", "a", "an", "is", "what", "how", "of", "to", "in", "for",
+    "hay", "hoặc", "bài", "website", "web", "trang", "any", "or", "and", "are", "there",
 }
+
+
+# Docs whose own words (title + description + content) are fewer than this are "thin".
+THIN_DOC_MIN_WORDS = 4
+
+
+def is_thin(doc: KnowledgeDocument) -> bool:
+    """A doc with almost no text of its own (e.g. a layer "General" with no subtitle, an item "2").
+
+    Its embedding is mostly ingestion boilerplate ("Bài học Mục Item…", "Lộ trình…"), so it sits
+    close to every roadmap question and its cosine score means nothing; match it by name only.
+    """
+    own = f"{doc.title} {doc.description or ''} {doc.content_text or ''}"
+    return len(re.findall(r"\w+", own)) < THIN_DOC_MIN_WORDS
 
 
 def _embedding_key(text: str) -> str:
@@ -83,16 +99,17 @@ class HybridVectorStore:
     """In-memory or persistent SQLite FTS5 + Vector hybrid index."""
 
     def __init__(self, db_path: str = ":memory:") -> None:
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        self._db_path = db_path
         self._embedder = None
         self._docs_map: dict[str, KnowledgeDocument] = {}
         self._vectors: dict[str, List[float]] = {}
-        self._init_db()
+        self.conn = self._connect()
 
-    def _init_db(self) -> None:
-        with self.conn:
-            self.conn.execute(
+    def _connect(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self._db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        with conn:
+            conn.execute(
                 """
                 CREATE VIRTUAL TABLE IF NOT EXISTS fts_docs USING fts5(
                     id UNINDEXED,
@@ -110,6 +127,7 @@ class HybridVectorStore:
                 )
                 """
             )
+        return conn
 
     def _get_embedder(self):
         if self._embedder is not None:
@@ -127,15 +145,20 @@ class HybridVectorStore:
         return self._embedder
 
     def index_documents(self, docs: List[KnowledgeDocument]) -> None:
-        """Index a batch of KnowledgeDocuments into FTS5 and vector store."""
-        self._docs_map.clear()
-        self._vectors.clear()
+        """Index a batch of KnowledgeDocuments into FTS5 and vector store.
 
-        with self.conn:
-            self.conn.execute("DELETE FROM fts_docs")
+        Builds a fresh index and swaps it in at the end, so searches running while a
+        background re-sync is in progress keep using the previous, complete index.
+        """
+        conn = self._connect() if self._db_path == ":memory:" else self.conn
+        docs_map: dict[str, KnowledgeDocument] = {}
+        vectors: dict[str, List[float]] = {}
+
+        with conn:
+            conn.execute("DELETE FROM fts_docs")
             for d in docs:
-                self._docs_map[d.id] = d
-                self.conn.execute(
+                docs_map[d.id] = d
+                conn.execute(
                     """
                     INSERT INTO fts_docs (
                         id, doc_type, title, topic_slug, topic_title,
@@ -170,7 +193,9 @@ class HybridVectorStore:
                 print(f"[VectorStore] Vector embedding generation warning ({exc}). Partial vectors kept; rest uses FTS5.")
             for d, k in zip(docs, keys):
                 if k in cache:
-                    self._vectors[d.id] = cache[k]
+                    vectors[d.id] = cache[k]
+
+        self.conn, self._docs_map, self._vectors = conn, docs_map, vectors
 
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
         """Search via SQLite FTS5 BM25 ranking."""
@@ -243,6 +268,7 @@ class HybridVectorStore:
         With embeddings, docs below VECTOR_MIN_SIMILARITY are dropped, so an off-topic query
         returns nothing instead of the closest unrelated docs. Without them it is FTS only.
         """
+        docs = self._docs_map  # snapshot: a background re-index may swap the maps mid-search
         fts_res = self.search_fts(query, limit=limit * 2)
         sims = self._similarities(query)
         if not sims:
@@ -253,8 +279,13 @@ class HybridVectorStore:
             return doc.id not in sims or sims[doc.id] >= VECTOR_MIN_SIMILARITY
 
         fts_res = [(d, s) for d, s in fts_res if relevant(d)]
-        top = sorted(sims.items(), key=lambda x: x[1], reverse=True)[: limit * 2]
-        vec_res = [(self._docs_map[i], s) for i, s in top if s >= VECTOR_MIN_SIMILARITY]
+        # Thin topics/layers only count when the query names them (FTS); never on cosine alone.
+        top = sorted(
+            ((i, s) for i, s in sims.items() if i in docs and not is_thin(docs[i])),
+            key=lambda x: x[1],
+            reverse=True,
+        )[: limit * 2]
+        vec_res = [(docs[i], s) for i, s in top if s >= VECTOR_MIN_SIMILARITY]
 
         if not vec_res:
             return fts_res[:limit]
@@ -269,4 +300,5 @@ class HybridVectorStore:
             rrf_scores[doc.id] = rrf_scores.get(doc.id, 0.0) + (1.0 / (60.0 + rank + 1.0))
 
         sorted_ids = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-        return [(self._docs_map[doc_id], score) for doc_id, score in sorted_ids[:limit] if doc_id in self._docs_map]
+        by_id = {d.id: d for d, _ in fts_res + vec_res}
+        return [(by_id[doc_id], score) for doc_id, score in sorted_ids[:limit]]

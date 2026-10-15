@@ -2,11 +2,55 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createSmoothStream, type SmoothStream } from './utils/smoothStream';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
-import type { PageContext } from '../types';
+import type { AssistantStepEvent, PageContext } from '../types';
+
+/**
+ * Merge a step event into the step already shown under that id.
+ * Times use the client clock for the start and the server's `duration_ms` for the length,
+ * so the timeline matches what the server measured.
+ */
+function mergeStep(prev: AssistantStepEvent | undefined, next: AssistantStepEvent): AssistantStepEvent {
+  const now = Date.now();
+  const merged: AssistantStepEvent = { ...prev, ...next };
+  if (next.status === 'running') {
+    merged.startedAt = prev?.startedAt ?? now;
+    merged.endedAt = undefined;
+  } else {
+    merged.startedAt = prev?.startedAt;
+    merged.endedAt =
+      prev?.endedAt ??
+      (merged.startedAt !== undefined && next.duration_ms !== undefined
+        ? merged.startedAt + next.duration_ms
+        : now);
+  }
+  return merged;
+}
+
+function upsertSteps(current: AssistantStepEvent[], incoming: AssistantStepEvent[]): AssistantStepEvent[] {
+  const steps = [...current];
+  for (const step of incoming) {
+    const idx = steps.findIndex((s) => s.id === step.id);
+    if (idx >= 0) steps[idx] = mergeStep(steps[idx], step);
+    else steps.push(mergeStep(undefined, step));
+  }
+  return steps;
+}
+
+function generateConversationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 export interface UseRoadmapAssistantChatOptions {
   baseUrl?: string;
   threadId?: string;
+  conversationId?: string;
   initialMessages?: ChatMessage[];
   onToolExecuted?: (toolName: string, result: string) => void;
   /** Returns the page the user is viewing; read at send time. */
@@ -24,6 +68,7 @@ export interface UseRoadmapAssistantChatReturn {
   isStreaming: boolean;
   activeTool: string | null;
   error: string | null;
+  conversationId: string;
   sendMessage: (textToSend?: string) => Promise<void>;
   stopStreaming: () => void;
   clearMessages: () => void;
@@ -34,12 +79,26 @@ export function useRoadmapAssistantChat(
 ): UseRoadmapAssistantChatReturn {
   const {
     baseUrl = 'http://localhost:8000',
-    threadId = 'roadmap-web-session',
+    threadId,
+    conversationId: initialConversationId,
     initialMessages,
     onToolExecuted,
     getContext,
     onWebMcpMessage,
   } = options;
+
+  const [conversationId, setConversationId] = useState<string>(
+    () => initialConversationId || threadId || generateConversationId()
+  );
+
+  useEffect(() => {
+    if (initialConversationId) {
+      setConversationId(initialConversationId);
+    } else if (threadId) {
+      setConversationId(threadId);
+    }
+  }, [initialConversationId, threadId]);
+
 
   // React 19 compliance: Synchronize callbacks and getters in useEffect
   const onWebMcpRef = useRef(onWebMcpMessage);
@@ -219,6 +278,16 @@ export function useRoadmapAssistantChat(
               onToolExecutedRef.current?.(name, result);
             },
 
+            onStep: (stepEvt) => {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === botMsgId
+                    ? { ...msg, steps: upsertSteps(msg.steps ?? [], [stepEvt]) }
+                    : msg
+                )
+              );
+            },
+
             onToken: (delta) => smooth.push(delta),
 
             onDone: (finalResp) => smooth.finish(() => {
@@ -232,6 +301,10 @@ export function useRoadmapAssistantChat(
                         toolCalls: msg.toolCalls?.length
                           ? msg.toolCalls
                           : finalResp.tool_calls,
+                        // `done` has the final state of every step: fills in any event missed mid-stream
+                        steps: finalResp.steps?.length
+                          ? upsertSteps(msg.steps ?? [], finalResp.steps)
+                          : msg.steps,
                       }
                     : msg
                 )
@@ -262,7 +335,7 @@ export function useRoadmapAssistantChat(
               setActiveTool(null);
             },
           },
-          threadId,
+          conversationId,
           getContextRef.current?.()
         );
       } catch (err: unknown) {
@@ -275,12 +348,13 @@ export function useRoadmapAssistantChat(
         setIsStreaming(false);
       }
     },
-    [input, isLoading, threadId, client, baseUrl]
+    [input, isLoading, conversationId, client, baseUrl]
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
     setError(null);
+    setConversationId(generateConversationId());
   }, []);
 
   return {
@@ -292,6 +366,7 @@ export function useRoadmapAssistantChat(
     isStreaming,
     activeTool,
     error,
+    conversationId,
     sendMessage,
     stopStreaming,
     clearMessages,

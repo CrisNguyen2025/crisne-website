@@ -457,3 +457,34 @@ input[type="search"]::-webkit-search-cancel-button {
   }
 }
 
+
+/* Progressive stream word reveal in the style of Claude */
+@keyframes streamFade {
+  0% {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(1.5px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: translateY(0);
+  }
+}
+
+.animate-stream-fade {
+  display: inline-block;
+  animation: streamFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stream-fade {
+    animation: none;
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+
+

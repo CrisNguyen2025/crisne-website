@@ -31,6 +31,7 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
     updateMany: vi.fn(),
+    deleteMany: vi.fn(),
   },
   roadmap: {
     findMany: vi.fn(),
@@ -57,6 +58,7 @@ import { GET as getTriage, POST as createTriage } from "@/app/api/v1/roadmaps/tr
 import { POST as generateDraft } from "@/app/api/v1/roadmaps/triage/[id]/generate/route";
 import { POST as approveDraft } from "@/app/api/v1/roadmaps/triage/[id]/approve/route";
 import { POST as dismissTriage } from "@/app/api/v1/roadmaps/triage/[id]/dismiss/route";
+import { DELETE as deleteTriage } from "@/app/api/v1/roadmaps/triage/[id]/route";
 import { setLlmProvider, type LlmProvider } from "@/lib/ai/llm-provider";
 import { DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL } from "@/lib/ai/gemini";
 import { resetLlmCircuitBreaker } from "@/lib/ai/llm-circuit-breaker";
@@ -417,5 +419,38 @@ describe("Knowledge Triage API Routes", () => {
     const data = await res.json();
     expect(data.success).toBe(true);
     expect(data.item.status).toBe("DISMISSED");
+  });
+
+  describe("DELETE /api/v1/roadmaps/triage/[id]", () => {
+    const deleteRequest = (headers: HeadersInit = ADMIN_HEADER) =>
+      new NextRequest("http://localhost/api/v1/roadmaps/triage/triage-123", {
+        method: "DELETE",
+        headers,
+      });
+    const params = { params: Promise.resolve({ id: "triage-123" }) };
+
+    it("deletes only items still in process", async () => {
+      prismaMock.knowledgeTriage.deleteMany.mockResolvedValueOnce({ count: 1 });
+
+      const res = await deleteTriage(deleteRequest(), params);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, id: "triage-123" });
+      expect(prismaMock.knowledgeTriage.deleteMany).toHaveBeenCalledWith({
+        where: { id: "triage-123", status: { in: ["PENDING", "DRAFTED"] } },
+      });
+    });
+
+    it("returns 404 for an approved or missing item", async () => {
+      prismaMock.knowledgeTriage.deleteMany.mockResolvedValueOnce({ count: 0 });
+
+      const res = await deleteTriage(deleteRequest(), params);
+      expect(res.status).toBe(404);
+    });
+
+    it("rejects visitors", async () => {
+      const res = await deleteTriage(deleteRequest({}), params);
+      expect(res.status).toBe(401);
+      expect(prismaMock.knowledgeTriage.deleteMany).not.toHaveBeenCalled();
+    });
   });
 });

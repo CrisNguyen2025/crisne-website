@@ -3,6 +3,7 @@
  */
 
 import type {
+  AssistantStepEvent,
   ChatResponse,
   HealthResponse,
   PageContext,
@@ -16,10 +17,13 @@ export interface RoadmapChatClientOptions {
   timeout?: number;
 }
 
+export type { AssistantStepEvent, AssistantStepItem, AssistantStepKind } from './types';
+
 export interface StreamCallbacks {
   onToken?: (delta: string) => void;
   onToolStart?: (name: string, args: Record<string, unknown>) => void;
   onToolEnd?: (name: string, result: string) => void;
+  onStep?: (step: AssistantStepEvent) => void;
   onDone?: (response: ChatResponse) => void;
   onError?: (error: Error) => void;
 }
@@ -115,10 +119,13 @@ export class RoadmapChatClient {
                   };
                   accumulatedTools.push(toolItem);
                   callbacks.onToolEnd?.(data.name, data.result || '');
+                } else if (currentEvent === 'step') {
+                  callbacks.onStep?.(data as AssistantStepEvent);
                 } else if (currentEvent === 'done') {
                   const finalResp: ChatResponse = {
                     message: data.message || accumulatedMessage,
                     tool_calls: data.tool_calls || accumulatedTools,
+                    steps: Array.isArray(data.steps) ? data.steps : undefined,
                   };
                   callbacks.onDone?.(finalResp);
                 } else if (currentEvent === 'error') {

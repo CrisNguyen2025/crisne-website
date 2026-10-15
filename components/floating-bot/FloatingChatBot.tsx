@@ -21,7 +21,11 @@ import {
   ArrowDownIcon,
   ThumbsUpIcon,
   ThumbsDownIcon,
+  MoreVerticalIcon,
+  CopyIcon,
+  CheckIcon,
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/icons";
+import { ChatTriggerButton, type ChatTriggerVariant } from "./ChatTriggerButton";
 
 /** Where an [[action:type|id|label]] chip from the model points; null when unknown. */
 function chipHref(
@@ -52,13 +56,27 @@ const QUICK_PROMPTS = [
   "Làm thế nào để liên hệ Zalo hoặc tải CV?",
 ];
 
-export function FloatingChatBot() {
+export interface FloatingChatBotProps {
+  /**
+   * Style của Float Trigger Button:
+   * - 'capsule': Glassmorphism Capsule bo tròn "Ask AI ✨" (Mặc định - V1)
+   * - 'mascot': 3D Robot Avatar Chibi thân thiện (V2)
+   */
+  triggerVariant?: ChatTriggerVariant;
+}
+
+export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotProps = {}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [copiedConvId, setCopiedConvId] = useState(false);
+  const optionsRef = useRef<HTMLDivElement | null>(null);
+
   const {
     messages,
     input,
     setInput,
     isLoading,
+    conversationId,
     sendMessage,
     sendFeedback,
     resetChat,
@@ -70,12 +88,17 @@ export function FloatingChatBot() {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll to bottom on new messages or during streaming
+  // Auto-scroll to bottom on new messages or during streaming.
+  // While streaming, jump instead of smooth-scrolling: every token restarts a
+  // smooth scroll, which stutters. Smooth is kept for new messages only.
+  // When the user has scrolled up to read earlier messages, pause auto-scroll.
   useEffect(() => {
-    if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isOpen && !showScrollBottom) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: isLoading ? "auto" : "smooth",
+      });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isLoading, showScrollBottom]);
 
   // Focus input when opened (Desktop only, avoid aggressive mobile keyboard jump)
   useEffect(() => {
@@ -83,6 +106,42 @@ export function FloatingChatBot() {
       setTimeout(() => inputRef.current?.focus(), 250);
     }
   }, [isOpen]);
+
+  // Click outside to close options dropdown
+  useEffect(() => {
+    if (!isOptionsOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        optionsRef.current &&
+        !optionsRef.current.contains(event.target as Node)
+      ) {
+        setIsOptionsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOptionsOpen]);
+
+  const handleCopyConversationId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!conversationId) return;
+    navigator.clipboard?.writeText(conversationId).then(
+      () => {
+        setCopiedConvId(true);
+        setTimeout(() => {
+          setCopiedConvId(false);
+          setIsOptionsOpen(false);
+        }, 1200);
+      },
+      () => {}
+    );
+  };
 
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
@@ -156,16 +215,48 @@ export function FloatingChatBot() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-0.5">
-                  {messages.length > 0 && (
+                  <div className="relative" ref={optionsRef}>
                     <button
-                      onClick={resetChat}
-                      title="Cuộc trò chuyện mới"
-                      aria-label="Cuộc trò chuyện mới"
+                      type="button"
+                      onClick={() => setIsOptionsOpen((prev) => !prev)}
+                      title="Tùy chọn"
+                      aria-label="Tùy chọn"
+                      aria-expanded={isOptionsOpen}
                       className={ICON_BUTTON}
                     >
-                      <NewChatIcon />
+                      <MoreVerticalIcon className="h-4 w-4" />
                     </button>
-                  )}
+
+                    {isOptionsOpen && (
+                      <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[220px] whitespace-nowrap rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg animate-in fade-in zoom-in-95 duration-150">
+                        <button
+                          type="button"
+                          onClick={handleCopyConversationId}
+                          className={cn(
+                            "flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer",
+                            copiedConvId
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "text-foreground hover:bg-muted"
+                          )}
+                        >
+                          <span className="flex items-center gap-2">
+                            {copiedConvId ? (
+                              <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            ) : (
+                              <CopyIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <span>Conversation ID</span>
+                          </span>
+                          {copiedConvId && (
+                            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              Đã copy
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => setIsOpen(false)}
                     title="Đóng chat"
@@ -247,7 +338,7 @@ export function FloatingChatBot() {
                             isLive && (
                               <div className="-mx-1.5">
                                 <ToolStepRow
-                                  label="Đang soạn câu trả lời"
+                                  label="Thinking..."
                                   running
                                 />
                               </div>
@@ -383,24 +474,13 @@ export function FloatingChatBot() {
           )}
         </AnimatePresence>
 
-        {/* ── Launcher ── */}
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setIsOpen(!isOpen)}
-          className={cn(
-            "pointer-events-auto h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg",
-            // On mobile the open sheet covers the screen and has its own close button
-            isOpen ? "hidden sm:flex" : "flex"
-          )}
-          aria-label={isOpen ? "Đóng AI Assistant" : "Mở AI Assistant"}
-        >
-          {isOpen ? (
-            <CloseIcon className="h-5 w-5" />
-          ) : (
-            <SparklesIcon className="h-5 w-5" />
-          )}
-        </motion.button>
+        {/* ── Launcher (V1 Capsule default, or V2 Mascot) ── */}
+        <ChatTriggerButton
+          variant={triggerVariant}
+          isOpen={isOpen}
+          onToggle={() => setIsOpen(!isOpen)}
+          greetingText={triggerVariant === "mascot" ? "Hi there! Cris có thể giúp gì cho bạn? ✨" : undefined}
+        />
       </aside>
     </>
   );

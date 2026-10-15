@@ -95,6 +95,13 @@ export async function dismissTriageItem(id: string): Promise<TriageItem> {
   return res.item;
 }
 
+/** Permanently delete a triage item that is still in process (PENDING or DRAFTED) */
+export async function deleteTriageItem(id: string): Promise<void> {
+  await apiFetch<{ success: boolean; id: string }>(`/api/v1/roadmaps/triage/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export interface CreateTriagePayload {
   query: string;
   assistantMsg?: string | null;

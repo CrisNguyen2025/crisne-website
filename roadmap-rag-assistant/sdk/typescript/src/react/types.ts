@@ -1,6 +1,8 @@
 import type { PageContext, ChatActionChip } from '../types';
+import type { AssistantStepEvent, AssistantStepItem } from '../client';
 
 export type { ChatActionChip };
+export type { AssistantStepEvent, AssistantStepItem };
 
 /**
  * Configuration and state types for the Roadmap Assistant Chatbot Widget.
@@ -27,6 +29,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   toolCalls?: ToolCall[];
+  steps?: AssistantStepEvent[];
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   /** Epoch ms of the first streamed token; ends the "thinking" step. */
@@ -119,6 +122,13 @@ export interface ChatbotConfig {
    * Optional custom CSS class name for the wrapper container.
    */
   className?: string;
+
+  /**
+   * Optional custom conversation/thread ID.
+   * If omitted, a unique UUID is automatically generated per conversation session.
+   */
+  conversationId?: string;
+  threadId?: string;
 }
 
 export interface FeedbackDetail {

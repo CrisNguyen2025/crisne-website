@@ -96,6 +96,26 @@ console.log(response.message);
 | Item | `update_item` | Cập nhật/di chuyển item |
 | Item | `delete_item` | Xóa item |
 
+## SSE Events (`POST /chat/stream`)
+
+| Event | Data |
+|-------|------|
+| `token` | `{"delta": "..."}` — a piece of the answer |
+| `tool_start` / `tool_end` | `{"name", "args"}` / `{"name", "result"}` |
+| `step` | One step of the turn's timeline (below) |
+| `done` | `{"message", "tool_calls", "steps"}` — `steps` holds the final state of every step |
+| `error` | `{"error": "..."}` |
+
+`step` events share an `id` per step: a `running` event, then `done` (with `duration_ms`) or `error`.
+Kinds: `routing` → `retrieval` → `tool` → `generation` → `guard`. Clients that ignore unknown
+events keep working. Full field list and owner-only fields: `rag_service/steps.py`.
+
+```text
+event: step
+data: {"id": "retrieve", "kind": "retrieval", "status": "done", "duration_ms": 412, "count": 1,
+       "detail": "1 tài liệu", "items": [{"title": "Vector Database", "type": "item", "topic": "ai", "href": "/?topic=ai"}]}
+```
+
 ## Run Tests
 
 ```bash

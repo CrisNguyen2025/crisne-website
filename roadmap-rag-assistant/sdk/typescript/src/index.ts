@@ -18,6 +18,9 @@ export type {
   PlanResponse,
   WebMcpToolSpec,
   ChatActionChip,
+  AssistantStepEvent,
+  AssistantStepItem,
+  AssistantStepKind,
 } from './types';
 
 // React Chatbot Widget & Headless Hooks

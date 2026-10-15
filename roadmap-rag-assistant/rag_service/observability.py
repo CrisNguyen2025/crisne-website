@@ -60,9 +60,13 @@ def get_langfuse() -> Any:
     try:
         from langfuse import Langfuse
 
+        from rag_service.pii import mask_trace_data
+
         _client = Langfuse(
             environment=os.getenv("LANGFUSE_TRACING_ENVIRONMENT") or "development",
             release=os.getenv("LANGFUSE_RELEASE") or None,
+            # Visitors type emails/phone numbers into the chat; never ship them to Langfuse
+            mask=mask_trace_data,
         )
         print("📈 Langfuse tracing enabled.")
     except Exception as exc:

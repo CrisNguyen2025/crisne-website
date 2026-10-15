@@ -153,7 +153,7 @@ function fadeWords(text: string, base: number): React.ReactNode[] {
   const re = /(\S+)(\s*)/g;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     out.push(
-      <span key={`w${base + m.index}`} className="animate-in fade-in duration-300">
+      <span key={`w${base + m.index}`} className="animate-stream-fade">
         {m[1]}
       </span>
     );
@@ -419,6 +419,81 @@ function BlockView({
   }
 }
 
+function areListItemsEqual(a: ListItem[], b: ListItem[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].text !== b[i].text || a[i].num !== b[i].num || a[i].ordered !== b[i].ordered) {
+      return false;
+    }
+    if (a[i].children.length !== b[i].children.length) return false;
+    if (a[i].children.length > 0 && !areListItemsEqual(a[i].children, b[i].children)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areBlocksEqual(
+  prev: {
+    block: Block;
+    trailing?: React.ReactNode;
+    onRun?: (code: string) => void;
+    fade?: boolean;
+  },
+  next: {
+    block: Block;
+    trailing?: React.ReactNode;
+    onRun?: (code: string) => void;
+    fade?: boolean;
+  }
+): boolean {
+  if (prev.fade !== next.fade) return false;
+  if (prev.trailing !== next.trailing) return false;
+  if (prev.onRun !== next.onRun) return false;
+
+  const b1 = prev.block;
+  const b2 = next.block;
+  if (b1.kind !== b2.kind) return false;
+
+  switch (b1.kind) {
+    case "paragraph": {
+      const p2 = b2 as typeof b1;
+      if (b1.lines.length !== p2.lines.length) return false;
+      for (let i = 0; i < b1.lines.length; i++) {
+        if (b1.lines[i] !== p2.lines[i]) return false;
+      }
+      return true;
+    }
+    case "heading": {
+      const h2 = b2 as typeof b1;
+      return b1.level === h2.level && b1.text === h2.text;
+    }
+    case "code": {
+      const c2 = b2 as typeof b1;
+      return b1.lang === c2.lang && b1.code === c2.code;
+    }
+    case "quote": {
+      const q2 = b2 as typeof b1;
+      if (b1.lines.length !== q2.lines.length) return false;
+      for (let i = 0; i < b1.lines.length; i++) {
+        if (b1.lines[i] !== q2.lines[i]) return false;
+      }
+      return true;
+    }
+    case "rule":
+      return true;
+    case "list": {
+      const l2 = b2 as typeof b1;
+      if (b1.ordered !== l2.ordered || b1.items.length !== l2.items.length) {
+        return false;
+      }
+      return areListItemsEqual(b1.items, l2.items);
+    }
+  }
+}
+
+const MemoizedBlockView = React.memo(BlockView, areBlocksEqual);
+
 /** Thin caret shown at the end of a streaming answer. */
 export function StreamingCaret() {
   return (
@@ -456,7 +531,7 @@ export function ChatMarkdown({
       className={`min-w-0 space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`}
     >
       {blocks.map((block, idx) => (
-        <BlockView
+        <MemoizedBlockView
           key={idx}
           block={block}
           onRun={onRun}

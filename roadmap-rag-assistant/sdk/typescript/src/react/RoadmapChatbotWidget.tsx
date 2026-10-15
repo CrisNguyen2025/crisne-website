@@ -12,37 +12,21 @@ import {
   CheckCircleIcon,
   ThumbsUpIcon,
   ThumbsDownIcon,
+  MoreVerticalIcon,
 } from "./icons";
-import { formatTime, formatToolDisplayName } from "./utils/formatters";
+import { formatTime, formatToolDisplayName, toStepItems } from "./utils/formatters";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { LayerChoicePicker } from "./LayerChoicePicker";
 import { ToolStepRow, CollapsibleStepsSummary, StepItem } from "./ToolStepRow";
 
 const WIDGET_THEME_VARS: React.CSSProperties = {
-  ["--bg" as any]: "#FFFFFF",
-  ["--surface" as any]: "#F4F3F0",
-  ["--border" as any]: "#E6E4DF",
-  ["--text" as any]: "#1F1E1C",
-  ["--text-muted" as any]: "#6B6862",
-  ["--accent" as any]: "#C2410C",
-  ["--accent-soft" as any]: "#FBEDE5",
-  ["--success" as any]: "#3F7D58",
-  ["--danger" as any]: "#B42318",
-
-  // Semantic mappings for Tailwind components (e.g. ChatMarkdown)
-  ["--background" as any]: "#FFFFFF",
-  ["--foreground" as any]: "#1F1E1C",
-  ["--muted-foreground" as any]: "#6B6862",
-  ["--card" as any]: "#F4F3F0",
-  ["--card-foreground" as any]: "#1F1E1C",
-  ["--popover" as any]: "#FFFFFF",
-  ["--popover-foreground" as any]: "#1F1E1C",
-  ["--border" as any]: "#E6E4DF",
-  ["--input" as any]: "#F4F3F0",
-  ["--muted" as any]: "#F4F3F0",
-  ["--primary" as any]: "#C2410C",
-  ["--primary-foreground" as any]: "#FFFFFF",
-  colorScheme: "light",
+  ["--bg" as any]: "#FFFFFF", ["--surface" as any]: "#F4F3F0", ["--border" as any]: "#E6E4DF",
+  ["--text" as any]: "#1F1E1C", ["--text-muted" as any]: "#6B6862", ["--accent" as any]: "#C2410C",
+  ["--accent-soft" as any]: "#FBEDE5", ["--success" as any]: "#3F7D58", ["--danger" as any]: "#B42318",
+  ["--background" as any]: "#FFFFFF", ["--foreground" as any]: "#1F1E1C", ["--muted-foreground" as any]: "#6B6862",
+  ["--card" as any]: "#F4F3F0", ["--card-foreground" as any]: "#1F1E1C", ["--popover" as any]: "#FFFFFF",
+  ["--popover-foreground" as any]: "#1F1E1C", ["--input" as any]: "#F4F3F0", ["--muted" as any]: "#F4F3F0",
+  ["--primary" as any]: "#C2410C", ["--primary-foreground" as any]: "#FFFFFF", colorScheme: "light",
 };
 
 const UNLIKE_REASONS = [
@@ -164,8 +148,22 @@ export function RoadmapChatbotWidget({
   getContext,
   onWebMcpMessage,
   className = "",
+  conversationId: customConversationId,
+  threadId,
 }: ChatbotConfig) {
   const [isOpen, setIsOpen] = useState(initialOpen);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [copiedConvId, setCopiedConvId] = useState(false);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  const handleLauncherMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
@@ -218,11 +216,14 @@ export function RoadmapChatbotWidget({
     isLoading,
     isStreaming,
     activeTool,
+    conversationId,
     sendMessage,
     stopStreaming,
     clearMessages,
   } = useRoadmapAssistantChat({
     baseUrl,
+    threadId,
+    conversationId: customConversationId,
     initialMessages,
     onToolExecuted,
     getContext,
@@ -234,43 +235,62 @@ export function RoadmapChatbotWidget({
   const containerRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
 
-  // Click outside to close smoothly
+  // Close container & options on click outside or Escape
   useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+    if (!isOpen && !isOptionsOpen) return;
+    const handleClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (isOpen && containerRef.current && !containerRef.current.contains(target)) {
         setIsOpen(false);
+        setIsOptionsOpen(false);
+      } else if (isOptionsOpen && optionsRef.current && !optionsRef.current.contains(target)) {
+        setIsOptionsOpen(false);
       }
     };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
         setIsOpen(false);
+        setIsOptionsOpen(false);
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside, { passive: true });
-    document.addEventListener("keydown", handleKeyDown);
-
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("touchstart", handleClick, { passive: true });
+    document.addEventListener("keydown", handleKey);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("touchstart", handleClick);
+      document.removeEventListener("keydown", handleKey);
     };
-  }, [isOpen]);
+  }, [isOpen, isOptionsOpen]);
+
+  const handleCopyConversationId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!conversationId) return;
+    navigator.clipboard?.writeText(conversationId).then(
+      () => {
+        setCopiedConvId(true);
+        setTimeout(() => {
+          setCopiedConvId(false);
+          setIsOptionsOpen(false);
+        }, 1200);
+      },
+      () => {}
+    );
+  };
+
+  const isAtBottomRef = useRef(true);
+
+  const handleContainerScroll = () => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= 60;
+  };
 
   // Auto-scroll (immediate follow during stream like Claude Code, smooth on arrival)
   useEffect(() => {
-    if (isOpen && scrollRef.current) {
-      scrollRef.current.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: isStreaming ? "auto" : "smooth",
-      });
+    if (isOpen && scrollRef.current && isAtBottomRef.current) {
+      const el = scrollRef.current;
+      el.scrollTop = el.scrollHeight;
     }
   }, [messages, isOpen, isStreaming, activeTool]);
 
@@ -324,6 +344,7 @@ export function RoadmapChatbotWidget({
     inputRef.current?.focus();
 
     // 3. Send message
+    isAtBottomRef.current = true;
     sendMessage(val);
 
     // 4. Re-ensure focus on next animation frame
@@ -386,15 +407,47 @@ export function RoadmapChatbotWidget({
             </div>
 
             <div className="flex shrink-0 items-center gap-0.5">
-              <button
-                type="button"
-                onClick={clearMessages}
-                title="Cuộc trò chuyện mới"
-                aria-label="Cuộc trò chuyện mới"
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
-              >
-                <NewChatIcon className="h-4 w-4" />
-              </button>
+              <div className="relative" ref={optionsRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsOptionsOpen((prev) => !prev)}
+                  title="Tùy chọn"
+                  aria-label="Tùy chọn"
+                  aria-expanded={isOptionsOpen}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+                >
+                  <MoreVerticalIcon className="h-4 w-4" />
+                </button>
+
+                {isOptionsOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[220px] whitespace-nowrap rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] animate-in fade-in zoom-in-95 duration-150">
+                    <button
+                      type="button"
+                      onClick={handleCopyConversationId}
+                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                        copiedConvId
+                          ? "bg-[#3F7D58]/10 text-[#3F7D58]"
+                          : "text-[#1F1E1C] hover:bg-[#F4F3F0]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {copiedConvId ? (
+                          <CheckIcon className="h-4 w-4 text-[#3F7D58] shrink-0" />
+                        ) : (
+                          <CopyIcon className="h-4 w-4 text-[#6B6862] shrink-0" />
+                        )}
+                        <span>Conversation ID</span>
+                      </span>
+                      {copiedConvId && (
+                        <span className="rounded-full bg-[#3F7D58]/15 px-2 py-0.5 text-[10px] font-semibold text-[#3F7D58]">
+                          Đã copy
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
@@ -410,6 +463,7 @@ export function RoadmapChatbotWidget({
           {/* ── Messages ── */}
           <div
             ref={scrollRef}
+            onScroll={handleContainerScroll}
             className="flex-1 space-y-6 overflow-y-auto px-4 py-5"
           >
             {messages.map((msg) => {
@@ -467,43 +521,37 @@ export function RoadmapChatbotWidget({
                 isLast &&
                 msg.content.includes("Chọn layer cho bài học");
 
-              // Build step items
-              const stepItems: StepItem[] = [];
-              toolCalls.forEach((tc, idx) => {
-                const toolKey = `${msg.id}-${idx}`;
-                stepItems.push({
-                  id: toolKey,
-                  label: formatToolDisplayName(tc.name),
-                  startedAt: tc.startedAt,
-                  endedAt: tc.endedAt,
-                  running: isLive && tc.endedAt === undefined,
-                  detail: tc.result,
-                });
-              });
+              // Step events from the server when it sends them; tool calls for older servers.
+              const stepItems: StepItem[] = msg.steps?.length
+                ? toStepItems(msg.id, msg.steps, isLive)
+                : toolCalls.map((tc, idx) => ({
+                    id: `${msg.id}-${idx}`,
+                    label: formatToolDisplayName(tc.name),
+                    startedAt: tc.startedAt,
+                    endedAt: tc.endedAt,
+                    running: isLive && tc.endedAt === undefined,
+                    detail: tc.result,
+                  }));
 
-              if (showThinking && toolCalls.length === 0) {
-                stepItems.push({
-                  id: `${msg.id}-thinking`,
-                  label: "Đang suy nghĩ & soạn câu trả lời",
-                  startedAt: thinkingSince,
-                  running: true,
-                });
+              // Between steps (e.g. the model extracting entities) nothing is running yet:
+              // keep the header live instead of showing "Thought for" before the answer starts.
+              if (msg.steps?.length && isLive && !msg.content && !stepItems.some((s) => s.running)) {
+                const lastEnd = msg.steps[msg.steps.length - 1].endedAt;
+                stepItems.push({ id: `${msg.id}-thinking`, label: "Thinking...", startedAt: lastEnd ?? thinkingSince, running: true });
+              }
+
+              if (!msg.steps?.length && toolCalls.length === 0) {
+                if (showThinking) {
+                  stepItems.push({ id: `${msg.id}-thinking`, label: "Thinking...", startedAt: thinkingSince, running: true });
+                } else if (msg.firstTokenAt && thinkingSince) {
+                  // Only streamed answers: a static greeting has no thinking to show
+                  stepItems.push({ id: `${msg.id}-thinking`, label: "Thought", startedAt: thinkingSince, endedAt: msg.firstTokenAt, running: false });
+                }
               }
 
               return (
                 <div key={msg.id} className="group flex flex-col gap-2">
-                  {/* Main answer content rendered directly on canvas without a bubble card */}
-                  {msg.content && (
-                    <div className="text-sm leading-relaxed text-[#1F1E1C] py-0.5">
-                      <ChatMarkdown
-                        content={msg.content}
-                        streaming={isLive}
-                        onRun={isLoading ? undefined : sendMessage}
-                      />
-                    </div>
-                  )}
-
-                  {/* Step summary (collapsible, defaults to last action + total time), placed at bottom of response */}
+                  {/* Step summary (Thinking & Tools), placed at top of response like Claude */}
                   {stepItems.length > 0 && (
                     <div className="-mx-1">
                       <CollapsibleStepsSummary
@@ -511,6 +559,17 @@ export function RoadmapChatbotWidget({
                         expandedTools={expandedTools}
                         onToggleTool={toggleToolExpand}
                         isLive={isLive}
+                      />
+                    </div>
+                  )}
+
+                  {/* Main answer content rendered directly on canvas */}
+                  {msg.content && (
+                    <div className="text-sm leading-relaxed text-[#1F1E1C] py-0.5">
+                      <ChatMarkdown
+                        content={msg.content}
+                        streaming={isLive}
+                        onRun={isLoading ? undefined : sendMessage}
                       />
                     </div>
                   )}
@@ -666,18 +725,29 @@ export function RoadmapChatbotWidget({
 
       {/* ── Launcher (hidden while open: the panel takes its corner; header has a close button) ── */}
       {!isOpen && (
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="Toggle Roadmap Assistant"
-        className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer"
-      >
-        {isOpen ? (
-          <CloseIcon className="h-5 w-5 text-[#6B6862]" />
-        ) : (
-          <SparklesIcon className="h-5 w-5 text-[#1F1E1C]" />
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle Roadmap Assistant"
+          className="pointer-events-auto group flex h-11 items-center gap-2 rounded-full border border-white/25 bg-[#181A20] px-4 text-[14px] font-medium tracking-normal text-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.2)] transition-all duration-200 hover:bg-[#22252D] hover:border-white/40 hover:scale-[1.03] active:scale-[0.97] select-none cursor-pointer"
+        >
+          {/* Minimal 4-point star icon sáng rõ */}
+          <span className="flex items-center justify-center text-white/80 transition-colors group-hover:text-white">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
+            </svg>
+          </span>
+
+          <span className="text-white/95 transition-colors group-hover:text-white">
+            Ask AI
+          </span>
+        </button>
       )}
     </div>
   );

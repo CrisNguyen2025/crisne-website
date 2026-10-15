@@ -141,3 +141,24 @@ export function ArrowDownIcon({ className }: IconProps) {
     </Icon>
   );
 }
+
+export function MoreVerticalIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+      <circle cx="12" cy="5" r="1" fill="currentColor" />
+      <circle cx="12" cy="19" r="1" fill="currentColor" />
+    </Icon>
+  );
+}
+
+
+export function AlertTriangleIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </Icon>
+  );
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { CheckIcon, ChevronDownIcon } from "./icons";
+import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./icons";
 
 export function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -38,58 +38,96 @@ function StepSpinner() {
       className="grid h-3 w-3 shrink-0 grid-cols-2 gap-0.5"
       aria-hidden="true"
     >
-      <span className="animate-pulse rounded-full bg-[#6B6862]" />
-      <span className="animate-pulse rounded-full bg-[#6B6862] [animation-delay:150ms]" />
-      <span className="animate-pulse rounded-full bg-[#6B6862] [animation-delay:450ms]" />
-      <span className="animate-pulse rounded-full bg-[#6B6862] [animation-delay:300ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[#6B6862] [animation-duration:800ms] [animation-delay:0ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[#6B6862] [animation-duration:800ms] [animation-delay:200ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[#6B6862] [animation-duration:800ms] [animation-delay:600ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[#6B6862] [animation-duration:800ms] [animation-delay:400ms]" />
     </span>
   );
 }
 
+/** A source found by a retrieval step; rendered as a link when it has `href`. */
+export interface StepSource {
+  title: string;
+  topic?: string;
+  href?: string;
+}
+
+/** `warning`: finished but needs a look (guard issues, interrupted). `error`: failed. */
+export type StepTone = "default" | "warning" | "error";
+
 export interface ToolStepRowProps {
   label: string;
+  /** Short result shown after the label, e.g. "2 tài liệu". */
+  summary?: string;
+  tone?: StepTone;
   startedAt?: number;
   endedAt?: number;
   running: boolean;
-  /** Expanded body; when absent the row is not clickable. */
+  /** Expanded body; when absent (and no items) the row is not clickable. */
   detail?: string;
+  items?: StepSource[];
   expanded?: boolean;
   onToggle?: () => void;
 }
 
+function StepStatusIcon({ running, tone }: { running: boolean; tone: StepTone }) {
+  if (running) return <StepSpinner />;
+  if (tone === "error") return <CloseIcon className="h-3 w-3 shrink-0 text-[#B42318]" />;
+  if (tone === "warning") return <AlertTriangleIcon className="h-3 w-3 shrink-0 text-[#B54708]" />;
+  return <CheckIcon className="h-3 w-3 shrink-0 text-[#3F7D58]" />;
+}
+
 export function ToolStepRow({
   label,
+  summary,
+  tone = "default",
   startedAt,
   endedAt,
   running,
   detail,
+  items,
   expanded = false,
   onToggle,
 }: ToolStepRowProps) {
-  const canExpand = !running && !!detail && !!onToggle;
+  const canExpand = !running && (!!detail || (items && items.length > 0)) && !!onToggle;
 
   return (
-    <div className="font-mono text-xs">
+    <div className="text-xs">
       <button
         type="button"
         onClick={canExpand ? onToggle : undefined}
         disabled={!canExpand}
         aria-expanded={canExpand ? expanded : undefined}
-        className={`flex w-full select-none items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors ${
-          canExpand ? "cursor-pointer hover:bg-[#ECEAE5]" : "cursor-default"
+        className={`group/row flex w-full select-none items-center gap-2 rounded px-2 py-1 text-left transition-colors ${
+          canExpand
+            ? "cursor-pointer hover:bg-[#F4F3F0] text-[#4D4B46]"
+            : "cursor-default text-[#6B6862]"
         }`}
       >
-        {running ? (
-          <StepSpinner />
-        ) : (
-          <CheckIcon className="h-3 w-3 text-[#3F7D58]" />
-        )}
+        <StepStatusIcon running={running} tone={tone} />
         <span
-          className={`truncate ${running ? "text-[#1F1E1C] font-medium" : "text-[#6B6862]"}`}
+          className={`truncate ${
+            running ? "font-medium text-[#1F1E1C]" : "text-[#4D4B46]"
+          }`}
         >
           {label}
+          {summary && (
+            <span
+              className={
+                tone === "error"
+                  ? "text-[#B42318]"
+                  : tone === "warning"
+                    ? "text-[#B54708]"
+                    : "text-[#8C8983]"
+              }
+            >
+              {" · "}
+              {summary}
+            </span>
+          )}
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1 text-[#6B6862]">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-[#8C8983] font-mono">
           {startedAt !== undefined && (running || endedAt !== undefined) && (
             <ElapsedTimer
               startedAt={startedAt}
@@ -98,15 +136,37 @@ export function ToolStepRow({
           )}
           {canExpand && (
             <ChevronDownIcon
-              className={`h-3 w-3 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+              className={`h-3 w-3 transition-transform duration-200 text-[#8C8983] group-hover/row:text-[#1F1E1C] ${
+                expanded ? "" : "-rotate-90"
+              }`}
             />
           )}
         </span>
       </button>
 
       {canExpand && expanded && (
-        <div className="ml-5 mt-1 whitespace-pre-wrap break-words rounded-md border border-[#E6E4DF] bg-[#F4F3F0] p-2.5 leading-relaxed text-[#1F1E1C]">
-          {detail}
+        <div className="ml-5 mt-1 mr-1 rounded-md bg-[#F4F3F0]/70 border border-[#EBE9E4] px-2.5 py-1.5 text-[11px] leading-relaxed text-[#4D4B46] whitespace-pre-wrap break-words">
+          {detail && <div className={items?.length ? "mb-1" : "font-mono"}>{detail}</div>}
+          {items && items.length > 0 && (
+            <ul className="space-y-0.5">
+              {items.map((it, idx) => (
+                <li key={`${it.href ?? it.title}-${idx}`} className="flex min-w-0 items-baseline gap-1.5">
+                  <span aria-hidden="true" className="text-[#8C8983]">•</span>
+                  {it.href ? (
+                    <a
+                      href={it.href}
+                      className="truncate font-medium text-[#1F1E1C] underline decoration-[#C2410C]/40 underline-offset-2 hover:decoration-[#C2410C]"
+                    >
+                      {it.title}
+                    </a>
+                  ) : (
+                    <span className="truncate">{it.title}</span>
+                  )}
+                  {it.topic && <span className="shrink-0 text-[#8C8983]">{it.topic}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
@@ -116,10 +176,13 @@ export function ToolStepRow({
 export interface StepItem {
   id: string;
   label: string;
+  summary?: string;
+  tone?: StepTone;
   startedAt?: number;
   endedAt?: number;
   running: boolean;
   detail?: string;
+  items?: StepSource[];
 }
 
 export interface CollapsibleStepsSummaryProps {
@@ -139,11 +202,10 @@ export function CollapsibleStepsSummary({
 
   if (steps.length === 0) return null;
 
-  const anyRunning = steps.some((s) => s.running);
-  // Last action
-  const lastStep = steps[steps.length - 1];
+  const runningStep = [...steps].reverse().find((s) => s.running);
+  const anyRunning = runningStep !== undefined;
+  const anyError = steps.some((s) => s.tone === "error");
 
-  // Overall start and end
   const firstStartedAt = steps.find((s) => s.startedAt !== undefined)?.startedAt;
   const lastEndedAt = anyRunning
     ? undefined
@@ -154,71 +216,65 @@ export function CollapsibleStepsSummary({
           undefined
         );
 
-  // If there is only 1 step, show it directly as a clean single row (can expand its details if available)
-  if (steps.length === 1) {
-    const single = steps[0];
-    return (
-      <ToolStepRow
-        label={single.label}
-        startedAt={single.startedAt}
-        endedAt={single.endedAt}
-        running={single.running}
-        detail={single.detail}
-        expanded={!!expandedTools[single.id]}
-        onToggle={() => onToggleTool(single.id)}
-      />
-    );
-  }
+  const totalDuration =
+    firstStartedAt !== undefined && lastEndedAt !== undefined
+      ? formatElapsed(lastEndedAt - firstStartedAt)
+      : undefined;
+
+  // Like Claude: the live header names what is happening now, then sums up the turn.
+  const headerLabel = runningStep
+    ? runningStep.label
+    : totalDuration
+      ? `Thought for ${totalDuration}`
+      : "Thought";
 
   return (
-    <div className="font-mono text-xs">
+    <div className="text-xs">
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
-        className="flex w-full select-none items-center gap-2 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-2.5 py-1.5 text-left transition-colors hover:bg-[#ECEAE5] cursor-pointer"
+        className="group/btn inline-flex items-center gap-1.5 py-0.5 text-left text-[#6B6862] hover:text-[#1F1E1C] cursor-pointer transition-colors select-none font-medium"
       >
         {anyRunning ? (
           <StepSpinner />
+        ) : anyError ? (
+          <CloseIcon className="h-3.5 w-3.5 text-[#B42318]" />
         ) : (
-          <CheckIcon className="h-3 w-3 text-[#3F7D58]" />
+          <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
         )}
 
-        <span className="flex items-center gap-1.5 truncate text-[#6B6862]">
-          <span className={anyRunning ? "font-medium text-[#1F1E1C]" : "text-[#6B6862]"}>
-            {lastStep.label}
-          </span>
-          <span className="rounded bg-[#FFFFFF] px-1.5 py-0.2 text-[10px] text-[#6B6862] border border-[#E6E4DF]">
-            +{steps.length - 1}
-          </span>
+        <span className="text-xs tracking-tight">
+          {headerLabel}
         </span>
 
-        <span className="ml-auto flex shrink-0 items-center gap-1 text-[#6B6862]">
-          {firstStartedAt !== undefined && (
-            <ElapsedTimer
-              startedAt={firstStartedAt}
-              endedAt={lastEndedAt}
-            />
-          )}
-          <ChevronDownIcon
-            className={`h-3 w-3 transition-transform duration-200 ${
-              isOpen ? "" : "-rotate-90"
-            }`}
-          />
-        </span>
+        {anyRunning && firstStartedAt !== undefined && (
+          <span className="text-[11px] text-[#8C8983] font-mono">
+            <ElapsedTimer startedAt={firstStartedAt} />
+          </span>
+        )}
+
+        <ChevronDownIcon
+          className={`h-3 w-3 text-[#8C8983] transition-transform duration-200 group-hover/btn:text-[#1F1E1C] ${
+            isOpen ? "" : "-rotate-90"
+          }`}
+        />
       </button>
 
       {isOpen && (
-        <div className="mt-1 space-y-0.5 rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] p-1">
+        <div className="relative mt-1.5 ml-1 pl-3 border-l border-[#E2DFD8] space-y-1 py-0.5 animate-in fade-in duration-150">
           {steps.map((s) => (
             <ToolStepRow
               key={s.id}
               label={s.label}
+              summary={s.summary}
+              tone={s.tone}
               startedAt={s.startedAt}
               endedAt={s.endedAt}
               running={s.running}
               detail={s.detail}
-              expanded={!!expandedTools[s.id]}
+              items={s.items}
+              expanded={expandedTools[s.id] ?? false}
               onToggle={() => onToggleTool(s.id)}
             />
           ))}

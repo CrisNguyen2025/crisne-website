@@ -11,12 +11,14 @@ import {
   Send,
   Loader2,
   RotateCw,
+  Trash2,
 } from "lucide-react";
 import {
   fetchTriageItems,
   generateTriageDraft,
   approveTriageDraft,
   dismissTriageItem,
+  deleteTriageItem,
   type TriageItem,
 } from "@/logic/roadmap/knowledgeTriageService";
 
@@ -102,6 +104,20 @@ export function KnowledgeTriageDrawer({
     setError(null);
     try {
       await dismissTriageItem(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Xoá vĩnh viễn feedback này? Không thể hoàn tác.")) return;
+    setActionLoadingId(id);
+    setError(null);
+    try {
+      await deleteTriageItem(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (err) {
       setError(toErrorMessage(err));
@@ -235,11 +251,25 @@ export function KnowledgeTriageDrawer({
                         </div>
                       )}
                     </div>
-                    {item.reason && (
-                      <span className="shrink-0 rounded-md bg-[#FBEDE5] px-2 py-0.5 text-[10px] font-medium text-[#C2410C] border border-[#C2410C]/20">
-                        {item.reason}
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1">
+                      {item.reason && (
+                        <span className="rounded-md bg-[#FBEDE5] px-2 py-0.5 text-[10px] font-medium text-[#C2410C] border border-[#C2410C]/20">
+                          {item.reason}
+                        </span>
+                      )}
+                      {(item.status === "PENDING" || item.status === "DRAFTED") && (
+                        <button
+                          type="button"
+                          disabled={isActionLoading}
+                          onClick={() => handleDelete(item.id)}
+                          title="Xoá feedback"
+                          aria-label="Xoá feedback"
+                          className="flex h-6 w-6 items-center justify-center rounded-md text-[#6B6862] hover:bg-[#FBEDE5] hover:text-[#C2410C] disabled:opacity-50 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Status: PENDING */}

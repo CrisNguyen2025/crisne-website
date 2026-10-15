@@ -11,10 +11,15 @@ import asyncio
 import json
 from pathlib import Path
 import re
+import time
 from typing import List, Optional, Tuple
 
 from rag_service.rag.ingestion import DatabaseIngestionWorker, KnowledgeDocument
 from rag_service.rag.vector_store import HybridVectorStore
+
+# Content edited outside the agent (web UI, Knowledge Triage approve, direct DB edits) never
+# notifies this service, so the index is rebuilt in the background once it is this old.
+INDEX_TTL_SECONDS = 30.0
 
 
 class HybridRagEngine:
@@ -28,6 +33,9 @@ class HybridRagEngine:
         self._ingestion_worker = DatabaseIngestionWorker()
         self._vector_store = HybridVectorStore()
         self._is_synced = False
+        self._synced_at = 0.0
+        self._sync_lock = asyncio.Lock()
+        self._sync_task: Optional[asyncio.Task] = None
         self.reload_blueprints()
 
     def reload_blueprints(self) -> None:
@@ -47,21 +55,33 @@ class HybridRagEngine:
 
     async def sync_live_database(self) -> int:
         """Sync and re-index all live Roadmaps, Layers, Groups, and Items."""
-        try:
-            docs = await self._ingestion_worker.ingest_all()
-            self._vector_store.index_documents(docs)
-            self._is_synced = True
-            print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
-            return len(docs)
-        except Exception as exc:
-            print(f"[HybridRagEngine] Error syncing live database: {exc}")
-            return 0
+        async with self._sync_lock:
+            try:
+                docs = await self._ingestion_worker.ingest_all()
+                # Embedding new docs is paced with time.sleep: keep it off the event loop
+                await asyncio.to_thread(self._vector_store.index_documents, docs)
+                self._is_synced = True
+                self._synced_at = time.monotonic()
+                print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
+                return len(docs)
+            except Exception as exc:
+                print(f"[HybridRagEngine] Error syncing live database: {exc}")
+                return 0
 
     async def search_live_knowledge(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
         """Search across live database entities (Roadmaps, Layers, Items, Content)."""
         if not self._is_synced:
             await self.sync_live_database()
+        elif time.monotonic() - self._synced_at > INDEX_TTL_SECONDS and not (
+            self._sync_task and not self._sync_task.done()
+        ):
+            # Stale-while-revalidate: answer from the current index, refresh for the next query
+            self._sync_task = asyncio.create_task(self.sync_live_database())
         return self._vector_store.hybrid_search(query, limit=limit)
+
+    def known_topic_slugs(self) -> set[str]:
+        """Slugs of every roadmap in the current index (valid targets for `/?topic=` links)."""
+        return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}
 
     def format_knowledge_context(self, matches: List[Tuple[KnowledgeDocument, float]]) -> str:
         """Format retrieved live knowledge into structured markdown context for the LLM."""
@@ -83,12 +103,12 @@ class HybridRagEngine:
                 lines.append(
                     f"\n#### 📑 Mảng kiến thức: [{doc.layer_tag}] {doc.title}\n"
                     f"- **Thuộc Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
-                    f"- **Chi tiết:** {doc.description or 'N/A'}\n"
+                    + (f"- **Chi tiết:** {doc.description}\n" if doc.description else "")
                 )
             elif doc.doc_type == "topic":
                 lines.append(
                     f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/?topic={doc.topic_slug})\n"
-                    f"- **Mô tả:** {doc.description or 'N/A'}\n"
+                    + (f"- **Mô tả:** {doc.description}\n" if doc.description else "")
                 )
 
         return "\n".join(lines)

@@ -51,6 +51,8 @@ async def _sse_stream_generator(
     agent = _get_agent()
     accumulated_tokens: list[str] = []
     executed_tools: list[dict] = []
+    # Latest state of each step, in the order steps started (see rag_service/steps.py)
+    steps: dict[str, dict] = {}
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -71,6 +73,10 @@ async def _sse_stream_generator(
                 delta = ev.get("delta", "")
                 accumulated_tokens.append(delta)
                 yield f"event: token\ndata: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
+            elif ev_type == "step":
+                payload = {k: v for k, v in ev.items() if k != "type"}
+                steps[payload["id"]] = {**steps.get(payload["id"], {}), **payload}
+                yield f"event: step\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     try:
         if isinstance(agent, FallbackAgent):
@@ -116,6 +122,7 @@ async def _sse_stream_generator(
         done_payload = {
             "message": final_message,
             "tool_calls": executed_tools,
+            "steps": list(steps.values()),
         }
         yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 

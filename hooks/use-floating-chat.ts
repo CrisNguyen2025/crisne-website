@@ -19,6 +19,7 @@ export function useFloatingChat() {
   const abortControllerRef = useRef<AbortController | null>(null);
   // Groups all turns of one conversation into a Langfuse session; renewed on reset
   const sessionIdRef = useRef<string>(crypto.randomUUID());
+  const [conversationId, setConversationId] = useState<string>(() => sessionIdRef.current);
 
   const stopResponse = useCallback(() => {
     if (abortControllerRef.current) {
@@ -32,7 +33,9 @@ export function useFloatingChat() {
     stopResponse();
     setMessages([]);
     setInput("");
-    sessionIdRef.current = crypto.randomUUID();
+    const newSessionId = crypto.randomUUID();
+    sessionIdRef.current = newSessionId;
+    setConversationId(newSessionId);
   }, [stopResponse]);
 
   const sendFeedback = useCallback(async (message: ChatMessage, value: 0 | 1) => {
@@ -155,6 +158,7 @@ export function useFloatingChat() {
     input,
     setInput,
     isLoading,
+    conversationId,
     sendMessage,
     sendFeedback,
     resetChat,
