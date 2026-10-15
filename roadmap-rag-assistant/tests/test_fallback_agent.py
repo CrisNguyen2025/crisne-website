@@ -9,6 +9,17 @@ from rag_service.tools import ALL_TOOLS
 
 @pytest.fixture
 def fallback_agent(mock_adapter):
+    # Layers the prompts below refer to; unknown layers are covered in test_target_clarification.py
+    mock_adapter.get_topic.return_value = {
+        "id": "test-id-1",
+        "slug": "test-topic",
+        "title": "Test Topic",
+        "layers": [
+            {"id": "layer-aaa", "shortTag": "02-AAA", "title": "aaa"},
+            {"id": "layer-mock-1", "shortTag": "03-MO1", "title": "mock 1"},
+            {"id": "layer-llm", "shortTag": "01-LLM", "title": "LLM Application"},
+        ],
+    }
     return FallbackAgent(tools=ALL_TOOLS)
 
 

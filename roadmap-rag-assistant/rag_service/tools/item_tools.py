@@ -99,9 +99,13 @@ async def create_item(
     Tự tìm hoặc tạo Group phù hợp theo level.
     Ví dụ: 'thêm item Prompt Engineering vào layer 01-LLM, level core'.
     """
-    from rag_service.tools import get_adapter, resolve_layer_id
+    from rag_service.tools import get_adapter
+    from rag_service.tools.layer_resolver import describe_unresolved, resolve_layer
 
-    real_layer_id = await resolve_layer_id(layer_id)
+    res = await resolve_layer(layer_id)
+    if res.status not in ("found", "unavailable"):
+        return describe_unresolved(layer_id, res)
+    real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
     result = await adapter.create_item(real_layer_id, level, title, description, content)
     return (
@@ -121,9 +125,13 @@ async def create_items_batch(
     Sử dụng khi người dùng yêu cầu thêm nhiều item trong một câu.
     Ví dụ: 'thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-DB level core'.
     """
-    from rag_service.tools import get_adapter, resolve_layer_id
+    from rag_service.tools import get_adapter
+    from rag_service.tools.layer_resolver import describe_unresolved, resolve_layer
 
-    real_layer_id = await resolve_layer_id(layer_id)
+    res = await resolve_layer(layer_id)
+    if res.status not in ("found", "unavailable"):
+        return describe_unresolved(layer_id, res)
+    real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
     created: list[str] = []
     for item in items:

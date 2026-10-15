@@ -23,6 +23,8 @@ class SessionContext(BaseModel):
     # Item create waiting for the user to pick/create a layer, plus the topic to create it in.
     pending_layer_choice: Optional[StructuredRoadmapAction] = None
     pending_layer_topic: Optional[str] = None
+    # Existing layers offered for that create, answerable by number or name.
+    pending_layer_options: List[dict] = Field(default_factory=list)
     recent_created_entities: List[dict] = Field(default_factory=list)
 
 

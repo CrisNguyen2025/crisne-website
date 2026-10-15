@@ -114,7 +114,7 @@ async def test_delete_layer(mock_adapter):
 @pytest.mark.asyncio
 async def test_create_group(mock_adapter):
     result = await create_group.ainvoke(
-        {"layer_id": "layer-1", "title": "Core", "level": "core"}
+        {"layer_id": "layer-id", "title": "Core", "level": "core"}
     )
     assert "✅" in result
     mock_adapter.create_group.assert_called_once()
@@ -141,7 +141,7 @@ async def test_delete_group(mock_adapter):
 async def test_create_item(mock_adapter):
     result = await create_item.ainvoke(
         {
-            "layer_id": "layer-1",
+            "layer_id": "layer-id",
             "level": "core",
             "title": "Prompt Engineering",
         }
@@ -154,7 +154,7 @@ async def test_create_item(mock_adapter):
 async def test_create_items_batch(mock_adapter):
     result = await create_items_batch.ainvoke(
         {
-            "layer_id": "layer-1",
+            "layer_id": "layer-id",
             "level": "core",
             "items": [
                 {"title": "Vector DB"},

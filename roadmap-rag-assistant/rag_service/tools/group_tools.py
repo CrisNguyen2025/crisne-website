@@ -57,9 +57,13 @@ async def create_group(
     hoặc theo chủ đề tùy chỉnh.
     Ví dụ: 'thêm group Advanced vào layer 01-DB'.
     """
-    from rag_service.tools import get_adapter, resolve_layer_id
+    from rag_service.tools import get_adapter
+    from rag_service.tools.layer_resolver import describe_unresolved, resolve_layer
 
-    real_layer_id = await resolve_layer_id(layer_id)
+    res = await resolve_layer(layer_id)
+    if res.status not in ("found", "unavailable"):
+        return describe_unresolved(layer_id, res)
+    real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
     result = await adapter.create_group(real_layer_id, title, level)
     return (

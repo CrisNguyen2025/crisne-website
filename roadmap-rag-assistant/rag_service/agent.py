@@ -43,7 +43,8 @@ from rag_service.router import (
 from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, build_grounding
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
-from rag_service.tools import ALL_TOOLS
+from rag_service.tools import ALL_TOOLS, get_adapter
+from rag_service.tools.layer_resolver import LayerResolution, resolve_layer
 from rag_service.tools.rag_tools import (
     generate_roadmap_from_template,
     preview_roadmap_plan,
@@ -75,6 +76,53 @@ class NextGenRoadmapAgent:
             "1. Tạo layer mặc định **General** — gõ `tạo layer mặc định`\n"
             "2. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`"
         )
+        async for ev in self._stream_text(ask, delay):
+            yield ev
+
+    async def _ask_target_choice(
+        self,
+        session_ctx,
+        action: StructuredRoadmapAction,
+        identifier: str,
+        res: LayerResolution,
+        topic_slug: Optional[str],
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        """Park a create whose target layer is unknown or ambiguous and ask the user to pick one."""
+        topic_slug = res.topic_slug or topic_slug
+        options = res.candidates
+        if res.status == "not_found" and topic_slug:
+            options = [c for c in options if c["topic_slug"] == topic_slug] or options
+        options = options[:10]
+
+        if res.status == "topic" and not options:
+            # The topic exists but has no layer yet: offer to create one.
+            action.target_parent_identifier = None
+            async for ev in self._ask_layer_choice(session_ctx, action, topic_slug, delay):
+                yield ev
+            return
+
+        session_ctx.pending_layer_choice = action
+        session_ctx.pending_layer_topic = topic_slug
+        session_ctx.pending_layer_options = options
+
+        titles = ", ".join(f"**{e.title}**" for e in action.entities)
+        if res.status == "ambiguous":
+            head = f"`{identifier}` khớp nhiều layer. Bạn muốn thêm {titles} vào layer nào?"
+        elif res.status == "topic":
+            head = f"`{identifier}` là topic **{topic_slug}**. Bạn muốn thêm {titles} vào layer nào của topic này?"
+        else:
+            head = f"Không tìm thấy topic hay layer nào tên `{identifier}`. Bạn muốn thêm {titles} vào đâu?"
+
+        lines = [
+            f"{i}. **{o['title'] or o['shortTag']}**" + (f" — topic `{o['topic_slug']}`" if o["topic_slug"] != topic_slug else "")
+            for i, o in enumerate(options, 1)
+        ]
+        tail = ["", "Gõ **số thứ tự** hoặc **tên layer** để chọn."]
+        if topic_slug:
+            tail.append(f"Hoặc gõ `tạo layer <tên>` để tạo layer mới trong topic `{topic_slug}`.")
+        tail.append("Gõ `hủy` để bỏ qua.")
+        ask = "\n".join([head, "", *lines, *tail])
         async for ev in self._stream_text(ask, delay):
             yield ev
 
@@ -173,11 +221,35 @@ class NextGenRoadmapAgent:
         if session_ctx.pending_layer_choice:
             pending_item = session_ctx.pending_layer_choice
             topic_slug = session_ctx.pending_layer_topic
+            options = session_ctx.pending_layer_options
             session_ctx.pending_layer_choice = None
             session_ctx.pending_layer_topic = None
+            session_ctx.pending_layer_options = []
             m = re.match(r"^tạo layer\s+(.+)$", content, re.IGNORECASE)
             if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
                 async for ev in self._stream_text("Đã hủy thêm bài học.", delay):
+                    yield ev
+                return
+
+            # Pick one of the offered layers by number or by name.
+            picked = None
+            if options and lower.isdigit() and 1 <= int(lower) <= len(options):
+                picked = options[int(lower) - 1]
+            elif options and not m:
+                named = [o for o in options if lower in (o["title"].lower(), o["shortTag"].lower(), o["id"].lower())]
+                picked = named[0] if len(named) == 1 else None
+            if picked:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    return
+                pending_item.target_parent_identifier = picked["id"]
+                session_store.set_active_layer(session_id, layer_id=picked["id"], title=picked["title"])
+                tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
+                yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                yield {"type": "tool_end", "name": tool_name, "result": item_msg}
+                async for ev in self._stream_text(item_msg, delay):
                     yield ev
                 return
             if m and not is_owner():
@@ -321,6 +393,41 @@ class NextGenRoadmapAgent:
                 async for ev in self._ask_layer_choice(session_ctx, resolved_action, topic_slug, delay):
                     yield ev
                 return
+
+            # Check the target exists before writing; ask back instead of guessing.
+            target = resolved_action.target_parent_identifier
+            if resolved_action.action == ActionType.CREATE and target:
+                if resolved_action.entity_level in (EntityLevel.ITEM, EntityLevel.GROUP):
+                    layer_res = await resolve_layer(target, topic_slug=topic_slug)
+                    if layer_res.status == "found":
+                        resolved_action.target_parent_identifier = layer_res.layer_id
+                        session_store.set_active_layer(
+                            session_id, layer_id=layer_res.layer_id, title=layer_res.layer_title or ""
+                        )
+                    elif layer_res.status != "unavailable":
+                        async for ev in self._ask_target_choice(
+                            session_ctx, resolved_action, target, layer_res, topic_slug, delay
+                        ):
+                            yield ev
+                        return
+                elif resolved_action.entity_level == EntityLevel.LAYER:
+                    try:
+                        topic_missing = await get_adapter().get_topic(target) is None
+                        topics = await get_adapter().list_topics() if topic_missing else []
+                    except Exception as exc:
+                        # Lookup failed (e.g. network): let the executor and its SQLite fallback handle it.
+                        print(f"[agent] Topic check for '{target}' skipped: {exc}")
+                        topic_missing = False
+                    if topic_missing:
+                        listing = "\n".join(f"- `{t.get('slug')}` — {t.get('title')}" for t in topics[:15])
+                        ask = (
+                            f"Không tìm thấy topic `{target}` để tạo layer.\n\n"
+                            f"**Các topic hiện có:**\n{listing}\n\n"
+                            f"Hãy gửi lại yêu cầu với một topic ở trên, hoặc tạo topic `{target}` trước."
+                        )
+                        async for ev in self._stream_text(ask, delay):
+                            yield ev
+                        return
 
             if resolved_action.is_batch and resolved_action.entity_level != EntityLevel.GROUP:
                 tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}s_batch"
