@@ -4,14 +4,6 @@ import type { WorkflowGraph, WorkflowUi } from "../lib/workflow/dsl-types";
 import { graphHash } from "../lib/workflow/graph-hash";
 import { validateWorkflowGraph } from "../lib/workflow/dsl-validator";
 
-// Local SQLite dev.db client to avoid writing to Turso
-const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
-const prisma = new PrismaClient({
-  datasources: {
-    db: { url: `file:${dbPath}` },
-  },
-});
-
 export const SAMPLE_WORKFLOW_GRAPH: WorkflowGraph = {
   schemaVersion: 1,
   nodes: [
@@ -117,6 +109,14 @@ export const SAMPLE_WORKFLOW_UI: WorkflowUi = {
 };
 
 async function seed() {
+  // Local SQLite dev.db client to avoid writing to Turso
+  const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
+  const prisma = new PrismaClient({
+    datasources: {
+      db: { url: `file:${dbPath}` },
+    },
+  });
+
   const validation = validateWorkflowGraph(SAMPLE_WORKFLOW_GRAPH);
   if (!validation.ok) {
     throw new Error(`Sample workflow is invalid: ${JSON.stringify(validation.errors)}`);
@@ -161,7 +161,11 @@ async function seed() {
   await prisma.$disconnect();
 }
 
-seed().catch((err) => {
-  console.error("Failed to seed sample workflow:", err);
-  process.exit(1);
-});
+// Seed only when run as a script (`npx tsx scripts/seed-sample-workflow.ts`): tests import
+// the sample graph from this file and must not write to prisma/dev.db
+if (/seed-sample-workflow\.ts$/.test(process.argv[1] ?? "")) {
+  seed().catch((err) => {
+    console.error("Failed to seed sample workflow:", err);
+    process.exit(1);
+  });
+}

@@ -43,6 +43,10 @@ next-env.d.ts
 
 # Prisma SQLite — keep dev.db in repo, ignore migrations lock
 prisma/migrations/migration_lock.toml
+# SQLite WAL side files and the test database (tests/setup/test-db.ts)
+prisma/dev.db-shm
+prisma/dev.db-wal
+prisma/test.db*
 
 # Auto-generated agent rules (personalized per developer)
 .brainsync/agent-rules.md

@@ -12,8 +12,12 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Creates prisma/test.db with the current schema before the run
+    globalSetup: ["tests/setup/test-db.ts"],
     // Tests must never hit Gemini or Langfuse: no keys from .env.local leak in
     env: {
+      // DB-backed tests use their own SQLite file, never prisma/dev.db
+      DATABASE_URL: "file:./test.db",
       GEMINI_API_KEY: "test-gemini-key-not-real",
       // Route tests assert the Gemini model chain
       LLM_PROVIDER: "",
