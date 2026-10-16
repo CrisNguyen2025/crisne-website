@@ -6,7 +6,7 @@ Run from roadmap-rag-assistant/:
 
 Heuristics-only metrics: coverage (share the heuristics decide), precision on what they decide,
 and accuracy over all cases (undecided counts as a miss). With --llm, each case also records
-which layer decided it: heuristic, llm, or default (the CHITCHAT fallback when the LLM fails).
+which layer decided it: heuristic, llm, or fallback (KNOWLEDGE_QUERY when the LLM is missing or fails).
 """
 
 from __future__ import annotations
@@ -34,15 +34,8 @@ def classify_heuristics(router: IntentRouter, cases: list[dict]) -> list[tuple[d
 async def classify_full(router: IntentRouter, cases: list[dict]) -> list[tuple[dict, str, str]]:
     rows = []
     for case in cases:
-        quick = router.classify_heuristics(case["query"])
         res = await router.aclassify(case["query"])
-        if quick is not None:
-            method = "heuristic"
-        else:
-            # aclassify returns this exact fallback when the LLM is missing or raises.
-            is_default = res.intent.value == "chitchat" and res.confidence == 0.5
-            method = "default" if is_default else "llm"
-        rows.append((case, res.intent.value, method))
+        rows.append((case, res.intent.value, res.source))
     return rows
 
 

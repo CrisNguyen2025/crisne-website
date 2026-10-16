@@ -132,11 +132,16 @@ class IntentRouter:
         return None
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
-        """Classify message intent, falling back to LLM structured output if ambiguous."""
+        """Classify message intent, falling back to LLM structured output if ambiguous.
+
+        Without a usable LLM answer the message goes to KNOWLEDGE_QUERY: it never writes, and search
+        still answers without an LLM (context or no-match reply), unlike a canned greeting.
+        """
         quick = self.classify_heuristics(text)
         if quick is not None:
             return quick
 
+        fallback_reason = "no_llm"
         if self._llm is not None:
             try:
                 structured_llm = self._llm.with_structured_output(IntentClassificationResult)
@@ -151,13 +156,16 @@ class IntentRouter:
                 )
                 res = await structured_llm.ainvoke(prompt)
                 if isinstance(res, IntentClassificationResult):
-                    return res
+                    return res.model_copy(update={"source": "llm", "fallback_reason": None})
+                fallback_reason = "llm_invalid_output"
             except Exception as exc:
                 print(f"[IntentRouter] LLM classification error: {exc}")
+                fallback_reason = f"llm_error:{type(exc).__name__}"
 
-        # Default fallback
         return IntentClassificationResult(
-            intent=IntentType.CHITCHAT,
+            intent=IntentType.KNOWLEDGE_QUERY,
             confidence=0.5,
             needs_cud_extraction=False,
+            source="fallback",
+            fallback_reason=fallback_reason,
         )

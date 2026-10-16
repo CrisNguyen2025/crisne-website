@@ -361,11 +361,11 @@ class NextGenRoadmapAgent:
         yield step_event("route", "routing", "running")
         router_step = start_step("intent-router", input={"message": content})
         intent_res: IntentClassificationResult = await self.router.aclassify(content)
-        # classify_heuristics is a cheap pure check; it tells us whether the LLM was needed.
-        method = "heuristic" if self.router.classify_heuristics(content) is not None else (
-            "llm" if self.llm is not None else "default"
-        )
-        end_step(router_step, output=intent_res.model_dump(mode="json"), metadata={"method": method})
+        method = intent_res.source
+        router_update: dict = {"output": intent_res.model_dump(mode="json"), "metadata": {"method": method}}
+        if method == "fallback":
+            router_update.update(level="WARNING", status_message=f"router fallback: {intent_res.fallback_reason}")
+        end_step(router_step, **router_update)
         yield step_event(
             "route",
             "routing",
@@ -373,6 +373,7 @@ class NextGenRoadmapAgent:
             intent=intent_res.intent.value,
             confidence=round(intent_res.confidence, 2),
             method=method,
+            fallback_reason=intent_res.fallback_reason,
         )
         if (trace := current_trace()) is not None:
             trace.flags["intent"] = intent_res.intent.value
@@ -667,6 +668,7 @@ class NextGenRoadmapAgent:
                 yield step_event("answer", "generation", "done", mode="llm")
                 return
             except Exception as exc:
+                print(f"[Agent] LLM chitchat warning ({type(exc).__name__}: {exc}). Falling back to template.")
                 end_step(gen, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
                 if (trace := current_trace()) is not None:
                     trace.flags["llm_fallback"] = True

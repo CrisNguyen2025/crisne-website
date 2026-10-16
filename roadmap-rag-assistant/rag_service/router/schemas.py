@@ -7,8 +7,9 @@ never leak conversational verbs ('tạo', 'thêm', 'create', 'add') into entity 
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
+from pydantic.json_schema import SkipJsonSchema
 
 
 class IntentType(str, Enum):
@@ -115,3 +116,7 @@ class IntentClassificationResult(BaseModel):
         False,
         description="True if the message requires extracting StructuredRoadmapAction.",
     )
+    # Set by the router, hidden from the LLM's structured-output schema.
+    source: SkipJsonSchema[Literal["heuristic", "llm", "fallback"]] = "heuristic"
+    # Why the router fell back: "no_llm", "llm_error:<ExceptionType>" or "llm_invalid_output".
+    fallback_reason: SkipJsonSchema[Optional[str]] = None
