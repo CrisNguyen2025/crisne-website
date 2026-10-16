@@ -10,7 +10,8 @@ import json
 import re
 from typing import Optional
 
-from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, build_grounding
+from rag_service.llm_breaker import llm_breaker
+from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, RATE_LIMITED_REPLY, build_grounding
 from rag_service.router.intent_router import IntentRouter
 from rag_service.router.schemas import IntentType
 
@@ -64,10 +65,14 @@ async def plan_webmcp_call(llm, message: str, tools: list[dict], context: Option
         tools_json=json.dumps(allowed, ensure_ascii=False),
         message=message,
     )
+    if llm_breaker.is_open:
+        return {"tool": None, "args": {}, "reply": RATE_LIMITED_REPLY}
     try:
         res = await llm.ainvoke(prompt)
         data = _parse_json(getattr(res, "content", str(res)))
     except Exception as exc:  # LLM/network errors should not crash the chat
+        if llm_breaker.record_failure(exc):
+            return {"tool": None, "args": {}, "reply": RATE_LIMITED_REPLY}
         return {"tool": None, "args": {}, "reply": f"Không gọi được LLM: {exc}"}
 
     if data is None:

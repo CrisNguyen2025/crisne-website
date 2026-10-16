@@ -9,9 +9,18 @@ import pytest
 
 from rag_service.auth import current_actor
 from rag_service.config import settings
+from rag_service.llm_breaker import llm_breaker
 from rag_service.tools import init_adapter
 
 TEST_INTERNAL_KEY = "test-internal-key"
+
+
+@pytest.fixture(autouse=True)
+def closed_llm_breaker():
+    """The LLM circuit breaker is process-wide: a 429 in one test must not skip the LLM in the next."""
+    llm_breaker.reset()
+    yield
+    llm_breaker.reset()
 
 
 @pytest.fixture(autouse=True)

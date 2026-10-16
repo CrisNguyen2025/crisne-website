@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from rag_service.llm_breaker import llm_breaker
 from rag_service.router.schemas import IntentClassificationResult, IntentType
 from rag_service.router.vietnamese import normalize_vietnamese
 
@@ -21,6 +22,8 @@ OFF_TOPIC_HINTS = [
     "thời tiết", "dự báo thời tiết", "giá vàng", "tỷ giá", "tỉ giá", "chứng khoán", "bitcoin", "crypto",
     "bóng đá", "tỷ số", "tỉ số", "phim", "bài hát", "nấu ăn", "công thức nấu", "du lịch",
     "weather", "stock price", "football score", "recipe",
+    # Business records live outside the roadmap database
+    "hợp đồng", "hóa đơn", "công nợ", "doanh thu", "bảng lương", "chấm công",
 ]
 
 # Clause joiners used to spot several requests in one message.
@@ -132,11 +135,19 @@ class IntentRouter:
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""
+        return (await self.aroute(text))[0]
+
+    async def aroute(self, text: str) -> tuple[IntentClassificationResult, str]:
+        """Classify and say how it was decided: heuristic | llm | llm_error | rate_limited | default."""
         quick = self.classify_heuristics(text)
         if quick is not None:
-            return quick
+            return quick, "heuristic"
 
-        if self._llm is not None:
+        method = "default"
+        if self._llm is not None and llm_breaker.is_open:
+            method = "rate_limited"
+        elif self._llm is not None:
+            method = "llm_error"
             try:
                 structured_llm = self._llm.with_structured_output(IntentClassificationResult)
                 prompt = (
@@ -150,13 +161,14 @@ class IntentRouter:
                 )
                 res = await structured_llm.ainvoke(prompt)
                 if isinstance(res, IntentClassificationResult):
-                    return res
+                    return res, "llm"
             except Exception as exc:
                 print(f"[IntentRouter] LLM classification error: {exc}")
+                llm_breaker.record_failure(exc)
 
         # Default fallback
         return IntentClassificationResult(
             intent=IntentType.CHITCHAT,
             confidence=0.5,
             needs_cud_extraction=False,
-        )
+        ), method

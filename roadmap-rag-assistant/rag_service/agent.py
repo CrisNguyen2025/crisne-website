@@ -27,6 +27,7 @@ from rag_service.observability import (
     traced_turn,
     usage_from_langchain,
 )
+from rag_service.llm_breaker import llm_breaker
 from rag_service.output_guard import LinkGuard, check_grounding
 from rag_service.prompts import PROMPT_SUGGESTION_FORMAT
 from rag_service.steps import step_event, with_steps
@@ -43,6 +44,7 @@ from rag_service.router import (
     normalize_vietnamese,
 )
 from rag_service.router.grounding import (
+    BATCH_LAYER_DELETE_REPLY,
     BULK_DELETE,
     BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
@@ -51,6 +53,7 @@ from rag_service.router.grounding import (
     RETRIEVAL_ERROR_REPLY,
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
+    UNCLEAR_REPLY,
     build_grounding,
     is_sensitive_request,
     no_match_reply,
@@ -65,6 +68,13 @@ from rag_service.tools.rag_tools import (
     preview_roadmap_plan,
     search_roadmap_templates,
 )
+
+
+# Placeholders the anaphora resolver leaves when no topic/layer is known from context
+# Below this the intent router only guessed (its default fallback is 0.5)
+UNCLEAR_CONFIDENCE = 0.7
+ANAPHORA_TARGETS = ("CONTEXT_ACTIVE", "đó", "nó", "this", "it")
+LAYER_VERBS = {ActionType.CREATE: "tạo", ActionType.DELETE: "xóa", ActionType.UPDATE: "sửa"}
 
 
 class NextGenRoadmapAgent:
@@ -90,6 +100,43 @@ class NextGenRoadmapAgent:
             "**Chọn layer cho bài học:**\n"
             "1. Tạo layer mặc định **General** — gõ `tạo layer mặc định`\n"
             "2. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`"
+        )
+        async for ev in self._stream_text(ask, delay):
+            yield ev
+
+    def _llm_fallback_reason(self, failed: bool) -> Optional[str]:
+        """Why an answer did not come from the LLM: none configured, the call failed, or rate limited."""
+        if self.llm is None:
+            return None
+        return "llm_error" if failed else "rate_limited"
+
+    async def _topic_known(self, slug: str) -> bool:
+        """True when the topic exists; a failed lookup counts as known, so the executor can still try."""
+        try:
+            return await get_adapter().get_topic(slug) is not None
+        except Exception as exc:
+            print(f"[agent] Topic check for '{slug}' skipped: {exc}")
+            return True
+
+    async def _ask_topic_choice(
+        self, action: StructuredRoadmapAction, identifier: Optional[str], delay: float
+    ) -> AsyncGenerator[dict, None]:
+        """Ask which topic a layer action belongs to, listing the existing topics. Nothing is written."""
+        try:
+            topics = await get_adapter().list_topics()
+        except Exception as exc:
+            print(f"[agent] Topic list skipped: {exc}")
+            topics = []
+        listing = "\n".join(f"- `{t.get('slug')}` — {t.get('title')}" for t in topics[:15]) or "_(chưa có topic nào)_"
+        if identifier and identifier not in ANAPHORA_TARGETS:
+            head = f"Không tìm thấy topic `{identifier}`."
+        else:
+            head = "Chưa xác định được topic cho thao tác này."
+        verb = LAYER_VERBS.get(action.action, "")
+        titles = ", ".join(e.title for e in action.entities) or "<tên layer>"
+        ask = (
+            f"{head}\n\n**Các topic hiện có:**\n{listing}\n\n"
+            f"Hãy gửi lại kèm tên topic, ví dụ: `{verb} layer {titles} trong topic <slug>`."
         )
         async for ev in self._stream_text(ask, delay):
             yield ev
@@ -383,11 +430,8 @@ class NextGenRoadmapAgent:
         # ── 3. Classify Intent via IntentRouter ───────────────────────────────
         yield step_event("route", "routing", "running")
         router_step = start_step("intent-router", input={"message": content})
-        intent_res: IntentClassificationResult = await self.router.aclassify(content)
-        # classify_heuristics is a cheap pure check; it tells us whether the LLM was needed.
-        method = "heuristic" if self.router.classify_heuristics(content) is not None else (
-            "llm" if self.llm is not None else "default"
-        )
+        intent_res: IntentClassificationResult
+        intent_res, method = await self.router.aroute(content)
         end_step(router_step, output=intent_res.model_dump(mode="json"), metadata={"method": method})
         yield step_event(
             "route",
@@ -423,6 +467,33 @@ class NextGenRoadmapAgent:
                 async for ev in self._stream_text(BULK_DELETE_REPLY, delay):
                     yield ev
                 return
+
+            # Layer actions need a known topic: ask back with the topic list instead of guessing.
+            if resolved_action.entity_level == EntityLevel.LAYER:
+                topic_ref = resolved_action.target_parent_identifier
+                if topic_ref in ANAPHORA_TARGETS or not topic_ref or not await self._topic_known(topic_ref):
+                    async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
+                        yield ev
+                    return
+
+                # Resolve the layer inside that topic before showing the preview; the id goes into target.
+                if resolved_action.action == ActionType.DELETE:
+                    if resolved_action.is_batch:
+                        async for ev in self._stream_text(BATCH_LAYER_DELETE_REPLY, delay):
+                            yield ev
+                        return
+                    layer_name = resolved_action.entities[0].title if resolved_action.entities else ""
+                    layer_res = await resolve_layer(layer_name, topic_slug=topic_ref)
+                    if layer_res.status != "found" or layer_res.topic_slug != topic_ref:
+                        in_topic = [c for c in layer_res.candidates if c["topic_slug"] == topic_ref][:10]
+                        listing = "\n".join(f"- `{c['shortTag'] or c['id']}` — {c['title']}" for c in in_topic)
+                        ask = f"Không tìm thấy layer `{layer_name}` trong topic `{topic_ref}`."
+                        if listing:
+                            ask += f"\n\n**Các layer trong topic này:**\n{listing}\n\nHãy gửi lại kèm tên hoặc shortTag chính xác."
+                        async for ev in self._stream_text(ask, delay):
+                            yield ev
+                        return
+                    resolved_action.target_parent_identifier = layer_res.layer_id
 
             # Dry-run confirmation for DELETE operations unless 'ngay'/'immediately' is specified;
             # deleting several entities is always confirmed.
@@ -469,25 +540,6 @@ class NextGenRoadmapAgent:
                         ):
                             yield ev
                         return
-                elif resolved_action.entity_level == EntityLevel.LAYER:
-                    try:
-                        topic_missing = await get_adapter().get_topic(target) is None
-                        topics = await get_adapter().list_topics() if topic_missing else []
-                    except Exception as exc:
-                        # Lookup failed (e.g. network): let the executor and its SQLite fallback handle it.
-                        print(f"[agent] Topic check for '{target}' skipped: {exc}")
-                        topic_missing = False
-                    if topic_missing:
-                        listing = "\n".join(f"- `{t.get('slug')}` — {t.get('title')}" for t in topics[:15])
-                        ask = (
-                            f"Không tìm thấy topic `{target}` để tạo layer.\n\n"
-                            f"**Các topic hiện có:**\n{listing}\n\n"
-                            f"Hãy gửi lại yêu cầu với một topic ở trên, hoặc tạo topic `{target}` trước."
-                        )
-                        async for ev in self._stream_text(ask, delay):
-                            yield ev
-                        return
-
             if resolved_action.is_batch and resolved_action.entity_level != EntityLevel.GROUP:
                 tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}s_batch"
             else:
@@ -592,7 +644,8 @@ class NextGenRoadmapAgent:
                 rag_context = rag_engine.format_knowledge_context(matches)
 
                 # Synthesize with LLM if available
-                if self.llm is not None:
+                llm_failed = False
+                if self.llm is not None and not llm_breaker.is_open:
                     gen = None
                     try:
                         synth_prompt = (
@@ -657,6 +710,8 @@ class NextGenRoadmapAgent:
                         return
                     except Exception as exc:
                         print(f"[Agent] LLM synthesis warning ({type(exc).__name__}: {exc}). Falling back to formatted context.")
+                        llm_breaker.record_failure(exc)
+                        llm_failed = True
                         end_step(
                             gen,
                             level="ERROR",
@@ -672,7 +727,7 @@ class NextGenRoadmapAgent:
                     "generation",
                     "done",
                     mode="context",
-                    fallback_reason="llm_error" if self.llm is not None else None,
+                    fallback_reason=self._llm_fallback_reason(llm_failed),
                 )
                 async for ev in self._stream_text(rag_context, delay):
                     yield ev
@@ -685,7 +740,8 @@ class NextGenRoadmapAgent:
                 return
 
         # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
-        if self.llm is not None:
+        llm_failed = False
+        if self.llm is not None and not llm_breaker.is_open:
             gen = None
             try:
                 chat_prompt = (
@@ -707,9 +763,21 @@ class NextGenRoadmapAgent:
                 yield step_event("answer", "generation", "done", mode="llm")
                 return
             except Exception as exc:
+                print(f"[Agent] Chitchat LLM error ({type(exc).__name__}: {exc}). Using template reply.")
+                llm_breaker.record_failure(exc)
+                llm_failed = True
                 end_step(gen, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
                 if (trace := current_trace()) is not None:
                     trace.flags["llm_fallback"] = True
+
+        # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
+        if intent_res.confidence < UNCLEAR_CONFIDENCE:
+            yield step_event(
+                "answer", "generation", "done", mode="unclear", fallback_reason=self._llm_fallback_reason(llm_failed)
+            )
+            async for ev in self._stream_text(UNCLEAR_REPLY, delay):
+                yield ev
+            return
 
         resp = (
             f"Xin chào! Tôi là **Roadmap AI Assistant** — Trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
@@ -725,7 +793,7 @@ class NextGenRoadmapAgent:
             "generation",
             "done",
             mode="template",
-            fallback_reason="llm_error" if self.llm is not None else None,
+            fallback_reason=self._llm_fallback_reason(llm_failed),
         )
         async for ev in self._stream_text(resp, delay):
             yield ev

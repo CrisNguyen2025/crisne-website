@@ -4,7 +4,9 @@
   into a short hint line, so references like "thêm vào layer này" resolve to the right target.
 - OUT_OF_SCOPE_REPLY / out_of_scope_reply(): refusal used when a message is unrelated to roadmaps.
 - EMPTY_MESSAGE_REPLY, TOO_LONG_REPLY, RETRIEVAL_ERROR_REPLY: fixed replies for bad input and retrieval failure.
+- UNCLEAR_REPLY: shown instead of the greeting when the intent is a low-confidence guess.
 - MIXED_INTENT_REPLY, BULK_DELETE / BULK_DELETE_REPLY: ask back on several requests at once, refuse "delete all".
+- BATCH_LAYER_DELETE_REPLY: layers are deleted one at a time.
 - is_sensitive_request() / SENSITIVE_REPLY: refuse requests for secrets, config or the system prompt,
   and prompt-injection attempts, before any routing or LLM call.
 - no_match_reply(): answer when a knowledge query finds nothing; never echoes the user's text.
@@ -16,8 +18,8 @@ import re
 from typing import Optional
 
 _OUT_OF_SCOPE_HEAD = (
-    "Xin lỗi, tôi chỉ hỗ trợ các việc liên quan đến lộ trình học tập trên hệ thống này "
-    "(topic, layer, nhóm và bài học).\n\n"
+    "Xin lỗi, thông tin này nằm ngoài dữ liệu Roadmap nên tôi không tra cứu được "
+    "(ví dụ: hợp đồng, hóa đơn, thời tiết). Tôi chỉ hỗ trợ lộ trình học tập: topic, layer, nhóm và bài học.\n\n"
     "Bạn có thể thử:\n"
     "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
 )
@@ -34,6 +36,14 @@ def out_of_scope_reply(owner: bool) -> str:
         return OUT_OF_SCOPE_REPLY
     return _OUT_OF_SCOPE_HEAD + "- 📋 **Xem danh sách**: `liệt kê topic`"
 
+
+# Shown when the message is neither a greeting nor a clear request
+UNCLEAR_REPLY = (
+    "Tôi chưa hiểu rõ yêu cầu của bạn. Bạn có thể thử một trong các lệnh sau:\n"
+    "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
+    "- 🗺️ **Tạo topic**: `tạo topic AI Engineering`\n"
+    "- 📋 **Xem danh sách**: `liệt kê topic`"
+)
 
 EMPTY_MESSAGE_REPLY = (
     "Bạn muốn tôi giúp gì? Ví dụ:\n"
@@ -64,6 +74,13 @@ BULK_DELETE_REPLY = (
     "Tôi không hỗ trợ xóa toàn bộ trong một lệnh. "
     "Hãy nêu tên cụ thể, ví dụ: `xóa layer mock 1 và mock 2 trong topic fe`."
 )
+
+BATCH_LAYER_DELETE_REPLY = (
+    "Hiện tại tôi chỉ xóa được từng layer một. Hãy gửi lệnh riêng cho mỗi layer, "
+    "ví dụ: `xóa layer mock 1 trong topic fe`."
+)
+
+RATE_LIMITED_REPLY = "LLM đang tạm ngưng do hết hạn mức sử dụng. Bạn vui lòng thử lại sau."
 
 RETRIEVAL_ERROR_REPLY = (
     "Xin lỗi, hiện tôi chưa tra cứu được dữ liệu Roadmap do lỗi tạm thời. "

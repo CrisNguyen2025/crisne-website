@@ -5,6 +5,7 @@ import asyncio
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.api.schemas import ChatRequest
 from rag_service.router.grounding import (
+    BATCH_LAYER_DELETE_REPLY,
     BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
     MAX_MESSAGE_CHARS,
@@ -12,6 +13,7 @@ from rag_service.router.grounding import (
     OUT_OF_SCOPE_REPLY,
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
+    UNCLEAR_REPLY,
     build_grounding,
     is_sensitive_request,
     no_match_reply,
@@ -196,10 +198,37 @@ def test_delete_all_is_refused():
         assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
 
 
-def test_batch_delete_is_confirmed_even_with_ngay():
+def test_batch_layer_delete_is_refused(monkeypatch):
+    class _Topics:
+        async def list_topics(self):
+            return [{"slug": "ai", "title": "AI"}]
+
+        async def get_topic(self, slug):
+            return {"slug": slug}
+
+    monkeypatch.setattr("rag_service.agent.get_adapter", lambda: _Topics())
     set_actor("owner")
-    tid = "batch-delete"
-    _, events = _reply("xóa layer mock 1 và mock 2 ngay", tid)
-    assert [e for e in events if e.get("type") == "action_preview"]
-    assert not [e for e in events if e.get("type") == "tool_start"]
-    session_store.get_or_create(tid).pending_confirmation = None
+    text, events = _reply("xóa layer mock 1 và mock 2 trong topic ai ngay", "batch-delete")
+    assert text == BATCH_LAYER_DELETE_REPLY
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_business_records_are_out_of_scope():
+    res = IntentRouter().classify_heuristics("Cho tôi biết chi tiết hợp đồng mã HD-999")
+    assert res is not None and res.intent == IntentType.OUT_OF_SCOPE
+
+
+def test_out_of_scope_reply_names_the_scope_without_intro():
+    text, _ = _reply("Cho tôi biết chi tiết hợp đồng mã HD-999", "oos-business")
+    assert text.startswith("Xin lỗi") and "hợp đồng" in text
+    assert "Xin chào" not in text
+
+
+def test_unclear_message_gets_short_reply_not_greeting():
+    text, _ = _reply("xyz qwerty", "unclear")
+    assert text == UNCLEAR_REPLY
+
+
+def test_greeting_still_gets_intro():
+    text, _ = _reply("chào bạn", "greeting")
+    assert "Xin chào" in text

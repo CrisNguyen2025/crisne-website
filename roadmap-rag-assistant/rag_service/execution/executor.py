@@ -109,7 +109,7 @@ class ActionExecutor:
         # ── 2. LAYER LEVEL ────────────────────────────────────────────────
         elif level == EntityLevel.LAYER:
             topic_slug = action.target_parent_identifier
-            if not topic_slug:
+            if act_type == ActionType.CREATE and not topic_slug:
                 return False, "❌ Không tìm thấy Topic đích để tạo Layer. Vui lòng chỉ định rõ tên topic."
 
             if act_type == ActionType.CREATE:
@@ -146,7 +146,10 @@ class ActionExecutor:
                     )
 
             elif act_type == ActionType.DELETE:
-                layer_id = action.target_parent_identifier or (action.entities[0].title if action.entities else "")
+                # target_parent_identifier holds the layer id, resolved by the agent before confirmation
+                layer_id = action.target_parent_identifier
+                if not layer_id:
+                    return False, "❌ Không xác định được layer cần xóa. Vui lòng chỉ định rõ tên layer và topic."
                 ok = await adapter.delete_layer(layer_id=layer_id)
                 asyncio.create_task(rag_engine.sync_live_database())
                 if ok:

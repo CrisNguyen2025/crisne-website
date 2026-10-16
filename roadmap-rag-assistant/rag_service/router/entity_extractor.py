@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from rag_service.llm_breaker import llm_breaker
 from rag_service.router.schemas import (
     ActionType,
     EntityLevel,
@@ -70,6 +71,21 @@ def _generate_clean_short_code(title: str) -> str:
     return "".join(w[0] for w in words if w).upper()[:4]
 
 
+# Words that can follow "trong"/"topic" but are keywords or urgency switches, never a topic or layer name.
+PARENT_STOPWORDS = {
+    "topic", "topics", "layer", "layers", "group", "item", "core", "đó", "the", "a", "an",
+    "trong", "vào", "cho", "on", "in", "to", "into", "luôn", "ngay", "tạo", "create", "new", "this", "này", "của", "đây",
+}
+
+
+def _clean_parent(raw: str) -> Optional[str]:
+    """Name of the topic/layer in a parent clause, or None when the word is a keyword instead."""
+    cand = re.sub(r"(?:\s+(?:topics?c*|layers?r*))+$", "", raw.strip(), flags=re.IGNORECASE).strip()
+    if not cand or cand.lower() in PARENT_STOPWORDS or cand.isdigit():
+        return None
+    return cand
+
+
 class StructuredEntityExtractor:
     """Extracts StructuredRoadmapAction via Gemini Structured Output or Deterministic Parser."""
 
@@ -87,7 +103,7 @@ class StructuredEntityExtractor:
     ) -> StructuredRoadmapAction:
         """Extract structured CUD action from user prompt."""
         # 1. Try Gemini Structured Output if available
-        if self._structured_llm is not None:
+        if self._structured_llm is not None and not llm_breaker.is_open:
             try:
                 formatted = EXTRACTION_PROMPT.format(
                     user_prompt=prompt,
@@ -108,6 +124,7 @@ class StructuredEntityExtractor:
                     return res
             except Exception as exc:
                 print(f"[EntityExtractor] LLM extraction error ({exc}), falling back to deterministic parser.")
+                llm_breaker.record_failure(exc)
 
         # 2. Robust Deterministic Parser (Offline / Fallback)
         return self._deterministic_extract(prompt, default_parent=default_parent)
@@ -168,6 +185,8 @@ class StructuredEntityExtractor:
         """High-precision rule-based parser that guarantees verb-free titles."""
         text = normalize_vietnamese(prompt).strip()
         text = clean_conversational_fillers(text)
+        # "ngay"/"luôn" switch off the confirmation step in the agent; they are not part of any name
+        text = re.sub(r"\s+", " ", re.sub(r"\b(?:luôn|ngay)\b", " ", text, flags=re.IGNORECASE)).strip()
 
         lower = text.lower()
 
@@ -210,17 +229,20 @@ class StructuredEntityExtractor:
                     text,
                     flags=re.IGNORECASE,
                 )
+                # Prefix form "topic ai" first; "trong X" then wins; suffix form "be topic" only as a fallback
+                found: Optional[str] = None
+                m_prefix = re.search(r"\btopics?c*\s+([a-zA-Z0-9_-]+)", text, flags=re.IGNORECASE)
+                if m_prefix:
+                    found = _clean_parent(m_prefix.group(1)) or found
                 if m_parent:
-                    cand = m_parent.group(1).strip()
-                    if cand.lower() not in ["topic", "layer", "group", "item", "core", "đó", "the", "a", "an"]:
-                        parent = cand
+                    found = _clean_parent(m_parent.group(1)) or found
 
                 # Also check "be topic" / "fe topic"
                 m_suffix = re.search(r"\b([a-zA-Z0-9_-]+)\s+topics?c*\b", text, flags=re.IGNORECASE)
-                if m_suffix:
-                    cand = m_suffix.group(1).strip()
-                    if cand.lower() not in ["tạo", "create", "new", "this", "the"]:
-                        parent = cand
+                if m_suffix and found is None:
+                    found = _clean_parent(m_suffix.group(1))
+                if found:
+                    parent = found
 
         # 6. Extract Raw Titles & Expand Enumerations ("mock 1 và 2" -> ["mock 1", "mock 2"])
         raw_titles = self._extract_raw_titles(text, level)
@@ -291,6 +313,10 @@ class StructuredEntityExtractor:
             text,
             flags=re.IGNORECASE,
         )
+        clause = clean_conversational_fillers(clause)
+        # Prefix-form parent ("... topic ai") is not part of the title of a layer/item
+        if level != EntityLevel.TOPIC:
+            clause = re.sub(r"\s+topics?c*\s+[a-zA-Z0-9_-]+\s*$", "", clause.strip(), flags=re.IGNORECASE)
         clause = clean_conversational_fillers(clause)
 
         # Strip out action verb, conversational wrapper, and level keyword

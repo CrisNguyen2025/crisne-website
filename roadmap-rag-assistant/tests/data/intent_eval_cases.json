@@ -146,5 +146,9 @@
   {
     "message": "asdfgh",
     "expected": null
+  },
+  {
+    "message": "Cho tôi biết chi tiết hợp đồng mã HD-999",
+    "expected": "out_of_scope"
   }
 ]
