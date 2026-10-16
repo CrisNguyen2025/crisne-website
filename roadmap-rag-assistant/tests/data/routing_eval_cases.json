@@ -49,6 +49,23 @@
   {"query": "how to delete a topic", "expected": "knowledge_query", "tag": "query-has-cud-verb"},
   {"query": "tạo topic có được không", "expected": "knowledge_query", "tag": "query-has-cud-verb"},
 
+  {"query": "xóa topic thì có mất item không?", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "xóa topic thì sao", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "tạo topic React là gì", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "thêm item thế nào", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "xóa layer có xóa luôn group không", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "thêm item Docker k", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "sửa tên topic được không", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "tạo topic làm sao", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "delete topic how to", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+  {"query": "tôi muốn biết cách xóa topic", "expected": "knowledge_query", "tag": "query-starts-with-cud"},
+
+  {"query": "tạo topic Spark k8s", "expected": "roadmap_cud", "tag": "cud-name-ends-k"},
+  {"query": "thêm item Unit Test với Jest và React Testing Library", "expected": "roadmap_cud", "tag": "cud-name-ends-k"},
+  {"query": "tạo item Show Me The Code", "expected": "roadmap_cud", "tag": "cud-has-query-word"},
+  {"query": "thêm layer Tìm hiểu Kubernetes", "expected": "roadmap_cud", "tag": "cud-has-query-word"},
+  {"query": "tạo topic Which Framework", "expected": "roadmap_cud", "tag": "cud-has-query-word"},
+
   {"query": "/plan tạo lộ trình Next.js Fullstack", "expected": "plan_goal", "tag": "plan"},
   {"query": "/goal trở thành AI engineer", "expected": "plan_goal", "tag": "plan"},
   {"query": "lập kế hoạch học DevOps trong 3 tháng", "expected": "plan_goal", "tag": "plan"},

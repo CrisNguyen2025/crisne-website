@@ -58,14 +58,26 @@ class IntentRouter:
                 needs_cud_extraction=False,
             )
 
-        # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic")
-        query_indicators = [
-            "tìm", "kiếm", "tra cứu", "có bài nào", "nội dung", "danh sách", "liệt kê", "list",
-            "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "search", "what is", "how to", "show me", "which",
-            "tại sao", "như thế nào"
+        # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic").
+        # A question routed to CUD can write data, a command routed to a query only answers, so ties go to the query.
+        # Strong indicators make any message a question, even one starting with a CUD verb ("xóa topic thì sao").
+        strong_query_indicators = [
+            "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "tại sao", "như thế nào",
+            "được không", "thì sao", "có nên", "muốn biết", "what is", "how to",
         ]
-        has_query = any(re.search(rf"\b{re.escape(q)}\b", lower) for q in query_indicators)
-        is_question = has_query or "?" in lower or lower.endswith("không") or lower.endswith("k") or lower.endswith("ko")
+        # Weak indicators also appear inside entity names ("Linked List", "Search Engine"), so they only count
+        # when the message does not start with a CUD verb.
+        weak_query_indicators = [
+            "tìm", "kiếm", "tra cứu", "có bài nào", "nội dung", "danh sách", "liệt kê", "list",
+            "search", "show me", "which",
+        ]
+        has_strong_query = (
+            "?" in lower
+            or any(re.search(rf"\b{re.escape(q)}\b", lower) for q in strong_query_indicators)
+            # Trailing question particle as a whole word: "... không", "... k", "... ko" (not "Flask", "ok")
+            or bool(re.search(r"(?:^|\s)(?:không|k|ko)\s*[.!]*$", lower))
+        )
+        has_weak_query = any(re.search(rf"\b{re.escape(q)}\b", lower) for q in weak_query_indicators)
 
         # 3. Strong CUD verbs + entity keywords (typo-tolerant and bare imperative support)
         cud_verbs = [
@@ -88,6 +100,8 @@ class IntentRouter:
                 lower,
             )
         )
+
+        is_question = has_strong_query or (has_weak_query and not starts_with_cud)
 
         if not is_question and ((has_verb and has_entity) or starts_with_cud):
             return IntentClassificationResult(
