@@ -42,7 +42,17 @@ from rag_service.router import (
     StructuredRoadmapAction,
     normalize_vietnamese,
 )
-from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, build_grounding
+from rag_service.router.grounding import (
+    EMPTY_MESSAGE_REPLY,
+    MAX_MESSAGE_CHARS,
+    RETRIEVAL_ERROR_REPLY,
+    SENSITIVE_REPLY,
+    TOO_LONG_REPLY,
+    build_grounding,
+    is_sensitive_request,
+    no_match_reply,
+    out_of_scope_reply,
+)
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import ALL_TOOLS, get_adapter
@@ -196,6 +206,15 @@ class NextGenRoadmapAgent:
         lower = content.lower()
         session_ctx = session_store.get_or_create(session_id)
 
+        # ── Input guard: empty or oversized messages never reach routing ─────
+        if not content or len(content) > MAX_MESSAGE_CHARS:
+            reply = EMPTY_MESSAGE_REPLY if not content else TOO_LONG_REPLY
+            if (trace := current_trace()) is not None:
+                trace.flags["guard"] = "empty" if not content else "too_long"
+            async for ev in self._stream_text(reply, delay):
+                yield ev
+            return
+
         # ── 0. Pending Action Confirmation ────────────────────────────────────
         if session_ctx.pending_confirmation:
             if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
@@ -218,6 +237,8 @@ class NextGenRoadmapAgent:
                 async for ev in self._stream_text(cancel_msg, delay):
                     yield ev
                 return
+            # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
+            session_ctx.pending_confirmation = None
 
         # ── 0b. Pending layer choice for an item without a target layer ──────
         if session_ctx.pending_layer_choice:
@@ -283,6 +304,14 @@ class NextGenRoadmapAgent:
                     yield ev
                 return
             # Anything else: drop the pending choice and handle as a fresh message.
+
+        # ── 0c. Sensitive guard: secrets, system prompt, prompt injection ─────
+        if is_sensitive_request(content):
+            if (trace := current_trace()) is not None:
+                trace.flags["guard"] = "sensitive"
+            async for ev in self._stream_text(SENSITIVE_REPLY, delay):
+                yield ev
+            return
 
         # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
         if "/plan" in lower or "lập kế hoạch" in lower or "xem trước" in lower:
@@ -362,7 +391,7 @@ class NextGenRoadmapAgent:
 
         # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
         if intent_res.intent == IntentType.OUT_OF_SCOPE:
-            async for ev in self._stream_text(OUT_OF_SCOPE_REPLY, delay):
+            async for ev in self._stream_text(out_of_scope_reply(is_owner()), delay):
                 yield ev
             return
 
@@ -490,7 +519,19 @@ class NextGenRoadmapAgent:
                 input={"query": content, "limit": 4},
                 metadata={"adapter_mode": settings.rag_adapter_mode, "scoring": "rrf(vector+keyword)"},
             )
-            matches = await rag_engine.search_live_knowledge(content, limit=4)
+            try:
+                matches = await rag_engine.search_live_knowledge(content, limit=4)
+            except Exception as exc:
+                # Index/adapter failure is not "no match": say so instead of the no-result reply.
+                print(f"[Agent] Retrieval error ({type(exc).__name__}: {exc}).")
+                end_step(retrieval_step, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
+                if (trace := current_trace()) is not None:
+                    trace.flags["retrieval_error"] = True
+                yield {"type": "tool_end", "name": "search_live_knowledge", "result": "Lỗi tra cứu"}
+                yield step_event("retrieve", "retrieval", "error")
+                async for ev in self._stream_text(RETRIEVAL_ERROR_REPLY, delay):
+                    yield ev
+                return
             end_step(
                 retrieval_step,
                 output=[
@@ -618,10 +659,7 @@ class NextGenRoadmapAgent:
                     yield ev
                 return
             else:
-                resp = (
-                    f"Tôi đã tìm kiếm trong toàn bộ cơ sở dữ liệu Roadmap nhưng chưa thấy bài học hoặc tài liệu nào phù hợp với từ khóa **\"{content}\"**.\n\n"
-                    f"Bạn có thể yêu cầu tôi tạo mới bằng lệnh: `tạo topic ...` hoặc `thêm bài học ... vào layer ...`!"
-                )
+                resp = no_match_reply(owner)
                 yield step_event("answer", "generation", "done", mode="no_match")
                 async for ev in self._stream_text(resp, delay):
                     yield ev

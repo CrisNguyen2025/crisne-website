@@ -12,6 +12,7 @@ from rag_service.api.server import app
 from rag_service.auth import set_actor
 from rag_service.rag.ingestion import KnowledgeDocument
 from rag_service.rag.rag_engine import rag_engine
+from rag_service.router.grounding import RETRIEVAL_ERROR_REPLY
 from rag_service.steps import step_event, with_steps
 
 
@@ -161,6 +162,34 @@ async def test_no_match_has_no_match_answer_step(monkeypatch):
     done = {s["id"]: s for s in steps if s["status"] != "running"}
     assert done["retrieve"]["count"] == 0
     assert done["answer"]["mode"] == "no_match"
+
+
+@pytest.mark.asyncio
+async def test_retrieval_error_is_not_reported_as_no_match(monkeypatch):
+    async def broken(query: str, limit: int = 5):
+        raise RuntimeError("index unavailable")
+
+    monkeypatch.setattr(rag_engine, "search_live_knowledge", broken)
+    set_actor("visitor")
+    events = await _ask(NextGenRoadmapAgent(llm_model=None), "tìm bài học về Docker")
+    done = {s["id"]: s for s in _steps(events) if s["status"] != "running"}
+    assert done["retrieve"]["status"] == "error"
+    assert "answer" not in done
+    text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert text == RETRIEVAL_ERROR_REPLY
+
+
+@pytest.mark.asyncio
+async def test_no_match_does_not_echo_query(monkeypatch):
+    async def nothing(query: str, limit: int = 5):
+        return []
+
+    monkeypatch.setattr(rag_engine, "search_live_knowledge", nothing)
+    set_actor("visitor")
+    events = await _ask(NextGenRoadmapAgent(llm_model=None), "tìm bài học về Kubernetes")
+    text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert "Kubernetes" not in text
+    assert "tạo topic" not in text
 
 
 # ── SSE ───────────────────────────────────────────────────────────────────

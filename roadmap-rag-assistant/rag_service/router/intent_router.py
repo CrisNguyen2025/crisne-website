@@ -65,7 +65,9 @@ class IntentRouter:
             "tại sao", "như thế nào"
         ]
         has_query = any(re.search(rf"\b{re.escape(q)}\b", lower) for q in query_indicators)
-        is_question = has_query or "?" in lower or lower.endswith("không") or lower.endswith("k") or lower.endswith("ko")
+        # Trailing "không / k / ko" marks a yes-no question only as a separate word ("có bài Docker k"),
+        # so words like "ok" or "check" are not questions.
+        is_question = has_query or "?" in lower or bool(re.search(r"\s(?:không|k|ko)$", lower))
 
         # 3. Strong CUD verbs + entity keywords (typo-tolerant and bare imperative support)
         cud_verbs = [
