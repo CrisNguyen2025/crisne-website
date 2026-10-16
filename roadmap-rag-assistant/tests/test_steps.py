@@ -7,7 +7,7 @@ import json
 import httpx
 import pytest
 
-from rag_service.agent import NextGenRoadmapAgent
+from rag_service.agent import NextGenRoadmapAgent, content_text
 from rag_service.api.server import app
 from rag_service.auth import set_actor
 from rag_service.rag.ingestion import KnowledgeDocument
@@ -148,6 +148,58 @@ async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_matc
     assert done["guard"]["grounding"] == "issues"
     assert done["guard"]["ungrounded_terms"] == ["Frontend"]
     assert done["guard"]["invalid_links"] == ["fe"]
+
+
+class _PartsChunk:
+    """A chunk shaped like newer Gemini output: content is a list of parts, not a string."""
+
+    def __init__(self, content: list) -> None:
+        self.content = content
+
+    def __add__(self, other: "_PartsChunk") -> "_PartsChunk":
+        return _PartsChunk(self.content + other.content)
+
+
+class _FakePartsLlm:
+    def __init__(self, answer: str) -> None:
+        self.answer = answer
+
+    async def astream(self, prompt: str):
+        yield _PartsChunk([{"type": "thinking", "thinking": "người dùng chào"}])
+        for word in self.answer.split(" "):
+            yield _PartsChunk([{"type": "text", "text": word + " "}])
+
+
+def _answer_text(events: list[dict]) -> str:
+    deltas = [e["delta"] for e in events if e.get("type") == "token"]
+    assert all(isinstance(d, str) for d in deltas)
+    return "".join(deltas)
+
+
+def test_content_text_reads_strings_and_text_parts():
+    assert content_text(_Chunk("abc")) == "abc"
+    parts = [{"type": "thinking", "thinking": "x"}, {"type": "text", "text": "Xin "}, "chào"]
+    assert content_text(_PartsChunk(parts)) == "Xin chào"
+    assert content_text(None) == ""
+
+
+@pytest.mark.asyncio
+async def test_chitchat_streams_text_when_llm_content_is_a_list():
+    set_actor("visitor")
+    events = await _ask(NextGenRoadmapAgent(llm_model=_FakePartsLlm("Chào bạn!")), "chào bạn")
+    assert _answer_text(events).strip() == "Chào bạn!"
+    done = {s["id"]: s for s in _steps(events) if s["status"] != "running"}
+    assert done["answer"]["status"] == "done" and done["answer"]["mode"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_answer_streams_text_when_llm_content_is_a_list(one_match):
+    set_actor("visitor")
+    llm = _FakePartsLlm("Có bài **Vector Database** trong lộ trình AI.")
+    events = await _ask(NextGenRoadmapAgent(llm_model=llm), "tìm bài học về vector database")
+    assert "Vector Database" in _answer_text(events)
+    done = {s["id"]: s for s in _steps(events) if s["status"] != "running"}
+    assert done["answer"]["mode"] == "llm"
 
 
 @pytest.mark.asyncio

@@ -54,6 +54,23 @@ from rag_service.tools.rag_tools import (
 )
 
 
+def content_text(message: object) -> str:
+    """Text of an LLM message or chunk. Newer Gemini models send content as a list of parts
+    ({"type": "text", "text": ...}, plus thinking parts) instead of a plain string."""
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif isinstance(part, dict) and part.get("type") == "text":
+            parts.append(part.get("text", ""))
+    return "".join(parts)
+
+
 class NextGenRoadmapAgent:
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -561,13 +578,13 @@ class NextGenRoadmapAgent:
                         link_guard = LinkGuard(rag_engine.known_topic_slugs())
                         async for chunk in self.llm.astream(synth_prompt):
                             merged = chunk if merged is None else merged + chunk
-                            if hasattr(chunk, "content") and chunk.content:
-                                if safe := link_guard.feed(chunk.content):
+                            if text := content_text(chunk):
+                                if safe := link_guard.feed(text):
                                     yield {"type": "token", "delta": safe}
                         if rest := link_guard.flush():
                             yield {"type": "token", "delta": rest}
 
-                        answer = getattr(merged, "content", "")
+                        answer = content_text(merged)
                         grounding = check_grounding(answer, rag_context, content)
                         grounding["invalid_links"] = link_guard.removed_slugs
                         issues = [k for k, v in grounding.items() if v]
@@ -644,9 +661,9 @@ class NextGenRoadmapAgent:
                 merged = None
                 async for chunk in self.llm.astream(chat_prompt):
                     merged = chunk if merged is None else merged + chunk
-                    if hasattr(chunk, "content") and chunk.content:
-                        yield {"type": "token", "delta": chunk.content}
-                end_step(gen, output=getattr(merged, "content", ""), usage_details=usage_from_langchain(merged))
+                    if text := content_text(chunk):
+                        yield {"type": "token", "delta": text}
+                end_step(gen, output=content_text(merged), usage_details=usage_from_langchain(merged))
                 yield step_event("answer", "generation", "done", mode="llm")
                 return
             except Exception as exc:
