@@ -6,6 +6,7 @@ and traditional vs modern tone mark placement (e.g., 'xoá' vs 'xóa', 'huỷ' v
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 # Mapping traditional tone placement to canonical modern standard
@@ -21,6 +22,12 @@ TRADITIONAL_TO_MODERN = {
     "Uỳ": "Ùy", "Uý": "Úy", "Uỷ": "Ủy", "Uỹ": "Ũy", "Uỵ": "Ụy",
 }
 
+# Only an open syllable moves its tone (hoà -> hòa). With a final letter both styles keep it on
+# the main vowel (hoàn, toán, huỳnh, khuỵu), and after 'q' the 'u' is part of the consonant (quý).
+TONE_PLACEMENT_REGEX = re.compile(
+    r"(?<![qQ])(" + "|".join(TRADITIONAL_TO_MODERN) + r")(?!\w)"
+)
+
 
 def normalize_vietnamese(text: str) -> str:
     """Normalize Vietnamese text to Unicode NFC and canonical modern tone placement."""
@@ -29,13 +36,8 @@ def normalize_vietnamese(text: str) -> str:
     # 1. Unicode NFC normalization (composes decomposed NFD accents from macOS/Telex)
     norm = unicodedata.normalize("NFC", text)
     # 2. Canonicalize vowel tone placement (e.g. 'xoá' -> 'xóa', 'huỷ' -> 'hủy')
-    for trad, mod in TRADITIONAL_TO_MODERN.items():
-        if trad in norm:
-            norm = norm.replace(trad, mod)
-    return norm
+    return TONE_PLACEMENT_REGEX.sub(lambda m: TRADITIONAL_TO_MODERN[m.group(1)], norm)
 
-
-import re
 
 PREFIX_FILLER_REGEX = re.compile(
     r"^(?:(?:"
