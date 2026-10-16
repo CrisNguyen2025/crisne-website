@@ -2,6 +2,7 @@
 
 expected:
 - "sensitive": blocked by the sensitive guard before routing
+- "mixed": a search and a roadmap change in one message, answered with an ask-back
 - an IntentType value: what the heuristic router must return
 - null: heuristics must stay undecided so the LLM router classifies it
 
@@ -26,6 +27,8 @@ def test_intent_eval_cases():
         message, expected = case["message"], case["expected"]
         if is_sensitive_request(message):
             got = "sensitive"
+        elif router.has_mixed_intents(message):
+            got = "mixed"
         else:
             res = router.classify_heuristics(message)
             got = res.intent.value if res else None

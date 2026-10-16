@@ -114,5 +114,37 @@
   {
     "message": "/plan tạo lộ trình Next.js",
     "expected": "plan_goal"
+  },
+  {
+    "message": "tìm bài Docker rồi tạo topic K8s",
+    "expected": "mixed"
+  },
+  {
+    "message": "tạo topic K8s và tìm bài Docker",
+    "expected": "mixed"
+  },
+  {
+    "message": "có bài Docker k, nếu không thì tạo topic Docker",
+    "expected": "mixed"
+  },
+  {
+    "message": "tạo 2 layer mock 1 và 2 trong be topic",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "tìm bài về React và Vue",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "nên học FE hay BE trước",
+    "expected": null
+  },
+  {
+    "message": "lộ trình nào phù hợp cho người mới",
+    "expected": null
+  },
+  {
+    "message": "asdfgh",
+    "expected": null
   }
 ]

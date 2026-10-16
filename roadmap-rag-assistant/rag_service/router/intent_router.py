@@ -23,6 +23,9 @@ OFF_TOPIC_HINTS = [
     "weather", "stock price", "football score", "recipe",
 ]
 
+# Clause joiners used to spot several requests in one message.
+MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;]|\brồi\b|\bsau\s+đó\b|\bvà\b|\bthen\b|\band\b)\s*", re.IGNORECASE)
+
 
 class IntentRouter:
     """Fast Intent Classifier with deterministic heuristics and LLM fallback."""
@@ -118,6 +121,14 @@ class IntentRouter:
             )
 
         return None
+
+    def has_mixed_intents(self, text: str) -> bool:
+        """True when joined clauses ask for both a search and a roadmap change ("tìm bài A rồi tạo topic B")."""
+        parts = [p for p in MIXED_INTENT_SPLIT.split(text) if p.strip()]
+        if len(parts) < 2:
+            return False
+        intents = {res.intent for p in parts if (res := self.classify_heuristics(p)) is not None}
+        return {IntentType.KNOWLEDGE_QUERY, IntentType.ROADMAP_CUD} <= intents
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""

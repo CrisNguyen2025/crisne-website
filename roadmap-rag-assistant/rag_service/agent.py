@@ -43,8 +43,11 @@ from rag_service.router import (
     normalize_vietnamese,
 )
 from rag_service.router.grounding import (
+    BULK_DELETE,
+    BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
     MAX_MESSAGE_CHARS,
+    MIXED_INTENT_REPLY,
     RETRIEVAL_ERROR_REPLY,
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
@@ -369,6 +372,14 @@ class NextGenRoadmapAgent:
                 yield ev
             return
 
+        # ── 2c. Several requests in one message: ask for one at a time ────────
+        if self.router.has_mixed_intents(content):
+            if (trace := current_trace()) is not None:
+                trace.flags["guard"] = "mixed_intents"
+            async for ev in self._stream_text(MIXED_INTENT_REPLY, delay):
+                yield ev
+            return
+
         # ── 3. Classify Intent via IntentRouter ───────────────────────────────
         yield step_event("route", "routing", "running")
         router_step = start_step("intent-router", input={"message": content})
@@ -408,8 +419,16 @@ class NextGenRoadmapAgent:
             )
             resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
 
-            # Dry-run confirmation for DELETE operations unless 'ngay'/'immediately' is specified
-            if resolved_action.action == ActionType.DELETE and not any(w in lower for w in ["ngay", "immediately", "luôn"]):
+            if resolved_action.action == ActionType.DELETE and BULK_DELETE.search(lower):
+                async for ev in self._stream_text(BULK_DELETE_REPLY, delay):
+                    yield ev
+                return
+
+            # Dry-run confirmation for DELETE operations unless 'ngay'/'immediately' is specified;
+            # deleting several entities is always confirmed.
+            if resolved_action.action == ActionType.DELETE and (
+                resolved_action.is_batch or not any(w in lower for w in ["ngay", "immediately", "luôn"])
+            ):
                 session_ctx.pending_confirmation = resolved_action
                 preview_text = DryRunValidator.format_preview_card(resolved_action, note=note)
                 preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."

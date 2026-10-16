@@ -4,6 +4,7 @@
   into a short hint line, so references like "thêm vào layer này" resolve to the right target.
 - OUT_OF_SCOPE_REPLY / out_of_scope_reply(): refusal used when a message is unrelated to roadmaps.
 - EMPTY_MESSAGE_REPLY, TOO_LONG_REPLY, RETRIEVAL_ERROR_REPLY: fixed replies for bad input and retrieval failure.
+- MIXED_INTENT_REPLY, BULK_DELETE / BULK_DELETE_REPLY: ask back on several requests at once, refuse "delete all".
 - is_sensitive_request() / SENSITIVE_REPLY: refuse requests for secrets, config or the system prompt,
   and prompt-injection attempts, before any routing or LLM call.
 - no_match_reply(): answer when a knowledge query finds nothing; never echoes the user's text.
@@ -45,6 +46,23 @@ MAX_MESSAGE_CHARS = 8000
 TOO_LONG_REPLY = (
     f"Tin nhắn quá dài (tối đa {MAX_MESSAGE_CHARS:,} ký tự). ".replace(",", ".")
     + "Hãy rút gọn câu hỏi hoặc chia danh sách thành nhiều lần gửi."
+)
+
+MIXED_INTENT_REPLY = (
+    "Tin nhắn có cả yêu cầu tìm kiếm và yêu cầu thay đổi roadmap. "
+    "Tôi xử lý từng yêu cầu một, bạn gửi lần lượt từng yêu cầu nhé.\n\n"
+    "Ví dụ: gửi `tìm bài học về Docker`, sau đó gửi `tạo topic Kubernetes`."
+)
+
+# "xóa hết topic", "xóa tất cả layer", "delete all items": not a named target.
+BULK_DELETE = re.compile(
+    r"\b(?:hết|tất\s+cả|toàn\s+bộ)\s+(?:các\s+)?(?:topics?|chủ\s+đề|lộ\s+trình|roadmaps?|layers?|nhóm|groups?|items?|bài|mục|lessons?)"
+    r"|\b(?:delete|remove)\s+all\b|\ball\s+(?:topics|roadmaps|layers|groups|items|lessons)\b",
+    re.IGNORECASE,
+)
+BULK_DELETE_REPLY = (
+    "Tôi không hỗ trợ xóa toàn bộ trong một lệnh. "
+    "Hãy nêu tên cụ thể, ví dụ: `xóa layer mock 1 và mock 2 trong topic fe`."
 )
 
 RETRIEVAL_ERROR_REPLY = (

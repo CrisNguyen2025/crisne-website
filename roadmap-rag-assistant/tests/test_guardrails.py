@@ -5,8 +5,10 @@ import asyncio
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.api.schemas import ChatRequest
 from rag_service.router.grounding import (
+    BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
     MAX_MESSAGE_CHARS,
+    MIXED_INTENT_REPLY,
     OUT_OF_SCOPE_REPLY,
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
@@ -177,3 +179,27 @@ def test_trailing_k_is_a_question_only_as_a_separate_word():
     for text in ["ok", "oke", "thanks"]:
         res = router.classify_heuristics(text)
         assert res is not None and res.intent == IntentType.CHITCHAT, text
+
+
+def test_mixed_intents_ask_back_without_tools():
+    set_actor("owner")
+    text, events = _reply("tìm bài Docker rồi tạo topic K8s", "mixed")
+    assert text == MIXED_INTENT_REPLY
+    assert not [e for e in events if e.get("type") == "tool_start"]
+
+
+def test_delete_all_is_refused():
+    set_actor("owner")
+    for message in ["xóa hết topic luôn", "xóa tất cả layer trong fe ngay"]:
+        text, events = _reply(message, f"bulk-{message}")
+        assert text == BULK_DELETE_REPLY, message
+        assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_batch_delete_is_confirmed_even_with_ngay():
+    set_actor("owner")
+    tid = "batch-delete"
+    _, events = _reply("xóa layer mock 1 và mock 2 ngay", tid)
+    assert [e for e in events if e.get("type") == "action_preview"]
+    assert not [e for e in events if e.get("type") == "tool_start"]
+    session_store.get_or_create(tid).pending_confirmation = None
