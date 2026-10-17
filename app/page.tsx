@@ -222,7 +222,6 @@ function RoadmapWorkspace() {
         onSelectHome={handleSelectHome}
         onSelectRoadmap={handleSelectRoadmap}
         onOpenCreateRoadmap={() => setIsCreateTopicOpen(true)}
-        onOpenTriage={() => setIsTriageDrawerOpen(true)}
         triageBadgeCount={triageBadgeCount}
       />
 

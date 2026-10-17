@@ -13,6 +13,7 @@ import re
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
+from rag_service.adapters.errors import DuplicateEntityError, with_skipped as _with_skipped
 
 
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
@@ -107,7 +108,10 @@ async def create_item(
         return describe_unresolved(layer_id, res)
     real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
-    result = await adapter.create_item(real_layer_id, level, title, description, content)
+    try:
+        result = await adapter.create_item(real_layer_id, level, title, description, content)
+    except DuplicateEntityError as dup:
+        return f"ℹ️ Bài học '{dup.title}' đã có trong layer '{layer_id}', không tạo thêm."
     return (
         f"✅ Đã tạo item '{result.get('title', title)}' "
         f"(level: {level}) trong layer '{layer_id}'"
@@ -134,16 +138,18 @@ async def create_items_batch(
     real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
     created: list[str] = []
+    skipped: list[str] = []
     for item in items:
         item_title = item.get("title", "")
-        result = await adapter.create_item(
-            real_layer_id, level, item_title, item.get("description", ""), item.get("content", "")
-        )
+        try:
+            result = await adapter.create_item(
+                real_layer_id, level, item_title, item.get("description", ""), item.get("content", "")
+            )
+        except DuplicateEntityError as dup:
+            skipped.append(dup.title)
+            continue
         created.append(result.get("title", item_title))
-    return (
-        f"✅ Đã tạo {len(created)} item (level: {level}): "
-        f"{', '.join(created)}"
-    )
+    return _with_skipped(f"✅ Đã tạo {len(created)} item (level: {level}): {', '.join(created)}", skipped)
 
 
 _LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+(.+?)\s*$")

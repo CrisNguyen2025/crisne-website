@@ -46,6 +46,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   roadmapItem: {
     create: vi.fn(),
+    findMany: vi.fn().mockResolvedValue([]),
   },
   // Interactive transaction: run the callback against the same mock
   $transaction: vi.fn(),
@@ -352,6 +353,20 @@ describe("Knowledge Triage API Routes", () => {
         data: { status: "APPROVED" },
       });
       expect(prismaMock.roadmapItem.create.mock.calls[0][0].data).toMatchObject({ groupId: "group-1", order: 3 });
+    });
+
+    it("returns 409 and keeps the draft when the layer already has a lesson with that title", async () => {
+      prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce(draftedItem("Nội dung"));
+      prismaMock.roadmapItem.findMany.mockResolvedValueOnce([
+        { id: "item-old", title: "  tối ưu hóa pipeline RAG với reranker " },
+      ]);
+
+      const res = await approveRequest();
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ code: "DUPLICATE", kind: "item", existing: { id: "item-old" } });
+      expect(prismaMock.knowledgeTriage.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.roadmapItem.create).not.toHaveBeenCalled();
     });
 
     it("returns 409 and creates nothing when the item was already approved (double click, retry)", async () => {

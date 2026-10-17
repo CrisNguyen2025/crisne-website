@@ -477,7 +477,52 @@ input[type="search"]::-webkit-search-cancel-button {
   animation: streamFade 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* "Still replying" dots on the chat scroll-to-bottom button */
+/* One dot of PulsatingDots: grows and brightens, then settles */
+@keyframes pulsatingDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 1;
+  }
+}
+
+.animate-pulsating-dot {
+  animation: pulsatingDot 1s ease-in-out infinite;
+}
+
+/* Three dots breathe in turn: scale and opacity only, no vertical travel,
+   so the row stays centred in the button and the motion reads as a wave. */
+@keyframes dotWave {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  70% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+}
+
+.animate-dot-wave {
+  animation: dotWave 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .animate-pulsating-dot {
+    animation-duration: 2s;
+  }
+  .animate-dot-wave {
+    animation-duration: 1.8s;
+  }
   .animate-stream-fade {
     animation: none;
     opacity: 1;

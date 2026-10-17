@@ -14,3 +14,5 @@ export declare function ChevronDownIcon({ className }: IconProps): import("react
 export declare function ThumbsUpIcon({ className }: IconProps): import("react/jsx-runtime").JSX.Element;
 export declare function ThumbsDownIcon({ className }: IconProps): import("react/jsx-runtime").JSX.Element;
 export declare function ArrowDownIcon({ className }: IconProps): import("react/jsx-runtime").JSX.Element;
+export declare function MoreVerticalIcon({ className }: IconProps): import("react/jsx-runtime").JSX.Element;
+export declare function AlertTriangleIcon({ className }: IconProps): import("react/jsx-runtime").JSX.Element;

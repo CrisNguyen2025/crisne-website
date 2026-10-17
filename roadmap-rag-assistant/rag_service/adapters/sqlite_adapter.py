@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import aiosqlite
 import uuid_utils
 
+from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
 from rag_service.auth import owner_only
 
 
@@ -158,12 +159,12 @@ class SqliteAdapter:
         now = _now_iso()
 
         async with self._connect() as db:
-            # Check slug uniqueness
-            cursor = await db.execute(
-                "SELECT id FROM Roadmap WHERE slug = ?", (slug,)
-            )
-            if await cursor.fetchone():
-                slug = f"{slug}-{str(int(datetime.now(timezone.utc).timestamp()))[-4:]}"
+            # Same title or slug means the topic exists: report it instead of minting a copy
+            cursor = await db.execute("SELECT id, slug, title FROM Roadmap")
+            topics = [dict(r) for r in await cursor.fetchall()]
+            dup = find_duplicate(topics, title) or next((t for t in topics if t["slug"] == slug), None)
+            if dup:
+                raise DuplicateEntityError("topic", dup["title"], dup)
 
             # Get next order
             cursor = await db.execute("SELECT COUNT(*) as cnt FROM Roadmap")
@@ -283,6 +284,13 @@ class SqliteAdapter:
                 raise ValueError(f"Topic '{topic_slug}' not found")
             roadmap_id = roadmap_row["id"]
 
+            cursor = await db.execute(
+                "SELECT id, title, shortTag FROM RoadmapLayer WHERE roadmapId = ?", (roadmap_id,)
+            )
+            dup = find_duplicate([dict(r) for r in await cursor.fetchall()], title)
+            if dup:
+                raise DuplicateEntityError("layer", dup["title"], dup)
+
             # Get next order
             cursor = await db.execute(
                 'SELECT COUNT(*) as cnt FROM RoadmapLayer WHERE roadmapId = ?',
@@ -371,11 +379,16 @@ class SqliteAdapter:
 
         async with self._connect() as db:
             cursor = await db.execute(
-                'SELECT COUNT(*) as cnt FROM RoadmapGroup WHERE layerId = ?',
-                (layer_id,),
+                "SELECT id, title, level FROM RoadmapGroup WHERE layerId = ?", (layer_id,)
             )
-            row = await cursor.fetchone()
-            order = (row["cnt"] if row else 0) + 1
+            siblings = [dict(r) for r in await cursor.fetchall()]
+            # Items are filed by level, so two groups with one level would split them
+            dup = find_duplicate(siblings, title) or (
+                next((g for g in siblings if g["level"] == group_level), None) if level else None
+            )
+            if dup:
+                raise DuplicateEntityError("group", dup["title"], dup)
+            order = len(siblings) + 1
 
             await db.execute(
                 """
@@ -433,6 +446,18 @@ class SqliteAdapter:
         now = _now_iso()
 
         async with self._connect() as db:
+            # A lesson title appears once per layer, whatever its level
+            cursor = await db.execute(
+                """
+                SELECT i.id, i.title, g.level FROM RoadmapItem i
+                JOIN RoadmapGroup g ON g.id = i.groupId WHERE g.layerId = ?
+                """,
+                (layer_id,),
+            )
+            dup = find_duplicate([dict(r) for r in await cursor.fetchall()], title)
+            if dup:
+                raise DuplicateEntityError("item", dup["title"], {**dup, "layerId": layer_id})
+
             # Find or create group for this level in this layer
             cursor = await db.execute(
                 "SELECT id FROM RoadmapGroup WHERE layerId = ? AND level = ?",

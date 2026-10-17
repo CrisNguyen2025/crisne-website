@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { resolveRoadmapId } from '@/lib/roadmap/resolveRoadmap';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -32,6 +33,13 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
+
+    const siblings = await prisma.roadmapLayer.findMany({
+      where: { roadmapId: roadmap.id },
+      select: { id: true, title: true, shortTag: true },
+    });
+    const duplicate = findDuplicate(siblings, title);
+    if (duplicate) return duplicateResponse('layer', duplicate);
 
     const newLayer = await prisma.roadmapLayer.create({
       data: {

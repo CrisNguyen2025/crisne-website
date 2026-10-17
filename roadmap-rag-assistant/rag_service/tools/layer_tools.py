@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
+from rag_service.adapters.errors import DuplicateEntityError, with_skipped as _with_skipped
 
 
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
@@ -78,7 +79,10 @@ async def create_layer(
     from rag_service.tools import get_adapter
 
     adapter = get_adapter()
-    result = await adapter.create_layer(topic_slug, title, short_tag, subtitle)
+    try:
+        result = await adapter.create_layer(topic_slug, title, short_tag, subtitle)
+    except DuplicateEntityError as dup:
+        return f"ℹ️ Layer '{dup.title}' đã có trong topic '{topic_slug}', không tạo thêm."
     return (
         f"✅ Đã tạo layer '{result.get('title', title)}' "
         f"(shortTag: {result.get('shortTag', short_tag)}) "
@@ -102,24 +106,29 @@ async def create_layers_batch(
     adapter = get_adapter()
     topic = await adapter.get_topic(topic_slug)
     if not topic:
-        title = topic_slug.upper()
-        short_code = title[:3]
-        await adapter.create_topic(title, short_code, f"Topic {title}", [])
-        topic = await adapter.get_topic(topic_slug)
+        # Never invent a topic from a guessed slug: that is how stray topics appeared
+        return f"❌ Không tìm thấy topic '{topic_slug}'. Hãy chọn một topic có sẵn hoặc tạo topic trước."
 
     existing_layers = topic.get("layers", []) if topic else []
     current_count = len(existing_layers)
 
     created: list[str] = []
-    for i, l in enumerate(layers):
+    skipped: list[str] = []
+    for l in layers:
         ltitle = l.get("title", "")
         clean_tag = re.sub(r"[^A-Za-z0-9]", "", ltitle).upper()[:3] or "LAY"
-        default_tag = f"{current_count + i + 1:02d}-{clean_tag}"
+        default_tag = f"{current_count + len(created) + 1:02d}-{clean_tag}"
         short_tag = l.get("short_tag") or default_tag
-        res = await adapter.create_layer(topic_slug, ltitle, short_tag, l.get("subtitle", ""))
+        try:
+            res = await adapter.create_layer(topic_slug, ltitle, short_tag, l.get("subtitle", ""))
+        except DuplicateEntityError as dup:
+            skipped.append(dup.title)
+            continue
         created.append(f"{res.get('title', ltitle)} ({short_tag})")
 
-    return f"✅ Đã tạo {len(created)} layer trong topic '{topic_slug}': {', '.join(created)}"
+    return _with_skipped(
+        f"✅ Đã tạo {len(created)} layer trong topic '{topic_slug}': {', '.join(created)}", skipped
+    )
 
 
 

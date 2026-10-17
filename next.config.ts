@@ -5,6 +5,8 @@ import path from "path";
 const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
+  // Lets a phone on the same Wi-Fi load dev assets (HMR, JS chunks) from the LAN IP
+  allowedDevOrigins: ["192.168.1.22"],
   turbopack: {
     root: path.resolve(__dirname),
   },

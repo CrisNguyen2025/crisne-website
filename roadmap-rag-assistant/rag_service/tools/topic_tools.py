@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
+from rag_service.adapters.errors import DuplicateEntityError, with_skipped as _with_skipped
 
 
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
@@ -75,7 +76,10 @@ async def create_topic(
         {"title": t, "shortTag": f"{i + 1:02d}-{t[:3].upper()}"}
         for i, t in enumerate(layer_titles or ["General"])
     ]
-    result = await adapter.create_topic(title, short_code, description, layers)
+    try:
+        result = await adapter.create_topic(title, short_code, description, layers)
+    except DuplicateEntityError as dup:
+        return f"ℹ️ Topic '{dup.title}' đã có (slug: {dup.existing.get('slug', 'N/A')}), không tạo thêm."
     return (
         f"✅ Đã tạo topic '{result.get('title', title)}' "
         f"(slug: {result.get('slug', 'N/A')})"
@@ -93,17 +97,22 @@ async def create_topics_batch(topics: list[dict]) -> str:
 
     adapter = get_adapter()
     results: list[str] = []
+    skipped: list[str] = []
     for t in topics:
         raw_title = t.get("title", "")
         short_code = t.get("short_code", raw_title[:2].upper() if raw_title else "XX")
-        result = await adapter.create_topic(
-            raw_title,
-            short_code,
-            t.get("description", ""),
-            [{"title": "General", "shortTag": "01-GEN"}],
-        )
+        try:
+            result = await adapter.create_topic(
+                raw_title,
+                short_code,
+                t.get("description", ""),
+                [{"title": "General", "shortTag": "01-GEN"}],
+            )
+        except DuplicateEntityError as dup:
+            skipped.append(dup.title)
+            continue
         results.append(result.get("title", raw_title))
-    return f"✅ Đã tạo {len(results)} topic: {', '.join(results)}"
+    return _with_skipped(f"✅ Đã tạo {len(results)} topic: {', '.join(results)}", skipped)
 
 
 @tool

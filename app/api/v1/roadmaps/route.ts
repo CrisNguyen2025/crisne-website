@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate, normalizeTitle } from '@/lib/roadmap/duplicates';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -70,14 +71,23 @@ export async function POST(req: NextRequest) {
       .replace(/[\s_-]+/g, '-')
       .replace(/^-+|-+$/g, '') || `topic-${Date.now()}`;
 
-    // Ensure unique slug
-    let slug = baseSlug;
-    const existing = await prisma.roadmap.findUnique({ where: { slug } });
-    if (existing) {
-      slug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
-    }
+    // Same title (or a title that slugifies the same) means the topic already exists:
+    // return it instead of minting a "-1234" copy.
+    const topics = await prisma.roadmap.findMany({ select: { id: true, slug: true, title: true } });
+    const duplicate = findDuplicate(topics, title) ?? topics.find((t) => t.slug === baseSlug);
+    if (duplicate) return duplicateResponse('topic', duplicate);
+    const slug = baseSlug;
 
-    const count = await prisma.roadmap.count();
+    // Repeated layer titles in the same request collapse to one
+    const seenLayers = new Set<string>();
+    const uniqueLayers = (layers as { title: string; shortTag: string; subtitle?: string }[]).filter((layer) => {
+      const key = normalizeTitle(layer.title);
+      if (seenLayers.has(key)) return false;
+      seenLayers.add(key);
+      return true;
+    });
+
+    const count = topics.length;
 
     const createdRoadmap = await prisma.roadmap.create({
       data: {
@@ -87,7 +97,7 @@ export async function POST(req: NextRequest) {
         description: description?.trim() || null,
         order: count + 1,
         layers: {
-          create: layers.map((layer: { title: string; shortTag: string; subtitle?: string }, idx: number) => ({
+          create: uniqueLayers.map((layer, idx) => ({
             order: idx + 1,
             title: layer.title.trim(),
             shortTag: layer.shortTag.trim().toUpperCase(),

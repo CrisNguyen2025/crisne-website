@@ -18,6 +18,8 @@ export interface ToolCall {
   name: string;
   args?: Record<string, unknown>;
   result: string;
+  status?: 'running' | 'success' | 'failed';
+  error?: string;
   /** Epoch ms when the tool started (client clock). */
   startedAt?: number;
   /** Epoch ms when the tool finished; undefined while running. */
@@ -28,6 +30,14 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  /** Reasoned thought stream (from <think> tags or SSE event: thinking) */
+  thinking?: string;
+  /** True while thinking tokens or initial deliberation are in progress */
+  isThinking?: boolean;
+  // True when the user pressed stop before the reply finished
+  stopped?: boolean;
+  /** Total elapsed time spent thinking in ms */
+  thinkingDurationMs?: number;
   toolCalls?: ToolCall[];
   steps?: AssistantStepEvent[];
   actionChips?: ChatActionChip[];
@@ -38,6 +48,12 @@ export interface ChatMessage {
 }
 
 export interface ChatbotConfig {
+  /**
+   * Whether this reader may change roadmap data. Readers get read-only suggestions.
+   * Default: false (fail closed until the host has confirmed access).
+   */
+  canWrite?: boolean;
+
   /**
    * Screen anchor corner for the floating widget.
    * Default: 'bottom-right'

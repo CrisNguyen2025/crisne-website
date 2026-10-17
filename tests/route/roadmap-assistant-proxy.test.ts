@@ -146,3 +146,18 @@ describe("Roadmap Assistant proxy — what it forwards", () => {
     expect(owner.status).toBe(200);
   });
 });
+
+describe("message length limit (P1-6)", () => {
+  it("refuses a question over 2000 characters before calling the service", async () => {
+    const res = await callPost("chat/stream", { message: "x".repeat(2001), thread_id: "t" });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "Câu hỏi quá dài. Bạn rút gọn giúp mình nhé." });
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("forwards a question of exactly 2000 characters", async () => {
+    const res = await callPost("chat/stream", { message: "x".repeat(2000), thread_id: "t" });
+    expect(res.status).not.toBe(413);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 
 // POST /api/v1/roadmaps/items - Create item in a group
 export async function POST(req: NextRequest) {
@@ -13,6 +14,16 @@ export async function POST(req: NextRequest) {
 
     if (!layerId || !level || !title) {
       return NextResponse.json({ error: 'layerId, level, and title are required' }, { status: 400 });
+    }
+
+    // A lesson title appears once per layer, whatever its level
+    const layerItems = await prisma.roadmapItem.findMany({
+      where: { group: { layerId } },
+      select: { id: true, title: true, group: { select: { level: true } } },
+    });
+    const duplicate = findDuplicate(layerItems, title);
+    if (duplicate) {
+      return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, level: duplicate.group.level, layerId });
     }
 
     // Find or create group

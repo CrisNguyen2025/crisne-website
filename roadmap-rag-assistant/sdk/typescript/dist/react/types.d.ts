@@ -1,5 +1,7 @@
 import type { PageContext, ChatActionChip } from '../types';
+import type { AssistantStepEvent, AssistantStepItem } from '../client';
 export type { ChatActionChip };
+export type { AssistantStepEvent, AssistantStepItem };
 /**
  * Configuration and state types for the Roadmap Assistant Chatbot Widget.
  */
@@ -8,6 +10,8 @@ export interface ToolCall {
     name: string;
     args?: Record<string, unknown>;
     result: string;
+    status?: 'running' | 'success' | 'failed';
+    error?: string;
     /** Epoch ms when the tool started (client clock). */
     startedAt?: number;
     /** Epoch ms when the tool finished; undefined while running. */
@@ -17,7 +21,15 @@ export interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
+    /** Reasoned thought stream (from <think> tags or SSE event: thinking) */
+    thinking?: string;
+    /** True while thinking tokens or initial deliberation are in progress */
+    isThinking?: boolean;
+    stopped?: boolean;
+    /** Total elapsed time spent thinking in ms */
+    thinkingDurationMs?: number;
     toolCalls?: ToolCall[];
+    steps?: AssistantStepEvent[];
     actionChips?: ChatActionChip[];
     status?: 'sending' | 'streaming' | 'complete' | 'error';
     /** Epoch ms of the first streamed token; ends the "thinking" step. */
@@ -25,6 +37,11 @@ export interface ChatMessage {
     timestamp: Date;
 }
 export interface ChatbotConfig {
+    /**
+     * Whether this reader may change roadmap data. Readers get read-only suggestions.
+     * Default: false (fail closed until the host has confirmed access).
+     */
+    canWrite?: boolean;
     /**
      * Screen anchor corner for the floating widget.
      * Default: 'bottom-right'
@@ -91,6 +108,12 @@ export interface ChatbotConfig {
      * Optional custom CSS class name for the wrapper container.
      */
     className?: string;
+    /**
+     * Optional custom conversation/thread ID.
+     * If omitted, a unique UUID is automatically generated per conversation session.
+     */
+    conversationId?: string;
+    threadId?: string;
 }
 export interface FeedbackDetail {
     reason?: string;

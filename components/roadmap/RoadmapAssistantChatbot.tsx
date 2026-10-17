@@ -6,12 +6,12 @@ import {
   runWebMcpCommand,
 } from "@/logic/roadmap/roadmapAssistantService";
 import { submitChatFeedback } from "@/logic/roadmap/knowledgeTriageService";
-import React from "react";
-import {
-  RoadmapChatbotWidget,
+import React, { useEffect, useState } from "react";
+import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
+import type {
   ChatbotPosition,
   FeedbackDetail,
-} from "@/roadmap-rag-assistant/sdk/typescript/src";
+} from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
 
 export interface RoadmapAssistantChatbotProps {
@@ -76,7 +76,7 @@ export function RoadmapAssistantChatbot({
   offsetY = 24,
   zIndex = 9999,
   className = "",
-  title = "AI Assistant",
+  title = "Abot",
   onToolExecuted,
 }: RoadmapAssistantChatbotProps) {
   const handleToolExecuted = (toolName: string, result: string) => {
@@ -133,6 +133,17 @@ export function RoadmapAssistantChatbot({
   // Same-origin proxy: it checks who the caller is before forwarding to the Python service
   const baseUrl = ROADMAP_ASSISTANT_BASE_URL;
 
+  // Readers start without write access (fail closed); the owner's status arrives a moment later
+  const [canWrite, setCanWrite] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${baseUrl}/me`, { cache: "no-store", signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { canWrite: false }))
+      .then((data: { canWrite?: unknown }) => setCanWrite(data.canWrite === true))
+      .catch(() => setCanWrite(false));
+    return () => controller.abort();
+  }, [baseUrl]);
+
   return (
     <RoadmapChatbotWidget
       position={position}
@@ -141,6 +152,7 @@ export function RoadmapAssistantChatbot({
       zIndex={zIndex}
       title={title}
       baseUrl={baseUrl}
+      canWrite={canWrite}
       className={className}
       onToolExecuted={handleToolExecuted}
       onFeedback={handleFeedback}

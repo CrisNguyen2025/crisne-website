@@ -4,63 +4,50 @@ exports.RoadmapChatbotWidget = RoadmapChatbotWidget;
 const jsx_runtime_1 = require("react/jsx-runtime");
 const react_1 = require("react");
 const useRoadmapAssistantChat_1 = require("./useRoadmapAssistantChat");
-const icons_1 = require("./icons");
 const formatters_1 = require("./utils/formatters");
-const ChatMarkdown_1 = require("./ChatMarkdown");
-const LayerChoicePicker_1 = require("./LayerChoicePicker");
-const ToolStepRow_1 = require("./ToolStepRow");
+const FeedbackReasonSheet_1 = require("./components/FeedbackReasonSheet");
+const ChatComposer_1 = require("./components/ChatComposer");
+const ChatHeader_1 = require("./components/ChatHeader");
+const useVisualViewportBox_1 = require("./utils/useVisualViewportBox");
+const MessageList_1 = require("./components/MessageList");
 const WIDGET_THEME_VARS = {
-    ["--bg"]: "#FFFFFF",
-    ["--surface"]: "#F4F3F0",
-    ["--border"]: "#E6E4DF",
-    ["--text"]: "#1F1E1C",
-    ["--text-muted"]: "#6B6862",
-    ["--accent"]: "#C2410C",
-    ["--accent-soft"]: "#FBEDE5",
-    ["--success"]: "#3F7D58",
-    ["--danger"]: "#B42318",
-    // Semantic mappings for Tailwind components (e.g. ChatMarkdown)
-    ["--background"]: "#FFFFFF",
-    ["--foreground"]: "#1F1E1C",
-    ["--muted-foreground"]: "#6B6862",
-    ["--card"]: "#F4F3F0",
-    ["--card-foreground"]: "#1F1E1C",
-    ["--popover"]: "#FFFFFF",
-    ["--popover-foreground"]: "#1F1E1C",
-    ["--border"]: "#E6E4DF",
-    ["--input"]: "#F4F3F0",
-    ["--muted"]: "#F4F3F0",
-    ["--primary"]: "#C2410C",
-    ["--primary-foreground"]: "#FFFFFF",
     colorScheme: "light",
+    ...{
+        "--bg": "#FFFFFF",
+        "--surface": "#F4F3F0",
+        "--border": "#E6E4DF",
+        "--text": "#1F1E1C",
+        "--text-muted": "#6B6862",
+        "--accent": "#C2410C",
+        "--accent-soft": "#FBEDE5",
+        "--success": "#3F7D58",
+        "--danger": "#B42318",
+        "--background": "#FFFFFF",
+        "--foreground": "#1F1E1C",
+        "--muted-foreground": "#6B6862",
+        "--card": "#F4F3F0",
+        "--card-foreground": "#1F1E1C",
+        "--popover": "#FFFFFF",
+        "--popover-foreground": "#1F1E1C",
+        "--input": "#F4F3F0",
+        "--muted": "#F4F3F0",
+        "--primary": "#C2410C",
+        "--primary-foreground": "#FFFFFF",
+    },
 };
-const UNLIKE_REASONS = [
-    "Ảo giác / Sai kiến thức",
-    "Lạc đề / Chưa đúng trọng tâm",
-    "Lỗi cú pháp / Lộ trình hỏng",
-    "Khó hiểu / Quá dài dòng",
-];
-function FeedbackReasonSheet({ onSubmit, onClose, }) {
-    const [selectedReason, setSelectedReason] = (0, react_1.useState)(null);
-    const [comment, setComment] = (0, react_1.useState)("");
-    const [isSubmitted, setIsSubmitted] = (0, react_1.useState)(false);
-    const handleSubmit = (e) => {
-        e?.preventDefault();
-        setIsSubmitted(true);
-        onSubmit(selectedReason || undefined, comment.trim() || undefined);
-        setTimeout(() => {
-            onClose();
-        }, 1200);
-    };
-    return ((0, jsx_runtime_1.jsxs)("div", { className: "absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-2xl border-t border-[#E6E4DF] bg-[#FFFFFF] p-3.5 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between pb-2 border-b border-[#E6E4DF]/60", children: [(0, jsx_runtime_1.jsx)("span", { className: "text-xs font-semibold text-[#1F1E1C]", children: "G\u00F3p \u00FD c\u00E2u tr\u1EA3 l\u1EDDi ch\u01B0a t\u1ED1t" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: onClose, title: "\u0110\u00F3ng", "aria-label": "\u0110\u00F3ng b\u1EA3ng g\u00F3p \u00FD", className: "flex h-5 w-5 items-center justify-center rounded text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }) })] }), isSubmitted ? ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-center gap-1.5 py-6 text-xs font-medium text-[#3F7D58]", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-4 w-4" }), (0, jsx_runtime_1.jsx)("span", { children: "\u0110\u00E3 ghi nh\u1EADn g\u00F3p \u00FD, c\u1EA3m \u01A1n b\u1EA1n!" })] })) : ((0, jsx_runtime_1.jsxs)("form", { onSubmit: handleSubmit, className: "flex flex-col gap-2.5 pt-2.5", children: [(0, jsx_runtime_1.jsx)("div", { className: "flex flex-wrap gap-1.5", children: UNLIKE_REASONS.map((opt) => {
-                            const isSelected = selectedReason === opt;
-                            return ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setSelectedReason(isSelected ? null : opt), className: `rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${isSelected
-                                    ? "border border-[#C2410C] bg-[#FBEDE5] text-[#C2410C] font-medium"
-                                    : "border border-[#E6E4DF] bg-[#F4F3F0] text-[#1F1E1C] hover:bg-[#ECEAE5]"}`, children: opt }, opt));
-                        }) }), (0, jsx_runtime_1.jsx)("textarea", { value: comment, onChange: (e) => setComment(e.target.value), placeholder: "AI c\u1EA7n c\u1EA3i thi\u1EC7n \u0111i\u1EC3m n\u00E0o? (t\u00F9y ch\u1ECDn)...", rows: 2, maxLength: 300, className: "w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] p-2 text-xs text-[#1F1E1C] outline-none placeholder:text-[#6B6862] focus:border-[#C2410C] focus:bg-[#FFFFFF]" }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-end gap-2 pt-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: onClose, className: "rounded-md px-2.5 py-1 text-xs text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: "B\u1ECF qua" }), (0, jsx_runtime_1.jsx)("button", { type: "submit", className: "rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 cursor-pointer", children: "G\u1EEDi g\u00F3p \u00FD" })] })] }))] }));
-}
-function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY = 24, zIndex = 9999, title = "Roadmap Assistant", subtitle = "AI Knowledge & Roadmap Agent", baseUrl = "http://localhost:8000", initialOpen = false, initialMessages, onToolExecuted, onFeedback, getContext, onWebMcpMessage, className = "", }) {
+function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY = 24, zIndex = 9999, title = "Abot", subtitle = "Trợ lý kiến thức & lộ trình", baseUrl = "http://localhost:8000", initialOpen = false, initialMessages, onToolExecuted, onFeedback, getContext, onWebMcpMessage, className = "", conversationId: customConversationId, threadId, canWrite = false, }) {
     const [isOpen, setIsOpen] = (0, react_1.useState)(initialOpen);
+    const [isOptionsOpen, setIsOptionsOpen] = (0, react_1.useState)(false);
+    const [copiedConvId, setCopiedConvId] = (0, react_1.useState)(false);
+    const optionsRef = (0, react_1.useRef)(null);
+    const [mousePos, setMousePos] = (0, react_1.useState)({ x: 0, y: 0 });
+    const handleLauncherMouseMove = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMousePos({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+        });
+    };
     const [expandedTools, setExpandedTools] = (0, react_1.useState)({});
     const [feedback, setFeedback] = (0, react_1.useState)({});
     const [activeFeedbackMsgId, setActiveFeedbackMsgId] = (0, react_1.useState)(null);
@@ -106,53 +93,109 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
             }
         }
     };
-    const { messages, input, setInput, isLoading, isStreaming, activeTool, sendMessage, stopStreaming, clearMessages, } = (0, useRoadmapAssistantChat_1.useRoadmapAssistantChat)({
+    const { messages, input, setInput, isLoading, isStreaming, activeTool, conversationId, sendMessage, stopStreaming, clearMessages, retry, } = (0, useRoadmapAssistantChat_1.useRoadmapAssistantChat)({
         baseUrl,
+        threadId,
+        conversationId: customConversationId,
         initialMessages,
         onToolExecuted,
         getContext,
         onWebMcpMessage,
+        canWrite,
     });
+    // Follows the on-screen keyboard on phones so the composer stays visible
+    const keyboardBox = (0, useVisualViewportBox_1.useVisualViewportBox)(isOpen);
     const scrollRef = (0, react_1.useRef)(null);
     const inputRef = (0, react_1.useRef)(null);
     const containerRef = (0, react_1.useRef)(null);
     const isSendingRef = (0, react_1.useRef)(false);
-    // Click outside to close smoothly
+    // Snippet tapped to run; only that snippet's run button spins while the reply is loading
+    const [runningCode, setRunningCode] = (0, react_1.useState)(null);
     (0, react_1.useEffect)(() => {
-        if (!isOpen)
+        if (!isLoading)
+            setRunningCode(null);
+    }, [isLoading]);
+    const handleRunCode = (0, react_1.useCallback)((code) => {
+        if (isLoading)
             return;
-        const handleClickOutside = (event) => {
-            if (containerRef.current &&
-                !containerRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        const handleKeyDown = (event) => {
-            if (event.key === "Escape") {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        document.addEventListener("touchstart", handleClickOutside, { passive: true });
-        document.addEventListener("keydown", handleKeyDown);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-            document.removeEventListener("touchstart", handleClickOutside);
-            document.removeEventListener("keydown", handleKeyDown);
-        };
-    }, [isOpen]);
-    // Auto-scroll (immediate follow during stream like Claude Code, smooth on arrival)
+        setRunningCode(code.trim());
+        sendMessage(code);
+    }, [isLoading, sendMessage]);
+    // Close container & options on click outside or Escape
     (0, react_1.useEffect)(() => {
-        if (isOpen && scrollRef.current) {
-            scrollRef.current.scrollTo({
-                top: scrollRef.current.scrollHeight,
-                behavior: isStreaming ? "auto" : "smooth",
-            });
+        if (!isOpen && !isOptionsOpen)
+            return;
+        const handleClick = (e) => {
+            const target = e.target;
+            if (isOpen && containerRef.current && !containerRef.current.contains(target)) {
+                setIsOpen(false);
+                setIsOptionsOpen(false);
+            }
+            else if (isOptionsOpen && optionsRef.current && !optionsRef.current.contains(target)) {
+                setIsOptionsOpen(false);
+            }
+        };
+        const handleKey = (e) => {
+            if (e.key === "Escape") {
+                setIsOpen(false);
+                setIsOptionsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        document.addEventListener("touchstart", handleClick, { passive: true });
+        document.addEventListener("keydown", handleKey);
+        return () => {
+            document.removeEventListener("mousedown", handleClick);
+            document.removeEventListener("touchstart", handleClick);
+            document.removeEventListener("keydown", handleKey);
+        };
+    }, [isOpen, isOptionsOpen]);
+    const handleCopyConversationId = (e) => {
+        e.stopPropagation();
+        if (!conversationId)
+            return;
+        navigator.clipboard?.writeText(conversationId).then(() => {
+            setCopiedConvId(true);
+            setTimeout(() => {
+                setCopiedConvId(false);
+                setIsOptionsOpen(false);
+            }, 1200);
+        }, () => { });
+    };
+    const isAtBottomRef = (0, react_1.useRef)(true);
+    const bottomSentinelRef = (0, react_1.useRef)(null);
+    const [showScrollBottom, setShowScrollBottom] = (0, react_1.useState)(false);
+    // "Stick to bottom": a 1px sentinel after the last message tells us whether the reader is
+    // at the end. The browser reports only when that changes, so nothing runs while scrolling.
+    // Within 80px of the end still counts as "at the bottom".
+    (0, react_1.useEffect)(() => {
+        const root = scrollRef.current;
+        const sentinel = bottomSentinelRef.current;
+        if (!isOpen || !root || !sentinel || typeof IntersectionObserver === "undefined")
+            return;
+        const observer = new IntersectionObserver(([entry]) => {
+            isAtBottomRef.current = entry.isIntersecting;
+            setShowScrollBottom(!entry.isIntersecting);
+        }, { root, rootMargin: "0px 0px 80px 0px" });
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [isOpen]);
+    const scrollToBottom = () => {
+        // The observer flips "at bottom" and hides the button on arrival. Setting them here would
+        // stick if the reader scrolls away mid-animation, since the sentinel never came into view.
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    };
+    // Follow new content while the reader is at the end. Layout effect: the jump happens before
+    // paint, so the sentinel never leaves view mid-stream and the button doesn't flash.
+    (0, react_1.useLayoutEffect)(() => {
+        if (isOpen && scrollRef.current && isAtBottomRef.current) {
+            const el = scrollRef.current;
+            el.scrollTop = el.scrollHeight;
         }
     }, [messages, isOpen, isStreaming, activeTool]);
-    // Auto-focus on open or when generation completes
+    // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
     (0, react_1.useEffect)(() => {
-        if (isOpen) {
+        if (isOpen && typeof window !== "undefined" && window.innerWidth >= 768) {
             const timer = setTimeout(() => inputRef.current?.focus(), 50);
             return () => clearTimeout(timer);
         }
@@ -194,6 +237,7 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
         // 2. Keep input focused immediately
         inputRef.current?.focus();
         // 3. Send message
+        isAtBottomRef.current = true;
         sendMessage(val);
         // 4. Re-ensure focus on next animation frame
         requestAnimationFrame(() => {
@@ -218,56 +262,7 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
             ? "Đang trả lời…"
             : subtitle;
     const showStop = isStreaming && !input.trim();
-    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `pointer-events-none flex flex-col font-sans ${position.endsWith("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { ref: containerRef, style: WIDGET_THEME_VARS, className: "pointer-events-auto relative flex h-[720px] max-h-[calc(100vh-3rem)] w-[400px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in zoom-in-95 duration-200", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-between gap-3 border-b border-[#E6E4DF] bg-[#FFFFFF] px-4 py-3", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex min-w-0 items-center gap-2.5", children: [(0, jsx_runtime_1.jsx)("span", { className: "flex h-7 w-7 items-center justify-center rounded-lg bg-[#F4F3F0] border border-[#E6E4DF] text-[#6B6862]", children: (0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsxs)("div", { className: "min-w-0", children: [(0, jsx_runtime_1.jsx)("div", { className: "truncate text-sm font-semibold tracking-tight text-[#1F1E1C]", children: title }), (0, jsx_runtime_1.jsx)("div", { className: "truncate text-xs leading-tight text-[#6B6862]", children: status })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "flex shrink-0 items-center gap-0.5", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: clearMessages, title: "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", "aria-label": "Cu\u1ED9c tr\u00F2 chuy\u1EC7n m\u1EDBi", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.NewChatIcon, { className: "h-4 w-4" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(false), title: "Thu g\u1ECDn", "aria-label": "Thu g\u1ECDn", className: "flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-4 w-4" }) })] })] }), (0, jsx_runtime_1.jsx)("div", { ref: scrollRef, className: "flex-1 space-y-6 overflow-y-auto px-4 py-5", children: messages.map((msg) => {
-                            const isUser = msg.role === "user";
-                            const timeStr = (0, formatters_1.formatTime)(msg.timestamp);
-                            const isLast = msg.id === messages[messages.length - 1]?.id;
-                            const isLive = !isUser && isStreaming && isLast;
-                            const toolCalls = msg.toolCalls ?? [];
-                            const toolRunning = toolCalls.some((tc) => tc.endedAt === undefined && isLive);
-                            // Waiting for the model after tools finished (or before any tool started).
-                            const showThinking = isLive && !msg.content && !toolRunning;
-                            const thinkingSince = toolCalls[toolCalls.length - 1]?.endedAt ??
-                                new Date(msg.timestamp).getTime();
-                            if (isUser) {
-                                return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col items-end gap-1", children: [(0, jsx_runtime_1.jsx)("div", { className: "relative max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-xs bg-[#F4F3F0] border border-[#E6E4DF] px-3.5 py-2 text-sm leading-relaxed text-[#1F1E1C]", children: msg.content }), (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p c\u00E2u h\u1ECFi", "aria-label": "Sao ch\u00E9p c\u00E2u h\u1ECFi", className: "flex h-5 w-5 items-center justify-center rounded transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3 w-3 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3 w-3" })) }), timeStr && (0, jsx_runtime_1.jsx)("span", { className: "text-[11px]", children: timeStr })] })] }, msg.id));
-                            }
-                            const awaitingConfirm = !isStreaming &&
-                                isLast &&
-                                (msg.content.includes("Xác nhận thực hiện") ||
-                                    msg.content.includes("DRY-RUN PREVIEW"));
-                            const awaitingLayerChoice = !isStreaming &&
-                                isLast &&
-                                msg.content.includes("Chọn layer cho bài học");
-                            // Build step items
-                            const stepItems = [];
-                            toolCalls.forEach((tc, idx) => {
-                                const toolKey = `${msg.id}-${idx}`;
-                                stepItems.push({
-                                    id: toolKey,
-                                    label: (0, formatters_1.formatToolDisplayName)(tc.name),
-                                    startedAt: tc.startedAt,
-                                    endedAt: tc.endedAt,
-                                    running: isLive && tc.endedAt === undefined,
-                                    detail: tc.result,
-                                });
-                            });
-                            if (showThinking && toolCalls.length === 0) {
-                                stepItems.push({
-                                    id: `${msg.id}-thinking`,
-                                    label: "Đang suy nghĩ & soạn câu trả lời",
-                                    startedAt: thinkingSince,
-                                    running: true,
-                                });
-                            }
-                            return ((0, jsx_runtime_1.jsxs)("div", { className: "group flex flex-col gap-2", children: [msg.content && ((0, jsx_runtime_1.jsx)("div", { className: "text-sm leading-relaxed text-[#1F1E1C] py-0.5", children: (0, jsx_runtime_1.jsx)(ChatMarkdown_1.ChatMarkdown, { content: msg.content, streaming: isLive, onRun: isLoading ? undefined : sendMessage }) })), stepItems.length > 0 && ((0, jsx_runtime_1.jsx)("div", { className: "-mx-1", children: (0, jsx_runtime_1.jsx)(ToolStepRow_1.CollapsibleStepsSummary, { steps: stepItems, expandedTools: expandedTools, onToggleTool: toggleToolExpand, isLive: isLive }) })), awaitingConfirm && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 pt-1", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("ok"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CheckCircleIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "X\u00E1c nh\u1EADn th\u1EF1c hi\u1EC7n" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => sendMessage("hủy"), disabled: isLoading, className: "flex items-center gap-1.5 rounded-lg border border-[#E4E2DD] bg-[#F2F1EE] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#EAE8E3] disabled:opacity-50 cursor-pointer", children: [(0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-3.5 w-3.5" }), (0, jsx_runtime_1.jsx)("span", { children: "H\u1EE7y b\u1ECF" })] })] })), awaitingLayerChoice && ((0, jsx_runtime_1.jsx)(LayerChoicePicker_1.LayerChoicePicker, { onSend: sendMessage, disabled: isLoading })), msg.content && !isLive && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-end gap-1.5 pt-0.5 text-xs text-[#6B6862]", children: [timeStr && (0, jsx_runtime_1.jsx)("span", { className: "select-none text-[11px]", children: timeStr }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => copyMessage(msg.id, msg.content), title: "Sao ch\u00E9p", "aria-label": "Sao ch\u00E9p c\u00E2u tr\u1EA3 l\u1EDDi", className: "flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer", children: copiedId === msg.id ? ((0, jsx_runtime_1.jsx)(icons_1.CheckIcon, { className: "h-3.5 w-3.5 text-[#3F7D58]" })) : ((0, jsx_runtime_1.jsx)(icons_1.CopyIcon, { className: "h-3.5 w-3.5" })) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 1), title: "H\u1EEFu \u00EDch", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi h\u1EEFu \u00EDch", "aria-pressed": feedback[msg.id] === 1, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 1
-                                                    ? "text-[#1F1E1C] bg-[#F4F3F0]"
-                                                    : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsUpIcon, { className: "h-3.5 w-3.5" }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleFeedback(msg.id, 0), title: "Ch\u01B0a t\u1ED1t", "aria-label": "C\u00E2u tr\u1EA3 l\u1EDDi ch\u01B0a t\u1ED1t", "aria-pressed": feedback[msg.id] === 0, className: `flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] cursor-pointer ${feedback[msg.id] === 0
-                                                    ? "text-[#B42318] bg-[#FBEDE5]"
-                                                    : "text-[#6B6862] hover:text-[#1F1E1C]"}`, children: (0, jsx_runtime_1.jsx)(icons_1.ThumbsDownIcon, { className: "h-3.5 w-3.5" }) })] }))] }, msg.id));
-                        }) }), (0, jsx_runtime_1.jsx)("div", { className: "p-3 border-t border-[#E6E4DF] bg-[#FFFFFF]", children: (0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 rounded-xl border border-[#E6E4DF] bg-[#F4F3F0] py-1.5 pl-3.5 pr-1.5 transition-all focus-within:border-[#C2410C] focus-within:ring-1 focus-within:ring-[#C2410C]/25", children: [(0, jsx_runtime_1.jsx)("input", { ref: inputRef, type: "text", value: input, onChange: (e) => setInput(e.target.value), onKeyDown: handleKeyDown, placeholder: isLoading
-                                        ? "AI đang phản hồi... Bạn có thể nhập tiếp"
-                                        : "Nhập lệnh tạo, hỏi đáp bài học hoặc /plan...", className: "min-w-0 flex-1 bg-transparent text-sm text-[#1F1E1C] outline-none placeholder:text-[#6B6862]" }), showStop ? ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: stopStreaming, title: "D\u1EEBng ph\u1EA3n h\u1ED3i", "aria-label": "D\u1EEBng ph\u1EA3n h\u1ED3i", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FBEDE5] text-[#B42318] border border-[#B42318]/20 transition-opacity hover:opacity-90 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.StopIcon, { className: "h-3.5 w-3.5" }) })) : ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => handleSend(), disabled: !input.trim(), "aria-label": "Send message", className: "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C2410C] text-white font-medium transition-all hover:bg-[#9A3412] hover:scale-105 active:scale-95 disabled:bg-[#E6E4DF] disabled:text-[#6B6862] disabled:opacity-40 disabled:hover:scale-100 cursor-pointer", children: (0, jsx_runtime_1.jsx)(icons_1.ArrowUpIcon, { className: "h-4 w-4" }) }))] }) }), activeFeedbackMsgId && ((0, jsx_runtime_1.jsx)(FeedbackReasonSheet, { messageId: activeFeedbackMsgId, onSubmit: (reason, comment) => {
+    return ((0, jsx_runtime_1.jsxs)("div", { style: positionStyles, className: `pointer-events-none flex flex-col font-sans ${position.endsWith("left") ? "items-start" : "items-end"} ${className}`, children: [isOpen && ((0, jsx_runtime_1.jsxs)("div", { ref: containerRef, style: { ...WIDGET_THEME_VARS, ...keyboardBox }, className: "pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in duration-200 rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[720px] md:max-h-[calc(100vh-3rem)] md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95", children: [(0, jsx_runtime_1.jsx)(ChatHeader_1.ChatHeader, { canWrite: canWrite, clearMessages: clearMessages, copiedConvId: copiedConvId, handleCopyConversationId: handleCopyConversationId, isOptionsOpen: isOptionsOpen, optionsRef: optionsRef, setIsOpen: setIsOpen, setIsOptionsOpen: setIsOptionsOpen, status: status, title: title }), (0, jsx_runtime_1.jsx)(MessageList_1.MessageList, { messages: messages, isLoading: isLoading, isStreaming: isStreaming, runningCode: runningCode, expandedTools: expandedTools, feedback: feedback, copiedId: copiedId, sendMessage: sendMessage, retry: retry, copyMessage: copyMessage, handleFeedback: handleFeedback, handleRunCode: handleRunCode, toggleToolExpand: toggleToolExpand, scrollRef: scrollRef, bottomSentinelRef: bottomSentinelRef, showScrollBottom: showScrollBottom, scrollToBottom: scrollToBottom }), (0, jsx_runtime_1.jsx)(ChatComposer_1.ChatComposer, { inputRef: inputRef, input: input, setInput: setInput, isLoading: isLoading, showStop: showStop, stopStreaming: stopStreaming, handleSend: handleSend, handleKeyDown: handleKeyDown }), activeFeedbackMsgId && ((0, jsx_runtime_1.jsx)(FeedbackReasonSheet_1.FeedbackReasonSheet, { messageId: activeFeedbackMsgId, onSubmit: (reason, comment) => {
                             const targetMsg = messages.find((m) => m.id === activeFeedbackMsgId);
                             const targetIdx = messages.findIndex((m) => m.id === activeFeedbackMsgId);
                             let userQuery = "";
@@ -285,5 +280,5 @@ function RoadmapChatbotWidget({ position = "bottom-right", offsetX = 24, offsetY
                                 query: userQuery,
                                 assistantMsg: targetMsg?.content,
                             });
-                        }, onClose: () => setActiveFeedbackMsgId(null) }))] })), !isOpen && ((0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "Toggle Roadmap Assistant", className: "pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFFFFF] text-[#1F1E1C] border border-[#E6E4DF] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] transition-all hover:bg-[#F4F3F0] hover:scale-105 active:scale-95 cursor-pointer", children: isOpen ? ((0, jsx_runtime_1.jsx)(icons_1.CloseIcon, { className: "h-5 w-5 text-[#6B6862]" })) : ((0, jsx_runtime_1.jsx)(icons_1.SparklesIcon, { className: "h-5 w-5 text-[#1F1E1C]" })) }))] }));
+                        }, onClose: () => setActiveFeedbackMsgId(null) }))] })), !isOpen && ((0, jsx_runtime_1.jsxs)("button", { type: "button", onClick: () => setIsOpen(!isOpen), "aria-label": "M\u1EDF Abot", className: "pointer-events-auto group flex h-11 items-center gap-2 rounded-full border border-white/25 bg-[#181A20] px-4 text-[14px] font-medium tracking-normal text-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.2)] transition-all duration-200 hover:bg-[#22252D] hover:border-white/40 hover:scale-[1.03] active:scale-[0.97] select-none cursor-pointer", children: [(0, jsx_runtime_1.jsx)("span", { className: "flex items-center justify-center text-white/80 transition-colors group-hover:text-white", children: (0, jsx_runtime_1.jsx)("svg", { width: "15", height: "15", viewBox: "0 0 24 24", fill: "currentColor", xmlns: "http://www.w3.org/2000/svg", children: (0, jsx_runtime_1.jsx)("path", { d: "M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" }) }) }), (0, jsx_runtime_1.jsx)("span", { className: "text-white/95 transition-colors group-hover:text-white", children: "Ask AI" })] }))] }));
 }

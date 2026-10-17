@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 
 // POST /api/v1/roadmaps/groups - Create a custom group in a layer
 export async function POST(req: NextRequest) {
@@ -17,9 +18,15 @@ export async function POST(req: NextRequest) {
 
     const groupLevel = (level || title.toLowerCase().replace(/[^\w]/g, '-')) || `group-${Date.now()}`;
 
-    const count = await prisma.roadmapGroup.count({
+    const siblings = await prisma.roadmapGroup.findMany({
       where: { layerId },
+      select: { id: true, title: true, level: true },
     });
+    // Items are filed by level, so two groups with one level would split them
+    const duplicate =
+      findDuplicate(siblings, title) ?? (level ? siblings.find((g) => g.level === groupLevel) : undefined);
+    if (duplicate) return duplicateResponse('group', duplicate);
+    const count = siblings.length;
 
     const newGroup = await prisma.roadmapGroup.create({
       data: {

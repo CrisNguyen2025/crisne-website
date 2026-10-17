@@ -127,7 +127,7 @@ export function ToolStepRow({
             </span>
           )}
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-[#8C8983] font-mono">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-[#8C8983]">
           {startedAt !== undefined && (running || endedAt !== undefined) && (
             <ElapsedTimer
               startedAt={startedAt}
@@ -145,8 +145,8 @@ export function ToolStepRow({
       </button>
 
       {canExpand && expanded && (
-        <div className="ml-5 mt-1 mr-1 rounded-md bg-[#F4F3F0]/70 border border-[#EBE9E4] px-2.5 py-1.5 text-[11px] leading-relaxed text-[#4D4B46] whitespace-pre-wrap break-words">
-          {detail && <div className={items?.length ? "mb-1" : "font-mono"}>{detail}</div>}
+        <div className="ml-5 mt-1 mr-1 rounded-md bg-[#F4F3F0]/70 border border-[#E6E4DF] px-2.5 py-1.5 text-[11px] leading-relaxed text-[#4D4B46] whitespace-pre-wrap break-words">
+          {detail && <div className={items?.length ? "mb-1" : ""}>{detail}</div>}
           {items && items.length > 0 && (
             <ul className="space-y-0.5">
               {items.map((it, idx) => (
@@ -225,8 +225,8 @@ export function CollapsibleStepsSummary({
   const headerLabel = runningStep
     ? runningStep.label
     : totalDuration
-      ? `Thought for ${totalDuration}`
-      : "Thought";
+      ? `Đã suy nghĩ ${totalDuration}`
+      : "Đã suy nghĩ";
 
   return (
     <div className="text-xs">
@@ -249,7 +249,7 @@ export function CollapsibleStepsSummary({
         </span>
 
         {anyRunning && firstStartedAt !== undefined && (
-          <span className="text-[11px] text-[#8C8983] font-mono">
+          <span className="text-[11px] text-[#8C8983]">
             <ElapsedTimer startedAt={firstStartedAt} />
           </span>
         )}
@@ -262,7 +262,7 @@ export function CollapsibleStepsSummary({
       </button>
 
       {isOpen && (
-        <div className="relative mt-1.5 ml-1 pl-3 border-l border-[#E2DFD8] space-y-1 py-0.5 animate-in fade-in duration-150">
+        <div className="relative mt-1.5 ml-1 pl-3 border-l border-[#E6E4DF] space-y-1 py-0.5 animate-in fade-in duration-150">
           {steps.map((s) => (
             <ToolStepRow
               key={s.id}

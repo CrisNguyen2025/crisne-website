@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate } from "@/lib/roadmap/duplicates";
 import { markdownToPlainText, markdownToSafeHtml } from "@/lib/roadmap/markdown";
 
 const DESCRIPTION_MAX_LENGTH = 200;
@@ -54,6 +55,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const level = triage.level || "core";
+
+    // A lesson with this title is already in the layer: keep the draft for editing, don't add a copy
+    const layerItems = await prisma.roadmapItem.findMany({
+      where: { group: { layerId } },
+      select: { id: true, title: true },
+    });
+    const duplicate = findDuplicate(layerItems, triage.draftTitle);
+    if (duplicate) return duplicateResponse("item", { ...duplicate, layerId });
 
     // 2. Find or create group under this layer
     let group = await prisma.roadmapGroup.findFirst({

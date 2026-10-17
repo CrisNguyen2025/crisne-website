@@ -141,6 +141,33 @@ class NextGenRoadmapAgent:
         async for ev in self._stream_text(ask, delay):
             yield ev
 
+    async def _greeting_reply(self) -> str:
+        """Greeting whose examples name a topic and layer that exist, so they work when copied.
+
+        With no data (or the API down) the examples keep <placeholders> instead of made-up names.
+        """
+        topic_slug, layer_title = "<slug topic>", "<tên layer>"
+        try:
+            adapter = get_adapter()
+            topics = await adapter.list_topics()
+            if topics:
+                topic_slug = topics[0].get("slug") or topic_slug
+                layers = (await adapter.get_topic(topic_slug) or {}).get("layers") or []
+                if layers:
+                    layer_title = layers[0].get("title") or layer_title
+        except Exception as exc:
+            print(f"[agent] Greeting examples use placeholders: {exc}")
+        return (
+            "Xin chào! Tôi là **Abot** — trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
+            "Bạn có thể yêu cầu tôi:\n"
+            "- 🗺️ **Tạo topic**: `tạo topic <tên topic>`\n"
+            f"- 📑 **Tạo layer**: `tạo layer <tên layer> trong topic {topic_slug}`\n"
+            f"- 📖 **Thêm bài học**: `thêm bài học <tên bài> vào layer {layer_title}`\n"
+            "- 🧠 **Tra cứu tri thức**: `Website có bài nào về Docker hoặc Database không?`\n"
+            "- 📋 **Lập kế hoạch**: `/plan Lộ trình Next.js Fullstack`\n\n"
+            "_Tên đã có sẵn sẽ không bị tạo trùng._"
+        )
+
     async def _ask_target_choice(
         self,
         session_ctx,
@@ -745,7 +772,7 @@ class NextGenRoadmapAgent:
             gen = None
             try:
                 chat_prompt = (
-                    "Bạn là Roadmap AI Assistant — trợ lý thông minh quản lý hệ thống lộ trình học tập.\n"
+                    "Bạn là Abot — trợ lý quản lý hệ thống lộ trình học tập.\n"
                     "Người dùng vừa gửi tin nhắn: " + repr(content) + "\n"
                     "Chỉ trả lời về lộ trình học tập, topic, layer, nhóm và bài học. "
                     "Nếu câu hỏi nằm ngoài phạm vi này, lịch sự từ chối và gợi ý các việc bạn có thể làm.\n"
@@ -779,15 +806,7 @@ class NextGenRoadmapAgent:
                 yield ev
             return
 
-        resp = (
-            f"Xin chào! Tôi là **Roadmap AI Assistant** — Trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
-            f"Bạn có thể yêu cầu tôi:\n"
-            f"- 🗺️ **Tạo Topic mới**: `tạo ABC topic`, `tạo topic AI Engineering`\n"
-            f"- 📑 **Tạo Layer**: `create aaa layer on fe`, `tạo 2 layer mock 1 và 2 trong be topic`\n"
-            f"- 📖 **Thêm bài học (Item)**: `thêm 3 item bài 1, 2 và 3 vào layer ...`\n"
-            f"- 🧠 **Tra cứu tri thức**: `Tìm kiếm kiến thức về Vector Database trong lộ trình AI`\n"
-            f"- 📋 **Lập kế hoạch**: `/plan tạo lộ trình Next.js Fullstack`"
-        )
+        resp = await self._greeting_reply()
         yield step_event(
             "answer",
             "generation",

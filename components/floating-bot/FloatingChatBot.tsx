@@ -15,7 +15,6 @@ import { ToolStepRow } from "@/roadmap-rag-assistant/sdk/typescript/src/react/To
 import {
   SparklesIcon,
   CloseIcon,
-  NewChatIcon,
   ArrowUpIcon,
   StopIcon,
   ArrowDownIcon,
@@ -47,7 +46,7 @@ function chipHref(
 }
 
 const ICON_BUTTON =
-  "flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer";
+  "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer";
 
 const QUICK_PROMPTS = [
   "Cris có kinh nghiệm gì về Next.js & React?",
@@ -79,7 +78,6 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
     conversationId,
     sendMessage,
     sendFeedback,
-    resetChat,
     stopResponse,
   } = useFloatingChat();
 
@@ -100,9 +98,9 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
     }
   }, [messages, isOpen, isLoading, showScrollBottom]);
 
-  // Focus input when opened (Desktop only, avoid aggressive mobile keyboard jump)
+  // Focus input when opened (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
-    if (isOpen && window.innerWidth >= 640) {
+    if (isOpen && typeof window !== "undefined" && window.innerWidth >= 768) {
       setTimeout(() => inputRef.current?.focus(), 250);
     }
   }, [isOpen]);
@@ -167,7 +165,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={() => setIsOpen(false)}
-            className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-xs sm:hidden"
+            className="fixed inset-0 z-[9998] bg-black/50 backdrop-blur-xs md:hidden"
             aria-hidden="true"
           />
         )}
@@ -175,31 +173,31 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
 
       <aside
         aria-label="AI Assistant"
-        className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex flex-col items-end font-sans sm:bottom-6 sm:right-6"
+        className={cn(
+          "pointer-events-none fixed z-[9999] flex flex-col font-sans",
+          isOpen
+            ? "inset-0 md:inset-auto md:bottom-6 md:right-6 md:items-end"
+            : "bottom-4 right-4 items-end md:bottom-6 md:right-6"
+        )}
       >
-        {/* ── Chat Window Popup / Mobile Bottom Sheet ── */}
+        {/* ── Chat Window Popup / Mobile Fullscreen (100dvh) ── */}
         <AnimatePresence>
           {isOpen && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.97, y: 16 }}
+              initial={{ opacity: 0, scale: 0.98, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 16 }}
+              exit={{ opacity: 0, scale: 0.98, y: 12 }}
               transition={{ type: "spring", stiffness: 380, damping: 30 }}
               className={cn(
                 "pointer-events-auto relative flex flex-col overflow-hidden bg-background text-foreground shadow-xl",
-                // Mobile: Full bottom sheet with safe area
-                "fixed inset-x-0 bottom-0 top-auto h-[88dvh] max-h-[88dvh] rounded-t-2xl border-t border-border",
-                // Desktop: Compact bottom-right floating window
-                "sm:static sm:inset-auto sm:mb-3 sm:h-[600px] sm:max-h-[80vh] sm:w-[400px] sm:rounded-2xl sm:border sm:border-border"
+                // Mobile (< 768px): Fullscreen 100dvh
+                "fixed inset-0 h-[100dvh] max-h-[100dvh] w-full rounded-none border-0",
+                // Desktop (>= 768px): Compact bottom-right floating window
+                "md:static md:inset-auto md:mb-3 md:h-[600px] md:max-h-[80vh] md:w-[400px] md:rounded-2xl md:border md:border-border"
               )}
             >
-              {/* Mobile Drag Indicator */}
-              <div className="flex w-full justify-center pb-1 pt-2 sm:hidden">
-                <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
-              </div>
-
               {/* Header */}
-              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <SparklesIcon className="h-4 w-4 text-primary" />
                   <div className="min-w-0">
@@ -299,10 +297,10 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                         <button
                           key={idx}
                           onClick={() => sendMessage(prompt)}
-                          className="group flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                          className="group flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-2 rounded-xl border border-border px-3.5 py-2.5 text-left text-sm text-foreground transition-colors hover:bg-muted active:bg-muted/80"
                         >
                           <span className="truncate">{prompt}</span>
-                          <ArrowUpIcon className="h-3.5 w-3.5 rotate-45 text-muted-foreground transition-colors group-hover:text-foreground" />
+                          <ArrowUpIcon className="h-3.5 w-3.5 shrink-0 rotate-45 text-muted-foreground transition-colors group-hover:text-foreground" />
                         </button>
                       ))}
                     </div>
@@ -313,7 +311,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                       if (msg.role === "user") {
                         return (
                           <div key={msg.id} className="flex justify-end">
-                            <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-3.5 py-2 text-sm leading-relaxed">
+                            <div className="max-w-[88%] md:max-w-[80%] whitespace-pre-wrap break-words rounded-2xl bg-muted px-4 py-2.5 text-[15px] md:text-sm leading-relaxed">
                               {msg.content}
                             </div>
                           </div>
@@ -363,7 +361,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                                     onClick={() =>
                                       !link.external && setIsOpen(false)
                                     }
-                                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+                                    className="inline-flex min-h-[38px] md:min-h-0 items-center gap-1 rounded-md border border-border px-3 py-1.5 md:px-2.5 md:py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                                   >
                                     {chip.label}
                                     <ArrowUpIcon className="h-3 w-3 rotate-45 text-muted-foreground" />
@@ -375,13 +373,13 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
 
                           {/* Feedback: shown once the answer has finished streaming */}
                           {msg.traceId && msg.content && !isLive && (
-                            <div className="-ml-1.5 flex items-center gap-0.5">
+                            <div className="-ml-1 flex items-center gap-0.5">
                               <button
                                 onClick={() => sendFeedback(msg, 1)}
                                 className={cn(
                                   "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-muted",
                                   msg.feedback === 1
-                                    ? "text-foreground"
+                                    ? "text-foreground bg-muted/60"
                                     : "text-muted-foreground hover:text-foreground"
                                 )}
                                 aria-label="Câu trả lời hữu ích"
@@ -394,7 +392,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                                 className={cn(
                                   "flex h-7 w-7 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-muted",
                                   msg.feedback === 0
-                                    ? "text-destructive"
+                                    ? "text-destructive bg-destructive/10"
                                     : "text-muted-foreground hover:text-foreground"
                                 )}
                                 aria-label="Câu trả lời chưa tốt"
@@ -413,24 +411,58 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
               </div>
 
               {/* Scroll-to-bottom button */}
-              {showScrollBottom && (
-                <button
-                  onClick={scrollToBottom}
-                  className="absolute bottom-24 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-foreground shadow-md transition-colors hover:bg-muted sm:bottom-20"
-                  aria-label="Cuộn xuống cuối"
-                >
-                  <ArrowDownIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
+              {/* While a reply is still generating, the arrow becomes three
+                  pulsing dots: new content is arriving below the fold. */}
+              <AnimatePresence>
+                {showScrollBottom && (
+                  <motion.button
+                    key="scroll-bottom"
+                    type="button"
+                    onClick={scrollToBottom}
+                    initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="absolute inset-x-0 bottom-20 z-10 mx-auto flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-foreground shadow-md hover:bg-muted"
+                    aria-label={
+                      isLoading
+                        ? "Đang trả lời — cuộn xuống để xem"
+                        : "Cuộn xuống cuối"
+                    }
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-0.5">
+                        {[0, 1, 2].map((i) => (
+                          <motion.span
+                            key={i}
+                            className="h-1 w-1 rounded-full bg-primary"
+                            animate={{ opacity: [0.3, 1, 0.3], y: [0, -2, 0] }}
+                            transition={{
+                              duration: 0.9,
+                              repeat: Infinity,
+                              ease: "easeInOut",
+                              delay: i * 0.15,
+                            }}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <ArrowDownIcon className="h-3.5 w-3.5" />
+                    )}
+                  </motion.button>
+                )}
+              </AnimatePresence>
 
-              {/* Composer (text-base on mobile prevents iOS Safari zoom) */}
-              <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              {/* Composer */}
+              <div className="border-t border-border/80 bg-background/95 backdrop-blur-md p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shrink-0">
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
                     sendMessage();
                   }}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-background py-1.5 pl-3.5 pr-1.5 transition-colors focus-within:border-ring"
+                  className="flex items-center gap-2 rounded-2xl border border-border/80 bg-muted/30 py-1.5 pl-4 pr-1.5 transition-all duration-150 focus-within:border-primary/50 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/15"
                 >
                   <input
                     ref={inputRef}
@@ -440,7 +472,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                     // Matches MAX_MESSAGE_LENGTH in app/api/chat/route.ts
                     maxLength={1000}
                     disabled={isLoading}
-                    className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60 sm:text-sm"
+                    className="min-w-0 flex-1 bg-transparent py-1 text-[16px] md:text-sm font-normal tracking-[-0.01em] leading-normal text-foreground outline-none placeholder:text-muted-foreground/60 placeholder:font-normal placeholder:text-sm disabled:opacity-50"
                   />
 
                   {isLoading ? (
@@ -449,7 +481,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                       onClick={stopResponse}
                       title="Dừng phản hồi"
                       aria-label="Dừng phản hồi"
-                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-foreground text-background transition-opacity hover:opacity-90"
+                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-foreground text-background shadow-xs transition-all hover:opacity-90 active:scale-95"
                     >
                       <StopIcon className="h-3.5 w-3.5" />
                     </button>
@@ -459,13 +491,13 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                       disabled={!input.trim()}
                       title="Gửi câu hỏi"
                       aria-label="Gửi câu hỏi"
-                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-40"
+                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xs transition-all hover:bg-primary/90 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
                     >
-                      <ArrowUpIcon />
+                      <ArrowUpIcon className="h-4 w-4" />
                     </button>
                   )}
                 </form>
-                <p className="mt-1.5 hidden text-center text-xs text-muted-foreground sm:block">
+                <p className="mt-1.5 hidden text-center text-xs text-muted-foreground md:block">
                   AI có thể mắc sai sót. Vui lòng xác thực với Cris khi cần
                   thiết.
                 </p>

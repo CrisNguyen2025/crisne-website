@@ -3,13 +3,24 @@
  * RoadmapChatClient — TypeScript SDK for the Roadmap RAG Assistant with SSE streaming.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RoadmapChatClient = void 0;
+exports.RoadmapChatClient = exports.StreamTimeoutError = void 0;
+/** The stream stopped sending data for too long; the request was cancelled. */
+class StreamTimeoutError extends Error {
+    kind = 'timeout';
+    constructor(message = 'Stream idle timeout') {
+        super(message);
+        this.name = 'StreamTimeoutError';
+    }
+}
+exports.StreamTimeoutError = StreamTimeoutError;
 class RoadmapChatClient {
     baseUrl;
     timeout;
+    idleTimeout;
     constructor(options = {}) {
         this.baseUrl = (options.baseUrl || 'http://localhost:8000').replace(/\/$/, '');
         this.timeout = options.timeout || 120000;
+        this.idleTimeout = options.idleTimeout || 30000;
     }
     /**
      * Real-time Server-Sent Events (SSE) streaming chat.
@@ -22,6 +33,19 @@ class RoadmapChatClient {
      */
     streamChat(message, callbacks, threadId = 'default', context) {
         const controller = new AbortController();
+        // Two guards: a silence limit between chunks (a stalled stream) and a cap on the whole request.
+        // Either one aborts the fetch, and the error reaches onError as a StreamTimeoutError.
+        let timedOut = false;
+        let idleTimer;
+        const cancelForTimeout = () => {
+            timedOut = true;
+            controller.abort();
+        };
+        const armIdle = () => {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(cancelForTimeout, this.idleTimeout);
+        };
+        const totalTimer = setTimeout(cancelForTimeout, this.timeout);
         (async () => {
             try {
                 const resp = await fetch(`${this.baseUrl}/chat/stream`, {
@@ -42,11 +66,57 @@ class RoadmapChatClient {
                 let buffer = '';
                 let currentEvent = 'message';
                 const accumulatedTools = [];
+                const pendingToolArgs = new Map();
                 let accumulatedMessage = '';
+                let accumulatedThinking = '';
+                let inThinkTag = false;
+                const processTokenChunk = (chunk) => {
+                    if (!chunk)
+                        return;
+                    let remaining = chunk;
+                    while (remaining.length > 0) {
+                        if (!inThinkTag) {
+                            const thinkMatch = remaining.match(/<(?:think|thought)>/i);
+                            if (thinkMatch && thinkMatch.index !== undefined) {
+                                const before = remaining.slice(0, thinkMatch.index);
+                                if (before) {
+                                    accumulatedMessage += before;
+                                    callbacks.onToken?.(before);
+                                }
+                                inThinkTag = true;
+                                remaining = remaining.slice(thinkMatch.index + thinkMatch[0].length);
+                            }
+                            else {
+                                accumulatedMessage += remaining;
+                                callbacks.onToken?.(remaining);
+                                remaining = '';
+                            }
+                        }
+                        else {
+                            const closeMatch = remaining.match(/<\/(?:think|thought)>/i);
+                            if (closeMatch && closeMatch.index !== undefined) {
+                                const thinkContent = remaining.slice(0, closeMatch.index);
+                                if (thinkContent) {
+                                    accumulatedThinking += thinkContent;
+                                    callbacks.onThinking?.(thinkContent);
+                                }
+                                inThinkTag = false;
+                                remaining = remaining.slice(closeMatch.index + closeMatch[0].length);
+                            }
+                            else {
+                                accumulatedThinking += remaining;
+                                callbacks.onThinking?.(remaining);
+                                remaining = '';
+                            }
+                        }
+                    }
+                };
+                armIdle();
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done)
                         break;
+                    armIdle();
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
                     buffer = lines.pop() || '';
@@ -63,27 +133,57 @@ class RoadmapChatClient {
                             const dataRaw = trimmed.slice(5).trim();
                             try {
                                 const data = JSON.parse(dataRaw);
-                                if (currentEvent === 'token') {
-                                    const delta = data.delta || '';
-                                    accumulatedMessage += delta;
-                                    callbacks.onToken?.(delta);
+                                if (currentEvent === 'thinking' || currentEvent === 'reasoning') {
+                                    const delta = typeof data === 'object' && data !== null
+                                        ? (data.delta ?? data.content ?? '')
+                                        : (typeof data === 'string' ? data : '');
+                                    if (delta) {
+                                        accumulatedThinking += delta;
+                                        callbacks.onThinking?.(delta);
+                                    }
+                                }
+                                else if (currentEvent === 'token') {
+                                    const rawDelta = typeof data === 'object' && data !== null
+                                        ? (data.delta ?? data.content ?? '')
+                                        : (typeof data === 'string' ? data : '');
+                                    processTokenChunk(rawDelta);
                                 }
                                 else if (currentEvent === 'tool_start') {
-                                    callbacks.onToolStart?.(data.name, data.args || {});
+                                    const args = (data.args && typeof data.args === 'object') ? data.args : {};
+                                    pendingToolArgs.set(data.name, args);
+                                    callbacks.onToolStart?.(data.name, args);
                                 }
                                 else if (currentEvent === 'tool_end') {
+                                    const resolvedArgs = (data.args && Object.keys(data.args).length > 0)
+                                        ? data.args
+                                        : (pendingToolArgs.get(data.name) || {});
+                                    pendingToolArgs.delete(data.name);
+                                    const isFailed = Boolean(data.status === 'failed' ||
+                                        data.error ||
+                                        (typeof data.result === 'string' &&
+                                            (data.result.toLowerCase().startsWith('error') ||
+                                                data.result.toLowerCase().includes('failed') ||
+                                                data.result.toLowerCase().includes('thất bại') ||
+                                                data.result.toLowerCase().startsWith('exception'))));
                                     const toolItem = {
                                         name: data.name,
-                                        args: {},
+                                        args: resolvedArgs,
                                         result: data.result || '',
+                                        status: isFailed ? 'failed' : 'success',
+                                        error: data.error || (isFailed ? data.result : undefined),
                                     };
                                     accumulatedTools.push(toolItem);
                                     callbacks.onToolEnd?.(data.name, data.result || '');
                                 }
+                                else if (currentEvent === 'step') {
+                                    callbacks.onStep?.(data);
+                                }
                                 else if (currentEvent === 'done') {
                                     const finalResp = {
                                         message: data.message || accumulatedMessage,
+                                        thinking: data.thinking || (accumulatedThinking ? accumulatedThinking : undefined),
                                         tool_calls: data.tool_calls || accumulatedTools,
+                                        steps: Array.isArray(data.steps) ? data.steps : undefined,
                                     };
                                     callbacks.onDone?.(finalResp);
                                 }
@@ -99,10 +199,18 @@ class RoadmapChatClient {
                 }
             }
             catch (err) {
+                if (timedOut) {
+                    callbacks.onError?.(new StreamTimeoutError());
+                    return;
+                }
                 if (err instanceof Error && err.name === 'AbortError') {
                     return;
                 }
                 callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+            }
+            finally {
+                clearTimeout(idleTimer);
+                clearTimeout(totalTimer);
             }
         })();
         return controller;

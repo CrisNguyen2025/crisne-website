@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     // Creates prisma/test.db with the current schema before the run
     globalSetup: ["tests/setup/test-db.ts"],
     // Tests must never hit Gemini or Langfuse: no keys from .env.local leak in

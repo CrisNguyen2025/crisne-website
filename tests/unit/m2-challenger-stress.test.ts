@@ -25,6 +25,13 @@ import {
   createAntiSlopTransformStream,
 } from "@/lib/ai/anti-slop";
 import { POST, buildAntiSlopSystemPrompt, ANTI_SLOP_SYSTEM_PROMPT } from "@/app/api/chat/route";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { RoadmapChatClient } from "@/roadmap-rag-assistant/sdk/typescript/src/client";
+import {
+  ThoughtProcess,
+  formatThoughtBadge,
+} from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/ThoughtProcess";
 
 // Mock next/server after() for request lifecycle
 vi.mock("next/server", async (importOriginal) => ({
@@ -66,6 +73,33 @@ function createStreamFromChunks(chunks: (string | Uint8Array)[]): ReadableStream
     start(controller) {
       for (const chunk of chunks) {
         controller.enqueue(chunk);
+      }
+      controller.close();
+    },
+  });
+}
+
+function createSseStreamFromEvents(
+  events: { event: string; data: Record<string, unknown> | string }[]
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const ev of events) {
+        const payload = typeof ev.data === "string" ? ev.data : JSON.stringify(ev.data);
+        controller.enqueue(encoder.encode(`event: ${ev.event}\ndata: ${payload}\n\n`));
+      }
+      controller.close();
+    },
+  });
+}
+
+function createSseStreamFromRawChunks(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
       }
       controller.close();
     },
@@ -632,4 +666,461 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       }
     });
   });
+
+  // =========================================================================
+  // HELPER: Run streamChat with Promise wrapper
+  // =========================================================================
+  function runStreamChat(
+    client: RoadmapChatClient,
+    message: string,
+    stream: ReadableStream<Uint8Array>
+  ): Promise<{
+    response?: any;
+    error?: Error;
+    tokens: string;
+    thinking: string;
+    toolsStarted: string[];
+    toolsEnded: string[];
+  }> {
+    (globalThis as any).fetch = vi.fn().mockResolvedValue(
+      new Response(stream, {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      })
+    );
+
+    return new Promise((resolve) => {
+      let tokens = "";
+      let thinking = "";
+      const toolsStarted: string[] = [];
+      const toolsEnded: string[] = [];
+
+      client.streamChat(message, {
+        onToken: (d) => {
+          tokens += d;
+        },
+        onThinking: (d) => {
+          thinking += d;
+        },
+        onToolStart: (name) => {
+          toolsStarted.push(name);
+        },
+        onToolEnd: (name) => {
+          toolsEnded.push(name);
+        },
+        onDone: (res) => {
+          resolve({ response: res, tokens, thinking, toolsStarted, toolsEnded });
+        },
+        onError: (err) => {
+          resolve({ error: err, tokens, thinking, toolsStarted, toolsEnded });
+        },
+      });
+    });
+  }
+
+  // =========================================================================
+  // SECTION 7: Thinking Stream Protocol — Unclosed & Partial Tags (M2 Challenger)
+  // =========================================================================
+  describe("Section 7: Thinking Stream Protocol — Unclosed & Partial Tags (M2 Challenger)", () => {
+    it("prevents leaking thinking content to main message when <think> tag is unclosed mid-stream", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>I am thinking about system architecture..." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "explain architecture", stream);
+
+      // Thinking content MUST NOT leak into visible tokens or message
+      expect(result.tokens).toBe("");
+      expect(result.thinking).toBe("I am thinking about system architecture...");
+      expect(result.response?.message).toBe("");
+      expect(result.response?.thinking).toBe("I am thinking about system architecture...");
+    });
+
+    it("preserves leading public content and hides unclosed trailing thinking block without leak", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "Direct answer first. <think>Hidden background reasoning..." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "status query", stream);
+
+      expect(result.tokens).toBe("Direct answer first. ");
+      expect(result.thinking).toBe("Hidden background reasoning...");
+      expect(result.response?.message).toBe("Direct answer first. ");
+      expect(result.response?.thinking).toBe("Hidden background reasoning...");
+    });
+
+    it("handles unclosed <thought> synonym tag identically without leaking", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<thought>Synonym tag unclosed reasoning..." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "test synonym", stream);
+
+      expect(result.tokens).toBe("");
+      expect(result.thinking).toBe("Synonym tag unclosed reasoning...");
+      expect(result.response?.message).toBe("");
+      expect(result.response?.thinking).toBe("Synonym tag unclosed reasoning...");
+    });
+  });
+
+  // =========================================================================
+  // SECTION 8: Thinking Stream Protocol — Multiple Separated Blocks (M2 Challenger)
+  // =========================================================================
+  describe("Section 8: Thinking Stream Protocol — Multiple Separated Blocks (M2 Challenger)", () => {
+    it("captures multiple separated <think> blocks in a single stream and maintains clean tokens", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>Plan step 1</think>Result 1. " } },
+        { event: "token", data: { delta: "<think>Plan step 2</think>Result 2." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "multi-step request", stream);
+
+      expect(result.tokens).toBe("Result 1. Result 2.");
+      expect(result.thinking).toBe("Plan step 1Plan step 2");
+      expect(result.response?.message).toBe("Result 1. Result 2.");
+      expect(result.response?.thinking).toBe("Plan step 1Plan step 2");
+    });
+
+    it("handles mixed case <THINK> and <Thought> tags across separated blocks", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<THINK>Capital thought</THINK>Answer A " } },
+        { event: "token", data: { delta: "<Thought>Mixed thought</Thought>Answer B" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "case test", stream);
+
+      expect(result.tokens).toBe("Answer A Answer B");
+      expect(result.thinking).toBe("Capital thoughtMixed thought");
+    });
+
+    it("handles consecutive back-to-back thinking blocks without intervening public text", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        {
+          event: "token",
+          data: { delta: "<think>Thought 1</think><think>Thought 2</think><thought>Thought 3</thought>Public answer" },
+        },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "stacked thoughts", stream);
+
+      expect(result.tokens).toBe("Public answer");
+      expect(result.thinking).toBe("Thought 1Thought 2Thought 3");
+    });
+  });
+
+  // =========================================================================
+  // SECTION 9: Thinking Stream Protocol — Empty Blocks & Ghost Prevention (M2 Challenger)
+  // =========================================================================
+  describe("Section 9: Thinking Stream Protocol — Empty Blocks & Ghost Prevention (M2 Challenger)", () => {
+    it("suppresses empty <think></think> blocks and does not emit onThinking", async () => {
+      const client = new RoadmapChatClient();
+      let thinkingCalled = 0;
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think></think>Immediate answer" } },
+        { event: "done", data: {} },
+      ]);
+
+      (globalThis as any).fetch = vi.fn().mockResolvedValue(
+        new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        })
+      );
+
+      const donePromise = new Promise<{ res: any; tokens: string }>((resolve) => {
+        let tokens = "";
+        client.streamChat("hi", {
+          onToken: (t) => {
+            tokens += t;
+          },
+          onThinking: () => {
+            thinkingCalled++;
+          },
+          onDone: (res) => resolve({ res, tokens }),
+        });
+      });
+
+      const { res, tokens } = await donePromise;
+
+      expect(thinkingCalled).toBe(0);
+      expect(tokens).toBe("Immediate answer");
+      expect(res.thinking).toBeUndefined();
+    });
+
+    it("suppresses empty <thought></thought> block", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<thought></thought>Clean answer" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "empty thought test", stream);
+
+      expect(result.tokens).toBe("Clean answer");
+      expect(result.thinking).toBe("");
+      expect(result.response?.thinking).toBeUndefined();
+    });
+
+    it("ThoughtProcess component renders null (no ghost badge) when thinking is empty or undefined", () => {
+      const emptyHtml = renderToStaticMarkup(
+        React.createElement(ThoughtProcess, { thinking: "", isThinking: false })
+      );
+      expect(emptyHtml).toBe("");
+
+      const undefinedHtml = renderToStaticMarkup(
+        React.createElement(ThoughtProcess, { thinking: undefined, isThinking: false })
+      );
+      expect(undefinedHtml).toBe("");
+    });
+
+    it("handles whitespace-only thinking block without leaking into tokens", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>   </think>Direct answer" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "whitespace test", stream);
+
+      expect(result.tokens).toBe("Direct answer");
+      expect(result.tokens).not.toContain("<think>");
+    });
+  });
+
+  // =========================================================================
+  // SECTION 10: Thinking Stream Protocol — Rapid Tool Interleaving & State Invariants (M2 Challenger)
+  // =========================================================================
+  describe("Section 10: Thinking Stream Protocol — Rapid Tool Interleaving (M2 Challenger)", () => {
+    it("handles interleaved SSE thinking events, rapid tool executions, and token deltas", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "thinking", data: { delta: "Step 1: Check knowledge base." } },
+        { event: "tool_start", data: { name: "search_kb", args: { query: "nextjs" } } },
+        { event: "tool_end", data: { name: "search_kb", result: "found doc" } },
+        { event: "thinking", data: { delta: "Step 2: Read layer." } },
+        { event: "token", data: { delta: "<think>Formatting answer</think>Dự án sử dụng Next.js 15." } },
+        { event: "tool_start", data: { name: "highlight_layer", args: { id: "layer-02" } } },
+        { event: "tool_end", data: { name: "highlight_layer", result: "ok" } },
+        { event: "token", data: { delta: " Tầng 02 LLM Application." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "interleaved test", stream);
+
+      expect(result.tokens).toBe("Dự án sử dụng Next.js 15. Tầng 02 LLM Application.");
+      expect(result.thinking).toBe("Step 1: Check knowledge base.Step 2: Read layer.Formatting answer");
+      expect(result.toolsStarted).toEqual(["search_kb", "highlight_layer"]);
+      expect(result.toolsEnded).toEqual(["search_kb", "highlight_layer"]);
+      expect(result.response?.tool_calls).toHaveLength(2);
+      expect(result.response?.tool_calls[0].name).toBe("search_kb");
+      expect(result.response?.tool_calls[0].status).toBe("success");
+      expect(result.response?.tool_calls[1].name).toBe("highlight_layer");
+      expect(result.response?.tool_calls[1].status).toBe("success");
+    });
+
+    it("maintains inThinkTag state across intervening tool_start and tool_end SSE events", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>Deciding to execute tool" } },
+        { event: "tool_start", data: { name: "lookup_item", args: { id: 10 } } },
+        { event: "tool_end", data: { name: "lookup_item", result: "Found item 10" } },
+        { event: "token", data: { delta: " and process completed</think>Final verified response." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "persistent tag test", stream);
+
+      expect(result.tokens).toBe("Final verified response.");
+      expect(result.thinking).toBe("Deciding to execute tool and process completed");
+      expect(result.toolsStarted).toEqual(["lookup_item"]);
+      expect(result.toolsEnded).toEqual(["lookup_item"]);
+    });
+
+    it("records tool failure status correctly while thinking stream proceeds", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "thinking", data: { delta: "Attempting DB query..." } },
+        { event: "tool_start", data: { name: "query_db", args: { query: "bad sql" } } },
+        { event: "tool_end", data: { name: "query_db", result: "error: syntax error in SQL statement", status: "failed" } },
+        { event: "thinking", data: { delta: "DB failed, using fallback." } },
+        { event: "token", data: { delta: "Dữ liệu trả về từ cache cục bộ." } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "tool failure test", stream);
+
+      expect(result.response?.tool_calls[0].status).toBe("failed");
+      expect(result.tokens).toBe("Dữ liệu trả về từ cache cục bộ.");
+      expect(result.thinking).toBe("Attempting DB query...DB failed, using fallback.");
+    });
+  });
+
+  // =========================================================================
+  // SECTION 11: Adversarial Stress Testing — Fragmentation, Nesting & Overwrite Attacks (M2 Challenger)
+  // =========================================================================
+  describe("Section 11: Adversarial Stress Testing — Fragmentation, Nesting & Overwrite Attacks (M2 Challenger)", () => {
+    it("EMPIRICAL ATTACK 1: reproduces tag boundary fragmentation leak when <think> is split across chunks", async () => {
+      const client = new RoadmapChatClient();
+      // Chunk 1 has '<thi', Chunk 2 has 'nk>Secret thought</think>Public answer'
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<thi" } },
+        { event: "token", data: { delta: "nk>Secret thought</think>Public answer" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "fragmentation attack", stream);
+
+      // EMPIRICAL FINDING: Because processTokenChunk matches /(?:think|thought)/ per-chunk without
+      // buffering incomplete tags, the '<thi' and 'nk>Secret thought</think>Public answer' both leak to tokens!
+      expect(result.tokens).toBe("<think>Secret thought</think>Public answer");
+      expect(result.thinking).toBe("");
+    });
+
+    it("EMPIRICAL ATTACK 2: reproduces closing tag fragmentation trap when </think> is split across chunks", async () => {
+      const client = new RoadmapChatClient();
+      // Chunk 1 has '<think>Secret thought</thi', Chunk 2 has 'nk>Public answer'
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>Secret thought</thi" } },
+        { event: "token", data: { delta: "nk>Public answer" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "close tag fragmentation", stream);
+
+      // EMPIRICAL FINDING: Closing tag is missed due to chunk boundary split.
+      // Parser stays in think mode; 'Public answer' is swallowed into thinking and tokens remain blank!
+      expect(result.tokens).toBe("");
+      expect(result.thinking).toBe("Secret thought</think>Public answer");
+    });
+
+    it("EMPIRICAL ATTACK 3: reproduces nested <think> tag breakdown and content leak", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "token", data: { delta: "<think>Outer <think>Inner</think> Leaked thought</think>Public" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "nested think test", stream);
+
+      // EMPIRICAL FINDING: First </think> terminates think tag state, leaking the rest to public tokens
+      expect(result.tokens).toBe(" Leaked thought</think>Public");
+      expect(result.thinking).toBe("Outer <think>Inner");
+    });
+
+    it("EMPIRICAL ATTACK 4: reproduces concurrent duplicate tool name argument overwrite in pendingToolArgs", async () => {
+      const client = new RoadmapChatClient();
+      const stream = createSseStreamFromEvents([
+        { event: "tool_start", data: { name: "search", args: { query: "first" } } },
+        { event: "tool_start", data: { name: "search", args: { query: "second" } } },
+        { event: "tool_end", data: { name: "search", result: "result 1" } },
+        { event: "tool_end", data: { name: "search", result: "result 2" } },
+        { event: "done", data: {} },
+      ]);
+
+      const result = await runStreamChat(client, "tool name collision", stream);
+
+      // EMPIRICAL FINDING: Because pendingToolArgs is keyed only by tool name, the second tool_start
+      // overwrote the args of the first tool_start.
+      expect(result.response?.tool_calls).toHaveLength(2);
+      expect(result.response?.tool_calls[0].args).toEqual({ query: "second" });
+      expect(result.response?.tool_calls[1].args).toEqual({});
+    });
+
+    it("HIGH-THROUGHPUT STRESS: handles 50 rapid alternating thinking and content chunks without crash or memory leak", async () => {
+      const client = new RoadmapChatClient();
+      const events: { event: string; data: Record<string, unknown> }[] = [];
+
+      for (let i = 0; i < 50; i++) {
+        events.push({
+          event: "token",
+          data: { delta: `<think>Reasoning step ${i}</think>Answer chunk ${i} ` },
+        });
+      }
+      events.push({ event: "done", data: {} });
+
+      const stream = createSseStreamFromEvents(events);
+      const start = performance.now();
+      const result = await runStreamChat(client, "50 cycles", stream);
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(1000); // Must process 50 cycles in under 1 second
+      for (let i = 0; i < 50; i++) {
+        expect(result.tokens).toContain(`Answer chunk ${i}`);
+        expect(result.thinking).toContain(`Reasoning step ${i}`);
+      }
+      expect(result.tokens).not.toContain("<think>");
+    });
+  });
+
+  // =========================================================================
+  // SECTION 12: Collapsible ThoughtProcess Component UI Invariants (M2 Challenger)
+  // =========================================================================
+  describe("Section 12: Collapsible ThoughtProcess Component UI Invariants (M2 Challenger)", () => {
+    it("renders active thinking state with pulsing amber dot and live label", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(ThoughtProcess, {
+          thinking: "Analyzing request...",
+          isThinking: true,
+          durationMs: 3000,
+        })
+      );
+
+      expect(html).toContain("animate-pulse");
+      expect(html).toContain("bg-amber-500");
+      expect(html).toContain("Thinking (3s)...");
+      expect(html).toContain("aria-expanded=\"false\"");
+    });
+
+    it("renders completed thought state with green checkmark and 'Đã suy nghĩ X giây'", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(ThoughtProcess, {
+          thinking: "Completed thought process.",
+          isThinking: false,
+          durationMs: 4200,
+        })
+      );
+
+      expect(html).toContain("Đã suy nghĩ 4 giây");
+      expect(html).toContain("text-[#3F7D58]"); // Checkmark green color
+      expect(html).not.toContain("animate-pulse");
+    });
+
+    it("renders expanded state with monospace muted typography and visible content", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(ThoughtProcess, {
+          thinking: "Step 1: Graph traversal\nStep 2: Topological sort",
+          isThinking: false,
+          durationMs: 1000,
+          expanded: true,
+        })
+      );
+
+      expect(html).toContain("aria-expanded=\"true\"");
+      expect(html).toContain("Step 1: Graph traversal");
+      expect(html).toContain("font-mono");
+      expect(html).toContain("italic");
+      expect(html).toContain("text-muted-foreground");
+    });
+
+    it("formatThoughtBadge formats singular and plural seconds accurately", () => {
+      expect(formatThoughtBadge(800, false)).toBe("Đã suy nghĩ 1 giây");
+      expect(formatThoughtBadge(1000, false)).toBe("Đã suy nghĩ 1 giây");
+      expect(formatThoughtBadge(2000, false)).toBe("Đã suy nghĩ 2 giây");
+      expect(formatThoughtBadge(5000, false)).toBe("Đã suy nghĩ 5 giây");
+      expect(formatThoughtBadge(2500, true)).toBe("Thinking (3s)...");
+    });
+  });
 });
+

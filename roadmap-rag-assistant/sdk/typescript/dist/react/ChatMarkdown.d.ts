@@ -1,21 +1,30 @@
 import React from "react";
+import { CalloutType } from "./components/CalloutAlert";
 /**
- * Dependency-free Markdown for chat answers (shared by both chatbots).
+ * Rich Markdown Engine for chat answers.
+ * Zero external parser dependencies — pure React Virtual DOM.
  *
- * Blocks: # to #### headings, ordered/unordered lists (2 levels), fenced code
- * with a copy button, blockquotes, horizontal rules, paragraphs.
- * Inline: **bold**, *italic*, `code`, [links](url).
+ * Supported Blocks:
+ * - Headings (H1 to H4) with hierarchy & subtle dividers
+ * - Markdown Tables (responsive, horizontal touch scroll, alternating rows)
+ * - GitHub Callouts/Alerts ([!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION])
+ * - Enhanced Code Blocks (syntax tokens, language badges, line numbers, 1-click copy)
+ * - KaTeX Math Formulas ($...$ inline and $$...$$ display)
+ * - Lists (ordered/unordered with arbitrary nesting)
+ * - Checklists (- [ ] and - [x] with styled checkboxes)
+ * - Blockquotes, horizontal rules, paragraphs
  *
- * Everything is rendered as React text nodes, never as raw HTML, so model
- * output cannot inject markup. Unclosed tokens (common mid-stream) stay literal.
+ * Inline:
+ * - **bold**, *italic*, `inline code`, [links](url), $math$
  */
-type ListItem = {
+export type ListItem = {
     text: string;
     num: number;
     ordered: boolean;
+    checked?: boolean;
     children: ListItem[];
 };
-type Block = {
+export type Block = {
     kind: "heading";
     level: number;
     text: string;
@@ -34,20 +43,34 @@ type Block = {
     kind: "quote";
     lines: string[];
 } | {
+    kind: "alert";
+    alertType: CalloutType;
+    title?: string;
+    lines: string[];
+} | {
+    kind: "table";
+    headers: string[];
+    alignments: ("left" | "center" | "right")[];
+    rows: string[][];
+} | {
+    kind: "math";
+    math: string;
+    display: boolean;
+} | {
     kind: "rule";
 };
 export declare function parseBlocks(content: string): Block[];
-/** `fade`: animate newly streamed words (used for the block still being written). */
 export declare function renderInline(text: string, fade?: boolean): React.ReactNode[];
-/** Thin caret shown at the end of a streaming answer. */
+/** Caret shown at the end of a streaming answer. */
 export declare function StreamingCaret(): import("react/jsx-runtime").JSX.Element;
 export interface ChatMarkdownProps {
     content: string;
-    /** Show a caret after the last character (inline when the last block allows it). */
+    /** Show a caret after the last character */
     streaming?: boolean;
     className?: string;
-    /** Adds a run button to one-line snippets; called with the snippet text. */
+    /** Adds a run button to one-line snippets; called with the snippet text */
     onRun?: (code: string) => void;
+    /** Snippet currently running, so its run button shows a spinner */
+    runningCode?: string | null;
 }
-export declare function ChatMarkdown({ content, streaming, className, onRun, }: ChatMarkdownProps): import("react/jsx-runtime").JSX.Element;
-export {};
+export declare function ChatMarkdown({ content, streaming, className, onRun, runningCode, }: ChatMarkdownProps): import("react/jsx-runtime").JSX.Element;

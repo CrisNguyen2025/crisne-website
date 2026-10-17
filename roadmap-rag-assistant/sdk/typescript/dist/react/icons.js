@@ -13,6 +13,8 @@ exports.ChevronDownIcon = ChevronDownIcon;
 exports.ThumbsUpIcon = ThumbsUpIcon;
 exports.ThumbsDownIcon = ThumbsDownIcon;
 exports.ArrowDownIcon = ArrowDownIcon;
+exports.MoreVerticalIcon = MoreVerticalIcon;
+exports.AlertTriangleIcon = AlertTriangleIcon;
 const jsx_runtime_1 = require("react/jsx-runtime");
 /**
  * Shared outline icon frame: 24×24 viewBox, 1.5 stroke, 16px by default.
@@ -59,4 +61,10 @@ function ThumbsDownIcon({ className }) {
 }
 function ArrowDownIcon({ className }) {
     return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "M12 5v14" }), (0, jsx_runtime_1.jsx)("path", { d: "m19 12-7 7-7-7" })] }));
+}
+function MoreVerticalIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("circle", { cx: "12", cy: "12", r: "1", fill: "currentColor" }), (0, jsx_runtime_1.jsx)("circle", { cx: "12", cy: "5", r: "1", fill: "currentColor" }), (0, jsx_runtime_1.jsx)("circle", { cx: "12", cy: "19", r: "1", fill: "currentColor" })] }));
+}
+function AlertTriangleIcon({ className }) {
+    return ((0, jsx_runtime_1.jsxs)(Icon, { className: className, children: [(0, jsx_runtime_1.jsx)("path", { d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" }), (0, jsx_runtime_1.jsx)("path", { d: "M12 9v4" }), (0, jsx_runtime_1.jsx)("path", { d: "M12 17h.01" })] }));
 }

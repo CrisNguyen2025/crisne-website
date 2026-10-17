@@ -145,7 +145,7 @@ export function KnowledgeTriageDrawer({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-semibold tracking-tight text-[#1F1E1C]">
-                  Knowledge Triage
+                  Knowledge Triage (Draft set data)
                 </h2>
                 {pendingCount > 0 && (
                   <span className="rounded-full bg-[#FBEDE5] px-2 py-0.5 text-[10px] font-semibold text-[#C2410C] border border-[#C2410C]/20">

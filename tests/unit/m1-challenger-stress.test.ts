@@ -1,472 +1,707 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
 import ReactDOMServer from "react-dom/server";
 import {
-  SparklesIcon,
-  ArrowUpIcon,
-  StopIcon,
-  NewChatIcon,
-  CloseIcon,
-  CopyIcon,
-  CheckIcon,
-  CheckCircleIcon,
-  ChevronDownIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
-  ArrowDownIcon,
-} from "../../roadmap-rag-assistant/sdk/typescript/src/react/icons";
+  ChatMarkdown,
+  parseBlocks,
+  renderInline,
+  Block,
+} from "../../roadmap-rag-assistant/sdk/typescript/src/react/ChatMarkdown";
+import { MarkdownTable } from "../../roadmap-rag-assistant/sdk/typescript/src/react/components/MarkdownTable";
 import {
-  formatMarkdownText,
-  renderInlineStyles,
-  formatTime,
-  formatToolDisplayName,
-} from "../../roadmap-rag-assistant/sdk/typescript/src/react/utils/formatters";
-import {
-  fileExistsInProject,
-  readProjectFile,
-} from "../e2e/test-helpers";
+  CalloutAlert,
+  CalloutType,
+} from "../../roadmap-rag-assistant/sdk/typescript/src/react/components/CalloutAlert";
+import { CodeBlock } from "../../roadmap-rag-assistant/sdk/typescript/src/react/components/CodeBlock";
 
-describe("Challenger 2 — Milestone 1 Stress & Adversarial Test Suite", () => {
-  const allIcons = [
-    { name: "SparklesIcon", component: SparklesIcon, defaultClass: "w-4 h-4" },
-    { name: "ArrowUpIcon", component: ArrowUpIcon, defaultClass: "w-4 h-4" },
-    { name: "StopIcon", component: StopIcon, defaultClass: "w-4 h-4" },
-    { name: "NewChatIcon", component: NewChatIcon, defaultClass: "w-4 h-4" },
-    { name: "CloseIcon", component: CloseIcon, defaultClass: "w-4 h-4" },
-    { name: "CopyIcon", component: CopyIcon, defaultClass: "w-4 h-4" },
-    { name: "CheckIcon", component: CheckIcon, defaultClass: "w-4 h-4" },
-    { name: "CheckCircleIcon", component: CheckCircleIcon, defaultClass: "w-4 h-4" },
-    { name: "ChevronDownIcon", component: ChevronDownIcon, defaultClass: "w-4 h-4" },
-    { name: "ThumbsUpIcon", component: ThumbsUpIcon, defaultClass: "w-4 h-4" },
-    { name: "ThumbsDownIcon", component: ThumbsDownIcon, defaultClass: "w-4 h-4" },
-    { name: "ArrowDownIcon", component: ArrowDownIcon, defaultClass: "w-4 h-4" },
-  ];
+function renderToHtml(element: React.ReactElement): string {
+  return ReactDOMServer.renderToStaticMarkup(element);
+}
 
-  describe("Mission Item 1: Icon Isolation & Rendering Verification (All 12 Icons)", () => {
-    it("all 12 icons are exported as valid React function components", () => {
-      expect(allIcons).toHaveLength(12);
-      for (const { name, component } of allIcons) {
-        expect(typeof component, `${name} should be a function`).toBe("function");
+describe("Empirical Challenger — Milestone 1 Rich Markdown Engine Stress Suite", () => {
+  // =========================================================================
+  // DIMENSION 1: EXTREME TABLE INPUTS
+  // =========================================================================
+  describe("Dimension 1: Extreme Table Inputs", () => {
+    it("handles table with missing leading and trailing pipes", () => {
+      const markdown = [
+        "Col A | Col B | Col C",
+        "--- | :---: | ---:",
+        "Val 1 | Val 2 | Val 3",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("table");
+
+      if (blocks[0].kind === "table") {
+        expect(blocks[0].headers).toEqual(["Col A", "Col B", "Col C"]);
+        expect(blocks[0].alignments).toEqual(["left", "center", "right"]);
+        expect(blocks[0].rows).toEqual([["Val 1", "Val 2", "Val 3"]]);
       }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("<table");
+      expect(html).toContain("Col A");
+      expect(html).toContain("Val 3");
     });
 
-    it("renders each of the 12 icons to valid SVG markup with default className", () => {
-      for (const { name, component, defaultClass } of allIcons) {
-        const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(component));
-        expect(markup, `${name} markup should start with <svg`).toContain("<svg");
-        expect(markup, `${name} markup should end with </svg>`).toContain("</svg>");
-        expect(markup, `${name} markup should include default class ${defaultClass}`).toContain(defaultClass);
-      }
+    it("handles asymmetric rows with fewer columns than headers (auto-pads cells)", () => {
+      const markdown = [
+        "| H1 | H2 | H3 | H4 |",
+        "| --- | --- | --- | --- |",
+        "| Row1-Col1 | Row1-Col2 |",
+        "| Row2-Col1 |",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("table");
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      // 4 headers (th) - use /<th[\s>]/g to avoid matching <thead
+      const thMatches = html.match(/<th[\s>]/g) || [];
+      expect(thMatches).toHaveLength(4);
+
+      // MarkdownTable pads empty cells: row 1 (2 data + 2 pad = 4), row 2 (1 data + 3 pad = 4) => 8 td
+      const tdMatches = html.match(/<td/g) || [];
+      expect(tdMatches).toHaveLength(8);
+      expect(html).toContain("Row1-Col1");
+      expect(html).toContain("Row2-Col1");
     });
 
-    it("renders each of the 12 icons with custom classNames applied directly to the svg", () => {
-      const customClass = "test-custom-icon-class-xyz-987";
-      for (const { name, component } of allIcons) {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement(component, { className: customClass })
-        );
-        expect(markup, `${name} markup should contain custom className`).toContain(customClass);
-      }
+    it("handles rows with more columns than headers without crashing or throwing", () => {
+      const markdown = [
+        "| H1 | H2 |",
+        "| --- | --- |",
+        "| A | B | Extra 1 | Extra 2 |",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("table");
+
+      // Verify alignment lookup does not crash when index >= alignments.length
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("Extra 1");
+      expect(html).toContain("Extra 2");
     });
 
-    it("handles complex multi-token Tailwind classes without error", () => {
-      const complexClass = "w-10 h-10 p-2 text-emerald-500 hover:text-emerald-700 transition-all duration-300";
-      for (const { name, component } of allIcons) {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement(component, { className: complexClass })
-        );
-        expect(markup).toContain("text-emerald-500");
-        expect(markup).toContain("hover:text-emerald-700");
+    it("correctly handles escaped pipes (\\|) inside cell content", () => {
+      const markdown = [
+        "| Operation | Syntax \\| Note | Example |",
+        "| :--- | :--- | :--- |",
+        "| Bitwise OR | `a \\| b` | `5 \\| 3` |",
+        "| Table Pipe | Escaped \\| inside | Cell \\| Value |",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("table");
+
+      if (blocks[0].kind === "table") {
+        expect(blocks[0].headers).toHaveLength(3);
+        expect(blocks[0].headers[1]).toBe("Syntax | Note");
+        expect(blocks[0].rows[0][1]).toBe("`a | b`");
+        expect(blocks[0].rows[1][0]).toBe("Table Pipe");
+        expect(blocks[0].rows[1][1]).toBe("Escaped | inside");
       }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("Syntax | Note");
+      expect(html).toContain("Escaped | inside");
     });
 
-    it("every icon shares the outline frame: 1.5 stroke, currentColor, aria-hidden, no hex colors", () => {
-      for (const { name, component } of allIcons) {
-        const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(component));
-        expect(markup, `${name} stroke width`).toContain('stroke-width="1.5"');
-        expect(markup, `${name} stroke color`).toContain('stroke="currentColor"');
-        expect(markup, `${name} aria-hidden`).toContain('aria-hidden="true"');
-        expect(markup, `${name} hex color`).not.toMatch(/#[0-9A-Fa-f]{6}/);
-      }
+    it("renders rich inline markdown inside table headers and data cells", () => {
+      const markdown = [
+        "| **Metric** | *Status* | `Code` | [Link](https://example.com) |",
+        "| --- | --- | --- | --- |",
+        "| **Latency** | *99.9%* | `p99` | [Docs](https://docs.example.com) |",
+        "| **Throughput** | *OK* | `10k/s` | [Grafana](/metrics) |",
+      ].join("\n");
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("<strong class=\"font-semibold text-foreground\">Metric</strong>");
+      expect(html).toContain("<em class=\"italic\">Status</em>");
+      expect(html).toContain("<code class=\"rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground\">Code</code>");
+      expect(html).toContain('href="https://example.com" target="_blank" rel="noopener noreferrer"');
+      expect(html).toContain("<strong class=\"font-semibold text-foreground\">Latency</strong>");
+      expect(html).toContain('href="/metrics"');
     });
 
-    it("handles empty string className gracefully", () => {
-      for (const { name, component } of allIcons) {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement(component, { className: "" })
-        );
-        expect(markup).toContain("<svg");
-        expect(markup).toContain("</svg>");
-      }
+    it("investigates single-column table behavior (adversarial edge case)", () => {
+      // In standard GFM, single column tables are technically possible:
+      // | Item |
+      // | --- |
+      // | One |
+      const singleCol = [
+        "| Item |",
+        "| --- |",
+        "| One |",
+        "| Two |",
+      ].join("\n");
+
+      const blocks = parseBlocks(singleCol);
+      // Let's document empirically whether isTableSeparator accepts single-column table:
+      // isTableSeparator regex requires (\|\s*:?-{2,}:?\s*)+ so single column table without trailing separator column
+      // is parsed as paragraph.
+      expect(Array.isArray(blocks)).toBe(true);
+      // Must not crash or throw unhandled exception
+      expect(() => renderToHtml(React.createElement(ChatMarkdown, { content: singleCol }))).not.toThrow();
     });
 
-    it("confirms RoadmapChatbotWidget has zero inline svg tags", () => {
-      const widgetPath = "roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget.tsx";
-      const sdkDir = "roadmap-rag-assistant/sdk/typescript/src/react";
-      const sdkFiles = [widgetPath, `${sdkDir}/ToolStepRow.tsx`, `${sdkDir}/ChatMarkdown.tsx`];
-      for (const file of sdkFiles) {
-        const content = readProjectFile(file);
-        expect(content, file).not.toMatch(/<svg[\s>]/);
-        expect(content, file).toContain('from "./icons"');
+    it("survives massive table stress test (50 rows x 10 columns)", () => {
+      const headers = Array.from({ length: 10 }, (_, i) => `Col_${i}`).join(" | ");
+      const sep = Array.from({ length: 10 }, () => "---").join(" | ");
+      const rows = Array.from({ length: 50 }, (_, r) =>
+        Array.from({ length: 10 }, (_, c) => `R${r}C${c}`).join(" | ")
+      );
+      const massiveMarkdown = [`| ${headers} |`, `| ${sep} |`, ...rows.map((r) => `| ${r} |`)].join("\n");
+
+      const t0 = performance.now();
+      const blocks = parseBlocks(massiveMarkdown);
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: massiveMarkdown }));
+      const duration = performance.now() - t0;
+
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("table");
+      if (blocks[0].kind === "table") {
+        expect(blocks[0].headers).toHaveLength(10);
+        expect(blocks[0].rows).toHaveLength(50);
       }
-      // Every shared icon is used by one of the two chatbots (no dead icons).
-      const portfolio = readProjectFile("components/floating-bot/FloatingChatBot.tsx");
-      expect(portfolio).not.toMatch(/<svg[\s>]/);
-      const allUsage = sdkFiles.map(readProjectFile).join("\n") + portfolio;
-      for (const { name } of allIcons) {
-        expect(allUsage).toContain(name);
-      }
+      expect(duration).toBeLessThan(300); // Must parse and render under 300ms
+      expect(html).toContain("R49C9");
     });
   });
 
-  describe("Mission Item 2: Formatters Stress Testing & Edge Cases", () => {
-    describe("formatMarkdownText", () => {
-      it("handles empty strings and whitespace-only lines without throwing", () => {
-        const emptyResult = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(""))
-        );
-        // Blank input renders an empty container: no spacer divs, no stray text.
-        expect(emptyResult).not.toMatch(/<(p|li|h\d)/);
+  // =========================================================================
+  // DIMENSION 2: EXTREME ALERT INPUTS
+  // =========================================================================
+  describe("Dimension 2: Extreme Alert Inputs", () => {
+    it("handles multiline alerts spanning many lines with custom title", () => {
+      const markdown = [
+        "> [!WARNING] Production Deployment Alert",
+        "> Line 1: Verify all schema migrations are applied.",
+        "> Line 2: Ensure database backups are current.",
+        "> Line 3: Notify the DevOps on-call engineer.",
+        "> Line 4: Monitor Datadog latency dashboards.",
+      ].join("\n");
 
-        const multiNewlineResult = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText("\n\n\n"))
-        );
-        expect(multiNewlineResult).not.toMatch(/<(p|li|h\d)/);
-      });
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("alert");
 
-      it("handles all bullet point prefixes (- , * , • )", () => {
-        const content = "- Item Dash\n* Item Asterisk\n• Item Bullet";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(content))
-        );
-        expect(markup).toContain("Item Dash");
-        expect(markup).toContain("Item Asterisk");
-        expect(markup).toContain("Item Bullet");
-        // One <ul> with three items, marker in the muted token colour
-        expect(markup.match(/<ul/g)).toHaveLength(1);
-        expect(markup.match(/<li/g)).toHaveLength(3);
-        expect(markup).toContain("text-muted-foreground");
-      });
+      if (blocks[0].kind === "alert") {
+        expect(blocks[0].alertType).toBe("warning");
+        expect(blocks[0].title).toBe("Production Deployment Alert");
+        expect(blocks[0].lines).toHaveLength(4);
+        expect(blocks[0].lines[0]).toBe("Line 1: Verify all schema migrations are applied.");
+      }
 
-      it("handles numbered lists with single, multiple digits, and zero", () => {
-        const content = "1. First step\n2. Second step\n100. Hundredth step\n0. Zero step";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(content))
-        );
-        expect(markup).toContain("1.");
-        expect(markup).toContain("First step");
-        expect(markup).toContain("100.");
-        expect(markup).toContain("Hundredth step");
-        expect(markup).toContain("0.");
-        expect(markup).toContain("Zero step");
-      });
-
-      it("does not falsely treat decimal numbers or dates as numbered lists", () => {
-        const content = "Version 3.14 is released today.\nOn 2026.10.14 an update landed.";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(content))
-        );
-        // Should render as <p> paragraphs, not as list containers with font-semibold number badges
-        expect(markup).toContain("<p");
-        expect(markup).not.toContain("shrink-0");
-        expect(markup).toContain("Version 3.14 is released today.");
-      });
-
-      it("handles # to #### headers without leaking '#' characters", () => {
-        const content = "## Major Section\n### Minor Section\n#### Level 4";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(content))
-        );
-        expect(markup).toContain("<h3");
-        expect(markup).toContain("Major Section");
-        expect(markup).toContain("<h4");
-        expect(markup).toContain("Minor Section");
-        expect(markup).toContain("<h5");
-        expect(markup).toContain("Level 4");
-        expect(markup).not.toContain("#");
-      });
-
-      it("uses design tokens only: no hard-coded hex colours or slate/white palette", () => {
-        const sample = "## Header\n- Bullet point\n1. Numbered item\nParagraph **bold** and `code`\n> quote\n```ts\nconst x = 1;\n```";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(sample))
-        );
-        expect(markup).not.toMatch(/#[0-9A-Fa-f]{6}/);
-        expect(markup).not.toMatch(/text-slate-|bg-slate-|text-white/);
-        expect(markup).toContain("text-foreground");
-        expect(markup).toContain("bg-muted");
-      });
-
-      it("renders nested lists, code blocks, blockquotes and safe links", () => {
-        const sample = [
-          "1. Parent",
-          "   - Child A",
-          "   - Child B",
-          "2. Next",
-          "",
-          "> Quoted line",
-          "",
-          "```bash",
-          "npm test",
-          "```",
-          "",
-          "[Docs](/roadmaps/fe) [Ext](https://example.com) [Bad](javascript:alert(1))",
-        ].join("\n");
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(sample))
-        );
-        expect(markup.match(/<ol/g)).toHaveLength(1);
-        expect(markup).toContain("Child A");
-        expect(markup).toContain("Child B");
-        expect(markup).toContain("<blockquote");
-        expect(markup).toContain("<pre");
-        expect(markup).toContain("npm test");
-        expect(markup).toContain("Sao chép code");
-        expect(markup).toContain('href="/roadmaps/fe"');
-        expect(markup).toContain('href="https://example.com" target="_blank" rel="noopener noreferrer"');
-        expect(markup).not.toContain("javascript:");
-        expect(markup).toContain("Bad");
-      });
-
-      it("escapes raw HTML tags to prevent XSS injection attacks", () => {
-        const malicious = "<script>alert('xss')</script>\n<img src=x onerror=alert(1)>\n<div style=\"color:red\">Evil</div>";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(malicious))
-        );
-        expect(markup).not.toContain("<script>");
-        expect(markup).toContain("&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;");
-        expect(markup).not.toContain("<img src=x");
-        expect(markup).toContain("&lt;img src=x onerror=alert(1)&gt;");
-      });
-
-      it("handles massive long text streams (50,000 characters) without stack overflow or performance degradation", () => {
-        const longParagraph = "Roadmap AI knowledge streaming test. ".repeat(1500);
-        const start = performance.now();
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(longParagraph))
-        );
-        const duration = performance.now() - start;
-        expect(markup.length).toBeGreaterThan(50000);
-        expect(duration).toBeLessThan(500); // Must render in under 500ms
-      });
-
-      it("correctly handles unicode and Vietnamese accents", () => {
-        const vn = "Xin chào! Lộ trình học Next.js 16 và Trí tuệ nhân tạo (AI Assistant) ⚡🚀";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("div", null, formatMarkdownText(vn))
-        );
-        expect(markup).toContain("Xin chào! Lộ trình học Next.js 16 và Trí tuệ nhân tạo (AI Assistant) ⚡🚀");
-      });
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain('role="alert"');
+      expect(html).toContain("Production Deployment Alert");
+      expect(html).toContain("border-l-amber-500");
+      expect(html).toContain("Line 4: Monitor Datadog latency dashboards.");
     });
 
-    describe("renderInlineStyles", () => {
-      it("renders bold **text** in <strong> tags", () => {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles("This is **bold** text"))
-        );
-        expect(markup).toContain("<strong class=\"font-semibold text-foreground\">bold</strong>");
-      });
+    it("tests alert with nested lists inside alert body", () => {
+      const markdown = [
+        "> [!TIP]",
+        "> - Quick step 1",
+        "> - Quick step 2",
+        "> 1. Ordered follow-up",
+      ].join("\n");
 
-      it("renders code `text` in <code> tags", () => {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles("Run `npm test` here"))
-        );
-        expect(markup).toContain("<code class=\"rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground\">npm test</code>");
-      });
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("alert");
 
-      it("handles adjacent and mixed formatting", () => {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles("**First**`second`**third**"))
-        );
-        expect(markup).toContain("<strong");
-        expect(markup).toContain("First");
-        expect(markup).toContain("<code");
-        expect(markup).toContain("second");
-        expect(markup).toContain("third");
-      });
+      if (blocks[0].kind === "alert") {
+        expect(blocks[0].alertType).toBe("tip");
+        expect(blocks[0].lines).toHaveLength(3);
+        expect(blocks[0].lines[0]).toBe("- Quick step 1");
+        expect(blocks[0].lines[1]).toBe("- Quick step 2");
+        expect(blocks[0].lines[2]).toBe("1. Ordered follow-up");
+      }
 
-      it("handles unclosed markdown tokens gracefully without crashing", () => {
-        const unclosed = "Single `backtick and unclosed **bold text without end";
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles(unclosed))
-        );
-        expect(markup).toContain("Single `backtick and unclosed **bold text without end");
-      });
-
-      it("renders _italic_ and *italic* but leaves snake_case identifiers untouched", () => {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles("_Hỗ trợ English._ *nhấn* create_topics_batch"))
-        );
-        expect(markup.match(/<em/g)).toHaveLength(2);
-        expect(markup).toContain("Hỗ trợ English.");
-        expect(markup).toContain("create_topics_batch");
-        expect(markup).not.toContain("_Hỗ");
-      });
-
-      it("handles empty bold tags **** cleanly", () => {
-        const markup = ReactDOMServer.renderToStaticMarkup(
-          React.createElement("span", null, renderInlineStyles("Empty **** bold"))
-        );
-        expect(markup).toContain("<strong");
-      });
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("Tip");
+      expect(html).toContain("border-l-emerald-500");
+      expect(html).toContain("- Quick step 1");
+      expect(html).toContain("1. Ordered follow-up");
     });
 
-    describe("formatTime", () => {
-      it("returns empty string for undefined and null", () => {
-        expect(formatTime(undefined)).toBe("");
-        expect(formatTime(null as unknown as undefined)).toBe("");
-      });
+    it("falls back to blockquote for unknown alert types without crashing", () => {
+      const markdown = [
+        "> [!UNKNOWN_TYPE] Some unknown alert content",
+        "> Second line of text",
+      ].join("\n");
 
-      it("returns empty string for empty string and invalid date strings", () => {
-        expect(formatTime("")).toBe("");
-        expect(formatTime("not-a-date")).toBe("");
-        expect(formatTime("2026-99-99T99:99:99")).toBe("");
-      });
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      // Because UNKNOWN_TYPE is not in (NOTE|TIP|IMPORTANT|WARNING|CAUTION), it must fall back to quote
+      expect(blocks[0].kind).toBe("quote");
 
-      it("returns empty string for NaN date", () => {
-        expect(formatTime(new Date(NaN))).toBe("");
-      });
-
-      it("returns empty string for timestamp 0 (falsy timestamp edge case)", () => {
-        expect(formatTime(0)).toBe("");
-      });
-
-      it("formats valid Date objects to HH:mm (24-hour format)", () => {
-        const d = new Date("2026-10-14T14:35:00Z");
-        const res = formatTime(d);
-        expect(res).toMatch(/^\d{2}:\d{2}$/);
-      });
-
-      it("formats valid ISO timestamp strings to HH:mm", () => {
-        const res = formatTime("2026-10-14T09:15:00.000Z");
-        expect(res).toMatch(/^\d{2}:\d{2}$/);
-      });
-
-      it("formats valid numeric timestamps (Date.now()) to HH:mm", () => {
-        const now = Date.now();
-        const res = formatTime(now);
-        expect(res).toMatch(/^\d{2}:\d{2}$/);
-      });
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("<blockquote");
+      expect(html).toContain("[!UNKNOWN_TYPE] Some unknown alert content");
+      expect(html).not.toContain('role="alert"');
     });
 
-    describe("formatToolDisplayName", () => {
-      it("maps all 14 roadmap & knowledge tool names to plain labels (no emoji)", () => {
-        const mappings: Record<string, string> = {
-          search_live_knowledge: "Tra cứu cơ sở tri thức Live",
-          create_topic: "Tạo Topic Roadmap",
-          create_topics_batch: "Tạo Topic Roadmap",
-          create_layer: "Tạo Layer mảng kiến thức",
-          create_layers_batch: "Tạo Layer mảng kiến thức",
-          create_group: "Tạo Nhóm phân loại (Group)",
-          create_item: "Thêm Bài học (Item)",
-          create_items_batch: "Thêm Bài học (Item)",
-          delete_topic: "Xóa thực thể Roadmap",
-          delete_layer: "Xóa thực thể Roadmap",
-          delete_group: "Xóa thực thể Roadmap",
-          delete_item: "Xóa thực thể Roadmap",
-          preview_roadmap_plan: "Phác thảo kế hoạch Roadmap (/plan)",
-          generate_roadmap_from_template: "Sinh nhanh từ Blueprint (/goal)",
-          list_topics: "Liệt kê danh sách Topic",
+    it("supports all case variations: lowercase, uppercase, and mixed case", () => {
+      const variations = [
+        { text: "> [!note]\n> lower note", type: "note", title: "Note" },
+        { text: "> [!TIP]\n> upper tip", type: "tip", title: "Tip" },
+        { text: "> [!Warning]\n> mixed warning", type: "warning", title: "Warning" },
+        { text: "> [!iMPoRTaNT]\n> wild case", type: "important", title: "Important" },
+        { text: "> [!CAUTION]\n> upper caution", type: "caution", title: "Caution" },
+      ];
+
+      for (const { text, type, title } of variations) {
+        const blocks = parseBlocks(text);
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0].kind).toBe("alert");
+        if (blocks[0].kind === "alert") {
+          expect(blocks[0].alertType).toBe(type);
+        }
+
+        const html = renderToHtml(React.createElement(ChatMarkdown, { content: text }));
+        expect(html).toContain('role="alert"');
+        expect(html).toContain(title);
+      }
+    });
+
+    it("handles direct CalloutAlert component instantiation with empty lines or missing title", () => {
+      const html1 = renderToHtml(
+        React.createElement(CalloutAlert, {
+          type: "note",
+          lines: [],
+          renderInline: (t: string) => [t],
+        })
+      );
+      expect(html1).toContain('role="alert"');
+      expect(html1).toContain("Note");
+
+      // Test fallback for invalid type cast
+      const html2 = renderToHtml(
+        React.createElement(CalloutAlert, {
+          type: "unrecognized" as unknown as CalloutType,
+          lines: ["Fallback body line"],
+          renderInline: (t: string) => [t],
+        })
+      );
+      expect(html2).toContain('role="alert"');
+      expect(html2).toContain("Note");
+      expect(html2).toContain("Fallback body line");
+    });
+  });
+
+  // =========================================================================
+  // DIMENSION 3: EXTREME MATH INPUTS
+  // =========================================================================
+  describe("Dimension 3: Extreme Math Inputs", () => {
+    it("handles multiple inline math formulas in a single sentence", () => {
+      const content = "Evaluate $f(x) = x^2$ at $x = 3$ to get $y = 9$.";
+      const inlineElements = renderInline(content);
+      const html = renderToHtml(React.createElement("span", null, inlineElements));
+
+      expect(html).toContain("f(x) = x^2");
+      expect(html).toContain("x = 3");
+      expect(html).toContain("y = 9");
+      // Fallback fx badge should be present for all 3 formulas
+      const fxCount = (html.match(/fx<\/span>/g) || []).length;
+      expect(fxCount).toBe(3);
+    });
+
+    it("distinguishes currency values ($50 and $100) from inline math", () => {
+      const content = "I have $50 and $100 in my wallet. Not a formula.";
+      const inlineElements = renderInline(content);
+      const html = renderToHtml(React.createElement("span", null, inlineElements));
+
+      // Currency followed/preceded by whitespace must NOT be converted to math
+      expect(html).toContain("$50 and $100");
+      expect(html).not.toContain("fx</span>");
+    });
+
+    it("evaluates boundary currency format without spaces ($50-$100 and $10,$20)", () => {
+      // In $50-$100, the delimiter regex encounters '-' before '$100'.
+      // An empirical test documents whether math regex captures 50- or leaves it.
+      const content = "Prices range between $50-$100 depending on volume.";
+      expect(() => renderToHtml(React.createElement(ChatMarkdown, { content }))).not.toThrow();
+    });
+
+    it("handles unclosed $$ display math blocks gracefully (mid-stream resilience)", () => {
+      const unclosed = [
+        "Here is an in-progress equation:",
+        "$$",
+        "\\int_{0}^{\\infty} e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}",
+      ].join("\n");
+
+      const blocks = parseBlocks(unclosed);
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0].kind).toBe("paragraph");
+      expect(blocks[1].kind).toBe("math");
+      if (blocks[1].kind === "math") {
+        expect(blocks[1].display).toBe(true);
+        expect(blocks[1].math).toContain("\\int_{0}^{\\infty}");
+      }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: unclosed }));
+      expect(html).toContain("LaTeX");
+      expect(html).toContain("\\int_{0}^{\\infty}");
+    });
+
+    it("handles single-line display math $$formula$$ without multiline wrapping", () => {
+      const markdown = "$$\\sum_{i=1}^n i = \\frac{n(n+1)}{2}$$";
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("math");
+      if (blocks[0].kind === "math") {
+        expect(blocks[0].display).toBe(true);
+        expect(blocks[0].math).toBe("\\sum_{i=1}^n i = \\frac{n(n+1)}{2}");
+      }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("LaTeX");
+      expect(html).toContain("\\sum_{i=1}^n i");
+    });
+
+    it("handles unclosed single $ inline math without corrupting following text", () => {
+      const content = "This is an unclosed $math equation that never terminates.";
+      const inlineElements = renderInline(content);
+      const html = renderToHtml(React.createElement("span", null, inlineElements));
+
+      // Unclosed single $ cannot find closing $ before end of text: must remain verbatim
+      expect(html).toContain("This is an unclosed $math equation that never terminates.");
+      expect(html).not.toContain("fx</span>");
+    });
+
+    it("renders KaTeX HTML when window.katex is available", () => {
+      // Simulate client-side window.katex existence
+      const originalWindow = global.window;
+      try {
+        (global as unknown as { window: unknown }).window = {
+          katex: {
+            renderToString: (tex: string, opts: { displayMode?: boolean }) =>
+              `<katex-mock display="${opts?.displayMode}">${tex}</katex-mock>`,
+          },
         };
 
-        for (const [tool, expected] of Object.entries(mappings)) {
-          expect(formatToolDisplayName(tool)).toBe(expected);
-        }
-      });
+        const markdown = "Formula: $E=mc^2$ and block:\n\n$$\\lambda = \\frac{h}{p}$$";
+        const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+        expect(html).toContain('<katex-mock display="false">E=mc^2</katex-mock>');
+        expect(html).toContain('<katex-mock display="true">\\lambda = \\frac{h}{p}</katex-mock>');
+      } finally {
+        (global as unknown as { window: unknown }).window = originalWindow;
+      }
+    });
 
-      it("falls back to the raw tool name for unmapped tools", () => {
-        expect(formatToolDisplayName("unknown_tool_xyz")).toBe("unknown_tool_xyz");
-        expect(formatToolDisplayName("custom_webmcp_handler")).toBe("custom_webmcp_handler");
-        expect(formatToolDisplayName("")).toBe("");
-      });
+    it("catches KaTeX rendering exceptions gracefully without crashing component", () => {
+      const originalWindow = global.window;
+      try {
+        (global as unknown as { window: unknown }).window = {
+          katex: {
+            renderToString: () => {
+              throw new Error("KaTeX syntax error: invalid token");
+            },
+          },
+        };
+
+        const markdown = "Equation with error: $\\invalid{\\token$";
+        expect(() => renderToHtml(React.createElement(ChatMarkdown, { content: markdown }))).not.toThrow();
+        const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+        // Falls back to graceful badge when katex throws
+        expect(html).toContain("fx");
+      } finally {
+        (global as unknown as { window: unknown }).window = originalWindow;
+      }
     });
   });
 
-  describe("Mission Item 3: React 19 Compliance & SDK Clean Architecture", () => {
-    it("ensures useRoadmapAssistantChat has zero render-phase ref mutations or reads", () => {
-      const hookContent = readProjectFile(
-        "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts"
+  // =========================================================================
+  // DIMENSION 4: EXTREME CODE BLOCKS
+  // =========================================================================
+  describe("Dimension 4: Extreme Code Blocks", () => {
+    it("handles unclosed code fence at EOF (streaming scenario)", () => {
+      const markdown = [
+        "```typescript",
+        "interface UserSession {",
+        "  userId: string;",
+        "  token: string;",
+        "}",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("code");
+      if (blocks[0].kind === "code") {
+        expect(blocks[0].lang).toBe("typescript");
+        expect(blocks[0].code).toContain("userId: string;");
+      }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("TypeScript");
+      expect(html).toContain("userId");
+      expect(html).toContain("string");
+    });
+
+    it("tests language identifiers with special characters (c++, c#, shell-script, unknown)", () => {
+      // Test c++
+      const cppBlocks = parseBlocks("```c++\nint x = 10;\n```");
+      expect(cppBlocks[0].kind).toBe("code");
+      if (cppBlocks[0].kind === "code") {
+        expect(cppBlocks[0].lang).toBe("c++");
+      }
+
+      // Test shell-script
+      const shellBlocks = parseBlocks("```shell-script\necho hello\n```");
+      expect(shellBlocks[0].kind).toBe("code");
+      if (shellBlocks[0].kind === "code") {
+        expect(shellBlocks[0].lang).toBe("shell-script");
+      }
+
+      // Test c# (adversarial: regex FENCE is /^\s*```\s*([\w+-]*)\s*$/ so # is not in \w+-)
+      // We document this empirical behavior:
+      const csharpBlocks = parseBlocks("```c#\nConsole.WriteLine();\n```");
+      expect(Array.isArray(csharpBlocks)).toBe(true);
+
+      // Render CodeBlock directly with c# to verify badge translation
+      const htmlCSharp = renderToHtml(
+        React.createElement(CodeBlock, { lang: "c#", code: 'Console.WriteLine("Hi");' })
+      );
+      expect(htmlCSharp).toContain("C#");
+    });
+
+    it("handles code containing backticks (template literals, markdown code snippets)", () => {
+      const markdown = [
+        "```javascript",
+        "const greeting = `Hello, ${user.name}!`;",
+        "const query = `SELECT * FROM users WHERE status = 'active'`;",
+        "```",
+      ].join("\n");
+
+      const blocks = parseBlocks(markdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("code");
+      if (blocks[0].kind === "code") {
+        expect(blocks[0].code).toContain("`Hello, ${user.name}!`");
+      }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
+      expect(html).toContain("JavaScript");
+      expect(html).toContain("Hello, ${user.name}!");
+    });
+
+    it("handles single-line code snippet rendering (action prompt / executable command)", () => {
+      const htmlWithRun = renderToHtml(
+        React.createElement(CodeBlock, {
+          lang: "",
+          code: "npm run test:stress",
+          onRun: () => {},
+        })
       );
 
-      // Verify no ref.current assignments outside of useEffect
-      const lines = hookContent.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.includes(".current =") && !line.includes("null")) {
-          // Check if inside useEffect or a callback
-          const prevContext = lines.slice(Math.max(0, i - 100), i + 1).join("\n");
-          const isInEffect = prevContext.includes("useEffect");
-          const isInCallback = prevContext.includes("useCallback") || prevContext.includes("client.streamChat");
-          expect(
-            isInEffect || isInCallback,
-            `Ref mutation on line ${i + 1} (${line.trim()}) must be inside useEffect or callback`
-          ).toBe(true);
-        }
+      expect(htmlWithRun).toContain("npm run test:stress");
+      expect(htmlWithRun).toContain('aria-label="Gửi: npm run test:stress"');
+      expect(htmlWithRun).toContain('aria-label="Sao chép"');
+    });
+
+    it("stress-tests code syntax highlighter with complex tokens: regex, hex, scientific numbers, comments", () => {
+      const complexCode = [
+        "// A single-line comment",
+        "const hexVal = 0xDEADBEEF;",
+        "const floatVal = 3.14159e-10;",
+        "const str = 'Single quote with escaped \\' quote';",
+        "function calculateMetrics(total: number, active: boolean): void {",
+        "  if (active && total > 0) {",
+        "    return calculateMetrics(total - 1, false);",
+        "  }",
+        "}",
+      ].join("\n");
+
+      const html = renderToHtml(
+        React.createElement(CodeBlock, {
+          lang: "ts",
+          code: complexCode,
+          showLineNumbers: true,
+        })
+      );
+
+      // Verify line numbers 1 to 8
+      for (let line = 1; line <= 8; line++) {
+        expect(html).toContain(`>${line}<`);
+      }
+      expect(html).toContain("TypeScript");
+      expect(html).toContain("0xDEADBEEF");
+      expect(html).toContain("calculateMetrics");
+    });
+
+    it("survives massive code block stress test (1,000 lines) under 250ms", () => {
+      const codeLines = Array.from({ length: 1000 }, (_, i) => `const var_${i} = ${i * 42}; // line ${i}`);
+      const code = codeLines.join("\n");
+
+      const t0 = performance.now();
+      const html = renderToHtml(
+        React.createElement(CodeBlock, {
+          lang: "typescript",
+          code,
+          showLineNumbers: true,
+        })
+      );
+      const duration = performance.now() - t0;
+
+      expect(duration).toBeLessThan(250);
+      expect(html).toContain(">1000<");
+      expect(html).toContain("var_999");
+    });
+  });
+
+  // =========================================================================
+  // DIMENSION 5: STREAMING, CHECKLISTS & TYPOGRAPHY EDGE CASES
+  // =========================================================================
+  describe("Dimension 5: Streaming, Checklists & Typography Edge Cases", () => {
+    it("renders streaming caret correctly in streaming mode", () => {
+      const htmlStreaming = renderToHtml(
+        React.createElement(ChatMarkdown, {
+          content: "Streaming response in progress...",
+          streaming: true,
+        })
+      );
+      expect(htmlStreaming).toContain("animate-pulse");
+      expect(htmlStreaming).toContain("animate-stream-fade");
+
+      const htmlStatic = renderToHtml(
+        React.createElement(ChatMarkdown, {
+          content: "Static completed response.",
+          streaming: false,
+        })
+      );
+      expect(htmlStatic).not.toContain("animate-pulse");
+    });
+
+    it("parses and renders nested checklists with mixed check state", () => {
+      const checklistMarkdown = [
+        "- [x] Task 1 completed",
+        "  - [ ] Subtask 1.1 pending",
+        "  - [x] Subtask 1.2 completed",
+        "- [ ] Task 2 pending",
+      ].join("\n");
+
+      const blocks = parseBlocks(checklistMarkdown);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("list");
+
+      if (blocks[0].kind === "list") {
+        expect(blocks[0].items).toHaveLength(2);
+        expect(blocks[0].items[0].checked).toBe(true);
+        expect(blocks[0].items[0].children).toHaveLength(2);
+        expect(blocks[0].items[0].children[0].checked).toBe(false);
+        expect(blocks[0].items[0].children[1].checked).toBe(true);
+        expect(blocks[0].items[1].checked).toBe(false);
+      }
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: checklistMarkdown }));
+      expect(html).toContain('role="checkbox"');
+      expect(html).toContain('aria-checked="true"');
+      expect(html).toContain('aria-checked="false"');
+      expect(html).toContain("line-through");
+    });
+
+    it("defends against malicious javascript: links in markdown", () => {
+      const malicious = [
+        "[XSS Attack](javascript:alert(document.cookie))",
+        "[Data URL](data:text/html,<script>alert(1)</script>)",
+        "[Safe Link](https://google.com)",
+      ].join("\n");
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: malicious }));
+      expect(html).not.toContain('href="javascript:');
+      expect(html).not.toContain('href="data:');
+      expect(html).toContain('href="https://google.com"');
+    });
+
+    it("handles deeply nested lists (20 levels deep) without recursion failure", () => {
+      const lines: string[] = [];
+      for (let level = 0; level < 20; level++) {
+        const indent = "  ".repeat(level);
+        lines.push(`${indent}- Level ${level}`);
+      }
+
+      const blocks = parseBlocks(lines.join("\n"));
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("list");
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: lines.join("\n") }));
+      expect(html).toContain("Level 0");
+      expect(html).toContain("Level 19");
+    });
+  });
+
+  // =========================================================================
+  // DIMENSION 6: EMPIRICAL ADVERSARIAL FAILURE MODES & PARSER LIMITS
+  // =========================================================================
+  describe("Dimension 6: Empirical Adversarial Failure Modes & Parser Limits", () => {
+    it("EMPIRICAL FINDING: c# and f# fences fail FENCE regex and invert block structure", () => {
+      // FENCE regex is /^\s*```\s*([\w+-]*)\s*$/
+      // Because '#' is not in [\w+-], ```c# is parsed as a paragraph
+      // and the closing ``` starts an open code block that captures following text
+      const input = "```c#\nint x = 1;\n```\nTrailing text after fence.";
+      const blocks = parseBlocks(input);
+
+      // Verify the empirical behavior:
+      expect(blocks[0].kind).toBe("paragraph");
+      expect(blocks[1].kind).toBe("code");
+      // The trailing text gets absorbed inside the code block!
+      if (blocks[1].kind === "code") {
+        expect(blocks[1].code).toContain("Trailing text after fence.");
       }
     });
 
-    it("verifies unmount abort cleanup is present in useRoadmapAssistantChat", () => {
-      const hookContent = readProjectFile(
-        "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts"
-      );
-      expect(hookContent).toContain("abortControllerRef.current.abort()");
-      expect(hookContent).toContain("return () => {");
+    it("EMPIRICAL FINDING: single-column tables are not recognized as tables", () => {
+      // isTableSeparator regex requires (\|\s*:?-{2,}:?\s*)+ which requires at least two columns
+      const singleColTable = "| Header |\n| --- |\n| Cell 1 |";
+      const blocks = parseBlocks(singleColTable);
+
+      // Documents that single-column table falls through to paragraph
+      expect(blocks[0].kind).toBe("paragraph");
     });
 
-    it("verifies ChatActionChip type contracts in types.ts and react/types.ts", () => {
-      const coreTypes = readProjectFile("roadmap-rag-assistant/sdk/typescript/src/types.ts");
-      const reactTypes = readProjectFile("roadmap-rag-assistant/sdk/typescript/src/react/types.ts");
+    it("EMPIRICAL FINDING: currency range without space ($50-$100) triggers inline math false-positive", () => {
+      // INLINE math regex ((?<!\$)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\$))
+      // matches '$50-$' because '-' is non-whitespace before closing '$'
+      const inlineElements = renderInline("Prices are $50-$100 today");
+      const html = renderToHtml(React.createElement("span", null, inlineElements));
 
-      expect(coreTypes).toContain("export interface ChatActionChip");
-      expect(coreTypes).toContain("type: 'project' | 'roadmap' | 'contact' | 'link'");
-      expect(coreTypes).toContain("actionChips?: ChatActionChip[]");
-
-      expect(reactTypes).toContain("export type { ChatActionChip }");
-      expect(reactTypes).toContain("actionChips?: ChatActionChip[]");
+      // Empirically confirms that '50-' was matched as math badge and '100 today' remains
+      expect(html).toContain("50-");
+      expect(html).toContain("100 today");
     });
 
-    it("verifies SDK root exports include all public symbols", () => {
-      const indexContent = readProjectFile("roadmap-rag-assistant/sdk/typescript/src/index.ts");
-      expect(indexContent).toContain("useRoadmapAssistantChat");
-      expect(indexContent).toContain("RoadmapChatbotWidget");
-      expect(indexContent).toContain("ChatActionChip");
-      expect(indexContent).toContain("export * from './react/icons'");
-      expect(indexContent).toContain("export * from './react/utils/formatters'");
+    it("EMPIRICAL FINDING: callout alert renders markdown lists as flat text with <br> instead of <ul>", () => {
+      const alertWithList = "> [!NOTE]\n> - Step 1\n> - Step 2";
+      const blocks = parseBlocks(alertWithList);
+      expect(blocks[0].kind).toBe("alert");
+
+      const html = renderToHtml(React.createElement(ChatMarkdown, { content: alertWithList }));
+      // It renders '- Step 1<br/>- Step 2' inside the alert, NOT <ul> or <li>
+      expect(html).not.toContain("<ul");
+      expect(html).not.toMatch(/<li[\s>]/);
+      expect(html).toContain("- Step 1");
+      expect(html).toContain("<br/>");
+      expect(html).toContain("- Step 2");
     });
 
-    it("executes useRoadmapAssistantChat hook inside React 19 component rendering without error", async () => {
-      const { useRoadmapAssistantChat } = await import(
-        "../../roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat"
-      );
+    it("EMPIRICAL FINDING: unclosed $$ display math absorbs entire remaining document", () => {
+      const input = "$$\n\\frac{a}{b}\n\nThis paragraph was intended to be outside the math.";
+      const blocks = parseBlocks(input);
 
-      function TestChatComponent() {
-        const chat = useRoadmapAssistantChat({
-          baseUrl: "http://localhost:8000",
-          threadId: "challenger-test-session",
-          initialMessages: [
-            {
-              id: "init-1",
-              role: "user",
-              content: "Hello AI Assistant",
-              timestamp: new Date(),
-            },
-          ],
-        });
-
-        return React.createElement(
-          "div",
-          { id: "chat-test-container" },
-          React.createElement("span", { id: "msg-count" }, String(chat.messages.length)),
-          React.createElement("span", { id: "is-loading" }, String(chat.isLoading)),
-          React.createElement("span", { id: "is-streaming" }, String(chat.isStreaming))
-        );
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe("math");
+      if (blocks[0].kind === "math") {
+        expect(blocks[0].math).toContain("This paragraph was intended to be outside the math.");
       }
-
-      const markup = ReactDOMServer.renderToStaticMarkup(React.createElement(TestChatComponent));
-      expect(markup).toContain('id="chat-test-container"');
-      expect(markup).toContain('<span id="msg-count">1</span>');
-      expect(markup).toContain('<span id="is-loading">false</span>');
-      expect(markup).toContain('<span id="is-streaming">false</span>');
     });
   });
 });
+

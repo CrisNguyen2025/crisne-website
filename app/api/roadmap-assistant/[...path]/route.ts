@@ -8,6 +8,7 @@ export const maxDuration = 60;
 
 // Public on purpose: visitors chat with the Roadmap Assistant without signing in. The Python
 // service only accepts requests carrying RAG_INTERNAL_KEY and only runs writes for x-actor=owner.
+const MAX_MESSAGE_LENGTH = 2000;
 const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", "chat/cancel"]);
 const GET_PATHS = new Set(["health"]);
 
@@ -56,6 +57,11 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
     }
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
       return jsonError("Invalid JSON body.", 400);
+    }
+    // Same limit as the widget input and the service; refused here before any work is done
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === "string" && message.length > MAX_MESSAGE_LENGTH) {
+      return jsonError("Câu hỏi quá dài. Bạn rút gọn giúp mình nhé.", 413);
     }
 
     const scoped: Record<string, unknown> = { ...payload };

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 class ChatRequest(BaseModel):
     """POST /chat request body."""
 
-    message: str = Field(description="Natural language prompt from user")
+    message: str = Field(max_length=2000, description="Natural language prompt from user")
     thread_id: str = Field(
         default="default",
         description="Conversation thread ID for memory continuity",

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import httpx
 
+from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
 
 
@@ -40,6 +41,11 @@ class HttpApiAdapter:
         if method.upper() != "GET":
             require_owner()
         resp = await self._client.request(method, path, json=json)
+        if resp.status_code == 409:
+            body = resp.json() if resp.content else {}
+            if body.get("code") == "DUPLICATE":
+                existing = body.get("existing") or {}
+                raise DuplicateEntityError(body.get("kind", "entity"), existing.get("title", ""), existing)
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:
             return {}

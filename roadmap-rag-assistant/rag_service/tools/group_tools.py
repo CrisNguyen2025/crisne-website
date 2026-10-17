@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
+from rag_service.adapters.errors import DuplicateEntityError
 
 
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
@@ -65,7 +66,10 @@ async def create_group(
         return describe_unresolved(layer_id, res)
     real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
-    result = await adapter.create_group(real_layer_id, title, level)
+    try:
+        result = await adapter.create_group(real_layer_id, title, level)
+    except DuplicateEntityError as dup:
+        return f"ℹ️ Group '{dup.title}' đã có trong layer '{layer_id}', không tạo thêm."
     return (
         f"✅ Đã tạo group '{result.get('title', title)}' "
         f"(level: {result.get('level', level or 'auto')}) "
