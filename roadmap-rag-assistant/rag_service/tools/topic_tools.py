@@ -28,8 +28,8 @@ class CreateTopicInput(BaseModel):
         default="", description="Mô tả ngắn về topic (tùy chọn)"
     )
     layer_titles: list[str] = Field(
-        default_factory=lambda: ["General"],
-        description="Danh sách tên các layer ban đầu, ví dụ: ['Foundation', 'Core', 'Advanced']",
+        default_factory=list,
+        description="Danh sách tên các layer ban đầu (tùy chọn), ví dụ: ['Foundation', 'Core', 'Advanced']",
     )
 
 
@@ -74,7 +74,7 @@ async def create_topic(
     adapter = get_adapter()
     layers = [
         {"title": t, "shortTag": f"{i + 1:02d}-{t[:3].upper()}"}
-        for i, t in enumerate(layer_titles or ["General"])
+        for i, t in enumerate(layer_titles or [])
     ]
     try:
         result = await adapter.create_topic(title, short_code, description, layers)
@@ -106,7 +106,7 @@ async def create_topics_batch(topics: list[dict]) -> str:
                 raw_title,
                 short_code,
                 t.get("description", ""),
-                [{"title": "General", "shortTag": "01-GEN"}],
+                [],
             )
         except DuplicateEntityError as dup:
             skipped.append(dup.title)

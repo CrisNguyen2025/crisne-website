@@ -200,7 +200,8 @@ class SqliteAdapter:
             )
 
             # Create initial layers
-            layer_list = layers or [{"title": "General", "shortTag": "01-GEN"}]
+            # No default layer: a topic starts empty unless layers are given
+            layer_list = layers or []
             for idx, layer in enumerate(layer_list):
                 layer_id = _uuid7()
                 await db.execute(
