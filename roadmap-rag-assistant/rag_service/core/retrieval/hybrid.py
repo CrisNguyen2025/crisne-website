@@ -15,13 +15,12 @@ import os
 import re
 import sqlite3
 import time
-from typing import List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from rag_service.config import settings
-from rag_service.rag.ingestion import KnowledgeDocument
 
 
-EMBEDDING_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "embedding_cache.json"
+EMBEDDING_CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "embedding_cache.json"
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 # Seconds between embed requests (~90/min, under the 100/min free-tier limit)
 EMBEDDING_REQUEST_INTERVAL = 0.67
@@ -41,17 +40,7 @@ FTS_STOPWORDS = {
 
 
 # Docs whose own words (title + description + content) are fewer than this are "thin".
-THIN_DOC_MIN_WORDS = 4
-
-
-def is_thin(doc: KnowledgeDocument) -> bool:
-    """A doc with almost no text of its own (e.g. a layer "General" with no subtitle, an item "2").
-
-    Its embedding is mostly ingestion boilerplate ("Bài học Mục Item…", "Lộ trình…"), so it sits
-    close to every roadmap question and its cosine score means nothing; match it by name only.
-    """
-    own = f"{doc.title} {doc.description or ''} {doc.content_text or ''}"
-    return len(re.findall(r"\w+", own)) < THIN_DOC_MIN_WORDS
+# Documents this short are matched by name only (see the domain's thin rule)
 
 
 def _embedding_key(text: str) -> str:
@@ -98,10 +87,18 @@ def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
 class HybridVectorStore:
     """In-memory or persistent SQLite FTS5 + Vector hybrid index."""
 
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(
+        self,
+        db_path: str = ":memory:",
+        thin: Optional[Callable[[Any], bool]] = None,
+        min_similarity: float = VECTOR_MIN_SIMILARITY,
+    ) -> None:
+        """`thin(doc)` marks documents to match by name only; the domain supplies it (None = none are thin)."""
         self._db_path = db_path
+        self._thin = thin or (lambda doc: False)
+        self._min_similarity = min_similarity
         self._embedder = None
-        self._docs_map: dict[str, KnowledgeDocument] = {}
+        self._docs_map: dict[str, Any] = {}
         self._vectors: dict[str, List[float]] = {}
         self.conn = self._connect()
 
@@ -144,14 +141,14 @@ class HybridVectorStore:
                 print(f"[VectorStore] Embeddings init warning: {exc}")
         return self._embedder
 
-    def index_documents(self, docs: List[KnowledgeDocument]) -> None:
-        """Index a batch of KnowledgeDocuments into FTS5 and vector store.
+    def index_documents(self, docs: List[Any]) -> None:
+        """Index a batch of Anys into FTS5 and vector store.
 
         Builds a fresh index and swaps it in at the end, so searches running while a
         background re-sync is in progress keep using the previous, complete index.
         """
         conn = self._connect() if self._db_path == ":memory:" else self.conn
-        docs_map: dict[str, KnowledgeDocument] = {}
+        docs_map: dict[str, Any] = {}
         vectors: dict[str, List[float]] = {}
 
         with conn:
@@ -197,7 +194,7 @@ class HybridVectorStore:
 
         self.conn, self._docs_map, self._vectors = conn, docs_map, vectors
 
-    def search_fts(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
+    def search_fts(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """Search via SQLite FTS5 BM25 ranking."""
         all_tokens = re.findall(r"\w+", query.lower())
         # Keep stopwords only when the query has nothing else (e.g. a one-word query).
@@ -254,7 +251,7 @@ class HybridVectorStore:
             if doc_id in self._docs_map
         }
 
-    def search_vector(self, query: str, limit: int = 10) -> List[Tuple[KnowledgeDocument, float]]:
+    def search_vector(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """Search via dense vector cosine similarity."""
         sims = self._similarities(query)
         if not sims:
@@ -262,7 +259,7 @@ class HybridVectorStore:
         scored = sorted(sims.items(), key=lambda x: x[1], reverse=True)[:limit]
         return [(self._docs_map[doc_id], sim) for doc_id, sim in scored]
 
-    def hybrid_search(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
+    def hybrid_search(self, query: str, limit: int = 5) -> List[Tuple[Any, float]]:
         """Combine FTS5 BM25 and Vector Search using Reciprocal Rank Fusion (RRF).
 
         With embeddings, docs below VECTOR_MIN_SIMILARITY are dropped, so an off-topic query
@@ -274,18 +271,18 @@ class HybridVectorStore:
         if not sims:
             return fts_res[:limit]
 
-        def relevant(doc: KnowledgeDocument) -> bool:
+        def relevant(doc: Any) -> bool:
             # Docs left unembedded (e.g. quota ran out mid-index) cannot be judged, so keep them.
-            return doc.id not in sims or sims[doc.id] >= VECTOR_MIN_SIMILARITY
+            return doc.id not in sims or sims[doc.id] >= self._min_similarity
 
         fts_res = [(d, s) for d, s in fts_res if relevant(d)]
         # Thin topics/layers only count when the query names them (FTS); never on cosine alone.
         top = sorted(
-            ((i, s) for i, s in sims.items() if i in docs and not is_thin(docs[i])),
+            ((i, s) for i, s in sims.items() if i in docs and not self._thin(docs[i])),
             key=lambda x: x[1],
             reverse=True,
         )[: limit * 2]
-        vec_res = [(docs[i], s) for i, s in top if s >= VECTOR_MIN_SIMILARITY]
+        vec_res = [(docs[i], s) for i, s in top if s >= self._min_similarity]
 
         if not vec_res:
             return fts_res[:limit]

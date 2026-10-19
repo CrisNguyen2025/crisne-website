@@ -18,8 +18,9 @@ from evals.corpus_export import DEV_DB, build_documents, load_knowledge, read_ex
 from evals.kit.corpus import content_hash
 from evals.kit.target import Answer, Hit, RouteResult, TargetUnavailable
 from rag_service.config import settings
-from rag_service.rag.ingestion import KnowledgeDocument
-from rag_service.rag.vector_store import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
+from rag_service.core.retrieval.hybrid import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.engine import roadmap_store
 from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
 from rag_service.router.intent_router import IntentRouter
 
@@ -72,7 +73,7 @@ class RoadmapTarget:
     def _get_store(self) -> HybridVectorStore:
         # Built on first retrieve so routing-only runs never embed the corpus
         if self._store is None:
-            store = HybridVectorStore()
+            store = roadmap_store()
             if self.mode == "fts":
                 store._get_embedder = lambda: None  # type: ignore[method-assign]
             store.index_documents(self._load()[0])

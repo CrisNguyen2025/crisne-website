@@ -14,12 +14,30 @@ import re
 import time
 from typing import List, Optional, Tuple
 
-from rag_service.rag.ingestion import DatabaseIngestionWorker, KnowledgeDocument
-from rag_service.rag.vector_store import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.ingestion import DatabaseIngestionWorker, KnowledgeDocument
+from rag_service.core.retrieval.hybrid import HybridVectorStore
 
 # Content edited outside the agent (web UI, Knowledge Triage approve, direct DB edits) never
 # notifies this service, so the index is rebuilt in the background once it is this old.
 INDEX_TTL_SECONDS = 30.0
+
+
+THIN_DOC_MIN_WORDS = 4
+
+
+def is_thin(doc: KnowledgeDocument) -> bool:
+    """A doc with almost no text of its own (e.g. a layer "General" with no subtitle, an item "2").
+
+    Its embedding is mostly ingestion boilerplate ("Bài học Mục Item…", "Lộ trình…"), so it sits
+    close to every roadmap question and its cosine score means nothing; match it by name only.
+    """
+    own = f"{doc.title} {doc.description or ''} {doc.content_text or ''}"
+    return len(re.findall(r"\w+", own)) < THIN_DOC_MIN_WORDS
+
+
+def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
+    """The hybrid index configured with the roadmap's thin-document rule."""
+    return HybridVectorStore(db_path, thin=is_thin)
 
 
 def knowledge_href(doc: KnowledgeDocument) -> str:
@@ -34,11 +52,11 @@ class HybridRagEngine:
 
     def __init__(self, blueprints_dir: Path | None = None) -> None:
         if blueprints_dir is None:
-            blueprints_dir = Path(__file__).resolve().parent.parent / "data" / "blueprints"
+            blueprints_dir = Path(__file__).resolve().parents[3] / "data" / "blueprints"
         self._blueprints_dir = Path(blueprints_dir)
         self._templates: dict[str, dict] = {}
         self._ingestion_worker = DatabaseIngestionWorker()
-        self._vector_store = HybridVectorStore()
+        self._vector_store = roadmap_store()
         self._is_synced = False
         self._synced_at = 0.0
         self._sync_lock = asyncio.Lock()

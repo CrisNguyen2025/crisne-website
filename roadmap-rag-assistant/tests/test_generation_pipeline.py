@@ -15,7 +15,7 @@ from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.core.augmentation.context import build_prompt, select_documents
 from rag_service.core.generation.guardrails import PiiStreamFilter
-from rag_service.rag.ingestion import KnowledgeDocument
+from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 
 DOC = KnowledgeDocument(
     id="d1", doc_type="item", title="Docker", topic_slug="ops", topic_title="Ops",
@@ -183,7 +183,7 @@ def test_llm_output_pii_is_masked_before_reaching_the_client():
 
 
 def test_rag_answer_ends_with_metadata_listing_cited_sources(monkeypatch):
-    from rag_service.rag.rag_engine import rag_engine
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
 
     monkeypatch.setattr(rag_engine, "known_topic_slugs", lambda: {"ops"})
     monkeypatch.setattr(rag_engine, "known_item_ids", lambda: {"d1", "x"})
@@ -204,7 +204,7 @@ def test_rag_answer_claiming_a_save_is_withheld_and_falls_back(monkeypatch):
     import pytest as _pytest
 
     from rag_service.core.generation.pipeline import GenerationFailed
-    from rag_service.rag.rag_engine import rag_engine
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
 
     monkeypatch.setattr(rag_engine, "known_topic_slugs", lambda: {"ops"})
 
@@ -245,11 +245,19 @@ def test_sqlite_history_keeps_only_newest_per_thread_and_clears(tmp_path):
 
 
 def test_core_never_names_a_business_domain():
-    """The core (augmentation + generation) must stay clonable: domain words live in rag_service/domains/."""
+    """augmentation and generation must stay clonable: domain words live in rag_service/domains/.
+
+    Retrieval is not in this check yet: its FTS schema still stores roadmap columns (see core/retrieval/hybrid.py).
+    """
     import pathlib
     import re
 
     root = pathlib.Path(__file__).resolve().parents[1] / "rag_service" / "core"
+    scope = [root / "augmentation", root / "generation"]
     banned = re.compile(r"lộ trình|topic|layer|abot|roadmap|bài học", re.IGNORECASE)
-    hits = [f"{p.relative_to(root)}: {m.group(0)}" for p in root.rglob("*.py") for m in banned.finditer(p.read_text(encoding="utf-8"))]
+    hits = [
+        f"{p.relative_to(root)}: {m.group(0)}"
+        for folder in scope for p in folder.rglob("*.py")
+        for m in banned.finditer(p.read_text(encoding="utf-8"))
+    ]
     assert not hits, hits

@@ -17,14 +17,14 @@ _DOC_KIND = {"item": "Bài học", "layer": "Mảng kiến thức", "topic": "L�
 
 
 def _known_links() -> Callable[[str], bool]:
-    from rag_service.rag.rag_engine import rag_engine
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
 
     return roadmap_link_allowed(rag_engine.known_topic_slugs(), rag_engine.known_item_ids())
 
 
 def _roadmap_document(doc: Any, score: float) -> ContextDocument:
-    """A KnowledgeDocument (rag_service.rag.ingestion) as one <document>; same fields as format_knowledge_context."""
-    from rag_service.rag.rag_engine import knowledge_href
+    """A KnowledgeDocument (rag_service.domains.roadmap.retrieval.ingestion) as one <document>; same fields as format_knowledge_context."""
+    from rag_service.domains.roadmap.retrieval.engine import knowledge_href
 
     href = knowledge_href(doc) if doc.topic_slug else None
     lines = [f"Loại: {_DOC_KIND.get(doc.doc_type, doc.doc_type)}", f"Tên: {doc.title}"]

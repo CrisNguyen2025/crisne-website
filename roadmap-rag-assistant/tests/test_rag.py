@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_service.rag.rag_engine import MiniRagEngine
+from rag_service.domains.roadmap.retrieval.engine import MiniRagEngine
 from rag_service.tools.rag_tools import (
     generate_roadmap_from_template,
     preview_roadmap_plan,
@@ -92,8 +92,8 @@ async def test_stale_index_is_refreshed_in_background():
     """Edits made outside the agent (web UI, triage approve) reach the index after the TTL."""
     import time
 
-    from rag_service.rag.rag_engine import INDEX_TTL_SECONDS
-    from rag_service.rag.ingestion import KnowledgeDocument
+    from rag_service.domains.roadmap.retrieval.engine import INDEX_TTL_SECONDS
+    from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 
     corpus = [[], [KnowledgeDocument(id="d", doc_type="item", title="Docker Basics", topic_slug="ops",
                                       topic_title="ops", searchable_text="Bài học Mục Item: Docker Basics")]]

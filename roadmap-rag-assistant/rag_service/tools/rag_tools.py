@@ -11,7 +11,7 @@ from __future__ import annotations
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
-from rag_service.rag.rag_engine import rag_engine
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 
 
 class SearchTemplatesInput(BaseModel):

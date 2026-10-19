@@ -16,8 +16,9 @@ import json
 from pathlib import Path
 
 from rag_service.adapters.sqlite_adapter import SqliteAdapter
-from rag_service.rag.ingestion import DatabaseIngestionWorker
-from rag_service.rag.vector_store import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.ingestion import DatabaseIngestionWorker
+from rag_service.core.retrieval.hybrid import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.engine import roadmap_store
 
 CASES_PATH = Path(__file__).parent / "data" / "retrieval_eval_cases.json"
 DEV_DB = Path(__file__).resolve().parents[2] / "prisma" / "dev.db"
@@ -62,7 +63,7 @@ def report(name: str, res: dict) -> None:
 
 async def build_store(fts_only: bool) -> HybridVectorStore:
     docs = await DatabaseIngestionWorker(adapter=SqliteAdapter(str(DEV_DB))).ingest_all()
-    store = HybridVectorStore()
+    store = roadmap_store()
     if fts_only:
         store._get_embedder = lambda: None  # type: ignore[method-assign]
     store.index_documents(docs)

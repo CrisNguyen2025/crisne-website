@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from rag_service.rag.ingestion import KnowledgeDocument
-from rag_service.rag.vector_store import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
+from rag_service.core.retrieval.hybrid import HybridVectorStore
+from rag_service.domains.roadmap.retrieval.engine import roadmap_store
 
 
 def _doc(doc_id: str, title: str, text: str) -> KnowledgeDocument:
@@ -31,7 +32,7 @@ class _FakeEmbedder:
 
 
 def _store(with_vectors: bool = True, missing: tuple[str, ...] = ()) -> HybridVectorStore:
-    store = HybridVectorStore()
+    store = roadmap_store()
     store._get_embedder = lambda: None  # index without calling the API
     store.index_documents(DOCS)
     if with_vectors:
@@ -74,7 +75,7 @@ def test_thin_docs_are_not_returned_on_cosine_alone():
         id="general", doc_type="layer", title="General", topic_slug="fe", topic_title="fe",
         searchable_text="Mảng kiến thức Layer: [01-GEN] General trong Lộ trình fe.",
     )
-    store = HybridVectorStore()
+    store = roadmap_store()
     store._get_embedder = lambda: None
     store.index_documents(DOCS + [thin])
     store._vectors = {"general": [0.9, 0.1, 0.0], "rag": [1.0, 0.0, 0.0]}

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from evals.kit.corpus import content_hash
 from rag_service.adapters.sqlite_adapter import SqliteAdapter
-from rag_service.rag.ingestion import DatabaseIngestionWorker, KnowledgeDocument
+from rag_service.domains.roadmap.retrieval.ingestion import DatabaseIngestionWorker, KnowledgeDocument
 
 DEV_DB = Path(__file__).resolve().parents[2] / "prisma" / "dev.db"
 CORPUS_DIR = Path(__file__).parent / "corpus" / "public" / "roadmap"

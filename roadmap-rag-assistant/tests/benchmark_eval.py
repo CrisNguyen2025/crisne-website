@@ -14,7 +14,7 @@ import asyncio
 from typing import NamedTuple
 import pytest
 
-from rag_service.rag.rag_engine import rag_engine
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.router import (
     ActionType,
     EntityLevel,

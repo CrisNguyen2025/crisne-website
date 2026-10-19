@@ -32,7 +32,7 @@ from rag_service.observability import (
     traced_turn,
 )
 from rag_service.steps import step_event, with_steps
-from rag_service.rag.rag_engine import knowledge_href, rag_engine
+from rag_service.domains.roadmap.retrieval.engine import knowledge_href, rag_engine
 from rag_service.router import (
     ActionType,
     EntityLevel,

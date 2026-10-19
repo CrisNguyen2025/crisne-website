@@ -9,7 +9,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from rag_service.adapters.errors import DuplicateEntityError
-from rag_service.rag.rag_engine import rag_engine
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.router.entity_extractor import _generate_clean_short_code
 from rag_service.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
 from rag_service.state.session_store import session_store

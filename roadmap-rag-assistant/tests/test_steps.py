@@ -12,8 +12,8 @@ from rag_service.agent import NextGenRoadmapAgent
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.api.server import app
 from rag_service.auth import set_actor
-from rag_service.rag.ingestion import KnowledgeDocument
-from rag_service.rag.rag_engine import rag_engine
+from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.router.grounding import RETRIEVAL_ERROR_REPLY
 from rag_service.steps import step_event, with_steps
 
