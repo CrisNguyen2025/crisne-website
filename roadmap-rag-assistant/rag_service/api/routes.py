@@ -53,6 +53,8 @@ async def _sse_stream_generator(
     executed_tools: list[dict] = []
     # Latest state of each step, in the order steps started (see rag_service/steps.py)
     steps: dict[str, dict] = {}
+    # Closing metadata of an LLM answer (sources, usage, grounding), sent with `done`
+    metadata: dict = {}
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -80,6 +82,8 @@ async def _sse_stream_generator(
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 steps[payload["id"]] = {**steps.get(payload["id"], {}), **payload}
                 yield f"event: step\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            elif ev_type == "metadata":
+                metadata.update({k: v for k, v in ev.items() if k != "type"})
 
     try:
         if isinstance(agent, FallbackAgent):
@@ -132,6 +136,8 @@ async def _sse_stream_generator(
             "tool_calls": executed_tools,
             "steps": list(steps.values()),
         }
+        if metadata:
+            done_payload["metadata"] = metadata
         yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
     except Exception as exc:

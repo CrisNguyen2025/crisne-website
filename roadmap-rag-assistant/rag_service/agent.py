@@ -21,6 +21,7 @@ from rag_service.config import settings
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.execution.executor import ActionExecutor
 from rag_service.generation import GenerationFailed, GenerationRequest, generation_pipeline, record_turn
+from rag_service.generation.domain_profile import PROFILE
 from rag_service.observability import (
     current_trace,
     end_step,
@@ -101,8 +102,13 @@ class NextGenRoadmapAgent:
         async for ev in self._stream_text(ask, delay):
             yield ev
 
-    def _llm_fallback_reason(self, failed: bool) -> Optional[str]:
-        """Why an answer did not come from the LLM: none configured, the call failed, or rate limited."""
+    def _llm_fallback_reason(self, failed: bool | str) -> Optional[str]:
+        """Why an answer did not come from the LLM: none configured, the call failed, or rate limited.
+
+        A string is a reason from the generation pipeline ("llm_error", "grounding") and is kept as is.
+        """
+        if isinstance(failed, str):
+            return failed
         if self.llm is None:
             return None
         return "llm_error" if failed else "rate_limited"
@@ -677,13 +683,13 @@ class NextGenRoadmapAgent:
                 if generation_pipeline.available(self.llm):
                     try:
                         req = GenerationRequest(
-                            mode="rag", query=content, thread_id=session_id, rag_context=rag_context
+                            mode="rag", query=content, thread_id=session_id, sources=matches
                         )
                         async for ev in generation_pipeline.astream(self.llm, req):
                             yield ev
                         return
-                    except GenerationFailed:
-                        llm_failed = True
+                    except GenerationFailed as exc:
+                        llm_failed = exc.reason
 
                 # Fallback directly to formatted markdown context
                 yield step_event(
@@ -711,8 +717,8 @@ class NextGenRoadmapAgent:
                 async for ev in generation_pipeline.astream(self.llm, req):
                     yield ev
                 return
-            except GenerationFailed:
-                llm_failed = True
+            except GenerationFailed as exc:
+                llm_failed = exc.reason
 
         # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
         if intent_res.confidence < UNCLEAR_CONFIDENCE:
@@ -777,7 +783,7 @@ def _build_gemini():
     return ChatGoogleGenerativeAI(
         model=settings.llm_model,
         api_key=api_key,
-        temperature=0.1,
+        temperature=PROFILE.temperature,
         max_retries=1,
         timeout=25.0,
         streaming=True,
@@ -794,7 +800,7 @@ def _build_groq():
     return ChatGroq(
         model=settings.llm_model,
         api_key=api_key,
-        temperature=0.1,
+        temperature=PROFILE.temperature,
         # Groq's free tier answers 429 when the per-minute limit is hit; retry with backoff.
         max_retries=2,
         timeout=25.0,

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import httpx
 import pytest
 
 from rag_service.agent import NextGenRoadmapAgent
+from rag_service.generation import generation_pipeline
 from rag_service.api.server import app
 from rag_service.auth import set_actor
 from rag_service.rag.ingestion import KnowledgeDocument
@@ -138,7 +140,9 @@ async def test_knowledge_query_steps_for_visitor(one_match):
 
 
 @pytest.mark.asyncio
-async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_match):
+async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_match, monkeypatch):
+    # Policy "note" streams the answer despite grounding issues, so the guard step follows it
+    monkeypatch.setattr(generation_pipeline, "profile", replace(generation_pipeline.profile, grounding_policy="note"))
     set_actor("owner")
     llm = _FakeLlm("Có bài **Vector Database** trong **Frontend**, xem [đây](/?topic=fe).")
     steps = _steps(await _ask(NextGenRoadmapAgent(llm_model=llm), "tìm bài học về vector database"))
@@ -149,6 +153,31 @@ async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_matc
     assert done["guard"]["grounding"] == "issues"
     assert done["guard"]["ungrounded_terms"] == ["Frontend"]
     assert done["guard"]["invalid_links"] == ["fe"]
+
+
+@pytest.mark.asyncio
+async def test_future_promise_falls_back_to_context_under_default_policy(one_match):
+    set_actor("owner")
+    llm = _FakeLlm("Có bài **Vector Database**, hệ thống sẽ sớm cập nhật thêm.")
+    events = await _ask(NextGenRoadmapAgent(llm_model=llm), "tìm bài học về vector database")
+    done = {s["id"]: s for s in _steps(events) if s["status"] != "running"}
+    assert list(done) == ["route", "retrieve", "guard", "answer"]
+    assert done["answer"]["mode"] == "context" and done["answer"]["fallback_reason"] == "grounding"
+    text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert "cập nhật thêm" not in text and "Vector Database" in text
+
+
+@pytest.mark.asyncio
+async def test_ungrounded_terms_only_warn_and_the_answer_still_streams(one_match):
+    set_actor("owner")
+    llm = _FakeLlm("Bài **Cơ sở dữ liệu vector** giúp lưu embedding.")
+    events = await _ask(NextGenRoadmapAgent(llm_model=llm), "tìm bài học về vector database")
+    done = {s["id"]: s for s in _steps(events) if s["status"] != "running"}
+    assert list(done) == ["route", "retrieve", "answer", "guard"]
+    assert done["answer"]["mode"] == "llm"
+    assert done["guard"]["grounding"] == "issues" and done["guard"]["ungrounded_terms"] == ["Cơ sở dữ liệu vector"]
+    text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert "Cơ sở dữ liệu vector" in text and "⚠️" not in text
 
 
 @pytest.mark.asyncio
