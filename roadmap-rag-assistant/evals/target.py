@@ -62,6 +62,8 @@ class RoadmapTarget:
 
     def _load(self) -> tuple[list[KnowledgeDocument], list[dict]]:
         if self._knowledge is None:
+            if not DEV_DB.exists():
+                raise RuntimeError(f"{DEV_DB} is missing: restore the corpus source (see the backup) before running evals")
             self._knowledge = load_knowledge()
             # Same conversion as the export, reusing its doc_ids, so hits and fingerprint match the corpus
             self._documents = build_documents(self._knowledge, read_existing()[0])
@@ -100,7 +102,10 @@ class RoadmapTarget:
             from rag_service.agent import build_agent
             from rag_service.tools import init_adapter
 
-            # Same knowledge as the corpus, and no Next.js needed
+            # Same knowledge as the corpus, and no Next.js needed. Never create the file: sqlite would
+            # otherwise make an empty database that looks like real data.
+            if not DEV_DB.exists():
+                raise RuntimeError(f"{DEV_DB} is missing: restore the corpus source before running answer evals")
             init_adapter(SqliteAdapter(str(DEV_DB)))
             agent = build_agent()
             if agent.llm is None:
