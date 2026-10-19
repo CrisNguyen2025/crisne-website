@@ -65,6 +65,7 @@ Từ `roadmap-rag-assistant/`:
 .venv/bin/python -m evals run --opt mode=fts             # offline, không cần API key
 .venv/bin/python -m evals run --opt mode=hybrid --profile hybrid   # cần GEMINI_API_KEY, dùng ngưỡng của hybrid
 .venv/bin/python -m evals run --only _routing            # chạy 1 dataset theo prefix path
+.venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm   # chấm câu trả lời thật: GỌI LLM, tốn quota
 .venv/bin/python -m evals diff evals/runs/<base> evals/runs/<head>   # regressed / fixed / added / removed
 .venv/bin/python -m pytest tests/test_evals_kit.py       # boundary + validate + scorer (offline)
 ```
@@ -90,6 +91,7 @@ version corpus, fingerprint corpus) và `samples.jsonl` (kết quả từng samp
 | `expected.route` | | route mong đợi; `[]` = không quyết định (để LLM router xử lý) |
 | `expected.contexts` | | `[{section_id, doc_id?, quote?, required?}]`; `[]` = off-topic, retrieval phải rỗng. Không có `required` = trúng 1 section là đủ; có `required: true` = phải lấy đủ mọi section required (câu multi-section) |
 | `expected.facts` | | các ý bắt buộc có trong câu trả lời |
+| `expected.forbidden` | | các chuỗi câu trả lời **không được** chứa (lộ bộ nhớ thread khác, PII đã mask, thông tin đã bị sửa); so substring không phân biệt hoa thường |
 | `expected.answer` | | câu trả lời tham khảo, không dùng để chấm |
 | `metadata.status` | ✓ | `active` \| `needs_review` \| `deprecated`; chỉ `active` được chạy |
 | `metadata.tags` | | lấy từ `kit/schema/tags.json` + `datasets/tags.json` |
@@ -126,7 +128,7 @@ Scorer chỉ chạy khi sample có field nó cần; thiếu field thì bỏ qua 
 |---|---|---|
 | `retrieval` | `retrieve` | `hit@k`, `mrr@k` (on-topic), `off_topic_rejected` |
 | `route` | `route` | `accuracy` (behavior + route cùng khớp) |
-| `answer` | `answer` | `accuracy` (behavior, facts substring, citation ⊇ required contexts) |
+| `answer` | `answer` | `accuracy` (behavior, facts substring, không chứa forbidden, citation ⊇ required contexts) |
 
 Thiếu capability thì scorer bị **skip** và được ghi lại trong summary, không báo lỗi.
 
@@ -143,6 +145,7 @@ Mỗi leak được ghi vào `summary.json` (`acl_leaks`) và **luôn làm run f
 |---|---|---|---|
 | `public/roadmap` | `tests/data/retrieval_eval_cases.json` (001–049) + bổ sung (050–083) | 83 (18 off-topic, 10 trong đó near-topic) | FTS: hit@5 0.954 · mrr@5 0.840 · off_topic_rejected 0.111 — hybrid: 1.0 · 0.932 · 0.667 |
 | `_routing` | `tests/data/intent_eval_cases.json` | 38 | accuracy 1.0 |
+| `_answer` | viết mới (bug "quên tên Cris") | 8 (7 multi-turn) | accuracy 1.0 (groq `openai/gpt-oss-120b`) |
 
 - Baseline khớp đúng với `tests/eval_retrieval.py --fts-only` (cùng hit@5, MRR, 1/8 off-topic).
 - Corpus `public/roadmap@1.0`: 115 doc export từ `dev.db`, chỉ còn topic `ai-architecture`. Đã bỏ dữ liệu probe (`owner-probe`, `bypass-probe`),
@@ -169,7 +172,15 @@ Phân bố tag của `public/roadmap`:
 | Ngoài corpus | `out-of-corpus` | 18 | 11% |
 | Sát chủ đề nhưng không có bài | `near-topic` | 10 | 20% |
 
-- `RoadmapTarget.capabilities = {retrieve, route}`; scorer `answer` chưa dùng cho roadmap.
+- `RoadmapTarget.capabilities = {retrieve, route}`, thêm `answer` khi chạy với `--opt answer=llm`. Không có option thì
+  `_answer` bị skip, nên lệnh `run` mặc định vẫn offline. `answer` chạy agent thật với LLM trong `.env`, adapter SQLite
+  đọc `prisma/dev.db` (không cần Next.js), role `visitor` (không ghi được DB). `history` của sample được nạp thẳng vào
+  bộ nhớ (đã mask PII) trên một thread mới, không replay từng lượt. Behavior suy ra từ step/reply: `refuse` = sensitive /
+  out_of_scope / no_match, `clarify` = mixed intent / unclear, còn lại `answer`. Citation = `metadata.sources` có
+  `cited`; href trong roadmap ở mức topic nên cited bị đánh rộng (mọi bài cùng topic).
+- `_answer` chưa đặt ngưỡng vì LLM không tất định; cần thêm vài run để biết độ dao động. Lịch sử: 0.875 ở 2 run đầu
+  (`answer-006` "email của tôi là gì?" bị router đưa vào tìm kiếm), lên 1.0 sau khi router nhận câu hỏi về thông tin
+  của chính người dùng (`CONVERSATION_RECALL` trong `rag_service/router/intent_router.py`).
 - `section_id` là `doc_id` của corpus (trước đây tạm dùng title). Đổi title trong DB không làm lệch dataset vì
   export giữ `doc_id` theo `source_id`.
 - Bộ cũ trong `tests/data/` và các test `tests/eval_retrieval.py`, `tests/test_intent_eval.py` **vẫn giữ nguyên**.

@@ -1,5 +1,7 @@
 """Output guardrails: topic-link filtering on the token stream, grounding flags, PII masking."""
 
+import pytest
+
 from rag_service.output_guard import LinkGuard, check_grounding
 from rag_service.pii import mask_pii, mask_trace_data
 
@@ -57,3 +59,37 @@ def test_mask_pii_matches_next_app_patterns():
         "message": "[email]",
         "n": [1, "[phone]"],
     }
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("CCCD 012345678901 nhé", "CCCD [cccd] nhé"),
+        ("thẻ 4111 1111 1111 1111", "thẻ [card]"),
+        ("thẻ 4111-1111-1111-1111 hết hạn", "thẻ [card] hết hạn"),
+        ("key sk-abc123def456ghi789jkl", "key [secret]"),
+        ("sk-proj-AbCdEf0123456789xyz và gsk_0123456789abcdefghij", "[secret] và [secret]"),
+        ("pk-lf-0123456789abcdef01", "[secret]"),
+        ("AIzaSyA1234567890abcdefghijklmnopqrstuv", "[secret]"),
+        ("AKIAABCDEFGHIJKLMNOP", "[secret]"),
+        ("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.abcdefghijk", "[secret]"),
+    ],
+)
+def test_mask_pii_secrets_cards_and_ids(text, expected):
+    assert mask_pii(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "4111 1111 1111 1112",  # fails Luhn: not a card
+        "score 0.806753858365573",
+        "2026-10-14T01:44:41.623Z",
+        "01a1493b-a588-7ec1-b3d2-959390846119",
+        "a159474aacdc6e27ed985fc04ca02a1b",
+        "1234567890123 lượt xem",  # 13 digits, fails Luhn
+        "task-abcdefghijklmnopqrstuv",  # not a known key prefix
+    ],
+)
+def test_mask_pii_keeps_lookalikes(text):
+    assert mask_pii(text) == text

@@ -115,6 +115,14 @@ def test_score_answer_facts_and_citations():
     assert not score_answer(missing_citation, target, 5, None)["passed"]
 
 
+def test_score_answer_forbidden_terms():
+    target = FakeTarget(answer=Answer("Bạn tên là Cris.", "answer"))
+    leaked = {"id": "x-001", "input": "q", "expected": {"forbidden": ["cris"]}, "metadata": {"status": "active"}}
+    clean = {"id": "x-002", "input": "q", "expected": {"forbidden": ["Taro"]}, "metadata": {"status": "active"}}
+    assert score_answer(leaked, target, 5, None)["checks"] == {"forbidden": False}
+    assert score_answer(clean, target, 5, None)["passed"]
+
+
 def test_thresholds_and_diff(tmp_path):
     rows = [
         {"id": "a-001", "scorer": "route", "tags": [], "passed": True},

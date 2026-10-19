@@ -26,6 +26,25 @@ OFF_TOPIC_HINTS = [
     "hợp đồng", "hóa đơn", "công nợ", "doanh thu", "bảng lương", "chấm công",
 ]
 
+# Questions about the user or the conversation so far ("tôi tên gì?", "nãy tôi nói gì?").
+# Answered from conversation history in chitchat, never by searching the knowledge base.
+_ME = r"(?:tôi|mình|tớ|tao|em)"
+CONVERSATION_RECALL = re.compile(
+    rf"\b{_ME}\s+tên\s+(?:là\s+)?gì\b"
+    rf"|\btên\s+(?:của\s+)?{_ME}\s+(?:là\s+)?gì\b"
+    rf"|\b{_ME}\s+là\s+ai\b"
+    # The user's own details: "email của tôi là gì?", "sđt mình là bao nhiêu"
+    # normalize_vietnamese writes "thọai" (old tone placement), so both spellings are accepted
+    rf"|\b(?:e-?mail|mail|sđt|số\s+đt|(?:số\s+)?điện\s+th(?:oạ|ọa)i|địa\s+chỉ|tên|tuổi|nghề|công\s+việc)"
+    rf"\s+(?:của\s+)?{_ME}\s+(?:là\s+)?(?:gì|bao\s+nhiêu|ở\s+đâu)\b"
+    r"|\bwhat(?:'s|\s+is)\s+my\s+(?:e-?mail|phone(?:\s+number)?|address|job|age)\b"
+    rf"|\b(?:có\s+)?nhớ\s+(?:tên\s+)?{_ME}\b"
+    rf"|\b(?:lúc\s+nãy|vừa\s+nãy|ban\s+nãy|nãy\s+giờ|nãy|vừa\s+rồi|trước\s+đó)\s+{_ME}\s+(?:đã\s+|vừa\s+)?(?:nói|hỏi|kể|bảo)\b"
+    rf"|\b{_ME}\s+(?:vừa|đã|mới)\s+(?:nói|hỏi|kể|bảo)\s+(?:những\s+)?(?:gì|cái\s+gì)\b"
+    r"|\bwhat(?:'s|\s+is)\s+my\s+name\b|\bwho\s+am\s+i\b|\bwhat\s+did\s+i\s+(?:say|ask|tell)\b",
+    re.IGNORECASE,
+)
+
 # Clause joiners used to spot several requests in one message.
 MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;]|\brồi\b|\bsau\s+đó\b|\bvà\b|\bthen\b|\band\b)\s*", re.IGNORECASE)
 
@@ -67,6 +86,14 @@ class IntentRouter:
         # 1c. Prompt suggestions ("gợi ý", "prompt mẫu") are chitchat-style help, not a search.
         # "gợi ý bài về X" still searches, so a topic qualifier ("về") keeps it on the knowledge path.
         if re.search(r"\b(?:gợi\s*ý|goi\s*y|prompt\s+mẫu|vài\s+prompt|ví\s+dụ\s+prompt)\b", lower) and not re.search(r"\bvề\b", lower):
+            return IntentClassificationResult(
+                intent=IntentType.CHITCHAT,
+                confidence=0.9,
+                needs_cud_extraction=False,
+            )
+
+        # 1d. Recall of the user or earlier turns is chitchat: the answer is in the history, not the KB.
+        if CONVERSATION_RECALL.search(lower):
             return IntentClassificationResult(
                 intent=IntentType.CHITCHAT,
                 confidence=0.9,
