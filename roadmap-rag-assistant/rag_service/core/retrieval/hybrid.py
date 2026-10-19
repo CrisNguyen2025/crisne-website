@@ -15,7 +15,7 @@ import os
 import re
 import sqlite3
 import time
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 from rag_service.config import settings
 
@@ -28,6 +28,8 @@ EMBEDDING_REQUEST_INTERVAL = 0.67
 # on-topic match scored 0.688 and the highest off-topic query 0.654. Re-check with the eval
 # when changing the embedding model.
 VECTOR_MIN_SIMILARITY = 0.665
+# Text columns of the FTS table when a domain does not name its own
+DEFAULT_TEXT_FIELDS = ("title", "searchable_text")
 
 # Question words and fillers that match nearly every document under BM25 OR-queries.
 # "bài", "website", "trang"... describe the site itself; every item's searchable_text starts with "Bài học".
@@ -92,11 +94,19 @@ class HybridVectorStore:
         db_path: str = ":memory:",
         thin: Optional[Callable[[Any], bool]] = None,
         min_similarity: float = VECTOR_MIN_SIMILARITY,
+        text_fields: Sequence[str] = DEFAULT_TEXT_FIELDS,
     ) -> None:
-        """`thin(doc)` marks documents to match by name only; the domain supplies it (None = none are thin)."""
+        """`thin(doc)` marks documents to match by name only; the domain supplies it (None = none are thin).
+
+        `text_fields` are the document attributes stored and searched by FTS5, in that order. A domain
+        passes its own list; `searchable_text` must be one of them (it is embedded).
+        """
+        if "searchable_text" not in text_fields:
+            raise ValueError("text_fields must include 'searchable_text'")
         self._db_path = db_path
         self._thin = thin or (lambda doc: False)
         self._min_similarity = min_similarity
+        self._fields = tuple(text_fields)
         self._embedder = None
         self._docs_map: dict[str, Any] = {}
         self._vectors: dict[str, List[float]] = {}
@@ -110,19 +120,10 @@ class HybridVectorStore:
                 """
                 CREATE VIRTUAL TABLE IF NOT EXISTS fts_docs USING fts5(
                     id UNINDEXED,
-                    doc_type,
-                    title,
-                    topic_slug,
-                    topic_title,
-                    layer_tag,
-                    layer_title,
-                    level,
-                    description,
-                    content_text,
-                    searchable_text,
+                    {columns},
                     tokenize = 'unicode61'
                 )
-                """
+                """.format(columns=",\n                    ".join(self._fields))
             )
         return conn
 
@@ -155,19 +156,10 @@ class HybridVectorStore:
             conn.execute("DELETE FROM fts_docs")
             for d in docs:
                 docs_map[d.id] = d
+                placeholders = ", ".join("?" * (len(self._fields) + 1))
                 conn.execute(
-                    """
-                    INSERT INTO fts_docs (
-                        id, doc_type, title, topic_slug, topic_title,
-                        layer_tag, layer_title, level, description,
-                        content_text, searchable_text
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        d.id, d.doc_type, d.title, d.topic_slug, d.topic_title,
-                        d.layer_tag or "", d.layer_title or "", d.level or "",
-                        d.description or "", d.content_text or "", d.searchable_text
-                    ),
+                    f"INSERT INTO fts_docs (id, {', '.join(self._fields)}) VALUES ({placeholders})",
+                    (d.id, *(getattr(d, f) or "" for f in self._fields)),
                 )
 
         embedder = self._get_embedder()

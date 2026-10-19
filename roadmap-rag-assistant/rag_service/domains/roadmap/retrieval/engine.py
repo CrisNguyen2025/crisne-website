@@ -35,9 +35,16 @@ def is_thin(doc: KnowledgeDocument) -> bool:
     return len(re.findall(r"\w+", own)) < THIN_DOC_MIN_WORDS
 
 
+# FTS5 columns of the roadmap index (the order is the table's column order)
+ROADMAP_TEXT_FIELDS = (
+    "doc_type", "title", "topic_slug", "topic_title", "layer_tag", "layer_title",
+    "level", "description", "content_text", "searchable_text",
+)
+
+
 def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
-    """The hybrid index configured with the roadmap's thin-document rule."""
-    return HybridVectorStore(db_path, thin=is_thin)
+    """The hybrid index configured with the roadmap's thin-document rule and columns."""
+    return HybridVectorStore(db_path, thin=is_thin, text_fields=ROADMAP_TEXT_FIELDS)
 
 
 def knowledge_href(doc: KnowledgeDocument) -> str:
