@@ -13,7 +13,7 @@ import uuid
 
 from evals.corpus_export import DEV_DB, build_documents, load_knowledge, read_existing
 from evals.kit.corpus import content_hash
-from evals.kit.target import Answer, Hit, RouteResult
+from evals.kit.target import Answer, Hit, RouteResult, TargetUnavailable
 from rag_service.rag.ingestion import KnowledgeDocument
 from rag_service.rag.vector_store import HybridVectorStore
 from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
@@ -120,6 +120,10 @@ class RoadmapTarget:
 
         reply = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
         steps = {e["id"]: e for e in events if e.get("type") == "step" and e.get("status") != "running"}
+        # The LLM was rate limited or down: the template/context answer is not what this sample measures
+        reason = steps.get("answer", {}).get("fallback_reason")
+        if reason in ("rate_limited", "llm_error"):
+            raise TargetUnavailable(reason)
         return Answer(text=reply, behavior=self._behavior(reply, steps), citations=self._citations(events))
 
     @staticmethod

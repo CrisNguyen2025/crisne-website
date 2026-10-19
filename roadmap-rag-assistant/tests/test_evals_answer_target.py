@@ -83,3 +83,25 @@ def test_answer_seeds_masked_history_and_runs_as_visitor(monkeypatch):
 
     # A fresh thread per sample: nothing carries over to the next one
     assert "Cris" not in target.answer("xin chào", []).text
+
+
+def test_quota_hit_answer_is_unavailable_not_a_wrong_answer(monkeypatch):
+    from evals.kit.target import TargetUnavailable
+
+    target = RoadmapTarget(mode="fts", answer="llm")
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+
+    async def rate_limited(text, thread_id):
+        return [
+            {"type": "step", "id": "route", "status": "done", "intent": "chitchat"},
+            {"type": "step", "id": "answer", "status": "done", "mode": "template", "fallback_reason": "rate_limited"},
+            {"type": "token", "delta": "Xin lỗi"},
+        ]
+
+    monkeypatch.setattr(target, "_collect", rate_limited)
+    import pytest as _pytest
+
+    with _pytest.raises(TargetUnavailable) as exc:
+        target.answer("xin chào", [])
+    assert exc.value.reason == "rate_limited"

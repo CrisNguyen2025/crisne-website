@@ -26,6 +26,10 @@ def print_summary(summary: dict, results: list[dict]) -> None:
             print(f"  {name}: {shown}")
         for skipped in ds["skipped_scorers"]:
             print(f"  {skipped}: skipped (target lacks capability)")
+        if ds.get("unavailable_samples"):
+            reasons = sorted({u["reason"] for u in ds["unavailable_samples"]})
+            ids = ", ".join(u["id"] for u in ds["unavailable_samples"][:5])
+            print(f"  unavailable: {len(ds['unavailable_samples'])} sample(s) not scored ({', '.join(reasons)}): {ids}")
         for failure in ds["threshold_failures"]:
             print(f"  FAIL {failure}")
         for leak in ds["acl_leaks"]:

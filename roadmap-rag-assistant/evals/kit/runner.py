@@ -24,7 +24,7 @@ from evals.kit.corpus import (
 )
 from evals.kit.scorers import SCORERS
 from evals.kit.source import Dataset, FileSource, validate
-from evals.kit.target import Target
+from evals.kit.target import Target, TargetUnavailable
 
 KIT_VERSION = "1.0.0"
 DEFAULT_K = 5
@@ -78,7 +78,7 @@ def run(args: argparse.Namespace) -> int:
     per_dataset: dict[str, dict] = {}
     for ds in datasets:
         k = ds.meta.get("k", DEFAULT_K)
-        skipped, rows = [], []
+        skipped, rows, unavailable = [], [], []
         leaks_before = len(guard.leaks)
         for name in ds.meta["scorers"]:
             capability, score = SCORERS[name]
@@ -90,12 +90,18 @@ def run(args: argparse.Namespace) -> int:
                     continue
                 run_as = sample["metadata"].get("run_as") or ds.meta.get("default_role")
                 guard.sample_id = sample["id"]
-                result = score(sample, guard, k, run_as)
+                try:
+                    result = score(sample, guard, k, run_as)
+                except TargetUnavailable as exc:
+                    unavailable.append({"id": sample["id"], "scorer": name, "reason": exc.reason})
+                    continue
                 if result is not None:
                     rows.append({"id": sample["id"], "dataset": ds.path, "scorer": name,
                                  "tags": sample["metadata"].get("tags", []), **result})
         summary = metrics.summarize(rows, k)
         summary["skipped_scorers"] = skipped
+        # Not failures: the provider was unavailable, so these samples say nothing about the system
+        summary["unavailable_samples"] = unavailable
         # A profile (e.g. one per retrieval mode) overrides the default thresholds key by key
         thresholds = {**ds.meta.get("thresholds", {}), **ds.meta.get("profiles", {}).get(args.profile, {})}
         summary["threshold_failures"] = metrics.check_thresholds(summary["metrics"], thresholds)

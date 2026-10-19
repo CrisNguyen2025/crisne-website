@@ -23,6 +23,18 @@ class RouteResult:
     route: list[str] = field(default_factory=list)  # empty = no decision (e.g. deferred to an LLM router)
 
 
+class TargetUnavailable(Exception):
+    """The target could not answer for a reason outside the system under test (e.g. provider quota).
+
+    The runner records the sample as unavailable instead of failing it, so a quota outage cannot look
+    like a regression. The reason is reported in the run summary.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 @dataclass(frozen=True)
 class Answer:
     text: str
