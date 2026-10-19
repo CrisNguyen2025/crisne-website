@@ -83,7 +83,8 @@ class DomainProfile:
     grounding_policy: Literal["fallback", "note"] = "fallback"
     # Only findings precise enough to withhold an answer. ungrounded_terms is word-overlap based and flags
     # paraphrases ("Cơ sở dữ liệu vector" for "Vector Database"), so it is a trace/guard warning only.
-    grounding_fail_on: tuple[str, ...] = ("future_promise",)
+    # unbacked_action: the model claims a save/create/update, but this pipeline never writes anything.
+    grounding_fail_on: tuple[str, ...] = ("future_promise", "unbacked_action")
     grounding_note: str = ""
     # Mask emails/phones in the answer before it reaches the client.
     mask_output_pii: bool = True

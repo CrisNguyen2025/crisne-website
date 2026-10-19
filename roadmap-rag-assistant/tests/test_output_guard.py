@@ -49,7 +49,7 @@ def test_reformatted_names_from_the_context_are_grounded():
 
 def test_grounded_answer_has_no_flags():
     res = check_grounding("Có bài **General** trong lộ trình **fe**.", "General ... fe", "fe có gì")
-    assert res == {"ungrounded_terms": [], "future_promise": []}
+    assert res == {"ungrounded_terms": [], "future_promise": [], "unbacked_action": []}
 
 
 def test_mask_pii_matches_next_app_patterns():
@@ -93,3 +93,19 @@ def test_mask_pii_secrets_cards_and_ids(text, expected):
 )
 def test_mask_pii_keeps_lookalikes(text):
     assert mask_pii(text) == text
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "✅ Đã tạo bài post mới trong layer General.",
+        "Bài đã được lưu và hiển thị trong roadmap của bạn.",
+        "Mình vừa thêm xong bài học.",
+    ],
+)
+def test_invented_action_is_flagged(answer):
+    assert check_grounding(answer, "ctx", "q")["unbacked_action"]
+
+
+def test_normal_answers_are_not_flagged_as_actions():
+    assert not check_grounding("Bài này nói về chunking, lưu ý nội dung cần đọc kỹ.", "ctx", "q")["unbacked_action"]

@@ -191,3 +191,20 @@ def test_rag_answer_ends_with_metadata_listing_cited_sources(monkeypatch):
     meta = events[-1]
     assert meta["type"] == "metadata" and meta["mode"] == "rag" and meta["grounding"] == "ok"
     assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", True), ("x", True)]
+
+
+def test_rag_answer_claiming_a_save_is_withheld_and_falls_back(monkeypatch):
+    import pytest as _pytest
+
+    from rag_service.generation import GenerationFailed
+    from rag_service.rag.rag_engine import rag_engine
+
+    monkeypatch.setattr(rag_engine, "known_topic_slugs", lambda: {"ops"})
+
+    async def run():
+        req = GenerationRequest(mode="rag", query="tạo bài", thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9)])
+        return [ev async for ev in generation_pipeline.astream(RecordingLLM("✅ Đã tạo bài post mới trong layer General."), req)]
+
+    with _pytest.raises(GenerationFailed) as exc:
+        asyncio.run(run())
+    assert exc.value.reason == "grounding"

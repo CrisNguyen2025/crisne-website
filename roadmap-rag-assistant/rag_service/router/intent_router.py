@@ -110,7 +110,8 @@ class IntentRouter:
 
         # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic")
         query_indicators = [
-            "tìm", "kiếm", "tra cứu", "có bài nào", "nội dung", "danh sách", "liệt kê", "list",
+            # "nội dung" is not a question marker: it is the content field of a create ("Nội dung: ...")
+            "tìm", "kiếm", "tra cứu", "có bài nào", "danh sách", "liệt kê", "list",
             "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "search", "what is", "how to", "show me", "which",
             "tại sao", "như thế nào"
         ]

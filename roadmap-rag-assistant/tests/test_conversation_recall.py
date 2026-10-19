@@ -96,3 +96,26 @@ def test_name_question_is_answered_by_the_llm_with_history():
 def test_identity_question_with_question_mark_is_chitchat(text):
     res = IntentRouter().classify_heuristics(text)
     assert res is not None and res.intent == IntentType.CHITCHAT
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tạo bài post mới trong layer General của topic Machine Learning",
+        "Tạo bài post mới trong layer General của topic Machine Learning. Tiêu đề: Giới thiệu. Nội dung: Machine Learning là một nhánh của AI",
+        "tạo bài mới tên X, nội dung: abc",
+        "xóa bài Docker nội dung cũ",
+    ],
+)
+def test_create_with_content_field_is_a_roadmap_change_not_a_search(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.ROADMAP_CUD
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["nội dung bài Chunking Strategy là gì?", "tìm bài có nội dung về docker"],
+)
+def test_content_questions_still_search(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.KNOWLEDGE_QUERY

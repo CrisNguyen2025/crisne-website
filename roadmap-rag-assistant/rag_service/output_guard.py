@@ -27,6 +27,14 @@ FUTURE_PROMISE = re.compile(
 )
 
 
+ACTION_CLAIM = re.compile(
+    r"✅\s*(?:đã\s+)?(?:tạo|lưu|thêm|xóa|xoá|cập\s+nhật|sửa)\b"
+    r"|\b(?:đã|vừa)\s+(?:được\s+)?(?:tạo|lưu|thêm|xóa|xoá|cập\s+nhật|sửa)\b"
+    r"|\bđược\s+(?:tạo|lưu)\s+(?:và|thành\s+công|xong)\b",
+    re.IGNORECASE,
+)
+
+
 class LinkGuard:
     """Feed streamed deltas in, get the same text out with invalid topic links unlinked."""
 
@@ -90,4 +98,6 @@ def check_grounding(answer: str, context: str, question: str) -> dict:
         n for n in names if n and not n.endswith(":") and not _words(n) <= known
     )
     promises = [m.group(0) for m in FUTURE_PROMISE.finditer(answer)]
-    return {"ungrounded_terms": ungrounded, "future_promise": promises}
+    # Answers never run a write: a claim of having created/saved/changed something is invented
+    actions = [m.group(0) for m in ACTION_CLAIM.finditer(answer)]
+    return {"ungrounded_terms": ungrounded, "future_promise": promises, "unbacked_action": actions}
