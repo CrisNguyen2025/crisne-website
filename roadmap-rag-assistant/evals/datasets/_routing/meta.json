@@ -1,0 +1,11 @@
+{
+  "owner": "roadmap-rag-assistant",
+  "acl_tier": "public",
+  "default_role": null,
+  "scorers": [
+    "route"
+  ],
+  "thresholds": {
+    "route.accuracy": 1.0
+  }
+}

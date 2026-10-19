@@ -1,0 +1,9 @@
+{
+  "description": "Generic tags every domain may use. A domain adds its own in datasets/tags.json.",
+  "tags": [
+    "single-hop", "multi-section", "multi-doc", "numeric", "comparison",
+    "canonical", "paraphrase", "typo", "no-diacritics", "code-switch",
+    "temporal", "conflict", "false-premise", "out-of-corpus", "near-topic",
+    "sensitive", "injection", "access-restricted", "multi-turn"
+  ]
+}

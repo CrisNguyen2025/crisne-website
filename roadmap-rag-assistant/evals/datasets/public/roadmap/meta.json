@@ -1,0 +1,20 @@
+{
+  "owner": "roadmap-rag-assistant",
+  "acl_tier": "public",
+  "default_role": null,
+  "scorers": [
+    "retrieval"
+  ],
+  "k": 5,
+  "thresholds": {
+    "retrieval.hit@5": 0.95,
+    "retrieval.mrr@5": 0.8
+  },
+  "profiles": {
+    "hybrid": {
+      "retrieval.hit@5": 0.98,
+      "retrieval.mrr@5": 0.9,
+      "retrieval.off_topic_rejected": 0.6
+    }
+  }
+}

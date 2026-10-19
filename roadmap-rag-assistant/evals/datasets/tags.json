@@ -1,0 +1,7 @@
+{
+  "description": "Roadmap-specific tags, merged with evals/kit/schema/tags.json.",
+  "tags": [
+    "mixed-intent",
+    "llm-fallback"
+  ]
+}

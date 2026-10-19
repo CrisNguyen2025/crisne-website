@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evals/kit/schema/corpus-meta.schema.json",
+  "title": "Corpus meta",
+  "description": "Version and content hash of one corpus folder. sha256 is kit.corpus.content_hash(documents).",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["owner", "acl_tier", "version", "doc_count", "sha256"],
+  "additionalProperties": false,
+  "properties": {
+    "owner": { "type": "string", "minLength": 1 },
+    "acl_tier": { "enum": ["public", "internal", "confidential"] },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "source": { "type": "string" },
+    "doc_count": { "type": "integer" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "exported_at": { "type": "string" }
+  }
+}
