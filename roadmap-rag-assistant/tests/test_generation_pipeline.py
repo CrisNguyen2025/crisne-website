@@ -211,3 +211,30 @@ def test_rag_answer_claiming_a_save_is_withheld_and_falls_back(monkeypatch):
     with _pytest.raises(GenerationFailed) as exc:
         asyncio.run(run())
     assert exc.value.reason == "grounding"
+
+
+def test_sqlite_history_survives_a_new_store_instance(tmp_path):
+    from rag_service.generation.history import SqliteHistoryStore
+
+    path = str(tmp_path / "h.db")
+    store = SqliteHistoryStore(path, max_messages=4)
+    store.append("t1", "user", "tôi là Cris")
+    store.append("t1", "assistant", "Chào Cris!")
+    store.append("t2", "user", "khác thread")
+
+    reopened = SqliteHistoryStore(path, max_messages=4)
+    assert [(t.role, t.content) for t in reopened.get_recent("t1", 10)] == [
+        ("user", "tôi là Cris"), ("assistant", "Chào Cris!"),
+    ]
+    assert [t.content for t in reopened.get_recent("t2", 10)] == ["khác thread"]
+
+
+def test_sqlite_history_keeps_only_newest_per_thread_and_clears(tmp_path):
+    from rag_service.generation.history import SqliteHistoryStore
+
+    store = SqliteHistoryStore(str(tmp_path / "h.db"), max_messages=3)
+    for i in range(5):
+        store.append("t", "user", f"m{i}")
+    assert [t.content for t in store.get_recent("t", 10)] == ["m2", "m3", "m4"]
+    store.clear("t")
+    assert store.get_recent("t", 10) == []

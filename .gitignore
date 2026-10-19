@@ -74,3 +74,6 @@ roadmap-rag-assistant/rag_service/data/embedding_cache.json
 # Python bytecode
 __pycache__/
 *.pyc
+
+# RAG conversation memory (RAG_HISTORY_DB)
+roadmap-rag-assistant/data/history.db*

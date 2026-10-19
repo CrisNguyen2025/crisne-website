@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import sqlite3
+import threading
 from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Literal, Protocol
@@ -48,4 +51,66 @@ class InMemoryHistoryStore:
         self._threads.pop(thread_id or "default", None)
 
 
-history_store: HistoryStore = InMemoryHistoryStore()
+class SqliteHistoryStore:
+    """Conversation memory kept in a SQLite file, so it survives a server restart.
+
+    Same contract as InMemoryHistoryStore. Stdlib only; one short write per turn, so a shared
+    connection guarded by a lock is enough for the single-process server.
+    """
+
+    def __init__(self, path: str, max_messages: int = 50) -> None:
+        self._max = max_messages
+        self._lock = threading.Lock()
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        self._db = sqlite3.connect(path, check_same_thread=False)
+        self._db.execute(
+            """CREATE TABLE IF NOT EXISTS chat_turn (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 thread_id TEXT NOT NULL,
+                 role TEXT NOT NULL,
+                 content TEXT NOT NULL)"""
+        )
+        self._db.execute("CREATE INDEX IF NOT EXISTS chat_turn_thread ON chat_turn(thread_id, id)")
+        self._db.commit()
+
+    def append(self, thread_id: str, role: Role, content: str) -> None:
+        if not content:
+            return
+        sid = thread_id or "default"
+        with self._lock:
+            self._db.execute(
+                "INSERT INTO chat_turn (thread_id, role, content) VALUES (?, ?, ?)", (sid, role, content)
+            )
+            # Keep only the newest `max_messages` per thread
+            self._db.execute(
+                """DELETE FROM chat_turn WHERE thread_id = ? AND id NOT IN (
+                     SELECT id FROM chat_turn WHERE thread_id = ? ORDER BY id DESC LIMIT ?)""",
+                (sid, sid, self._max),
+            )
+            self._db.commit()
+
+    def get_recent(self, thread_id: str, n: int) -> List[Turn]:
+        if n <= 0:
+            return []
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT role, content FROM chat_turn WHERE thread_id = ? ORDER BY id DESC LIMIT ?",
+                (thread_id or "default", n),
+            ).fetchall()
+        return [Turn(role, content) for role, content in reversed(rows)]
+
+    def clear(self, thread_id: str) -> None:
+        with self._lock:
+            self._db.execute("DELETE FROM chat_turn WHERE thread_id = ?", (thread_id or "default",))
+            self._db.commit()
+
+
+def _make_default() -> HistoryStore:
+    """SQLite when RAG_HISTORY_DB is set in .env (e.g. data/history.db), otherwise RAM as before."""
+    from rag_service.config import settings
+
+    path = settings.rag_history_db.strip()
+    return SqliteHistoryStore(path) if path else InMemoryHistoryStore()
+
+
+history_store: HistoryStore = _make_default()

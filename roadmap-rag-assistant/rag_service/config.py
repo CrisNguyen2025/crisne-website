@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     # Sent as `x-admin-key`; must match ADMIN_API_KEY of the Next.js app, or writes get 401.
     admin_api_key: str = ""
     sqlite_db_path: str = "../prisma/dev.db"
+    # Conversation memory file; empty keeps it in RAM (lost on restart)
+    rag_history_db: str = ""
 
     # ── Access ──
     # Shared with the Next.js proxy (RAG_INTERNAL_KEY there); empty = every request is rejected.
