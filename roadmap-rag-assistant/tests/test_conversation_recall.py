@@ -38,6 +38,10 @@ NOT_RECALL = [
     ("tôi muốn tìm bài về tên miền", IntentType.KNOWLEDGE_QUERY),
     ("tạo topic AI Engineering", IntentType.ROADMAP_CUD),
     ("chào bạn", IntentType.CHITCHAT),
+    ("bạn là gì vậy?", IntentType.CHITCHAT),
+    ("bạn tên gì?", IntentType.CHITCHAT),
+    ("who are you?", IntentType.CHITCHAT),
+    ("bạn là ai, làm được gì?", IntentType.CHITCHAT),
     ("email marketing là gì?", IntentType.KNOWLEDGE_QUERY),
     ("địa chỉ IP là gì?", IntentType.KNOWLEDGE_QUERY),
     ("tìm bài về số điện thoại ảo", IntentType.KNOWLEDGE_QUERY),
@@ -86,3 +90,9 @@ def test_name_question_is_answered_by_the_llm_with_history():
     answer = [e for e in events if e.get("type") == "step" and e.get("id") == "answer" and e["status"] == "done"]
     assert answer[-1]["mode"] == "llm"
     assert "tôi là Cris" in llm.prompts[-1].split("<user_query>")[0]
+
+
+@pytest.mark.parametrize("text", ["bạn là ai?", "Bạn là ai", "who are you?"])
+def test_identity_question_with_question_mark_is_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.CHITCHAT

@@ -100,6 +100,14 @@ class IntentRouter:
                 needs_cud_extraction=False,
             )
 
+        # 1e. Questions about the assistant itself ("bạn là ai?") are chitchat, even with a "?"
+        if re.search(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you)\b", lower):
+            return IntentClassificationResult(
+                intent=IntentType.CHITCHAT,
+                confidence=0.9,
+                needs_cud_extraction=False,
+            )
+
         # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic")
         query_indicators = [
             "tìm", "kiếm", "tra cứu", "có bài nào", "nội dung", "danh sách", "liệt kê", "list",
