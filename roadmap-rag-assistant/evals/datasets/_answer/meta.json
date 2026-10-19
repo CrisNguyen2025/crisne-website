@@ -1,0 +1,9 @@
+{
+  "owner": "roadmap-rag-assistant",
+  "acl_tier": "public",
+  "default_role": null,
+  "scorers": [
+    "answer"
+  ],
+  "thresholds": {}
+}

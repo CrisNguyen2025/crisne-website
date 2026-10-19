@@ -1,0 +1,85 @@
+"""RoadmapTarget answer capability: opt-in, behavior mapping, citations, history seeding (no network)."""
+
+from __future__ import annotations
+
+import asyncio
+
+import pytest
+
+from evals.target import RoadmapTarget, build_target
+from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY
+
+
+def test_answer_is_opt_in_so_the_default_run_stays_offline():
+    assert "answer" not in build_target(mode="fts").capabilities
+    assert "answer" in build_target(mode="fts", answer="llm").capabilities
+    with pytest.raises(ValueError):
+        build_target(answer="yes")
+
+
+@pytest.mark.parametrize(
+    "reply,steps,expected",
+    [
+        (SENSITIVE_REPLY, {}, "refuse"),
+        ("ngoài phạm vi", {"route": {"intent": "out_of_scope"}}, "refuse"),
+        ("chưa có", {"route": {"intent": "knowledge_query"}, "answer": {"mode": "no_match"}}, "refuse"),
+        (MIXED_INTENT_REPLY, {}, "clarify"),
+        ("?", {"route": {"intent": "chitchat"}, "answer": {"mode": "unclear"}}, "clarify"),
+        ("Bạn tên là Cris.", {"route": {"intent": "chitchat"}, "answer": {"mode": "llm"}}, "answer"),
+        ("context", {"route": {"intent": "knowledge_query"}, "answer": {"mode": "context"}}, "answer"),
+    ],
+)
+def test_behavior_mapping(reply, steps, expected):
+    assert RoadmapTarget._behavior(reply, steps) == expected
+
+
+def test_citations_map_cited_sources_to_corpus_section_ids():
+    target = RoadmapTarget(mode="fts")
+    documents = target._load()[1]
+    doc = documents[0]
+    events = [
+        {"type": "token", "delta": "x"},
+        {"type": "metadata", "sources": [
+            {"id": doc["source_id"], "cited": True},
+            {"id": documents[1]["source_id"], "cited": False},
+            {"id": "not-in-corpus", "cited": True},
+        ]},
+    ]
+    assert target._citations(events) == [doc["doc_id"]]
+
+
+class _EchoHistoryLlm:
+    """Answers with whatever history reached the prompt, so the test sees what the target seeded."""
+
+    async def astream(self, prompt):
+        from langchain_core.messages import AIMessageChunk
+
+        tag = "\n<conversation_history>\n"
+        history = prompt.split(tag)[1].split("\n</conversation_history>")[0] if tag in prompt else ""
+        yield AIMessageChunk(content=history or "no-history")
+
+
+def test_answer_seeds_masked_history_and_runs_as_visitor(monkeypatch):
+    from rag_service.agent import NextGenRoadmapAgent
+    from rag_service.auth import current_actor
+
+    seen_actor = []
+    target = RoadmapTarget(mode="fts", answer="llm")
+    agent = NextGenRoadmapAgent(llm_model=_EchoHistoryLlm())
+    real = agent.astream_events
+
+    async def spy(*a, **kw):
+        seen_actor.append(current_actor.get())
+        async for ev in real(*a, **kw):
+            yield ev
+
+    monkeypatch.setattr(agent, "astream_events", spy)
+    target._agent, target._loop = agent, asyncio.new_event_loop()
+    monkeypatch.setattr(target, "_get_agent", lambda: agent)
+
+    got = target.answer("xin chào", [{"role": "user", "content": "tôi là Cris, mail cris.demo@example.com"}])
+    assert "Cris" in got.text and "cris.demo@example.com" not in got.text and "[email]" in got.text
+    assert seen_actor == ["visitor"]
+
+    # A fresh thread per sample: nothing carries over to the next one
+    assert "Cris" not in target.answer("xin chào", []).text

@@ -24,6 +24,12 @@ RECALL = [
     "what's my name?",
     "who am I",
     "what did I say before?",
+    "email của tôi là gì?",
+    "sđt mình là bao nhiêu",
+    "số điện thoại của tôi là gì?",
+    "địa chỉ của tôi ở đâu?",
+    "tên của tôi là gì",
+    "what's my email?",
 ]
 
 NOT_RECALL = [
@@ -32,6 +38,9 @@ NOT_RECALL = [
     ("tôi muốn tìm bài về tên miền", IntentType.KNOWLEDGE_QUERY),
     ("tạo topic AI Engineering", IntentType.ROADMAP_CUD),
     ("chào bạn", IntentType.CHITCHAT),
+    ("email marketing là gì?", IntentType.KNOWLEDGE_QUERY),
+    ("địa chỉ IP là gì?", IntentType.KNOWLEDGE_QUERY),
+    ("tìm bài về số điện thoại ảo", IntentType.KNOWLEDGE_QUERY),
 ]
 
 

@@ -33,6 +33,11 @@ CONVERSATION_RECALL = re.compile(
     rf"\b{_ME}\s+tên\s+(?:là\s+)?gì\b"
     rf"|\btên\s+(?:của\s+)?{_ME}\s+(?:là\s+)?gì\b"
     rf"|\b{_ME}\s+là\s+ai\b"
+    # The user's own details: "email của tôi là gì?", "sđt mình là bao nhiêu"
+    # normalize_vietnamese writes "thọai" (old tone placement), so both spellings are accepted
+    rf"|\b(?:e-?mail|mail|sđt|số\s+đt|(?:số\s+)?điện\s+th(?:oạ|ọa)i|địa\s+chỉ|tên|tuổi|nghề|công\s+việc)"
+    rf"\s+(?:của\s+)?{_ME}\s+(?:là\s+)?(?:gì|bao\s+nhiêu|ở\s+đâu)\b"
+    r"|\bwhat(?:'s|\s+is)\s+my\s+(?:e-?mail|phone(?:\s+number)?|address|job|age)\b"
     rf"|\b(?:có\s+)?nhớ\s+(?:tên\s+)?{_ME}\b"
     rf"|\b(?:lúc\s+nãy|vừa\s+nãy|ban\s+nãy|nãy\s+giờ|nãy|vừa\s+rồi|trước\s+đó)\s+{_ME}\s+(?:đã\s+|vừa\s+)?(?:nói|hỏi|kể|bảo)\b"
     rf"|\b{_ME}\s+(?:vừa|đã|mới)\s+(?:nói|hỏi|kể|bảo)\s+(?:những\s+)?(?:gì|cái\s+gì)\b"

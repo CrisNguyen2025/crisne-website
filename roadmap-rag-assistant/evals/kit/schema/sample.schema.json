@@ -3,7 +3,7 @@
   "$id": "evals/kit/schema/sample.schema.json",
   "title": "Eval sample",
   "description": "One line of samples.jsonl. Shared contract for every domain; bump version on breaking changes.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "object",
   "required": ["id", "input", "expected", "metadata"],
   "additionalProperties": false,
@@ -43,6 +43,7 @@
           }
         },
         "facts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 } },
         "answer": { "type": "string" }
       }
     },

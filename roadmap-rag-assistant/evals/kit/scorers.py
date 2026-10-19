@@ -69,6 +69,9 @@ def score_answer(sample: dict, target: Target, k: int, run_as: str | None) -> di
     if expected.get("facts"):
         # Substring match is a cheap baseline; swap in a judge scorer when wording varies a lot
         checks["facts"] = all(fact.casefold() in text for fact in expected["facts"])
+    if expected.get("forbidden"):
+        # Things the answer must never say: another thread's memory, masked PII, a wrong earlier claim
+        checks["forbidden"] = not any(term.casefold() in text for term in expected["forbidden"])
     required = {c["section_id"] for c in expected.get("contexts", []) if c.get("required", True)}
     if required:
         checks["citations"] = required <= set(got.citations)
