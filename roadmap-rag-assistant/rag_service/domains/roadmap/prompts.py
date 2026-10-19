@@ -1,3 +1,5 @@
+"""Roadmap assistant prompt pieces (domain text, not part of the core)."""
+
 """System prompt and few-shot examples for the Roadmap Assistant agent."""
 
 PROMPT_SUGGESTION_FORMAT = """

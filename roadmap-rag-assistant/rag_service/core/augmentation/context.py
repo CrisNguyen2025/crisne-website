@@ -11,9 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional, Sequence, Tuple
 
-from rag_service.generation.documents import ContextDocument
-from rag_service.generation.domain_profile import PROFILE, DomainProfile
-from rag_service.generation.history import HistoryStore, Turn, history_store
+from rag_service.core.augmentation.documents import ContextDocument
+from rag_service.core.generation.profile import DomainProfile
+from rag_service.core.augmentation.history import HistoryStore, Turn, history_store
 
 Mode = Literal["rag", "chitchat"]
 
@@ -42,7 +42,7 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
-def select_documents(req: GenerationRequest, profile: DomainProfile = PROFILE) -> List[ContextDocument]:
+def select_documents(req: GenerationRequest, profile: DomainProfile) -> List[ContextDocument]:
     """Convert sources to documents and keep those scoring at least `min_relative_score` of the best.
 
     Relative, because retrievers score on different scales (RRF ≈ 0.016–0.033, cosine 0–1, BM25).
@@ -77,7 +77,7 @@ def format_history(turns: List[Turn], profile: DomainProfile) -> str:
 
 def build_prompt(
     req: GenerationRequest,
-    profile: DomainProfile = PROFILE,
+    profile: DomainProfile,
     history: HistoryStore = history_store,
     documents: Optional[List[ContextDocument]] = None,
 ) -> str:

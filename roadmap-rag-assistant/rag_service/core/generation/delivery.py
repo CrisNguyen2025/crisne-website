@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from rag_service.generation.documents import ContextDocument
-from rag_service.generation.history import HistoryStore, history_store
+from rag_service.core.augmentation.documents import ContextDocument
+from rag_service.core.augmentation.history import HistoryStore, history_store
 from rag_service.pii import mask_pii
 
 

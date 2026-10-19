@@ -20,8 +20,11 @@ from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.config import settings
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.execution.executor import ActionExecutor
-from rag_service.generation import GenerationFailed, GenerationRequest, generation_pipeline, record_turn
-from rag_service.generation.domain_profile import PROFILE
+from rag_service.core.augmentation.context import GenerationRequest
+from rag_service.core.generation.delivery import record_turn
+from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.domains.roadmap.pipeline import generation_pipeline
+from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.observability import (
     current_trace,
     end_step,

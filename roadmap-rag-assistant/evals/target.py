@@ -27,7 +27,7 @@ MODES = ("fts", "vector", "hybrid")
 ANSWER_MODES = ("off", "llm")
 CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
 # Code whose change can change an answer; any edit here invalidates the whole cache
-CODE_GLOBS = ("rag_service/agent.py", "rag_service/generation/*.py", "rag_service/rag/*.py", "rag_service/router/*.py")
+CODE_GLOBS = ("rag_service/agent.py", "rag_service/core/**/*.py", "rag_service/domains/**/*.py", "rag_service/rag/*.py", "rag_service/router/*.py")
 
 
 def _code_fingerprint() -> str:
@@ -126,7 +126,7 @@ class RoadmapTarget:
 
     def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer:
         from rag_service.auth import current_actor
-        from rag_service.generation import history_store
+        from rag_service.core.augmentation.history import history_store
         from rag_service.pii import mask_pii
         from rag_service.state import session_store
 

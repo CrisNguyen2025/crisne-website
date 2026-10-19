@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable, List
 
-from rag_service.output_guard import check_grounding
+from rag_service.core.generation.grounding import check_grounding
 from rag_service.pii import EMAIL_PATTERN, INTL_PHONE_PATTERN, VN_PHONE_PATTERN, mask_pii
 
 

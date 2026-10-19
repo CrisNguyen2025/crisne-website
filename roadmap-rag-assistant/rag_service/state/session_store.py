@@ -65,7 +65,7 @@ class SessionStore:
         if session_id in self._sessions:
             del self._sessions[session_id]
         # Imported here: generation imports the agent's dependencies, which import this module.
-        from rag_service.generation.history import history_store
+        from rag_service.core.augmentation.history import history_store
 
         history_store.clear(session_id)
 

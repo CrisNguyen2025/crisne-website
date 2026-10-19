@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from rag_service.agent import NextGenRoadmapAgent
-from rag_service.generation import generation_pipeline
+from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.api.server import app
 from rag_service.auth import set_actor
 from rag_service.rag.ingestion import KnowledgeDocument
@@ -152,7 +152,7 @@ async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_matc
     assert done["answer"]["mode"] == "llm" and done["answer"]["duration_ms"] >= 0
     assert done["guard"]["grounding"] == "issues"
     assert done["guard"]["ungrounded_terms"] == ["Frontend"]
-    assert done["guard"]["invalid_links"] == ["fe"]
+    assert done["guard"]["invalid_links"] == ["/?topic=fe"]
 
 
 @pytest.mark.asyncio

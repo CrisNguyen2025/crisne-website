@@ -9,7 +9,7 @@
     S5 delivery                  SSE tokens + closing metadata event; memory is written per turn
                                  by the agent (delivery.record_turn)
 
-Domain specifics live in domain_profile.PROFILE. When the LLM fails, or the answer fails the
+Domain specifics come from a DomainProfile passed in (see rag_service/domains/). When the LLM fails, or the answer fails the
 grounding check under policy "fallback", the pipeline raises GenerationFailed and the caller
 runs its own fallback.
 """
@@ -20,11 +20,11 @@ from typing import Any, AsyncGenerator
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
-from rag_service.generation import citation, guardrails
-from rag_service.generation.context import GenerationRequest, build_prompt, select_documents
-from rag_service.generation.delivery import metadata_event, token_event
-from rag_service.generation.domain_profile import PROFILE, DomainProfile
-from rag_service.generation.generate import StreamResult, astream
+from rag_service.core.generation import citation, guardrails
+from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
+from rag_service.core.generation.delivery import metadata_event, token_event
+from rag_service.core.generation.profile import DomainProfile
+from rag_service.core.generation.generate import StreamResult, astream
 from rag_service.llm_breaker import llm_breaker
 from rag_service.observability import current_trace, end_step, start_step, usage_from_langchain
 from rag_service.steps import step_event
@@ -39,7 +39,7 @@ class GenerationFailed(Exception):
 
 
 class GenerationPipeline:
-    def __init__(self, profile: DomainProfile = PROFILE) -> None:
+    def __init__(self, profile: DomainProfile) -> None:
         self.profile = profile
 
     def available(self, llm: Any) -> bool:
@@ -150,4 +150,3 @@ class GenerationPipeline:
         )
 
 
-generation_pipeline = GenerationPipeline()
