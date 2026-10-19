@@ -503,7 +503,8 @@ describe("Empirical Challenger — Milestone 1 Rich Markdown Engine Stress Suite
       );
 
       expect(htmlWithRun).toContain("npm run test:stress");
-      expect(htmlWithRun).toContain('aria-label="Gửi: npm run test:stress"');
+      expect(htmlWithRun).toContain('aria-label="Gửi"');
+      expect(htmlWithRun).not.toContain("Gửi: npm run test:stress");
       expect(htmlWithRun).toContain('aria-label="Sao chép"');
     });
 
@@ -569,7 +570,8 @@ describe("Empirical Challenger — Milestone 1 Rich Markdown Engine Stress Suite
         })
       );
       expect(htmlStreaming).toContain("animate-pulse");
-      expect(htmlStreaming).toContain("animate-stream-fade");
+      // Per-word fade was removed: streamed text renders as plain text
+      expect(htmlStreaming).not.toContain("animate-stream-fade");
 
       const htmlStatic = renderToHtml(
         React.createElement(ChatMarkdown, {

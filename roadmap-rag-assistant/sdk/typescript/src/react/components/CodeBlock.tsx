@@ -221,23 +221,10 @@ export function CodeBlock({
     const isBusy = runningCode !== null;
     return (
       <div className="my-2 flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs">
-        {/* A suggestion is one tap: the text sends it */}
-        {onRun ? (
-          <button
-            type="button"
-            onClick={() => onRun(snippet)}
-            disabled={isBusy}
-            aria-label={`Gửi: ${snippet}`}
-            title="Gửi"
-            className="flex min-h-[36px] min-w-0 flex-1 cursor-pointer items-center gap-2 text-left text-[13px] text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{code}</span>
-          </button>
-        ) : (
-          <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-[13px] text-foreground">
-            {code}
-          </code>
-        )}
+        {/* Text is read-only; only the play and copy buttons act on it */}
+        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-[13px] text-foreground">
+          {code}
+        </code>
         {onRun && (
           <button
             type="button"

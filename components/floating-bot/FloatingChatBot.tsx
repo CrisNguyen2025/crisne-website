@@ -270,7 +270,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
               <div
                 ref={scrollContainerRef}
                 onScroll={handleScroll}
-                className="flex-1 space-y-6 overflow-y-auto px-4 py-5"
+                className="flex-1 space-y-4 overflow-y-auto px-4 py-5"
               >
                 {messages.length === 0 ? (
                   <div className="flex h-full flex-col justify-center space-y-5 px-1">
@@ -326,7 +326,7 @@ export function FloatingChatBot({ triggerVariant = "capsule" }: FloatingChatBotP
                         .replace(/\[\[[^\]]*$/, "")
                         .trim();
                       return (
-                        <div key={msg.id} className="flex flex-col gap-2">
+                        <div key={msg.id} className="flex flex-col gap-1.5 pr-2">
                           {msg.content ? (
                             <ChatMarkdown
                               content={visibleContent}

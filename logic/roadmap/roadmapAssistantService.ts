@@ -6,8 +6,8 @@
  * dealing with raw fetch() calls.
  */
 
-import { RoadmapChatClient } from '@/roadmap-rag-assistant/sdk/typescript/src';
-import type { ChatResponse, PageContext, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src';
+import { RoadmapChatClient } from '@/roadmap-rag-assistant/sdk/typescript/src/client';
+import type { ChatResponse, PageContext, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src/types';
 
 // Same-origin proxy (app/api/roadmap-assistant): the browser never calls the Python service
 // directly; the proxy decides whether the caller is the owner before forwarding.

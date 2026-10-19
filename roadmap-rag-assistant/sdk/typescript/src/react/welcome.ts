@@ -36,18 +36,14 @@ export function getWelcomeSuggestions(context?: PageContext, canWrite = false): 
 }
 
 export function buildWelcomeMessage(context?: PageContext, canWrite = false): ChatMessage {
-  const suggestions = getWelcomeSuggestions(context, canWrite)
-    .map(({ label, prompt }) => `**${label}**\n\`\`\`text\n${prompt}\n\`\`\``)
-    .join('\n');
-
   return {
     id: WELCOME_MESSAGE_ID,
     role: 'assistant',
     content:
       'Xin chào! Tôi là **Abot** ⚡\n' +
       'Trợ lý hỗ trợ quản trị lộ trình học tập và tra cứu kiến thức.\n\n' +
-      `${suggestions}\n` +
-      '_Bạn có thể hỏi bằng tiếng Việt hoặc tiếng Anh._',
+      '_Bạn có thể hỏi bằng tiếng Việt hoặc tiếng Anh, hoặc chọn một gợi ý bên dưới._',
+    suggestions: getWelcomeSuggestions(context, canWrite),
     timestamp: new Date(),
   };
 }

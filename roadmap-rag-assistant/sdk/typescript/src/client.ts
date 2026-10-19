@@ -36,7 +36,8 @@ export interface StreamCallbacks {
   onToken?: (delta: string) => void;
   onThinking?: (delta: string) => void;
   onToolStart?: (name: string, args: Record<string, unknown>) => void;
-  onToolEnd?: (name: string, result: string) => void;
+  /** `isError` comes from the server's `is_error` when present, else a guess from the text */
+  onToolEnd?: (name: string, result: string, isError: boolean) => void;
   onStep?: (step: AssistantStepEvent) => void;
   onDone?: (response: ChatResponse) => void;
   onError?: (error: Error) => void;
@@ -202,15 +203,20 @@ export class RoadmapChatClient {
                     : (pendingToolArgs.get(data.name) || {});
                   pendingToolArgs.delete(data.name);
 
-                  const isFailed = Boolean(
-                    data.status === 'failed' ||
-                    data.error ||
-                    (typeof data.result === 'string' &&
-                      (data.result.toLowerCase().startsWith('error') ||
-                       data.result.toLowerCase().includes('failed') ||
-                       data.result.toLowerCase().includes('thất bại') ||
-                       data.result.toLowerCase().startsWith('exception')))
-                  );
+                  // The server's is_error is authoritative; guessing from the text is only a
+                  // fallback for events that don't carry it (older servers, unknown outcomes).
+                  const isFailed =
+                    typeof data.is_error === 'boolean'
+                      ? data.is_error
+                      : Boolean(
+                          data.status === 'failed' ||
+                          data.error ||
+                          (typeof data.result === 'string' &&
+                            (data.result.toLowerCase().startsWith('error') ||
+                             data.result.toLowerCase().includes('failed') ||
+                             data.result.toLowerCase().includes('thất bại') ||
+                             data.result.toLowerCase().startsWith('exception')))
+                        );
 
                   const toolItem: ToolCallResult = {
                     name: data.name,
@@ -220,7 +226,7 @@ export class RoadmapChatClient {
                     error: data.error || (isFailed ? data.result : undefined),
                   };
                   accumulatedTools.push(toolItem);
-                  callbacks.onToolEnd?.(data.name, data.result || '');
+                  callbacks.onToolEnd?.(data.name, data.result || '', isFailed);
                 } else if (currentEvent === 'step') {
                   callbacks.onStep?.(data as AssistantStepEvent);
                 } else if (currentEvent === 'done') {

@@ -8,9 +8,8 @@ export interface CalloutAlertProps {
   type: CalloutType;
   title?: string;
   lines: string[];
-  renderInline: (text: string, fade?: boolean) => React.ReactNode[];
+  renderInline: (text: string) => React.ReactNode[];
   trailing?: React.ReactNode;
-  fade?: boolean;
 }
 
 function NoteIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -169,7 +168,6 @@ export function CalloutAlert({
   lines,
   renderInline,
   trailing,
-  fade = false,
 }: CalloutAlertProps) {
   const config = ALERT_CONFIGS[type] || ALERT_CONFIGS.note;
   const displayTitle = title?.trim() || config.defaultTitle;
@@ -190,7 +188,7 @@ export function CalloutAlert({
         {lines.map((line, idx) => (
           <React.Fragment key={idx}>
             {idx > 0 && <br />}
-            {renderInline(line, fade)}
+            {renderInline(line)}
           </React.Fragment>
         ))}
         {trailing}

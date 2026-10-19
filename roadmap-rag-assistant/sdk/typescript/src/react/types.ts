@@ -41,6 +41,8 @@ export interface ChatMessage {
   toolCalls?: ToolCall[];
   steps?: AssistantStepEvent[];
   actionChips?: ChatActionChip[];
+  /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
+  suggestions?: { label: string; prompt: string }[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   /** Epoch ms of the first streamed token; ends the "thinking" step. */
   firstTokenAt?: number;

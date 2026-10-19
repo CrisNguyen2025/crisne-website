@@ -95,9 +95,9 @@ describe("RoadmapChatbotWidget", () => {
   describe("suggestions by access (P0-1)", () => {
     it("reader sees no suggestion that would create data", () => {
       openWidget(false);
-      const card = screen.getByRole("button", { name: /Gửi: Có những lộ trình/ });
+      const card = screen.getByText(/Có những lộ trình/);
       expect(within(card.parentElement as HTMLElement).queryByText(/^Tạo /)).toBeNull();
-      expect(screen.queryByRole("button", { name: /Gửi: Tạo 2 layer/ })).toBeNull();
+      expect(screen.queryByText(/Tạo 2 layer/)).toBeNull();
     });
   });
 });

@@ -1,39 +1,90 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckIcon, CopyIcon, PlayIcon } from "./icons";
+import React, { useMemo } from "react";
+import { CodeBlock } from "./components/CodeBlock";
+import { MarkdownTable } from "./components/MarkdownTable";
+import { CalloutAlert, CalloutType } from "./components/CalloutAlert";
 
 /**
- * Dependency-free Markdown for chat answers (shared by both chatbots).
+ * Rich Markdown Engine for chat answers.
+ * Zero external parser dependencies — pure React Virtual DOM.
  *
- * Blocks: # to #### headings, ordered/unordered lists (2 levels), fenced code
- * with a copy button, blockquotes, horizontal rules, paragraphs.
- * Inline: **bold**, *italic*, `code`, [links](url).
+ * Supported Blocks:
+ * - Headings (H1 to H4) with hierarchy & subtle dividers
+ * - Markdown Tables (responsive, horizontal touch scroll, alternating rows)
+ * - GitHub Callouts/Alerts ([!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION])
+ * - Enhanced Code Blocks (syntax tokens, language badges, line numbers, 1-click copy)
+ * - KaTeX Math Formulas ($...$ inline and $$...$$ display)
+ * - Lists (ordered/unordered with arbitrary nesting)
+ * - Checklists (- [ ] and - [x] with styled checkboxes)
+ * - Blockquotes, horizontal rules, paragraphs
  *
- * Everything is rendered as React text nodes, never as raw HTML, so model
- * output cannot inject markup. Unclosed tokens (common mid-stream) stay literal.
+ * Inline:
+ * - **bold**, *italic*, `inline code`, [links](url), ==highlight==, $math$
  */
 
-// `num` keeps the number the model wrote (e.g. "0." or "100."), not a renumbering.
-type ListItem = {
+export type ListItem = {
   text: string;
   num: number;
   ordered: boolean;
+  checked?: boolean;
   children: ListItem[];
 };
 
-type Block =
+export type Block =
   | { kind: "heading"; level: number; text: string }
   | { kind: "paragraph"; lines: string[] }
   | { kind: "list"; ordered: boolean; items: ListItem[] }
   | { kind: "code"; lang: string; code: string }
   | { kind: "quote"; lines: string[] }
+  | {
+      kind: "alert";
+      alertType: CalloutType;
+      title?: string;
+      lines: string[];
+    }
+  | {
+      kind: "table";
+      headers: string[];
+      alignments: ("left" | "center" | "right")[];
+      rows: string[][];
+    }
+  | { kind: "math"; math: string; display: boolean }
   | { kind: "rule" };
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const LIST_ITEM = /^(\s*)([-*•]|\d+\.)\s+(.*)$/;
+const CHECKLIST_ITEM = /^\[([ xX])\]\s*(.*)$/;
 const FENCE = /^\s*```\s*([\w+-]*)\s*$/;
 const RULE = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
+
+function isTableSeparator(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes("-")) return false;
+  return /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(trimmed);
+}
+
+function splitTableRow(rowStr: string): string[] {
+  let trimmed = rowStr.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+  const escaped = trimmed.replace(/\\\|/g, "__ESCAPED_PIPE__");
+  return escaped
+    .split("|")
+    .map((cell) => cell.replace(/__ESCAPED_PIPE__/g, "|").trim());
+}
+
+function parseTableAlignments(sepStr: string): ("left" | "center" | "right")[] {
+  const cells = splitTableRow(sepStr);
+  return cells.map((cell) => {
+    const c = cell.trim();
+    const leftColon = c.startsWith(":");
+    const rightColon = c.endsWith(":");
+    if (leftColon && rightColon) return "center";
+    if (rightColon) return "right";
+    return "left";
+  });
+}
 
 export function parseBlocks(content: string): Block[] {
   const lines = content.replace(/\r\n?/g, "\n").split("\n");
@@ -48,23 +99,89 @@ export function parseBlocks(content: string): Block[] {
       continue;
     }
 
+    // 1. Fenced Code Block
     const fence = line.match(FENCE);
     if (fence) {
       const body: string[] = [];
       i++;
-      // An unclosed fence (still streaming) runs to the end of the content.
-      while (i < lines.length && !FENCE.test(lines[i])) body.push(lines[i++]);
+      while (i < lines.length && !FENCE.test(lines[i])) {
+        body.push(lines[i++]);
+      }
       i++;
       blocks.push({ kind: "code", lang: fence[1], code: body.join("\n") });
       continue;
     }
 
+    // 2. Block Math ($$...$$)
+    const mathMatch = line.match(/^\s*\$\$(.*)$/);
+    if (mathMatch) {
+      const rest = mathMatch[1].trim();
+      if (rest.endsWith("$$") && rest.length >= 2) {
+        // Single-line block math
+        const formula = rest.slice(0, -2).trim();
+        blocks.push({ kind: "math", math: formula, display: true });
+        i++;
+        continue;
+      }
+      // Multiline block math
+      const body: string[] = [];
+      if (rest) body.push(rest);
+      i++;
+      while (i < lines.length) {
+        const currentLine = lines[i];
+        if (currentLine.includes("$$")) {
+          const beforeEnd = currentLine.replace(/\$\$.*$/, "").trim();
+          if (beforeEnd) body.push(beforeEnd);
+          i++;
+          break;
+        }
+        body.push(currentLine);
+        i++;
+      }
+      blocks.push({ kind: "math", math: body.join("\n"), display: true });
+      continue;
+    }
+
+    // 3. Markdown Table (| Header 1 | Header 2 |)
+    if (
+      line.includes("|") &&
+      i + 1 < lines.length &&
+      isTableSeparator(lines[i + 1])
+    ) {
+      const headerLine = lines[i++];
+      const sepLine = lines[i++];
+      const headers = splitTableRow(headerLine);
+      const alignments = parseTableAlignments(sepLine);
+      const rows: string[][] = [];
+
+      while (i < lines.length) {
+        const rowLine = lines[i];
+        if (
+          !rowLine.trim() ||
+          !rowLine.includes("|") ||
+          FENCE.test(rowLine) ||
+          HEADING.test(rowLine) ||
+          RULE.test(rowLine) ||
+          /^\s*>/.test(rowLine)
+        ) {
+          break;
+        }
+        rows.push(splitTableRow(rowLine));
+        i++;
+      }
+
+      blocks.push({ kind: "table", headers, alignments, rows });
+      continue;
+    }
+
+    // 4. Horizontal Rule
     if (RULE.test(line)) {
       blocks.push({ kind: "rule" });
       i++;
       continue;
     }
 
+    // 5. Headings (# H1 to #### H4)
     const heading = line.match(HEADING);
     if (heading) {
       blocks.push({
@@ -76,53 +193,105 @@ export function parseBlocks(content: string): Block[] {
       continue;
     }
 
+    // 6. Blockquote or GitHub Alert (> [!NOTE])
     if (/^\s*>/.test(line)) {
-      const quote: string[] = [];
+      const quoteLines: string[] = [];
       while (i < lines.length && /^\s*>/.test(lines[i])) {
-        quote.push(lines[i++].replace(/^\s*>\s?/, ""));
+        quoteLines.push(lines[i++].replace(/^\s*>\s?/, ""));
       }
-      blocks.push({ kind: "quote", lines: quote });
+
+      if (quoteLines.length > 0) {
+        const firstLine = quoteLines[0].trim();
+        const alertMatch = firstLine.match(
+          /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i
+        );
+        if (alertMatch) {
+          const alertType = alertMatch[1].toLowerCase() as CalloutType;
+          const customTitle = alertMatch[2].trim() || undefined;
+          const bodyLines = quoteLines.slice(1);
+          blocks.push({
+            kind: "alert",
+            alertType,
+            title: customTitle,
+            lines: bodyLines,
+          });
+          continue;
+        }
+      }
+
+      blocks.push({ kind: "quote", lines: quoteLines });
       continue;
     }
 
-    const first = line.match(LIST_ITEM);
-    if (first) {
-      const ordered = /\d/.test(first[2]);
-      const list: Block = {
+    // 7. Lists & Checklists (ordered / unordered with arbitrary nesting)
+    const firstListMatch = line.match(LIST_ITEM);
+    if (firstListMatch) {
+      const ordered = /\d/.test(firstListMatch[2]);
+      const listBlock: Block = {
         kind: "list",
         ordered,
         items: [],
       };
+
+      const stack: { indent: number; item: ListItem }[] = [];
+
       while (i < lines.length) {
         const m = lines[i].match(LIST_ITEM);
         if (!m) break;
-        const nested = m[1].replace(/\t/g, "  ").length >= 2;
-        const sameKind = /\d/.test(m[2]) === ordered;
-        if (!nested && !sameKind) break; // a different top-level list starts here
-        const item = {
-          text: m[3],
-          num: parseInt(m[2], 10),
-          ordered: /\d/.test(m[2]),
+
+        const indent = m[1].replace(/\t/g, "  ").length;
+        const isItemOrdered = /\d/.test(m[2]);
+
+        if (indent === 0 && stack.length > 0 && isItemOrdered !== ordered) {
+          break;
+        }
+
+        const checkMatch = m[3].match(CHECKLIST_ITEM);
+        const checked = checkMatch
+          ? checkMatch[1].toLowerCase() === "x"
+          : undefined;
+        const itemText = checkMatch ? checkMatch[2] : m[3];
+
+        const newItem: ListItem = {
+          text: itemText,
+          num: parseInt(m[2], 10) || 1,
+          ordered: isItemOrdered,
+          checked,
           children: [],
         };
-        const parent = list.items[list.items.length - 1];
-        if (nested && parent) parent.children.push(item);
-        else list.items.push(item);
+
+        while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+          stack.pop();
+        }
+
+        if (stack.length === 0) {
+          listBlock.items.push(newItem);
+          stack.push({ indent, item: newItem });
+        } else {
+          const parent = stack[stack.length - 1].item;
+          parent.children.push(newItem);
+          stack.push({ indent, item: newItem });
+        }
+
         i++;
       }
-      blocks.push(list);
+
+      blocks.push(listBlock);
       continue;
     }
 
+    // 8. Normal Paragraph
     const para: string[] = [];
     while (
       i < lines.length &&
       lines[i].trim() &&
       !FENCE.test(lines[i]) &&
+      !lineStartsWithMath(lines[i]) &&
       !HEADING.test(lines[i]) &&
       !LIST_ITEM.test(lines[i]) &&
       !RULE.test(lines[i]) &&
-      !/^\s*>/.test(lines[i])
+      !/^\s*>/.test(lines[i]) &&
+      !isTableLine(lines, i)
     ) {
       para.push(lines[i++]);
     }
@@ -132,64 +301,131 @@ export function parseBlocks(content: string): Block[] {
   return blocks;
 }
 
-// ── Inline ────────────────────────────────────────────────────────────────
+function lineStartsWithMath(line: string): boolean {
+  return /^\s*\$\$/.test(line);
+}
 
-// _italic_ only at word boundaries, so snake_case identifiers stay intact.
+function isTableLine(lines: string[], idx: number): boolean {
+  if (!lines[idx].includes("|")) return false;
+  if (idx + 1 < lines.length && isTableSeparator(lines[idx + 1])) return true;
+  return false;
+}
+
+// ── Inline Renderer ────────────────────────────────────────────────────────
+
 const INLINE =
-  /(`[^`\n]+`)|(\*\*(.*?)\*\*)|(\[([^\]\n]+)\]\(([^)\s]+)\))|(\*([^*\s][^*\n]*?)\*)|((?<![\w])_([^_\n]+)_(?![\w]))/g;
+  /(`[^`\n]+`)|(\*\*(.*?)\*\*)|(\[([^\]\n]+)\]\(([^)\s]+)\))|((?<!\$)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\$))|(\*([^*\s][^*\n]*?)\*)|((?<![\w])_([^_\n]+)_(?![\w]))|(==([^=\n]+)==)/g;
 
 function safeHref(url: string): { href: string; external: boolean } | null {
   if (/^https?:\/\//i.test(url)) return { href: url, external: true };
   if (/^(\/|#|mailto:)/i.test(url)) return { href: url, external: false };
-  return null; // javascript:, data:, relative junk — rendered as plain text
+  return null;
 }
 
-/**
- * Wraps each word of plain text in a span keyed by its offset. Words already on screen keep
- * their key and stay put; only newly streamed words mount, so only they play the fade-in.
- */
-function fadeWords(text: string, base: number): React.ReactNode[] {
-  const out: React.ReactNode[] = [];
-  const re = /(\S+)(\s*)/g;
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    out.push(
-      <span key={`w${base + m.index}`} className="animate-stream-fade">
-        {m[1]}
-      </span>
+function MathView({
+  math,
+  display = false,
+}: {
+  math: string;
+  display?: boolean;
+}) {
+  const renderedHtml = useMemo(() => {
+    if (
+      typeof window !== "undefined" &&
+      (window as unknown as { katex?: { renderToString?: (tex: string, opts: unknown) => string } })
+        .katex?.renderToString
+    ) {
+      try {
+        return (
+          window as unknown as {
+            katex: { renderToString: (tex: string, opts: unknown) => string };
+          }
+        ).katex.renderToString(math, {
+          displayMode: display,
+          throwOnError: false,
+        });
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }, [math, display]);
+
+  if (renderedHtml) {
+    if (display) {
+      return (
+        <div
+          className="my-3 overflow-x-auto rounded-lg border border-border/80 bg-muted/30 p-3.5 text-center text-sm shadow-xs touch-pan-x"
+          dangerouslySetInnerHTML={{ __html: renderedHtml }}
+        />
+      );
+    }
+    return (
+      <span
+        className="mx-0.5 inline-block text-[0.95em]"
+        dangerouslySetInnerHTML={{ __html: renderedHtml }}
+      />
     );
-    if (m[2]) out.push(m[2]);
   }
-  return out;
+
+  // Graceful fallback when KaTeX is not loaded on page
+  if (display) {
+    return (
+      <div className="my-3 overflow-x-auto rounded-lg border border-border/80 bg-muted/40 p-3.5 text-xs shadow-xs touch-pan-x">
+        <div className="flex items-center gap-1.5 pb-1.5 mb-1.5 border-b border-border/50 text-[11px] font-medium text-muted-foreground">
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+            Math
+          </span>
+          <span className="font-mono text-[10px] text-muted-foreground/70">
+            LaTeX
+          </span>
+        </div>
+        <div className="py-1 text-center font-mono font-medium text-sm text-foreground">
+          {math}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <span className="mx-0.5 inline-flex items-center rounded border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
+      <span className="mr-1 select-none font-sans text-[10px] font-semibold text-muted-foreground">
+        fx
+      </span>
+      <span className="font-mono">{math}</span>
+    </span>
+  );
 }
 
-/** `fade`: animate newly streamed words (used for the block still being written). */
-export function renderInline(text: string, fade = false): React.ReactNode[] {
-  const plain = (start: number, end: number) =>
-    fade ? fadeWords(text.slice(start, end), start) : [text.slice(start, end)];
+export function renderInline(text: string): React.ReactNode[] {
+  const plain = (start: number, end: number) => [text.slice(start, end)];
   const out: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
-  // Fresh regex per call: renderInline recurses for bold/italic, and a shared
-  // global regex would have its lastIndex reset under the outer loop.
+
   const re = new RegExp(INLINE.source, "g");
   for (let m = re.exec(text); m; m = re.exec(text)) {
     if (m.index > last) out.push(...plain(last, m.index));
+
     if (m[1]) {
+      // Inline code `...`
       out.push(
         <code
           key={key++}
-          className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground"
+          className="rounded border border-border/60 bg-muted px-1 py-px font-mono text-[0.85em] text-rose-600 dark:text-rose-400"
         >
           {m[1].slice(1, -1)}
         </code>
       );
     } else if (m[2] !== undefined) {
+      // Bold **...**
       out.push(
         <strong key={key++} className="font-semibold text-foreground">
-          {renderInline(m[3], fade)}
+          {renderInline(m[3])}
         </strong>
       );
     } else if (m[4]) {
+      // Link [text](url)
       const link = safeHref(m[6]);
       out.push(
         link ? (
@@ -199,7 +435,7 @@ export function renderInline(text: string, fade = false): React.ReactNode[] {
             {...(link.external
               ? { target: "_blank", rel: "noopener noreferrer" }
               : {})}
-            className="font-medium text-foreground underline decoration-primary/50 underline-offset-2 hover:decoration-primary"
+            className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition-colors hover:decoration-blue-600 dark:text-blue-400 dark:decoration-blue-400/40 dark:hover:decoration-blue-400"
           >
             {m[5]}
           </a>
@@ -207,136 +443,131 @@ export function renderInline(text: string, fade = false): React.ReactNode[] {
           m[5]
         )
       );
-    } else if (m[7] || m[9]) {
+    } else if (m[7] !== undefined) {
+      // Inline math $...$
+      out.push(<MathView key={key++} math={m[8]} display={false} />);
+    } else if (m[9] || m[11]) {
+      // Italic *...* or _..._
       out.push(
         <em key={key++} className="italic">
-          {renderInline(m[8] ?? m[10], fade)}
+          {renderInline(m[10] ?? m[12])}
         </em>
+      );
+    } else if (m[13]) {
+      // Highlight ==...==
+      out.push(
+        <mark
+          key={key++}
+          className="rounded-sm bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/30"
+        >
+          {renderInline(m[14])}
+        </mark>
       );
     }
     last = m.index + m[0].length;
   }
+
   if (last < text.length) out.push(...plain(last, text.length));
   return out;
 }
 
-// ── Blocks ────────────────────────────────────────────────────────────────
+// ── Typographic Headings ──────────────────────────────────────────────────
 
-function CodeBlock({
-  lang,
-  code,
-  onRun,
+const HEADING_CLASSES: Record<number, string> = {
+  1: "text-lg font-bold pb-1.5 border-b border-border/50 text-foreground tracking-tight",
+  2: "text-base font-semibold pb-1 border-b border-border/30 text-foreground",
+  3: "text-sm font-semibold text-foreground",
+  4: "text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+};
+
+function HeadingView({
+  level,
+  text,
+  trailing,
 }: {
-  lang: string;
-  code: string;
-  onRun?: (code: string) => void;
+  level: number;
+  text: string;
+  trailing?: React.ReactNode;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const id = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(id);
-  }, [copied]);
-
-  const copy = () => {
-    navigator.clipboard?.writeText(code).then(
-      () => setCopied(true),
-      () => {}
-    );
-  };
-
-  const Icon = copied ? CheckIcon : CopyIcon;
-
-  // One-line snippet (e.g. a prompt suggestion): compact row, icon-only copy.
-  if ((!lang || lang === "text") && !code.includes("\n")) {
-    return (
-      <div className="group flex min-w-0 items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5">
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-mono text-xs text-foreground">
-          {code}
-        </code>
-        {onRun && (
-          <button
-            type="button"
-            onClick={() => onRun(code.trim())}
-            aria-label="Gửi lệnh này"
-            title="Gửi"
-            className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <PlayIcon className="h-3.5 w-3.5" />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={copy}
-          aria-label={copied ? "Đã sao chép" : "Sao chép"}
-          title={copied ? "Đã chép" : "Chép"}
-          className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-      <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-        <span className="font-mono text-xs text-muted-foreground">
-          {lang || "code"}
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          aria-label={copied ? "Đã sao chép" : "Sao chép code"}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {copied ? (
-            <CheckIcon className="h-3.5 w-3.5" />
-          ) : (
-            <CopyIcon className="h-3.5 w-3.5" />
-          )}
-          <span>{copied ? "Đã chép" : "Chép"}</span>
-        </button>
-      </div>
-      <pre className="overflow-x-auto p-3 font-mono text-xs leading-relaxed">
-        <code>{code}</code>
-      </pre>
-    </div>
+  const className = `pt-1.5 ${HEADING_CLASSES[level] || HEADING_CLASSES[4]}`;
+  const children = (
+    <>
+      {renderInline(text)}
+      {trailing}
+    </>
   );
+
+  switch (level) {
+    case 1:
+      return <h1 className={className}>{children}</h1>;
+    case 2:
+      return <h2 className={className}>{children}</h2>;
+    case 3:
+      return <h3 className={className}>{children}</h3>;
+    case 4:
+    default:
+      return <h4 className={className}>{children}</h4>;
+  }
 }
 
-const HEADING_TAG = ["h3", "h3", "h4", "h5"] as const;
-const HEADING_CLASS = [
-  "text-base font-semibold",
-  "text-sm font-semibold",
-  "text-sm font-semibold",
-  "text-sm font-medium",
-];
+// ── Lists and Checklists ──────────────────────────────────────────────────
 
 function ListView({
   ordered,
   items,
   trailing,
-  fade = false,
 }: {
   ordered: boolean;
   items: ListItem[];
   trailing?: React.ReactNode;
-  fade?: boolean;
 }) {
   const Tag = ordered ? "ol" : "ul";
   return (
-    <Tag className="space-y-1">
+    <Tag className="space-y-1.5 my-2">
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1;
+        const isChecklist = item.checked !== undefined;
+
         return (
-          <li key={idx} className="flex gap-2">
-            <span className="shrink-0 select-none tabular-nums text-muted-foreground">
-              {ordered ? `${item.num}.` : "•"}
-            </span>
+          <li key={idx} className="flex gap-2 items-start">
+            {isChecklist ? (
+              <span
+                role="checkbox"
+                aria-checked={item.checked}
+                className={`mt-0.5 inline-flex h-4 w-4 shrink-0 select-none items-center justify-center rounded border transition-colors ${
+                  item.checked
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border/80 bg-background/60"
+                }`}
+              >
+                {item.checked && (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-2.5 w-2.5"
+                    aria-hidden="true"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </span>
+            ) : (
+              <span className="shrink-0 select-none tabular-nums text-muted-foreground font-mono text-xs mt-0.5">
+                {ordered ? `${item.num}.` : "•"}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
-              {renderInline(item.text, fade)}
+              <span
+                className={
+                  item.checked ? "line-through text-muted-foreground/80" : ""
+                }
+              >
+                {renderInline(item.text)}
+              </span>
               {isLast && !item.children.length && trailing}
               {item.children.length > 0 && (
                 <div className="mt-1">
@@ -344,7 +575,6 @@ function ListView({
                     ordered={item.children[0].ordered}
                     items={item.children}
                     trailing={isLast ? trailing : undefined}
-                    fade={fade}
                   />
                 </div>
               )}
@@ -356,36 +586,35 @@ function ListView({
   );
 }
 
+// ── Block Dispatcher ──────────────────────────────────────────────────────
+
 function BlockView({
   block,
   trailing,
   onRun,
-  fade = false,
+  runningCode,
 }: {
   block: Block;
   trailing?: React.ReactNode;
   onRun?: (code: string) => void;
-  fade?: boolean;
+  runningCode?: string | null;
 }) {
   switch (block.kind) {
-    case "heading": {
-      const Tag = HEADING_TAG[block.level - 1];
+    case "heading":
       return (
-        <Tag
-          className={`pt-1 text-foreground ${HEADING_CLASS[block.level - 1]}`}
-        >
-          {renderInline(block.text, fade)}
-          {trailing}
-        </Tag>
+        <HeadingView
+          level={block.level}
+          text={block.text}
+          trailing={trailing}
+        />
       );
-    }
     case "paragraph":
       return (
-        <p>
+        <p className="my-1.5 leading-relaxed">
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line, fade)}
+              {renderInline(line)}
             </React.Fragment>
           ))}
           {trailing}
@@ -397,36 +626,74 @@ function BlockView({
           ordered={block.ordered}
           items={block.items}
           trailing={trailing}
-          fade={fade}
         />
       );
     case "code":
-      return <CodeBlock lang={block.lang} code={block.code} onRun={onRun} />;
+      return (
+        <CodeBlock
+          lang={block.lang}
+          code={block.code}
+          onRun={onRun}
+          runningCode={runningCode}
+          showLineNumbers={true}
+        />
+      );
+    case "alert":
+      return (
+        <CalloutAlert
+          type={block.alertType}
+          title={block.title}
+          lines={block.lines}
+          renderInline={renderInline}
+          trailing={trailing}
+        />
+      );
+    case "table":
+      return (
+        <MarkdownTable
+          headers={block.headers}
+          alignments={block.alignments}
+          rows={block.rows}
+          renderInline={renderInline}
+        />
+      );
+    case "math":
+      return <MathView math={block.math} display={block.display} />;
     case "quote":
       return (
-        <blockquote className="border-l-2 border-border pl-3 text-muted-foreground">
+        <blockquote className="my-2 border-l-2 border-border pl-3 text-muted-foreground italic">
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line, fade)}
+              {renderInline(line)}
             </React.Fragment>
           ))}
           {trailing}
         </blockquote>
       );
     case "rule":
-      return <hr className="border-border" />;
+      return <hr className="my-3 border-border/60" />;
   }
 }
+
+// ── Block Memoization Comparison ──────────────────────────────────────────
 
 function areListItemsEqual(a: ListItem[], b: ListItem[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].text !== b[i].text || a[i].num !== b[i].num || a[i].ordered !== b[i].ordered) {
+    if (
+      a[i].text !== b[i].text ||
+      a[i].num !== b[i].num ||
+      a[i].ordered !== b[i].ordered ||
+      a[i].checked !== b[i].checked
+    ) {
       return false;
     }
     if (a[i].children.length !== b[i].children.length) return false;
-    if (a[i].children.length > 0 && !areListItemsEqual(a[i].children, b[i].children)) {
+    if (
+      a[i].children.length > 0 &&
+      !areListItemsEqual(a[i].children, b[i].children)
+    ) {
       return false;
     }
   }
@@ -438,18 +705,18 @@ function areBlocksEqual(
     block: Block;
     trailing?: React.ReactNode;
     onRun?: (code: string) => void;
-    fade?: boolean;
+    runningCode?: string | null;
   },
   next: {
     block: Block;
     trailing?: React.ReactNode;
     onRun?: (code: string) => void;
-    fade?: boolean;
+    runningCode?: string | null;
   }
 ): boolean {
-  if (prev.fade !== next.fade) return false;
   if (prev.trailing !== next.trailing) return false;
   if (prev.onRun !== next.onRun) return false;
+  if (prev.runningCode !== next.runningCode) return false;
 
   const b1 = prev.block;
   const b2 = next.block;
@@ -480,6 +747,36 @@ function areBlocksEqual(
       }
       return true;
     }
+    case "alert": {
+      const a2 = b2 as typeof b1;
+      if (b1.alertType !== a2.alertType || b1.title !== a2.title) return false;
+      if (b1.lines.length !== a2.lines.length) return false;
+      for (let i = 0; i < b1.lines.length; i++) {
+        if (b1.lines[i] !== a2.lines[i]) return false;
+      }
+      return true;
+    }
+    case "table": {
+      const t2 = b2 as typeof b1;
+      if (b1.headers.length !== t2.headers.length) return false;
+      if (b1.alignments.length !== t2.alignments.length) return false;
+      if (b1.rows.length !== t2.rows.length) return false;
+      for (let i = 0; i < b1.headers.length; i++) {
+        if (b1.headers[i] !== t2.headers[i]) return false;
+        if (b1.alignments[i] !== t2.alignments[i]) return false;
+      }
+      for (let r = 0; r < b1.rows.length; r++) {
+        if (b1.rows[r].length !== t2.rows[r].length) return false;
+        for (let c = 0; c < b1.rows[r].length; c++) {
+          if (b1.rows[r][c] !== t2.rows[r][c]) return false;
+        }
+      }
+      return true;
+    }
+    case "math": {
+      const m2 = b2 as typeof b1;
+      return b1.math === m2.math && b1.display === m2.display;
+    }
     case "rule":
       return true;
     case "list": {
@@ -494,7 +791,7 @@ function areBlocksEqual(
 
 const MemoizedBlockView = React.memo(BlockView, areBlocksEqual);
 
-/** Thin caret shown at the end of a streaming answer. */
+/** Caret shown at the end of a streaming answer. */
 export function StreamingCaret() {
   return (
     <span
@@ -506,11 +803,35 @@ export function StreamingCaret() {
 
 export interface ChatMarkdownProps {
   content: string;
-  /** Show a caret after the last character (inline when the last block allows it). */
+  /** Show a caret after the last character */
   streaming?: boolean;
   className?: string;
-  /** Adds a run button to one-line snippets; called with the snippet text. */
+  /** Adds a run button to one-line snippets; called with the snippet text */
   onRun?: (code: string) => void;
+  /** Snippet currently running, so its run button shows a spinner */
+  runningCode?: string | null;
+}
+
+/**
+ * While streaming, close inline marks the model has opened but not yet closed on the last
+ * line, so `**bold` renders bold right away instead of showing raw `**` and then jumping to
+ * bold when the closing pair arrives. Inline marks never span lines, so only the last line
+ * matters; inside an open code fence nothing is touched.
+ */
+export function closeOpenInline(text: string): string {
+  const fences = text.match(/^\s*```/gm)?.length ?? 0;
+  if (fences % 2 === 1) return text;
+
+  const lineStart = text.lastIndexOf("\n") + 1;
+  // A lone trailing "*" is half of a closing "**" still on its way: hold it back.
+  let line = text.slice(lineStart).replace(/(^|[^*])\*$/, "$1");
+
+  const ticks = line.match(/`/g)?.length ?? 0;
+  if (ticks % 2 === 1) line += "`";
+  const bolds = line.match(/\*\*/g)?.length ?? 0;
+  if (bolds % 2 === 1) line += "**";
+
+  return text.slice(0, lineStart) + line;
 }
 
 export function ChatMarkdown({
@@ -518,24 +839,31 @@ export function ChatMarkdown({
   streaming = false,
   className = "",
   onRun,
+  runningCode = null,
 }: ChatMarkdownProps) {
-  // While streaming, hide a half-typed closing fence ("`" or "``") so it never flashes in a code block.
-  const visible = streaming ? content.replace(/\n[ \t]*`{1,2}$/, "") : content;
+  const visible = streaming
+    ? closeOpenInline(content.replace(/\n[ \t]*`{1,2}$/, ""))
+    : content;
   const blocks = parseBlocks(visible);
   const caret = streaming ? <StreamingCaret /> : null;
   const last = blocks[blocks.length - 1];
-  const caretInline = !!last && last.kind !== "code" && last.kind !== "rule";
+  const caretInline =
+    !!last &&
+    last.kind !== "code" &&
+    last.kind !== "rule" &&
+    last.kind !== "table" &&
+    last.kind !== "math";
 
   return (
     <div
-      className={`min-w-0 space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`}
+      className={`min-w-0 max-w-full space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`}
     >
       {blocks.map((block, idx) => (
         <MemoizedBlockView
           key={idx}
           block={block}
           onRun={onRun}
-          fade={streaming && idx === blocks.length - 1}
+          runningCode={runningCode}
           trailing={
             idx === blocks.length - 1 && caretInline ? caret : undefined
           }

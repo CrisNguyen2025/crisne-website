@@ -304,7 +304,7 @@ class NextGenRoadmapAgent:
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id)
-                yield {"type": "tool_end", "name": tool_name, "result": res_msg}
+                yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
                 async for ev in self._stream_text(res_msg, delay):
                     yield ev
                 return
@@ -348,7 +348,7 @@ class NextGenRoadmapAgent:
                 tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
                 ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
-                yield {"type": "tool_end", "name": tool_name, "result": item_msg}
+                yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
                 async for ev in self._stream_text(item_msg, delay):
                     yield ev
                 return
@@ -368,7 +368,7 @@ class NextGenRoadmapAgent:
                 )
                 yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
                 ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id)
-                yield {"type": "tool_end", "name": "create_layer", "result": layer_msg}
+                yield {"type": "tool_end", "name": "create_layer", "result": layer_msg, "is_error": not ok}
                 if not ok:
                     async for ev in self._stream_text(layer_msg, delay):
                         yield ev
@@ -376,7 +376,7 @@ class NextGenRoadmapAgent:
                 pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
                 yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
                 ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
-                yield {"type": "tool_end", "name": "create_item", "result": item_msg}
+                yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
                 async for ev in self._stream_text(f"{layer_msg}\n\n{item_msg}", delay):
                     yield ev
                 return
@@ -582,7 +582,7 @@ class NextGenRoadmapAgent:
 
             remembered_layer = session_ctx.active_layer_id
             ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id)
-            yield {"type": "tool_end", "name": tool_name, "result": result_msg}
+            yield {"type": "tool_end", "name": tool_name, "result": result_msg, "is_error": not ok}
 
             # The remembered layer may have been deleted since: forget it and ask again.
             if (
@@ -625,7 +625,7 @@ class NextGenRoadmapAgent:
                 end_step(retrieval_step, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
                 if (trace := current_trace()) is not None:
                     trace.flags["retrieval_error"] = True
-                yield {"type": "tool_end", "name": "search_live_knowledge", "result": "Lỗi tra cứu"}
+                yield {"type": "tool_end", "name": "search_live_knowledge", "result": "Lỗi tra cứu", "is_error": True}
                 yield step_event("retrieve", "retrieval", "error")
                 async for ev in self._stream_text(RETRIEVAL_ERROR_REPLY, delay):
                     yield ev
@@ -647,7 +647,7 @@ class NextGenRoadmapAgent:
             )
             if (trace := current_trace()) is not None:
                 trace.flags["retrieved"] = len(matches)
-            yield {"type": "tool_end", "name": "search_live_knowledge", "result": f"Tìm thấy {len(matches)} tài liệu"}
+            yield {"type": "tool_end", "name": "search_live_knowledge", "result": f"Tìm thấy {len(matches)} tài liệu", "is_error": False}
             owner = is_owner()
             yield step_event(
                 "retrieve",

@@ -221,7 +221,6 @@ export function RoadmapChatbotWidget({
 
   const isAtBottomRef = useRef(true);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
-  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   // "Stick to bottom": a 1px sentinel after the last message tells us whether the reader is
   // at the end. The browser reports only when that changes, so nothing runs while scrolling.
@@ -230,21 +229,21 @@ export function RoadmapChatbotWidget({
     const root = scrollRef.current;
     const sentinel = bottomSentinelRef.current;
     if (!isOpen || !root || !sentinel || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
+    const followObserver = new IntersectionObserver(
       ([entry]) => {
         isAtBottomRef.current = entry.isIntersecting;
-        setShowScrollBottom(!entry.isIntersecting);
       },
       { root, rootMargin: "0px 0px 80px 0px" }
     );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+    followObserver.observe(sentinel);
+    return () => followObserver.disconnect();
   }, [isOpen]);
 
   const scrollToBottom = () => {
-    // The observer flips "at bottom" and hides the button on arrival. Setting them here would
-    // stick if the reader scrolls away mid-animation, since the sentinel never came into view.
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    // Jump straight to the end, like Claude Code: no animated glide. The observer hides the
+    // button once the sentinel is in view.
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   };
 
   // Follow new content while the reader is at the end. Layout effect: the jump happens before
@@ -383,7 +382,6 @@ export function RoadmapChatbotWidget({
             toggleToolExpand={toggleToolExpand}
             scrollRef={scrollRef}
             bottomSentinelRef={bottomSentinelRef}
-            showScrollBottom={showScrollBottom}
             scrollToBottom={scrollToBottom}
           />
 

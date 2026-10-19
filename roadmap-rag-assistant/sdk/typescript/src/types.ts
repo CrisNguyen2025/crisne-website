@@ -7,6 +7,10 @@ export interface ToolCallResult {
   name: string;
   args: Record<string, unknown>;
   result: string;
+  status?: 'running' | 'success' | 'failed';
+  error?: string;
+  startedAt?: number;
+  endedAt?: number;
 }
 
 export interface ChatRequest {
@@ -24,6 +28,7 @@ export interface PageContext {
 
 export interface ChatResponse {
   message: string;
+  thinking?: string;
   tool_calls: ToolCallResult[];
   /** Final state of every step of the turn (streaming endpoint only). */
   steps?: AssistantStepEvent[];
@@ -114,6 +119,12 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  /** Reasoned thought stream (from <think> tags or SSE event: thinking) */
+  thinking?: string;
+  /** True while thinking tokens or initial deliberation are in progress */
+  isThinking?: boolean;
+  /** Total elapsed time spent thinking in ms */
+  thinkingDurationMs?: number;
   toolCalls?: ToolCallResult[];
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';

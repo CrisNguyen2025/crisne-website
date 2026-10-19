@@ -602,7 +602,8 @@ describe("Challenger M1-2: Streaming, Performance & Memoization Stress Suite", (
       );
 
       expect(markup).toContain("npm run test:streaming");
-      expect(markup).toContain("Gửi: npm run test:streaming");
+      expect(markup).toContain('aria-label="Gửi"');
+      expect(markup).not.toContain("Gửi: npm run test:streaming");
     });
 
     it("handles streaming token backtick trimming at the trailing edge (visible preprocessing)", () => {

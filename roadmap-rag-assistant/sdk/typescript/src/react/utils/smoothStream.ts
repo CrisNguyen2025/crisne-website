@@ -21,10 +21,12 @@ export interface SmoothStream {
   cancel: () => void;
 }
 
-/** ms per word when the backlog is small: ~35 words/s, a calm reading pace. */
-const BASE_DELAY_MS = 28;
-/** Never wait longer than one frame's worth of time per word when far behind. */
-const MIN_DELAY_MS = 4;
+/** ms per word at the steady pace: ~30 words/s, close to a model streaming live. */
+const BASE_DELAY_MS = 33;
+/** Fastest pace when far behind: ~70 words/s, still readable as a flow, not a dump. */
+const MIN_DELAY_MS = 14;
+/** A backlog longer than this at the steady pace speeds up to finish in about this time. */
+const CATCH_UP_MS = 8000;
 
 const WORD = /^\s*\S+\s+/;
 
@@ -60,9 +62,10 @@ export function createSmoothStream(emit: (chunk: string) => void): SmoothStream 
     carry += lastTime === null ? BASE_DELAY_MS : now - lastTime;
     lastTime = now;
 
-    // Aim to clear the current backlog in about one second.
+    // Hold a steady reading pace and only speed up for a very long backlog, aiming to clear it
+    // within CATCH_UP_MS. (Clearing it in ~1s made a whole answer appear almost at once.)
     const backlog = countWords(buffer) || 1;
-    const delay = Math.max(MIN_DELAY_MS, Math.min(BASE_DELAY_MS, 1000 / backlog));
+    const delay = Math.max(MIN_DELAY_MS, Math.min(BASE_DELAY_MS, CATCH_UP_MS / backlog));
 
     let out = "";
     while (carry >= delay) {

@@ -67,6 +67,9 @@ async def _sse_stream_generator(
                 yield f"event: tool_start\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "tool_end":
                 tool_record = {"name": ev.get("name"), "result": ev.get("result", "")}
+                # Only when the agent knows the outcome; the client falls back otherwise
+                if "is_error" in ev:
+                    tool_record["is_error"] = bool(ev["is_error"])
                 executed_tools.append(tool_record)
                 yield f"event: tool_end\ndata: {json.dumps(tool_record, ensure_ascii=False)}\n\n"
             elif ev_type == "token":
@@ -99,8 +102,13 @@ async def _sse_stream_generator(
 
                     elif event_name == "on_tool_end":
                         name = event.get("name", "tool")
-                        output = str(event.get("data", {}).get("output", ""))
+                        raw_output = event.get("data", {}).get("output", "")
+                        output = str(raw_output)
                         tool_record = {"name": name, "result": output}
+                        # LangChain marks a failed tool call on its ToolMessage
+                        status = getattr(raw_output, "status", None)
+                        if status in ("success", "error"):
+                            tool_record["is_error"] = status == "error"
                         executed_tools.append(tool_record)
                         yield f"event: tool_end\ndata: {json.dumps(tool_record, ensure_ascii=False)}\n\n"
 

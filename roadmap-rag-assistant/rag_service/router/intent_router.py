@@ -64,6 +64,15 @@ class IntentRouter:
                 needs_cud_extraction=False,
             )
 
+        # 1c. Prompt suggestions ("gợi ý", "prompt mẫu") are chitchat-style help, not a search.
+        # "gợi ý bài về X" still searches, so a topic qualifier ("về") keeps it on the knowledge path.
+        if re.search(r"\b(?:gợi\s*ý|goi\s*y|prompt\s+mẫu|vài\s+prompt|ví\s+dụ\s+prompt)\b", lower) and not re.search(r"\bvề\b", lower):
+            return IntentClassificationResult(
+                intent=IntentType.CHITCHAT,
+                confidence=0.9,
+                needs_cud_extraction=False,
+            )
+
         # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic")
         query_indicators = [
             "tìm", "kiếm", "tra cứu", "có bài nào", "nội dung", "danh sách", "liệt kê", "list",

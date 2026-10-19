@@ -36,6 +36,25 @@ export type {
   FeedbackDetail,
 } from './react';
 
+// Rich Markdown Engine & Components
+export {
+  ChatMarkdown,
+  parseBlocks,
+  renderInline,
+  StreamingCaret,
+} from './react/ChatMarkdown';
+export type { ChatMarkdownProps, Block, ListItem } from './react/ChatMarkdown';
+export { CodeBlock } from './react/components/CodeBlock';
+export type { CodeBlockProps } from './react/components/CodeBlock';
+export { MarkdownTable } from './react/components/MarkdownTable';
+export type { MarkdownTableProps } from './react/components/MarkdownTable';
+export { CalloutAlert } from './react/components/CalloutAlert';
+export type { CalloutAlertProps, CalloutType } from './react/components/CalloutAlert';
+export { ThoughtProcess } from './react/components/ThoughtProcess';
+export type { ThoughtProcessProps } from './react/components/ThoughtProcess';
+export { ToolExecutionCard } from './react/components/ToolExecutionCard';
+export type { ToolExecutionCardProps } from './react/components/ToolExecutionCard';
+
 // Icons & Formatters for UI customizers
 export * from './react/icons';
 export * from './react/utils/formatters';

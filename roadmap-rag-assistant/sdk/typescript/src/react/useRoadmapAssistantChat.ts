@@ -136,7 +136,10 @@ export function useRoadmapAssistantChat(
     if (initialMessages && initialMessages.length > 0) {
       return initialMessages;
     }
-    if (restored) return restored.messages;
+    // A restored greeting alone is rebuilt so it always matches the current greeting format
+    const onlyGreeting =
+      restored?.messages.length === 1 && restored.messages[0].id === WELCOME_MESSAGE_ID;
+    if (restored && !onlyGreeting) return restored.messages;
     return [buildWelcomeMessage(getContext?.(), canWrite)];
   });
   // Access is often confirmed after mount: rebuild the greeting only while nothing was sent yet
@@ -342,15 +345,8 @@ export function useRoadmapAssistantChat(
               );
             },
 
-            onToolEnd: (name, result) => {
+            onToolEnd: (name, result, isFailed) => {
               setActiveTool(null);
-              const isFailed = Boolean(
-                typeof result === 'string' &&
-                (result.toLowerCase().startsWith('error') ||
-                 result.toLowerCase().includes('failed') ||
-                 result.toLowerCase().includes('thất bại') ||
-                 result.toLowerCase().startsWith('exception'))
-              );
               const status: 'failed' | 'success' = isFailed ? 'failed' : 'success';
 
               setMessages((prev) =>

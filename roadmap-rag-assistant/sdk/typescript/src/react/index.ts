@@ -13,6 +13,22 @@ export type {
   FeedbackDetail,
 } from './types';
 
+// Rich Markdown Engine & Components
+export { ChatMarkdown, parseBlocks, renderInline, StreamingCaret } from './ChatMarkdown';
+export type { ChatMarkdownProps, Block, ListItem } from './ChatMarkdown';
+export { CodeBlock } from './components/CodeBlock';
+export type { CodeBlockProps } from './components/CodeBlock';
+export { MarkdownTable } from './components/MarkdownTable';
+export type { MarkdownTableProps } from './components/MarkdownTable';
+export { CalloutAlert } from './components/CalloutAlert';
+export type { CalloutAlertProps, CalloutType } from './components/CalloutAlert';
+
+// Thinking Process & Tool Execution UX
+export { ThoughtProcess } from './components/ThoughtProcess';
+export type { ThoughtProcessProps } from './components/ThoughtProcess';
+export { ToolExecutionCard } from './components/ToolExecutionCard';
+export type { ToolExecutionCardProps } from './components/ToolExecutionCard';
+
 // Icons & Presentation Assets
 export * from './icons';
 

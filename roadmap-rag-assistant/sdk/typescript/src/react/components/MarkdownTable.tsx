@@ -6,8 +6,7 @@ export interface MarkdownTableProps {
   headers: string[];
   alignments: ("left" | "center" | "right")[];
   rows: string[][];
-  renderInline: (text: string, fade?: boolean) => React.ReactNode[];
-  fade?: boolean;
+  renderInline: (text: string) => React.ReactNode[];
 }
 
 export function MarkdownTable({
@@ -15,7 +14,6 @@ export function MarkdownTable({
   alignments,
   rows,
   renderInline,
-  fade = false,
 }: MarkdownTableProps) {
   const getAlignmentClass = (align?: "left" | "center" | "right") => {
     switch (align) {
@@ -43,7 +41,7 @@ export function MarkdownTable({
                     scope="col"
                     className={`px-3.5 py-2 font-medium tracking-wide first:pl-4 last:pr-4 ${alignClass}`}
                   >
-                    {renderInline(header, fade)}
+                    {renderInline(header)}
                   </th>
                 );
               })}
@@ -63,7 +61,7 @@ export function MarkdownTable({
                     key={colIdx}
                     className={`px-3.5 py-2 text-foreground align-top first:pl-4 last:pr-4 ${alignClass}`}
                   >
-                    {renderInline(cell, fade)}
+                    {renderInline(cell)}
                   </td>
                 );
               })}
