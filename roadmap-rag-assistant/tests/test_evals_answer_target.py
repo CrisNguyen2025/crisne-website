@@ -64,7 +64,7 @@ def test_answer_seeds_masked_history_and_runs_as_visitor(monkeypatch):
     from rag_service.auth import current_actor
 
     seen_actor = []
-    target = RoadmapTarget(mode="fts", answer="llm")
+    target = RoadmapTarget(mode="fts", answer="llm", cache="off")
     agent = NextGenRoadmapAgent(llm_model=_EchoHistoryLlm())
     real = agent.astream_events
 
@@ -88,7 +88,7 @@ def test_answer_seeds_masked_history_and_runs_as_visitor(monkeypatch):
 def test_quota_hit_answer_is_unavailable_not_a_wrong_answer(monkeypatch):
     from evals.kit.target import TargetUnavailable
 
-    target = RoadmapTarget(mode="fts", answer="llm")
+    target = RoadmapTarget(mode="fts", answer="llm", cache="off")
     target._get_agent = lambda: None
     target._loop = asyncio.new_event_loop()
 
@@ -105,3 +105,74 @@ def test_quota_hit_answer_is_unavailable_not_a_wrong_answer(monkeypatch):
     with _pytest.raises(TargetUnavailable) as exc:
         target.answer("xin chào", [])
     assert exc.value.reason == "rate_limited"
+
+
+def test_answer_cache_skips_the_llm_on_the_second_identical_question(tmp_path, monkeypatch):
+    import evals.target as target_mod
+
+    monkeypatch.setattr(target_mod, "CACHE_FILE", tmp_path / "answers.json")
+    target = RoadmapTarget(mode="fts", answer="llm", cache="on")
+    calls = []
+
+    async def fake_collect(text, thread_id):
+        calls.append(text)
+        return [
+            {"type": "step", "id": "route", "status": "done", "intent": "chitchat"},
+            {"type": "step", "id": "answer", "status": "done", "mode": "llm"},
+            {"type": "token", "delta": "Bạn tên là Cris."},
+        ]
+
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+    monkeypatch.setattr(target, "_collect", fake_collect)
+    first = target.answer("tôi tên gì?", [{"role": "user", "content": "tôi là Cris"}])
+    second = target.answer("tôi tên gì?", [{"role": "user", "content": "tôi là Cris"}])
+    assert calls == ["tôi tên gì?"]  # second call served from the cache
+    assert first == second and second.text == "Bạn tên là Cris." and second.behavior == "answer"
+
+    # A different history is a different question
+    target.answer("tôi tên gì?", [])
+    assert len(calls) == 2
+
+
+def test_cache_off_always_calls_the_agent(tmp_path, monkeypatch):
+    import evals.target as target_mod
+
+    monkeypatch.setattr(target_mod, "CACHE_FILE", tmp_path / "answers.json")
+    target = RoadmapTarget(mode="fts", answer="llm", cache="off")
+    calls = []
+
+    async def fake_collect(text, thread_id):
+        calls.append(text)
+        return [{"type": "step", "id": "answer", "status": "done", "mode": "llm"}, {"type": "token", "delta": "ok"}]
+
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+    monkeypatch.setattr(target, "_collect", fake_collect)
+    target.answer("q", [])
+    target.answer("q", [])
+    assert len(calls) == 2 and not (tmp_path / "answers.json").exists()
+
+
+def test_fallback_answers_are_not_cached(tmp_path, monkeypatch):
+    import pytest as _pytest
+
+    import evals.target as target_mod
+    from evals.kit.target import TargetUnavailable
+
+    cache_file = tmp_path / "answers.json"
+    monkeypatch.setattr(target_mod, "CACHE_FILE", cache_file)
+    target = RoadmapTarget(mode="fts", answer="llm", cache="on")
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+
+    async def rate_limited(text, thread_id):
+        return [
+            {"type": "step", "id": "answer", "status": "done", "mode": "template", "fallback_reason": "rate_limited"},
+            {"type": "token", "delta": "Xin chào! Tôi là Abot"},
+        ]
+
+    monkeypatch.setattr(target, "_collect", rate_limited)
+    with _pytest.raises(TargetUnavailable):
+        target.answer("tôi tên gì?", [])
+    assert not cache_file.exists()

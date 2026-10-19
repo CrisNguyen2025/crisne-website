@@ -9,11 +9,15 @@ provider and spends quota, so the default offline run leaves it out.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import uuid
+from pathlib import Path
 
 from evals.corpus_export import DEV_DB, build_documents, load_knowledge, read_existing
 from evals.kit.corpus import content_hash
 from evals.kit.target import Answer, Hit, RouteResult, TargetUnavailable
+from rag_service.config import settings
 from rag_service.rag.ingestion import KnowledgeDocument
 from rag_service.rag.vector_store import HybridVectorStore
 from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
@@ -21,11 +25,28 @@ from rag_service.router.intent_router import IntentRouter
 
 MODES = ("fts", "vector", "hybrid")
 ANSWER_MODES = ("off", "llm")
+CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
+# Code whose change can change an answer; any edit here invalidates the whole cache
+CODE_GLOBS = ("rag_service/agent.py", "rag_service/generation/*.py", "rag_service/rag/*.py", "rag_service/router/*.py")
+
+
+def _code_fingerprint() -> str:
+    root = Path(__file__).resolve().parents[1]
+    digest = hashlib.sha256()
+    for pattern in CODE_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            digest.update(path.name.encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 class RoadmapTarget:
     name = "roadmap"
-    def __init__(self, mode: str = "hybrid", answer: str = "off"):
+    def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on"):
+        if cache not in ("on", "off"):
+            raise ValueError(f"cache must be 'on' or 'off', got {cache!r}")
+        self._cache_on = cache == "on"
+        self._cache: dict | None = None
         if mode not in MODES:
             raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
         if answer not in ANSWER_MODES:
@@ -104,6 +125,12 @@ class RoadmapTarget:
         from rag_service.pii import mask_pii
         from rag_service.state import session_store
 
+        key = self._cache_key(text, history)
+        if self._cache_on:
+            hit = self._load_cache().get(key)
+            if hit is not None:
+                return Answer(text=hit["text"], behavior=hit["behavior"], citations=hit["citations"])
+
         self._get_agent()
         thread_id = f"eval-{uuid.uuid4()}"
         # Earlier turns go straight into memory, masked as the agent stores them, so a sample tests how
@@ -120,11 +147,37 @@ class RoadmapTarget:
 
         reply = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
         steps = {e["id"]: e for e in events if e.get("type") == "step" and e.get("status") != "running"}
-        # The LLM was rate limited or down: the template/context answer is not what this sample measures
+        # The LLM was rate limited or down: the template/context answer is not what this sample measures.
+        # Checked before caching, so a fallback is never stored as if it were the model's answer.
         reason = steps.get("answer", {}).get("fallback_reason")
         if reason in ("rate_limited", "llm_error"):
             raise TargetUnavailable(reason)
-        return Answer(text=reply, behavior=self._behavior(reply, steps), citations=self._citations(events))
+        answer_obj = Answer(text=reply, behavior=self._behavior(reply, steps), citations=self._citations(events))
+        if self._cache_on:
+            self._store_cache(key, answer_obj)
+        return answer_obj
+
+    def _cache_key(self, text: str, history: list[dict]) -> str:
+        """Model, code, corpus and the exact question: change any of them and the answer is recomputed."""
+        payload = {
+            "model": settings.llm_model,
+            "code": _code_fingerprint(),
+            "corpus": self.corpus_fingerprint()["sha256"],
+            "text": text,
+            "history": history,
+        }
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+    def _load_cache(self) -> dict:
+        if self._cache is None:
+            self._cache = json.loads(CACHE_FILE.read_text(encoding="utf-8")) if CACHE_FILE.exists() else {}
+        return self._cache
+
+    def _store_cache(self, key: str, answer: Answer) -> None:
+        cache = self._load_cache()
+        cache[key] = {"text": answer.text, "behavior": answer.behavior, "citations": answer.citations}
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
 
     @staticmethod
     def _behavior(reply: str, steps: dict) -> str:
@@ -147,5 +200,5 @@ class RoadmapTarget:
         return {"source": "prisma/dev.db", "doc_count": len(documents), "sha256": content_hash(documents)}
 
 
-def build_target(mode: str = "hybrid", answer: str = "off") -> RoadmapTarget:
-    return RoadmapTarget(mode=mode, answer=answer)
+def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on") -> RoadmapTarget:
+    return RoadmapTarget(mode=mode, answer=answer, cache=cache)

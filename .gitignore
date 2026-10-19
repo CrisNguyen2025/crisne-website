@@ -77,3 +77,6 @@ __pycache__/
 
 # RAG conversation memory (RAG_HISTORY_DB)
 roadmap-rag-assistant/data/history.db*
+
+# Eval answer cache (roadmap-rag-assistant/evals/target.py)
+roadmap-rag-assistant/evals/.cache/
