@@ -131,7 +131,7 @@ def test_greeting_examples_name_real_topic_and_layer(monkeypatch):
     from rag_service.agent import NextGenRoadmapAgent
 
     adapter = _GreetingAdapter([{"slug": "ai-architecture", "layers": [{"title": "Database"}]}])
-    monkeypatch.setattr("rag_service.agent.get_adapter", lambda: adapter)
+    monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: adapter)
     reply = asyncio.run(NextGenRoadmapAgent._greeting_reply(None))
     assert "trong topic ai-architecture" in reply and "vào layer Database" in reply
 
@@ -139,7 +139,7 @@ def test_greeting_examples_name_real_topic_and_layer(monkeypatch):
 def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
     from rag_service.agent import NextGenRoadmapAgent
 
-    monkeypatch.setattr("rag_service.agent.get_adapter", lambda: _GreetingAdapter([]))
+    monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: _GreetingAdapter([]))
     reply = asyncio.run(NextGenRoadmapAgent._greeting_reply(None))
     assert "trong topic <slug topic>" in reply and "vào layer <tên layer>" in reply
     # No invented names like "be", "fe" or "aaa"

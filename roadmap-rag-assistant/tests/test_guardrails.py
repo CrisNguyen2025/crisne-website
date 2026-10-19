@@ -206,7 +206,7 @@ def test_batch_layer_delete_is_refused(monkeypatch):
         async def get_topic(self, slug):
             return {"slug": slug}
 
-    monkeypatch.setattr("rag_service.agent.get_adapter", lambda: _Topics())
+    monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: _Topics())
     set_actor("owner")
     text, events = _reply("xóa layer mock 1 và mock 2 trong topic ai ngay", "batch-delete")
     assert text == BATCH_LAYER_DELETE_REPLY

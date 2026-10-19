@@ -62,7 +62,7 @@ class _FakeAdapter:
 @pytest.fixture
 def adapter(monkeypatch):
     fake = _FakeAdapter({"ai": "AI", "fe": "Frontend"})
-    monkeypatch.setattr("rag_service.agent.get_adapter", lambda: fake)
+    monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: fake)
     return fake
 
 

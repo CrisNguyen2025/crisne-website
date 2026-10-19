@@ -23,6 +23,7 @@ from rag_service.execution.executor import ActionExecutor
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.delivery import record_turn
 from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS, RoadmapAgentActions
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.observability import (
@@ -62,20 +63,17 @@ from rag_service.router.grounding import (
 )
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
-from rag_service.tools import ALL_TOOLS, get_adapter
-from rag_service.tools.layer_resolver import LayerResolution, resolve_layer, topic_named_in_message
+from rag_service.tools import ALL_TOOLS
+from rag_service.tools.layer_resolver import resolve_layer, topic_named_in_message
 from rag_service.tools.rag_tools import (
     generate_roadmap_from_template,
     preview_roadmap_plan,
-    search_roadmap_templates,
 )
 
 
 # Placeholders the anaphora resolver leaves when no topic/layer is known from context
 # Below this the intent router only guessed (its default fallback is 0.5)
 UNCLEAR_CONFIDENCE = 0.7
-ANAPHORA_TARGETS = ("CONTEXT_ACTIVE", "đó", "nó", "this", "it")
-LAYER_VERBS = {ActionType.CREATE: "tạo", ActionType.DELETE: "xóa", ActionType.UPDATE: "sửa"}
 
 
 def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> None:
@@ -88,7 +86,7 @@ def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> N
     )
 
 
-class NextGenRoadmapAgent:
+class NextGenRoadmapAgent(RoadmapAgentActions):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
     def __init__(self, llm_model: Optional[object] = None, tools: Optional[list] = None) -> None:
@@ -98,22 +96,6 @@ class NextGenRoadmapAgent:
         self.router = IntentRouter(llm_model=llm_model)
         self.extractor = StructuredEntityExtractor(llm_model=llm_model)
         self.executor = ActionExecutor()
-
-    async def _ask_layer_choice(
-        self, session_ctx, action: StructuredRoadmapAction, topic_slug: str, delay: float
-    ) -> AsyncGenerator[dict, None]:
-        """Park an item create and ask the user to create a default or named layer for it."""
-        session_ctx.pending_layer_choice = action
-        session_ctx.pending_layer_topic = topic_slug
-        titles = ", ".join(f"**{e.title}**" for e in action.entities)
-        ask = (
-            f"Chưa xác định được layer để thêm {titles} trong topic `{topic_slug}`.\n\n"
-            "**Chọn layer cho bài học:**\n"
-            "1. Tạo layer mặc định **General** — gõ `tạo layer mặc định`\n"
-            "2. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`"
-        )
-        async for ev in self._stream_text(ask, delay):
-            yield ev
 
     def _llm_fallback_reason(self, failed: bool | str) -> Optional[str]:
         """Why an answer did not come from the LLM: none configured, the call failed, or rate limited.
@@ -125,111 +107,6 @@ class NextGenRoadmapAgent:
         if self.llm is None:
             return None
         return "llm_error" if failed else "rate_limited"
-
-    async def _topic_known(self, slug: str) -> bool:
-        """True when the topic exists; a failed lookup counts as known, so the executor can still try."""
-        try:
-            return await get_adapter().get_topic(slug) is not None
-        except Exception as exc:
-            print(f"[agent] Topic check for '{slug}' skipped: {exc}")
-            return True
-
-    async def _ask_topic_choice(
-        self, action: StructuredRoadmapAction, identifier: Optional[str], delay: float
-    ) -> AsyncGenerator[dict, None]:
-        """Ask which topic a layer action belongs to, listing the existing topics. Nothing is written."""
-        try:
-            topics = await get_adapter().list_topics()
-        except Exception as exc:
-            print(f"[agent] Topic list skipped: {exc}")
-            topics = []
-        listing = "\n".join(f"- `{t.get('slug')}` — {t.get('title')}" for t in topics[:15]) or "_(chưa có topic nào)_"
-        if identifier and identifier not in ANAPHORA_TARGETS:
-            head = f"Không tìm thấy topic `{identifier}`."
-        else:
-            head = "Chưa xác định được topic cho thao tác này."
-        verb = LAYER_VERBS.get(action.action, "")
-        titles = ", ".join(e.title for e in action.entities) or "<tên layer>"
-        ask = (
-            f"{head}\n\n**Các topic hiện có:**\n{listing}\n\n"
-            f"Hãy gửi lại kèm tên topic, ví dụ: `{verb} layer {titles} trong topic <slug>`."
-        )
-        async for ev in self._stream_text(ask, delay):
-            yield ev
-
-    async def _greeting_reply(self) -> str:
-        """Greeting whose examples name a topic and layer that exist, so they work when copied.
-
-        With no data (or the API down) the examples keep <placeholders> instead of made-up names.
-        """
-        topic_slug, layer_title = "<slug topic>", "<tên layer>"
-        try:
-            adapter = get_adapter()
-            topics = await adapter.list_topics()
-            if topics:
-                topic_slug = topics[0].get("slug") or topic_slug
-                layers = (await adapter.get_topic(topic_slug) or {}).get("layers") or []
-                if layers:
-                    layer_title = layers[0].get("title") or layer_title
-        except Exception as exc:
-            print(f"[agent] Greeting examples use placeholders: {exc}")
-        return (
-            "Xin chào! Tôi là **Abot** — trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
-            "Bạn có thể yêu cầu tôi:\n"
-            "- 🗺️ **Tạo topic**: `tạo topic <tên topic>`\n"
-            f"- 📑 **Tạo layer**: `tạo layer <tên layer> trong topic {topic_slug}`\n"
-            f"- 📖 **Thêm bài học**: `thêm bài học <tên bài> vào layer {layer_title}`\n"
-            "- 🧠 **Tra cứu tri thức**: `Website có bài nào về Docker hoặc Database không?`\n"
-            "- 📋 **Lập kế hoạch**: `/plan Lộ trình Next.js Fullstack`\n\n"
-            "_Tên đã có sẵn sẽ không bị tạo trùng._"
-        )
-
-    async def _ask_target_choice(
-        self,
-        session_ctx,
-        action: StructuredRoadmapAction,
-        identifier: str,
-        res: LayerResolution,
-        topic_slug: Optional[str],
-        delay: float,
-    ) -> AsyncGenerator[dict, None]:
-        """Park a create whose target layer is unknown or ambiguous and ask the user to pick one."""
-        topic_slug = res.topic_slug or topic_slug
-        options = res.candidates
-        if res.status == "not_found" and topic_slug:
-            options = [c for c in options if c["topic_slug"] == topic_slug] or options
-        options = options[:10]
-
-        if res.status == "topic" and not options:
-            # The topic exists but has no layer yet: offer to create one.
-            action.target_parent_identifier = None
-            async for ev in self._ask_layer_choice(session_ctx, action, topic_slug, delay):
-                yield ev
-            return
-
-        session_ctx.pending_layer_choice = action
-        session_ctx.pending_layer_topic = topic_slug
-        session_ctx.pending_layer_options = options
-
-        titles = ", ".join(f"**{e.title}**" for e in action.entities)
-        if res.status == "ambiguous":
-            head = f"`{identifier}` khớp nhiều layer. Bạn muốn thêm {titles} vào layer nào?"
-        elif res.status == "topic":
-            head = f"`{identifier}` là topic **{topic_slug}**. Bạn muốn thêm {titles} vào layer nào của topic này?"
-        else:
-            head = f"Không tìm thấy topic hay layer nào tên `{identifier}`. Bạn muốn thêm {titles} vào đâu?"
-
-        lines = [
-            f"{i}. **{o['title'] or o['shortTag']}**" + (f" — topic `{o['topic_slug']}`" if o["topic_slug"] != topic_slug else "")
-            for i, o in enumerate(options, 1)
-        ]
-        tail = ["", "Gõ **số thứ tự** hoặc **tên layer** để chọn."]
-        if topic_slug:
-            tail.append(f"Hoặc gõ `tạo layer <tên>` để tạo layer mới trong topic `{topic_slug}`.")
-        tail.append("Gõ `hủy` để bỏ qua.")
-        ask = "\n".join([head, "", *lines, *tail])
-        async for ev in self._stream_text(ask, delay):
-            yield ev
 
     async def _stream_text(self, text: str, delay: float) -> AsyncGenerator[dict, None]:
         """Stream words over SSE. `delay` (seconds per word) adds an optional typing effect; 0 disables it."""
