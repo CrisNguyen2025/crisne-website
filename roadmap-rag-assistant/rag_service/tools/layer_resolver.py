@@ -40,6 +40,42 @@ def _pick(matches: list[dict]) -> LayerResolution | None:
     return None
 
 
+# "… của topic Machine Learning", "in roadmap fe": the phrase after it names a topic
+_TOPIC_MENTION = re.compile(
+    r"(?:của|trong|thuộc|ở|on|in|of)\s+(?:topic|lộ\s+trình|chủ\s+đề|roadmap)\s+([^.,;:\n]+)", re.IGNORECASE
+)
+
+
+def topic_named_in(text: str, topics: list[dict]) -> str | None:
+    """Slug of the topic the message names explicitly, matched on slug, title or shortCode.
+
+    The phrase may run on ("Machine Learning tiêu đề …"), so a name only has to start it; the longest
+    matching name wins.
+    """
+    for m in _TOPIC_MENTION.finditer(text or ""):
+        phrase = re.sub(r"\s+", " ", m.group(1)).strip().casefold()
+        best: tuple[int, str] | None = None
+        for topic in topics:
+            for name in (topic.get("slug"), topic.get("title"), topic.get("shortCode")):
+                n = re.sub(r"\s+", " ", (name or "")).strip().casefold()
+                if n and (phrase == n or phrase.startswith(n + " ")) and (best is None or len(n) > best[0]):
+                    best = (len(n), topic["slug"])
+        if best:
+            return best[1]
+    return None
+
+
+async def topic_named_in_message(text: str) -> str | None:
+    """topic_named_in against the live topics; None when they cannot be loaded."""
+    from rag_service.tools import get_adapter
+
+    try:
+        return topic_named_in(text, await get_adapter().list_topics())
+    except Exception as exc:
+        print(f"[resolve_layer] Could not load topics: {exc}")
+        return None
+
+
 async def _load_layers() -> tuple[list[dict], list[dict]]:
     from rag_service.tools import get_adapter
 

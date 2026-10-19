@@ -48,15 +48,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         shortTag: shortTag.toUpperCase(),
         subtitle: subtitle || '',
         order: roadmap._count.layers + 1,
-        groups: {
-          create: [
-            {
-              level: 'core',
-              title: '🟢 Core',
-              order: 1,
-            },
-          ],
-        },
+        // No group yet: the first item of a level creates it (findOrCreateGroup), so empty layers stay empty
       },
       include: {
         groups: {

@@ -22,6 +22,13 @@ from rag_service.rag.vector_store import HybridVectorStore
 INDEX_TTL_SECONDS = 30.0
 
 
+def knowledge_href(doc: KnowledgeDocument) -> str:
+    """Page link for a retrieved document: items open the lesson itself (?item= accepts its id)."""
+    if doc.doc_type == "item" and doc.id:
+        return f"/?topic={doc.topic_slug}&item={doc.id}"
+    return f"/?topic={doc.topic_slug}"
+
+
 class HybridRagEngine:
     """Enterprise RAG engine supporting live database search and blueprint generation."""
 
@@ -79,6 +86,10 @@ class HybridRagEngine:
             self._sync_task = asyncio.create_task(self.sync_live_database())
         return self._vector_store.hybrid_search(query, limit=limit)
 
+    def known_item_ids(self) -> set[str]:
+        """Ids of every item in the current index (valid targets for `&item=` links)."""
+        return {d.id for d in self._vector_store._docs_map.values() if d.doc_type == "item"}
+
     def known_topic_slugs(self) -> set[str]:
         """Slugs of every roadmap in the current index (valid targets for `/?topic=` links)."""
         return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}
@@ -92,7 +103,7 @@ class HybridRagEngine:
         for doc, score in matches:
             if doc.doc_type == "item":
                 lines.append(
-                    f"\n#### 📖 Bài học: [{doc.title}](/?topic={doc.topic_slug})\n"
+                    f"\n#### 📖 Bài học: [{doc.title}]({knowledge_href(doc)})\n"
                     f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
                     f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Cấp độ: `{doc.level}`)\n"
                     f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"

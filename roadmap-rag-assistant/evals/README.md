@@ -177,7 +177,7 @@ Phân bố tag của `public/roadmap`:
   đọc `prisma/dev.db` (không cần Next.js), role `visitor` (không ghi được DB). `history` của sample được nạp thẳng vào
   bộ nhớ (đã mask PII) trên một thread mới, không replay từng lượt. Behavior suy ra từ step/reply: `refuse` = sensitive /
   out_of_scope / no_match, `clarify` = mixed intent / unclear, còn lại `answer`. Citation = `metadata.sources` có
-  `cited`; href trong roadmap ở mức topic nên cited bị đánh rộng (mọi bài cùng topic).
+  `cited`: item link tới đúng bài (`/?topic=<slug>&item=<id>`), nên chỉ bài thật sự được link mới tính là cited.
 - `_answer` chưa đặt ngưỡng vì LLM không tất định; cần thêm vài run để biết độ dao động. Lịch sử: 0.875 ở 2 run đầu
   (`answer-006` "email của tôi là gì?" bị router đưa vào tìm kiếm), lên 1.0 sau khi router nhận câu hỏi về thông tin
   của chính người dùng (`CONVERSATION_RECALL` trong `rag_service/router/intent_router.py`).

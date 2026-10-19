@@ -15,6 +15,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
+    "db:cleanup-groups": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/cleanup-roadmap-groups.ts",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
     "eval:rag": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/eval-retrieval.ts",

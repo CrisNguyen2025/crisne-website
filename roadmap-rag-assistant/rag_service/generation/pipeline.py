@@ -50,7 +50,7 @@ class GenerationPipeline:
         is_rag = req.mode == "rag"
         documents = select_documents(req, profile) if is_rag else []  # S1
         prompt = build_prompt(req, profile, documents=documents)
-        known = profile.known_link_slugs() if is_rag and profile.known_link_slugs else None
+        known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)  # S3
         pii = guardrails.PiiStreamFilter() if profile.mask_output_pii else guardrails.NoFilter()  # S4
         # Under "fallback" a RAG answer is held until the grounding check passes.

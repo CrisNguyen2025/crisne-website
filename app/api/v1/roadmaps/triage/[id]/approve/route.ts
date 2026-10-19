@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from "@/lib/roadmap/duplicates";
 import { markdownToPlainText, markdownToSafeHtml } from "@/lib/roadmap/markdown";
+import { findOrCreateGroup, normalizeLevel } from "@/lib/roadmap/levels";
 
 const DESCRIPTION_MAX_LENGTH = 200;
 
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const level = triage.level || "core";
+    const level = normalizeLevel(triage.level);
 
     // A lesson with this title is already in the layer: keep the draft for editing, don't add a copy
     const layerItems = await prisma.roadmapItem.findMany({
@@ -65,29 +66,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (duplicate) return duplicateResponse("item", { ...duplicate, layerId });
 
     // 2. Find or create group under this layer
-    let group = await prisma.roadmapGroup.findFirst({
-      where: { layerId, level },
-      include: { _count: { select: { items: true } } },
-    });
-
-    if (!group) {
-      group = await prisma.roadmapGroup.create({
-        data: {
-          layerId,
-          level,
-          title:
-            level === "core"
-              ? "🟢 Core"
-              : level === "intermediate"
-              ? "🟡 Intermediate"
-              : "🔴 Advanced",
-          order: 99,
-        },
-        include: { _count: { select: { items: true } } },
-      });
-    }
-
-    const targetGroup = group;
+    const targetGroup = await findOrCreateGroup(prisma, layerId, level);
     const { draftTitle, draftContent } = triage;
 
     // 3–4. Claim the item and create the lesson in one transaction: a second approve (double

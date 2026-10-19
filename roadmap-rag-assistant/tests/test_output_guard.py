@@ -109,3 +109,16 @@ def test_invented_action_is_flagged(answer):
 
 def test_normal_answers_are_not_flagged_as_actions():
     assert not check_grounding("Bài này nói về chunking, lưu ý nội dung cần đọc kỹ.", "ctx", "q")["unbacked_action"]
+
+
+
+def test_link_guard_checks_item_ids_when_given():
+    guard = LinkGuard({"ai"}, {"vdb"})
+    out = guard.feed("[A](/?topic=ai&item=vdb) [B](/?topic=ai&item=fake) [C](/?topic=ai)") + guard.flush()
+    assert out == "[A](/?topic=ai&item=vdb) B [C](/?topic=ai)"
+    assert guard.removed_items == ["fake"] and guard.removed_slugs == []
+
+
+def test_link_guard_without_item_set_keeps_item_links_of_known_topics():
+    guard = LinkGuard({"ai"})
+    assert guard.feed("[A](/?topic=ai&item=anything)") + guard.flush() == "[A](/?topic=ai&item=anything)"

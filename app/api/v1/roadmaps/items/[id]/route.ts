@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { findOrCreateGroup, normalizeLevel } from '@/lib/roadmap/levels';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -24,27 +25,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         include: { group: true },
       });
 
-      if (existingItem && existingItem.group.level !== level) {
-        const layerId = existingItem.group.layerId;
-        let targetGroup = await prisma.roadmapGroup.findFirst({
-          where: { layerId, level },
-        });
-
-        if (!targetGroup) {
-          targetGroup = await prisma.roadmapGroup.create({
-            data: {
-              layerId,
-              level,
-              title:
-                level === 'core'
-                  ? '🟢 Core'
-                  : level === 'intermediate'
-                    ? '🟡 Intermediate'
-                    : '🔴 Advanced',
-              order: 99,
-            },
-          });
-        }
+      if (existingItem && normalizeLevel(existingItem.group.level) !== normalizeLevel(level)) {
+        const targetGroup = await findOrCreateGroup(prisma, existingItem.group.layerId, level);
         targetGroupId = targetGroup.id;
       }
     }

@@ -124,3 +124,79 @@ def test_layer_delete_missing_layer_is_not_run(adapter, monkeypatch):
     assert "Không tìm thấy layer `mock 9` trong topic `ai`" in text
     assert "01-GIT" in text
     assert "tool_start" not in _kinds(events) and "action_preview" not in _kinds(events)
+
+
+# ── Topic named in the message picks between same-named layers ─────────────
+
+TOPICS = [
+    {"slug": "aa-tioc", "title": "aa tioc", "shortCode": "AA"},
+    {"slug": "machine-learning", "title": "Machine Learning", "shortCode": "ML"},
+]
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Tạo bài X trong layer General của topic Machine Learning. Tiêu đề: X", "machine-learning"),
+        ("thêm bài vào layer General của topic machine learning tiêu đề abc", "machine-learning"),
+        ("tạo bài trong layer General thuộc lộ trình ML", "machine-learning"),
+        ("tạo bài trong layer General của topic aa tioc", "aa-tioc"),
+        ("add an item to General in roadmap machine-learning", "machine-learning"),
+        ("tạo bài trong layer General", None),
+        ("tạo bài trong layer General của topic Không Có", None),
+    ],
+)
+def test_topic_named_in_message(text, expected):
+    from rag_service.tools.layer_resolver import topic_named_in
+
+    assert topic_named_in(text, TOPICS) == expected
+
+
+class _TwoGeneralLayers:
+    async def list_topics(self):
+        return TOPICS
+
+    async def get_topic(self, slug):
+        layer_id = {"aa-tioc": "L-aa", "machine-learning": "L-ml"}[slug]
+        return {"layers": [{"id": layer_id, "title": "General", "shortTag": "01-GEN"}]}
+
+
+def test_resolve_layer_prefers_the_named_topic_among_same_named_layers(monkeypatch):
+    from rag_service.tools.layer_resolver import resolve_layer
+
+    monkeypatch.setattr("rag_service.tools.get_adapter", lambda: _TwoGeneralLayers())
+    assert asyncio.run(resolve_layer("General")).status == "ambiguous"
+    res = asyncio.run(resolve_layer("General", topic_slug="machine-learning"))
+    assert res.status == "found" and res.layer_id == "L-ml"
+
+
+def test_agent_passes_the_topic_named_in_the_message_to_the_layer_resolver(monkeypatch):
+    from rag_service.router.schemas import SingleEntity, StructuredRoadmapAction
+
+    seen = {}
+
+    async def spy(identifier, topic_slug=None):
+        seen["identifier"], seen["topic_slug"] = identifier, topic_slug
+        return LayerResolution("not_found")  # stop before any write
+
+    agent = NextGenRoadmapAgent(llm_model=None)
+
+    async def extract(*_, **__):
+        return StructuredRoadmapAction(
+            action=ActionType.CREATE, entity_level=EntityLevel.ITEM, target_parent_identifier="General",
+            entities=[SingleEntity(title="Giới thiệu", level="core")],
+        )
+
+    monkeypatch.setattr(agent.extractor, "aextract", extract)
+    monkeypatch.setattr("rag_service.agent.resolve_layer", spy)
+    monkeypatch.setattr("rag_service.tools.get_adapter", lambda: _TwoGeneralLayers())
+    set_actor("owner")
+
+    async def run():
+        return [ev async for ev in agent.astream_events(
+            {"messages": [{"role": "user", "content": "Tạo bài Giới thiệu trong layer General của topic Machine Learning"}], "fast": True},
+            config={"configurable": {"thread_id": "lt-named-topic"}},
+        )]
+
+    asyncio.run(run())
+    assert seen == {"identifier": "General", "topic_slug": "machine-learning"}

@@ -9,6 +9,7 @@ import httpx
 
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
+from rag_service.adapters.levels import normalize_level
 
 
 class HttpApiAdapter:
@@ -178,7 +179,7 @@ class HttpApiAdapter:
         """POST /api/v1/roadmaps/groups"""
         payload: dict = {"layerId": layer_id, "title": title}
         if level:
-            payload["level"] = level
+            payload["level"] = normalize_level(level)
         data = await self._request("POST", "/api/v1/roadmaps/groups", json=payload)
         return data.get("group", data)
 
@@ -212,7 +213,7 @@ class HttpApiAdapter:
         """POST /api/v1/roadmaps/items"""
         payload = {
             "layerId": layer_id,
-            "level": level,
+            "level": normalize_level(level),
             "title": title,
             "description": description,
             "content": content or None,
@@ -228,7 +229,7 @@ class HttpApiAdapter:
         if "description" in kwargs:
             payload["description"] = kwargs["description"]
         if "level" in kwargs:
-            payload["level"] = kwargs["level"]
+            payload["level"] = normalize_level(kwargs["level"])
         data = await self._request(
             "PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload
         )

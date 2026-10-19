@@ -29,7 +29,7 @@ from rag_service.observability import (
     traced_turn,
 )
 from rag_service.steps import step_event, with_steps
-from rag_service.rag.rag_engine import rag_engine
+from rag_service.rag.rag_engine import knowledge_href, rag_engine
 from rag_service.router import (
     ActionType,
     EntityLevel,
@@ -60,7 +60,7 @@ from rag_service.router.grounding import (
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import ALL_TOOLS, get_adapter
-from rag_service.tools.layer_resolver import LayerResolution, resolve_layer
+from rag_service.tools.layer_resolver import LayerResolution, resolve_layer, topic_named_in_message
 from rag_service.tools.rag_tools import (
     generate_roadmap_from_template,
     preview_roadmap_plan,
@@ -551,7 +551,12 @@ class NextGenRoadmapAgent:
                 resolved_action.entity_level == EntityLevel.ITEM
                 and resolved_action.action == ActionType.CREATE
             )
-            topic_slug = (page_context or {}).get("roadmapSlug") or session_ctx.active_topic_slug
+            # A topic named in the message ("… của topic Machine Learning") beats the open page and the session
+            topic_slug = (
+                await topic_named_in_message(content)
+                or (page_context or {}).get("roadmapSlug")
+                or session_ctx.active_topic_slug
+            )
 
             # Item create without a layer: offer to create a default or named layer.
             if is_item_create and not resolved_action.target_parent_identifier and topic_slug:
@@ -668,7 +673,7 @@ class NextGenRoadmapAgent:
                         "title": doc.title,
                         "type": doc.doc_type,
                         "topic": doc.topic_slug,
-                        "href": f"/?topic={doc.topic_slug}",
+                        "href": knowledge_href(doc),
                         **({"score": round(score, 4)} if owner else {}),
                     }
                     for doc, score in matches

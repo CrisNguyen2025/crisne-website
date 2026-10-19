@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
+import { findOrCreateGroup, normalizeLevel } from '@/lib/roadmap/levels';
 
 // POST /api/v1/roadmaps/items - Create item in a group
 export async function POST(req: NextRequest) {
@@ -10,7 +11,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { layerId, level, title, description, content } = body;
+    const { layerId, title, description, content } = body;
+    const level = body.level ? normalizeLevel(body.level) : '';
 
     if (!layerId || !level || !title) {
       return NextResponse.json({ error: 'layerId, level, and title are required' }, { status: 400 });
@@ -26,23 +28,7 @@ export async function POST(req: NextRequest) {
       return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, level: duplicate.group.level, layerId });
     }
 
-    // Find or create group
-    let group = await prisma.roadmapGroup.findFirst({
-      where: { layerId, level },
-      include: { _count: { select: { items: true } } },
-    });
-
-    if (!group) {
-      group = await prisma.roadmapGroup.create({
-        data: {
-          layerId,
-          level,
-          title: level === 'core' ? '🟢 Core' : level === 'intermediate' ? '🟡 Intermediate' : '🔴 Advanced',
-          order: 99,
-        },
-        include: { _count: { select: { items: true } } },
-      });
-    }
+    const group = await findOrCreateGroup(prisma, layerId, level);
 
     const newItem = await prisma.roadmapItem.create({
       data: {

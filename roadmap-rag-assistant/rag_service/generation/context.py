@@ -34,7 +34,8 @@ def _escape(text: str) -> str:
 
 
 def _attr(text: str) -> str:
-    return text.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
+    # "&" stays literal: the model copies href verbatim, and "&amp;" would break the query string
+    return text.replace('"', "&quot;").replace("<", "&lt;")
 
 
 def _clip(text: str, limit: int) -> str:

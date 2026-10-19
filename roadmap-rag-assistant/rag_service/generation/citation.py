@@ -6,7 +6,7 @@ unknown ones into plain text (LinkGuard); without one it passes text through.
 
 from __future__ import annotations
 
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Tuple
 
 from rag_service.output_guard import LinkGuard
 
@@ -31,12 +31,12 @@ class PassThrough:
 
 
 class _LinkCitation:
-    def __init__(self, known: set[str]) -> None:
-        self._guard = LinkGuard(known)
+    def __init__(self, slugs: set[str], items: Optional[set[str]]) -> None:
+        self._guard = LinkGuard(slugs, items)
 
     @property
     def removed(self) -> List[str]:
-        return self._guard.removed_slugs
+        return self._guard.removed_slugs + self._guard.removed_items
 
     def feed(self, text: str) -> str:
         return self._guard.feed(text)
@@ -45,5 +45,6 @@ class _LinkCitation:
         return self._guard.flush()
 
 
-def citation_filter(known: Optional[set[str]]) -> CitationFilter:
-    return _LinkCitation(known) if known is not None else PassThrough()
+def citation_filter(known: Optional[Tuple[set[str], Optional[set[str]]]]) -> CitationFilter:
+    """`known` = (valid link slugs, valid item ids or None to skip the item check)."""
+    return _LinkCitation(*known) if known is not None else PassThrough()

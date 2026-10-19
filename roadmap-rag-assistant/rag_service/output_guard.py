@@ -17,6 +17,7 @@ LINK = re.compile(r"\[([^\]\n]*)\]\(([^)\s]*)\)")
 # A "[" that may still become a link once more tokens arrive
 PARTIAL_LINK = re.compile(r"\[[^\]\n]*(?:\](?:\([^)\s]*)?)?")
 TOPIC_URL = re.compile(r"^/\?topic=([^&#]+)")
+ITEM_PARAM = re.compile(r"[?&]item=([^&#]+)")
 # Held back at most this long; anything longer is not a link the model is writing
 MAX_PENDING = 300
 
@@ -36,22 +37,32 @@ ACTION_CLAIM = re.compile(
 
 
 class LinkGuard:
-    """Feed streamed deltas in, get the same text out with invalid topic links unlinked."""
+    """Feed streamed deltas in, get the same text out with invalid topic links unlinked.
 
-    def __init__(self, valid_slugs: Iterable[str]) -> None:
+    With `valid_items`, a link's `&item=` must also be a known item id, so the model cannot point a
+    citation at a lesson that does not exist.
+    """
+
+    def __init__(self, valid_slugs: Iterable[str], valid_items: Iterable[str] | None = None) -> None:
         self._valid = set(valid_slugs)
+        self._items = set(valid_items) if valid_items is not None else None
         self._buf = ""
         self.removed_slugs: list[str] = []
+        self.removed_items: list[str] = []
 
     def _check(self, m: re.Match) -> str:
         topic = TOPIC_URL.match(m.group(2))
         if topic is None:
             return m.group(0)
         slug = unquote(topic.group(1))
-        if slug in self._valid:
-            return m.group(0)
-        self.removed_slugs.append(slug)
-        return m.group(1)
+        if slug not in self._valid:
+            self.removed_slugs.append(slug)
+            return m.group(1)
+        item = ITEM_PARAM.search(m.group(2))
+        if item and self._items is not None and unquote(item.group(1)) not in self._items:
+            self.removed_items.append(unquote(item.group(1)))
+            return m.group(1)
+        return m.group(0)
 
     def feed(self, delta: str) -> str:
         self._buf += delta

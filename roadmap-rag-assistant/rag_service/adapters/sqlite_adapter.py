@@ -19,8 +19,27 @@ import aiosqlite
 import uuid_utils
 
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
+from rag_service.adapters.levels import default_group_title, normalize_level
 from rag_service.auth import owner_only
 
+
+
+async def _find_or_create_group(db, layer_id: str, level: str, now: str) -> str:
+    """The layer's group for a level, created on first use; legacy groups match after normalizing."""
+    level = normalize_level(level)
+    cursor = await db.execute("SELECT id, level FROM RoadmapGroup WHERE layerId = ?", (layer_id,))
+    for row in await cursor.fetchall():
+        if normalize_level(row["level"]) == level:
+            return row["id"]
+    group_id = _uuid7()
+    await db.execute(
+        """
+        INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, 99, ?, ?)
+        """,
+        (group_id, layer_id, level, default_group_title(level), now, now),
+    )
+    return group_id
 
 def _uuid7() -> str:
     return str(uuid_utils.uuid7())
@@ -308,15 +327,7 @@ class SqliteAdapter:
                  title.strip(), subtitle.strip(), now, now),
             )
 
-            # Seed a default Core group
-            group_id = _uuid7()
-            await db.execute(
-                """
-                INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
-                VALUES (?, ?, 'core', '🟢 Core', 1, ?, ?)
-                """,
-                (group_id, layer_id, now, now),
-            )
+            # No group yet: the first item of a level creates it, so empty layers stay empty
 
             await db.commit()
 
@@ -375,7 +386,7 @@ class SqliteAdapter:
     ) -> dict:
         group_id = _uuid7()
         now = _now_iso()
-        group_level = level or re.sub(r"[^\w]", "-", title.lower()) or f"group-{int(datetime.now(timezone.utc).timestamp())}"
+        group_level = normalize_level(level or re.sub(r"[^\w]", "-", title.lower())) or f"group-{int(datetime.now(timezone.utc).timestamp())}"
 
         async with self._connect() as db:
             cursor = await db.execute(
@@ -384,7 +395,7 @@ class SqliteAdapter:
             siblings = [dict(r) for r in await cursor.fetchall()]
             # Items are filed by level, so two groups with one level would split them
             dup = find_duplicate(siblings, title) or (
-                next((g for g in siblings if g["level"] == group_level), None) if level else None
+                next((g for g in siblings if normalize_level(g["level"]) == group_level), None) if level else None
             )
             if dup:
                 raise DuplicateEntityError("group", dup["title"], dup)
@@ -458,31 +469,8 @@ class SqliteAdapter:
             if dup:
                 raise DuplicateEntityError("item", dup["title"], {**dup, "layerId": layer_id})
 
-            # Find or create group for this level in this layer
-            cursor = await db.execute(
-                "SELECT id FROM RoadmapGroup WHERE layerId = ? AND level = ?",
-                (layer_id, level),
-            )
-            group_row = await cursor.fetchone()
-
-            if group_row:
-                group_id = group_row["id"]
-            else:
-                # Auto-create group
-                group_id = _uuid7()
-                group_title = {
-                    "core": "🟢 Core",
-                    "intermediate": "🟡 Intermediate",
-                    "advanced": "🔴 Advanced",
-                }.get(level, f"📁 {level.title()}")
-
-                await db.execute(
-                    """
-                    INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
-                    VALUES (?, ?, ?, ?, 99, ?, ?)
-                    """,
-                    (group_id, layer_id, level, group_title, now, now),
-                )
+            level = normalize_level(level)
+            group_id = await _find_or_create_group(db, layer_id, level, now)
 
             # Count existing items in group for order
             cursor = await db.execute(
@@ -527,7 +515,7 @@ class SqliteAdapter:
 
             # Handle level change (cross-group movement)
             if "level" in kwargs:
-                new_level = str(kwargs["level"])
+                new_level = normalize_level(kwargs["level"])
                 cursor = await db.execute(
                     """
                     SELECT i.groupId, g.layerId, g.level
@@ -538,30 +526,8 @@ class SqliteAdapter:
                     (item_id,),
                 )
                 item_row = await cursor.fetchone()
-                if item_row and item_row["level"] != new_level:
-                    layer_id = item_row["layerId"]
-                    # Find or create destination group
-                    cursor = await db.execute(
-                        "SELECT id FROM RoadmapGroup WHERE layerId = ? AND level = ?",
-                        (layer_id, new_level),
-                    )
-                    target = await cursor.fetchone()
-                    if not target:
-                        target_id = _uuid7()
-                        group_title = {
-                            "core": "🟢 Core",
-                            "intermediate": "🟡 Intermediate",
-                            "advanced": "🔴 Advanced",
-                        }.get(new_level, f"📁 {new_level.title()}")
-                        await db.execute(
-                            """
-                            INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
-                            VALUES (?, ?, ?, ?, 99, ?, ?)
-                            """,
-                            (target_id, layer_id, new_level, group_title, now, now),
-                        )
-                    else:
-                        target_id = target["id"]
+                if item_row and normalize_level(item_row["level"]) != new_level:
+                    target_id = await _find_or_create_group(db, item_row["layerId"], new_level, now)
                     sets.append("groupId = ?")
                     vals.append(target_id)
 

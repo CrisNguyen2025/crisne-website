@@ -52,11 +52,14 @@ def test_sqlite_refuses_duplicates_at_every_level(adapter):
             await adapter.create_layer(topic["slug"], "MOCK  1", "03-MOC")
         assert exc.value.existing["id"] == layer["id"]
 
-        # create_layer seeds a "core" group, so another core group is a duplicate
-        with pytest.raises(DuplicateEntityError):
-            await adapter.create_group(layer["id"], "Core basics", "core")
+        # create_layer adds no group: the first item files one under its level
+        new_layer = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])
+        assert new_layer["groups"] == []
 
-        await adapter.create_item(layer["id"], "core", "Docker Basics")
+        await adapter.create_item(layer["id"], "Core", "Docker Basics")
+        # The item's group is "core" (normalized), so another core group is a duplicate
+        with pytest.raises(DuplicateEntityError):
+            await adapter.create_group(layer["id"], "Core basics", "CORE")
         with pytest.raises(DuplicateEntityError):
             await adapter.create_item(layer["id"], "advanced", "docker basics")
 
@@ -141,3 +144,27 @@ def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
     assert "trong topic <slug topic>" in reply and "vào layer <tên layer>" in reply
     # No invented names like "be", "fe" or "aaa"
     assert " be`" not in reply and " fe`" not in reply and "aaa" not in reply
+
+
+def test_levels_normalize_and_reuse_one_group(adapter):
+    """'Core', 'cơ bản' and 'core' land in one group; a custom level gets its own title-cased group."""
+    import asyncio
+
+    from rag_service.adapters.levels import default_group_title, normalize_level
+
+    assert [normalize_level(x) for x in ("Core", " cơ bản ", "Nâng  cao", "Deep Dive", "")] == [
+        "core", "core", "advanced", "deep dive", "core",
+    ]
+    assert default_group_title("deep dive") == "Deep Dive" and default_group_title("Advanced") == "🔴 Advanced"
+
+    async def run():
+        topic = await adapter.create_topic("Levels", "LV")
+        layer = await adapter.create_layer(topic["slug"], "Levels", "02-LVL")
+        await adapter.create_item(layer["id"], "Core", "A")
+        await adapter.create_item(layer["id"], "cơ bản", "B")
+        await adapter.create_item(layer["id"], "core", "C")
+        await adapter.create_item(layer["id"], "Deep Dive", "D")
+        groups = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])["groups"]
+        return {g["level"]: (g["title"], len(g["items"])) for g in groups}
+
+    assert asyncio.run(run()) == {"core": ("🟢 Core", 3), "deep dive": ("Deep Dive", 1)}
