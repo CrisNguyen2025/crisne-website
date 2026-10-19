@@ -105,7 +105,7 @@ def test_layer_delete_resolves_layer_before_preview(adapter, monkeypatch):
     async def found(identifier, topic_slug=None):
         return LayerResolution("found", layer_id="L1", layer_title="mock 1", topic_slug="ai")
 
-    monkeypatch.setattr("rag_service.agent.resolve_layer", found)
+    monkeypatch.setattr("rag_service.domains.roadmap.commands.resolve_layer", found)
     set_actor("owner")
     _, events = _run("xóa layer mock 1 topic ai", "lt-preview")
     previews = [e for e in events if e.get("type") == "action_preview"]
@@ -118,7 +118,7 @@ def test_layer_delete_missing_layer_is_not_run(adapter, monkeypatch):
             {"id": "L2", "title": "Git", "shortTag": "01-GIT", "topic_slug": "ai", "topic_title": "AI"},
         ])
 
-    monkeypatch.setattr("rag_service.agent.resolve_layer", missing)
+    monkeypatch.setattr("rag_service.domains.roadmap.commands.resolve_layer", missing)
     set_actor("owner")
     text, events = _run("xóa layer mock 9 trong topic ai", "lt-missing-layer")
     assert "Không tìm thấy layer `mock 9` trong topic `ai`" in text
@@ -188,7 +188,7 @@ def test_agent_passes_the_topic_named_in_the_message_to_the_layer_resolver(monke
         )
 
     monkeypatch.setattr(agent.extractor, "aextract", extract)
-    monkeypatch.setattr("rag_service.agent.resolve_layer", spy)
+    monkeypatch.setattr("rag_service.domains.roadmap.commands.resolve_layer", spy)
     monkeypatch.setattr("rag_service.tools.get_adapter", lambda: _TwoGeneralLayers())
     set_actor("owner")
 
