@@ -1,0 +1,79 @@
+"""Questions about the user or earlier turns route to chitchat, where the history is in the prompt."""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+
+import pytest
+from langchain_core.messages import AIMessageChunk
+
+from rag_service.agent import NextGenRoadmapAgent
+from rag_service.router.intent_router import IntentRouter
+from rag_service.router.schemas import IntentType
+
+RECALL = [
+    "tôi tên gì?",
+    "tôi tên là gì",
+    "tên của mình là gì?",
+    "tôi là ai?",
+    "bạn có nhớ tên tôi không?",
+    "nãy tôi nói gì?",
+    "lúc nãy mình hỏi gì vậy",
+    "tôi vừa nói gì?",
+    "what's my name?",
+    "who am I",
+    "what did I say before?",
+]
+
+NOT_RECALL = [
+    ("tìm bài học về Docker", IntentType.KNOWLEDGE_QUERY),
+    ("Docker là gì?", IntentType.KNOWLEDGE_QUERY),
+    ("tôi muốn tìm bài về tên miền", IntentType.KNOWLEDGE_QUERY),
+    ("tạo topic AI Engineering", IntentType.ROADMAP_CUD),
+    ("chào bạn", IntentType.CHITCHAT),
+]
+
+
+@pytest.mark.parametrize("text", RECALL)
+def test_recall_questions_route_to_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.CHITCHAT
+
+
+@pytest.mark.parametrize("text,intent", NOT_RECALL)
+def test_other_messages_keep_their_route(text, intent):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == intent
+
+
+class RecordingLLM:
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    async def astream(self, prompt):
+        self.prompts.append(prompt)
+        yield AIMessageChunk(content="Bạn là Cris.")
+
+
+def test_name_question_is_answered_by_the_llm_with_history():
+    llm = RecordingLLM()
+    agent = NextGenRoadmapAgent(llm_model=llm)
+    thread = f"t-{uuid.uuid4()}"
+
+    async def say(text):
+        return [
+            ev
+            async for ev in agent.astream_events(
+                {"messages": [{"role": "user", "content": text}], "fast": True},
+                config={"configurable": {"thread_id": thread}},
+            )
+        ]
+
+    asyncio.run(say("tôi là Cris"))
+    asyncio.run(say("xin chào"))
+    events = asyncio.run(say("tôi tên gì?"))
+
+    answer = [e for e in events if e.get("type") == "step" and e.get("id") == "answer" and e["status"] == "done"]
+    assert answer[-1]["mode"] == "llm"
+    assert "tôi là Cris" in llm.prompts[-1].split("<user_query>")[0]
