@@ -75,6 +75,16 @@ ANAPHORA_TARGETS = ("CONTEXT_ACTIVE", "đó", "nó", "this", "it")
 LAYER_VERBS = {ActionType.CREATE: "tạo", ActionType.DELETE: "xóa", ActionType.UPDATE: "sửa"}
 
 
+def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> None:
+    """One line per chat turn, from the agent so /chat and /chat/stream both log it."""
+    route, answer = steps.get("route", {}), steps.get("answer", {})
+    print(
+        f"[turn] thread={thread_id} intent={route.get('intent')} route={route.get('method')} "
+        f"mode={answer.get('mode')} fallback={answer.get('fallback_reason')} "
+        f"grounding={metadata.get('grounding')} tools={tools}"
+    )
+
+
 class NextGenRoadmapAgent:
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -267,17 +277,28 @@ class NextGenRoadmapAgent:
         message = input_dict.get("messages", [{}])[-1].get("content", "").strip()
         session_id = (config or {}).get("configurable", {}).get("thread_id", "default")
         reply: list[str] = []
+        steps: dict[str, dict] = {}
+        tools: list[str] = []
+        metadata: dict = {}
         async for ev in traced_turn(
             with_steps(self._astream_events_impl(input_dict, config)),
             message=message,
             session_id=session_id,
             page_context=input_dict.get("context"),
         ):
-            if ev.get("type") == "token":
+            kind = ev.get("type")
+            if kind == "token":
                 reply.append(ev.get("delta", ""))
+            elif kind == "step" and ev.get("status") != "running":
+                steps[ev["id"]] = {**steps.get(ev["id"], {}), **ev}
+            elif kind == "tool_start":
+                tools.append(ev.get("name", "tool"))
+            elif kind == "metadata":
+                metadata = ev
             yield ev
         # Every branch (LLM, template, tool) becomes memory for the next turn's prompt.
         record_turn(session_id, message, "".join(reply))
+        log_turn(session_id, steps, tools, metadata)
 
     async def _astream_events_impl(
         self, input_dict: dict, config: dict | None = None

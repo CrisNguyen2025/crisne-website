@@ -18,6 +18,19 @@ Adapter (HTTP → Next.js API  |  SQLite → prisma/dev.db)
 Database (SQLite / Turso)
 ```
 
+## Nguồn dữ liệu (đọc trước khi debug)
+
+Có hai nguồn khác nhau, và chúng có thể không chứa cùng một nội dung:
+
+| Dùng cho | Nguồn | Ghi chú |
+|---|---|---|
+| RAG server khi `RAG_ADAPTER_MODE=http` | Next.js API (`NEXTJS_API_BASE_URL`), tức là database Next.js đang dùng (Turso khi có `TURSO_*`) | Đây là dữ liệu UI và chatbot thấy |
+| Evals, corpus export, `RAG_ADAPTER_MODE=sqlite` | `prisma/dev.db` | Corpus tĩnh `evals/corpus` được export từ đây |
+
+Dòng khởi động của server in nguồn đang dùng. Mỗi lượt chat in một dòng `[turn]` với intent, mode, fallback và tool, để tìm được hội thoại trong log mà không cần ảnh chụp màn hình.
+
+Chạy server có tự reload khi sửa code: `yarn rag:dev` (từ thư mục gốc).
+
 ## Quick Start
 
 ### 1. Setup

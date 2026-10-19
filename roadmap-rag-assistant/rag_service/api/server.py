@@ -38,7 +38,8 @@ async def lifespan(app: FastAPI):
     observability.get_langfuse()  # log once at startup whether tracing is on
     print(
         f"🚀 Roadmap RAG Assistant started "
-        f"(adapter={settings.rag_adapter_mode}, model={settings.llm_model})"
+        f"(adapter={settings.rag_adapter_mode}, source={settings.nextjs_api_base_url if settings.rag_adapter_mode == 'http' else settings.sqlite_db_path}, "
+        f"model={settings.llm_model})"
     )
 
     yield
