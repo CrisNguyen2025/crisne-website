@@ -186,7 +186,9 @@ def test_trailing_k_is_a_question_only_as_a_separate_word():
 def test_mixed_intents_ask_back_without_tools():
     set_actor("owner")
     text, events = _reply("tìm bài Docker rồi tạo topic K8s", "mixed")
-    assert text == MIXED_INTENT_REPLY
+    assert text.startswith(MIXED_INTENT_REPLY)
+    assert text.index("1. `tìm bài Docker`") < text.index("2. `tạo topic K8s`")
+    assert "Gửi bước 1 trước: `tìm bài Docker`" in text
     assert not [e for e in events if e.get("type") == "tool_start"]
 
 

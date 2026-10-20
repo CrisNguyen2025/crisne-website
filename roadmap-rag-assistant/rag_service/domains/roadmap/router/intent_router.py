@@ -170,13 +170,20 @@ class IntentRouter:
 
         return None
 
-    def has_mixed_intents(self, text: str) -> bool:
-        """True when joined clauses ask for both a search and a roadmap change ("tìm bài A rồi tạo topic B")."""
-        parts = [p for p in MIXED_INTENT_SPLIT.split(text) if p.strip()]
+    def mixed_intent_steps(self, text: str) -> list[str]:
+        """Search and change clauses in message order when both are asked at once ("tìm bài A rồi tạo topic B"), else []."""
+        parts = [p.strip() for p in MIXED_INTENT_SPLIT.split(text) if p.strip()]
         if len(parts) < 2:
-            return False
-        intents = {res.intent for p in parts if (res := self.classify_heuristics(p)) is not None}
-        return {IntentType.KNOWLEDGE_QUERY, IntentType.ROADMAP_CUD} <= intents
+            return []
+        wanted = {IntentType.KNOWLEDGE_QUERY, IntentType.ROADMAP_CUD}
+        steps = [(p, res.intent) for p in parts if (res := self.classify_heuristics(p)) is not None and res.intent in wanted]
+        if {intent for _, intent in steps} != wanted:
+            return []
+        return [p for p, _ in steps]
+
+    def has_mixed_intents(self, text: str) -> bool:
+        """True when joined clauses ask for both a search and a roadmap change."""
+        return bool(self.mixed_intent_steps(text))
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""

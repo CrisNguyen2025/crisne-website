@@ -53,11 +53,15 @@ EMPTY_MESSAGE_REPLY = (
     "- 📋 `liệt kê topic`"
 )
 
-MIXED_INTENT_REPLY = (
-    "Tin nhắn có cả yêu cầu tìm kiếm và yêu cầu thay đổi roadmap. "
-    "Tôi xử lý từng yêu cầu một, bạn gửi lần lượt từng yêu cầu nhé.\n\n"
-    "Ví dụ: gửi `tìm bài học về Docker`, sau đó gửi `tạo topic Kubernetes`."
-)
+MIXED_INTENT_REPLY = "Tin nhắn có cả yêu cầu tìm kiếm và yêu cầu thay đổi roadmap, tôi làm lần lượt từng bước."
+
+
+def mixed_intent_reply(steps: list[str]) -> str:
+    """Ask back with the user's own clauses as ordered commands, so the next message is one copy away."""
+    lines = [MIXED_INTENT_REPLY, ""]
+    lines += [f"{i}. `{step}`" for i, step in enumerate(steps, 1)]
+    lines += ["", f"Gửi bước 1 trước: `{steps[0]}`, xong rồi gửi tiếp các bước sau theo thứ tự."]
+    return "\n".join(lines)
 
 # "xóa hết topic", "xóa tất cả layer", "delete all items": not a named target.
 BULK_DELETE = re.compile(

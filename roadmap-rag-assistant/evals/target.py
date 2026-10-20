@@ -191,7 +191,7 @@ class RoadmapTarget:
         mode = steps.get("answer", {}).get("mode")
         if reply.strip() == SENSITIVE_REPLY.strip() or intent == "out_of_scope" or mode == "no_match":
             return "refuse"
-        if reply.strip() == MIXED_INTENT_REPLY.strip() or mode == "unclear":
+        if reply.strip().startswith(MIXED_INTENT_REPLY) or mode == "unclear":
             return "clarify"
         return "answer"
 

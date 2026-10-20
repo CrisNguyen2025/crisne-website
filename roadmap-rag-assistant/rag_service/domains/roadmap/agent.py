@@ -43,7 +43,7 @@ from rag_service.domains.roadmap.router import (
 )
 from rag_service.domains.roadmap.router.grounding import (
     EMPTY_MESSAGE_REPLY,
-    MIXED_INTENT_REPLY,
+    mixed_intent_reply,
     RETRIEVAL_ERROR_REPLY,
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
@@ -218,10 +218,10 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             return
 
         # ── 2c. Several requests in one message: ask for one at a time ────────
-        if self.router.has_mixed_intents(content):
+        if mixed_steps := self.router.mixed_intent_steps(content):
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "mixed_intents"
-            async for ev in self._stream_text(MIXED_INTENT_REPLY, delay):
+            async for ev in self._stream_text(mixed_intent_reply(mixed_steps), delay):
                 yield ev
             return
 
