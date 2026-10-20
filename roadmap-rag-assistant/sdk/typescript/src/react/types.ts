@@ -1,4 +1,4 @@
-import type { PageContext, ChatActionChip } from '../types';
+import type { PageContext, ChatActionChip, ChatSource } from '../types';
 import type { AssistantStepEvent, AssistantStepItem } from '../client';
 
 export type { ChatActionChip };
@@ -40,6 +40,8 @@ export interface ChatMessage {
   thinkingDurationMs?: number;
   toolCalls?: ToolCall[];
   steps?: AssistantStepEvent[];
+  /** Documents the answer used, shown under it. */
+  sources?: ChatSource[];
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
   suggestions?: { label: string; prompt: string }[];

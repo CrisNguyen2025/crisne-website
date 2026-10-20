@@ -18,6 +18,9 @@ def token_event(delta: str) -> dict:
     return {"type": "token", "delta": delta}
 
 
+MAX_SOURCES = 3
+
+
 def metadata_event(
     mode: str,
     answer: str,
@@ -26,17 +29,28 @@ def metadata_event(
     grounding: Optional[str],
     show_scores: bool,
 ) -> dict:
-    """Closing event of an LLM answer. `cited` marks documents whose href appears in the answer."""
-    sources = [
-        {
-            "id": d.id,
-            "title": d.title,
-            "href": d.href,
-            "cited": bool(d.href) and f"({d.href})" in answer,
-            **({"score": round(d.score, 4)} if show_scores else {}),
-        }
-        for d in documents
-    ]
+    """Closing event of an LLM answer.
+
+    A document is a source only when the answer uses it: its href is linked (`cited`) or its
+    title is named in the text. Retrieved-but-unused documents are not shown.
+    """
+    lowered = answer.casefold()
+    sources = []
+    for d in documents:
+        cited = bool(d.href) and f"({d.href})" in answer
+        named = bool(d.title) and d.title.casefold() in lowered
+        if not (cited or named):
+            continue
+        sources.append(
+            {
+                "id": d.id,
+                "title": d.title,
+                "href": d.href,
+                "cited": cited,
+                **({"score": round(d.score, 4)} if show_scores else {}),
+            }
+        )
+    sources = sources[:MAX_SOURCES]
     ev: dict = {"type": "metadata", "mode": mode, "sources": sources}
     if usage:
         ev["usage"] = usage

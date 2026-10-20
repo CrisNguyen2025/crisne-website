@@ -235,6 +235,7 @@ export class RoadmapChatClient {
                     thinking: data.thinking || (accumulatedThinking ? accumulatedThinking : undefined),
                     tool_calls: data.tool_calls || accumulatedTools,
                     steps: Array.isArray(data.steps) ? data.steps : undefined,
+                    sources: Array.isArray(data.metadata?.sources) ? data.metadata.sources : undefined,
                   };
                   callbacks.onDone?.(finalResp);
                 } else if (currentEvent === 'error') {

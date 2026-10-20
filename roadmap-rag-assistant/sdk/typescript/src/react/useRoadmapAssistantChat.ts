@@ -414,6 +414,7 @@ export function useRoadmapAssistantChat(
                     steps: finalResp.steps?.length
                       ? upsertSteps(msg.steps ?? [], finalResp.steps)
                       : msg.steps,
+                    sources: finalResp.sources ?? msg.sources,
                   };
                 })
               );

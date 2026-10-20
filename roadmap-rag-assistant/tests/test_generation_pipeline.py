@@ -195,8 +195,8 @@ def test_rag_answer_ends_with_metadata_listing_cited_sources(monkeypatch):
     events = asyncio.run(run())
     meta = events[-1]
     assert meta["type"] == "metadata" and meta["mode"] == "rag" and meta["grounding"] == "ok"
-    # Same topic, but only the lesson actually linked counts as cited
-    assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", True), ("x", False)]
+    # Only the lesson the answer links is a source; the retrieved but unused one is dropped
+    assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", True)]
     assert meta["sources"][0]["href"] == "/?topic=ops&item=d1"
 
 

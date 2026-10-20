@@ -9,6 +9,7 @@ import {
   ThumbsUpIcon,
 } from "../icons";
 import { ChatMarkdown } from "../ChatMarkdown";
+import { SourceChip, roadmapSourceLabel } from "./SourceChip";
 import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
 import {
@@ -245,6 +246,24 @@ export function MessageList({
                     runningCode={isLoading ? runningCode : null}
                     className="[&>:last-child]:!mb-0"
                   />
+                </div>
+              )}
+
+              {/* Sources the answer used, shown whether or not the model linked them inline */}
+              {!!msg.sources?.length && !isLive && (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-[#6B6A66]">Nguồn</span>
+                  {msg.sources.map(
+                    (s) =>
+                      s.href && (
+                        <SourceChip
+                          key={s.id}
+                          title={s.title}
+                          href={s.href}
+                          source={roadmapSourceLabel(s.href) ?? "Roadmap"}
+                        />
+                      )
+                  )}
                 </div>
               )}
 

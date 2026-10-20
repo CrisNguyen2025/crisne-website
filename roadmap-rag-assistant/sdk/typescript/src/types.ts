@@ -32,6 +32,16 @@ export interface ChatResponse {
   tool_calls: ToolCallResult[];
   /** Final state of every step of the turn (streaming endpoint only). */
   steps?: AssistantStepEvent[];
+  /** Documents the answer used (streaming endpoint only). */
+  sources?: ChatSource[];
+}
+
+/** A document the answer used; `cited` when the answer also links it inline. */
+export interface ChatSource {
+  id: string;
+  title: string;
+  href?: string | null;
+  cited: boolean;
 }
 
 /** A document found by the retrieval step. */
@@ -126,6 +136,7 @@ export interface ChatMessage {
   /** Total elapsed time spent thinking in ms */
   thinkingDurationMs?: number;
   toolCalls?: ToolCallResult[];
+  sources?: ChatSource[];
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   timestamp: Date;
