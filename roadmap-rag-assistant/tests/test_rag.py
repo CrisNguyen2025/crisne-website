@@ -46,6 +46,8 @@ def test_rag_engine_format_plan_preview(rag):
     assert "AI & LLM Architecture" in preview
     assert "Layer 1:" in preview
     assert "01-LLM" in preview
+    assert "Group" not in preview
+    assert "🟢 Core" not in preview
 
 
 @pytest.mark.asyncio

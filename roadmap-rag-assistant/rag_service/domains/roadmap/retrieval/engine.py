@@ -208,10 +208,10 @@ class HybridRagEngine:
             lines.append(f"  **Layer {i}: [{layer.get('shortTag', '')}] {layer.get('title', '')}**")
             if layer.get("subtitle"):
                 lines.append(f"  _{layer.get('subtitle')}_")
+            # Groups are created from item levels on write, so the preview lists items only
             for group in layer.get("groups", []):
-                lines.append(f"    - **Group**: {group.get('title', group.get('level', ''))}")
                 for item in group.get("items", []):
-                    lines.append(f"      • {item.get('title', '')}: {item.get('description', '')}")
+                    lines.append(f"    • {item.get('title', '')}: {item.get('description', '')}")
 
         return "\n".join(lines)
 
