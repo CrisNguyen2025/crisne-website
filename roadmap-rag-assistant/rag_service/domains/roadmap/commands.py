@@ -6,6 +6,7 @@ carries it out: extraction, target checks, confirmation and the executor.
 
 from __future__ import annotations
 
+import re
 from typing import AsyncGenerator
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
@@ -17,12 +18,149 @@ from rag_service.router.grounding import (
     BULK_DELETE_REPLY,
     build_grounding,
 )
-from rag_service.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
+from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state import AnaphoraResolver, session_store
+from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.tools.layer_resolver import resolve_layer, topic_named_in_message
 
 
 class RoadmapCommands:
+    def bulk_import_applies(self, raw_content: str, lower: str, page_context) -> bool:
+        """A pasted list of two or more items: imported when a layer is open, otherwise the user is asked which."""
+        titles = parse_item_list(raw_content)
+        layer_in_view = (page_context or {}).get("layerId")
+        if layer_in_view and len(titles) >= 2:
+            return True
+        return not layer_in_view and len(titles) >= 2 and re.search(r"\bthêm\b|\badd\b", lower) is not None
+
+    async def handle_pending(
+        self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Finish a roadmap change that was waiting: confirm/cancel a previewed action, or pick a layer."""
+        # ── 0. Pending Action Confirmation ────────────────────────────────────
+        if session_ctx.pending_confirmation:
+            if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
+                pending_act = session_ctx.pending_confirmation
+                session_ctx.pending_confirmation = None
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    outcome["handled"] = True
+                    return
+                tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
+                yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
+                ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id)
+                yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+                async for ev in self._stream_text(res_msg, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            elif lower in ["hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi"]:
+                session_ctx.pending_confirmation = None
+                cancel_msg = "Đã hủy bỏ thao tác theo yêu cầu của bạn."
+                async for ev in self._stream_text(cancel_msg, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
+            session_ctx.pending_confirmation = None
+
+        # ── 0b. Pending layer choice for an item without a target layer ──────
+        if session_ctx.pending_layer_choice:
+            pending_item = session_ctx.pending_layer_choice
+            topic_slug = session_ctx.pending_layer_topic
+            options = session_ctx.pending_layer_options
+            session_ctx.pending_layer_choice = None
+            session_ctx.pending_layer_topic = None
+            session_ctx.pending_layer_options = []
+            m = re.match(r"^tạo layer\s+(.+)$", content, re.IGNORECASE)
+            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
+                async for ev in self._stream_text("Đã hủy thêm bài học.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+
+            # Pick one of the offered layers by number or by name.
+            picked = None
+            if options and lower.isdigit() and 1 <= int(lower) <= len(options):
+                picked = options[int(lower) - 1]
+            elif options and not m:
+                named = [o for o in options if lower in (o["title"].lower(), o["shortTag"].lower(), o["id"].lower())]
+                picked = named[0] if len(named) == 1 else None
+            if picked:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    outcome["handled"] = True
+                    return
+                pending_item.target_parent_identifier = picked["id"]
+                session_store.set_active_layer(session_id, layer_id=picked["id"], title=picked["title"])
+                tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
+                yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
+                async for ev in self._stream_text(item_msg, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            if m and not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            if m:
+                name = m.group(1).strip()
+                is_default = name.lower() in ["mặc định", "default"]
+                layer_title = "General" if is_default else name
+                layer_action = StructuredRoadmapAction(
+                    action=ActionType.CREATE,
+                    entity_level=EntityLevel.LAYER,
+                    target_parent_identifier=topic_slug,
+                    entities=[SingleEntity(title=layer_title, short_tag="01-GEN" if is_default else None)],
+                )
+                yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
+                ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id)
+                yield {"type": "tool_end", "name": "create_layer", "result": layer_msg, "is_error": not ok}
+                if not ok:
+                    async for ev in self._stream_text(layer_msg, delay):
+                        yield ev
+                    outcome["handled"] = True
+                    return
+                pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
+                yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
+                async for ev in self._stream_text(f"{layer_msg}\n\n{item_msg}", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else: drop the pending choice and handle as a fresh message.
+
+    async def handle_bulk_import(
+        self, *, raw_content: str, lower: str, page_context, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        """Import the pasted items into the open layer (owner only), or ask for the layer first."""
+        titles = parse_item_list(raw_content)
+        layer_in_view = (page_context or {}).get("layerId")
+        if not layer_in_view:
+            ask = (
+                f"Tôi thấy {len(titles)} dòng item nhưng chưa biết thêm vào layer nào. "
+                "Hãy mở layer đích trên trang rồi gửi lại danh sách, hoặc nói rõ tên layer."
+            )
+            async for ev in self._stream_text(ask, delay):
+                yield ev
+            return
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
+        yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
+        res = await import_items_from_text.coroutine(**tool_args)
+        yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
+        async for ev in self._stream_text(res + "\n\n_Các item được thêm vào level `core`. Nói rõ level nếu muốn khác._", delay):
+            yield ev
+
     async def handle_cud(
         self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float
     ) -> AsyncGenerator[dict, None]:
