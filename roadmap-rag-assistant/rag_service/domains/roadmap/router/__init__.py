@@ -1,8 +1,8 @@
 """Router module — Intent classification and Pydantic structured entity extraction."""
 
-from rag_service.router.entity_extractor import StructuredEntityExtractor
-from rag_service.router.intent_router import IntentRouter
-from rag_service.router.schemas import (
+from rag_service.domains.roadmap.router.entity_extractor import StructuredEntityExtractor
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.schemas import (
     ActionType,
     EntityLevel,
     IntentClassificationResult,
@@ -10,7 +10,7 @@ from rag_service.router.schemas import (
     SingleEntity,
     StructuredRoadmapAction,
 )
-from rag_service.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
+from rag_service.domains.roadmap.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
 
 __all__ = [
     "ActionType",

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from rag_service.router.schemas import StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 
 class SessionContext(BaseModel):

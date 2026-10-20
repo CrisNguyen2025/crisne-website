@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from evals.target import RoadmapTarget, build_target
-from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY
+from rag_service.domains.roadmap.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY
 
 @pytest.fixture(autouse=True)
 def _no_corpus_db(request, monkeypatch):

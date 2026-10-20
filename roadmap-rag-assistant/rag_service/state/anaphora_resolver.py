@@ -9,7 +9,7 @@ Handles:
 from __future__ import annotations
 
 from typing import Optional, Tuple
-from rag_service.router.schemas import EntityLevel, StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import EntityLevel, StructuredRoadmapAction
 from rag_service.state.session_store import SessionContext, session_store
 
 

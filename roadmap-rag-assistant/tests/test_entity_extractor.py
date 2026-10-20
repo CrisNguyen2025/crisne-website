@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from rag_service.router import StructuredEntityExtractor, normalize_vietnamese
-from rag_service.router.entity_extractor import EXTRACTION_PROMPT
-from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+from rag_service.domains.roadmap.router import StructuredEntityExtractor, normalize_vietnamese
+from rag_service.domains.roadmap.router.entity_extractor import EXTRACTION_PROMPT
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 
 
 class _FakeStructuredLLM:

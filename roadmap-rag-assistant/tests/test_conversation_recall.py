@@ -9,8 +9,8 @@ import pytest
 from langchain_core.messages import AIMessageChunk
 
 from rag_service.agent import NextGenRoadmapAgent
-from rag_service.router.intent_router import IntentRouter
-from rag_service.router.schemas import IntentType
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.schemas import IntentType
 
 RECALL = [
     "tôi tên gì?",

@@ -16,7 +16,7 @@ from rag_service.auth import (
     is_valid_internal_key,
     parse_actor,
 )
-from rag_service.router.schemas import (
+from rag_service.domains.roadmap.router.schemas import (
     ActionType,
     EntityLevel,
     SingleEntity,

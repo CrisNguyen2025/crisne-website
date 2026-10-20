@@ -4,7 +4,7 @@ import asyncio
 
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.api.schemas import ChatRequest
-from rag_service.router.grounding import (
+from rag_service.domains.roadmap.router.grounding import (
     BATCH_LAYER_DELETE_REPLY,
     BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
@@ -22,8 +22,8 @@ from rag_service.router.grounding import (
 )
 from rag_service.auth import set_actor
 from rag_service.state import session_store
-from rag_service.router.intent_router import IntentRouter
-from rag_service.router.schemas import IntentType
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.schemas import IntentType
 
 
 def test_off_topic_is_out_of_scope():
@@ -81,7 +81,7 @@ def test_chat_request_accepts_context():
 
 
 def test_sanitize_title_strips_page_context_hint():
-    from rag_service.router.entity_extractor import StructuredEntityExtractor
+    from rag_service.domains.roadmap.router.entity_extractor import StructuredEntityExtractor
 
     extractor = StructuredEntityExtractor(llm_model=None)
     title = extractor._sanitize_title("Frontend Basics [Ngữ cảnh trang hiện tại: roadmap='kkkk'. Khi người dùng nói 'này']")

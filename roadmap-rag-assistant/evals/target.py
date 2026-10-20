@@ -21,14 +21,14 @@ from rag_service.config import settings
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
-from rag_service.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
-from rag_service.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
 MODES = ("fts", "vector", "hybrid")
 ANSWER_MODES = ("off", "llm")
 CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
 # Code whose change can change an answer; any edit here invalidates the whole cache
-CODE_GLOBS = ("rag_service/agent.py", "rag_service/core/**/*.py", "rag_service/domains/**/*.py", "rag_service/rag/*.py", "rag_service/router/*.py")
+CODE_GLOBS = ("rag_service/core/**/*.py", "rag_service/domains/**/*.py")
 
 
 def _code_fingerprint() -> str:

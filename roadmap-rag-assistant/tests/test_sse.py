@@ -44,7 +44,7 @@ async def test_chat_stream_plan_mode(mock_adapter, owner_headers):
 
 @pytest.mark.asyncio
 async def test_chat_confirm_and_cancel_endpoints(mock_adapter, owner_headers):
-    from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+    from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
     from rag_service.state.session_store import session_store
 
     thread_id = "test-confirm-thread"

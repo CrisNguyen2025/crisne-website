@@ -2,8 +2,8 @@
 
 import pytest
 
-from rag_service.router.intent_router import IntentRouter
-from rag_service.router.schemas import IntentType
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.schemas import IntentType
 
 READER_SUGGESTIONS = [
     "Topic backend có những layer nào?",

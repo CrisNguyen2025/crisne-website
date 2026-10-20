@@ -11,9 +11,9 @@ import re
 from typing import Optional
 
 from rag_service.llm_breaker import llm_breaker
-from rag_service.router.grounding import OUT_OF_SCOPE_REPLY, RATE_LIMITED_REPLY, build_grounding
-from rag_service.router.intent_router import IntentRouter
-from rag_service.router.schemas import IntentType
+from rag_service.domains.roadmap.router.grounding import OUT_OF_SCOPE_REPLY, RATE_LIMITED_REPLY, build_grounding
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.schemas import IntentType
 
 _router = IntentRouter()
 

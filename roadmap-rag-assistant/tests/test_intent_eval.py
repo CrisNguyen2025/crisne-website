@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from rag_service.router.grounding import is_sensitive_request
-from rag_service.router.intent_router import IntentRouter
+from rag_service.domains.roadmap.router.grounding import is_sensitive_request
+from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
 CASES_PATH = Path(__file__).parent / "data" / "intent_eval_cases.json"
 

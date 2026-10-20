@@ -12,13 +12,13 @@ from typing import AsyncGenerator
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
 from rag_service.execution.dry_run import DryRunValidator
-from rag_service.router.grounding import (
+from rag_service.domains.roadmap.router.grounding import (
     BATCH_LAYER_DELETE_REPLY,
     BULK_DELETE,
     BULK_DELETE_REPLY,
     build_grounding,
 )
-from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.tools.rag_tools import generate_roadmap_from_template, preview_roadmap_plan

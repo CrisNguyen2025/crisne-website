@@ -11,7 +11,7 @@ from rag_service.adapters.errors import DuplicateEntityError, normalize_title
 from rag_service.adapters.sqlite_adapter import SqliteAdapter
 from rag_service.auth import set_actor
 from rag_service.execution.executor import ActionExecutor
-from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state.session_store import session_store
 
 SCHEMA = """

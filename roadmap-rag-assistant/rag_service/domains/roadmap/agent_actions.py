@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import AsyncGenerator, Optional
 
-from rag_service.router.schemas import ActionType, StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import ActionType, StructuredRoadmapAction
 from rag_service.tools import get_adapter
 from rag_service.tools.layer_resolver import LayerResolution
 

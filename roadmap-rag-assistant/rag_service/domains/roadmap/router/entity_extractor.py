@@ -11,13 +11,13 @@ import re
 from typing import Optional
 
 from rag_service.llm_breaker import llm_breaker
-from rag_service.router.schemas import (
+from rag_service.domains.roadmap.router.schemas import (
     ActionType,
     EntityLevel,
     SingleEntity,
     StructuredRoadmapAction,
 )
-from rag_service.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
+from rag_service.domains.roadmap.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
 
 
 

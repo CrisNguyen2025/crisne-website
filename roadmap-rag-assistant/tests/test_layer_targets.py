@@ -8,8 +8,8 @@ import pytest
 
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.auth import set_actor
-from rag_service.router.schemas import ActionType, EntityLevel
-from rag_service.router.entity_extractor import StructuredEntityExtractor
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel
+from rag_service.domains.roadmap.router.entity_extractor import StructuredEntityExtractor
 from rag_service.tools.layer_resolver import LayerResolution
 
 
@@ -171,7 +171,7 @@ def test_resolve_layer_prefers_the_named_topic_among_same_named_layers(monkeypat
 
 
 def test_agent_passes_the_topic_named_in_the_message_to_the_layer_resolver(monkeypatch):
-    from rag_service.router.schemas import SingleEntity, StructuredRoadmapAction
+    from rag_service.domains.roadmap.router.schemas import SingleEntity, StructuredRoadmapAction
 
     seen = {}
 

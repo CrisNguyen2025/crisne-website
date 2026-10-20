@@ -13,8 +13,8 @@ import re
 from typing import Optional
 
 from rag_service.llm_breaker import llm_breaker
-from rag_service.router.schemas import IntentClassificationResult, IntentType
-from rag_service.router.vietnamese import normalize_vietnamese
+from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
+from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 
 # Subjects clearly outside the roadmap domain. Matched only when no roadmap entity word is present.
