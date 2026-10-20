@@ -26,6 +26,11 @@ OFF_TOPIC_HINTS = [
     "hợp đồng", "hóa đơn", "công nợ", "doanh thu", "bảng lương", "chấm công",
 ]
 
+# Leading greeting, stripped before checking what follows it ("xin chào bạn, ...", "hi Abot!")
+GREETING_PREFIX = re.compile(
+    r"^\s*(?:xin\s+)?(?:chào|hi|hello|hey|alo)(?:\s+(?:bạn|abot|bot|em|anh|chị))?\b[\s,!.]*"
+)
+
 # Questions about the user or the conversation so far ("tôi tên gì?", "nãy tôi nói gì?").
 # Answered from conversation history in chitchat, never by searching the knowledge base.
 _ME = r"(?:tôi|mình|tớ|tao|em)"
@@ -100,8 +105,16 @@ class IntentRouter:
                 needs_cud_extraction=False,
             )
 
-        # 1e. Questions about the assistant itself ("bạn là ai?") are chitchat, even with a "?"
-        if re.search(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you)\b", lower):
+        # 1e. A greeting alone, or a greeting followed by a question about the assistant
+        # ("Xin chào, bạn là ai?"), is chitchat, even with a "?"
+        rest = GREETING_PREFIX.sub("", lower, count=1)
+        if rest != lower and not rest.strip(" ?!.,"):
+            return IntentClassificationResult(
+                intent=IntentType.CHITCHAT,
+                confidence=0.95,
+                needs_cud_extraction=False,
+            )
+        if re.search(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you)\b", rest):
             return IntentClassificationResult(
                 intent=IntentType.CHITCHAT,
                 confidence=0.9,

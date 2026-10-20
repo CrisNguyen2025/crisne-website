@@ -21,6 +21,7 @@ from typing import Any, AsyncGenerator
 from rag_service.auth import is_owner
 from rag_service.config import settings
 from rag_service.core.generation import citation, guardrails
+from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.profile import DomainProfile
@@ -52,6 +53,8 @@ class GenerationPipeline:
         prompt = build_prompt(req, profile, documents=documents)
         known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)  # S3
+        channel = SourceChannel(d.id for d in documents) if is_rag else None  # S3b
+        clean: list[str] = []  # the answer without the sources line and source labels
         pii = guardrails.PiiStreamFilter() if profile.mask_output_pii else guardrails.NoFilter()  # S4
         # Under "fallback" a RAG answer is held until the grounding check passes.
         hold = is_rag and profile.grounding_policy == "fallback"
@@ -67,12 +70,20 @@ class GenerationPipeline:
         result = StreamResult()
         try:
             async for delta in astream(llm, prompt, result):  # S2
-                if safe := pii.feed(links.feed(delta)):
+                text = channel.feed(delta) if channel else delta
+                clean.append(text)
+                if safe := pii.feed(links.feed(text)):
                     if hold:
                         held.append(safe)
                     else:
                         yield token_event(safe)  # S5
-            if rest := pii.feed(links.flush()) + pii.flush():
+            if channel:
+                tail = channel.flush()
+                clean.append(tail)
+                links_tail = links.feed(tail)
+            else:
+                links_tail = ""
+            if rest := pii.feed(links_tail + links.flush()) + pii.flush():
                 if hold:
                     held.append(rest)
                 else:
@@ -85,7 +96,7 @@ class GenerationPipeline:
                 trace.flags["llm_fallback"] = True
             raise GenerationFailed("llm_error", str(exc)) from exc
 
-        answer = result.text
+        answer = "".join(clean) if channel else result.text
         usage = usage_from_langchain(result.merged)
         sections = {
             "history_turns": prompt.count("<turn "),
@@ -147,6 +158,7 @@ class GenerationPipeline:
             usage,
             ("issues" if report.issues else "ok") if report is not None else None,
             show_scores=is_owner(),
+            cited_ids=channel.ids if channel else [],
         )
 
 

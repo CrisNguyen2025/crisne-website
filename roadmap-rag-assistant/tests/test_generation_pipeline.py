@@ -190,13 +190,14 @@ def test_rag_answer_ends_with_metadata_listing_cited_sources(monkeypatch):
 
     async def run():
         req = GenerationRequest(mode="rag", query="docker", thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9), (_doc("x"), 0.8)])
-        return [ev async for ev in generation_pipeline.astream(RecordingLLM("Xem [Docker](/?topic=ops&item=d1) nhé"), req)]
+        return [ev async for ev in generation_pipeline.astream(RecordingLLM("Xem Docker nhé.\n<sources>d1</sources>"), req)]
 
     events = asyncio.run(run())
     meta = events[-1]
     assert meta["type"] == "metadata" and meta["mode"] == "rag" and meta["grounding"] == "ok"
     # Only the lesson the answer links is a source; the retrieved but unused one is dropped
-    assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", True)]
+    assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", False)]
+    assert "<sources" not in _text(events) and "Nguồn" not in _text(events)
     assert meta["sources"][0]["href"] == "/?topic=ops&item=d1"
 
 

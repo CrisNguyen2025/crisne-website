@@ -33,6 +33,7 @@ from rag_service.observability import (
     traced_turn,
 )
 from rag_service.steps import step_event, with_steps
+from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
 from rag_service.domains.roadmap.retrieval.engine import knowledge_href, rag_engine
 from rag_service.domains.roadmap.router import (
     IntentClassificationResult,
@@ -70,6 +71,12 @@ def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> N
     )
 
 
+async def _on_topic_search(query: str, limit: int = 4):
+    """Live search, keeping only lessons that share a content word with the question."""
+    matches = await rag_engine.search_live_knowledge(query, limit=limit)
+    return filter_on_topic(query, matches)
+
+
 class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -91,7 +98,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
     def _source_deps(self) -> SourceDeps:
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
         return SourceDeps(
-            search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
+            search=lambda query, limit=4: _on_topic_search(query, limit),
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
             href_of=knowledge_href,
             item_fields=_item_fields,

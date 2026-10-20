@@ -28,29 +28,29 @@ def metadata_event(
     usage: Optional[dict],
     grounding: Optional[str],
     show_scores: bool,
+    cited_ids: Optional[List[str]] = None,
 ) -> dict:
     """Closing event of an LLM answer.
 
-    A document is a source only when the answer uses it: its href is linked (`cited`) or its
-    title is named in the text. Retrieved-but-unused documents are not shown.
+    `sources` are the documents the model named in its <sources> line (see sources_channel),
+    in the order it named them. Nothing else is a source: retrieved but unused documents and
+    names that merely appear in the text are not.
     """
-    lowered = answer.casefold()
+    by_id = {d.id: d for d in documents}
     sources = []
-    for d in documents:
-        cited = bool(d.href) and f"({d.href})" in answer
-        named = bool(d.title) and d.title.casefold() in lowered
-        if not (cited or named):
+    for doc_id in (cited_ids or [])[:MAX_SOURCES]:
+        d = by_id.get(doc_id)
+        if d is None:
             continue
         sources.append(
             {
                 "id": d.id,
                 "title": d.title,
                 "href": d.href,
-                "cited": cited,
+                "cited": bool(d.href) and f"({d.href})" in answer,
                 **({"score": round(d.score, 4)} if show_scores else {}),
             }
         )
-    sources = sources[:MAX_SOURCES]
     ev: dict = {"type": "metadata", "mode": mode, "sources": sources}
     if usage:
         ev["usage"] = usage

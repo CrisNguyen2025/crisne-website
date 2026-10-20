@@ -249,7 +249,7 @@ export function MessageList({
                 </div>
               )}
 
-              {/* Sources the answer used, shown whether or not the model linked them inline */}
+              {/* Sources the answer used, once at the end of the answer */}
               {!!msg.sources?.length && !isLive && (
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <span className="text-xs text-[#6B6A66]">Nguồn</span>

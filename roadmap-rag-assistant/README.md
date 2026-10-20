@@ -116,7 +116,7 @@ console.log(response.message);
 | `token` | `{"delta": "..."}` — a piece of the answer |
 | `tool_start` / `tool_end` | `{"name", "args"}` / `{"name", "result"}` |
 | `step` | One step of the turn's timeline (below) |
-| `done` | `{"message", "tool_calls", "steps"}` — `steps` holds the final state of every step |
+| `done` | `{"message", "tool_calls", "steps", "metadata"?}` — `steps` holds the final state of every step; `metadata.sources` lists the sources (below) |
 | `error` | `{"error": "..."}` |
 
 `step` events share an `id` per step: a `running` event, then `done` (with `duration_ms`) or `error`.
@@ -128,6 +128,24 @@ event: step
 data: {"id": "retrieve", "kind": "retrieval", "status": "done", "duration_ms": 412, "count": 1,
        "detail": "1 tài liệu", "items": [{"title": "Vector Database", "type": "item", "topic": "ai", "href": "/?topic=ai"}]}
 ```
+
+## Nguồn của câu trả lời (khi nào hiện dải "Nguồn")
+
+Prompt yêu cầu model không chèn link, id tài liệu hay dòng "Nguồn:" vào câu trả lời. Nguồn đi riêng trong `done.metadata.sources`,
+và UI hiện một dải "Nguồn" duy nhất ở cuối câu trả lời. Quy tắc nằm ở `metadata_event`
+(`rag_service/core/generation/delivery.py`).
+
+| # | Trường hợp | Route / `answer.mode` | Dải "Nguồn" |
+|---|---|---|---|
+| 1 | Câu hỏi kiến thức, câu trả lời nhắc tới bài đã truy xuất | `knowledge_query` / `llm` | **Có**: bài được nhắc tên, tối đa 3 |
+| 2 | Câu hỏi kiến thức, câu trả lời không nhắc bài nào | `knowledge_query` / `llm` | Không |
+| 3 | LLM lỗi, chưa cấu hình, hoặc grounding không đạt | `knowledge_query` / `context` | Không: nội dung đã là danh sách bài có link |
+| 4 | Không có bài nào khớp | `knowledge_query` / `no_match` | Không |
+| 5 | Lỗi truy xuất | `knowledge_query` | Không |
+| 6 | Chào hỏi, hỏi về trợ lý, hỏi lại điều đã nói | `chitchat` | Không |
+| 7 | Ngoài phạm vi roadmap | `out_of_scope` | Không |
+| 8 | Tạo, sửa, xoá topic/layer/group/item | `roadmap_cud` | Không: kết quả là thao tác, không phải tri thức |
+| 9 | `/plan`, `/goal` | `plan_goal` | Không |
 
 ## Run Tests
 
