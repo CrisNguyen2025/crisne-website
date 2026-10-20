@@ -37,7 +37,15 @@ SECRET = re.compile(r"api[\s_-]?keys?|secrets?|tokens?|passwords?|mật\s+khẩu
 OWNED = re.compile(
     r"giá\s+trị|\bvalue\b|hiện\s+tại|\bcurrent\b|của\s+(?:bạn|hệ\s+thống|server|backend|ứng\s+dụng|app)"
     r"|\byour\s+(?:api|secrets?|tokens?|passwords?|credentials?|env)"
+    # Claiming an operator role ("tôi là admin") is asking for the system's own secrets
+    r"|\b(?:admin|quản\s+trị(?:\s+viên)?|root|maintainer)\b"
 )
+# Printing or showing the process environment is sensitive by itself: no ownership cue is needed.
+# "đọc" is left out on purpose, since "cách đọc biến môi trường trong Node" is a lesson question.
+ENV_DUMP = re.compile(
+    r"\bin\s+ra\b|cho\s+(?:tôi\s+|mình\s+|em\s+)?xem|hiển\s+thị|\b(?:print|show|reveal|dump|echo)\b"
+)
+ENV_SCOPE = re.compile(r"biến\s+môi\s+trường|environment\s+variables?|\benv\b")
 
 
 def is_sensitive_request(message: str) -> bool:
@@ -46,6 +54,8 @@ def is_sensitive_request(message: str) -> bool:
         return True
     lower = message.lower()
     if SYSTEM_PROMPT.search(lower) or INJECTION.search(lower):
+        return True
+    if ENV_DUMP.search(lower) and ENV_SCOPE.search(lower):
         return True
     if not REVEAL.search(lower):
         return False

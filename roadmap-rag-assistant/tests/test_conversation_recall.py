@@ -48,6 +48,28 @@ NOT_RECALL = [
 ]
 
 
+INTRODUCTION = [
+    "tôi là Huy đúng k",
+    "tôi là Huy",
+    "mình là Huy đúng không?",
+    "tôi là cris",
+    "tôi tên là huy đúng k",
+    "mình tên là Huy đúng không?",
+]
+
+
+@pytest.mark.parametrize("text", INTRODUCTION)
+def test_introduction_routes_to_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.CHITCHAT
+
+
+@pytest.mark.parametrize("text", ["tôi là topic AI Engineering", "tôi là layer Docker đúng không"])
+def test_introduction_with_roadmap_word_is_not_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is None or res.intent != IntentType.CHITCHAT
+
+
 @pytest.mark.parametrize("text", RECALL)
 def test_recall_questions_route_to_chitchat(text):
     res = IntentRouter().classify_heuristics(text)

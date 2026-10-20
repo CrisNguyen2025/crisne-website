@@ -17,6 +17,7 @@ from rag_service.domains.roadmap.router.schemas import (
     SingleEntity,
     StructuredRoadmapAction,
 )
+from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
 
 
@@ -74,14 +75,17 @@ def _generate_clean_short_code(title: str) -> str:
 # Words that can follow "trong"/"topic" but are keywords or urgency switches, never a topic or layer name.
 PARENT_STOPWORDS = {
     "topic", "topics", "layer", "layers", "group", "item", "core", "đó", "the", "a", "an",
-    "trong", "vào", "cho", "on", "in", "to", "into", "luôn", "ngay", "tạo", "create", "new", "this", "này", "của", "đây",
+    "trong", "vào", "vao", "cho", "on", "in", "to", "into", "luôn", "ngay", "tạo", "create", "new", "this", "này", "của", "đây",
 }
 
 
-def _clean_parent(raw: str) -> Optional[str]:
-    """Name of the topic/layer in a parent clause, or None when the word is a keyword instead."""
+def _clean_parent(raw: str, allow_number: bool = False) -> Optional[str]:
+    """Name of the topic/layer in a parent clause, or None when the word is a keyword instead.
+
+    A bare number is a valid layer reference ("trong layer 1") only when the clause said "layer".
+    """
     cand = re.sub(r"(?:\s+(?:topics?c*|layers?r*))+$", "", raw.strip(), flags=re.IGNORECASE).strip()
-    if not cand or cand.lower() in PARENT_STOPWORDS or cand.isdigit():
+    if not cand or cand.lower() in PARENT_STOPWORDS or (cand.isdigit() and not allow_number):
         return None
     return cand
 
@@ -138,7 +142,7 @@ class StructuredEntityExtractor:
 
         # Always strip action verbs at start (including pleasantry wrappers like 'xóa giúp mình')
         cleaned = re.sub(
-            r"^(?:tạo|thêm|xóa|xoá|sửa|đổi tên|cập nhật|gỡ|hủy|huỷ|create|add|delete|remove|new|make)\s+(?:(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)\s+)?",
+            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|gỡ|hủy|huỷ|create|add|delete|remove|new|make)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?",
             "",
             cleaned,
             flags=re.IGNORECASE,
@@ -170,7 +174,7 @@ class StructuredEntityExtractor:
 
         # Otherwise strip leading category words (e.g. "topic AI Engineering" -> "AI Engineering")
         candidate = re.sub(
-            r"^(?:topics?c*|chủ\s+đề|lộ\s+trình|roadmaps?|layers?r*|groups?|nhóm|items?m*|bài(?:\s+học)?|mục|lessons?)\s+",
+            r"^(?:topics?c*|chủ\s+đề|chu\s+de|lộ\s+trình|lo\s+trinh|roadmaps?|layers?r*|groups?|nhóm|nhom|items?m*|bài(?:\s+học)?|bai(?:\s+hoc)?|mục|muc|lessons?)\s+",
             "",
             cleaned,
             flags=re.IGNORECASE,
@@ -201,20 +205,22 @@ class StructuredEntityExtractor:
             text = re.sub(r"\blevel\s+[a-zA-Z0-9_-]+", "", text, flags=re.IGNORECASE).strip()
 
         # 3. Determine Action
+        # Action and level words are matched folded, so "xoa bai" and "xóa bài" are the same request
+        flat = fold(lower)
         action = ActionType.CREATE
-        if any(w in lower for w in ["xóa", "xoá", "delete", "remove", "gỡ"]):
+        if "gỡ" in lower or any(re.search(rf"\b{w}\b", flat) for w in ["xoa", "delete", "remove"]):
             action = ActionType.DELETE
-        elif any(w in lower for w in ["sửa", "đổi tên", "update", "rename", "cập nhật"]):
+        elif any(re.search(rf"\b{w}\b", flat) for w in ["sua", "doi ten", "rename", "update", "cap nhat"]):
             action = ActionType.UPDATE
 
 
         # 4. Determine Entity Level
         level = EntityLevel.TOPIC
-        if any(re.search(rf"\b{p}\b", lower) for p in [r"items?m*", r"bài(?:\s+học)?", r"mục", r"lessons?"]):
+        if any(re.search(rf"\b{p}\b", flat) for p in [r"items?m*", r"bai(?:\s+hoc)?", r"muc", r"lessons?"]):
             level = EntityLevel.ITEM
-        elif any(re.search(rf"\b{p}\b", lower) for p in [r"groups?", r"nhóm"]):
+        elif any(re.search(rf"\b{p}\b", flat) for p in [r"groups?", r"nhom"]):
             level = EntityLevel.GROUP
-        elif any(re.search(rf"\b{p}\b", lower) for p in [r"layers?r*", r"mảng(?:\s+kiến\s+thức)?"]):
+        elif any(re.search(rf"\b{p}\b", flat) for p in [r"layers?r*", r"mang(?:\s+kien\s+thuc)?"]):
             level = EntityLevel.LAYER
 
         # 5. Extract Parent Target (only relevant for layer, group, item — NOT topic)
@@ -225,7 +231,7 @@ class StructuredEntityExtractor:
             else:
                 # Match parent topic / layer like "trong layer mock 1" or "on fe" or "to layer 01-LLM"
                 m_parent = re.search(
-                    r"\b(?:trong|vào|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=\s+level|$)",
+                    r"\b(?:trong|vào|vao|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=\s+level|$)",
                     text,
                     flags=re.IGNORECASE,
                 )
@@ -235,7 +241,7 @@ class StructuredEntityExtractor:
                 if m_prefix:
                     found = _clean_parent(m_prefix.group(1)) or found
                 if m_parent:
-                    found = _clean_parent(m_parent.group(1)) or found
+                    found = _clean_parent(m_parent.group(1), allow_number=bool(re.search(r"layer", m_parent.group(0), re.IGNORECASE))) or found
 
                 # Also check "be topic" / "fe topic"
                 m_suffix = re.search(r"\b([a-zA-Z0-9_-]+)\s+topics?c*\b", text, flags=re.IGNORECASE)
@@ -308,7 +314,7 @@ class StructuredEntityExtractor:
         # 2. Check for comma / and lists: "A, B và C" / "A and B"
         # First strip out parent clause
         clause = re.sub(
-            r"\b(?:trong|vào|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=\s+level|$)",
+            r"\b(?:trong|vào|vao|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=\s+level|$)",
             "",
             text,
             flags=re.IGNORECASE,
@@ -321,7 +327,7 @@ class StructuredEntityExtractor:
 
         # Strip out action verb, conversational wrapper, and level keyword
         clause = re.sub(
-            r"^(?:tạo|thêm|xóa|xoá|sửa|đổi tên|cập nhật|create|add|delete|remove)\s+(?:(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|mục|bài(?:\s+học)?|roadmaps?|lessons?)?\s*(?:(?:về|about)\s+)?",
+            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|chu\s+de|mục|muc|nhóm|nhom|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about)\s+)?",
             "",
             clause.strip(),
             flags=re.IGNORECASE,

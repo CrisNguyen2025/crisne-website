@@ -14,7 +14,7 @@ from typing import Callable, Optional
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
-from rag_service.domains.roadmap.retrieval.relevance import content_words
+from rag_service.domains.roadmap.retrieval.relevance import content_words, fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 
@@ -23,8 +23,23 @@ OFF_TOPIC_HINTS = [
     "thời tiết", "dự báo thời tiết", "giá vàng", "tỷ giá", "tỉ giá", "chứng khoán", "bitcoin", "crypto",
     "bóng đá", "tỷ số", "tỉ số", "phim", "bài hát", "nấu ăn", "công thức nấu", "du lịch",
     "weather", "stock price", "football score", "recipe",
+    # Sports fixtures and TV schedules
+    "arsenal", "man city", "man utd", "liverpool", "chelsea", "world cup", "đá với", "chiếu trên", "lịch chiếu",
+    # Shopping, food, lottery, vehicles, health: everyday questions with no roadmap content
+    "giá rẻ", "uy tín tại", "mua iphone", "ăn gì", "quán ăn", "món ngon", "xổ số", "vé số",
+    "xe honda", "ô tô", "xe máy", "review giúp", "trị mụn", "thuốc", "thủ đô", "capital of",
     # Business records live outside the roadmap database
     "hợp đồng", "hóa đơn", "công nợ", "doanh thu", "bảng lương", "chấm công",
+]
+
+OFF_TOPIC_STRONG_HINTS = [
+    "bài thơ", "viết thơ", "truyện", "tin tức", "poem", "romantic", "joke", "câu chuyện cười",
+    "kể chuyện", "dịch giúp", "dịch đoạn", "translate",
+]
+
+# Matched against the normalized message, so each phrase goes through the same normalization
+PLAN_PHRASES = [
+    normalize_vietnamese(p).lower() for p in ["lập kế hoạch", "xem trước roadmap", "preview plan", "generate roadmap"]
 ]
 
 # Leading greeting, stripped before checking what follows it ("xin chào bạn, ...", "hi Abot!")
@@ -51,8 +66,14 @@ CONVERSATION_RECALL = re.compile(
     re.IGNORECASE,
 )
 
+# A self-introduction or a check of it: "tôi là Huy", "tôi là Huy đúng k?". Only a short name, no roadmap word.
+IDENTITY_STATEMENT = re.compile(
+    rf"^{_ME}\s+(?:tên\s+)?là\s+[\w]+(?:\s+[\w]+){{0,2}}?(?:\s+(?:đúng|phải)(?:\s+(?:k|ko|không|chưa))?)?\s*[?!.]*$",
+    re.IGNORECASE,
+)
+
 # Clause joiners used to spot several requests in one message.
-MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;]|\brồi\b|\bsau\s+đó\b|\bvà\b|\bthen\b|\band\b)\s*", re.IGNORECASE)
+MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;\n]|\brồi\b|\bsau\s+đó\b|\bvà\b|\bthen\b|\band\b)\s*", re.IGNORECASE)
 
 
 class IntentRouter:
@@ -78,7 +99,7 @@ class IntentRouter:
 
         # 1. Plan / Goal mode
         if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(
-            k in lower for k in ["lập kế hoạch", "xem trước roadmap", "preview plan", "generate roadmap"]
+            k in lower for k in PLAN_PHRASES
         ):
             return IntentClassificationResult(
                 intent=IntentType.PLAN_GOAL,
@@ -87,12 +108,18 @@ class IntentRouter:
             )
 
         # 1b. Off-topic guardrail: clearly unrelated subjects without any roadmap entity word
+        # Keyword matching runs on the folded text, so "xoa bai" and "xóa bài" are the same request
+        flat = fold(lower)
         has_roadmap_entity = any(
-            re.search(rf"\b{pat}\b", lower)
-            for pat in [r"topics?c*", r"chủ\s+đề", r"lộ\s+trình", r"roadmaps?", r"layers?r*",
-                        r"mảng", r"groups?", r"nhóm", r"items?m*", r"bài", r"mục", r"lessons?"]
+            re.search(rf"\b{pat}\b", flat)
+            for pat in [r"topics?c*", r"chu\s+de", r"lo\s+trinh", r"roadmaps?", r"layers?r*",
+                        r"mang", r"groups?", r"nhom", r"items?m*", r"bai", r"muc", r"lessons?"]
         )
-        if not has_roadmap_entity and any(hint in lower for hint in OFF_TOPIC_HINTS):
+        # Creative writing and news cues ("bài thơ") use "bài", a roadmap word too, so they skip the entity check
+        def _has_hint(hints: list[str]) -> bool:
+            return any(re.search(rf"\b{re.escape(fold(h))}\b", flat) for h in hints)
+
+        if _has_hint(OFF_TOPIC_STRONG_HINTS) or (not has_roadmap_entity and _has_hint(OFF_TOPIC_HINTS)):
             return IntentClassificationResult(
                 intent=IntentType.OUT_OF_SCOPE,
                 confidence=0.90,
@@ -109,7 +136,7 @@ class IntentRouter:
             )
 
         # 1d. Recall of the user or earlier turns is chitchat: the answer is in the history, not the KB.
-        if CONVERSATION_RECALL.search(lower):
+        if CONVERSATION_RECALL.search(lower) or (not has_roadmap_entity and IDENTITY_STATEMENT.match(lower)):
             return IntentClassificationResult(
                 intent=IntentType.CHITCHAT,
                 confidence=0.9,
@@ -139,41 +166,47 @@ class IntentRouter:
             "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "search", "what is", "how to", "show me", "which",
             "tại sao", "như thế nào"
         ]
-        has_query = any(re.search(rf"\b{re.escape(q)}\b", lower) for q in query_indicators)
+        has_query = any(re.search(rf"\b{re.escape(fold(q))}\b", flat) for q in query_indicators)
         # Trailing "không / k / ko" marks a yes-no question only as a separate word ("có bài Docker k"),
         # so words like "ok" or "check" are not questions.
         is_question = has_query or "?" in lower or bool(re.search(r"\s(?:không|k|ko)$", lower))
 
         # 3. Strong CUD verbs + entity keywords (typo-tolerant and bare imperative support)
+        # "gỡ" is left out: folded it becomes "go", an English word
         cud_verbs = [
-            "tạo", "thêm", "xóa", "xoá", "sửa", "đổi tên", "cập nhật", "gỡ", "hủy", "huỷ",
-            "create", "add", "delete", "remove", "update", "rename", "make", "new"
+            fold(v) for v in [
+                "tạo", "thêm", "xóa", "xoá", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
+                "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
+            ]
         ]
         entity_patterns = [
-            r"topics?c*", r"chủ\s+đề", r"lộ\s+trình", r"roadmaps?",
-            r"layers?r*", r"mảng(?:\s+kiến\s+thức)?",
-            r"groups?", r"nhóm",
-            r"items?m*", r"bài(?:\s+học)?", r"mục", r"lessons?"
+            r"topics?c*", r"chu\s+de", r"lo\s+trinh", r"roadmaps?",
+            r"layers?r*", r"mang(?:\s+kien\s+thuc)?",
+            r"groups?", r"nhom",
+            r"items?m*", r"bai(?:\s+hoc)?", r"muc", r"lessons?"
         ]
 
-        has_verb = any(re.search(rf"\b{re.escape(v)}\b", lower) for v in cud_verbs)
-        has_entity = any(re.search(rf"\b{pat}\b", lower) for pat in entity_patterns)
+        has_verb = any(re.search(rf"\b{re.escape(v)}\b", flat) for v in cud_verbs)
+        has_entity = any(re.search(rf"\b{pat}\b", flat) for pat in entity_patterns)
         verbs_or = "|".join(re.escape(v) for v in cud_verbs)
         starts_with_cud = bool(
             re.search(
-                rf"^(?:(?:bạn\s+ơi|vui\s+lòng|nhờ\s+bạn|hộ\s+mình|giúp\s+mình)\s+)?(?:{verbs_or})\b",
-                lower,
+                rf"^(?:(?:ban\s+oi|vui\s+long|nho\s+ban|ho\s+minh|giup\s+minh)\s+)?(?:{verbs_or})\b",
+                flat,
             )
         )
 
-        if not is_question and ((has_verb and has_entity) or starts_with_cud):
+        # A verb needs an object from the roadmap: "xóa nó đi" or "Xóa." alone is not a change request
+        if not is_question and has_entity and (has_verb or starts_with_cud):
             return IntentClassificationResult(
                 intent=IntentType.ROADMAP_CUD,
                 confidence=0.95,
                 needs_cud_extraction=True,
             )
 
-        if is_question:
+        # A question word ("là gì", "tìm") is a search by itself. A weak marker alone ("?", trailing "k")
+        # is not: the message must also name roadmap content, else it goes on to the vocabulary check and the LLM router.
+        if is_question and (has_query or has_entity or self.names_known_lesson(text)):
             return IntentClassificationResult(
                 intent=IntentType.KNOWLEDGE_QUERY,
                 confidence=0.90,
@@ -182,7 +215,8 @@ class IntentRouter:
 
         # 4. Chitchat / Greetings
         greetings = [
-            "chào", "hi", "hello", "hey", "alo", "bạn là ai", "who are you", "help", "trợ giúp",
+            "chào", "hi", "hello", "hey", "alo", "bạn là ai", "bạn giúp được gì", "bạn làm được gì",
+            "who are you", "help", "trợ giúp",
             "cảm ơn", "thank", "thanks", "ok", "oke", "tuyệt", "good"
         ]
         if any(re.search(rf"^\s*{re.escape(g)}\b", lower) for g in greetings):

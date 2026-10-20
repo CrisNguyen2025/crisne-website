@@ -1,0 +1,249 @@
+[
+  {
+    "message": "tạo topic AI Engineering",
+    "expected": {
+      "action": "create",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "AI Engineering"
+      ]
+    }
+  },
+  {
+    "message": "thêm topic Cloud Native",
+    "expected": {
+      "action": "create",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "Cloud Native"
+      ]
+    }
+  },
+  {
+    "message": "xóa topic microservices",
+    "expected": {
+      "action": "delete",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "microservices"
+      ]
+    }
+  },
+  {
+    "message": "delete topic microservices",
+    "expected": {
+      "action": "delete",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "microservices"
+      ]
+    }
+  },
+  {
+    "message": "tạo layer Testing trong topic qa",
+    "expected": {
+      "action": "create",
+      "entity_level": "layer",
+      "target": "qa",
+      "titles": [
+        "Testing"
+      ]
+    }
+  },
+  {
+    "message": "thêm layer Kiến thức nền trong topic be",
+    "expected": {
+      "action": "create",
+      "entity_level": "layer",
+      "target": "be",
+      "titles": [
+        "Kiến thức nền"
+      ]
+    }
+  },
+  {
+    "message": "xóa layer Docker trong topic devops",
+    "expected": {
+      "action": "delete",
+      "entity_level": "layer",
+      "target": "devops",
+      "titles": [
+        "Docker"
+      ]
+    }
+  },
+  {
+    "message": "đổi tên layer 2 thành Kiến thức nền tảng Backend",
+    "expected": {
+      "action": "update",
+      "entity_level": "layer",
+      "target": "2",
+      "titles": [
+        "Kiến thức nền tảng Backend"
+      ]
+    },
+    "schema_gap": true
+  },
+  {
+    "message": "rename layer 2 to Backend Foundations",
+    "expected": {
+      "action": "update",
+      "entity_level": "layer",
+      "target": "2",
+      "titles": [
+        "Backend Foundations"
+      ]
+    },
+    "schema_gap": true
+  },
+  {
+    "message": "sua ten layer 3 thanh Frontend",
+    "expected": {
+      "action": "update",
+      "entity_level": "layer",
+      "target": "3",
+      "titles": [
+        "Frontend"
+      ]
+    },
+    "schema_gap": true
+  },
+  {
+    "message": "tạo group Testing trong layer 1",
+    "expected": {
+      "action": "create",
+      "entity_level": "group",
+      "target": "1",
+      "titles": [
+        "Testing"
+      ]
+    }
+  },
+  {
+    "message": "xóa group Redis trong layer 01-LLM",
+    "expected": {
+      "action": "delete",
+      "entity_level": "group",
+      "target": "01-LLM",
+      "titles": [
+        "Redis"
+      ]
+    }
+  },
+  {
+    "message": "Can you add a new group called 'Testing & CI/CD' under layer 1?",
+    "expected": {
+      "action": "create",
+      "entity_level": "group",
+      "target": "1",
+      "titles": [
+        "Testing & CI/CD"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài git rebase vào layer 1",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "1",
+      "titles": [
+        "git rebase"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài Docker compose vào layer 02-AAA",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "02-AAA",
+      "titles": [
+        "Docker compose"
+      ]
+    }
+  },
+  {
+    "message": "Add item Redis to layer 02-AAA",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "02-AAA",
+      "titles": [
+        "Redis"
+      ]
+    }
+  },
+  {
+    "message": "them bai rest api vao layer 1",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "1",
+      "titles": [
+        "rest api"
+      ]
+    }
+  },
+  {
+    "message": "xóa bài redux",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": null,
+      "titles": [
+        "redux"
+      ]
+    }
+  },
+  {
+    "message": "xoa bai kafka",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": null,
+      "titles": [
+        "kafka"
+      ]
+    }
+  },
+  {
+    "message": "xóa bài redux trong layer 1",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": "1",
+      "titles": [
+        "redux"
+      ]
+    }
+  },
+  {
+    "message": "tạo topic AI Engineering và topic Data Engineering",
+    "expected": {
+      "action": "create",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "AI Engineering",
+        "Data Engineering"
+      ]
+    }
+  },
+  {
+    "message": "tạo 2 layer mock 1 và mock 2 trong topic be",
+    "expected": {
+      "action": "create",
+      "entity_level": "layer",
+      "target": "be",
+      "titles": [
+        "mock 1",
+        "mock 2"
+      ]
+    }
+  }
+]

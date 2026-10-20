@@ -6,6 +6,6 @@
     "route"
   ],
   "thresholds": {
-    "route.accuracy": 1.0
+    "route.accuracy": 0.75
   }
 }

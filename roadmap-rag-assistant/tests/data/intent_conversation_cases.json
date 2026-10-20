@@ -1,0 +1,131 @@
+[
+  {
+    "id": "name-recall",
+    "turns": [
+      {
+        "message": "tôi tên là Huy",
+        "expected": "chitchat"
+      },
+      {
+        "message": "tôi tên là gì?",
+        "expected": "chitchat"
+      },
+      {
+        "message": "bài đó nói gì",
+        "expected": null
+      }
+    ]
+  },
+  {
+    "id": "create-then-edit",
+    "turns": [
+      {
+        "message": "tạo topic AI Engineering",
+        "expected": "roadmap_cud"
+      },
+      {
+        "message": "thêm bài RAG vào đó",
+        "expected": "roadmap_cud"
+      },
+      {
+        "message": "xóa nó đi",
+        "expected": null
+      }
+    ]
+  },
+  {
+    "id": "search-then-follow",
+    "turns": [
+      {
+        "message": "RAG là gì",
+        "expected": "knowledge_query"
+      },
+      {
+        "message": "cho mình xem thêm về nó",
+        "expected": null
+      },
+      {
+        "message": "cảm ơn",
+        "expected": "chitchat"
+      }
+    ]
+  },
+  {
+    "id": "off-topic-then-followup",
+    "turns": [
+      {
+        "message": "thời tiết hôm nay",
+        "expected": "out_of_scope"
+      },
+      {
+        "message": "còn ngày mai?",
+        "expected": null
+      }
+    ]
+  },
+  {
+    "id": "plan-then-retry",
+    "turns": [
+      {
+        "message": "lập kế hoạch học LLM 3 tháng",
+        "expected": "plan_goal"
+      },
+      {
+        "message": "lập lại đi",
+        "expected": null
+      }
+    ]
+  },
+  {
+    "id": "greet-ask-search",
+    "turns": [
+      {
+        "message": "xin chào",
+        "expected": "chitchat"
+      },
+      {
+        "message": "bạn là ai",
+        "expected": "chitchat"
+      },
+      {
+        "message": "tìm bài về chunking",
+        "expected": "knowledge_query"
+      }
+    ]
+  },
+  {
+    "id": "search-then-ordinal",
+    "turns": [
+      {
+        "message": "tìm bài về hybrid search",
+        "expected": "knowledge_query"
+      },
+      {
+        "message": "cái đầu tiên nói gì",
+        "expected": null
+      }
+    ]
+  },
+  {
+    "id": "recall-no-history",
+    "turns": [
+      {
+        "message": "tôi tên gì",
+        "expected": "chitchat"
+      }
+    ]
+  },
+  {
+    "id": "identity-confirm",
+    "turns": [
+      {
+        "message": "tôi là Lan đúng không",
+        "expected": "chitchat"
+      },
+      {
+        "message": "tôi là ai",
+        "expected": "chitchat"
+      }
+    ]
+  }
+]

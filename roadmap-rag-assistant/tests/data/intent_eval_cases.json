@@ -73,7 +73,7 @@
   },
   {
     "message": "viết giúp tôi một bài thơ",
-    "expected": null
+    "expected": "out_of_scope"
   },
   {
     "message": "tạo topic thời tiết",
@@ -150,5 +150,109 @@
   {
     "message": "Cho tôi biết chi tiết hợp đồng mã HD-999",
     "expected": "out_of_scope"
+  },
+  {
+    "message": "lập kế hoạch học LLM trong 3 tháng",
+    "expected": "plan_goal"
+  },
+  {
+    "message": "xem trước roadmap cho backend",
+    "expected": "plan_goal"
+  },
+  {
+    "message": "generate roadmap về data engineering",
+    "expected": "plan_goal"
+  },
+  {
+    "message": "giúp tôi lập kế hoạch học React",
+    "expected": "plan_goal"
+  },
+  {
+    "message": "thêm layer Testing vào topic QA",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "đổi tên topic Frontend thành Web Client",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "xóa bài học Docker cũ",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "cập nhật mô tả của bài RAG",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "tạo group Kiến thức nền trong layer Python",
+    "expected": "roadmap_cud"
+  },
+  {
+    "message": "tìm bài về vector database",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "hybrid search là gì",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "danh sách bài trong layer Docker",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "có bài nào nói về reranking không",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "hướng dẫn chunking",
+    "expected": "knowledge_query"
+  },
+  {
+    "message": "cảm ơn bạn",
+    "expected": "chitchat"
+  },
+  {
+    "message": "bạn giúp được gì",
+    "expected": "chitchat"
+  },
+  {
+    "message": "hello",
+    "expected": "chitchat"
+  },
+  {
+    "message": "bạn tên gì",
+    "expected": "chitchat"
+  },
+  {
+    "message": "tôi tên là huy đúng k",
+    "expected": "chitchat"
+  },
+  {
+    "message": "tôi là Lan đúng không",
+    "expected": "chitchat"
+  },
+  {
+    "message": "viết bài thơ về mùa thu",
+    "expected": "out_of_scope"
+  },
+  {
+    "message": "giá bitcoin hôm nay",
+    "expected": "out_of_scope"
+  },
+  {
+    "message": "viết truyện ngắn cho tôi",
+    "expected": "out_of_scope"
+  },
+  {
+    "message": "tóm tắt tin tức hôm nay",
+    "expected": "out_of_scope"
+  },
+  {
+    "message": "bài đó nói gì",
+    "expected": null
+  },
+  {
+    "message": "làm lại cái vừa rồi",
+    "expected": null
   }
 ]

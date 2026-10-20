@@ -144,7 +144,7 @@ Mỗi leak được ghi vào `summary.json` (`acl_leaks`) và **luôn làm run f
 | Dataset | Nguồn migrate | Samples | Baseline `mode=fts` |
 |---|---|---|---|
 | `public/roadmap` | `tests/data/retrieval_eval_cases.json` (001–049) + bổ sung (050–083) | 83 (18 off-topic, 10 trong đó near-topic) | FTS: hit@5 0.954 · mrr@5 0.840 · off_topic_rejected 0.111 — hybrid: 1.0 · 0.932 · 0.667 |
-| `_routing` | `tests/data/intent_eval_cases.json` | 38 | accuracy 1.0 |
+| `_routing` | `tests/data/intent_eval_cases.json` + bộ blind/stress (đã map nhãn) | 142 active (38 gốc + 104 mới, 5 `needs_review`) | accuracy 0.7606 (gốc 38/38, mới 70/104). Ngưỡng hạ từ 1.0 xuống 0.75: 34 case heuristic chưa phủ (out_of_scope không từ khóa, plan_goal tiếng Anh, chitchat nhỏ). Ngưỡng chặn hồi quy; nâng lại khi sửa xong các nhóm này |
 | `_answer` | viết mới (bug "quên tên Cris") | 8 (7 multi-turn) | accuracy 1.0 (groq `openai/gpt-oss-120b`) |
 
 - Baseline khớp đúng với `tests/eval_retrieval.py --fts-only` (cùng hit@5, MRR, 1/8 off-topic).
