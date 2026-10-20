@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { CodeBlock } from "./components/CodeBlock";
 import { MarkdownTable } from "./components/MarkdownTable";
 import { CalloutAlert, CalloutType } from "./components/CalloutAlert";
+import { SourceChip, roadmapSourceLabel } from "./components/SourceChip";
 
 /**
  * Rich Markdown Engine for chat answers.
@@ -427,8 +428,16 @@ export function renderInline(text: string): React.ReactNode[] {
     } else if (m[4]) {
       // Link [text](url)
       const link = safeHref(m[6]);
+      const sourceLabel = roadmapSourceLabel(m[6]);
       out.push(
-        link ? (
+        link && sourceLabel ? (
+          <SourceChip
+            key={key++}
+            title={m[5]}
+            href={link.href}
+            source={sourceLabel}
+          />
+        ) : link ? (
           <a
             key={key++}
             href={link.href}
