@@ -21,6 +21,7 @@ from rag_service.config import settings
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
+from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
 from rag_service.domains.roadmap.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
 from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
@@ -43,7 +44,7 @@ def _code_fingerprint() -> str:
 
 class RoadmapTarget:
     name = "roadmap"
-    def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on"):
+    def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off"):
         if cache not in ("on", "off"):
             raise ValueError(f"cache must be 'on' or 'off', got {cache!r}")
         self._cache_on = cache == "on"
@@ -53,6 +54,10 @@ class RoadmapTarget:
         if answer not in ANSWER_MODES:
             raise ValueError(f"answer must be one of {ANSWER_MODES}, got {answer!r}")
         self.mode = mode
+        # gate=on applies the chat's on-topic check to retrieval, as /chat does
+        if gate not in ("on", "off"):
+            raise ValueError(f"gate must be on or off, got {gate!r}")
+        self.gate = gate == "on"
         self.capabilities = frozenset({"retrieve", "route"} | ({"answer"} if answer == "llm" else set()))
         self._agent = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -84,10 +89,10 @@ class RoadmapTarget:
         store = self._get_store()
         search = {"fts": store.search_fts, "vector": store.search_vector, "hybrid": store.hybrid_search}[self.mode]
         doc_ids = {doc["source_id"]: doc["doc_id"] for doc in self._load()[1]}
-        return [
-            Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score)
-            for doc, score in search(text, limit=k)
-        ]
+        matches = search(text, limit=k)
+        if self.gate:
+            matches = filter_on_topic(text, matches)
+        return [Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score) for doc, score in matches]
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
         if is_sensitive_request(text):
@@ -196,15 +201,18 @@ class RoadmapTarget:
         return "answer"
 
     def _citations(self, events: list[dict]) -> list[str]:
-        """Corpus section_ids of the sources the answer links to (from the pipeline's metadata event)."""
+        """Corpus section_ids of the answer's sources (the <sources> line, sent in the metadata event).
+
+        Every listed source counts, linked inline or not: the answer no longer links documents in its text.
+        """
         doc_ids = {doc["source_id"]: doc["doc_id"] for doc in self._load()[1]}
         meta = next((e for e in reversed(events) if e.get("type") == "metadata"), {})
-        return [doc_ids[s["id"]] for s in meta.get("sources", []) if s.get("cited") and s["id"] in doc_ids]
+        return [doc_ids[s["id"]] for s in meta.get("sources", []) if s["id"] in doc_ids]
 
     def corpus_fingerprint(self) -> dict:
         documents = self._load()[1]
         return {"source": "prisma/dev.db", "doc_count": len(documents), "sha256": content_hash(documents)}
 
 
-def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on") -> RoadmapTarget:
-    return RoadmapTarget(mode=mode, answer=answer, cache=cache)
+def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off") -> RoadmapTarget:
+    return RoadmapTarget(mode=mode, answer=answer, cache=cache, gate=gate)

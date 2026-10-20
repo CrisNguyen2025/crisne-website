@@ -75,6 +75,11 @@ export interface AssistantStepEvent {
   // retrieval
   count?: number;
   items?: AssistantStepItem[];
+  /** Searches run for the question (more than 1 when it was rewritten from history). */
+  queries?: number;
+  rewritten?: boolean;
+  /** Results before the on-topic check, sent only when the check dropped some. */
+  before_gate?: number;
   // tool
   name?: string;
   /** Owner only. */

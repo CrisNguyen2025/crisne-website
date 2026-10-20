@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     sqlite_db_path: str = "../prisma/dev.db"
     # Conversation memory file; empty keeps it in RAM (lost on restart)
     rag_history_db: str = ""
+    # Rewrite, expand and split the question with the LLM before searching (one extra LLM call per question)
+    rag_query_transform: bool = False
 
     # ── Access ──
     # Shared with the Next.js proxy (RAG_INTERNAL_KEY there); empty = every request is rejected.

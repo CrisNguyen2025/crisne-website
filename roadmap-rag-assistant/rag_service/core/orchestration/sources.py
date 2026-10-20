@@ -13,6 +13,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.core.retrieval.transform import QueryPlan, merge_ranked
 from rag_service.observability import current_trace, end_step, start_step
 from rag_service.steps import step_event
 
@@ -30,6 +31,10 @@ class SourceDeps:
     tool_name: str = "search_live_knowledge"
     scoring: str = "rrf(vector+keyword)"
     adapter_mode: str = ""
+    # Optional query transformation: (llm, query, session_id) -> QueryPlan. None = search the question as asked.
+    plan: Optional[Callable[[Any, str, str], Awaitable[QueryPlan]]] = None
+    # Optional final check of the merged matches against the original question: (query, matches) -> matches.
+    accept: Optional[Callable[[str, list], list]] = None
 
 
 async def stream_words(text: str, delay: float) -> AsyncGenerator[dict, None]:
@@ -71,7 +76,22 @@ async def answer_from_sources(
         metadata={"adapter_mode": adapter_mode, "scoring": scoring},
     )
     try:
-        matches = await search(query, limit=4)
+        plan = await deps.plan(llm, query, session_id) if deps.plan else QueryPlan(query)
+        queries = plan.queries()
+        if len(queries) == 1:
+            matches = await search(query, limit=4)
+        else:
+            results = await asyncio.gather(*(search(q, limit=4) for q in queries))
+            matches = merge_ranked(results, 4)
+        before_gate = len(matches)
+        if deps.accept:
+            # A rewrite resolved "bài đó" to a name, so the check also accepts the rewrite's words;
+            # other variants are not used here, so a drifting phrasing cannot let an unrelated match through.
+            gate_query = f"{query} {plan.variants[0]}" if plan.rewritten and plan.variants else query
+            matches = deps.accept(gate_query, matches)
+        if (trace := current_trace()) is not None:
+            trace.flags["queries"] = len(queries)
+            trace.flags["rewritten"] = plan.rewritten
     except Exception as exc:
         # Index/adapter failure is not "no match": say so instead of the no-result reply.
         print(f"[Agent] Retrieval error ({type(exc).__name__}: {exc}).")
@@ -99,6 +119,9 @@ async def answer_from_sources(
         "done",
         count=len(matches),
         detail=f"{len(matches)} tài liệu",
+        queries=len(queries),
+        rewritten=plan.rewritten or None,
+        before_gate=before_gate if before_gate != len(matches) else None,
         items=[
             {**item_fields(doc), "href": href_of(doc), **({"score": round(score, 4)} if owner else {})}
             for doc, score in matches

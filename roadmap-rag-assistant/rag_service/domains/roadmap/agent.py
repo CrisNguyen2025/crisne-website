@@ -33,6 +33,8 @@ from rag_service.observability import (
     traced_turn,
 )
 from rag_service.steps import step_event, with_steps
+from rag_service.core.augmentation.history import history_store
+from rag_service.core.retrieval.transform import HISTORY_TURNS, plan_queries
 from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
 from rag_service.domains.roadmap.retrieval.engine import knowledge_href, rag_engine
 from rag_service.domains.roadmap.router import (
@@ -63,18 +65,20 @@ UNCLEAR_CONFIDENCE = 0.7
 
 def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> None:
     """One line per chat turn, from the agent so /chat and /chat/stream both log it."""
-    route, answer = steps.get("route", {}), steps.get("answer", {})
+    route, answer, retrieve = steps.get("route", {}), steps.get("answer", {}), steps.get("retrieve", {})
+    found = retrieve.get("count")
     print(
         f"[turn] thread={thread_id} intent={route.get('intent')} route={route.get('method')} "
+        f"queries={retrieve.get('queries')} rewritten={bool(retrieve.get('rewritten'))} "
+        f"retrieved={retrieve.get('before_gate', found)} on_topic={found} "
         f"mode={answer.get('mode')} fallback={answer.get('fallback_reason')} "
-        f"grounding={metadata.get('grounding')} tools={tools}"
+        f"grounding={metadata.get('grounding')} sources={len(metadata.get('sources', []))} tools={tools}"
     )
 
 
-async def _on_topic_search(query: str, limit: int = 4):
-    """Live search, keeping only lessons that share a content word with the question."""
-    matches = await rag_engine.search_live_knowledge(query, limit=limit)
-    return filter_on_topic(query, matches)
+async def _plan_queries(llm, query: str, session_id: str):
+    """Query plan for a turn: the recent conversation is passed so references like "bài đó" can be resolved."""
+    return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm)
 
 
 class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
@@ -84,7 +88,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         self.llm = llm_model
         self.typing_delay = float(os.getenv("RAG_TYPING_DELAY_MS", "5")) / 1000
         self.tools = {t.name: t for t in (tools or ALL_TOOLS)}
-        self.router = IntentRouter(llm_model=llm_model)
+        self.router = IntentRouter(llm_model=llm_model, vocabulary=rag_engine.title_vocabulary)
         self.extractor = StructuredEntityExtractor(llm_model=llm_model)
         self.executor = ActionExecutor()
 
@@ -98,7 +102,9 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
     def _source_deps(self) -> SourceDeps:
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
         return SourceDeps(
-            search=lambda query, limit=4: _on_topic_search(query, limit),
+            search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
+            accept=filter_on_topic,
+            plan=_plan_queries if settings.rag_query_transform else None,
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
             href_of=knowledge_href,
             item_fields=_item_fields,

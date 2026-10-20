@@ -10,10 +10,11 @@ Subsystems:
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Callable, Optional
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
+from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 
@@ -57,8 +58,18 @@ MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;]|\brồi\b|\bsau\s+đó\b|\bvà\b|\b
 class IntentRouter:
     """Fast Intent Classifier with deterministic heuristics and LLM fallback."""
 
-    def __init__(self, llm_model: Optional[object] = None) -> None:
+    def __init__(
+        self, llm_model: Optional[object] = None, vocabulary: Optional[Callable[[], set[str]]] = None
+    ) -> None:
         self._llm = llm_model
+        # Folded words of every lesson/layer/topic title; a statement naming one is a knowledge question
+        self._vocabulary = vocabulary
+
+    def names_known_lesson(self, text: str) -> bool:
+        """True when the message shares a content word with a roadmap title ("LLM chấm điểm ..." -> LLM-as-a-Judge)."""
+        if self._vocabulary is None:
+            return False
+        return bool(content_words(text) & self._vocabulary())
 
     def classify_heuristics(self, text: str) -> Optional[IntentClassificationResult]:
         """Perform sub-5ms heuristic classification on clear-cut syntax and keywords."""
@@ -207,6 +218,12 @@ class IntentRouter:
         quick = self.classify_heuristics(text)
         if quick is not None:
             return quick, "heuristic"
+        # A statement without a question word ("LLM chấm điểm câu trả lời của chính nó") that names a known
+        # title is a knowledge question; the LLM router tends to call it out of scope.
+        if self.names_known_lesson(text):
+            return IntentClassificationResult(
+                intent=IntentType.KNOWLEDGE_QUERY, confidence=0.8, needs_cud_extraction=False
+            ), "vocabulary"
 
         method = "default"
         if self._llm is not None and llm_breaker.is_open:

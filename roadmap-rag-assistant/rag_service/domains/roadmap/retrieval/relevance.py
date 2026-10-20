@@ -8,6 +8,7 @@ becomes the "no lesson found" reply instead of a made-up match.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, List, Tuple
 
 # Question words and filler that say nothing about the topic
@@ -20,8 +21,17 @@ QUESTION_WORDS = {
 WORD = re.compile(r"\w+", re.UNICODE)
 
 
+def fold(text: str) -> str:
+    """Lowercase without Vietnamese diacritics, so "chia nho" matches "chia nhỏ"."""
+    text = text.casefold().replace("đ", "d")
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+FOLDED_QUESTION_WORDS = {fold(w) for w in QUESTION_WORDS}
+
+
 def content_words(text: str) -> set[str]:
-    return {w for w in WORD.findall(text.casefold()) if len(w) >= 2 and w not in QUESTION_WORDS}
+    return {w for w in WORD.findall(fold(text)) if len(w) >= 2 and w not in FOLDED_QUESTION_WORDS}
 
 
 def _doc_text(doc: Any) -> str:
@@ -34,3 +44,20 @@ def filter_on_topic(query: str, matches: List[Tuple[Any, float]]) -> List[Tuple[
     if not words:
         return matches
     return [(doc, score) for doc, score in matches if words & content_words(_doc_text(doc))]
+
+
+# English filler that appears in titles but names no technique
+TITLE_STOPWORDS = {"and", "the", "for", "with", "from", "into", "via", "vs", "per", "cho", "model", "models"}
+
+
+def title_terms(title: str) -> set[str]:
+    """Technical terms of a title, lowercased: ASCII words of 4+ letters, or acronyms ("LLM", "RAG").
+
+    Short lowercase ASCII words are often Vietnamese syllables ("Tri" in "Tri thức"), so they are skipped.
+    """
+    return {
+        w.casefold()
+        for w in WORD.findall(title)
+        if w.isascii() and not w.isdigit() and (len(w) >= 4 or (len(w) >= 2 and w.isupper()))
+        and w.casefold() not in TITLE_STOPWORDS
+    }

@@ -43,7 +43,7 @@ def test_behavior_mapping(reply, steps, expected):
     assert RoadmapTarget._behavior(reply, steps) == expected
 
 
-def test_citations_map_cited_sources_to_corpus_section_ids():
+def test_citations_map_every_listed_source_to_corpus_section_ids():
     from evals.corpus_export import DEV_DB
 
     if not DEV_DB.exists():
@@ -59,7 +59,7 @@ def test_citations_map_cited_sources_to_corpus_section_ids():
             {"id": "not-in-corpus", "cited": True},
         ]},
     ]
-    assert target._citations(events) == [doc["doc_id"]]
+    assert target._citations(events) == [doc["doc_id"], documents[1]["doc_id"]]
 
 
 class _EchoHistoryLlm:

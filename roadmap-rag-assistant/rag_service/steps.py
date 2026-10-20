@@ -10,8 +10,9 @@ Contract (data of each SSE `step` event, JSON):
 
 Per kind (all optional unless noted):
 
-    routing      intent, confidence, method (heuristic | llm | default)
-    retrieval    count (required), items: [{title, type, topic, href, score*}]
+    routing      intent, confidence, method (heuristic | vocabulary | llm | default)
+    retrieval    count (required), items: [{title, type, topic, href, score*}],
+                 queries (searches run), rewritten (question resolved from history), before_gate (results before the on-topic check, when it dropped some)
     tool         name (required), args*, result (first 300 chars, on done)
     generation   mode: llm | context | no_match | template; fallback_reason: llm_error
     guard*       grounding: ok | issues; ungrounded_terms, future_promise, invalid_links

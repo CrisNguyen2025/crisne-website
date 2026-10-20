@@ -115,6 +115,19 @@ class HybridRagEngine:
         """Ids of every item in the current index (valid targets for `&item=` links)."""
         return {d.id for d in self._vector_store._docs_map.values() if d.doc_type == "item"}
 
+    def title_vocabulary(self) -> set[str]:
+        """Technical terms in indexed titles, for routing statements that name a lesson ("LLM", "chunking").
+
+        Only ASCII words of 3+ letters: Vietnamese syllables in titles ("giá" in "Đánh giá") are too common
+        to say a message is about a lesson.
+        """
+        from rag_service.domains.roadmap.retrieval.relevance import title_terms
+
+        words: set[str] = set()
+        for doc in self._vector_store._docs_map.values():
+            words |= title_terms(doc.title)
+        return words
+
     def known_topic_slugs(self) -> set[str]:
         """Slugs of every roadmap in the current index (valid targets for `/?topic=` links)."""
         return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}

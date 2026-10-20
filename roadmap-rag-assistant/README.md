@@ -163,3 +163,8 @@ PYTHONPATH=. pytest tests/ -v
 | `RAG_ADAPTER_MODE` | `http` | `http` or `sqlite` |
 | `NEXTJS_API_BASE_URL` | `http://localhost:3000` | Next.js API URL |
 | `SQLITE_DB_PATH` | `../prisma/dev.db` | SQLite database path |
+| `RAG_QUERY_TRANSFORM` | `false` | Viết lại câu hỏi tham chiếu lịch sử ("bài đó") bằng LLM trước khi tìm. Chỉ gọi LLM khi câu có tham chiếu và có lịch sử |
+| `RAG_HISTORY_DB` | (trống: RAM) | File SQLite lưu hội thoại, ví dụ `data/history.db`. Đặt ở local để trace lại được một thread |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | (trống: tắt) | Bật trace từng bước (retrieve, generation, guard) theo thread |
+
+Mỗi lượt chat in một dòng `[turn]` gồm: `intent`, `route` (heuristic, vocabulary, llm), `queries`, `rewritten`, `retrieved` (trước cổng on-topic), `on_topic` (sau cổng), `mode`, `grounding`, `sources`. Đủ để biết lượt đó hỏng ở bước nào mà không cần replay.

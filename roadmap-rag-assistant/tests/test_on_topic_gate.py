@@ -30,3 +30,12 @@ def test_question_words_alone_do_not_count_as_a_match():
 def test_query_without_content_words_is_left_to_the_search():
     matches = [(_doc("Hybrid Search"), 0.9)]
     assert filter_on_topic("bài nào?", matches) == matches
+
+
+def test_question_without_diacritics_matches_a_lesson_with_them():
+    chunking = (_doc("Chunking Strategy", "Chiến lược chia nhỏ tài liệu trước khi embedding"), 0.7)
+    assert filter_on_topic("cach chia nho tai lieu truoc khi embed", [chunking]) == [chunking]
+
+
+def test_question_words_are_ignored_with_or_without_diacritics():
+    assert content_words("co bai nao khong?") == set()
