@@ -21,6 +21,7 @@ from rag_service.execution.executor import ActionExecutor
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.delivery import record_turn
 from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.core.orchestration.sources import SourceDeps, answer_from_sources, llm_fallback_reason, stream_words
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
@@ -83,24 +84,23 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         self.executor = ActionExecutor()
 
     def _llm_fallback_reason(self, failed: bool | str) -> Optional[str]:
-        """Why an answer did not come from the LLM: none configured, the call failed, or rate limited.
-
-        A string is a reason from the generation pipeline ("llm_error", "grounding") and is kept as is.
-        """
-        if isinstance(failed, str):
-            return failed
-        if self.llm is None:
-            return None
-        return "llm_error" if failed else "rate_limited"
+        return llm_fallback_reason(self.llm, failed)
 
     async def _stream_text(self, text: str, delay: float) -> AsyncGenerator[dict, None]:
-        """Stream words over SSE. `delay` (seconds per word) adds an optional typing effect; 0 disables it."""
-        words = text.split(" ")
-        for i, word in enumerate(words):
-            delta = word + (" " if i < len(words) - 1 else "")
-            yield {"type": "token", "delta": delta}
-            if delay:
-                await asyncio.sleep(delay)
+        async for ev in stream_words(text, delay):
+            yield ev
+
+    def _source_deps(self) -> SourceDeps:
+        """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
+        return SourceDeps(
+            search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
+            format_context=lambda matches: rag_engine.format_knowledge_context(matches),
+            href_of=knowledge_href,
+            no_match_reply=no_match_reply,
+            retrieval_error_reply=RETRIEVAL_ERROR_REPLY,
+            pipeline=generation_pipeline,
+            adapter_mode=settings.rag_adapter_mode,
+        )
 
     async def ainvoke(self, input_dict: dict, config: dict | None = None) -> dict:
         events = []
@@ -256,99 +256,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
-        # ── 5. KNOWLEDGE QUERY (REAL LIVE RAG SEARCH) ─────────────────────────
+        # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
         if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
-            yield {"type": "tool_start", "name": "search_live_knowledge", "args": {"query": content}}
-            yield step_event("retrieve", "retrieval", "running")
-            retrieval_step = start_step(
-                "retrieve-live-knowledge",
-                "retriever",
-                input={"query": content, "limit": 4},
-                metadata={"adapter_mode": settings.rag_adapter_mode, "scoring": "rrf(vector+keyword)"},
-            )
-            try:
-                matches = await rag_engine.search_live_knowledge(content, limit=4)
-            except Exception as exc:
-                # Index/adapter failure is not "no match": say so instead of the no-result reply.
-                print(f"[Agent] Retrieval error ({type(exc).__name__}: {exc}).")
-                end_step(retrieval_step, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
-                if (trace := current_trace()) is not None:
-                    trace.flags["retrieval_error"] = True
-                yield {"type": "tool_end", "name": "search_live_knowledge", "result": "Lỗi tra cứu", "is_error": True}
-                yield step_event("retrieve", "retrieval", "error")
-                async for ev in self._stream_text(RETRIEVAL_ERROR_REPLY, delay):
-                    yield ev
-                return
-            end_step(
-                retrieval_step,
-                output=[
-                    {
-                        "rank": i + 1,
-                        "score": round(score, 4),
-                        "type": doc.doc_type,
-                        "title": doc.title,
-                        "topic": doc.topic_slug,
-                        "layer": doc.layer_title,
-                        "has_description": bool(doc.description),
-                    }
-                    for i, (doc, score) in enumerate(matches)
-                ],
-            )
-            if (trace := current_trace()) is not None:
-                trace.flags["retrieved"] = len(matches)
-            yield {"type": "tool_end", "name": "search_live_knowledge", "result": f"Tìm thấy {len(matches)} tài liệu", "is_error": False}
-            owner = is_owner()
-            yield step_event(
-                "retrieve",
-                "retrieval",
-                "done",
-                count=len(matches),
-                detail=f"{len(matches)} tài liệu",
-                items=[
-                    {
-                        "title": doc.title,
-                        "type": doc.doc_type,
-                        "topic": doc.topic_slug,
-                        "href": knowledge_href(doc),
-                        **({"score": round(score, 4)} if owner else {}),
-                    }
-                    for doc, score in matches
-                ],
-            )
-
-            if matches:
-                rag_context = rag_engine.format_knowledge_context(matches)
-
-                # Synthesize with LLM if available
-                llm_failed = False
-                if generation_pipeline.available(self.llm):
-                    try:
-                        req = GenerationRequest(
-                            mode="rag", query=content, thread_id=session_id, sources=matches
-                        )
-                        async for ev in generation_pipeline.astream(self.llm, req):
-                            yield ev
-                        return
-                    except GenerationFailed as exc:
-                        llm_failed = exc.reason
-
-                # Fallback directly to formatted markdown context
-                yield step_event(
-                    "answer",
-                    "generation",
-                    "done",
-                    mode="context",
-                    fallback_reason=self._llm_fallback_reason(llm_failed),
-                )
-                async for ev in self._stream_text(rag_context, delay):
-                    yield ev
-                return
-            else:
-                resp = no_match_reply(owner)
-                yield step_event("answer", "generation", "done", mode="no_match")
-                async for ev in self._stream_text(resp, delay):
-                    yield ev
-                return
+            async for ev in answer_from_sources(
+                query=content, session_id=session_id, owner=is_owner(), delay=delay,
+                llm=self.llm, deps=self._source_deps(),
+            ):
+                yield ev
+            return
 
         # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
         llm_failed = False
