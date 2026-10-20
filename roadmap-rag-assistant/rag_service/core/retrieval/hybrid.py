@@ -1,4 +1,4 @@
-"""Hybrid Vector & Full-Text Search Store for Roadmap Knowledge.
+"""Hybrid Vector & Full-Text Search Store.
 
 Uses SQLite FTS5 for BM25 keyword retrieval combined with vector embeddings
 (Google gemini-embedding-001 or TF-IDF/cosine similarity) via Reciprocal Rank Fusion (RRF).
@@ -25,14 +25,14 @@ EMBEDDING_MODEL = "models/gemini-embedding-001"
 # Seconds between embed requests (~90/min, under the 100/min free-tier limit)
 EMBEDDING_REQUEST_INTERVAL = 0.67
 # Hybrid results below this cosine similarity are dropped. On tests/eval_retrieval.py the lowest
-# on-topic match scored 0.688 and the highest off-topic query 0.654. Re-check with the eval
+# relevant match scored 0.688 and the highest unrelated query 0.654. Re-check with the eval
 # when changing the embedding model.
 VECTOR_MIN_SIMILARITY = 0.665
 # Text columns of the FTS table when a domain does not name its own
 DEFAULT_TEXT_FIELDS = ("title", "searchable_text")
 
 # Question words and fillers that match nearly every document under BM25 OR-queries.
-# "bài", "website", "trang"... describe the site itself; every item's searchable_text starts with "Bài học".
+# words such as "bài", "website", "trang" describe the site itself; a domain's searchable_text may repeat them.
 FTS_STOPWORDS = {
     "là", "gì", "của", "và", "các", "những", "cho", "có", "không", "được", "trong", "về", "với",
     "này", "đó", "thế", "nào", "sao", "làm", "như", "một", "bao", "nhiêu", "hãy", "giúp", "tôi",
@@ -254,7 +254,7 @@ class HybridVectorStore:
     def hybrid_search(self, query: str, limit: int = 5) -> List[Tuple[Any, float]]:
         """Combine FTS5 BM25 and Vector Search using Reciprocal Rank Fusion (RRF).
 
-        With embeddings, docs below VECTOR_MIN_SIMILARITY are dropped, so an off-topic query
+        With embeddings, docs below the similarity threshold are dropped, so an unrelated query
         returns nothing instead of the closest unrelated docs. Without them it is FTS only.
         """
         docs = self._docs_map  # snapshot: a background re-index may swap the maps mid-search
@@ -268,7 +268,7 @@ class HybridVectorStore:
             return doc.id not in sims or sims[doc.id] >= self._min_similarity
 
         fts_res = [(d, s) for d, s in fts_res if relevant(d)]
-        # Thin topics/layers only count when the query names them (FTS); never on cosine alone.
+        # Thin documents only count when the query names them (FTS); never on cosine alone.
         top = sorted(
             ((i, s) for i, s in sims.items() if i in docs and not self._thin(docs[i])),
             key=lambda x: x[1],

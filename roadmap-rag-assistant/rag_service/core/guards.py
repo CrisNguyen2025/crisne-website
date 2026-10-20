@@ -1,6 +1,6 @@
 """Generic input and security checks, independent of the business.
 
-Replies that name the roadmap stay with the domain (rag_service/router/grounding.py).
+Replies that name the business stay with the domain.
 """
 
 from __future__ import annotations

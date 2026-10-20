@@ -18,10 +18,9 @@ from typing import AsyncGenerator, Optional
 from rag_service.auth import is_owner
 from rag_service.config import settings
 from rag_service.execution.executor import ActionExecutor
-from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.delivery import record_turn
-from rag_service.core.generation.pipeline import GenerationFailed
 from rag_service.core.guards import input_problem, is_sensitive_request
+from rag_service.core.orchestration.llm_answer import answer_with_llm
 from rag_service.core.orchestration.sources import SourceDeps, answer_from_sources, llm_fallback_reason, stream_words
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
@@ -95,6 +94,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
             href_of=knowledge_href,
+            item_fields=_item_fields,
+            trace_fields=_describe_document,
             no_match_reply=no_match_reply,
             retrieval_error_reply=RETRIEVAL_ERROR_REPLY,
             pipeline=generation_pipeline,
@@ -266,15 +267,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             return
 
         # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
-        llm_failed = False
-        if generation_pipeline.available(self.llm):
-            try:
-                req = GenerationRequest(mode="chitchat", query=content, thread_id=session_id)
-                async for ev in generation_pipeline.astream(self.llm, req):
-                    yield ev
-                return
-            except GenerationFailed as exc:
-                llm_failed = exc.reason
+        outcome = {"handled": False, "llm_failed": False}
+        async for ev in answer_with_llm(
+            llm=self.llm, pipeline=generation_pipeline, mode="chitchat", query=content, session_id=session_id, outcome=outcome,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+        llm_failed = outcome["llm_failed"]
 
         # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
         if intent_res.confidence < UNCLEAR_CONFIDENCE:
@@ -295,6 +295,22 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         )
         async for ev in self._stream_text(resp, delay):
             yield ev
+
+
+def _item_fields(doc) -> dict:
+    """What the retrieve step shows per document (the client's contract)."""
+    return {"title": doc.title, "type": doc.doc_type, "topic": doc.topic_slug}
+
+
+def _describe_document(doc) -> dict:
+    """Roadmap fields of a retrieved document for the trace and the retrieve step."""
+    return {
+        "type": doc.doc_type,
+        "title": doc.title,
+        "topic": doc.topic_slug,
+        "layer": doc.layer_title,
+        "has_description": bool(doc.description),
+    }
 
 
 def _resolve_gemini_api_key() -> str:

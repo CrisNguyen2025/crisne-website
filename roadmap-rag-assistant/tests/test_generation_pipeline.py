@@ -245,15 +245,12 @@ def test_sqlite_history_keeps_only_newest_per_thread_and_clears(tmp_path):
 
 
 def test_core_never_names_a_business_domain():
-    """augmentation and generation must stay clonable: domain words live in rag_service/domains/.
-
-    Retrieval is not in this check yet: its FTS schema still stores roadmap columns (see core/retrieval/hybrid.py).
-    """
+    """The whole core must stay clonable: domain words live in rag_service/domains/."""
     import pathlib
     import re
 
     root = pathlib.Path(__file__).resolve().parents[1] / "rag_service" / "core"
-    scope = [root / "augmentation", root / "generation"]
+    scope = [root]
     banned = re.compile(r"lộ trình|topic|layer|abot|roadmap|bài học", re.IGNORECASE)
     hits = [
         f"{p.relative_to(root)}: {m.group(0)}"

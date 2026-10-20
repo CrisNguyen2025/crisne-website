@@ -22,6 +22,8 @@ class SourceDeps:
     search: Callable[..., Awaitable[list]]      # (query, limit=) -> [(doc, score)]
     format_context: Callable[[list], str]         # markdown fallback when the LLM is not used
     href_of: Callable[[Any], str]                 # link for a document, shown in the retrieve step
+    item_fields: Callable[[Any], dict]            # fields of a document in the retrieve step's items
+    trace_fields: Callable[[Any], dict]           # fields of a document in the retrieval trace
     no_match_reply: Callable[[bool], str]         # owner -> reply when nothing matched
     retrieval_error_reply: str
     pipeline: Any                                 # GenerationPipeline (has available() and astream())
@@ -57,6 +59,7 @@ async def answer_from_sources(
 ) -> AsyncGenerator[dict, None]:
     """Retrieve for `query`, then answer from what was found (LLM), fall back to the formatted sources, or say nothing matched."""
     search, format_context, href_of = deps.search, deps.format_context, deps.href_of
+    item_fields, trace_fields = deps.item_fields, deps.trace_fields
     no_match_reply, retrieval_error_reply, pipeline = deps.no_match_reply, deps.retrieval_error_reply, deps.pipeline
     tool_name, scoring, adapter_mode = deps.tool_name, deps.scoring, deps.adapter_mode
     yield {"type": "tool_start", "name": tool_name, "args": {"query": query}}
@@ -83,15 +86,7 @@ async def answer_from_sources(
     end_step(
         retrieval_step,
         output=[
-            {
-                "rank": i + 1,
-                "score": round(score, 4),
-                "type": doc.doc_type,
-                "title": doc.title,
-                "topic": doc.topic_slug,
-                "layer": doc.layer_title,
-                "has_description": bool(doc.description),
-            }
+            {"rank": i + 1, "score": round(score, 4), **trace_fields(doc)}
             for i, (doc, score) in enumerate(matches)
         ],
     )
@@ -105,13 +100,7 @@ async def answer_from_sources(
         count=len(matches),
         detail=f"{len(matches)} tài liệu",
         items=[
-            {
-                "title": doc.title,
-                "type": doc.doc_type,
-                "topic": doc.topic_slug,
-                "href": href_of(doc),
-                **({"score": round(score, 4)} if owner else {}),
-            }
+            {**item_fields(doc), "href": href_of(doc), **({"score": round(score, 4)} if owner else {})}
             for doc, score in matches
         ],
     )
