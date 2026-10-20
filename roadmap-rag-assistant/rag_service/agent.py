@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
-from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.auth import is_owner
 from rag_service.config import settings
 from rag_service.execution.executor import ActionExecutor
 from rag_service.core.augmentation.context import GenerationRequest
@@ -55,10 +54,6 @@ from rag_service.router.grounding import (
 )
 from rag_service.state import session_store
 from rag_service.tools import ALL_TOOLS
-from rag_service.tools.rag_tools import (
-    generate_roadmap_from_template,
-    preview_roadmap_plan,
-)
 
 
 # Placeholders the anaphora resolver leaves when no topic/layer is known from context
@@ -208,36 +203,11 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
-        # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
-        if "/plan" in lower or "lập kế hoạch" in lower or "xem trước" in lower:
-            yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
-            res = await preview_roadmap_plan.ainvoke({"query_or_template_id": content})
-            yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
-            async for ev in self._stream_text(res, delay):
-                yield ev
-            return
-
-        if "/goal" in lower or "sinh nhanh" in lower or ("template" in lower and ("tạo" in lower or "lộ trình" in lower)):
-            if not is_owner():
-                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                    yield ev
-                return
-            m = re.search(r"template\s+([\w-]+)", lower)
-            tid = m.group(1) if m else "ai-engineering"
-            yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
-            res = await generate_roadmap_from_template.ainvoke({"template_id": tid})
-            yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
-            async for ev in self._stream_text(res, delay):
-                yield ev
-            return
-
-        # ── 2. List Topics / Navigation ───────────────────────────────────────
-        if any(k in lower for k in ["liệt kê topic", "danh sách topic", "list topics", "các topic hiện có"]):
-            yield {"type": "tool_start", "name": "list_topics", "args": {}}
-            res = await self.tools["list_topics"].ainvoke({})
-            yield {"type": "tool_end", "name": "list_topics", "result": res}
-            async for ev in self._stream_text(res, delay):
-                yield ev
+        # ── 1–2. Plan/goal and topic listing (roadmap domain: commands.py) ──
+        outcome = {"handled": False}
+        async for ev in self.handle_plan_and_listing(content=content, lower=lower, delay=delay, outcome=outcome):
+            yield ev
+        if outcome["handled"]:
             return
 
         # ── 2b. Bulk import of a pasted list (roadmap domain: rag_service/domains/roadmap/commands.py) ──

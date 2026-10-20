@@ -21,6 +21,7 @@ from rag_service.router.grounding import (
 from rag_service.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
+from rag_service.tools.rag_tools import generate_roadmap_from_template, preview_roadmap_plan
 from rag_service.tools.layer_resolver import resolve_layer, topic_named_in_message
 
 
@@ -135,6 +136,46 @@ class RoadmapCommands:
                 outcome["handled"] = True
                 return
             # Anything else: drop the pending choice and handle as a fresh message.
+
+    async def handle_plan_and_listing(
+        self, *, content: str, lower: str, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Roadmap plan preview (/plan), template generation (/goal) and the topic list."""
+        # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
+        if "/plan" in lower or "lập kế hoạch" in lower or "xem trước" in lower:
+            yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
+            res = await preview_roadmap_plan.ainvoke({"query_or_template_id": content})
+            yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
+            async for ev in self._stream_text(res, delay):
+                yield ev
+            outcome["handled"] = True
+            return
+
+        if "/goal" in lower or "sinh nhanh" in lower or ("template" in lower and ("tạo" in lower or "lộ trình" in lower)):
+            if not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            m = re.search(r"template\s+([\w-]+)", lower)
+            tid = m.group(1) if m else "ai-engineering"
+            yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
+            res = await generate_roadmap_from_template.ainvoke({"template_id": tid})
+            yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
+            async for ev in self._stream_text(res, delay):
+                yield ev
+            outcome["handled"] = True
+            return
+
+        # ── 2. List Topics / Navigation ───────────────────────────────────────
+        if any(k in lower for k in ["liệt kê topic", "danh sách topic", "list topics", "các topic hiện có"]):
+            yield {"type": "tool_start", "name": "list_topics", "args": {}}
+            res = await self.tools["list_topics"].ainvoke({})
+            yield {"type": "tool_end", "name": "list_topics", "result": res}
+            async for ev in self._stream_text(res, delay):
+                yield ev
+            outcome["handled"] = True
+            return
 
     async def handle_bulk_import(
         self, *, raw_content: str, lower: str, page_context, delay: float
