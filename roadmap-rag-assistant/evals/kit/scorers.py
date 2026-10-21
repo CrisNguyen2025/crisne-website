@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from evals.kit.target import Target
+from evals.kit import judge
+from evals.kit.target import Answer, Target
 
 ScorerFn = Callable[[dict, Target, int, "str | None"], "dict | None"]
 
@@ -80,3 +81,20 @@ def score_answer(sample: dict, target: Target, k: int, run_as: str | None) -> di
     if not checks:
         return None
     return {"passed": all(checks.values()), "checks": checks, "got": got.text[:200]}
+
+
+@scorer("judge", "judge")
+def score_judge(sample: dict, target: Target, k: int, run_as: str | None) -> dict | None:
+    """LLM judge on the live answer, plus judge-vs-human agreement when the sample carries a hand label."""
+    facts = sample["expected"].get("facts")
+    got = target.answer(sample["input"], sample.get("history", []), run_as)
+    row = {**judge.evaluate(sample, got, target), "got": got.text[:200]}
+    if facts:
+        # Same substring check as score_answer, reported next to the judge's semantic match as a cheap baseline
+        row["baseline"] = {"facts": all(fact.casefold() in got.text.casefold() for fact in facts)}
+    label = sample["metadata"].get("judge_label")
+    if label:
+        # The label grades a frozen answer, so agreement does not move when the live answer changes
+        verdict = judge.evaluate(sample, Answer(**label["answer"]), target)["passed"]
+        row["calibration"] = {"human": label["passed"], "judge": verdict, "agree": verdict == label["passed"]}
+    return row

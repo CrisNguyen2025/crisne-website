@@ -3,7 +3,8 @@
   "acl_tier": "public",
   "default_role": null,
   "scorers": [
-    "answer"
+    "answer",
+    "judge"
   ],
   "thresholds": {}
 }

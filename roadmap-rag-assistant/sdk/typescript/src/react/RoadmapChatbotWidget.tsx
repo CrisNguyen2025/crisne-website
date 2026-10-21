@@ -25,6 +25,8 @@ import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { useVisualViewportBox } from "./utils/useVisualViewportBox";
 import { MessageList } from "./components/MessageList";
+import { useFeedback, type VoteDetail } from "./useFeedback";
+import { feedbackKey } from "./storage";
 
 import { CollapsibleStepsSummary, StepItem } from "./ToolStepRow";
 
@@ -89,46 +91,41 @@ export function RoadmapChatbotWidget({
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
-  const [feedback, setFeedback] = useState<Record<string, 1 | 0>>({});
   const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // What the open reason sheet holds so far
+  const [sheetDraft, setSheetDraft] = useState<VoteDetail>({});
+  const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!feedbackNotice) return;
+    const timer = setTimeout(() => setFeedbackNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [feedbackNotice]);
+
+  // Votes show at once; the host only gets the last one (see useFeedback)
+  const { votes: feedback, vote, commit } = useFeedback({
+    storageKey: feedbackKey(baseUrl),
+    send: async (msgId, value, detail) => {
+      const traceId = messages.find((m) => m.id === msgId)?.traceId;
+      await onFeedback?.(msgId, value, { traceId, ...detail });
+    },
+    onFailed: () => setFeedbackNotice("Chưa gửi được đánh giá, vui lòng thử lại."),
+  });
+
   const handleFeedback = (msgId: string, val: 1 | 0) => {
-    if (val === 1) {
-      const isRemoving = feedback[msgId] === 1;
-      setFeedback((prev) => {
-        const next = { ...prev };
-        if (isRemoving) {
-          delete next[msgId];
-        } else {
-          next[msgId] = 1;
-        }
-        return next;
-      });
-      if (activeFeedbackMsgId === msgId) {
-        setActiveFeedbackMsgId(null);
-      }
-      if (!isRemoving) {
-        onFeedback?.(msgId, 1);
-      }
-    } else {
-      const isRemoving = feedback[msgId] === 0;
-      setFeedback((prev) => {
-        const next = { ...prev };
-        if (isRemoving) {
-          delete next[msgId];
-        } else {
-          next[msgId] = 0;
-        }
-        return next;
-      });
-      if (isRemoving) {
-        setActiveFeedbackMsgId(null);
-      } else {
-        onFeedback?.(msgId, 0);
-        setActiveFeedbackMsgId(msgId);
-      }
+    const isRemoving = feedback[msgId] === val;
+    if (activeFeedbackMsgId === msgId) setActiveFeedbackMsgId(null);
+    if (val === 1 || isRemoving) {
+      vote(msgId, isRemoving ? null : val);
+      return;
     }
+    // 👎 is sent once the reason sheet closes, with the reason if one was given.
+    // Another reply's open sheet is closed first: its 👎 is sent with what was picked or typed so far.
+    if (activeFeedbackMsgId && activeFeedbackMsgId !== msgId) void commit(activeFeedbackMsgId, sheetDraft);
+    setSheetDraft({});
+    vote(msgId, 0, { defer: true });
+    setActiveFeedbackMsgId(msgId);
   };
 
   const {
@@ -385,6 +382,15 @@ export function RoadmapChatbotWidget({
             scrollToBottom={scrollToBottom}
           />
 
+          {feedbackNotice && (
+            <div
+              role="status"
+              className="mx-3 mb-1.5 rounded-md border border-[#B42318]/20 bg-[#FBEDE5] px-3 py-1.5 text-xs text-[#B42318]"
+            >
+              {feedbackNotice}
+            </div>
+          )}
+
           {/* ── Composer ── */}
           <ChatComposer
             inputRef={inputRef}
@@ -400,27 +406,16 @@ export function RoadmapChatbotWidget({
           {/* ── Feedback Reason Bottom Sheet ── */}
           {activeFeedbackMsgId && (
             <FeedbackReasonSheet
+              // A fresh sheet per reply: one reply's draft never shows up on another
+              key={activeFeedbackMsgId}
               messageId={activeFeedbackMsgId}
-              onSubmit={(reason, comment) => {
-                const targetMsg = messages.find((m) => m.id === activeFeedbackMsgId);
-                const targetIdx = messages.findIndex((m) => m.id === activeFeedbackMsgId);
-                let userQuery = "";
-                if (targetIdx > 0) {
-                  for (let i = targetIdx - 1; i >= 0; i--) {
-                    if (messages[i].role === "user") {
-                      userQuery = messages[i].content;
-                      break;
-                    }
-                  }
-                }
-                onFeedback?.(activeFeedbackMsgId, 0, {
-                  reason,
-                  comment,
-                  query: userQuery,
-                  assistantMsg: targetMsg?.content,
-                });
+              onDraftChange={(reason, comment) => setSheetDraft({ reason, comment })}
+              onSubmit={(reason, comment) => void commit(activeFeedbackMsgId, { reason, comment })}
+              onClose={() => {
+                // Closed without a reason (or after sending one): sends the 👎 if it is still waiting
+                void commit(activeFeedbackMsgId);
+                setActiveFeedbackMsgId(null);
               }}
-              onClose={() => setActiveFeedbackMsgId(null)}
             />
           )}
         </div>

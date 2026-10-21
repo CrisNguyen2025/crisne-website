@@ -38,6 +38,8 @@ export interface ChatResponse {
   citations?: ChatCitation[];
   /** What the turn's actions wrote, one per executed action (streaming endpoint only). */
   changes?: ChangeReview[];
+  /** Langfuse trace of the turn, to attach 👍/👎 feedback to (streaming endpoint, only when tracing is on). */
+  traceId?: string;
 }
 
 /** A row an action created or deleted. */

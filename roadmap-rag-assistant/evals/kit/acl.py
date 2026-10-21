@@ -42,5 +42,11 @@ class AclGuard:
         self._check(answer.citations, run_as, "answer")
         return answer
 
+    def judge(self, prompt: str) -> str:
+        return self.target.judge(prompt)
+
+    def contexts(self, section_ids: list[str]) -> list[str]:
+        return self.target.contexts(section_ids)
+
     def corpus_fingerprint(self) -> dict:
         return self.target.corpus_fingerprint()

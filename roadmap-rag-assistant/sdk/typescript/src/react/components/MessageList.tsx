@@ -16,7 +16,6 @@ import {
   formatToolDisplayName,
   toStepItems,
 } from "../utils/formatters";
-import { WELCOME_MESSAGE_ID } from "../welcome";
 import { PulsatingDots } from "./PulsatingDots";
 import { ChangeReviewCard } from "./ChangeReviewCard";
 import type { ChatMessage } from "../types";
@@ -27,7 +26,7 @@ export interface MessageListProps {
   isStreaming: boolean;
   runningCode: string | null;
   expandedTools: Record<string, boolean>;
-  feedback: Record<string, 1 | 0>;
+  feedback: Record<string, 1 | 0 | null>;
   copiedId: string | null;
   sendMessage: (textToSend?: string) => void;
   retry: (errorMessageId: string) => void;
@@ -355,8 +354,9 @@ export function MessageList({
                       <CopyIcon className="h-3.5 w-3.5" />
                     )}
                   </button>
-                  {/* The greeting is static text, not an answer to rate */}
-                  {msg.id !== WELCOME_MESSAGE_ID && (
+                  {/* Only a traced reply can be rated: the vote is a score on its trace. Leaves out the
+                      greeting, stopped or failed replies, and every reply when tracing is off */}
+                  {msg.traceId && (
                     <>
                       <button
                         type="button"

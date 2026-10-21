@@ -30,13 +30,15 @@ evals/
 │   ├── source.py            # DatasetSource, FileSource, validate()
 │   ├── corpus.py            # CorpusSource, FileCorpusSource, content_hash, validate chéo datasets ↔ corpus
 │   ├── acl.py               # AclGuard: bắt leak trên mọi retrieve / answer
-│   ├── scorers.py           # chấm từng sample: retrieval, route, answer
+│   ├── scorers.py           # chấm từng sample: retrieval, route, answer, judge
+│   ├── judge.py             # LLM-as-judge: prompt, parse JSON, luật pass (model do target cấp)
 │   ├── metrics.py           # tổng hợp + so ngưỡng
 │   ├── runner.py            # CLI: validate | run | diff
 │   └── report.py            # ghi run, in summary, diff 2 run
 │
 ├── target.py                # RoadmapTarget  ┐ hai module DUY NHẤT import rag_service
 ├── corpus_export.py         # dev.db → corpus ┘
+├── sync_dataset.py          # Langfuse `cris-ai-golden-set` → datasets/_answer/samples.jsonl
 ├── __main__.py              # entry point domain: `python -m evals ...` với path mặc định
 ├── GUIDELINES.md            # rulebook gán nhãn
 ├── corpus/
@@ -66,8 +68,12 @@ Từ `roadmap-rag-assistant/`:
 .venv/bin/python -m evals run --opt mode=hybrid --profile hybrid   # cần GEMINI_API_KEY, dùng ngưỡng của hybrid
 .venv/bin/python -m evals run --only _routing            # chạy 1 dataset theo prefix path
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm   # chấm câu trả lời thật: GỌI LLM, tốn quota
+.venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm --opt judge=llm \
+    --opt judge_provider=google_genai --opt judge_model=gemini-2.5-pro             # + LLM judge: GỌI thêm judge model
 .venv/bin/python -m evals diff evals/runs/<base> evals/runs/<head>   # regressed / fixed / added / removed
-.venv/bin/python -m pytest tests/test_evals_kit.py       # boundary + validate + scorer (offline)
+.venv/bin/python -m evals sync-dataset --dry-run         # kéo golden set từ Langfuse: cần LANGFUSE_* trong .env, chỉ in thay đổi
+.venv/bin/python -m evals sync-dataset                   # ghi vào _answer/samples.jsonl (chỉ khi validate OK) → review diff → commit
+.venv/bin/python -m pytest tests/test_evals_kit.py tests/test_evals_judge.py tests/test_evals_sync_dataset.py   # offline
 ```
 
 `mode`: `fts` | `vector` | `hybrid` (mặc định `hybrid`).
@@ -96,6 +102,7 @@ version corpus, fingerprint corpus) và `samples.jsonl` (kết quả từng samp
 | `metadata.status` | ✓ | `active` \| `needs_review` \| `deprecated`; chỉ `active` được chạy |
 | `metadata.tags` | | lấy từ `kit/schema/tags.json` + `datasets/tags.json` |
 | `metadata.run_as` | | role khi gọi target; mặc định `meta.default_role` |
+| `metadata.judge_label` | | nhãn tay để calibrate judge: `{answer: {text, behavior, citations}, passed, reason?, source?}` (xem [LLM judge](#llm-judge)) |
 | `metadata.*` khác | | tự do cho domain, core bỏ qua |
 
 `section_id` phải tồn tại trong `corpus/`; dataset không được trích document có tầng ACL cao hơn thư mục của nó.
@@ -118,7 +125,7 @@ Scorer chỉ chạy khi sample có field nó cần; thiếu field thì bỏ qua 
 ### Meta (`meta.json`)
 
 `owner`, `acl_tier` (`public` \| `internal` \| `confidential`, phải khớp thư mục), `scorers`
-(`retrieval` \| `route` \| `answer`), `k` (mặc định 5), `default_role`, `thresholds`
+(`retrieval` \| `route` \| `answer` \| `judge`), `k` (mặc định 5), `default_role`, `thresholds`
 (key dạng `<scorer>.<metric>`, ví dụ `retrieval.hit@5`), `profiles` (tên → ngưỡng ghi đè `thresholds`, chọn bằng
 `--profile`; dùng khi cùng dataset chạy nhiều cấu hình, ví dụ một profile cho mỗi retrieval mode).
 
@@ -129,6 +136,7 @@ Scorer chỉ chạy khi sample có field nó cần; thiếu field thì bỏ qua 
 | `retrieval` | `retrieve` | `hit@k`, `mrr@k` (on-topic), `off_topic_rejected` |
 | `route` | `route` | `accuracy` (behavior + route cùng khớp) |
 | `answer` | `answer` | `accuracy` (behavior, facts substring, không chứa forbidden, citation ⊇ required contexts) |
+| `judge` | `judge` | `accuracy`, `faithfulness_mean`, `relevance_mean`, `facts_pass` (judge) vs `facts_pass_substring` (baseline), `refusal_pass`, `human_n`, `human_agreement`, `judge_false_pass`, `judge_false_fail` |
 
 Thiếu capability thì scorer bị **skip** và được ghi lại trong summary, không báo lỗi.
 
@@ -139,13 +147,46 @@ Runner bọc target bằng `AclGuard`. Mọi section trả về từ `retrieve` 
 (`metadata.run_as`, mặc định `meta.default_role`; không có role = anonymous, chỉ thấy `everyone`).
 Mỗi leak được ghi vào `summary.json` (`acl_leaks`) và **luôn làm run fail**, không phụ thuộc ngưỡng.
 
+### LLM judge
+
+Scorer `judge` chấm câu trả lời live bằng một judge model, bổ sung (không thay) scorer `answer`: substring vẫn chạy
+làm baseline rẻ, cả hai cùng có trong report. Chỉ chạy khi target có capability `judge`: với roadmap là
+`--opt answer=llm --opt judge=llm` (judge cần answer live nên `judge=llm` một mình báo lỗi), nên `run` mặc định vẫn offline.
+
+- **Tiêu chí** (mỗi tiêu chí có `reason` ngắn trong `samples.jsonl`):
+  `faithfulness` 1–5: khẳng định có căn cứ trong context đã cite hoặc lịch sử hội thoại (bỏ qua khi không có cả hai);
+  `relevance` 1–5: trả lời đúng câu hỏi (từ chối đúng cũng tính là relevant);
+  `facts`: từng `expected.facts` được nói tới, khớp theo nghĩa (`missing` liệt kê ý thiếu);
+  `refusal`: câu trả lời có từ chối / báo không có tài liệu khi và chỉ khi sample kỳ vọng
+  (`behavior=refuse` hoặc `contexts=[]` → phải từ chối; `behavior=answer` → không được từ chối; còn lại bỏ qua).
+  Pass = mọi tiêu chí áp dụng được đều pass, điểm 1–5 pass khi ≥ 4 (`kit/judge.py` `PASS_SCORE`).
+- **Context** đưa cho judge = text các section mà câu trả lời cite (`Target.contexts`), kèm title, topic, layer, level
+  như agent thấy. Câu trả lời không cite gì chỉ được đối chiếu với lịch sử.
+- **Model & Cross-Switching**: `judge_provider` (`google_genai` | `groq`) và `judge_model`. Để tránh **Self-Preference Bias** (mô hình tự khen chính mình), hệ thống mặc định **tự động đảo ngược provider**: nếu câu trả lời sinh bởi `google_genai`, judge sẽ dùng `groq` (`llama-3.3-70b-versatile`) và ngược lại. Người dùng vẫn có thể override bằng `--opt judge_provider=...` và `--opt judge_model=...`. Temperature 0, bật JSON mode của provider.
+- **Fallback**: Chuyển sang provider còn lại nếu primary judge gặp lỗi (thiếu API key, 429 quota/rate limit, timeout),
+  **trừ khi provider đó chính là provider sinh câu trả lời** (để không tự chấm bài mình). Với auto-switch mặc định thì
+  không có fallback; chỉ có khi `judge_provider` được đặt trùng với `LLM_PROVIDER`.
+- **Unavailable**: judge bị rate limit, lỗi provider hoặc trả JSON hỏng / điểm không phải số (sau khi đã thử fallback nếu có)
+  → sample ghi vào `unavailable_samples` (`judge_rate_limited` / `judge_error` / `judge_invalid_json`), không tính fail.
+  Reply hỏng không được ghi vào cache, nên run sau sẽ hỏi judge lại.
+- **Cache**: `evals/.cache/judge.json` (cùng thư mục với `answers.json`, đã .gitignore), key = `JUDGE_VERSION` +
+  provider + model + prompt (prompt chứa câu hỏi, lịch sử, context, câu trả lời, facts). Câu trả lời đổi thì judge chạy
+  lại; đổi prompt / luật pass thì bump `JUDGE_VERSION`. `--opt cache=off` tắt cả hai cache.
+- **Calibration**: 12 sample trong `_answer` có `metadata.judge_label` = một câu trả lời **cố định** (lấy từ cache
+  answer của các run trước; `answer-017` là câu sai tự viết, `source: synthetic`) + nhãn người chấm theo đúng rubric
+  trên (8 pass, 4 fail; `answer-024` là ca biên: thêm chi tiết ngoài context). Mỗi run, judge chấm thêm câu cố định đó
+  và so với nhãn: `human_agreement`, `judge_false_pass` (judge cho qua cái người đánh fail, chiều nguy hiểm),
+  `judge_false_fail`. Câu cố định nên agreement không trôi khi câu trả lời live thay đổi.
+  Nhãn hiện do agent gán, cần người review lại trước khi dùng agreement làm căn cứ.
+  Chưa đặt ngưỡng `judge.*`: cần vài run live để biết độ dao động và agreement thực tế.
+
 ## Hiện trạng (roadmap)
 
 | Dataset | Nguồn migrate | Samples | Baseline `mode=fts` |
 |---|---|---|---|
 | `public/roadmap` | `tests/data/retrieval_eval_cases.json` (001–049) + bổ sung (050–083) | 83 (18 off-topic, 10 trong đó near-topic) | FTS: hit@5 0.954 · mrr@5 0.840 · off_topic_rejected 0.111 — hybrid: 1.0 · 0.932 · 0.667 |
 | `_routing` | `tests/data/intent_eval_cases.json` + bộ blind/stress (đã map nhãn) | 142 active (38 gốc + 104 mới, 5 `needs_review`) | accuracy 0.7606 (gốc 38/38, mới 70/104). Ngưỡng hạ từ 1.0 xuống 0.75: 34 case heuristic chưa phủ (out_of_scope không từ khóa, plan_goal tiếng Anh, chitchat nhỏ). Ngưỡng chặn hồi quy; nâng lại khi sửa xong các nhóm này |
-| `_answer` | viết mới (bug "quên tên Cris") + câu so sánh cần đủ 2 nguồn (021–024) | 24 | accuracy 0.9583 (groq `openai/gpt-oss-120b`, hybrid); fail còn lại `answer-008`, cũng fail trước khi có citation theo câu |
+| `_answer` | viết mới (bug "quên tên Cris") + câu so sánh cần đủ 2 nguồn (021–024) + calibration set (025–028) | 28 | accuracy 0.9583 (groq `openai/gpt-oss-120b`, hybrid); fail còn lại `answer-008`, cũng fail trước khi có citation theo câu. `judge` scorer: 22/28 có `judge_label` (16 pass / 6 fail), chưa đặt ngưỡng |
 
 - Baseline khớp đúng với `tests/eval_retrieval.py --fts-only` (cùng hit@5, MRR, 1/8 off-topic).
 - Corpus `public/roadmap@1.0`: 115 doc export từ `dev.db`, chỉ còn topic `ai-architecture`. Đã bỏ dữ liệu probe (`owner-probe`, `bypass-probe`),
@@ -193,6 +234,17 @@ Phân bố tag của `public/roadmap`:
 ## Quy trình
 
 **Thêm sample:** thêm dòng vào `samples.jsonl` với `id` kế tiếp → `python -m evals validate` → `run`.
+
+**Golden set từ Langfuse** (`_answer`): duyệt trace trong Annotation Queue → "Add to Dataset" `cris-ai-golden-set` →
+sửa item thành nhãn: `input` là câu hỏi (string, hoặc `{"message" | "query", "history"}`), `expected_output` là object
+`expected` của sample (`behavior`, `facts`, `contexts`, `forbidden`...), `metadata` tuỳ chọn (`tags`, `note`, `judge_label`)
+→ `python -m evals sync-dataset` → review diff → commit. Luật merge:
+- sample viết tay (không có `metadata.langfuse_item_id`) không bao giờ bị đụng tới;
+- item giữ nguyên `id` sample từ lần sync đầu (`answer-NNN` kế tiếp), nên `evals diff` so được giữa các run;
+- `expected_output` chưa phải object `expected` (vd. câu trả lời copy từ trace) → `needs_review`, runner bỏ qua;
+- item archived hoặc bị xoá khỏi dataset → `deprecated`, id không tái sử dụng;
+- sample đã sync thuộc về Langfuse: sửa trên Langfuse rồi sync lại, sửa tay trong file sẽ bị ghi đè;
+- kết quả không qua `validate` (vd. tag lạ, `section_id` không có trong corpus) → không ghi file, in lỗi.
 
 **Corpus thay đổi** (`run` trả exit 2): `python -m evals.corpus_export --version <mới>` → `validate` (báo sample trỏ
 vào section đã mất) → rà sample có section liên quan, đặt `metadata.status = "needs_review"` cho sample chưa kịp sửa.
@@ -244,5 +296,11 @@ domain, import module đó trước khi chạy, rồi khai báo `name` trong `me
   check leak đã chạy trên mọi sample nhưng luôn bằng 0. Đã kiểm chứng bằng corpus copy có doc chỉ cho `staff`.
 - `ApiSource` / `ApiCorpusSource` thật (seam `DatasetSource` / `CorpusSource` đã có).
 - Upload run lên storage / dashboard.
-- Scorer `answer` bằng LLM judge thay cho substring; đo inter-annotator agreement; tách `dev` / `test`.
+- Judge: ~~nhãn agent-generated~~ → 22/28 sample `_answer` đã có `judge_label` human-verified hoặc synthetic rõ ràng
+  (16 pass, 6 fail; `source: human` sau khi review, `source: synthetic` cho label cố ý sai). Còn lại:
+  thêm người gán nhãn thứ hai để đo inter-annotator agreement; đặt ngưỡng `judge.*` sau vài run live
+  (hiện `thresholds: {}` — chờ đủ data variance); tách `dev` / `test` cho bộ calibration.
+- **Tích hợp dài hạn (Langfuse Full-Stack Observability & Evals)**:
+  - **Langfuse Tracing & Datasets**: Kết nối với SDK Langfuse đã có trong môi trường để đẩy trace trực tiếp từ mỗi eval run lên Langfuse Dashboard.
+  - **Online / Offline Evaluation**: Tận dụng tính năng Evaluator & Datasets của Langfuse để quản lý bộ đề test, gán nhãn tập trung (annotation queue) và đồng bộ trực tiếp feedback 👎 từ người dùng ngoài production.
 - Thêm `quote` vào `contexts` khi document có nhiều section.

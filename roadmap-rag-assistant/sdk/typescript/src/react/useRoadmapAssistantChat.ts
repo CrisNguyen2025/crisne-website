@@ -394,6 +394,13 @@ export function useRoadmapAssistantChat(
               );
             },
 
+            // Known before the reply: a stopped reply can still be rated
+            onTrace: (traceId) => {
+              setMessages((prev) =>
+                prev.map((msg) => (msg.id === botMsgId ? { ...msg, traceId } : msg))
+              );
+            },
+
             onToken: (delta) => smooth.push(delta),
 
             onDone: (finalResp) => smooth.finish(() => {
@@ -426,6 +433,7 @@ export function useRoadmapAssistantChat(
                       : msg.steps,
                     sources: finalResp.sources ?? msg.sources,
                     citations: finalResp.citations ?? msg.citations,
+                    traceId: finalResp.traceId ?? msg.traceId,
                     // `done` repeats every change of the turn: fills in any event missed mid-stream
                     changes: finalResp.changes?.length ? finalResp.changes : msg.changes,
                   };

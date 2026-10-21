@@ -12,14 +12,26 @@ interface FeedbackReasonSheetProps {
   messageId: string;
   onSubmit: (reason?: string, comment?: string) => void;
   onClose: () => void;
+  /** Reports what was picked or typed so far: the 👎 is sent with it if another reply's 👎 closes the sheet */
+  onDraftChange?: (reason?: string, comment?: string) => void;
 }
 
 export function FeedbackReasonSheet({
   onSubmit,
   onClose,
+  onDraftChange,
 }: FeedbackReasonSheetProps) {
   const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [comment, setComment] = useState("");
+
+  const pickReason = (reason: string | null) => {
+    setSelectedReason(reason);
+    onDraftChange?.(reason || undefined, comment.trim() || undefined);
+  };
+  const editComment = (text: string) => {
+    setComment(text);
+    onDraftChange?.(selectedReason || undefined, text.trim() || undefined);
+  };
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -62,7 +74,7 @@ export function FeedbackReasonSheet({
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => setSelectedReason(isSelected ? null : opt)}
+                  onClick={() => pickReason(isSelected ? null : opt)}
                   className={`rounded-md px-3 py-1.5 min-h-[38px] md:min-h-0 text-xs transition-colors cursor-pointer flex items-center justify-center ${
                     isSelected
                       ? "border border-[#C2410C] bg-[#FBEDE5] text-[#C2410C] font-medium"
@@ -77,7 +89,7 @@ export function FeedbackReasonSheet({
 
           <textarea
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            onChange={(e) => editComment(e.target.value)}
             placeholder="AI cần cải thiện điểm nào? (tùy chọn)..."
             rows={2}
             maxLength={300}

@@ -44,7 +44,7 @@ class Answer:
 
 class Target(Protocol):
     name: str
-    # Subset of {"retrieve", "route", "answer"}; scorers needing a missing capability are skipped
+    # Subset of {"retrieve", "route", "answer", "judge"}; scorers needing a missing capability are skipped
     capabilities: frozenset[str]
 
     def retrieve(self, text: str, k: int, run_as: str | None = None) -> list[Hit]: ...
@@ -52,6 +52,15 @@ class Target(Protocol):
     def route(self, text: str, run_as: str | None = None) -> RouteResult: ...
 
     def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer: ...
+
+    def judge(self, prompt: str) -> str:
+        """Only with the "judge" capability: runs the judge model (temperature 0, separate from the answer model)
+        on a kit.judge prompt and returns its raw JSON reply. Raises TargetUnavailable on quota or provider errors."""
+        ...
+
+    def contexts(self, section_ids: list[str]) -> list[str]:
+        """Only with the "judge" capability: the text of each cited section, as the answer saw it."""
+        ...
 
     def corpus_fingerprint(self) -> dict:
         """{"source", "doc_count", "sha256"}; sha256 = kit.corpus.content_hash(documents the target serves),

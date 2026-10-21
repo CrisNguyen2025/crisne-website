@@ -101,33 +101,22 @@ export function RoadmapAssistantChatbot({
     }
   };
 
+  // A failed request rejects: the widget then shows the previous vote again
   const handleFeedback = async (
-    msgId: string,
-    value: 0 | 1,
+    _msgId: string,
+    value: 0 | 1 | null,
     detail?: FeedbackDetail
   ) => {
-    try {
-      const traceId = Array.from(new TextEncoder().encode(msgId))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-        .padEnd(32, "0")
-        .slice(0, 32);
-
-      await submitChatFeedback({
-        traceId,
-        value,
-        reason: detail?.reason,
-        comment: detail?.comment,
-        query: detail?.query,
-        assistantMsg: detail?.assistantMsg,
-      }).catch(() => {});
-
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("roadmap:triage-updated"));
-      }
-    } catch {
-      // Best-effort network request
-    }
+    // Without the turn's Langfuse trace (service running without tracing) there is nothing to score
+    if (!detail?.traceId) return;
+    await submitChatFeedback({
+      traceId: detail.traceId,
+      value,
+      reason: detail.reason,
+      comment: detail.comment,
+      // Triage imports this assistant's 👎 by it
+      source: "roadmap-assistant",
+    });
   };
 
   // Same-origin proxy: it checks who the caller is before forwarding to the Python service
