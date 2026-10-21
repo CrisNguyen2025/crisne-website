@@ -12,15 +12,20 @@ import {
   Loader2,
   RotateCw,
   Trash2,
+  Download,
 } from "lucide-react";
 import {
   fetchTriageItems,
+  importTriageFromLangfuse,
+  fetchGoldenSetStatus,
+  type GoldenSetStatus,
   generateTriageDraft,
   approveTriageDraft,
   dismissTriageItem,
   deleteTriageItem,
   type TriageItem,
 } from "@/logic/roadmap/knowledgeTriageService";
+import { GoldenSetStatusCard } from "./GoldenSetStatusCard";
 
 interface KnowledgeTriageDrawerProps {
   isOpen: boolean;
@@ -47,6 +52,9 @@ export function KnowledgeTriageDrawer({
   const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"ALL" | "PENDING" | "DRAFTED" | "APPROVED">("ALL");
   const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [goldenSet, setGoldenSet] = useState<GoldenSetStatus | null>(null);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -54,6 +62,8 @@ export function KnowledgeTriageDrawer({
     try {
       const data = await fetchTriageItems();
       setItems(data);
+      // Secondary: a failure here hides the card, it does not block the list
+      setGoldenSet(await fetchGoldenSetStatus().catch(() => null));
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {
@@ -68,6 +78,26 @@ export function KnowledgeTriageDrawer({
   }, [isOpen, loadData]);
 
   if (!isOpen) return null;
+
+  // 👎 votes live in Langfuse: pulls the ones not imported yet into the triage list
+  const handleImport = async () => {
+    setIsImporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { imported, remaining } = await importTriageFromLangfuse();
+      setNotice(
+        `Đã nhập ${imported} phản hồi 👎 từ Langfuse` +
+          (remaining > 0 ? `, còn ${remaining}: bấm nhập tiếp.` : ".")
+      );
+      await loadData();
+      window.dispatchEvent(new CustomEvent("roadmap:triage-updated"));
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleGenerate = async (id: string) => {
     setActionLoadingId(id);
@@ -161,6 +191,16 @@ export function KnowledgeTriageDrawer({
           <div className="flex items-center gap-1">
             <button
               type="button"
+              onClick={handleImport}
+              disabled={isImporting}
+              title="Nhập 👎 từ Langfuse"
+              aria-label="Nhập 👎 từ Langfuse"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              type="button"
               onClick={loadData}
               title="Làm mới"
               className="flex h-7 w-7 items-center justify-center rounded-md text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
@@ -177,6 +217,8 @@ export function KnowledgeTriageDrawer({
             </button>
           </div>
         </div>
+
+        {goldenSet && <GoldenSetStatusCard status={goldenSet} />}
 
         {/* Filter Pills */}
         <div className="flex items-center gap-1.5 border-b border-[#E6E4DF] px-5 py-2.5 bg-[#FFFFFF]">
@@ -213,6 +255,11 @@ export function KnowledgeTriageDrawer({
             <span>{error}</span>
           </div>
         )}
+        {notice && (
+          <div role="status" className="border-b border-[#E6E4DF] bg-[#E6F1EA] px-5 py-2.5 text-xs text-[#3F7D58]">
+            {notice}
+          </div>
+        )}
 
         {/* List of Triage Cards */}
         <div className="flex-1 space-y-3.5 overflow-y-auto p-5 bg-[#FFFFFF]">
@@ -226,7 +273,7 @@ export function KnowledgeTriageDrawer({
               <CheckCircle2 className="h-8 w-8 text-[#3F7D58] mb-2" />
               <span className="text-xs font-medium text-[#1F1E1C]">Không có mục nào cần xử lý</span>
               <span className="text-[11px] text-[#6B6862] mt-0.5">
-                Các kiến thức bị thiếu sẽ tự động xuất hiện khi người dùng bấm Unlike.
+                Bấm nút nhập để lấy các câu trả lời bị 👎 từ Langfuse.
               </span>
             </div>
           ) : (

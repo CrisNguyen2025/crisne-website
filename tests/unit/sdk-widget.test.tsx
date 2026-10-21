@@ -100,4 +100,103 @@ describe("RoadmapChatbotWidget", () => {
       expect(screen.queryByRole("button", { name: "Thao tác nhanh" })).toBeNull();
     });
   });
+
+  describe("feedback", () => {
+    const traceId = "0123456789abcdef0123456789abcdef";
+    const replyStream = (done: object) =>
+      vi.fn().mockResolvedValue(
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode(`event: done\ndata: ${JSON.stringify(done)}\n\n`));
+              c.close();
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+    async function askAndWait(onFeedback = vi.fn()) {
+      render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen onFeedback={onFeedback} />);
+      fireEvent.change(screen.getByPlaceholderText(/Hỏi Abot/), { target: { value: "hỏi thử" } });
+      fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+      await screen.findByText("đã trả lời");
+      return onFeedback;
+    }
+
+    it("sends only the last of rapid clicks, with the trace id the stream sent on done", async () => {
+      vi.stubGlobal("fetch", replyStream({ message: "đã trả lời", trace_id: traceId }));
+      const onFeedback = await askAndWait();
+
+      const like = screen.getByRole("button", { name: "Câu trả lời hữu ích" });
+      fireEvent.click(like);
+      fireEvent.click(like);
+      fireEvent.click(like);
+      expect(like.getAttribute("aria-pressed")).toBe("true");
+      expect(onFeedback).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(onFeedback).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      expect(onFeedback).toHaveBeenCalledWith(expect.any(String), 1, { traceId });
+    });
+
+    it("sends a 👎 once, when the reason sheet closes", async () => {
+      vi.stubGlobal("fetch", replyStream({ message: "đã trả lời", trace_id: traceId }));
+      const onFeedback = await askAndWait();
+
+      fireEvent.click(screen.getByRole("button", { name: "Câu trả lời chưa tốt" }));
+      expect(onFeedback).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Bỏ qua" }));
+
+      await waitFor(() => expect(onFeedback).toHaveBeenCalledWith(expect.any(String), 0, { traceId }));
+      expect(onFeedback).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows the previous vote again when the host rejects", async () => {
+      vi.stubGlobal("fetch", replyStream({ message: "đã trả lời", trace_id: traceId }));
+      await askAndWait(vi.fn().mockRejectedValue(new Error("500")));
+
+      const like = screen.getByRole("button", { name: "Câu trả lời hữu ích" });
+      fireEvent.click(like);
+      expect(like.getAttribute("aria-pressed")).toBe("true");
+      await waitFor(() => expect(like.getAttribute("aria-pressed")).toBe("false"), { timeout: 2000 });
+      expect(screen.getByRole("status").textContent).toMatch(/Chưa gửi được đánh giá/);
+    });
+
+    it("sends the open sheet's reason when a 👎 on another reply closes it", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async () => replyStream({ message: "đã trả lời", trace_id: traceId })())
+      );
+      const onFeedback = await askAndWait();
+      fireEvent.change(screen.getByPlaceholderText(/Hỏi Abot/), { target: { value: "hỏi lần hai" } });
+      // The widget ignores a second send within 400ms of the first
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+      await waitFor(() => expect(screen.getAllByRole("button", { name: "Câu trả lời chưa tốt" })).toHaveLength(2), {
+        timeout: 3000,
+      });
+
+      const [first, second] = screen.getAllByRole("button", { name: "Câu trả lời chưa tốt" });
+      fireEvent.click(first);
+      fireEvent.click(screen.getByRole("button", { name: "Lạc đề / Chưa đúng trọng tâm" }));
+      fireEvent.click(second);
+
+      await waitFor(() =>
+        expect(onFeedback).toHaveBeenCalledWith(expect.any(String), 0, {
+          traceId,
+          reason: "Lạc đề / Chưa đúng trọng tâm",
+          comment: undefined,
+        })
+      );
+      // The new sheet starts empty
+      expect(screen.getByRole("button", { name: "Lạc đề / Chưa đúng trọng tâm" }).className).not.toMatch(/font-medium/);
+    });
+
+    it("offers no rating for a reply without a trace (tracing off)", async () => {
+      vi.stubGlobal("fetch", replyStream({ message: "đã trả lời" }));
+      await askAndWait();
+
+      expect(screen.queryByRole("button", { name: "Câu trả lời hữu ích" })).toBeNull();
+    });
+  });
 });

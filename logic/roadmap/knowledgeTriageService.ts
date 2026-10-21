@@ -120,19 +120,42 @@ export async function createTriageItem(payload: CreateTriagePayload): Promise<Tr
   return res.item;
 }
 
-/** Submit chat feedback to analytics and triage system */
+/** Records a vote as a Langfuse score on the reply's trace (null takes the vote back) */
 export async function submitChatFeedback(payload: {
   traceId: string;
-  value: 0 | 1;
+  value: 0 | 1 | null;
   reason?: string;
   comment?: string;
-  query?: string;
-  assistantMsg?: string;
-  roadmapSlug?: string;
+  source?: string;
 }): Promise<void> {
   await apiFetch<void>("/api/chat/feedback", {
     method: "POST",
     body: JSON.stringify(payload),
+    // Still delivered when the tab closes right after the vote
+    keepalive: true,
   });
 }
 
+/** Creates triage items from recent 👎 on the roadmap assistant, read from Langfuse */
+export async function importTriageFromLangfuse(): Promise<{ imported: number; remaining: number }> {
+  return apiFetch<{ imported: number; remaining: number }>("/api/v1/roadmaps/triage/import", {
+    method: "POST",
+  });
+}
+
+
+export interface GoldenSetStatus {
+  dataset: string;
+  /** Written by `python -m evals sync-dataset` when it last changed the committed golden set */
+  sync: { dataset: string; synced_at: string; samples: number } | null;
+  datasetItems?: number;
+  queuePending?: number | null;
+  queueUrl?: string | null;
+  /** Langfuse could not be read: only the committed part is known */
+  error?: string;
+}
+
+/** Golden set as committed next to Langfuse live (dataset items, 👎 waiting for review) */
+export async function fetchGoldenSetStatus(): Promise<GoldenSetStatus> {
+  return apiFetch<GoldenSetStatus>("/api/v1/roadmaps/triage/golden-set");
+}

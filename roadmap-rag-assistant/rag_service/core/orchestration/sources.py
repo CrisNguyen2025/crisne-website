@@ -14,7 +14,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
 from rag_service.core.retrieval.transform import QueryPlan, merge_ranked
-from rag_service.observability import current_trace, end_step, start_step
+from rag_service.observability import current_trace, end_step, end_step_on_error, start_step
 from rag_service.steps import step_event
 
 
@@ -103,6 +103,9 @@ async def answer_from_sources(
         async for ev in stream_words(retrieval_error_reply, delay):
             yield ev
         return
+    except BaseException as exc:  # client disconnected while searching
+        end_step_on_error(retrieval_step, exc)
+        raise
     end_step(
         retrieval_step,
         output=[

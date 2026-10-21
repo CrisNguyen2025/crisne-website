@@ -29,7 +29,7 @@ from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.generation.generate import StreamResult, astream
 from rag_service.llm_breaker import llm_breaker
-from rag_service.observability import current_trace, end_step, start_step, usage_from_langchain
+from rag_service.observability import current_trace, end_step, end_step_on_error, start_step, usage_from_langchain
 from rag_service.steps import step_event
 
 
@@ -108,6 +108,9 @@ class GenerationPipeline:
             if (trace := current_trace()) is not None:
                 trace.flags["llm_fallback"] = True
             raise GenerationFailed("llm_error", str(exc)) from exc
+        except BaseException as exc:  # client disconnected mid-answer: keep what was generated so far
+            end_step_on_error(gen, exc, output="".join(clean), metadata={"mode": req.mode})
+            raise
 
         answer = strip_marks("".join(clean)) if channel else result.text
         usage = usage_from_langchain(result.merged)
@@ -147,16 +150,12 @@ class GenerationPipeline:
                 yield guard_step()
             raise GenerationFailed("grounding", ", ".join(report.issues))
 
-        if held:
-            yield token_event("".join(held))
-        if report is not None and report.failed and profile.grounding_note:
-            yield token_event(profile.grounding_note)
-
         level = (
             {"level": "WARNING", "status_message": f"grounding: {', '.join(report.issues)}"}
             if report is not None and report.issues
             else {}
         )
+        # Ended before the held text is sent: a disconnect at those yields cannot leave the step open
         end_step(
             gen,
             output=answer,
@@ -164,6 +163,10 @@ class GenerationPipeline:
             metadata={"grounding": report.grounding, "sections": sections} if report else {"sections": sections},
             **level,
         )
+        if held:
+            yield token_event("".join(held))
+        if report is not None and report.failed and profile.grounding_note:
+            yield token_event(profile.grounding_note)
         yield step_event("answer", "generation", "done", mode="llm")
         if report is not None and is_owner():
             yield guard_step()

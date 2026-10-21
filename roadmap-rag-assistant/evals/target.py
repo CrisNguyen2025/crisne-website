@@ -4,6 +4,8 @@ Retrieval runs on the knowledge in prisma/dev.db (read only) and reports hits as
 routing runs the sensitive guard and the heuristic intent router, no LLM and no network.
 Answering (opt-in, `--opt answer=llm`) runs the real agent with the configured LLM: it calls the
 provider and spends quota, so the default offline run leaves it out.
+Judging (opt-in on top of it, `--opt judge=llm`) grades those answers with a judge model from the other provider
+than LLM_PROVIDER (google_genai <-> groq, against self-preference bias), or `judge_provider` / `judge_model`.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import uuid
 from pathlib import Path
 
 from evals.corpus_export import DEV_DB, build_documents, load_knowledge, read_existing
+from evals.kit import judge as kit_judge
 from evals.kit.corpus import content_hash
 from evals.kit.target import Answer, Hit, RouteResult, TargetUnavailable
 from rag_service.config import settings
@@ -27,7 +30,12 @@ from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
 MODES = ("fts", "vector", "hybrid")
 ANSWER_MODES = ("off", "llm")
+DEFAULT_JUDGE_MODELS = {
+    "google_genai": "gemini-2.5-pro",
+    "groq": "llama-3.3-70b-versatile",
+}
 CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
+JUDGE_CACHE_FILE = Path(__file__).parent / ".cache" / "judge.json"
 # Code whose change can change an answer; any edit here invalidates the whole cache
 CODE_GLOBS = ("rag_service/core/**/*.py", "rag_service/domains/**/*.py")
 
@@ -42,9 +50,14 @@ def _code_fingerprint() -> str:
     return digest.hexdigest()
 
 
+class JudgeConfigError(RuntimeError):
+    """The judge cannot run at all (missing key): fails the run instead of marking every sample unavailable."""
+
+
 class RoadmapTarget:
     name = "roadmap"
-    def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off"):
+    def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
+                 judge: str = "off", judge_provider: str = "", judge_model: str = ""):
         if cache not in ("on", "off"):
             raise ValueError(f"cache must be 'on' or 'off', got {cache!r}")
         self._cache_on = cache == "on"
@@ -58,7 +71,30 @@ class RoadmapTarget:
         if gate not in ("on", "off"):
             raise ValueError(f"gate must be on or off, got {gate!r}")
         self.gate = gate == "on"
-        self.capabilities = frozenset({"retrieve", "route"} | ({"answer"} if answer == "llm" else set()))
+        if judge not in ANSWER_MODES:
+            raise ValueError(f"judge must be one of {ANSWER_MODES}, got {judge!r}")
+        if judge == "llm" and answer != "llm":
+            raise ValueError("judge=llm grades live answers, so it needs answer=llm too")
+        answer_provider = settings.llm_provider.strip().lower()
+        if judge_provider:
+            self.judge_provider = judge_provider.strip().lower()
+        else:
+            # Auto-switch to alternate provider to avoid self-preference bias
+            self.judge_provider = "groq" if answer_provider == "google_genai" else "google_genai"
+
+        self.judge_model = judge_model or DEFAULT_JUDGE_MODELS.get(self.judge_provider, settings.llm_model)
+
+        # Fallback provider is the alternate model, never the answer provider: grading its own answers
+        # would bring back the self-preference bias, so without one the sample is unavailable instead
+        other = "groq" if self.judge_provider == "google_genai" else "google_genai"
+        self.fallback_provider = None if other == answer_provider else other
+        self.fallback_model = DEFAULT_JUDGE_MODELS[other] if self.fallback_provider else None
+
+        self._judge_llm = None
+        self._fallback_judge_llm = None
+        self._judge_cache: dict | None = None
+        capabilities = {"retrieve", "route"} | ({"answer"} if answer == "llm" else set())
+        self.capabilities = frozenset(capabilities | ({"judge"} if judge == "llm" else set()))
         self._agent = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._router = IntentRouter()
@@ -209,10 +245,121 @@ class RoadmapTarget:
         meta = next((e for e in reversed(events) if e.get("type") == "metadata"), {})
         return [doc_ids[s["id"]] for s in meta.get("sources", []) if s["id"] in doc_ids]
 
+    def contexts(self, section_ids: list[str]) -> list[str]:
+        """Each cited section with the title and placement the agent's context carries (layer, level)."""
+        sections = {
+            section["section_id"]: (doc, section["text"]) for doc in self._load()[1] for section in doc["sections"]
+        }
+        texts = []
+        for section_id in section_ids:
+            if section_id in sections:
+                doc, text = sections[section_id]
+                meta = doc.get("metadata", {})
+                where = ", ".join(str(meta[key]) for key in ("topic", "layer_title", "level") if meta.get(key))
+                texts.append(f"{doc['title']} ({where}): {text}" if where else f"{doc['title']}: {text}")
+        return texts
+
+    def _build_judge_llm(self, provider: str, model: str):
+        if provider == "google_genai":
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            from rag_service.domains.roadmap.agent import _resolve_gemini_api_key
+
+            api_key = _resolve_gemini_api_key()
+            if not api_key:
+                return None
+            return ChatGoogleGenerativeAI(
+                model=model, api_key=api_key, temperature=0, max_retries=1, timeout=60.0,
+                response_mime_type="application/json",
+            )
+        elif provider == "groq":
+            from langchain_groq import ChatGroq
+
+            api_key = settings.groq_api_key
+            if not api_key:
+                return None
+            return ChatGroq(
+                model=model, api_key=api_key, temperature=0, max_retries=2, timeout=60.0,
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+        else:
+            raise RuntimeError(f"judge_provider must be google_genai or groq, got {provider!r}")
+
+    def _get_judge_llm(self, fallback: bool = False):
+        provider = self.fallback_provider if fallback else self.judge_provider
+        model = self.fallback_model if fallback else self.judge_model
+
+        if not fallback and self._judge_llm is not None:
+            return self._judge_llm
+        if fallback and self._fallback_judge_llm is not None:
+            return self._fallback_judge_llm
+
+        llm = self._build_judge_llm(provider, model)
+        if not llm:
+            raise JudgeConfigError(f"judge=llm needs the {provider} API key in roadmap-rag-assistant/.env")
+
+        if fallback:
+            self._fallback_judge_llm = llm
+        else:
+            self._judge_llm = llm
+        return llm
+
+    def _judge_key(self, provider: str | None, model: str | None, prompt: str) -> str:
+        payload = {"version": kit_judge.JUDGE_VERSION, "provider": provider, "model": model, "prompt": prompt}
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+    def judge(self, prompt: str) -> str:
+        primary_key = self._judge_key(self.judge_provider, self.judge_model, prompt)
+        cache = self._load_judge_cache() if self._cache_on else {}
+        if primary_key in cache:
+            return cache[primary_key]
+
+        if self.judge_provider not in ("google_genai", "groq"):
+            raise RuntimeError(f"judge_provider must be google_genai or groq, got {self.judge_provider!r}")
+
+        chosen_key = primary_key
+        try:
+            reply = self._get_judge_llm(fallback=False).invoke(prompt).content
+        except Exception as primary_exc:
+            limited = any(mark in str(primary_exc) for mark in ("429", "RESOURCE_EXHAUSTED", "rate limit"))
+            unavailable = TargetUnavailable("judge_rate_limited" if limited else "judge_error")
+            if self.fallback_provider is None:
+                if isinstance(primary_exc, JudgeConfigError):
+                    raise
+                raise unavailable from primary_exc
+
+            # Only when the primary judge fails: a verdict the fallback gave earlier never hides the primary's
+            chosen_key = self._judge_key(self.fallback_provider, self.fallback_model, prompt)
+            if chosen_key in cache:
+                return cache[chosen_key]
+            try:
+                reply = self._get_judge_llm(fallback=True).invoke(prompt).content
+            except Exception as fallback_exc:
+                if isinstance(primary_exc, JudgeConfigError) and isinstance(fallback_exc, JudgeConfigError):
+                    raise JudgeConfigError(f"{primary_exc}; fallback: {fallback_exc}") from fallback_exc
+                raise unavailable from primary_exc
+
+        if isinstance(reply, list):  # some providers return content parts
+            reply = "".join(part.get("text", "") if isinstance(part, dict) else str(part) for part in reply)
+        # Checked before caching (raises TargetUnavailable): a broken reply is asked again next run, not replayed
+        kit_judge.parse(reply)
+        if self._cache_on:
+            cache[chosen_key] = reply
+            JUDGE_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            JUDGE_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
+        return reply
+
+    def _load_judge_cache(self) -> dict:
+        if self._judge_cache is None:
+            exists = JUDGE_CACHE_FILE.exists()
+            self._judge_cache = json.loads(JUDGE_CACHE_FILE.read_text(encoding="utf-8")) if exists else {}
+        return self._judge_cache
+
     def corpus_fingerprint(self) -> dict:
         documents = self._load()[1]
         return {"source": "prisma/dev.db", "doc_count": len(documents), "sha256": content_hash(documents)}
 
 
-def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off") -> RoadmapTarget:
-    return RoadmapTarget(mode=mode, answer=answer, cache=cache, gate=gate)
+def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
+                 judge: str = "off", judge_provider: str = "", judge_model: str = "") -> RoadmapTarget:
+    return RoadmapTarget(mode=mode, answer=answer, cache=cache, gate=gate,
+                         judge=judge, judge_provider=judge_provider, judge_model=judge_model)

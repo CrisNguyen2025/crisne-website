@@ -64,7 +64,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 | Hạng mục | Trạng thái | Việc cần làm |
 |---|---|---|
 | Eval retrieval (`yarn eval:rag`) + Langfuse dataset | ✅ | — |
-| Eval câu trả lời (độ bám nguồn, liên quan câu hỏi, từ chối đúng lúc) | ❌ | LLM judge chạy trên dataset; chặn merge trong CI khi điểm giảm |
+| Eval câu trả lời (độ bám nguồn, liên quan câu hỏi, từ chối đúng lúc) | 🟡 có LLM judge (`evals` scorer `judge`, opt-in) | Chạy live để lấy baseline + agreement, đặt ngưỡng; chặn merge trong CI khi điểm giảm |
 | Trích dẫn nguồn trong câu trả lời | ❌ | Hiển thị chunk hoặc bài nguồn |
 | Vòng feedback | 🟡 P0 xong | P1–P3 (mục 8) |
 

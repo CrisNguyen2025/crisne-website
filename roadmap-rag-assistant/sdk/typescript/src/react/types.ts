@@ -46,6 +46,8 @@ export interface ChatMessage {
   citations?: ChatCitation[];
   /** Data the reply's actions wrote, shown as a review card under it. */
   changes?: ChangeReview[];
+  /** Langfuse trace of the reply; feedback on it is scored on this trace. */
+  traceId?: string;
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
   suggestions?: { label: string; prompt: string }[];
@@ -134,11 +136,13 @@ export interface ChatbotConfig {
   onToolExecuted?: (toolName: string, result: string) => void;
 
   /**
-   * Callback fired when user rates an answer (1 for like, 0 for unlike) with optional detail.
+   * Callback fired with the last vote on an answer (1 for like, 0 for unlike, null when taken back),
+   * after rapid clicks settle. A 👎 arrives once its reason sheet closes, with the reason if given.
+   * Reject the promise when the vote was not saved: the widget then shows the previous vote again.
    */
   onFeedback?: (
     messageId: string,
-    value: 0 | 1,
+    value: 0 | 1 | null,
     detail?: FeedbackDetail
   ) => void | Promise<void>;
 
@@ -156,9 +160,9 @@ export interface ChatbotConfig {
 }
 
 export interface FeedbackDetail {
+  /** Langfuse trace of the rated reply; missing when the service runs without tracing. */
+  traceId?: string;
   reason?: string;
   comment?: string;
-  query?: string;
-  assistantMsg?: string;
 }
 

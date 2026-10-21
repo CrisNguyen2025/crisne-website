@@ -57,10 +57,13 @@ async def _sse_stream_generator(
     metadata: dict = {}
     # What the turn's actions wrote (see rag_service/execution/changes.py), also sent with `done`
     changes: list[dict] = []
+    # Langfuse trace of the turn (None when tracing is off), sent with `done` for 👍/👎 feedback
+    trace_id: str | None = None
 
     config = {"configurable": {"thread_id": thread_id}}
 
     async def _stream_from_fallback(f_agent: FallbackAgent):
+        nonlocal trace_id
         async for ev in f_agent.astream_events(
             {"messages": [{"role": "user", "content": message}], "context": context},
             config=config,
@@ -90,6 +93,10 @@ async def _sse_stream_generator(
                 yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
                 metadata.update({k: v for k, v in ev.items() if k != "type"})
+            elif ev_type == "trace":
+                trace_id = ev.get("trace_id")
+                # Sent first, so a reply stopped before `done` can still be rated
+                yield f"event: trace\ndata: {json.dumps({'trace_id': trace_id})}\n\n"
 
     try:
         if isinstance(agent, FallbackAgent):
@@ -146,6 +153,8 @@ async def _sse_stream_generator(
             done_payload["metadata"] = metadata
         if changes:
             done_payload["changes"] = changes
+        if trace_id:
+            done_payload["trace_id"] = trace_id
         yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
     except Exception as exc:

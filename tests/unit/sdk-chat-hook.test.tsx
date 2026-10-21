@@ -174,4 +174,26 @@ describe("useRoadmapAssistantChat", () => {
       expect(result.current.messages.map((m) => m.id)).toEqual(before);
     });
   });
+  describe("trace id", () => {
+    it("keeps the trace id sent before the reply when the stream ends without done", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(c) {
+              c.enqueue(new TextEncoder().encode(sse("trace", { trace_id: "0123456789abcdef0123456789abcdef" })));
+              c.enqueue(new TextEncoder().encode(sse("token", { delta: "Đang trả lời" })));
+              c.close();
+            },
+          }),
+          { status: 200 }
+        )
+      );
+      const { result } = renderHook(() => useRoadmapAssistantChat({ baseUrl: BASE }));
+
+      await act(() => result.current.sendMessage("hỏi thử"));
+      await waitFor(() =>
+        expect(result.current.messages.at(-1)?.traceId).toBe("0123456789abcdef0123456789abcdef")
+      );
+    });
+  });
 });

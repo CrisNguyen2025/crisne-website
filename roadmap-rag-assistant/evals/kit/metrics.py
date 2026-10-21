@@ -26,7 +26,35 @@ def _accuracy(rows: list[dict], k: int) -> dict:
     return {"n": len(rows), "accuracy": _ratio(sum(r["passed"] for r in rows), len(rows))}
 
 
-METRICS = {"retrieval": _retrieval}
+def _mean(values: list) -> float | None:
+    return round(sum(values) / len(values), 2) if values else None
+
+
+def _judge(rows: list[dict], k: int) -> dict:
+    def criterion(name: str) -> list[dict]:
+        return [r["criteria"][name] for r in rows if name in r["criteria"]]
+
+    facts, refusal = criterion("facts"), criterion("refusal")
+    baseline = [r["baseline"]["facts"] for r in rows if "baseline" in r]
+    labeled = [r["calibration"] for r in rows if "calibration" in r]
+    return {
+        "n": len(rows),
+        "accuracy": _ratio(sum(r["passed"] for r in rows), len(rows)),
+        "faithfulness_mean": _mean([c["score"] for c in criterion("faithfulness")]),
+        "relevance_mean": _mean([c["score"] for c in criterion("relevance")]),
+        "facts_pass": _ratio(sum(c["passed"] for c in facts), len(facts)),
+        # Substring baseline on the same samples: a gap with facts_pass shows how much wording varies
+        "facts_pass_substring": _ratio(sum(baseline), len(baseline)),
+        "refusal_pass": _ratio(sum(c["passed"] for c in refusal), len(refusal)),
+        "human_n": len(labeled),
+        "human_agreement": _ratio(sum(c["agree"] for c in labeled), len(labeled)),
+        # Judge passed what the human failed: the dangerous direction for a quality gate
+        "judge_false_pass": sum(c["judge"] and not c["human"] for c in labeled),
+        "judge_false_fail": sum(c["human"] and not c["judge"] for c in labeled),
+    }
+
+
+METRICS = {"retrieval": _retrieval, "judge": _judge}
 
 
 def summarize(results: list[dict], k: int) -> dict:

@@ -18,9 +18,12 @@ from contextvars import ContextVar
 from typing import Any, AsyncGenerator, AsyncIterator, Optional
 
 TRACE_NAME = "roadmap-assistant"
+# Also a trace tag: the Next.js triage import filters 👎 scores by it (the portfolio chat shares the score name)
+TRACE_TAGS = [TRACE_NAME]
 
 _client: Any = None
 _client_ready = False
+_warned_missing_keys = False
 
 
 class TurnTrace:
@@ -37,7 +40,7 @@ class TurnTrace:
         try:
             from langfuse import propagate_attributes
 
-            with propagate_attributes(session_id=self.session_id, trace_name=TRACE_NAME):
+            with propagate_attributes(session_id=self.session_id, trace_name=TRACE_NAME, tags=TRACE_TAGS):
                 return self.root.start_observation(name=name, as_type=as_type, **kwargs)
         except Exception as exc:
             print(f"[Langfuse] child '{name}' failed: {exc}")
@@ -50,13 +53,16 @@ _current: ContextVar[Optional[TurnTrace]] = ContextVar("rag_turn_trace", default
 
 def get_langfuse() -> Any:
     """Lazily create the client after `.env` is loaded; None when tracing is off."""
-    global _client, _client_ready
+    global _client, _client_ready, _warned_missing_keys
     if _client_ready:
         return _client
-    _client_ready = True
     if not (os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")):
-        print("[Langfuse] LANGFUSE_PUBLIC_KEY/SECRET_KEY not set — tracing disabled.")
+        # Not settled yet: a call made before `.env` is loaded must not switch tracing off for good
+        if not _warned_missing_keys:
+            print("[Langfuse] LANGFUSE_PUBLIC_KEY/SECRET_KEY not set — tracing disabled.")
+            _warned_missing_keys = True
         return None
+    _client_ready = True
     try:
         from langfuse import Langfuse
 
@@ -97,6 +103,17 @@ def end_step(obs: Any, **update: Any) -> None:
         print(f"[Langfuse] end step failed: {exc}")
 
 
+def end_step_on_error(obs: Any, exc: BaseException, **update: Any) -> None:
+    """End a step its code left through an exception, so the span is still exported.
+
+    A client disconnect (CancelledError / GeneratorExit) is a WARNING, anything else an ERROR.
+    """
+    if isinstance(exc, (GeneratorExit, asyncio.CancelledError)):
+        end_step(obs, level="WARNING", status_message="stream cancelled by client", **update)
+    else:
+        end_step(obs, level="ERROR", status_message=f"{type(exc).__name__}: {exc}", **update)
+
+
 def usage_from_langchain(message: Any) -> Optional[dict]:
     """Map LangChain `usage_metadata` to Langfuse usage_details."""
     meta = getattr(message, "usage_metadata", None)
@@ -128,7 +145,7 @@ async def traced_turn(
         try:
             from langfuse import propagate_attributes
 
-            with propagate_attributes(session_id=session_id, trace_name=TRACE_NAME):
+            with propagate_attributes(session_id=session_id, trace_name=TRACE_NAME, tags=TRACE_TAGS):
                 root = lf.start_observation(
                     name=TRACE_NAME,
                     as_type="agent",
@@ -149,6 +166,9 @@ async def traced_turn(
     tools_used: list[str] = []
     error: Optional[BaseException] = None
     try:
+        # The client sends 👍/👎 with this id, so the feedback score lands on this turn's trace
+        if trace_id := getattr(trace.root, "trace_id", None):
+            yield {"type": "trace", "trace_id": trace_id}
         async for ev in events:
             kind = ev.get("type")
             if kind == "tool_start":

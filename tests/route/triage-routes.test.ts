@@ -54,6 +54,12 @@ const prismaMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+// Langfuse holds the 👎 votes the import reads; no network in tests
+const langfuseMock = vi.hoisted(() => ({ listDownvotedTraces: vi.fn(), getReviewStatus: vi.fn() }));
+vi.mock("@/lib/ai/langfuse", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/ai/langfuse")>()),
+  ...langfuseMock,
+}));
 prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock));
 
 import { GET as getTriage, POST as createTriage } from "@/app/api/v1/roadmaps/triage/route";
@@ -61,6 +67,8 @@ import { POST as generateDraft } from "@/app/api/v1/roadmaps/triage/[id]/generat
 import { POST as approveDraft } from "@/app/api/v1/roadmaps/triage/[id]/approve/route";
 import { POST as dismissTriage } from "@/app/api/v1/roadmaps/triage/[id]/dismiss/route";
 import { DELETE as deleteTriage } from "@/app/api/v1/roadmaps/triage/[id]/route";
+import { POST as importTriage } from "@/app/api/v1/roadmaps/triage/import/route";
+import { GET as getGoldenSet } from "@/app/api/v1/roadmaps/triage/golden-set/route";
 import { setLlmProvider, type LlmProvider } from "@/lib/ai/llm-provider";
 import { DEFAULT_CHAT_MODEL, FALLBACK_CHAT_MODEL } from "@/lib/ai/gemini";
 import { resetLlmCircuitBreaker } from "@/lib/ai/llm-circuit-breaker";
@@ -469,6 +477,91 @@ describe("Knowledge Triage API Routes", () => {
       const res = await deleteTriage(deleteRequest({}), params);
       expect(res.status).toBe(401);
       expect(prismaMock.knowledgeTriage.deleteMany).not.toHaveBeenCalled();
+    });
+  });
+  describe("POST /api/v1/roadmaps/triage/import", () => {
+    const importRequest = (headers: HeadersInit = ADMIN_HEADER) =>
+      new NextRequest("http://localhost/api/v1/roadmaps/triage/import", { method: "POST", headers });
+
+    it("creates a PENDING item per new 👎, skipping traces already imported", async () => {
+      prismaMock.knowledgeTriage.findMany.mockResolvedValueOnce([{ traceId: "trace-old" }]);
+      langfuseMock.listDownvotedTraces.mockResolvedValueOnce({
+        traces: [
+          {
+            traceId: "trace-new",
+            input: { message: "Reranker là gì? mail a.b@gmail.com", page_context: { roadmapSlug: "llm-ops" } },
+            output: "Reranker sắp xếp lại kết quả.",
+            reason: "Lạc đề / Chưa đúng trọng tâm",
+            comment: "Thiếu ví dụ",
+          },
+          // No question to turn into a lesson
+          { traceId: "trace-empty", input: { page_context: null }, output: "" },
+        ],
+        remaining: 3,
+      });
+
+      const res = await importTriage(importRequest());
+
+      expect(await res.json()).toEqual({ imported: 1, remaining: 3 });
+      expect(langfuseMock.listDownvotedTraces.mock.calls[0][0]).toMatchObject({
+        source: "roadmap-assistant",
+        skip: new Set(["trace-old"]),
+      });
+      expect(prismaMock.knowledgeTriage.create).toHaveBeenCalledTimes(1);
+      expect(prismaMock.knowledgeTriage.create.mock.calls[0][0].data).toMatchObject({
+        traceId: "trace-new",
+        query: "Reranker là gì? mail [email]",
+        assistantMsg: "Reranker sắp xếp lại kết quả.",
+        reason: "Lạc đề / Chưa đúng trọng tâm",
+        comment: "Thiếu ví dụ",
+        roadmapSlug: "llm-ops",
+        status: "PENDING",
+      });
+    });
+
+    it("rejects visitors before reading Langfuse", async () => {
+      const res = await importTriage(importRequest({}));
+
+      expect(res.status).toBe(401);
+      expect(langfuseMock.listDownvotedTraces).not.toHaveBeenCalled();
+    });
+
+    it("reports a Langfuse failure without creating items", async () => {
+      prismaMock.knowledgeTriage.findMany.mockResolvedValueOnce([]);
+      langfuseMock.listDownvotedTraces.mockRejectedValueOnce(new Error("Langfuse is not configured"));
+
+      const res = await importTriage(importRequest());
+
+      expect(res.status).toBe(500);
+      expect(prismaMock.knowledgeTriage.create).not.toHaveBeenCalled();
+    });
+  });
+  describe("GET /api/v1/roadmaps/triage/golden-set", () => {
+    const statusRequest = (headers: HeadersInit = ADMIN_HEADER) =>
+      new NextRequest("http://localhost/api/v1/roadmaps/triage/golden-set", { headers });
+
+    it("returns the committed golden set next to the live Langfuse numbers", async () => {
+      langfuseMock.getReviewStatus.mockResolvedValueOnce({ datasetItems: 3, queuePending: 2, queueUrl: "https://lf/q" });
+
+      const data = await (await getGoldenSet(statusRequest())).json();
+
+      expect(langfuseMock.getReviewStatus).toHaveBeenCalledWith("cris-ai-golden-set");
+      expect(data).toMatchObject({ dataset: "cris-ai-golden-set", datasetItems: 3, queuePending: 2, queueUrl: "https://lf/q" });
+      expect(data).toHaveProperty("sync");
+    });
+
+    it("still answers with the committed part when Langfuse fails", async () => {
+      langfuseMock.getReviewStatus.mockRejectedValueOnce(new Error("Langfuse is not configured"));
+
+      const res = await getGoldenSet(statusRequest());
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ dataset: "cris-ai-golden-set", error: "Langfuse is not configured" });
+    });
+
+    it("rejects visitors", async () => {
+      expect((await getGoldenSet(statusRequest({}))).status).toBe(401);
+      expect(langfuseMock.getReviewStatus).not.toHaveBeenCalled();
     });
   });
 });

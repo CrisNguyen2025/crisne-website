@@ -54,6 +54,30 @@ export function saveConversation(key: string, conversation: StoredConversation):
   }
 }
 
+/** Votes the service has accepted, by message id: kept apart so a reload shows them again. */
+export function feedbackKey(baseUrl: string): string {
+  return `abot:feedback:${baseUrl}`;
+}
+
+export function loadFeedback(key: string): Record<string, 0 | 1> {
+  try {
+    const data = JSON.parse(window.sessionStorage.getItem(key) ?? '{}') as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(data).filter((entry): entry is [string, 0 | 1] => entry[1] === 0 || entry[1] === 1)
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function saveFeedback(key: string, votes: Record<string, 0 | 1>): void {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(votes));
+  } catch {
+    // Storage blocked: votes stay in memory only
+  }
+}
+
 export function clearConversation(key: string): void {
   try {
     window.sessionStorage.removeItem(key);

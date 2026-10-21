@@ -29,6 +29,7 @@ from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.observability import (
     current_trace,
     end_step,
+    end_step_on_error,
     start_step,
     traced_turn,
 )
@@ -242,7 +243,11 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         yield step_event("route", "routing", "running")
         router_step = start_step("intent-router", input={"message": content})
         intent_res: IntentClassificationResult
-        intent_res, method = await self.router.aroute(content)
+        try:
+            intent_res, method = await self.router.aroute(content)
+        except BaseException as exc:
+            end_step_on_error(router_step, exc)
+            raise
         end_step(router_step, output=intent_res.model_dump(mode="json"), metadata={"method": method})
         yield step_event(
             "route",

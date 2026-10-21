@@ -41,6 +41,8 @@ export interface StreamCallbacks {
   onToolEnd?: (name: string, result: string, isError: boolean) => void;
   onStep?: (step: AssistantStepEvent) => void;
   onChangeReview?: (change: ChangeReview) => void;
+  /** Langfuse trace of the turn, sent before the reply (also repeated on `done` as `traceId`) */
+  onTrace?: (traceId: string) => void;
   onDone?: (response: ChatResponse) => void;
   onError?: (error: Error) => void;
 }
@@ -233,6 +235,8 @@ export class RoadmapChatClient {
                   callbacks.onStep?.(data as AssistantStepEvent);
                 } else if (currentEvent === 'change_review') {
                   callbacks.onChangeReview?.(data as ChangeReview);
+                } else if (currentEvent === 'trace') {
+                  if (typeof data.trace_id === 'string') callbacks.onTrace?.(data.trace_id);
                 } else if (currentEvent === 'done') {
                   const finalResp: ChatResponse = {
                     message: data.message || accumulatedMessage,
@@ -242,6 +246,7 @@ export class RoadmapChatClient {
                     sources: Array.isArray(data.metadata?.sources) ? data.metadata.sources : undefined,
                     citations: Array.isArray(data.metadata?.citations) ? data.metadata.citations : undefined,
                     changes: Array.isArray(data.changes) ? data.changes : undefined,
+                    traceId: typeof data.trace_id === 'string' ? data.trace_id : undefined,
                   };
                   callbacks.onDone?.(finalResp);
                 } else if (currentEvent === 'error') {
