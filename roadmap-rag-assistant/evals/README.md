@@ -267,6 +267,27 @@ run tái lập được.
 **Thêm scorer riêng của domain:** dùng decorator `@scorer(name, capability)` từ `kit/scorers.py` trong module
 domain, import module đó trước khi chạy, rồi khai báo `name` trong `meta.scorers`.
 
+## Router contract (`evals/router/`)
+
+Intent router đọc mọi quy tắc từ một file: `rag_service/domains/roadmap/router/policy.py` (từ khóa theo trục,
+bảng act × target → intent, chính sách ghi). Mọi đường tới database đi qua `router/write_gate.py`
+(`allow` · `confirm` · `deny`). Sửa hành vi = sửa `policy.py`, rồi kiểm tra lại bằng một lệnh:
+
+```bash
+.venv/bin/python -m evals router-check            # exit 1 nếu metric tệ đi hoặc có quyết định đổi
+.venv/bin/python -m evals router-check --accept   # sau khi đọc diff: ghi baseline + snapshot mới
+```
+
+| File | Vai trò |
+|---|---|
+| `stress.jsonl` | câu sinh từ template × nhiễu, nhãn theo mệnh đề (`generate_stress.py`, seed cố định) |
+| `baseline.json` | ratchet: `stress.wrong_write/dropped/misroute` không được tăng, `heldout.*.correct` không được giảm |
+| `decisions.jsonl` | quyết định cho từng câu (route, write, rules); mọi thay đổi được in ra để người duyệt |
+
+Tập held-out là câu thật: `datasets/_routing/samples.jsonl` và `tests/data/intent_eval_cases.json`.
+`tests/test_router_policy.py` chạy `router-check`, nên thay đổi routing chưa được duyệt sẽ làm CI fail.
+Mỗi câu bị route sai ngoài thực tế: thêm vào held-out, sửa `policy.py`, chạy `router-check`, duyệt diff, `--accept`.
+
 ## Invariants (không được phá)
 
 1. `kit/` không import `rag_service` hay `evals.target`. Đã có test `test_kit_does_not_import_domain_code`.

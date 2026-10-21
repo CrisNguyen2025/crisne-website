@@ -1,0 +1,10 @@
+{
+  "heldout.intent_cases.correct": 64,
+  "heldout.routing.correct": 145,
+  "heldout.routing.wrong": 23,
+  "stress.dropped": 0,
+  "stress.misroute": 0,
+  "stress.ok": 406,
+  "stress.undecided": 98,
+  "stress.wrong_write": 0
+}

@@ -1,4 +1,4 @@
-"""Roadmap entry point: `python -m evals <validate|run|diff|sync-dataset>` with this repo's paths filled in."""
+"""Roadmap entry point: `python -m evals <validate|run|diff|sync-dataset|router-check>` with this repo's paths filled in."""
 
 import sys
 from pathlib import Path
@@ -12,6 +12,12 @@ if sys.argv[1:2] == ["sync-dataset"]:
     from evals.sync_dataset import main as sync_dataset
 
     sys.exit(sync_dataset(sys.argv[2:]))
+
+if sys.argv[1:2] == ["router-check"]:
+    # Intent router contract: stress set + held-out sets, ratchet baseline and decision snapshot (evals/router/)
+    from evals.router.check import main as router_check
+
+    sys.exit(router_check(sys.argv[2:]))
 
 sys.exit(
     main(

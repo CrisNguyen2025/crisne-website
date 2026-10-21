@@ -1,0 +1,504 @@
+{"id": "stress-0001", "input": "tạo topic ZZ Test", "family": "cud_imperative", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0002", "input": "tao topic ZZ Test", "family": "cud_imperative", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0003", "input": "TẠO TOPIC ZZ TEST", "family": "cud_imperative", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0004", "input": "ê bạn ơi, tạo topic ZZ Test", "family": "cud_imperative", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0005", "input": "tạo topic ZZ Test nhé ạ", "family": "cud_imperative", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0006", "input": "tạo topic ZZ Test 🙏", "family": "cud_imperative", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0007", "input": "Việc cần làm: tạo topic ZZ Test", "family": "cud_imperative", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0008", "input": "Câu hỏi: tạo topic ZZ Test", "family": "cud_imperative", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0009", "input": "pls tạo topic ZZ Test thanks", "family": "cud_imperative", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0010", "input": "Hi\ntạo topic ZZ Test", "family": "cud_imperative", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0011", "input": "tạo topic ZZ Test, rồi tìm bài về Docker", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0012", "input": "tạo topic ZZ Test, rồi tạo topic Docker Compose", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0013", "input": "thêm bài Kafka vào layer Backend", "family": "cud_imperative", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0014", "input": "them bai Kafka vao layer Backend", "family": "cud_imperative", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0015", "input": "THÊM BÀI KAFKA VÀO LAYER BACKEND", "family": "cud_imperative", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0016", "input": "ê bạn ơi, thêm bài Kafka vào layer Backend", "family": "cud_imperative", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0017", "input": "thêm bài Kafka vào layer Backend nhé ạ", "family": "cud_imperative", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0018", "input": "thêm bài Kafka vào layer Backend 🙏", "family": "cud_imperative", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0019", "input": "Việc cần làm: thêm bài Kafka vào layer Backend", "family": "cud_imperative", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0020", "input": "Câu hỏi: thêm bài Kafka vào layer Backend", "family": "cud_imperative", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0021", "input": "pls thêm bài Kafka vào layer Backend thanks", "family": "cud_imperative", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0022", "input": "Hi\nthêm bài Kafka vào layer Backend", "family": "cud_imperative", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0023", "input": "thêm bài Kafka vào layer Backend, rồi tìm bài về Docker", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0024", "input": "thêm bài Kafka vào layer Backend, rồi tạo topic Docker Compose", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0025", "input": "xóa bài RAG", "family": "cud_imperative", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0026", "input": "xoa bai RAG", "family": "cud_imperative", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0027", "input": "XÓA BÀI RAG", "family": "cud_imperative", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0028", "input": "ê bạn ơi, xóa bài RAG", "family": "cud_imperative", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0029", "input": "xóa bài RAG nhé ạ", "family": "cud_imperative", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0030", "input": "xóa bài RAG 🙏", "family": "cud_imperative", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0031", "input": "Việc cần làm: xóa bài RAG", "family": "cud_imperative", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0032", "input": "Câu hỏi: xóa bài RAG", "family": "cud_imperative", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0033", "input": "pls xóa bài RAG thanks", "family": "cud_imperative", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0034", "input": "Hi\nxóa bài RAG", "family": "cud_imperative", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0035", "input": "xóa bài RAG, rồi tìm bài về Docker", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0036", "input": "xóa bài RAG, rồi tạo topic Docker Compose", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0037", "input": "đổi tên bài Kafka thành Kafka", "family": "cud_imperative", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0038", "input": "doi ten bai Kafka thanh Kafka", "family": "cud_imperative", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0039", "input": "ĐỔI TÊN BÀI KAFKA THÀNH KAFKA", "family": "cud_imperative", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0040", "input": "ê bạn ơi, đổi tên bài Kafka thành Kafka", "family": "cud_imperative", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0041", "input": "đổi tên bài Kafka thành Kafka nhé ạ", "family": "cud_imperative", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0042", "input": "đổi tên bài Kafka thành Kafka 🙏", "family": "cud_imperative", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0043", "input": "Việc cần làm: đổi tên bài Kafka thành Kafka", "family": "cud_imperative", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0044", "input": "Câu hỏi: đổi tên bài Kafka thành Kafka", "family": "cud_imperative", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0045", "input": "pls đổi tên bài Kafka thành Kafka thanks", "family": "cud_imperative", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0046", "input": "Hi\nđổi tên bài Kafka thành Kafka", "family": "cud_imperative", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0047", "input": "đổi tên bài Kafka thành Kafka, rồi tìm bài về Docker", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0048", "input": "đổi tên bài Kafka thành Kafka, rồi tạo topic Docker Compose", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0049", "input": "chuyển bài Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0050", "input": "chuyen bai Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0051", "input": "CHUYỂN BÀI DOCKER COMPOSE SANG LAYER BACKEND", "family": "cud_imperative", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0052", "input": "ê bạn ơi, chuyển bài Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0053", "input": "chuyển bài Docker Compose sang layer Backend nhé ạ", "family": "cud_imperative", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0054", "input": "chuyển bài Docker Compose sang layer Backend 🙏", "family": "cud_imperative", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0055", "input": "Việc cần làm: chuyển bài Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0056", "input": "Câu hỏi: chuyển bài Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0057", "input": "pls chuyển bài Docker Compose sang layer Backend thanks", "family": "cud_imperative", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0058", "input": "Hi\nchuyển bài Docker Compose sang layer Backend", "family": "cud_imperative", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0059", "input": "chuyển bài Docker Compose sang layer Backend, rồi tìm bài về Docker", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0060", "input": "chuyển bài Docker Compose sang layer Backend, rồi tạo topic Docker Compose", "family": "cud_imperative", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0061", "input": "bạn tạo topic Test Router được không", "family": "cud_polite", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0062", "input": "ban tao topic Test Router duoc khong", "family": "cud_polite", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0063", "input": "BẠN TẠO TOPIC TEST ROUTER ĐƯỢC KHÔNG", "family": "cud_polite", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0064", "input": "bạn tạo topic Test Router được không?", "family": "cud_polite", "noise": "question_mark", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0065", "input": "bạn tạo topic Test Router được không k", "family": "cud_polite", "noise": "trailing_k", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0066", "input": "ê bạn ơi, bạn tạo topic Test Router được không", "family": "cud_polite", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0067", "input": "bạn tạo topic Test Router được không nhé ạ", "family": "cud_polite", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0068", "input": "bạn tạo topic Test Router được không 🙏", "family": "cud_polite", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0069", "input": "Việc cần làm: bạn tạo topic Test Router được không", "family": "cud_polite", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0070", "input": "Câu hỏi: bạn tạo topic Test Router được không", "family": "cud_polite", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0071", "input": "pls bạn tạo topic Test Router được không thanks", "family": "cud_polite", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0072", "input": "Hi\nbạn tạo topic Test Router được không", "family": "cud_polite", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0073", "input": "bạn tạo topic Test Router được không, rồi tìm bài về Docker", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0074", "input": "bạn tạo topic Test Router được không, rồi tạo topic Docker Compose", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0075", "input": "có thể thêm bài Machine Learning vào layer Backend không", "family": "cud_polite", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0076", "input": "co the them bai Machine Learning vao layer Backend khong", "family": "cud_polite", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0077", "input": "CÓ THỂ THÊM BÀI MACHINE LEARNING VÀO LAYER BACKEND KHÔNG", "family": "cud_polite", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0078", "input": "có thể thêm bài Machine Learning vào layer Backend không?", "family": "cud_polite", "noise": "question_mark", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0079", "input": "có thể thêm bài Machine Learning vào layer Backend không k", "family": "cud_polite", "noise": "trailing_k", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0080", "input": "ê bạn ơi, có thể thêm bài Machine Learning vào layer Backend không", "family": "cud_polite", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0081", "input": "có thể thêm bài Machine Learning vào layer Backend không nhé ạ", "family": "cud_polite", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0082", "input": "có thể thêm bài Machine Learning vào layer Backend không 🙏", "family": "cud_polite", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0083", "input": "Việc cần làm: có thể thêm bài Machine Learning vào layer Backend không", "family": "cud_polite", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0084", "input": "Câu hỏi: có thể thêm bài Machine Learning vào layer Backend không", "family": "cud_polite", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0085", "input": "pls có thể thêm bài Machine Learning vào layer Backend không thanks", "family": "cud_polite", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0086", "input": "Hi\ncó thể thêm bài Machine Learning vào layer Backend không", "family": "cud_polite", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0087", "input": "có thể thêm bài Machine Learning vào layer Backend không, rồi tìm bài về Docker", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0088", "input": "có thể thêm bài Machine Learning vào layer Backend không, rồi tạo topic Docker Compose", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0089", "input": "nhờ bạn tạo layer Backend được không", "family": "cud_polite", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0090", "input": "nho ban tao layer Backend duoc khong", "family": "cud_polite", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0091", "input": "NHỜ BẠN TẠO LAYER BACKEND ĐƯỢC KHÔNG", "family": "cud_polite", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0092", "input": "nhờ bạn tạo layer Backend được không?", "family": "cud_polite", "noise": "question_mark", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0093", "input": "nhờ bạn tạo layer Backend được không k", "family": "cud_polite", "noise": "trailing_k", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0094", "input": "ê bạn ơi, nhờ bạn tạo layer Backend được không", "family": "cud_polite", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0095", "input": "nhờ bạn tạo layer Backend được không nhé ạ", "family": "cud_polite", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0096", "input": "nhờ bạn tạo layer Backend được không 🙏", "family": "cud_polite", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0097", "input": "Việc cần làm: nhờ bạn tạo layer Backend được không", "family": "cud_polite", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0098", "input": "Câu hỏi: nhờ bạn tạo layer Backend được không", "family": "cud_polite", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0099", "input": "pls nhờ bạn tạo layer Backend được không thanks", "family": "cud_polite", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0100", "input": "Hi\nnhờ bạn tạo layer Backend được không", "family": "cud_polite", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0101", "input": "nhờ bạn tạo layer Backend được không, rồi tìm bài về Docker", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0102", "input": "nhờ bạn tạo layer Backend được không, rồi tạo topic Docker Compose", "family": "cud_polite", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0103", "input": "chưa có bài Redis thì thêm vào layer General", "family": "cud_conditional", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0104", "input": "chua co bai Redis thi them vao layer General", "family": "cud_conditional", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0105", "input": "CHƯA CÓ BÀI REDIS THÌ THÊM VÀO LAYER GENERAL", "family": "cud_conditional", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0106", "input": "ê bạn ơi, chưa có bài Redis thì thêm vào layer General", "family": "cud_conditional", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0107", "input": "chưa có bài Redis thì thêm vào layer General nhé ạ", "family": "cud_conditional", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0108", "input": "chưa có bài Redis thì thêm vào layer General 🙏", "family": "cud_conditional", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0109", "input": "Việc cần làm: chưa có bài Redis thì thêm vào layer General", "family": "cud_conditional", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0110", "input": "Câu hỏi: chưa có bài Redis thì thêm vào layer General", "family": "cud_conditional", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0111", "input": "pls chưa có bài Redis thì thêm vào layer General thanks", "family": "cud_conditional", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0112", "input": "Hi\nchưa có bài Redis thì thêm vào layer General", "family": "cud_conditional", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0113", "input": "chưa có bài Redis thì thêm vào layer General, rồi tìm bài về Docker", "family": "cud_conditional", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0114", "input": "chưa có bài Redis thì thêm vào layer General, rồi tạo topic Docker Compose", "family": "cud_conditional", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0115", "input": "nếu chưa có AI Engineering thì tạo topic AI", "family": "cud_conditional", "noise": "clean", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0116", "input": "neu chua co AI Engineering thi tao topic AI", "family": "cud_conditional", "noise": "no_diacritics", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0117", "input": "NẾU CHƯA CÓ AI ENGINEERING THÌ TẠO TOPIC AI", "family": "cud_conditional", "noise": "upper", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0118", "input": "ê bạn ơi, nếu chưa có AI Engineering thì tạo topic AI", "family": "cud_conditional", "noise": "filler_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0119", "input": "nếu chưa có AI Engineering thì tạo topic AI nhé ạ", "family": "cud_conditional", "noise": "filler_suffix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0120", "input": "nếu chưa có AI Engineering thì tạo topic AI 🙏", "family": "cud_conditional", "noise": "emoji", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0121", "input": "Việc cần làm: nếu chưa có AI Engineering thì tạo topic AI", "family": "cud_conditional", "noise": "label_prefix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0122", "input": "Câu hỏi: nếu chưa có AI Engineering thì tạo topic AI", "family": "cud_conditional", "noise": "label_prefix_question", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0123", "input": "pls nếu chưa có AI Engineering thì tạo topic AI thanks", "family": "cud_conditional", "noise": "english_mix", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0124", "input": "Hi\nnếu chưa có AI Engineering thì tạo topic AI", "family": "cud_conditional", "noise": "newline_greeting", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0125", "input": "nếu chưa có AI Engineering thì tạo topic AI, rồi tìm bài về Docker", "family": "cud_conditional", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "knowledge_query"]}}
+{"id": "stress-0126", "input": "nếu chưa có AI Engineering thì tạo topic AI, rồi tạo topic Docker Compose", "family": "cud_conditional", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud", "roadmap_cud"]}}
+{"id": "stress-0127", "input": "tìm bài về RAG", "family": "search", "noise": "clean", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0128", "input": "tim bai ve RAG", "family": "search", "noise": "no_diacritics", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0129", "input": "TÌM BÀI VỀ RAG", "family": "search", "noise": "upper", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0130", "input": "tìm bài về RAG?", "family": "search", "noise": "question_mark", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0131", "input": "tìm bài về RAG k", "family": "search", "noise": "trailing_k", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0132", "input": "ê bạn ơi, tìm bài về RAG", "family": "search", "noise": "filler_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0133", "input": "tìm bài về RAG nhé ạ", "family": "search", "noise": "filler_suffix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0134", "input": "tìm bài về RAG 🙏", "family": "search", "noise": "emoji", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0135", "input": "Việc cần làm: tìm bài về RAG", "family": "search", "noise": "label_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0136", "input": "Câu hỏi: tìm bài về RAG", "family": "search", "noise": "label_prefix_question", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0137", "input": "pls tìm bài về RAG thanks", "family": "search", "noise": "english_mix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0138", "input": "Hi\ntìm bài về RAG", "family": "search", "noise": "newline_greeting", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0139", "input": "tìm bài về RAG, rồi tìm bài về Docker", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "knowledge_query"]}}
+{"id": "stress-0140", "input": "tìm bài về RAG, rồi tạo topic Docker Compose", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "roadmap_cud"]}}
+{"id": "stress-0141", "input": "có bài nào về RAG không", "family": "search", "noise": "clean", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0142", "input": "co bai nao ve RAG khong", "family": "search", "noise": "no_diacritics", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0143", "input": "CÓ BÀI NÀO VỀ RAG KHÔNG", "family": "search", "noise": "upper", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0144", "input": "có bài nào về RAG không?", "family": "search", "noise": "question_mark", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0145", "input": "có bài nào về RAG không k", "family": "search", "noise": "trailing_k", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0146", "input": "ê bạn ơi, có bài nào về RAG không", "family": "search", "noise": "filler_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0147", "input": "có bài nào về RAG không nhé ạ", "family": "search", "noise": "filler_suffix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0148", "input": "có bài nào về RAG không 🙏", "family": "search", "noise": "emoji", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0149", "input": "Việc cần làm: có bài nào về RAG không", "family": "search", "noise": "label_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0150", "input": "Câu hỏi: có bài nào về RAG không", "family": "search", "noise": "label_prefix_question", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0151", "input": "pls có bài nào về RAG không thanks", "family": "search", "noise": "english_mix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0152", "input": "Hi\ncó bài nào về RAG không", "family": "search", "noise": "newline_greeting", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0153", "input": "có bài nào về RAG không, rồi tìm bài về Docker", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "knowledge_query"]}}
+{"id": "stress-0154", "input": "có bài nào về RAG không, rồi tạo topic Docker Compose", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "roadmap_cud"]}}
+{"id": "stress-0155", "input": "giải thích Docker Compose là gì", "family": "search", "noise": "clean", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0156", "input": "giai thich Docker Compose la gi", "family": "search", "noise": "no_diacritics", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0157", "input": "GIẢI THÍCH DOCKER COMPOSE LÀ GÌ", "family": "search", "noise": "upper", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0158", "input": "giải thích Docker Compose là gì?", "family": "search", "noise": "question_mark", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0159", "input": "giải thích Docker Compose là gì k", "family": "search", "noise": "trailing_k", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0160", "input": "ê bạn ơi, giải thích Docker Compose là gì", "family": "search", "noise": "filler_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0161", "input": "giải thích Docker Compose là gì nhé ạ", "family": "search", "noise": "filler_suffix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0162", "input": "giải thích Docker Compose là gì 🙏", "family": "search", "noise": "emoji", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0163", "input": "Việc cần làm: giải thích Docker Compose là gì", "family": "search", "noise": "label_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0164", "input": "Câu hỏi: giải thích Docker Compose là gì", "family": "search", "noise": "label_prefix_question", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0165", "input": "pls giải thích Docker Compose là gì thanks", "family": "search", "noise": "english_mix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0166", "input": "Hi\ngiải thích Docker Compose là gì", "family": "search", "noise": "newline_greeting", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0167", "input": "giải thích Docker Compose là gì, rồi tìm bài về Docker", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "knowledge_query"]}}
+{"id": "stress-0168", "input": "giải thích Docker Compose là gì, rồi tạo topic Docker Compose", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "roadmap_cud"]}}
+{"id": "stress-0169", "input": "AI Engineering hoạt động thế nào", "family": "search", "noise": "clean", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0170", "input": "AI Engineering hoat dong the nao", "family": "search", "noise": "no_diacritics", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0171", "input": "AI ENGINEERING HOẠT ĐỘNG THẾ NÀO", "family": "search", "noise": "upper", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0172", "input": "AI Engineering hoạt động thế nào?", "family": "search", "noise": "question_mark", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0173", "input": "AI Engineering hoạt động thế nào k", "family": "search", "noise": "trailing_k", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0174", "input": "ê bạn ơi, AI Engineering hoạt động thế nào", "family": "search", "noise": "filler_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0175", "input": "AI Engineering hoạt động thế nào nhé ạ", "family": "search", "noise": "filler_suffix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0176", "input": "AI Engineering hoạt động thế nào 🙏", "family": "search", "noise": "emoji", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0177", "input": "Việc cần làm: AI Engineering hoạt động thế nào", "family": "search", "noise": "label_prefix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0178", "input": "Câu hỏi: AI Engineering hoạt động thế nào", "family": "search", "noise": "label_prefix_question", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0179", "input": "pls AI Engineering hoạt động thế nào thanks", "family": "search", "noise": "english_mix", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0180", "input": "Hi\nAI Engineering hoạt động thế nào", "family": "search", "noise": "newline_greeting", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0181", "input": "AI Engineering hoạt động thế nào, rồi tìm bài về Docker", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "knowledge_query"]}}
+{"id": "stress-0182", "input": "AI Engineering hoạt động thế nào, rồi tạo topic Docker Compose", "family": "search", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query", "roadmap_cud"]}}
+{"id": "stress-0183", "input": "cách thêm bài vào layer", "family": "how_to_usage", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0184", "input": "cach them bai vao layer", "family": "how_to_usage", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0185", "input": "CÁCH THÊM BÀI VÀO LAYER", "family": "how_to_usage", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0186", "input": "cách thêm bài vào layer?", "family": "how_to_usage", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0187", "input": "cách thêm bài vào layer k", "family": "how_to_usage", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0188", "input": "ê bạn ơi, cách thêm bài vào layer", "family": "how_to_usage", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0189", "input": "cách thêm bài vào layer nhé ạ", "family": "how_to_usage", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0190", "input": "cách thêm bài vào layer 🙏", "family": "how_to_usage", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0191", "input": "Việc cần làm: cách thêm bài vào layer", "family": "how_to_usage", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0192", "input": "Câu hỏi: cách thêm bài vào layer", "family": "how_to_usage", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0193", "input": "pls cách thêm bài vào layer thanks", "family": "how_to_usage", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0194", "input": "Hi\ncách thêm bài vào layer", "family": "how_to_usage", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0195", "input": "cách thêm bài vào layer, rồi tìm bài về Docker", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0196", "input": "cách thêm bài vào layer, rồi tạo topic Docker Compose", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0197", "input": "các bước tạo topic", "family": "how_to_usage", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0198", "input": "cac buoc tao topic", "family": "how_to_usage", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0199", "input": "CÁC BƯỚC TẠO TOPIC", "family": "how_to_usage", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0200", "input": "các bước tạo topic?", "family": "how_to_usage", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0201", "input": "các bước tạo topic k", "family": "how_to_usage", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0202", "input": "ê bạn ơi, các bước tạo topic", "family": "how_to_usage", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0203", "input": "các bước tạo topic nhé ạ", "family": "how_to_usage", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0204", "input": "các bước tạo topic 🙏", "family": "how_to_usage", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0205", "input": "Việc cần làm: các bước tạo topic", "family": "how_to_usage", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0206", "input": "Câu hỏi: các bước tạo topic", "family": "how_to_usage", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0207", "input": "pls các bước tạo topic thanks", "family": "how_to_usage", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0208", "input": "Hi\ncác bước tạo topic", "family": "how_to_usage", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0209", "input": "các bước tạo topic, rồi tìm bài về Docker", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0210", "input": "các bước tạo topic, rồi tạo topic Docker Compose", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0211", "input": "làm thế nào để xóa topic", "family": "how_to_usage", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0212", "input": "lam the nao de xoa topic", "family": "how_to_usage", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0213", "input": "LÀM THẾ NÀO ĐỂ XÓA TOPIC", "family": "how_to_usage", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0214", "input": "làm thế nào để xóa topic?", "family": "how_to_usage", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0215", "input": "làm thế nào để xóa topic k", "family": "how_to_usage", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0216", "input": "ê bạn ơi, làm thế nào để xóa topic", "family": "how_to_usage", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0217", "input": "làm thế nào để xóa topic nhé ạ", "family": "how_to_usage", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0218", "input": "làm thế nào để xóa topic 🙏", "family": "how_to_usage", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0219", "input": "Việc cần làm: làm thế nào để xóa topic", "family": "how_to_usage", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0220", "input": "Câu hỏi: làm thế nào để xóa topic", "family": "how_to_usage", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0221", "input": "pls làm thế nào để xóa topic thanks", "family": "how_to_usage", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0222", "input": "Hi\nlàm thế nào để xóa topic", "family": "how_to_usage", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0223", "input": "làm thế nào để xóa topic, rồi tìm bài về Docker", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0224", "input": "làm thế nào để xóa topic, rồi tạo topic Docker Compose", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0225", "input": "muốn tạo layer thì làm sao", "family": "how_to_usage", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0226", "input": "muon tao layer thi lam sao", "family": "how_to_usage", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0227", "input": "MUỐN TẠO LAYER THÌ LÀM SAO", "family": "how_to_usage", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0228", "input": "muốn tạo layer thì làm sao?", "family": "how_to_usage", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0229", "input": "muốn tạo layer thì làm sao k", "family": "how_to_usage", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0230", "input": "ê bạn ơi, muốn tạo layer thì làm sao", "family": "how_to_usage", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0231", "input": "muốn tạo layer thì làm sao nhé ạ", "family": "how_to_usage", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0232", "input": "muốn tạo layer thì làm sao 🙏", "family": "how_to_usage", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0233", "input": "Việc cần làm: muốn tạo layer thì làm sao", "family": "how_to_usage", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0234", "input": "Câu hỏi: muốn tạo layer thì làm sao", "family": "how_to_usage", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0235", "input": "pls muốn tạo layer thì làm sao thanks", "family": "how_to_usage", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0236", "input": "Hi\nmuốn tạo layer thì làm sao", "family": "how_to_usage", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0237", "input": "muốn tạo layer thì làm sao, rồi tìm bài về Docker", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0238", "input": "muốn tạo layer thì làm sao, rồi tạo topic Docker Compose", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0239", "input": "tạo topic như thế nào", "family": "how_to_usage", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0240", "input": "tao topic nhu the nao", "family": "how_to_usage", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0241", "input": "TẠO TOPIC NHƯ THẾ NÀO", "family": "how_to_usage", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0242", "input": "tạo topic như thế nào?", "family": "how_to_usage", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0243", "input": "tạo topic như thế nào k", "family": "how_to_usage", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0244", "input": "ê bạn ơi, tạo topic như thế nào", "family": "how_to_usage", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0245", "input": "tạo topic như thế nào nhé ạ", "family": "how_to_usage", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0246", "input": "tạo topic như thế nào 🙏", "family": "how_to_usage", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0247", "input": "Việc cần làm: tạo topic như thế nào", "family": "how_to_usage", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0248", "input": "Câu hỏi: tạo topic như thế nào", "family": "how_to_usage", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0249", "input": "pls tạo topic như thế nào thanks", "family": "how_to_usage", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0250", "input": "Hi\ntạo topic như thế nào", "family": "how_to_usage", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0251", "input": "tạo topic như thế nào, rồi tìm bài về Docker", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0252", "input": "tạo topic như thế nào, rồi tạo topic Docker Compose", "family": "how_to_usage", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0253", "input": "bạn làm được gì", "family": "capability", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0254", "input": "ban lam duoc gi", "family": "capability", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0255", "input": "BẠN LÀM ĐƯỢC GÌ", "family": "capability", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0256", "input": "bạn làm được gì?", "family": "capability", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0257", "input": "bạn làm được gì k", "family": "capability", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0258", "input": "ê bạn ơi, bạn làm được gì", "family": "capability", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0259", "input": "bạn làm được gì nhé ạ", "family": "capability", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0260", "input": "bạn làm được gì 🙏", "family": "capability", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0261", "input": "Việc cần làm: bạn làm được gì", "family": "capability", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0262", "input": "Câu hỏi: bạn làm được gì", "family": "capability", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0263", "input": "pls bạn làm được gì thanks", "family": "capability", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0264", "input": "Hi\nbạn làm được gì", "family": "capability", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0265", "input": "bạn làm được gì, rồi tìm bài về Docker", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0266", "input": "bạn làm được gì, rồi tạo topic Docker Compose", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0267", "input": "có thể thao tác gì ở dự án này", "family": "capability", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0268", "input": "co the thao tac gi o du an nay", "family": "capability", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0269", "input": "CÓ THỂ THAO TÁC GÌ Ở DỰ ÁN NÀY", "family": "capability", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0270", "input": "có thể thao tác gì ở dự án này?", "family": "capability", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0271", "input": "có thể thao tác gì ở dự án này k", "family": "capability", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0272", "input": "ê bạn ơi, có thể thao tác gì ở dự án này", "family": "capability", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0273", "input": "có thể thao tác gì ở dự án này nhé ạ", "family": "capability", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0274", "input": "có thể thao tác gì ở dự án này 🙏", "family": "capability", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0275", "input": "Việc cần làm: có thể thao tác gì ở dự án này", "family": "capability", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0276", "input": "Câu hỏi: có thể thao tác gì ở dự án này", "family": "capability", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0277", "input": "pls có thể thao tác gì ở dự án này thanks", "family": "capability", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0278", "input": "Hi\ncó thể thao tác gì ở dự án này", "family": "capability", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0279", "input": "có thể thao tác gì ở dự án này, rồi tìm bài về Docker", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0280", "input": "có thể thao tác gì ở dự án này, rồi tạo topic Docker Compose", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0281", "input": "bạn hỗ trợ những chức năng nào", "family": "capability", "noise": "clean", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0282", "input": "ban ho tro nhung chuc nang nao", "family": "capability", "noise": "no_diacritics", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0283", "input": "BẠN HỖ TRỢ NHỮNG CHỨC NĂNG NÀO", "family": "capability", "noise": "upper", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0284", "input": "bạn hỗ trợ những chức năng nào?", "family": "capability", "noise": "question_mark", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0285", "input": "bạn hỗ trợ những chức năng nào k", "family": "capability", "noise": "trailing_k", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0286", "input": "ê bạn ơi, bạn hỗ trợ những chức năng nào", "family": "capability", "noise": "filler_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0287", "input": "bạn hỗ trợ những chức năng nào nhé ạ", "family": "capability", "noise": "filler_suffix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0288", "input": "bạn hỗ trợ những chức năng nào 🙏", "family": "capability", "noise": "emoji", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0289", "input": "Việc cần làm: bạn hỗ trợ những chức năng nào", "family": "capability", "noise": "label_prefix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0290", "input": "Câu hỏi: bạn hỗ trợ những chức năng nào", "family": "capability", "noise": "label_prefix_question", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0291", "input": "pls bạn hỗ trợ những chức năng nào thanks", "family": "capability", "noise": "english_mix", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0292", "input": "Hi\nbạn hỗ trợ những chức năng nào", "family": "capability", "noise": "newline_greeting", "expected": {"clauses": ["chitchat"]}}
+{"id": "stress-0293", "input": "bạn hỗ trợ những chức năng nào, rồi tìm bài về Docker", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "knowledge_query"]}}
+{"id": "stress-0294", "input": "bạn hỗ trợ những chức năng nào, rồi tạo topic Docker Compose", "family": "capability", "noise": "two_clauses", "expected": {"clauses": ["chitchat", "roadmap_cud"]}}
+{"id": "stress-0295", "input": "thời tiết hôm nay thế nào", "family": "off_topic", "noise": "clean", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0296", "input": "thoi tiet hom nay the nao", "family": "off_topic", "noise": "no_diacritics", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0297", "input": "THỜI TIẾT HÔM NAY THẾ NÀO", "family": "off_topic", "noise": "upper", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0298", "input": "thời tiết hôm nay thế nào?", "family": "off_topic", "noise": "question_mark", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0299", "input": "thời tiết hôm nay thế nào k", "family": "off_topic", "noise": "trailing_k", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0300", "input": "ê bạn ơi, thời tiết hôm nay thế nào", "family": "off_topic", "noise": "filler_prefix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0301", "input": "thời tiết hôm nay thế nào nhé ạ", "family": "off_topic", "noise": "filler_suffix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0302", "input": "thời tiết hôm nay thế nào 🙏", "family": "off_topic", "noise": "emoji", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0303", "input": "Việc cần làm: thời tiết hôm nay thế nào", "family": "off_topic", "noise": "label_prefix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0304", "input": "Câu hỏi: thời tiết hôm nay thế nào", "family": "off_topic", "noise": "label_prefix_question", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0305", "input": "pls thời tiết hôm nay thế nào thanks", "family": "off_topic", "noise": "english_mix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0306", "input": "Hi\nthời tiết hôm nay thế nào", "family": "off_topic", "noise": "newline_greeting", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0307", "input": "thời tiết hôm nay thế nào, rồi tìm bài về Docker", "family": "off_topic", "noise": "two_clauses", "expected": {"clauses": ["out_of_scope", "knowledge_query"]}}
+{"id": "stress-0308", "input": "thời tiết hôm nay thế nào, rồi tạo topic Docker Compose", "family": "off_topic", "noise": "two_clauses", "expected": {"clauses": ["out_of_scope", "roadmap_cud"]}}
+{"id": "stress-0309", "input": "giá bitcoin hôm nay bao nhiêu", "family": "off_topic", "noise": "clean", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0310", "input": "gia bitcoin hom nay bao nhieu", "family": "off_topic", "noise": "no_diacritics", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0311", "input": "GIÁ BITCOIN HÔM NAY BAO NHIÊU", "family": "off_topic", "noise": "upper", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0312", "input": "giá bitcoin hôm nay bao nhiêu?", "family": "off_topic", "noise": "question_mark", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0313", "input": "giá bitcoin hôm nay bao nhiêu k", "family": "off_topic", "noise": "trailing_k", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0314", "input": "ê bạn ơi, giá bitcoin hôm nay bao nhiêu", "family": "off_topic", "noise": "filler_prefix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0315", "input": "giá bitcoin hôm nay bao nhiêu nhé ạ", "family": "off_topic", "noise": "filler_suffix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0316", "input": "giá bitcoin hôm nay bao nhiêu 🙏", "family": "off_topic", "noise": "emoji", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0317", "input": "Việc cần làm: giá bitcoin hôm nay bao nhiêu", "family": "off_topic", "noise": "label_prefix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0318", "input": "Câu hỏi: giá bitcoin hôm nay bao nhiêu", "family": "off_topic", "noise": "label_prefix_question", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0319", "input": "pls giá bitcoin hôm nay bao nhiêu thanks", "family": "off_topic", "noise": "english_mix", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0320", "input": "Hi\ngiá bitcoin hôm nay bao nhiêu", "family": "off_topic", "noise": "newline_greeting", "expected": {"clauses": ["out_of_scope"]}}
+{"id": "stress-0321", "input": "giá bitcoin hôm nay bao nhiêu, rồi tìm bài về Docker", "family": "off_topic", "noise": "two_clauses", "expected": {"clauses": ["out_of_scope", "knowledge_query"]}}
+{"id": "stress-0322", "input": "giá bitcoin hôm nay bao nhiêu, rồi tạo topic Docker Compose", "family": "off_topic", "noise": "two_clauses", "expected": {"clauses": ["out_of_scope", "roadmap_cud"]}}
+{"id": "stress-0323", "input": "đừng xóa bài Machine Learning", "family": "negation", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0324", "input": "dung xoa bai Machine Learning", "family": "negation", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0325", "input": "ĐỪNG XÓA BÀI MACHINE LEARNING", "family": "negation", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0326", "input": "đừng xóa bài Machine Learning?", "family": "negation", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0327", "input": "đừng xóa bài Machine Learning k", "family": "negation", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0328", "input": "ê bạn ơi, đừng xóa bài Machine Learning", "family": "negation", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0329", "input": "đừng xóa bài Machine Learning nhé ạ", "family": "negation", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0330", "input": "đừng xóa bài Machine Learning 🙏", "family": "negation", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0331", "input": "Việc cần làm: đừng xóa bài Machine Learning", "family": "negation", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0332", "input": "Câu hỏi: đừng xóa bài Machine Learning", "family": "negation", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0333", "input": "pls đừng xóa bài Machine Learning thanks", "family": "negation", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0334", "input": "Hi\nđừng xóa bài Machine Learning", "family": "negation", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0335", "input": "đừng xóa bài Machine Learning, rồi tìm bài về Docker", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0336", "input": "đừng xóa bài Machine Learning, rồi tạo topic Docker Compose", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0337", "input": "không cần tạo topic ZZ Test", "family": "negation", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0338", "input": "khong can tao topic ZZ Test", "family": "negation", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0339", "input": "KHÔNG CẦN TẠO TOPIC ZZ TEST", "family": "negation", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0340", "input": "không cần tạo topic ZZ Test?", "family": "negation", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0341", "input": "không cần tạo topic ZZ Test k", "family": "negation", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0342", "input": "ê bạn ơi, không cần tạo topic ZZ Test", "family": "negation", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0343", "input": "không cần tạo topic ZZ Test nhé ạ", "family": "negation", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0344", "input": "không cần tạo topic ZZ Test 🙏", "family": "negation", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0345", "input": "Việc cần làm: không cần tạo topic ZZ Test", "family": "negation", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0346", "input": "Câu hỏi: không cần tạo topic ZZ Test", "family": "negation", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0347", "input": "pls không cần tạo topic ZZ Test thanks", "family": "negation", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0348", "input": "Hi\nkhông cần tạo topic ZZ Test", "family": "negation", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0349", "input": "không cần tạo topic ZZ Test, rồi tìm bài về Docker", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0350", "input": "không cần tạo topic ZZ Test, rồi tạo topic Docker Compose", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0351", "input": "khoan, chưa thêm bài Machine Learning vội", "family": "negation", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0352", "input": "khoan, chua them bai Machine Learning voi", "family": "negation", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0353", "input": "KHOAN, CHƯA THÊM BÀI MACHINE LEARNING VỘI", "family": "negation", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0354", "input": "khoan, chưa thêm bài Machine Learning vội?", "family": "negation", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0355", "input": "khoan, chưa thêm bài Machine Learning vội k", "family": "negation", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0356", "input": "ê bạn ơi, khoan, chưa thêm bài Machine Learning vội", "family": "negation", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0357", "input": "khoan, chưa thêm bài Machine Learning vội nhé ạ", "family": "negation", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0358", "input": "khoan, chưa thêm bài Machine Learning vội 🙏", "family": "negation", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0359", "input": "Việc cần làm: khoan, chưa thêm bài Machine Learning vội", "family": "negation", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0360", "input": "Câu hỏi: khoan, chưa thêm bài Machine Learning vội", "family": "negation", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0361", "input": "pls khoan, chưa thêm bài Machine Learning vội thanks", "family": "negation", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0362", "input": "Hi\nkhoan, chưa thêm bài Machine Learning vội", "family": "negation", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0363", "input": "khoan, chưa thêm bài Machine Learning vội, rồi tìm bài về Docker", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0364", "input": "khoan, chưa thêm bài Machine Learning vội, rồi tạo topic Docker Compose", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0365", "input": "thôi không xóa bài Redis nữa", "family": "negation", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0366", "input": "thoi khong xoa bai Redis nua", "family": "negation", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0367", "input": "THÔI KHÔNG XÓA BÀI REDIS NỮA", "family": "negation", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0368", "input": "thôi không xóa bài Redis nữa?", "family": "negation", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0369", "input": "thôi không xóa bài Redis nữa k", "family": "negation", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0370", "input": "ê bạn ơi, thôi không xóa bài Redis nữa", "family": "negation", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0371", "input": "thôi không xóa bài Redis nữa nhé ạ", "family": "negation", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0372", "input": "thôi không xóa bài Redis nữa 🙏", "family": "negation", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0373", "input": "Việc cần làm: thôi không xóa bài Redis nữa", "family": "negation", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0374", "input": "Câu hỏi: thôi không xóa bài Redis nữa", "family": "negation", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0375", "input": "pls thôi không xóa bài Redis nữa thanks", "family": "negation", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0376", "input": "Hi\nthôi không xóa bài Redis nữa", "family": "negation", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0377", "input": "thôi không xóa bài Redis nữa, rồi tìm bài về Docker", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0378", "input": "thôi không xóa bài Redis nữa, rồi tạo topic Docker Compose", "family": "negation", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0379", "input": "nếu xóa topic AI thì có mất bài không", "family": "hypothetical", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0380", "input": "neu xoa topic AI thi co mat bai khong", "family": "hypothetical", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0381", "input": "NẾU XÓA TOPIC AI THÌ CÓ MẤT BÀI KHÔNG", "family": "hypothetical", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0382", "input": "nếu xóa topic AI thì có mất bài không?", "family": "hypothetical", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0383", "input": "nếu xóa topic AI thì có mất bài không k", "family": "hypothetical", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0384", "input": "ê bạn ơi, nếu xóa topic AI thì có mất bài không", "family": "hypothetical", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0385", "input": "nếu xóa topic AI thì có mất bài không nhé ạ", "family": "hypothetical", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0386", "input": "nếu xóa topic AI thì có mất bài không 🙏", "family": "hypothetical", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0387", "input": "Việc cần làm: nếu xóa topic AI thì có mất bài không", "family": "hypothetical", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0388", "input": "Câu hỏi: nếu xóa topic AI thì có mất bài không", "family": "hypothetical", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0389", "input": "pls nếu xóa topic AI thì có mất bài không thanks", "family": "hypothetical", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0390", "input": "Hi\nnếu xóa topic AI thì có mất bài không", "family": "hypothetical", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0391", "input": "nếu xóa topic AI thì có mất bài không, rồi tìm bài về Docker", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0392", "input": "nếu xóa topic AI thì có mất bài không, rồi tạo topic Docker Compose", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0393", "input": "xóa layer DevOps có ảnh hưởng gì không", "family": "hypothetical", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0394", "input": "xoa layer DevOps co anh huong gi khong", "family": "hypothetical", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0395", "input": "XÓA LAYER DEVOPS CÓ ẢNH HƯỞNG GÌ KHÔNG", "family": "hypothetical", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0396", "input": "xóa layer DevOps có ảnh hưởng gì không?", "family": "hypothetical", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0397", "input": "xóa layer DevOps có ảnh hưởng gì không k", "family": "hypothetical", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0398", "input": "ê bạn ơi, xóa layer DevOps có ảnh hưởng gì không", "family": "hypothetical", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0399", "input": "xóa layer DevOps có ảnh hưởng gì không nhé ạ", "family": "hypothetical", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0400", "input": "xóa layer DevOps có ảnh hưởng gì không 🙏", "family": "hypothetical", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0401", "input": "Việc cần làm: xóa layer DevOps có ảnh hưởng gì không", "family": "hypothetical", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0402", "input": "Câu hỏi: xóa layer DevOps có ảnh hưởng gì không", "family": "hypothetical", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0403", "input": "pls xóa layer DevOps có ảnh hưởng gì không thanks", "family": "hypothetical", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0404", "input": "Hi\nxóa layer DevOps có ảnh hưởng gì không", "family": "hypothetical", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0405", "input": "xóa layer DevOps có ảnh hưởng gì không, rồi tìm bài về Docker", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0406", "input": "xóa layer DevOps có ảnh hưởng gì không, rồi tạo topic Docker Compose", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0407", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không", "family": "hypothetical", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0408", "input": "lo xoa nham bai Docker Compose thi khoi phuc duoc khong", "family": "hypothetical", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0409", "input": "LỠ XÓA NHẦM BÀI DOCKER COMPOSE THÌ KHÔI PHỤC ĐƯỢC KHÔNG", "family": "hypothetical", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0410", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không?", "family": "hypothetical", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0411", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không k", "family": "hypothetical", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0412", "input": "ê bạn ơi, lỡ xóa nhầm bài Docker Compose thì khôi phục được không", "family": "hypothetical", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0413", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không nhé ạ", "family": "hypothetical", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0414", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không 🙏", "family": "hypothetical", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0415", "input": "Việc cần làm: lỡ xóa nhầm bài Docker Compose thì khôi phục được không", "family": "hypothetical", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0416", "input": "Câu hỏi: lỡ xóa nhầm bài Docker Compose thì khôi phục được không", "family": "hypothetical", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0417", "input": "pls lỡ xóa nhầm bài Docker Compose thì khôi phục được không thanks", "family": "hypothetical", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0418", "input": "Hi\nlỡ xóa nhầm bài Docker Compose thì khôi phục được không", "family": "hypothetical", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0419", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không, rồi tìm bài về Docker", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0420", "input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không, rồi tạo topic Docker Compose", "family": "hypothetical", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0421", "input": "hôm qua tôi đã tạo topic Test Router", "family": "past_report", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0422", "input": "hom qua toi da tao topic Test Router", "family": "past_report", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0423", "input": "HÔM QUA TÔI ĐÃ TẠO TOPIC TEST ROUTER", "family": "past_report", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0424", "input": "hôm qua tôi đã tạo topic Test Router?", "family": "past_report", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0425", "input": "hôm qua tôi đã tạo topic Test Router k", "family": "past_report", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0426", "input": "ê bạn ơi, hôm qua tôi đã tạo topic Test Router", "family": "past_report", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0427", "input": "hôm qua tôi đã tạo topic Test Router nhé ạ", "family": "past_report", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0428", "input": "hôm qua tôi đã tạo topic Test Router 🙏", "family": "past_report", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0429", "input": "Việc cần làm: hôm qua tôi đã tạo topic Test Router", "family": "past_report", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0430", "input": "Câu hỏi: hôm qua tôi đã tạo topic Test Router", "family": "past_report", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0431", "input": "pls hôm qua tôi đã tạo topic Test Router thanks", "family": "past_report", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0432", "input": "Hi\nhôm qua tôi đã tạo topic Test Router", "family": "past_report", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0433", "input": "hôm qua tôi đã tạo topic Test Router, rồi tìm bài về Docker", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0434", "input": "hôm qua tôi đã tạo topic Test Router, rồi tạo topic Docker Compose", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0435", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi", "family": "past_report", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0436", "input": "toi vua them bai Redis vao layer DevOps roi", "family": "past_report", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0437", "input": "TÔI VỪA THÊM BÀI REDIS VÀO LAYER DEVOPS RỒI", "family": "past_report", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0438", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi?", "family": "past_report", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0439", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi k", "family": "past_report", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0440", "input": "ê bạn ơi, tôi vừa thêm bài Redis vào layer DevOps rồi", "family": "past_report", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0441", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi nhé ạ", "family": "past_report", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0442", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi 🙏", "family": "past_report", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0443", "input": "Việc cần làm: tôi vừa thêm bài Redis vào layer DevOps rồi", "family": "past_report", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0444", "input": "Câu hỏi: tôi vừa thêm bài Redis vào layer DevOps rồi", "family": "past_report", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0445", "input": "pls tôi vừa thêm bài Redis vào layer DevOps rồi thanks", "family": "past_report", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0446", "input": "Hi\ntôi vừa thêm bài Redis vào layer DevOps rồi", "family": "past_report", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0447", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi, rồi tìm bài về Docker", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0448", "input": "tôi vừa thêm bài Redis vào layer DevOps rồi, rồi tạo topic Docker Compose", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0449", "input": "ai đã xóa bài Redis", "family": "past_report", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0450", "input": "ai da xoa bai Redis", "family": "past_report", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0451", "input": "AI ĐÃ XÓA BÀI REDIS", "family": "past_report", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0452", "input": "ai đã xóa bài Redis?", "family": "past_report", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0453", "input": "ai đã xóa bài Redis k", "family": "past_report", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0454", "input": "ê bạn ơi, ai đã xóa bài Redis", "family": "past_report", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0455", "input": "ai đã xóa bài Redis nhé ạ", "family": "past_report", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0456", "input": "ai đã xóa bài Redis 🙏", "family": "past_report", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0457", "input": "Việc cần làm: ai đã xóa bài Redis", "family": "past_report", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0458", "input": "Câu hỏi: ai đã xóa bài Redis", "family": "past_report", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0459", "input": "pls ai đã xóa bài Redis thanks", "family": "past_report", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0460", "input": "Hi\nai đã xóa bài Redis", "family": "past_report", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0461", "input": "ai đã xóa bài Redis, rồi tìm bài về Docker", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0462", "input": "ai đã xóa bài Redis, rồi tạo topic Docker Compose", "family": "past_report", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0463", "input": "lệnh xóa bài là gì", "family": "meta", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0464", "input": "lenh xoa bai la gi", "family": "meta", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0465", "input": "LỆNH XÓA BÀI LÀ GÌ", "family": "meta", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0466", "input": "lệnh xóa bài là gì?", "family": "meta", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0467", "input": "lệnh xóa bài là gì k", "family": "meta", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0468", "input": "ê bạn ơi, lệnh xóa bài là gì", "family": "meta", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0469", "input": "lệnh xóa bài là gì nhé ạ", "family": "meta", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0470", "input": "lệnh xóa bài là gì 🙏", "family": "meta", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0471", "input": "Việc cần làm: lệnh xóa bài là gì", "family": "meta", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0472", "input": "Câu hỏi: lệnh xóa bài là gì", "family": "meta", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0473", "input": "pls lệnh xóa bài là gì thanks", "family": "meta", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0474", "input": "Hi\nlệnh xóa bài là gì", "family": "meta", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0475", "input": "lệnh xóa bài là gì, rồi tìm bài về Docker", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0476", "input": "lệnh xóa bài là gì, rồi tạo topic Docker Compose", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0477", "input": "cú pháp tạo topic", "family": "meta", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0478", "input": "cu phap tao topic", "family": "meta", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0479", "input": "CÚ PHÁP TẠO TOPIC", "family": "meta", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0480", "input": "cú pháp tạo topic?", "family": "meta", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0481", "input": "cú pháp tạo topic k", "family": "meta", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0482", "input": "ê bạn ơi, cú pháp tạo topic", "family": "meta", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0483", "input": "cú pháp tạo topic nhé ạ", "family": "meta", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0484", "input": "cú pháp tạo topic 🙏", "family": "meta", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0485", "input": "Việc cần làm: cú pháp tạo topic", "family": "meta", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0486", "input": "Câu hỏi: cú pháp tạo topic", "family": "meta", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0487", "input": "pls cú pháp tạo topic thanks", "family": "meta", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0488", "input": "Hi\ncú pháp tạo topic", "family": "meta", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0489", "input": "cú pháp tạo topic, rồi tìm bài về Docker", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0490", "input": "cú pháp tạo topic, rồi tạo topic Docker Compose", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
+{"id": "stress-0491", "input": "tạo topic có giới hạn số lượng không", "family": "meta", "noise": "clean", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0492", "input": "tao topic co gioi han so luong khong", "family": "meta", "noise": "no_diacritics", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0493", "input": "TẠO TOPIC CÓ GIỚI HẠN SỐ LƯỢNG KHÔNG", "family": "meta", "noise": "upper", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0494", "input": "tạo topic có giới hạn số lượng không?", "family": "meta", "noise": "question_mark", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0495", "input": "tạo topic có giới hạn số lượng không k", "family": "meta", "noise": "trailing_k", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0496", "input": "ê bạn ơi, tạo topic có giới hạn số lượng không", "family": "meta", "noise": "filler_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0497", "input": "tạo topic có giới hạn số lượng không nhé ạ", "family": "meta", "noise": "filler_suffix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0498", "input": "tạo topic có giới hạn số lượng không 🙏", "family": "meta", "noise": "emoji", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0499", "input": "Việc cần làm: tạo topic có giới hạn số lượng không", "family": "meta", "noise": "label_prefix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0500", "input": "Câu hỏi: tạo topic có giới hạn số lượng không", "family": "meta", "noise": "label_prefix_question", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0501", "input": "pls tạo topic có giới hạn số lượng không thanks", "family": "meta", "noise": "english_mix", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0502", "input": "Hi\ntạo topic có giới hạn số lượng không", "family": "meta", "noise": "newline_greeting", "expected": {"clauses": ["no_write"]}}
+{"id": "stress-0503", "input": "tạo topic có giới hạn số lượng không, rồi tìm bài về Docker", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["knowledge_query"]}}
+{"id": "stress-0504", "input": "tạo topic có giới hạn số lượng không, rồi tạo topic Docker Compose", "family": "meta", "noise": "two_clauses", "expected": {"clauses": ["roadmap_cud"]}}
