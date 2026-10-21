@@ -9,6 +9,7 @@ export function SiteChatbot() {
   const pathname = usePathname();
 
   if (pathname?.startsWith("/portfolio")) {
+    return <FloatingChatBot uiStyle="style2-drawer" />;
     return <FloatingChatBot />;
   }
 

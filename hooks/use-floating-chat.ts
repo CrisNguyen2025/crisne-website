@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export interface ChatMessage {
   id: string;
@@ -12,27 +12,49 @@ export interface ChatMessage {
   feedback?: 0 | 1;
 }
 
-export function useFloatingChat() {
+export interface UseFloatingChatReturn {
+  messages: ChatMessage[];
+  input: string;
+  setInput: (value: string) => void;
+  isLoading: boolean;
+  isStreaming: boolean;
+  conversationId: string;
+  sendMessage: (contentToSend?: string, historyOverride?: ChatMessage[]) => Promise<void>;
+  sendFeedback: (message: ChatMessage, value: 0 | 1) => Promise<void>;
+  resetChat: () => void;
+  stopResponse: () => void;
+  retry: (targetMessageId?: string) => Promise<void>;
+}
+
+export function useFloatingChat(): UseFloatingChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   // Groups all turns of one conversation into a Langfuse session; renewed on reset
-  const sessionIdRef = useRef<string>(crypto.randomUUID());
-  const [conversationId, setConversationId] = useState<string>(() => sessionIdRef.current);
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    sessionIdRef.current = conversationId;
+  }, [conversationId]);
 
   const stopResponse = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      setIsLoading(false);
     }
+    setIsLoading(false);
+    setIsStreaming(false);
   }, []);
 
   const resetChat = useCallback(() => {
     stopResponse();
     setMessages([]);
     setInput("");
+    setIsLoading(false);
+    setIsStreaming(false);
     const newSessionId = crypto.randomUUID();
     sessionIdRef.current = newSessionId;
     setConversationId(newSessionId);
@@ -59,15 +81,17 @@ export function useFloatingChat() {
   }, []);
 
   const sendMessage = useCallback(
-    async (contentToSend?: string) => {
+    async (contentToSend?: string, historyOverride?: ChatMessage[]) => {
       const text = (contentToSend ?? input).trim();
       if (!text || isLoading) return;
+
+      const baseHistory = historyOverride ?? messages;
 
       const userMsgId = `user-${Date.now()}`;
       const botMsgId = `bot-${Date.now() + 1}`;
 
       const newMessages: ChatMessage[] = [
-        ...messages,
+        ...baseHistory,
         { id: userMsgId, role: "user", content: text, createdAt: new Date() },
       ];
 
@@ -77,13 +101,14 @@ export function useFloatingChat() {
       ]);
       setInput("");
       setIsLoading(true);
+      setIsStreaming(false);
 
       abortControllerRef.current = new AbortController();
       // Friendly message from the API (e.g. rate limit, message too long), shown instead of the generic error
       let serverErrorMessage: string | undefined;
 
       try {
-        const historyPayload = messages.map((m) => ({
+        const historyPayload = baseHistory.map((m) => ({
           role: m.role,
           content: m.content,
         }));
@@ -94,7 +119,7 @@ export function useFloatingChat() {
           body: JSON.stringify({
             message: text,
             history: historyPayload,
-            sessionId: sessionIdRef.current,
+            sessionId: sessionIdRef.current ?? conversationId,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -114,10 +139,16 @@ export function useFloatingChat() {
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
+        let receivedFirstChunk = false;
 
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
+
+          if (!receivedFirstChunk) {
+            receivedFirstChunk = true;
+            setIsStreaming(true);
+          }
 
           const chunk = decoder.decode(value, { stream: true });
           setMessages((prev) =>
@@ -147,10 +178,32 @@ export function useFloatingChat() {
         );
       } finally {
         setIsLoading(false);
+        setIsStreaming(false);
         abortControllerRef.current = null;
       }
     },
-    [input, isLoading, messages]
+    [conversationId, input, isLoading, messages]
+  );
+
+  const retry = useCallback(
+    async (targetMessageId?: string) => {
+      if (isLoading) return;
+      const targetId =
+        targetMessageId ??
+        messages.filter((m) => m.role === "assistant").at(-1)?.id;
+      if (!targetId) return;
+
+      const index = messages.findIndex((m) => m.id === targetId);
+      const question = index > 0 ? messages[index - 1] : undefined;
+      if (!question || question.role !== "user") return;
+
+      const remaining = messages.filter(
+        (m) => m.id !== targetId && m.id !== question.id
+      );
+      setMessages(remaining);
+      await sendMessage(question.content, remaining);
+    },
+    [isLoading, messages, sendMessage]
   );
 
   return {
@@ -158,10 +211,12 @@ export function useFloatingChat() {
     input,
     setInput,
     isLoading,
+    isStreaming,
     conversationId,
     sendMessage,
     sendFeedback,
     resetChat,
     stopResponse,
+    retry,
   };
 }
