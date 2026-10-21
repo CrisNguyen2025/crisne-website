@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
 
@@ -95,9 +95,9 @@ describe("RoadmapChatbotWidget", () => {
   describe("suggestions by access (P0-1)", () => {
     it("reader sees no suggestion that would create data", () => {
       openWidget(false);
-      const card = screen.getByText(/Có những lộ trình/);
-      expect(within(card.parentElement as HTMLElement).queryByText(/^Tạo /)).toBeNull();
-      expect(screen.queryByText(/Tạo 2 layer/)).toBeNull();
+      expect(screen.getByRole("button", { name: "Xem lộ trình" })).toBeTruthy();
+      expect(screen.queryByTitle(/^Tạo /)).toBeNull();
+      expect(screen.queryByRole("button", { name: "Thao tác nhanh" })).toBeNull();
     });
   });
 });

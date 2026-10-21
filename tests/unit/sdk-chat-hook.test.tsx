@@ -154,10 +154,10 @@ describe("useRoadmapAssistantChat", () => {
         ({ canWrite }: { canWrite: boolean }) => useRoadmapAssistantChat({ baseUrl: BASE, canWrite }),
         { initialProps: { canWrite: false } }
       );
-      expect(result.current.messages[0].content).not.toContain("Tạo 2 layer");
+      expect(result.current.messages[0].suggestions?.[0].prompt).toBe("Có những lộ trình nào trên website?");
 
       rerender({ canWrite: true });
-      expect(result.current.messages[0].content).toContain("Tạo 2 layer");
+      expect(result.current.messages[0].suggestions?.[0].prompt).toBe("Tạo 2 layer Mock 1 và Mock 2");
     });
 
     it("keeps the conversation when access changes after a message was sent", async () => {

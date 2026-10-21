@@ -26,15 +26,15 @@ describe("welcome suggestions", () => {
 
   it("reader is the default: a greeting built without access info shows no write example", () => {
     const message = buildWelcomeMessage();
-    expect(message.content).not.toContain("Tạo 2 layer");
+    expect(message.suggestions?.some(({ prompt }) => prompt.startsWith("Tạo "))).toBe(false);
   });
 
-  it("renders every suggestion as a one-line text block the card can send", () => {
+  it("carries every suggestion as a one-line prompt the chip can send", () => {
     for (const canWrite of [true, false]) {
       const message = buildWelcomeMessage(undefined, canWrite);
       expect(message.id).toBe(WELCOME_MESSAGE_ID);
-      for (const { label, prompt } of getWelcomeSuggestions(undefined, canWrite)) {
-        expect(message.content).toContain(`**${label}**\n\`\`\`text\n${prompt}\n\`\`\``);
+      expect(message.suggestions).toEqual(getWelcomeSuggestions(undefined, canWrite));
+      for (const { prompt } of getWelcomeSuggestions(undefined, canWrite)) {
         expect(prompt).not.toContain("\n");
       }
     }

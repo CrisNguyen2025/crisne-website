@@ -42,7 +42,7 @@ PREFIX_FILLER_REGEX = re.compile(
     r"bạn\s+ơi|anh\s+ơi|chị\s+ơi|em\s+ơi|admin\s+ơi|bot\s+ơi"
     r"|làm\s+ơn|vui\s+lòng|hãy|nhờ\s+bạn|nhờ\s+bot"
     r"|(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)"
-    r"|please|kindly"
+    r"|please|kindly|(?:can|could|would)\s+you"
     r")[\s,]+)+",
     re.IGNORECASE,
 )

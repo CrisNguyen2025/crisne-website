@@ -138,6 +138,8 @@ class StructuredEntityExtractor:
         cleaned = normalize_vietnamese(title).strip()
         # Drop bracketed metadata (e.g. page-context hints) that must never become part of a name
         cleaned = re.sub(r"\[[^\]]*\]", " ", cleaned).strip()
+        # Quoted names: 'Testing & CI/CD' -> Testing & CI/CD
+        cleaned = cleaned.strip("'\"“”‘’").strip()
         cleaned = clean_conversational_fillers(cleaned)
 
         # Always strip action verbs at start (including pleasantry wrappers like 'xóa giúp mình')
@@ -191,6 +193,8 @@ class StructuredEntityExtractor:
         text = clean_conversational_fillers(text)
         # "ngay"/"luôn" switch off the confirmation step in the agent; they are not part of any name
         text = re.sub(r"\s+", " ", re.sub(r"\b(?:luôn|ngay)\b", " ", text, flags=re.IGNORECASE)).strip()
+        # A closing question mark or period is not part of a name, and would break the end-anchored clause matches
+        text = text.rstrip("?!.").strip()
 
         lower = text.lower()
 
@@ -231,7 +235,7 @@ class StructuredEntityExtractor:
             else:
                 # Match parent topic / layer like "trong layer mock 1" or "on fe" or "to layer 01-LLM"
                 m_parent = re.search(
-                    r"\b(?:trong|vào|vao|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=\s+level|$)",
+                    r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=\s+level|$)",
                     text,
                     flags=re.IGNORECASE,
                 )
@@ -314,7 +318,7 @@ class StructuredEntityExtractor:
         # 2. Check for comma / and lists: "A, B và C" / "A and B"
         # First strip out parent clause
         clause = re.sub(
-            r"\b(?:trong|vào|vao|cho|on|in|to|into)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=\s+level|$)",
+            r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=\s+level|$)",
             "",
             text,
             flags=re.IGNORECASE,
@@ -327,7 +331,7 @@ class StructuredEntityExtractor:
 
         # Strip out action verb, conversational wrapper, and level keyword
         clause = re.sub(
-            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|chu\s+de|mục|muc|nhóm|nhom|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about)\s+)?",
+            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:(?:a|an|new)\s+)*(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|chu\s+de|mục|muc|nhóm|nhom|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about|called|named)\s+)?",
             "",
             clause.strip(),
             flags=re.IGNORECASE,

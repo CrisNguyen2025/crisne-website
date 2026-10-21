@@ -123,7 +123,7 @@ describe("Empirical Challenger — Milestone 1 Rich Markdown Engine Stress Suite
       const html = renderToHtml(React.createElement(ChatMarkdown, { content: markdown }));
       expect(html).toContain("<strong class=\"font-semibold text-foreground\">Metric</strong>");
       expect(html).toContain("<em class=\"italic\">Status</em>");
-      expect(html).toContain("<code class=\"rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground\">Code</code>");
+      expect(html).toContain("<code class=\"rounded border border-border/60 bg-muted px-1 py-px font-mono text-[0.85em] text-rose-600 dark:text-rose-400\">Code</code>");
       expect(html).toContain('href="https://example.com" target="_blank" rel="noopener noreferrer"');
       expect(html).toContain("<strong class=\"font-semibold text-foreground\">Latency</strong>");
       expect(html).toContain('href="/metrics"');
