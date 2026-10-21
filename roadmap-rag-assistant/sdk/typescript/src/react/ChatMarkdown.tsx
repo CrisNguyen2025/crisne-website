@@ -1,9 +1,19 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useContext, useMemo, useRef } from "react";
 import { CodeBlock } from "./components/CodeBlock";
 import { MarkdownTable } from "./components/MarkdownTable";
 import { CalloutAlert, CalloutType } from "./components/CalloutAlert";
+import { CitationChip } from "./components/CitationChip";
+import type { ChatCitation, ChatSource } from "../types";
+import {
+  CLAIM_RE,
+  CLAIM_START,
+  STRAY_MARK_RE,
+  claimIndex,
+  markClaims,
+} from "./utils/citations";
+import { safeHref } from "./utils/links";
 
 /**
  * Rich Markdown Engine for chat answers.
@@ -316,10 +326,78 @@ function isTableLine(lines: string[], idx: number): boolean {
 const INLINE =
   /(`[^`\n]+`)|(\*\*(.*?)\*\*)|(\[([^\]\n]+)\]\(([^)\s]+)\))|((?<!\$)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\$))|(\*([^*\s][^*\n]*?)\*)|((?<![\w])_([^_\n]+)_(?![\w]))|(==([^=\n]+)==)/g;
 
-function safeHref(url: string): { href: string; external: boolean } | null {
-  if (/^https?:\/\//i.test(url)) return { href: url, external: true };
-  if (/^(\/|#|mailto:)/i.test(url)) return { href: url, external: false };
-  return null;
+/** The claims of one answer: the source ids of claim i at index i (see markClaims). */
+const CitationContext = React.createContext<string[][]>([]);
+
+/** A line of text; each marked claim on it is tagged with its sources, for SourceChips to highlight. */
+function InlineLine({ text }: { text: string }) {
+  const claims = useContext(CitationContext);
+  if (!text.includes(CLAIM_START)) return <>{renderInline(text)}</>;
+
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(CLAIM_RE)) {
+    out.push(
+      <React.Fragment key={`text-${last}`}>
+        {renderInline(text.slice(last, m.index))}
+      </React.Fragment>,
+      <span
+        key={`claim-${m.index}`}
+        data-claim=""
+        data-sources={(claims[claimIndex(m[2])] ?? []).join(" ")}
+        // The chat panel is always light, whatever the page theme
+        className="rounded-sm box-decoration-clone transition-colors duration-150 motion-reduce:transition-none data-[highlighted]:bg-[#DCE7FB]"
+      >
+        {renderInline(m[1])}
+      </span>
+    );
+    last = m.index + m[0].length;
+  }
+  out.push(<React.Fragment key={`text-${last}`}>{renderInline(text.slice(last))}</React.Fragment>);
+  return <>{out}</>;
+}
+
+/**
+ * Highlights the claims of one answer that cite source `id`, or none. Done on the DOM instead of
+ * through React state, so hovering a chip re-renders only that chip and not the whole answer.
+ * Ids are compared as strings, never put into a selector.
+ */
+function highlightClaims(root: HTMLElement, id: string | null) {
+  root.querySelectorAll("[data-claim][data-highlighted]").forEach((el) => el.removeAttribute("data-highlighted"));
+  if (id === null) {
+    delete root.dataset.activeSource;
+    return;
+  }
+  root.dataset.activeSource = id;
+  root.querySelectorAll<HTMLElement>("[data-claim]").forEach((el) => {
+    if (el.dataset.sources?.split(" ").includes(id)) el.setAttribute("data-highlighted", "true");
+  });
+}
+
+/**
+ * One chip per source the answer used, shown once at the end of the answer. Hovering a chip
+ * highlights the claims that cite its source.
+ */
+function SourceChips({ sources }: { sources: ChatSource[] }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const onOpenChange = (id: string, open: boolean) => {
+    const root = ref.current?.closest<HTMLElement>("[data-citation-root]");
+    if (!root) return;
+    // A chip closing late clears the highlight only if no other chip has taken it over meanwhile
+    if (open) highlightClaims(root, id);
+    else if (root.dataset.activeSource === id) highlightClaims(root, null);
+  };
+  return (
+    <span ref={ref}>
+      {sources.map((source) => (
+        <CitationChip
+          key={source.id}
+          citations={[{ id: source.id, title: source.title, href: source.href }]}
+          onOpenChange={(open) => onOpenChange(source.id, open)}
+        />
+      ))}
+    </span>
+  );
 }
 
 function MathView({
@@ -398,7 +476,8 @@ function MathView({
 }
 
 export function renderInline(text: string): React.ReactNode[] {
-  const plain = (start: number, end: number) => [text.slice(start, end)];
+  // Claim marks only mean something on a line InlineLine renders; anywhere else they are dropped
+  const plain = (start: number, end: number) => [text.slice(start, end).replace(STRAY_MARK_RE, "")];
   const out: React.ReactNode[] = [];
   let last = 0;
   let key = 0;
@@ -492,7 +571,7 @@ function HeadingView({
   const className = `pt-1.5 ${HEADING_CLASSES[level] || HEADING_CLASSES[4]}`;
   const children = (
     <>
-      {renderInline(text)}
+      <InlineLine text={text} />
       {trailing}
     </>
   );
@@ -566,7 +645,7 @@ function ListView({
                   item.checked ? "line-through text-muted-foreground/80" : ""
                 }
               >
-                {renderInline(item.text)}
+                <InlineLine text={item.text} />
               </span>
               {isLast && !item.children.length && trailing}
               {item.children.length > 0 && (
@@ -614,7 +693,7 @@ function BlockView({
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line)}
+              <InlineLine text={line} />
             </React.Fragment>
           ))}
           {trailing}
@@ -665,7 +744,7 @@ function BlockView({
           {block.lines.map((line, idx) => (
             <React.Fragment key={idx}>
               {idx > 0 && <br />}
-              {renderInline(line)}
+              <InlineLine text={line} />
             </React.Fragment>
           ))}
           {trailing}
@@ -810,6 +889,9 @@ export interface ChatMarkdownProps {
   onRun?: (code: string) => void;
   /** Snippet currently running, so its run button shows a spinner */
   runningCode?: string | null;
+  /** Claims in `content` and their sources; each claim gets a chip with its `sources` */
+  citations?: ChatCitation[];
+  sources?: ChatSource[];
 }
 
 /**
@@ -840,11 +922,15 @@ export function ChatMarkdown({
   className = "",
   onRun,
   runningCode = null,
+  citations,
+  sources,
 }: ChatMarkdownProps) {
   const visible = streaming
     ? closeOpenInline(content.replace(/\n[ \t]*`{1,2}$/, ""))
     : content;
-  const blocks = parseBlocks(visible);
+  // Citations come with the finished answer, so while it streams nothing below changes
+  const marked = markClaims(visible, citations);
+  const blocks = parseBlocks(marked.content);
   const caret = streaming ? <StreamingCaret /> : null;
   const last = blocks[blocks.length - 1];
   const caretInline =
@@ -853,23 +939,39 @@ export function ChatMarkdown({
     last.kind !== "rule" &&
     last.kind !== "table" &&
     last.kind !== "math";
+  // Unique sources, in the order the answer named them
+  const uniqueSources = [...new Map((sources ?? []).map((s) => [s.id, s])).values()];
+  const sourceChips = uniqueSources.length > 0 ? <SourceChips sources={uniqueSources} /> : null;
+  // Caret and source chips share the end of the answer; they sit on the last text line when it can hold them
+  const tail = caret || sourceChips ? (
+    <>
+      {caret}
+      {sourceChips}
+    </>
+  ) : undefined;
+  const blockViews = blocks.map((block, idx) => (
+    <MemoizedBlockView
+      key={idx}
+      block={block}
+      onRun={onRun}
+      runningCode={runningCode}
+      trailing={idx === blocks.length - 1 && caretInline ? tail : undefined}
+    />
+  ));
+  // With citations the answer is the root the source chips highlight in; without, nothing is wrapped
+  const scoped = marked.claims.length > 0 || uniqueSources.length > 0;
 
   return (
     <div
+      data-citation-root={scoped ? "" : undefined}
       className={`min-w-0 max-w-full space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`}
     >
-      {blocks.map((block, idx) => (
-        <MemoizedBlockView
-          key={idx}
-          block={block}
-          onRun={onRun}
-          runningCode={runningCode}
-          trailing={
-            idx === blocks.length - 1 && caretInline ? caret : undefined
-          }
-        />
-      ))}
-      {!caretInline && caret}
+      {scoped ? (
+        <CitationContext.Provider value={marked.claims}>{blockViews}</CitationContext.Provider>
+      ) : (
+        blockViews
+      )}
+      {!caretInline && tail}
     </div>
   );
 }

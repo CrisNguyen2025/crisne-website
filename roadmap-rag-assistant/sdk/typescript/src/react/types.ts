@@ -1,4 +1,4 @@
-import type { PageContext, ChatActionChip, ChatSource } from '../types';
+import type { PageContext, ChatActionChip, ChatSource, ChatCitation, ChangeReview } from '../types';
 import type { AssistantStepEvent, AssistantStepItem } from '../client';
 
 export type { ChatActionChip };
@@ -42,6 +42,10 @@ export interface ChatMessage {
   steps?: AssistantStepEvent[];
   /** Documents the answer used, shown under it. */
   sources?: ChatSource[];
+  /** Claims in `content` and their sources, shown as chips after each claim. */
+  citations?: ChatCitation[];
+  /** Data the reply's actions wrote, shown as a review card under it. */
+  changes?: ChangeReview[];
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
   suggestions?: { label: string; prompt: string }[];

@@ -384,6 +384,16 @@ export function useRoadmapAssistantChat(
               );
             },
 
+            onChangeReview: (change) => {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === botMsgId
+                    ? { ...msg, changes: [...(msg.changes ?? []), change] }
+                    : msg
+                )
+              );
+            },
+
             onToken: (delta) => smooth.push(delta),
 
             onDone: (finalResp) => smooth.finish(() => {
@@ -415,6 +425,9 @@ export function useRoadmapAssistantChat(
                       ? upsertSteps(msg.steps ?? [], finalResp.steps)
                       : msg.steps,
                     sources: finalResp.sources ?? msg.sources,
+                    citations: finalResp.citations ?? msg.citations,
+                    // `done` repeats every change of the turn: fills in any event missed mid-stream
+                    changes: finalResp.changes?.length ? finalResp.changes : msg.changes,
                   };
                 })
               );

@@ -145,7 +145,7 @@ Mỗi leak được ghi vào `summary.json` (`acl_leaks`) và **luôn làm run f
 |---|---|---|---|
 | `public/roadmap` | `tests/data/retrieval_eval_cases.json` (001–049) + bổ sung (050–083) | 83 (18 off-topic, 10 trong đó near-topic) | FTS: hit@5 0.954 · mrr@5 0.840 · off_topic_rejected 0.111 — hybrid: 1.0 · 0.932 · 0.667 |
 | `_routing` | `tests/data/intent_eval_cases.json` + bộ blind/stress (đã map nhãn) | 142 active (38 gốc + 104 mới, 5 `needs_review`) | accuracy 0.7606 (gốc 38/38, mới 70/104). Ngưỡng hạ từ 1.0 xuống 0.75: 34 case heuristic chưa phủ (out_of_scope không từ khóa, plan_goal tiếng Anh, chitchat nhỏ). Ngưỡng chặn hồi quy; nâng lại khi sửa xong các nhóm này |
-| `_answer` | viết mới (bug "quên tên Cris") | 8 (7 multi-turn) | accuracy 1.0 (groq `openai/gpt-oss-120b`) |
+| `_answer` | viết mới (bug "quên tên Cris") + câu so sánh cần đủ 2 nguồn (021–024) | 24 | accuracy 0.9583 (groq `openai/gpt-oss-120b`, hybrid); fail còn lại `answer-008`, cũng fail trước khi có citation theo câu |
 
 - Baseline khớp đúng với `tests/eval_retrieval.py --fts-only` (cùng hit@5, MRR, 1/8 off-topic).
 - Corpus `public/roadmap@1.0`: 115 doc export từ `dev.db`, chỉ còn topic `ai-architecture`. Đã bỏ dữ liệu probe (`owner-probe`, `bypass-probe`),
@@ -176,11 +176,15 @@ Phân bố tag của `public/roadmap`:
   `_answer` bị skip, nên lệnh `run` mặc định vẫn offline. `answer` chạy agent thật với LLM trong `.env`, adapter SQLite
   đọc `prisma/dev.db` (không cần Next.js), role `visitor` (không ghi được DB). `history` của sample được nạp thẳng vào
   bộ nhớ (đã mask PII) trên một thread mới, không replay từng lượt. Behavior suy ra từ step/reply: `refuse` = sensitive /
-  out_of_scope / no_match, `clarify` = mixed intent / unclear, còn lại `answer`. Citation = `metadata.sources` có
-  `cited`: item link tới đúng bài (`/?topic=<slug>&item=<id>`), nên chỉ bài thật sự được link mới tính là cited.
+  out_of_scope / no_match, `clarify` = mixed intent / unclear, còn lại `answer`. Citation = mọi `metadata.sources`
+  (bài model gắn `[[id]]` sau khẳng định, rồi tới bài chỉ có trong dòng `<sources>`), không phụ thuộc `cited`.
+  Vị trí từng khẳng định (`metadata.citations`) chưa được scorer chấm; khi đổi prompt citation thì đo thêm độ phủ và
+  slice khớp `text` trên câu hỏi on-topic.
 - `_answer` chưa đặt ngưỡng vì LLM không tất định; cần thêm vài run để biết độ dao động. Lịch sử: 0.875 ở 2 run đầu
   (`answer-006` "email của tôi là gì?" bị router đưa vào tìm kiếm), lên 1.0 sau khi router nhận câu hỏi về thông tin
-  của chính người dùng (`CONVERSATION_RECALL` trong `rag_service/router/intent_router.py`).
+  của chính người dùng (`CONVERSATION_RECALL` trong `rag_service/router/intent_router.py`). Khi thêm citation `[[id]]`
+  theo câu, `answer-015` từng fail vì model gắn `[[id]]` vào câu gợi ý đọc thêm ở câu hỏi ngoài corpus; prompt nay nói
+  rõ bài gợi ý không phải nguồn (`answer-013` cũng pass từ đó).
 - `section_id` là `doc_id` của corpus (trước đây tạm dùng title). Đổi title trong DB không làm lệch dataset vì
   export giữ `doc_id` theo `source_id`.
 - Bộ cũ trong `tests/data/` và các test `tests/eval_retrieval.py`, `tests/test_intent_eval.py` **vẫn giữ nguyên**.

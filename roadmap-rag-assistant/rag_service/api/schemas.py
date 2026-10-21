@@ -60,6 +60,8 @@ class ActionConfirmResponse(BaseModel):
 
     success: bool
     message: str
+    # What the confirmed action wrote (see rag_service/execution/changes.py); absent when nothing changed
+    changes: dict | None = None
 
 
 

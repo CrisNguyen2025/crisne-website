@@ -34,14 +34,60 @@ export interface ChatResponse {
   steps?: AssistantStepEvent[];
   /** Documents the answer used (streaming endpoint only). */
   sources?: ChatSource[];
+  /** Claims in `message` and the sources behind each (streaming endpoint only). */
+  citations?: ChatCitation[];
+  /** What the turn's actions wrote, one per executed action (streaming endpoint only). */
+  changes?: ChangeReview[];
 }
 
-/** A document the answer used; `cited` when the answer also links it inline. */
+/** A row an action created or deleted. */
+export interface ChangeEntry {
+  op: 'create' | 'delete';
+  level: 'topic' | 'layer' | 'group' | 'item' | (string & {});
+  title: string;
+  id?: string;
+  code?: string;
+  /** Rows a delete removed with this one (a delete cascades), parents first. */
+  children?: { level: string; title: string }[];
+}
+
+/**
+ * What one executed action actually changed, streamed as SSE `event: change_review`
+ * (contract: rag_service/execution/changes.py). Sent only when something was written.
+ */
+export interface ChangeReview {
+  id: string;
+  action: 'create' | 'delete' | (string & {});
+  level: string;
+  /** Where the entries were created (topic slug or layer id). */
+  parent?: string;
+  /** Rows written / deleted, children included. */
+  added: number;
+  removed: number;
+  entries: ChangeEntry[];
+  /** Titles left alone because they already exist. */
+  skipped?: string[];
+  /** True when children were cut short by the server. */
+  truncated?: boolean;
+}
+
+/** A document the answer used; `cited` when a claim cites it or the answer links it inline. */
 export interface ChatSource {
   id: string;
   title: string;
   href?: string | null;
   cited: boolean;
+}
+
+/**
+ * A claim in the answer and the sources behind it. `start`/`end` are UTF-16 indexes into the
+ * final message (`message.slice(start, end) === text`); `text` locates the claim if they drift.
+ */
+export interface ChatCitation {
+  start: number;
+  end: number;
+  text: string;
+  source_ids: string[];
 }
 
 /** A document found by the retrieval step. */
@@ -142,6 +188,7 @@ export interface ChatMessage {
   thinkingDurationMs?: number;
   toolCalls?: ToolCallResult[];
   sources?: ChatSource[];
+  citations?: ChatCitation[];
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   timestamp: Date;

@@ -55,6 +55,8 @@ async def _sse_stream_generator(
     steps: dict[str, dict] = {}
     # Closing metadata of an LLM answer (sources, usage, grounding), sent with `done`
     metadata: dict = {}
+    # What the turn's actions wrote (see rag_service/execution/changes.py), also sent with `done`
+    changes: list[dict] = []
 
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -82,6 +84,10 @@ async def _sse_stream_generator(
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 steps[payload["id"]] = {**steps.get(payload["id"], {}), **payload}
                 yield f"event: step\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            elif ev_type == "change_review":
+                payload = {k: v for k, v in ev.items() if k != "type"}
+                changes.append(payload)
+                yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
                 metadata.update({k: v for k, v in ev.items() if k != "type"})
 
@@ -138,6 +144,8 @@ async def _sse_stream_generator(
         }
         if metadata:
             done_payload["metadata"] = metadata
+        if changes:
+            done_payload["changes"] = changes
         yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
     except Exception as exc:
@@ -237,9 +245,10 @@ async def health() -> HealthResponse:
     )
 
 
-@router.post("/chat/confirm", response_model=ActionConfirmResponse)
+@router.post("/chat/confirm", response_model=ActionConfirmResponse, response_model_exclude_none=True)
 async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionConfirmResponse:
     """Confirm and execute a pending dry-run CUD action."""
+    from rag_service.execution.changes import ChangeSet
     from rag_service.execution.executor import ActionExecutor
     from rag_service.state.session_store import session_store
 
@@ -258,8 +267,9 @@ async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionC
     action = ctx.pending_confirmation
     ctx.pending_confirmation = None
     executor = ActionExecutor()
-    ok, msg = await executor.aexecute(action, session_id=tid)
-    return ActionConfirmResponse(success=ok, message=msg)
+    changes = ChangeSet.of(action)
+    ok, msg = await executor.aexecute(action, session_id=tid, changes=changes)
+    return ActionConfirmResponse(success=ok, message=msg, changes=changes.to_dict() if changes else None)
 
 
 @router.post("/chat/cancel", response_model=ActionConfirmResponse)

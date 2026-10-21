@@ -28,6 +28,8 @@ export { ThoughtProcess } from './components/ThoughtProcess';
 export type { ThoughtProcessProps } from './components/ThoughtProcess';
 export { ToolExecutionCard } from './components/ToolExecutionCard';
 export type { ToolExecutionCardProps } from './components/ToolExecutionCard';
+export { ChangeReviewCard } from './components/ChangeReviewCard';
+export type { ChangeReviewCardProps } from './components/ChangeReviewCard';
 
 // Icons & Presentation Assets
 export * from './icons';

@@ -32,3 +32,12 @@ def test_sources_keep_the_models_order_and_are_capped():
     docs = [_doc(str(i), f"Bài {i}", f"/?topic=t&item={i}") for i in range(6)]
     ev = metadata_event("rag", "", docs, None, "ok", False, cited_ids=["5", "2", "0", "1", "3"])
     assert [s["id"] for s in ev["sources"]] == ["5", "2", "0"][:MAX_SOURCES]
+    assert "citations" not in ev
+
+
+def test_sources_used_by_citations_are_never_capped():
+    docs = [_doc(str(i), f"Bài {i}") for i in range(6)]
+    cites = [{"start": 0, "end": 2, "text": "Ab", "source_ids": ["0", "1", "2", "3"]}]
+    ev = metadata_event("rag", "Ab", docs, None, "ok", False, cited_ids=["0", "1", "2", "3", "4"], citations=cites)
+    assert [s["id"] for s in ev["sources"]] == ["0", "1", "2", "3"]
+    assert all(s["cited"] for s in ev["sources"]) and ev["citations"] == cites

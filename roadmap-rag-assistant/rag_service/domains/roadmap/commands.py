@@ -11,6 +11,7 @@ from typing import AsyncGenerator
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
+from rag_service.execution.changes import ChangeSet
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.domains.roadmap.router.grounding import (
     BATCH_LAYER_DELETE_REPLY,
@@ -50,8 +51,11 @@ class RoadmapCommands:
                     return
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
-                ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id)
+                changes = ChangeSet.of(pending_act)
+                ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+                if changes:
+                    yield changes.event()
                 async for ev in self._stream_text(res_msg, delay):
                     yield ev
                 outcome["handled"] = True
@@ -98,8 +102,11 @@ class RoadmapCommands:
                 session_store.set_active_layer(session_id, layer_id=picked["id"], title=picked["title"])
                 tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
-                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                changes = ChangeSet.of(pending_item)
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
+                if changes:
+                    yield changes.event()
                 async for ev in self._stream_text(item_msg, delay):
                     yield ev
                 outcome["handled"] = True
@@ -120,8 +127,11 @@ class RoadmapCommands:
                     entities=[SingleEntity(title=layer_title, short_tag="01-GEN" if is_default else None)],
                 )
                 yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
-                ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id)
+                changes = ChangeSet.of(layer_action)
+                ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": "create_layer", "result": layer_msg, "is_error": not ok}
+                if changes:
+                    yield changes.event()
                 if not ok:
                     async for ev in self._stream_text(layer_msg, delay):
                         yield ev
@@ -129,8 +139,11 @@ class RoadmapCommands:
                     return
                 pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
                 yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
-                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id)
+                changes = ChangeSet.of(pending_item)
+                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
+                if changes:
+                    yield changes.event()
                 async for ev in self._stream_text(f"{layer_msg}\n\n{item_msg}", delay):
                     yield ev
                 outcome["handled"] = True
@@ -160,8 +173,11 @@ class RoadmapCommands:
             m = re.search(r"template\s+([\w-]+)", lower)
             tid = m.group(1) if m else "ai-engineering"
             yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
-            res = await generate_roadmap_from_template.ainvoke({"template_id": tid})
+            changes = ChangeSet("create", "topic")
+            res = await generate_roadmap_from_template.coroutine(template_id=tid, changes=changes)
             yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
+            if changes:
+                yield changes.event()
             async for ev in self._stream_text(res, delay):
                 yield ev
             outcome["handled"] = True
@@ -197,8 +213,11 @@ class RoadmapCommands:
             return
         tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
         yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
-        res = await import_items_from_text.coroutine(**tool_args)
+        changes = ChangeSet("create", "item", layer_in_view)
+        res = await import_items_from_text.coroutine(**tool_args, changes=changes)
         yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
+        if changes:
+            yield changes.event()
         async for ev in self._stream_text(res + "\n\n_Các item được thêm vào level `core`. Nói rõ level nếu muốn khác._", delay):
             yield ev
 
@@ -313,8 +332,11 @@ class RoadmapCommands:
         yield {"type": "tool_start", "name": tool_name, "args": tool_args}
 
         remembered_layer = session_ctx.active_layer_id
-        ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id)
+        changes = ChangeSet.of(resolved_action)
+        ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id, changes=changes)
         yield {"type": "tool_end", "name": tool_name, "result": result_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
 
         # The remembered layer may have been deleted since: forget it and ask again.
         if (

@@ -4,7 +4,8 @@
        context.build_prompt      persona + rules + <conversation_history> + <context> + <user_query>
     S2 generate.astream          stream tokens from the chat model
     S3 citation.citation_filter  drop links to unknown sources while streaming
-    S4 guardrails                mask PII while streaming; grounding check on the finished answer,
+       cite_channel              `[[id]]` markers → citation ranges on the text sent out
+    S4 guardrails               mask PII while streaming; grounding check on the finished answer,
                                  then fallback or note per DomainProfile.grounding_policy
     S5 delivery                  SSE tokens + closing metadata event; memory is written per turn
                                  by the agent (delivery.record_turn)
@@ -22,6 +23,7 @@ from rag_service.auth import is_owner
 from rag_service.config import settings
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
+from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
 from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.profile import DomainProfile
@@ -54,7 +56,14 @@ class GenerationPipeline:
         known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)  # S3
         channel = SourceChannel(d.id for d in documents) if is_rag else None  # S3b
+        cite = CiteChannel(d.id for d in documents) if is_rag else None  # S3c
+        tracker = CitationTracker(cite) if cite else None
         clean: list[str] = []  # the answer without the sources line and source labels
+
+        def track(text: str) -> str:
+            # Last before sending: the citation ranges are measured on exactly what the client gets
+            return tracker.feed(text) if tracker else text
+
         pii = guardrails.PiiStreamFilter() if profile.mask_output_pii else guardrails.NoFilter()  # S4
         # Under "fallback" a RAG answer is held until the grounding check passes.
         hold = is_rag and profile.grounding_policy == "fallback"
@@ -71,19 +80,23 @@ class GenerationPipeline:
         try:
             async for delta in astream(llm, prompt, result):  # S2
                 text = channel.feed(delta) if channel else delta
+                if cite:
+                    text = cite.feed(text)
                 clean.append(text)
-                if safe := pii.feed(links.feed(text)):
+                if safe := track(pii.feed(links.feed(text))):
                     if hold:
                         held.append(safe)
                     else:
                         yield token_event(safe)  # S5
             if channel:
                 tail = channel.flush()
+                if cite:
+                    tail = cite.feed(tail) + cite.flush()
                 clean.append(tail)
                 links_tail = links.feed(tail)
             else:
                 links_tail = ""
-            if rest := pii.feed(links_tail + links.flush()) + pii.flush():
+            if rest := track(pii.feed(links_tail + links.flush()) + pii.flush()):
                 if hold:
                     held.append(rest)
                 else:
@@ -96,7 +109,7 @@ class GenerationPipeline:
                 trace.flags["llm_fallback"] = True
             raise GenerationFailed("llm_error", str(exc)) from exc
 
-        answer = "".join(clean) if channel else result.text
+        answer = strip_marks("".join(clean)) if channel else result.text
         usage = usage_from_langchain(result.merged)
         sections = {
             "history_turns": prompt.count("<turn "),
@@ -104,6 +117,9 @@ class GenerationPipeline:
             "dropped_documents": len(req.sources) - len(documents),
             "removed_links": links.removed,
         }
+        if cite and tracker:
+            sections["citations"] = len(tracker.citations)
+            sections["invalid_citations"] = cite.invalid
         report = None
         if is_rag:  # S4
             context_text = "\n".join(f"{d.title}\n{d.body}" for d in documents)
@@ -158,7 +174,9 @@ class GenerationPipeline:
             usage,
             ("issues" if report.issues else "ok") if report is not None else None,
             show_scores=is_owner(),
-            cited_ids=channel.ids if channel else [],
+            # Ids cited inline come first; the <sources> line only adds the ones never cited inline
+            cited_ids=(cite.ids + [i for i in channel.ids if i not in cite.ids]) if channel and cite else [],
+            citations=tracker.citations if tracker else None,
         )
 
 

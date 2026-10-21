@@ -10,10 +10,14 @@ Tools:
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Optional
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 from rag_service.adapters.errors import DuplicateEntityError, with_skipped as _with_skipped
+
+if TYPE_CHECKING:
+    from rag_service.execution.changes import ChangeSet
 
 
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
@@ -123,6 +127,7 @@ async def create_items_batch(
     layer_id: str,
     level: str,
     items: list[dict],
+    changes: Optional["ChangeSet"] = None,
 ) -> str:
     """Tạo nhiều Items cùng lúc trong một Layer.
 
@@ -147,8 +152,12 @@ async def create_items_batch(
             )
         except DuplicateEntityError as dup:
             skipped.append(dup.title)
+            if changes is not None:
+                changes.skip(dup.title)
             continue
         created.append(result.get("title", item_title))
+        if changes is not None:
+            changes.created(result.get("title", item_title), result)
     return _with_skipped(f"✅ Đã tạo {len(created)} item (level: {level}): {', '.join(created)}", skipped)
 
 
@@ -166,7 +175,9 @@ def parse_item_list(text: str) -> list[str]:
 
 
 @tool(args_schema=ImportItemsFromTextInput)
-async def import_items_from_text(layer_id: str, level: str, text: str) -> str:
+async def import_items_from_text(
+    layer_id: str, level: str, text: str, changes: Optional["ChangeSet"] = None
+) -> str:
     """Nhập nhiều item từ một danh sách dán vào, mỗi dòng bắt đầu bằng '-' hoặc số thứ tự.
 
     Ví dụ: 'thêm các bài sau vào layer này:\n- Docker\n- Kubernetes'.
@@ -174,7 +185,9 @@ async def import_items_from_text(layer_id: str, level: str, text: str) -> str:
     titles = parse_item_list(text)
     if not titles:
         return "⚠️ Không tìm thấy dòng item nào. Hãy dùng dạng '- Tên bài' hoặc '1. Tên bài' mỗi dòng."
-    return await create_items_batch.coroutine(layer_id=layer_id, level=level, items=[{"title": t} for t in titles])
+    return await create_items_batch.coroutine(
+        layer_id=layer_id, level=level, items=[{"title": t} for t in titles], changes=changes
+    )
 
 
 @tool(args_schema=UpdateItemInput)

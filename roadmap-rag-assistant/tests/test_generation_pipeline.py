@@ -201,6 +201,35 @@ def test_rag_answer_ends_with_metadata_listing_cited_sources(monkeypatch):
     assert meta["sources"][0]["href"] == "/?topic=ops&item=d1"
 
 
+def test_rag_answer_citations_slice_back_to_the_streamed_text(monkeypatch):
+    from rag_service.core.generation.cite_channel import MARK
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    monkeypatch.setattr(rag_engine, "known_topic_slugs", lambda: {"ops"})
+    monkeypatch.setattr(rag_engine, "known_item_ids", lambda: {"d1", "x"})
+    reply = (
+        "- **Docker** đóng gói ứng dụng 📦. [[d1]]\n"
+        "- Kubernetes điều phối container. [[x, zzz]] Còn lại tự học. [[nope]]\n"
+        "<sources>d1</sources>"
+    )
+
+    async def run():
+        req = GenerationRequest(mode="rag", query="docker", thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9), (_doc("x"), 0.8)])
+        return [ev async for ev in generation_pipeline.astream(RecordingLLM(reply), req)]
+
+    events = asyncio.run(run())
+    text, meta = _text(events), events[-1]
+    assert "[[" not in text and MARK not in text and "<sources" not in text
+    utf16 = text.encode("utf-16-le")
+    for c in meta["citations"]:
+        assert utf16[c["start"] * 2: c["end"] * 2].decode("utf-16-le") == c["text"]
+    assert [(c["text"], c["source_ids"]) for c in meta["citations"]] == [
+        ("**Docker** đóng gói ứng dụng 📦.", ["d1"]),
+        ("Kubernetes điều phối container.", ["x"]),
+    ]
+    assert [(s["id"], s["cited"]) for s in meta["sources"]] == [("d1", True), ("x", True)]
+
+
 def test_rag_answer_claiming_a_save_is_withheld_and_falls_back(monkeypatch):
     import pytest as _pytest
 

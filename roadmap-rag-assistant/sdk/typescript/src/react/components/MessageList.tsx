@@ -9,7 +9,6 @@ import {
   ThumbsUpIcon,
 } from "../icons";
 import { ChatMarkdown } from "../ChatMarkdown";
-import { SourceChip, roadmapSourceLabel } from "./SourceChip";
 import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
 import {
@@ -19,6 +18,7 @@ import {
 } from "../utils/formatters";
 import { WELCOME_MESSAGE_ID } from "../welcome";
 import { PulsatingDots } from "./PulsatingDots";
+import { ChangeReviewCard } from "./ChangeReviewCard";
 import type { ChatMessage } from "../types";
 
 export interface MessageListProps {
@@ -244,28 +244,15 @@ export function MessageList({
                     streaming={isLive}
                     onRun={handleRunCode}
                     runningCode={isLoading ? runningCode : null}
+                    citations={isLive ? undefined : msg.citations}
+                    sources={isLive ? undefined : msg.sources}
                     className="[&>:last-child]:!mb-0"
                   />
                 </div>
               )}
 
-              {/* Sources the answer used, once at the end of the answer */}
-              {!!msg.sources?.length && !isLive && (
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-xs text-[#6B6A66]">Nguồn</span>
-                  {msg.sources.map(
-                    (s) =>
-                      s.href && (
-                        <SourceChip
-                          key={s.id}
-                          title={s.title}
-                          href={s.href}
-                          source={roadmapSourceLabel(s.href) ?? "Roadmap"}
-                        />
-                      )
-                  )}
-                </div>
-              )}
+              {/* Data the reply's actions wrote: summary, expands to the rows created and deleted */}
+              {!!msg.changes?.length && <ChangeReviewCard changes={msg.changes} />}
 
               {/* Suggested follow-ups as chips; the full prompt is sent on tap */}
               {!!msg.suggestions?.length && !isLive && (

@@ -21,6 +21,8 @@ export type {
   AssistantStepEvent,
   AssistantStepItem,
   AssistantStepKind,
+  ChangeReview,
+  ChangeEntry,
 } from './types';
 
 // React Chatbot Widget & Headless Hooks
@@ -54,6 +56,8 @@ export { ThoughtProcess } from './react/components/ThoughtProcess';
 export type { ThoughtProcessProps } from './react/components/ThoughtProcess';
 export { ToolExecutionCard } from './react/components/ToolExecutionCard';
 export type { ToolExecutionCardProps } from './react/components/ToolExecutionCard';
+export { ChangeReviewCard } from './react/components/ChangeReviewCard';
+export type { ChangeReviewCardProps } from './react/components/ChangeReviewCard';
 
 // Icons & Formatters for UI customizers
 export * from './react/icons';

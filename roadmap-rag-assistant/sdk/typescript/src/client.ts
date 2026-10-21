@@ -4,6 +4,7 @@
 
 import type {
   AssistantStepEvent,
+  ChangeReview,
   ChatResponse,
   HealthResponse,
   PageContext,
@@ -39,6 +40,7 @@ export interface StreamCallbacks {
   /** `isError` comes from the server's `is_error` when present, else a guess from the text */
   onToolEnd?: (name: string, result: string, isError: boolean) => void;
   onStep?: (step: AssistantStepEvent) => void;
+  onChangeReview?: (change: ChangeReview) => void;
   onDone?: (response: ChatResponse) => void;
   onError?: (error: Error) => void;
 }
@@ -229,6 +231,8 @@ export class RoadmapChatClient {
                   callbacks.onToolEnd?.(data.name, data.result || '', isFailed);
                 } else if (currentEvent === 'step') {
                   callbacks.onStep?.(data as AssistantStepEvent);
+                } else if (currentEvent === 'change_review') {
+                  callbacks.onChangeReview?.(data as ChangeReview);
                 } else if (currentEvent === 'done') {
                   const finalResp: ChatResponse = {
                     message: data.message || accumulatedMessage,
@@ -236,6 +240,8 @@ export class RoadmapChatClient {
                     tool_calls: data.tool_calls || accumulatedTools,
                     steps: Array.isArray(data.steps) ? data.steps : undefined,
                     sources: Array.isArray(data.metadata?.sources) ? data.metadata.sources : undefined,
+                    citations: Array.isArray(data.metadata?.citations) ? data.metadata.citations : undefined,
+                    changes: Array.isArray(data.changes) ? data.changes : undefined,
                   };
                   callbacks.onDone?.(finalResp);
                 } else if (currentEvent === 'error') {

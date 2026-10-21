@@ -8,10 +8,15 @@ Tools:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Optional
+
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
 from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+if TYPE_CHECKING:
+    from rag_service.execution.changes import ChangeSet
 
 
 class SearchTemplatesInput(BaseModel):
@@ -92,7 +97,7 @@ async def preview_roadmap_plan(query_or_template_id: str) -> str:
 
 @tool(args_schema=GenerateFromTemplateInput)
 async def generate_roadmap_from_template(
-    template_id: str, custom_title: str = ""
+    template_id: str, custom_title: str = "", changes: Optional["ChangeSet"] = None
 ) -> str:
     """Tạo nhanh toàn bộ một tài liệu/lộ trình hoàn chỉnh (Topic + Layers + Groups + Items) từ template.
 
@@ -133,6 +138,8 @@ async def generate_roadmap_from_template(
         layers=initial_layers,
     )
     topic_slug = created_topic.get("slug", "")
+    if changes is not None:
+        changes.created(title, created_topic, short_code, level="topic")
 
     # Step 2: Query full topic to retrieve layer IDs
     full_topic = await adapter.get_topic(topic_slug)
@@ -141,6 +148,8 @@ async def generate_roadmap_from_template(
         for lyr in full_topic["layers"]:
             tag = lyr.get("shortTag", "")
             layer_map[tag] = lyr.get("id", "")
+            if changes is not None:
+                changes.created(lyr.get("title", ""), lyr, tag, level="layer")
 
     # Step 3: Populate groups and items into each layer
     items_created_count = 0
@@ -155,13 +164,15 @@ async def generate_roadmap_from_template(
             for item in group.get("items", []):
                 item_title = item.get("title", "")
                 item_desc = item.get("description", "")
-                await adapter.create_item(
+                created_item = await adapter.create_item(
                     layer_id=layer_id,
                     level=level,
                     title=item_title,
                     description=item_desc,
                 )
                 items_created_count += 1
+                if changes is not None:
+                    changes.created(item_title, created_item, level="item")
 
     return (
         f"🎉 **Đã khởi tạo thành công tài liệu/lộ trình từ template '{template.get('id')}'!**\n"
