@@ -17,6 +17,25 @@ ANAPHORA_TARGETS = ("CONTEXT_ACTIVE", "đó", "nó", "this", "it")
 LAYER_VERBS = {ActionType.CREATE: "tạo", ActionType.DELETE: "xóa", ActionType.UPDATE: "sửa"}
 
 
+async def _example_names() -> tuple[str, str]:
+    """A topic slug and layer title that exist, so copied examples work.
+
+    With no data (or the API down) the examples keep <placeholders> instead of made-up names.
+    """
+    topic_slug, layer_title = "<slug topic>", "<tên layer>"
+    try:
+        adapter = get_adapter()
+        topics = await adapter.list_topics()
+        if topics:
+            topic_slug = topics[0].get("slug") or topic_slug
+            layers = (await adapter.get_topic(topic_slug) or {}).get("layers") or []
+            if layers:
+                layer_title = layers[0].get("title") or layer_title
+    except Exception as exc:
+        print(f"[agent] Greeting examples use placeholders: {exc}")
+    return topic_slug, layer_title
+
+
 class RoadmapAgentActions:
     async def _ask_layer_choice(
         self, session_ctx, action: StructuredRoadmapAction, topic_slug: str, delay: float
@@ -66,21 +85,8 @@ class RoadmapAgentActions:
             yield ev
 
     async def _greeting_reply(self) -> str:
-        """Greeting whose examples name a topic and layer that exist, so they work when copied.
-
-        With no data (or the API down) the examples keep <placeholders> instead of made-up names.
-        """
-        topic_slug, layer_title = "<slug topic>", "<tên layer>"
-        try:
-            adapter = get_adapter()
-            topics = await adapter.list_topics()
-            if topics:
-                topic_slug = topics[0].get("slug") or topic_slug
-                layers = (await adapter.get_topic(topic_slug) or {}).get("layers") or []
-                if layers:
-                    layer_title = layers[0].get("title") or layer_title
-        except Exception as exc:
-            print(f"[agent] Greeting examples use placeholders: {exc}")
+        """Greeting whose examples name a topic and layer that exist, so they work when copied."""
+        topic_slug, layer_title = await _example_names()
         return (
             "Xin chào! Tôi là **Abot** — trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
             "Bạn có thể yêu cầu tôi:\n"
@@ -90,6 +96,29 @@ class RoadmapAgentActions:
             "- 🧠 **Tra cứu tri thức**: `Website có bài nào về Docker hoặc Database không?`\n"
             "- 📋 **Lập kế hoạch**: `/plan Lộ trình Next.js Fullstack`\n\n"
             "_Tên đã có sẵn sẽ không bị tạo trùng._"
+        )
+
+    async def _help_reply(self) -> str:
+        """Answer to "làm được gì" / "cách thêm bài vào layer": every command, with names that exist.
+
+        Fixed text, not the LLM: the commands must match what the router and extractor accept.
+        """
+        topic_slug, layer_title = await _example_names()
+        return (
+            "Tôi quản lý roadmap học tập và tra cứu bài học trong đó. Gõ lệnh theo mẫu:\n\n"
+            "**Tra cứu**\n"
+            "- 🔎 `tìm bài về Docker` · `topic AI có những bài gì`\n\n"
+            "**Thêm mới**\n"
+            "- 🗺️ Topic: `tạo topic <tên topic>`\n"
+            f"- 📑 Layer: `tạo layer <tên layer> trong topic {topic_slug}`\n"
+            f"- 📖 Bài học: `thêm bài <tên bài> vào layer {layer_title}`\n\n"
+            "**Sửa, chuyển, xóa**\n"
+            "- ✏️ `đổi tên bài <tên cũ> thành <tên mới>`\n"
+            f"- 🔀 `chuyển bài <tên bài> sang layer {layer_title}`\n"
+            "- 🗑️ `xóa bài <tên bài>` (luôn hỏi xác nhận trước khi xóa)\n\n"
+            "**Lập kế hoạch**\n"
+            "- 📋 `/plan Lộ trình Next.js Fullstack`\n\n"
+            "_Tên đã có sẵn sẽ không bị tạo trùng. Lệnh hỏi dạng \"… được không\" sẽ hiện thẻ xác nhận trước khi chạy._"
         )
 
     async def _ask_target_choice(

@@ -29,7 +29,7 @@
 {"id": "routing-029", "input": "/plan tạo lộ trình Next.js", "expected": {"behavior": "answer", "route": ["plan_goal"]}, "metadata": {"status": "active", "tags": []}}
 {"id": "routing-030", "input": "tìm bài Docker rồi tạo topic K8s", "expected": {"behavior": "clarify"}, "metadata": {"status": "active", "tags": ["mixed-intent"]}}
 {"id": "routing-031", "input": "tạo topic K8s và tìm bài Docker", "expected": {"behavior": "clarify"}, "metadata": {"status": "active", "tags": ["mixed-intent"]}}
-{"id": "routing-032", "input": "có bài Docker k, nếu không thì tạo topic Docker", "expected": {"behavior": "clarify"}, "metadata": {"status": "active", "tags": ["mixed-intent"]}}
+{"id": "routing-032", "input": "có bài Docker k, nếu không thì tạo topic Docker", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["conditional-request"]}}
 {"id": "routing-033", "input": "tạo 2 layer mock 1 và 2 trong be topic", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": []}}
 {"id": "routing-034", "input": "tìm bài về React và Vue", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": []}}
 {"id": "routing-035", "input": "nên học FE hay BE trước", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["llm-fallback"]}}
@@ -145,3 +145,29 @@
 {"id": "routing-145", "input": "???", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["llm-fallback"]}}
 {"id": "routing-146", "input": "🙂", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["llm-fallback"]}}
 {"id": "routing-147", "input": ".", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["llm-fallback"]}}
+{"id": "routing-148", "input": "có thể thao tác gì ở dự án này", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-149", "input": "dự án này làm được những gì", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-150", "input": "bạn hỗ trợ những chức năng nào", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-151", "input": "co the thao tac gi o day", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["implicit-question", "no-diacritics"]}}
+{"id": "routing-152", "input": "topic này có mấy bài", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-153", "input": "layer Backend có bao nhiêu bài học", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-154", "input": "bài Docker nằm ở đâu", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-155", "input": "roadmap AI gồm những gì", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["implicit-question"]}}
+{"id": "routing-156", "input": "tạo topic AI Engineering", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": []}}
+{"id": "routing-157", "input": "thêm bài Caching vào layer Backend", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": []}}
+{"id": "routing-158", "input": "tạo topic về não bộ", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": []}}
+{"id": "routing-159", "input": "cách thêm bài vào layer", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["how-to"]}}
+{"id": "routing-160", "input": "các bước xóa một topic", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["how-to"]}}
+{"id": "routing-161", "input": "làm thế nào để tạo layer mới", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["how-to"]}}
+{"id": "routing-162", "input": "có thể thêm bài Kafka vào layer Backend không", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["polite-request"]}}
+{"id": "routing-163", "input": "bạn tạo topic AI được không", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["polite-request"]}}
+{"id": "routing-164", "input": "tạo topic tên là Tại sao Docker", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["question-in-name"]}}
+{"id": "routing-165", "input": "thêm bài Làm sao deploy Next.js vào layer DevOps", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["question-in-name"]}}
+{"id": "routing-166", "input": "tạo topic như thế nào", "expected": {"behavior": "answer", "route": ["chitchat"]}, "metadata": {"status": "active", "tags": ["question-in-name"]}}
+{"id": "routing-167", "input": "topic AI có bài Docker chưa, chưa thì thêm vào", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["conditional-request"]}}
+{"id": "routing-168", "input": "nếu chưa có bài Redis thì thêm vào layer Backend", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["conditional-request"]}}
+{"id": "routing-169", "input": "Kafka", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["underspecified"]}}
+{"id": "routing-170", "input": "cái đó", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["underspecified"]}}
+{"id": "routing-171", "input": "đổi sang tiếng Anh", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["underspecified"]}}
+{"id": "routing-172", "input": "tôi muốn học về Docker", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["underspecified"]}}
+{"id": "routing-173", "input": "chưa có bài Redis thì thêm vào layer Backend", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["conditional-request"]}}

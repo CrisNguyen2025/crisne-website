@@ -1,5 +1,8 @@
 """Fast Intent Router — routes user messages to the appropriate subsystem.
 
+Two stages: understanding.py reads the message's speech act and target; classify_heuristics maps
+act × target to an intent. Messages it cannot map go to the vocabulary check, then the LLM router.
+
 Subsystems:
 - ROADMAP_CUD: Structured CUD Extractor & Executor
 - KNOWLEDGE_QUERY: Real Hybrid RAG Engine (search existing topics/layers/items/lessons)
@@ -9,79 +12,95 @@ Subsystems:
 
 from __future__ import annotations
 
-import re
-from typing import Callable, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Optional, Sequence
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
-from rag_service.domains.roadmap.retrieval.relevance import content_words, fold
-from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
-
-
-# Subjects clearly outside the roadmap domain. Matched only when no roadmap entity word is present.
-OFF_TOPIC_HINTS = [
-    "thời tiết", "dự báo thời tiết", "giá vàng", "tỷ giá", "tỉ giá", "chứng khoán", "bitcoin", "crypto",
-    "bóng đá", "tỷ số", "tỉ số", "phim", "bài hát", "nấu ăn", "công thức nấu", "du lịch",
-    "weather", "stock price", "football score", "recipe",
-    # Sports fixtures and TV schedules
-    "arsenal", "man city", "man utd", "liverpool", "chelsea", "world cup", "đá với", "chiếu trên", "lịch chiếu",
-    # Shopping, food, lottery, vehicles, health: everyday questions with no roadmap content
-    "giá rẻ", "uy tín tại", "mua iphone", "ăn gì", "quán ăn", "món ngon", "xổ số", "vé số",
-    "xe honda", "ô tô", "xe máy", "review giúp", "trị mụn", "thuốc", "thủ đô", "capital of",
-    # Business records live outside the roadmap database
-    "hợp đồng", "hóa đơn", "công nợ", "doanh thu", "bảng lương", "chấm công",
-]
-
-OFF_TOPIC_STRONG_HINTS = [
-    "bài thơ", "viết thơ", "truyện", "tin tức", "poem", "romantic", "joke", "câu chuyện cười",
-    "kể chuyện", "dịch giúp", "dịch đoạn", "translate",
-]
-
-# Matched against the normalized message, so each phrase goes through the same normalization
-PLAN_PHRASES = [
-    normalize_vietnamese(p).lower() for p in ["lập kế hoạch", "xem trước roadmap", "preview plan", "generate roadmap"]
-]
-
-# Leading greeting, stripped before checking what follows it ("xin chào bạn, ...", "hi Abot!")
-GREETING_PREFIX = re.compile(
-    r"^\s*(?:xin\s+)?(?:chào|hi|hello|hey|alo)(?:\s+(?:bạn|abot|bot|em|anh|chị))?\b[\s,!.]*"
+from rag_service.domains.roadmap.retrieval.relevance import content_words
+from rag_service.domains.roadmap.router.policy import (
+    COMMENTARY_ROWS,
+    DECISION_TABLE,
+    MIXED_INTENT_SPLIT,
+    ROUTER_EXAMPLES,
+    WRITE_CONFIRM,
+    WRITE_NONE,
+    Row,
 )
+from rag_service.domains.roadmap.router.understanding import Understanding, understand
 
-# Questions about the user or the conversation so far ("tôi tên gì?", "nãy tôi nói gì?").
-# Answered from conversation history in chitchat, never by searching the knowledge base.
-_ME = r"(?:tôi|mình|tớ|tao|em)"
-CONVERSATION_RECALL = re.compile(
-    rf"\b{_ME}\s+tên\s+(?:là\s+)?gì\b"
-    rf"|\btên\s+(?:của\s+)?{_ME}\s+(?:là\s+)?gì\b"
-    rf"|\b{_ME}\s+là\s+ai\b"
-    # The user's own details: "email của tôi là gì?", "sđt mình là bao nhiêu"
-    # normalize_vietnamese writes "thọai" (old tone placement), so both spellings are accepted
-    rf"|\b(?:e-?mail|mail|sđt|số\s+đt|(?:số\s+)?điện\s+th(?:oạ|ọa)i|địa\s+chỉ|tên|tuổi|nghề|công\s+việc)"
-    rf"\s+(?:của\s+)?{_ME}\s+(?:là\s+)?(?:gì|bao\s+nhiêu|ở\s+đâu)\b"
-    r"|\bwhat(?:'s|\s+is)\s+my\s+(?:e-?mail|phone(?:\s+number)?|address|job|age)\b"
-    rf"|\b(?:có\s+)?nhớ\s+(?:tên\s+)?{_ME}\b"
-    rf"|\b(?:lúc\s+nãy|vừa\s+nãy|ban\s+nãy|nãy\s+giờ|nãy|vừa\s+rồi|trước\s+đó)\s+{_ME}\s+(?:đã\s+|vừa\s+)?(?:nói|hỏi|kể|bảo)\b"
-    rf"|\b{_ME}\s+(?:vừa|đã|mới)\s+(?:nói|hỏi|kể|bảo)\s+(?:những\s+)?(?:gì|cái\s+gì)\b"
-    r"|\bwhat(?:'s|\s+is)\s+my\s+name\b|\bwho\s+am\s+i\b|\bwhat\s+did\s+i\s+(?:say|ask|tell)\b",
-    re.IGNORECASE,
-)
 
-# The user giving a personal detail: "email của tôi là cris@example.com", "tên tôi là Taro". Stored in history
-# and answered from it, so it is chitchat; without this the LLM router calls it out of scope.
-SELF_DISCLOSURE = re.compile(
-    rf"^(?:(?:e-?mail|mail|sđt|số\s+đt|(?:số\s+)?điện\s+th(?:oạ|ọa)i|địa\s+chỉ|tên|tuổi|nghề|công\s+việc)"
-    rf"\s+(?:của\s+)?{_ME}|{_ME}\s+tên)\s+là\s+\S+",
-    re.IGNORECASE,
-)
+@dataclass(frozen=True)
+class Decision:
+    """The heuristic router's answer for one message, with the reasons a person needs to recheck it.
 
-# A self-introduction or a check of it: "tôi là Huy", "tôi là Huy đúng k?". Only a short name, no roadmap word.
-IDENTITY_STATEMENT = re.compile(
-    rf"^{_ME}\s+(?:tên\s+)?là\s+[\w]+(?:\s+[\w]+){{0,2}}?(?:\s+(?:đúng|phải)(?:\s+(?:k|ko|không|chưa))?)?\s*[?!.]*$",
-    re.IGNORECASE,
-)
+    intent None means undecided: the vocabulary check and then the LLM router take over.
+    """
 
-# Clause joiners used to spot several requests in one message.
-MIXED_INTENT_SPLIT = re.compile(r"\s*(?:[,;\n]|\brồi\b|\bsau\s+đó\b|\bvà\b|\bthen\b|\band\b)\s*", re.IGNORECASE)
+    intent: Optional[IntentType]
+    confidence: float
+    write: str                 # policy section 4: none | allow | confirm | deny
+    row: Optional[str]         # the decision-table row that matched
+    understanding: Understanding
+
+    @property
+    def rules(self) -> list[str]:
+        """Row, axes and cues behind the decision, in the order a person reads them."""
+        u = self.understanding
+        cues = [name for name, on in (
+            ("change_verb", u.has_change_verb), ("object", u.has_object), ("search_word", u.has_search_word),
+            ("usage", u.asks_usage), ("greeting_opener", u.opens_with_greeting),
+        ) if on]
+        if u.write_blocker:
+            cues.append(f"blocker={u.write_blocker}")
+        return [f"row={self.row or '-'}", f"act={u.act.value}", f"target={u.target.value}", *cues]
+
+    def to_result(self) -> Optional[IntentClassificationResult]:
+        if self.intent is None:
+            return None
+        return IntentClassificationResult(
+            intent=self.intent,
+            confidence=self.confidence,
+            needs_cud_extraction=self.intent == IntentType.ROADMAP_CUD,
+            needs_confirmation=self.write == WRITE_CONFIRM,
+        )
+
+    def snapshot(self) -> dict:
+        """Plain fields for evals/router/decisions.jsonl."""
+        if self.intent is None:
+            return {"route": "undecided", "write": self.write, "rules": self.rules}
+        return {
+            "route": self.intent.value,
+            "confirm": self.write == WRITE_CONFIRM,
+            "confidence": self.confidence,
+            "write": self.write,
+            "rules": self.rules,
+        }
+
+
+def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
+    """Prompt for the LLM router: labels, rules, examples, then the recent conversation and the message."""
+    examples = "\n".join(f'- "{msg}" → {label}' for msg, label in ROUTER_EXAMPLES)
+    turns = "\n".join(f"{t.role}: {t.content}" for t in history) or "(chưa có)"
+    return (
+        "Phân loại ý định của người dùng trong hệ thống quản lý Roadmap:\n"
+        "- ROADMAP_CUD: người dùng RA LỆNH tạo, thêm, sửa, xóa, chuyển một topic/layer/group/item cụ thể\n"
+        "- KNOWLEDGE_QUERY: hỏi về kiến thức, tìm kiếm bài học, tra cứu roadmap hiện có\n"
+        "- PLAN_GOAL: muốn lập kế hoạch hoặc sinh lộ trình trọn gói\n"
+        "- CHITCHAT: chào hỏi, cảm ơn, hỏi trợ lý/dự án làm được gì, cách dùng\n"
+        "- OUT_OF_SCOPE: không liên quan đến roadmap/topic/layer/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n"
+        "- UNCLEAR: không đủ thông tin để biết người dùng muốn gì\n\n"
+        "Quy tắc:\n"
+        "- Câu hỏi (kể cả không có dấu \"?\", ví dụ kết thúc bằng \"gì\", \"nào\", \"không\") KHÔNG BAO GIỜ là ROADMAP_CUD.\n"
+        "- ROADMAP_CUD cần một động từ thay đổi và đối tượng rõ ràng (từ tin nhắn hoặc hội thoại trước).\n"
+        "- Một tên công nghệ, khái niệm hay bài học đứng một mình (\"Kafka\", \"RAG\") là KNOWLEDGE_QUERY: người dùng muốn tra cứu nó.\n"
+        "- UNCLEAR chỉ dành cho tin nhắn không đọc được ý nào (ký tự ngẫu nhiên, đại từ trơn như \"cái đó\" khi chưa có hội thoại).\n"
+        "- Phân vân giữa ROADMAP_CUD và nhãn khác: chọn nhãn khác hoặc UNCLEAR, vì ROADMAP_CUD ghi vào dữ liệu.\n"
+        "- confidence: mức chắc chắn từ 0.0 đến 1.0.\n\n"
+        f"Ví dụ:\n{examples}\n\n"
+        f"Hội thoại gần đây:\n{turns}\n\n"
+        f"Tin nhắn: \"{text}\""
+    )
 
 
 class IntentRouter:
@@ -100,165 +119,92 @@ class IntentRouter:
             return False
         return bool(content_words(text) & self._vocabulary())
 
+    def understand(self, text: str) -> Understanding:
+        """The two axes of the message: speech act and target (understanding.py)."""
+        return understand(text)
+
+    def _matches(self, row: Row, u: Understanding, text: str) -> bool:
+        if row.act is not None and u.act not in (row.act if isinstance(row.act, tuple) else (row.act,)):
+            return False
+        if row.target is not None and u.target != row.target:
+            return False
+        if row.needs == "search_word":
+            return u.has_search_word
+        if row.needs == "opens_with_greeting":
+            return u.opens_with_greeting
+        if row.needs == "write_blocker":
+            return u.write_blocker is not None
+        if row.needs == "known_title":  # checked last: it reads the title vocabulary
+            return self.names_known_lesson(text)
+        return row.needs is None
+
+    def decide(self, text: str) -> Decision:
+        """Apply the policy decision table (policy.py section 3) to the message's act × target. Sub-5ms, no LLM."""
+        u = understand(text)
+        decision = next(
+            (Decision(row.intent, row.confidence, row.write, row.name, u)
+             for row in DECISION_TABLE if self._matches(row, u, text)),
+            Decision(None, 0.0, WRITE_NONE, None, u),
+        )
+        if decision.intent != IntentType.ROADMAP_CUD:
+            return decision
+        # A change must come from one clause: "xóa layer X có ảnh hưởng gì không, rồi tìm bài Y" reads as a command
+        # whole, but neither clause asks for a change. Then the first clause with an intent decides.
+        parts = [p.strip() for p in MIXED_INTENT_SPLIT.split(text) if p and p.strip()]
+        if len(parts) < 2:
+            return decision
+        clauses = [self.decide(p) for p in parts]
+        if any(c.intent == IntentType.ROADMAP_CUD for c in clauses):
+            return decision
+        first = next((c for c in clauses if c.intent is not None), None)
+        if first is None:
+            return Decision(None, 0.0, WRITE_NONE, "change_not_in_any_clause", u)
+        return Decision(first.intent, first.confidence, first.write, f"clause:{first.row}", u)
+
     def classify_heuristics(self, text: str) -> Optional[IntentClassificationResult]:
-        """Perform sub-5ms heuristic classification on clear-cut syntax and keywords."""
-        norm_text = normalize_vietnamese(text)
-        lower = norm_text.lower().strip()
-
-        # 1. Plan / Goal mode
-        if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(
-            k in lower for k in PLAN_PHRASES
-        ):
-            return IntentClassificationResult(
-                intent=IntentType.PLAN_GOAL,
-                confidence=0.98,
-                needs_cud_extraction=False,
-            )
-
-        # 1b. Off-topic guardrail: clearly unrelated subjects without any roadmap entity word
-        # Keyword matching runs on the folded text, so "xoa bai" and "xóa bài" are the same request
-        flat = fold(lower)
-        has_roadmap_entity = any(
-            re.search(rf"\b{pat}\b", flat)
-            for pat in [r"topics?c*", r"chu\s+de", r"lo\s+trinh", r"roadmaps?", r"layers?r*",
-                        r"mang", r"groups?", r"nhom", r"items?m*", r"bai", r"muc", r"lessons?"]
-        )
-        # Creative writing and news cues ("bài thơ") use "bài", a roadmap word too, so they skip the entity check
-        def _has_hint(hints: list[str]) -> bool:
-            return any(re.search(rf"\b{re.escape(fold(h))}\b", flat) for h in hints)
-
-        if _has_hint(OFF_TOPIC_STRONG_HINTS) or (not has_roadmap_entity and _has_hint(OFF_TOPIC_HINTS)):
-            return IntentClassificationResult(
-                intent=IntentType.OUT_OF_SCOPE,
-                confidence=0.90,
-                needs_cud_extraction=False,
-            )
-
-        # 1c. Prompt suggestions ("gợi ý", "prompt mẫu") are chitchat-style help, not a search.
-        # "gợi ý bài về X" still searches, so a topic qualifier ("về") keeps it on the knowledge path.
-        if re.search(r"\b(?:gợi\s*ý|goi\s*y|prompt\s+mẫu|vài\s+prompt|ví\s+dụ\s+prompt)\b", lower) and not re.search(r"\bvề\b", lower):
-            return IntentClassificationResult(
-                intent=IntentType.CHITCHAT,
-                confidence=0.9,
-                needs_cud_extraction=False,
-            )
-
-        # 1d. Recall of the user or earlier turns is chitchat: the answer is in the history, not the KB.
-        if CONVERSATION_RECALL.search(lower) or (
-            not has_roadmap_entity and (IDENTITY_STATEMENT.match(lower) or SELF_DISCLOSURE.search(lower))
-        ):
-            return IntentClassificationResult(
-                intent=IntentType.CHITCHAT,
-                confidence=0.9,
-                needs_cud_extraction=False,
-            )
-
-        # 1e. A greeting alone, or a greeting followed by a question about the assistant
-        # ("Xin chào, bạn là ai?"), is chitchat, even with a "?"
-        rest = GREETING_PREFIX.sub("", lower, count=1)
-        if rest != lower and not rest.strip(" ?!.,"):
-            return IntentClassificationResult(
-                intent=IntentType.CHITCHAT,
-                confidence=0.95,
-                needs_cud_extraction=False,
-            )
-        if re.search(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you)\b", rest):
-            return IntentClassificationResult(
-                intent=IntentType.CHITCHAT,
-                confidence=0.9,
-                needs_cud_extraction=False,
-            )
-
-        # 2. Knowledge query / Search patterns (checked first to avoid capturing questions like "hướng dẫn xóa topic")
-        query_indicators = [
-            # "nội dung" is not a question marker: it is the content field of a create ("Nội dung: ...")
-            "tìm", "kiếm", "tra cứu", "có bài nào", "danh sách", "liệt kê", "list",
-            "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "search", "what is", "how to", "show me", "which",
-            "tại sao", "như thế nào"
-        ]
-        has_query = any(re.search(rf"\b{re.escape(fold(q))}\b", flat) for q in query_indicators)
-        # Trailing "không / k / ko" marks a yes-no question only as a separate word ("có bài Docker k"),
-        # so words like "ok" or "check" are not questions.
-        is_question = has_query or "?" in lower or bool(re.search(r"\s(?:không|k|ko)$", lower))
-
-        # 3. Strong CUD verbs + entity keywords (typo-tolerant and bare imperative support)
-        # "gỡ" is left out: folded it becomes "go", an English word
-        cud_verbs = [
-            fold(v) for v in [
-                "tạo", "thêm", "xóa", "xoá", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
-                "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
-            ]
-        ]
-        entity_patterns = [
-            r"topics?c*", r"chu\s+de", r"lo\s+trinh", r"roadmaps?",
-            r"layers?r*", r"mang(?:\s+kien\s+thuc)?",
-            r"groups?", r"nhom",
-            r"items?m*", r"bai(?:\s+hoc)?", r"muc", r"lessons?"
-        ]
-
-        has_verb = any(re.search(rf"\b{re.escape(v)}\b", flat) for v in cud_verbs)
-        has_entity = any(re.search(rf"\b{pat}\b", flat) for pat in entity_patterns)
-        verbs_or = "|".join(re.escape(v) for v in cud_verbs)
-        starts_with_cud = bool(
-            re.search(
-                rf"^(?:(?:ban\s+oi|vui\s+long|nho\s+ban|ho\s+minh|giup\s+minh)\s+)?(?:{verbs_or})\b",
-                flat,
-            )
-        )
-
-        # A verb needs an object from the roadmap: "xóa nó đi" or "Xóa." alone is not a change request
-        if not is_question and has_entity and (has_verb or starts_with_cud):
-            return IntentClassificationResult(
-                intent=IntentType.ROADMAP_CUD,
-                confidence=0.95,
-                needs_cud_extraction=True,
-            )
-
-        # A question word ("là gì", "tìm") is a search by itself. A weak marker alone ("?", trailing "k")
-        # is not: the message must also name roadmap content, else it goes on to the vocabulary check and the LLM router.
-        if is_question and (has_query or has_entity or self.names_known_lesson(text)):
-            return IntentClassificationResult(
-                intent=IntentType.KNOWLEDGE_QUERY,
-                confidence=0.90,
-                needs_cud_extraction=False,
-            )
-
-        # 4. Chitchat / Greetings
-        greetings = [
-            "chào", "hi", "hello", "hey", "alo", "bạn là ai", "bạn giúp được gì", "bạn làm được gì",
-            "who are you", "help", "trợ giúp",
-            "cảm ơn", "thank", "thanks", "ok", "oke", "tuyệt", "good"
-        ]
-        if any(re.search(rf"^\s*{re.escape(g)}\b", lower) for g in greetings):
-            return IntentClassificationResult(
-                intent=IntentType.CHITCHAT,
-                confidence=0.95,
-                needs_cud_extraction=False,
-            )
-
-        return None
+        """The heuristic decision as a classification result, or None to leave the message to the LLM router."""
+        return self.decide(text).to_result()
 
     def mixed_intent_steps(self, text: str) -> list[str]:
-        """Search and change clauses in message order when both are asked at once ("tìm bài A rồi tạo topic B"), else []."""
-        parts = [p.strip() for p in MIXED_INTENT_SPLIT.split(text) if p.strip()]
+        """The request clauses, in message order, when one message asks for several things, else [].
+
+        Several = two or more clauses with their own intent, at least one of them a change or of different kinds
+        ("tìm bài A rồi tạo topic B", "bạn làm được gì, rồi tạo topic C"). Greetings, thanks and blocked changes
+        ("đừng xóa bài X, rồi tìm bài Y") are not requests; two searches are answered as one search.
+        """
+        parts = [p.strip() for p in MIXED_INTENT_SPLIT.split(text) if p and p.strip()]
         if len(parts) < 2:
             return []
-        wanted = {IntentType.KNOWLEDGE_QUERY, IntentType.ROADMAP_CUD}
-        steps = [(p, res.intent) for p in parts if (res := self.classify_heuristics(p)) is not None and res.intent in wanted]
-        if {intent for _, intent in steps} != wanted:
+        requests = [
+            (p, d.intent) for p in parts
+            if (d := self.decide(p)).intent is not None and d.row not in COMMENTARY_ROWS
+        ]
+        intents = [intent for _, intent in requests]
+        if len(requests) < 2 or (IntentType.ROADMAP_CUD not in intents and len(set(intents)) < 2):
             return []
-        return [p for p, _ in steps]
+        return [p for p, _ in requests]
 
     def has_mixed_intents(self, text: str) -> bool:
-        """True when joined clauses ask for both a search and a roadmap change."""
+        """True when one message asks for several things (see mixed_intent_steps)."""
         return bool(self.mixed_intent_steps(text))
+
+    def has_change_request(self, text: str, follow_up: bool = False) -> bool:
+        """The minimum before anything is written: a change verb and a roadmap object ("tạo topic X").
+
+        In a follow-up the object may come from earlier turns ("xóa nó đi"), so the verb is enough.
+        """
+        u = understand(text)
+        return u.has_change_verb and (follow_up or u.has_object)
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""
         return (await self.aroute(text))[0]
 
-    async def aroute(self, text: str) -> tuple[IntentClassificationResult, str]:
-        """Classify and say how it was decided: heuristic | llm | llm_error | rate_limited | default."""
+    async def aroute(self, text: str, history: Sequence[Any] = ()) -> tuple[IntentClassificationResult, str]:
+        """Classify and say how it was decided: heuristic | llm | llm_error | rate_limited | default.
+
+        `history` (recent turns with .role/.content) is shown to the LLM router only, for follow-ups like "xóa nó đi".
+        """
         quick = self.classify_heuristics(text)
         if quick is not None:
             return quick, "heuristic"
@@ -276,16 +222,7 @@ class IntentRouter:
             method = "llm_error"
             try:
                 structured_llm = self._llm.with_structured_output(IntentClassificationResult)
-                prompt = (
-                    "Phân loại ý định của người dùng trong hệ thống quản lý Roadmap:\n"
-                    "- ROADMAP_CUD: khi người dùng muốn tạo, thêm, sửa, xóa topic/layer/group/item\n"
-                    "- KNOWLEDGE_QUERY: khi người dùng hỏi về kiến thức, tìm kiếm bài học, tra cứu roadmap hiện có\n"
-                    "- PLAN_GOAL: khi người dùng muốn lập kế hoạch hoặc sinh lộ trình trọn gói\n"
-                    "- CHITCHAT: chào hỏi, cảm ơn, hỏi thông tin trợ lý\n"
-                    "- OUT_OF_SCOPE: nội dung không liên quan đến roadmap/topic/layer/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n\n"
-                    f"Tin nhắn: \"{text}\""
-                )
-                res = await structured_llm.ainvoke(prompt)
+                res = await structured_llm.ainvoke(build_router_prompt(text, history))
                 if isinstance(res, IntentClassificationResult):
                     return res, "llm"
             except Exception as exc:

@@ -17,6 +17,7 @@ class IntentType(str, Enum):
     PLAN_GOAL = "plan_goal"             # /plan preview outline or /goal end-to-end generation
     CHITCHAT = "chitchat"               # Greetings, thanks, identity questions
     OUT_OF_SCOPE = "out_of_scope"       # Unrelated to roadmaps (weather, finance, general coding...)
+    UNCLEAR = "unclear"                 # LLM router could not tell; the user is asked to rephrase
 
 
 class ActionType(str, Enum):
@@ -114,4 +115,8 @@ class IntentClassificationResult(BaseModel):
     needs_cud_extraction: bool = Field(
         False,
         description="True if the message requires extracting StructuredRoadmapAction.",
+    )
+    needs_confirmation: bool = Field(
+        False,
+        description="True if the change is asked politely or on a condition and must be confirmed before it runs.",
     )

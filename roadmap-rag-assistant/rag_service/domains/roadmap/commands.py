@@ -15,9 +15,17 @@ from rag_service.execution.changes import ChangeSet
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.domains.roadmap.router.grounding import (
     BATCH_LAYER_DELETE_REPLY,
-    BULK_DELETE,
     BULK_DELETE_REPLY,
+    QUESTION_TITLE_REPLY,
     build_grounding,
+)
+from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
+from rag_service.domains.roadmap.router.understanding import is_plain_listing
+from rag_service.domains.roadmap.router.write_gate import (
+    BULK_DELETE_REQUEST,
+    QUESTION_AS_TITLE,
+    WriteGate,
+    gate_action,
 )
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state import AnaphoraResolver, session_store
@@ -184,7 +192,8 @@ class RoadmapCommands:
             return
 
         # ── 2. List Topics / Navigation ───────────────────────────────────────
-        if any(k in lower for k in ["liệt kê topic", "danh sách topic", "list topics", "các topic hiện có"]):
+        # Only a plain listing request: "danh sách topic có bài Docker không, tạo layer" is not one (router decides)
+        if LIST_TOPICS.search(lower) and is_plain_listing(content):
             yield {"type": "tool_start", "name": "list_topics", "args": {}}
             res = await self.tools["list_topics"].ainvoke({})
             yield {"type": "tool_end", "name": "list_topics", "result": res}
@@ -221,10 +230,29 @@ class RoadmapCommands:
         async for ev in self._stream_text(res + "\n\n_Các item được thêm vào level `core`. Nói rõ level nếu muốn khác._", delay):
             yield ev
 
-    async def handle_cud(
-        self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float
+    async def _ask_confirmation(
+        self, action: StructuredRoadmapAction, note, session_id: str, session_ctx, delay: float
     ) -> AsyncGenerator[dict, None]:
-        """Roadmap create/update/delete: extract the action, ask back when a target is unclear, then confirm or run it."""
+        """Preview card for an action that runs only after "ok"; handle_pending executes it."""
+        session_ctx.pending_confirmation = action
+        preview_text = DryRunValidator.format_preview_card(action, note=note)
+        preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
+        yield {
+            "type": "action_preview",
+            "action_id": session_id,
+            "preview": preview_text,
+        }
+        async for ev in self._stream_text(preview_text, delay):
+            yield ev
+
+    async def handle_cud(
+        self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float,
+        gate: WriteGate = WriteGate(WRITE_ALLOW),
+    ) -> AsyncGenerator[dict, None]:
+        """Roadmap create/update/delete: extract the action, ask back when a target is unclear, then confirm or run it.
+
+        `gate` is the route-level write decision (write_gate.gate_route); gate_action refines it for the extracted change.
+        """
         # Visitors may read roadmaps but never change them (writes use ADMIN_API_KEY)
         if not is_owner():
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
@@ -236,8 +264,11 @@ class RoadmapCommands:
         )
         resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
 
-        if resolved_action.action == ActionType.DELETE and BULK_DELETE.search(lower):
-            async for ev in self._stream_text(BULK_DELETE_REPLY, delay):
+        # One write decision for this change (write_gate.py): denied changes stop here with the reason as reply
+        gate = gate_action(gate, resolved_action, content, lower)
+        if gate.denied:
+            reply = {QUESTION_AS_TITLE: QUESTION_TITLE_REPLY, BULK_DELETE_REQUEST: BULK_DELETE_REPLY}[gate.reason]
+            async for ev in self._stream_text(reply, delay):
                 yield ev
             return
 
@@ -268,20 +299,9 @@ class RoadmapCommands:
                     return
                 resolved_action.target_parent_identifier = layer_res.layer_id
 
-        # Dry-run confirmation for DELETE operations unless 'ngay'/'immediately' is specified;
-        # deleting several entities is always confirmed.
-        if resolved_action.action == ActionType.DELETE and (
-            resolved_action.is_batch or not any(w in lower for w in ["ngay", "immediately", "luôn"])
-        ):
-            session_ctx.pending_confirmation = resolved_action
-            preview_text = DryRunValidator.format_preview_card(resolved_action, note=note)
-            preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-            yield {
-                "type": "action_preview",
-                "action_id": session_id,
-                "preview": preview_text,
-            }
-            async for ev in self._stream_text(preview_text, delay):
+        # A delete to confirm is previewed once its layer is resolved (the preview names it)
+        if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
+            async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
                 yield ev
             return
 
@@ -318,6 +338,12 @@ class RoadmapCommands:
                     ):
                         yield ev
                     return
+        # Asked politely or on a condition ("có thể thêm ... không", "chưa thì thêm vào"): show it, run on "ok"
+        if gate.mode == WRITE_CONFIRM:
+            async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
+                yield ev
+            return
+
         if resolved_action.is_batch and resolved_action.entity_level != EntityLevel.GROUP:
             tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}s_batch"
         else:

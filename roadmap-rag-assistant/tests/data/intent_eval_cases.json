@@ -125,7 +125,7 @@
   },
   {
     "message": "có bài Docker k, nếu không thì tạo topic Docker",
-    "expected": "mixed"
+    "expected": "roadmap_cud"
   },
   {
     "message": "tạo 2 layer mock 1 và 2 trong be topic",
@@ -249,7 +249,7 @@
   },
   {
     "message": "bài đó nói gì",
-    "expected": null
+    "expected": "knowledge_query"
   },
   {
     "message": "làm lại cái vừa rồi",

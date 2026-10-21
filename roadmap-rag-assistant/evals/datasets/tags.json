@@ -4,6 +4,12 @@
     "mixed-intent",
     "llm-fallback",
     "memory",
-    "pii"
+    "pii",
+    "implicit-question",
+    "how-to",
+    "polite-request",
+    "question-in-name",
+    "conditional-request",
+    "underspecified"
   ]
 }

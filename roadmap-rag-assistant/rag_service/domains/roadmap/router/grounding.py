@@ -79,6 +79,16 @@ BATCH_LAYER_DELETE_REPLY = (
     "ví dụ: `xóa layer mock 1 trong topic fe`."
 )
 
+BLOCKED_CHANGE_REPLY = (
+    "Tôi hiểu đây không phải yêu cầu thay đổi nên không sửa gì trong roadmap. "
+    "Nếu bạn muốn thay đổi, hãy gửi lệnh trực tiếp, ví dụ: `xóa bài Kafka` hoặc `tạo topic AI Engineering`."
+)
+
+QUESTION_TITLE_REPLY = (
+    "Tên bạn đưa trông giống một câu hỏi nên tôi chưa tạo gì. Nếu muốn tạo mới, hãy gửi lại kèm tên rõ ràng, "
+    "ví dụ: `tạo topic AI Engineering`."
+)
+
 RATE_LIMITED_REPLY = "LLM đang tạm ngưng do hết hạn mức sử dụng. Bạn vui lòng thử lại sau."
 
 RETRIEVAL_ERROR_REPLY = (

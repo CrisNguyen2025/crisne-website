@@ -45,6 +45,8 @@ from rag_service.domains.roadmap.router import (
     StructuredEntityExtractor,
     normalize_vietnamese,
 )
+from rag_service.domains.roadmap.router.policy import WRITE_NONE
+from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, gate_route
 from rag_service.domains.roadmap.router.grounding import (
     EMPTY_MESSAGE_REPLY,
     mixed_intent_reply,
@@ -52,6 +54,7 @@ from rag_service.domains.roadmap.router.grounding import (
     SENSITIVE_REPLY,
     TOO_LONG_REPLY,
     UNCLEAR_REPLY,
+    BLOCKED_CHANGE_REPLY,
     no_match_reply,
     out_of_scope_reply,
 )
@@ -70,6 +73,7 @@ def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> N
     found = retrieve.get("count")
     print(
         f"[turn] thread={thread_id} intent={route.get('intent')} route={route.get('method')} "
+        f"act={route.get('act')} target={route.get('target')} rule={route.get('rule')} write={route.get('write')} "
         f"queries={retrieve.get('queries')} rewritten={bool(retrieve.get('rewritten'))} "
         f"retrieved={retrieve.get('before_gate', found)} on_topic={found} "
         f"mode={answer.get('mode')} fallback={answer.get('fallback_reason')} "
@@ -243,12 +247,24 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         yield step_event("route", "routing", "running")
         router_step = start_step("intent-router", input={"message": content})
         intent_res: IntentClassificationResult
+        recent = history_store.get_recent(session_id, HISTORY_TURNS)
         try:
-            intent_res, method = await self.router.aroute(content)
+            intent_res, method = await self.router.aroute(content, recent)
         except BaseException as exc:
             end_step_on_error(router_step, exc)
             raise
-        end_step(router_step, output=intent_res.model_dump(mode="json"), metadata={"method": method})
+        # The heuristic decision with its reasons (policy row, axes, cues) and the write gate, kept with the route
+        # so a misroute shows which rule fired and whether data could have changed
+        decision = self.router.decide(content)
+        understood = decision.understanding
+        route_gate = gate_route(
+            intent_res, method, self.router.has_change_request(content, follow_up=bool(recent)), decision.write
+        )
+        end_step(
+            router_step,
+            output=intent_res.model_dump(mode="json"),
+            metadata={"method": method, **understood.summary(), "rules": decision.rules, "write": route_gate.mode},
+        )
         yield step_event(
             "route",
             "routing",
@@ -256,9 +272,17 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             intent=intent_res.intent.value,
             confidence=round(intent_res.confidence, 2),
             method=method,
+            act=understood.act.value,
+            target=understood.target.value,
+            # The heuristic reading even when the LLM decided: a blocked_change row explains a denied write
+            rule=decision.row,
+            write=route_gate.mode,
         )
         if (trace := current_trace()) is not None:
+            trace.flags["act"] = understood.act.value
+            trace.flags["target"] = understood.target.value
             trace.flags["intent"] = intent_res.intent.value
+            trace.flags["write"] = route_gate.mode
 
         # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
         if intent_res.intent == IntentType.OUT_OF_SCOPE:
@@ -266,11 +290,21 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
+        # ── 3c. Write gate (write_gate.py): a denied change, or an unclear message, gets an ask-back ──
+        if intent_res.intent == IntentType.UNCLEAR or route_gate.denied:
+            blocked = route_gate.reason == BLOCKED_CHANGE
+            if (trace := current_trace()) is not None and route_gate.denied:
+                trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
+            yield step_event("answer", "generation", "done", mode="blocked" if blocked else "unclear", fallback_reason=None)
+            async for ev in self._stream_text(BLOCKED_CHANGE_REPLY if blocked else UNCLEAR_REPLY, delay):
+                yield ev
+            return
+
         # ── 4. ROADMAP CUD OPERATIONS (roadmap domain: rag_service/domains/roadmap/commands.py) ──
-        if intent_res.intent == IntentType.ROADMAP_CUD or intent_res.needs_cud_extraction:
+        if route_gate.mode != WRITE_NONE:
             async for ev in self.handle_cud(
                 content=content, lower=lower, page_context=page_context,
-                session_id=session_id, session_ctx=session_ctx, delay=delay,
+                session_id=session_id, session_ctx=session_ctx, delay=delay, gate=route_gate,
             ):
                 yield ev
             return
@@ -285,6 +319,13 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             return
 
         # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
+        # "làm được gì", "cách thêm bài vào layer": the command list, not an LLM answer that may refuse or invent syntax
+        if understood.asks_usage:
+            yield step_event("answer", "generation", "done", mode="help")
+            async for ev in self._stream_text(await self._help_reply(), delay):
+                yield ev
+            return
+
         outcome = {"handled": False, "llm_failed": False}
         async for ev in answer_with_llm(
             llm=self.llm, pipeline=generation_pipeline, mode="chitchat", query=content, session_id=session_id, outcome=outcome,
