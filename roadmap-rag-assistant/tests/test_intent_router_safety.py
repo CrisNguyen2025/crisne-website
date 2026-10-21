@@ -10,7 +10,6 @@ import asyncio
 
 import pytest
 
-import rag_service.tools as rag_tools
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.auth import set_actor
 from rag_service.core.augmentation.history import Turn, history_store
@@ -20,10 +19,9 @@ from rag_service.domains.roadmap.router.schemas import IntentClassificationResul
 from rag_service.steps import with_steps
 
 @pytest.fixture(autouse=True)
-def no_live_database(mock_adapter):
-    """Agent turns here must never reach the running Next.js: a CUD path would write to the real database."""
-    yield mock_adapter
-    rag_tools._adapter = None
+def roadmap_data(mock_adapter):
+    """Agent turns here read topics and layers: give them the mock roadmap (conftest blocks the live API)."""
+    return mock_adapter
 
 
 IMPLICIT_QUESTIONS = [

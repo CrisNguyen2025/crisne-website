@@ -35,6 +35,37 @@ def owner_access(monkeypatch):
     current_actor.reset(token)
 
 
+class LiveApiBlocked(RuntimeError):
+    """A test reached the roadmap adapter without choosing one: it would have used the running Next.js database."""
+
+
+class OfflineAdapter:
+    """Default adapter in tests: any call fails loudly instead of reading or writing the real roadmap.
+
+    A test that needs roadmap data uses the `mock_adapter` fixture, or patches `get_adapter`.
+    """
+
+    def __getattr__(self, name: str):
+        async def blocked(*args, **kwargs):
+            raise LiveApiBlocked(f"adapter.{name}() reached the live roadmap API; use the mock_adapter fixture")
+
+        return blocked
+
+
+@pytest.fixture(autouse=True)
+def no_live_roadmap_api():
+    """Without this, get_adapter() builds an HttpApiAdapter to the running Next.js and tests write to its database.
+
+    The adapter is process-wide, so it is also restored after each test: no test sees another test's adapter.
+    """
+    import rag_service.tools as tools
+
+    previous = tools._adapter
+    tools._adapter = OfflineAdapter()
+    yield
+    tools._adapter = previous
+
+
 @pytest.fixture
 def owner_headers() -> dict[str, str]:
     """Headers the Next.js proxy sends for the signed-in owner."""

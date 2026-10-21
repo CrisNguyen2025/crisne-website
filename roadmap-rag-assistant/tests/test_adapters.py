@@ -58,3 +58,20 @@ class TestSqliteAdapterHelpers:
         uid = _uuid7()
         assert len(uid) == 36
         assert uid.count("-") == 4
+
+
+def test_tests_never_reach_the_live_roadmap_api():
+    """conftest installs an offline adapter: a test that forgets mock_adapter fails loudly instead of writing to Next.js."""
+    import asyncio
+
+    from conftest import LiveApiBlocked
+    from rag_service.tools import get_adapter
+
+    with pytest.raises(LiveApiBlocked):
+        asyncio.run(get_adapter().create_topic(title="should never be created"))
+
+
+def test_mock_adapter_replaces_the_offline_default(mock_adapter):
+    from rag_service.tools import get_adapter
+
+    assert get_adapter() is mock_adapter
