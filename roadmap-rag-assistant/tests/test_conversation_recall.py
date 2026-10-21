@@ -58,6 +58,31 @@ INTRODUCTION = [
 ]
 
 
+# Personal details the user gives: stored in history, so chitchat and never "out of scope"
+DISCLOSURE = [
+    "email của tôi là cris.demo@example.com",
+    "mail của mình là cris@example.com",
+    "số điện thoại của tôi là 0901234567",
+    "sđt mình là 0901234567",
+    "địa chỉ của tôi là Quận 1, TP.HCM",
+    "tên tôi là Taro",
+    "tên của mình là Cris",
+    "tuổi của tôi là 25",
+]
+
+
+@pytest.mark.parametrize("text", DISCLOSURE)
+def test_personal_detail_statement_routes_to_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is not None and res.intent == IntentType.CHITCHAT
+
+
+@pytest.mark.parametrize("text", ["tên topic của tôi là Docker", "email của bài Docker là gì"])
+def test_disclosure_with_roadmap_word_is_not_chitchat(text):
+    res = IntentRouter().classify_heuristics(text)
+    assert res is None or res.intent != IntentType.CHITCHAT
+
+
 @pytest.mark.parametrize("text", INTRODUCTION)
 def test_introduction_routes_to_chitchat(text):
     res = IntentRouter().classify_heuristics(text)

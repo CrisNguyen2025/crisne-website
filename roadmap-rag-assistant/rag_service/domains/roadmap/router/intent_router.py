@@ -66,6 +66,14 @@ CONVERSATION_RECALL = re.compile(
     re.IGNORECASE,
 )
 
+# The user giving a personal detail: "email của tôi là cris@example.com", "tên tôi là Taro". Stored in history
+# and answered from it, so it is chitchat; without this the LLM router calls it out of scope.
+SELF_DISCLOSURE = re.compile(
+    rf"^(?:(?:e-?mail|mail|sđt|số\s+đt|(?:số\s+)?điện\s+th(?:oạ|ọa)i|địa\s+chỉ|tên|tuổi|nghề|công\s+việc)"
+    rf"\s+(?:của\s+)?{_ME}|{_ME}\s+tên)\s+là\s+\S+",
+    re.IGNORECASE,
+)
+
 # A self-introduction or a check of it: "tôi là Huy", "tôi là Huy đúng k?". Only a short name, no roadmap word.
 IDENTITY_STATEMENT = re.compile(
     rf"^{_ME}\s+(?:tên\s+)?là\s+[\w]+(?:\s+[\w]+){{0,2}}?(?:\s+(?:đúng|phải)(?:\s+(?:k|ko|không|chưa))?)?\s*[?!.]*$",
@@ -136,7 +144,9 @@ class IntentRouter:
             )
 
         # 1d. Recall of the user or earlier turns is chitchat: the answer is in the history, not the KB.
-        if CONVERSATION_RECALL.search(lower) or (not has_roadmap_entity and IDENTITY_STATEMENT.match(lower)):
+        if CONVERSATION_RECALL.search(lower) or (
+            not has_roadmap_entity and (IDENTITY_STATEMENT.match(lower) or SELF_DISCLOSURE.search(lower))
+        ):
             return IntentClassificationResult(
                 intent=IntentType.CHITCHAT,
                 confidence=0.9,
