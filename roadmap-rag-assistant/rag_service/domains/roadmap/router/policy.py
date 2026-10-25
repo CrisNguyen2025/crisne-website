@@ -102,7 +102,16 @@ HOW_TO = re.compile(
     re.IGNORECASE,
 )
 
-ABOUT_ASSISTANT = re.compile(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you)\b")
+ABOUT_ASSISTANT = re.compile(
+    r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you"
+    r"|bạn\s+có\s+phải\s+(?:là\s+)?(?:ai|bot|người|chatgpt)|bạn\s+do\s+ai\s+(?:tạo|làm|phát\s+triển)"
+    r"|ai\s+(?:tạo|làm)\s+ra\s+bạn|bạn\s+có\s+khỏe\s+không|are\s+you\s+(?:an?\s+)?(?:ai|bot|human|chatgpt))\b"
+)
+
+# Thanks, alone or with praise: "dạ em cảm ơn anh bot nhiều ạ", "cảm ơn bạn, giải thích nhiệt tình ghê".
+# "cảm ơn, giờ giải thích RAG giúp mình" still searches: a search word counts only next to praise.
+THANKS = re.compile(r"^\s*(?:dạ\s+)?(?:(?:em|mình|tôi|tui)\s+)?(?:cảm\s+ơn|cám\s+ơn|thanks?|thank\s+you|tks)\b")
+PRAISE = re.compile(r"\b(?:nhiệt\s+tình|ghê|đỉnh|tuyệt|hay\s+quá|dễ\s+hiểu|great|awesome)\b")
 
 # Speech-act cues
 
@@ -110,6 +119,18 @@ ABOUT_ASSISTANT = re.compile(r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+g�
 PLAN_PHRASES = [
     normalize_vietnamese(p).lower() for p in ["lập kế hoạch", "xem trước roadmap", "preview plan", "generate roadmap"]
 ]
+
+# A learning plan asked in plain words: a goal ("muốn học", "trở thành", "prepare for", "trong 6 tháng") and a
+# plan noun ("lộ trình", "study plan"). Matched on the folded message. "tạo lộ trình X" is a create, not a plan.
+LEARNING_PLAN_GOAL = re.compile(
+    r"\b(?:muon\s+(?:hoc|tu\s+hoc|di\s+lam|chuyen|tro\s+thanh)|tu\s+hoc|tro\s+thanh|become|master(?:ing)?"
+    r"|prepare\s+for|from\s+scratch|step-by-step|certification|chi\s+tiet\s+tung\s+tuan"
+    r"|tu\s+(?:can\s+ban|co\s+ban|nhap\s+mon|con\s+so\s+0)"
+    r"|trong\s+\d+\s+(?:thang|tuan)|in\s+\d+\s+(?:weeks?|months?))\b"
+)
+LEARNING_PLAN_NOUN = re.compile(
+    r"\b(?:lo\s+trinh|roadmap|ke\s+hoach\s+hoc|khung\s+chuong\s+trinh|study\s+plan|learning\s+(?:path|plan)|plan)\b"
+)
 
 # Leading greeting, stripped before checking what follows it ("xin chào bạn, ...", "hi Abot!")
 GREETING_PREFIX = re.compile(
@@ -125,7 +146,7 @@ GREETING_WORDS = [
 
 # Questions about the user or the conversation so far ("tôi tên gì?", "nãy tôi nói gì?").
 # Answered from conversation history in chitchat, never by searching the knowledge base.
-_ME = r"(?:tôi|mình|tớ|tao|em)"
+_ME = r"(?:tôi|mình|tớ|tao|em|tui)"
 CONVERSATION_RECALL = re.compile(
     rf"\b{_ME}\s+tên\s+(?:là\s+)?gì\b"
     rf"|\btên\s+(?:của\s+)?{_ME}\s+(?:là\s+)?gì\b"
@@ -136,8 +157,10 @@ CONVERSATION_RECALL = re.compile(
     rf"\s+(?:của\s+)?{_ME}\s+(?:là\s+)?(?:gì|bao\s+nhiêu|ở\s+đâu)\b"
     r"|\bwhat(?:'s|\s+is)\s+my\s+(?:e-?mail|phone(?:\s+number)?|address|job|age)\b"
     rf"|\b(?:có\s+)?nhớ\s+(?:tên\s+)?{_ME}\b"
-    rf"|\b(?:lúc\s+nãy|vừa\s+nãy|ban\s+nãy|nãy\s+giờ|nãy|vừa\s+rồi|trước\s+đó)\s+{_ME}\s+(?:đã\s+|vừa\s+)?(?:nói|hỏi|kể|bảo)\b"
+    rf"|\b(?:lúc\s+nãy|vừa\s+nãy|ban\s+nãy|hồi\s+nãy|nãy\s+giờ|nãy|vừa\s+rồi|trước\s+đó)\s+{_ME}\s+(?:đã\s+|vừa\s+)?(?:nói|hỏi|kể|bảo)\b"
     rf"|\b{_ME}\s+(?:vừa|đã|mới)\s+(?:nói|hỏi|kể|bảo)\s+(?:những\s+)?(?:gì|cái\s+gì)\b"
+    # "tôi vừa bảo tôi muốn học công nghệ gì nhỉ": the asked detail sits between the verb and "gì"
+    rf"|\b{_ME}\s+(?:vừa|đã|mới)\s+(?:nói|kể|bảo)\s+{_ME}\s+[^?.!]{{0,40}}?\bgì\b"
     r"|\bwhat(?:'s|\s+is)\s+my\s+name\b|\bwho\s+am\s+i\b|\bwhat\s+did\s+i\s+(?:say|ask|tell)\b",
     re.IGNORECASE,
 )
@@ -184,6 +207,10 @@ CUD_VERB_WORDS = [
     "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
 ]
 CUD_VERBS = [fold(v) for v in CUD_VERB_WORDS]
+# A change verb right before a roadmap noun: "tạo lộ trình Docker từ đầu" creates a topic, it is not a plan request
+CREATE_ROADMAP = re.compile(
+    rf"\b(?:{'|'.join(re.escape(v) for v in CUD_VERBS)})\s+(?:(?:a|an|new|mot|cai)\s+)?(?:lo\s+trinh|roadmap|topic|chu\s+de)\b"
+)
 _VERBS_OR = "|".join(re.escape(v) for v in CUD_VERBS)
 # A command opens with its verb, optionally after a polite opener ("bạn ơi xóa ...")
 IMPERATIVE_START = re.compile(rf"^(?:(?:ban\s+oi|vui\s+long|nho\s+ban|ho\s+minh|giup\s+minh)\s+)?(?:{_VERBS_OR})\b")

@@ -26,6 +26,7 @@ from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
 from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
 from rag_service.core.generation.delivery import metadata_event, token_event
+from rag_service.core.generation.faithfulness import unsupported_claims
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.generation.generate import StreamResult, astream
 from rag_service.llm_breaker import llm_breaker
@@ -127,6 +128,11 @@ class GenerationPipeline:
         if is_rag:  # S4
             context_text = "\n".join(f"{d.title}\n{d.body}" for d in documents)
             report = guardrails.check(answer, context_text, req.query, links.removed, profile.grounding_fail_on)
+            if settings.rag_semantic_grounding:
+                claims = await unsupported_claims(llm, answer, context_text, req.query)
+                if claims is not None:
+                    report.grounding["unsupported_claims"] = claims
+                    report.fail_on = report.fail_on + ("unsupported_claims",)
             sections["grounding"] = report.grounding
             if (trace := current_trace()) is not None:
                 trace.flags["grounding"] = "issues" if report.issues else "ok"

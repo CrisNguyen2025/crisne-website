@@ -24,14 +24,15 @@ from rag_service.config import settings
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
-from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
+from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary, filter_on_topic
 from rag_service.domains.roadmap.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
 from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
 MODES = ("fts", "vector", "hybrid")
 ANSWER_MODES = ("off", "llm")
 DEFAULT_JUDGE_MODELS = {
-    "google_genai": "gemini-2.5-pro",
+    # gemini-2.5-pro is closed to new keys (404); Google names this one as its replacement
+    "google_genai": "gemini-3.1-pro-preview",
     "groq": "llama-3.3-70b-versatile",
 }
 CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
@@ -57,7 +58,12 @@ class JudgeConfigError(RuntimeError):
 class RoadmapTarget:
     name = "roadmap"
     def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
-                 judge: str = "off", judge_provider: str = "", judge_model: str = ""):
+                 judge: str = "off", judge_provider: str = "", judge_model: str = "", rerank: str = "off"):
+        # rerank=llm reorders retrieval with the chat model, as /chat does with RAG_RERANK=true
+        if rerank not in ANSWER_MODES:
+            raise ValueError(f"rerank must be one of {ANSWER_MODES}, got {rerank!r}")
+        self.rerank = rerank == "llm"
+        self._rerank_llm = None
         if cache not in ("on", "off"):
             raise ValueError(f"cache must be 'on' or 'off', got {cache!r}")
         self._cache_on = cache == "on"
@@ -125,9 +131,23 @@ class RoadmapTarget:
         store = self._get_store()
         search = {"fts": store.search_fts, "vector": store.search_vector, "hybrid": store.hybrid_search}[self.mode]
         doc_ids = {doc["source_id"]: doc["doc_id"] for doc in self._load()[1]}
-        matches = search(text, limit=k)
+        if self.rerank:
+            from rag_service.core.retrieval.rerank import RERANK_POOL, rerank
+            from rag_service.domains.roadmap.agent import _PROVIDERS, rerank_text
+
+            if self._rerank_llm is None:
+                builder = _PROVIDERS.get(settings.llm_provider.strip().lower())
+                self._rerank_llm = builder() if builder else None
+                if self._rerank_llm is None:
+                    raise RuntimeError("rerank=llm needs LLM_PROVIDER and its API key in roadmap-rag-assistant/.env")
+                # One loop for the run: the model's HTTP client is bound to the loop it first ran on
+                self._rerank_loop = asyncio.new_event_loop()
+            pool = search(text, limit=max(k, RERANK_POOL))
+            matches = self._rerank_loop.run_until_complete(rerank(self._rerank_llm, text, pool, rerank_text))[:k]
+        else:
+            matches = search(text, limit=k)
         if self.gate:
-            matches = filter_on_topic(text, matches)
+            matches = filter_on_topic(text, matches, corpus_vocabulary(self._load()[0]))
         return [Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score) for doc, score in matches]
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
@@ -360,6 +380,7 @@ class RoadmapTarget:
 
 
 def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
-                 judge: str = "off", judge_provider: str = "", judge_model: str = "") -> RoadmapTarget:
+                 judge: str = "off", judge_provider: str = "", judge_model: str = "",
+                 rerank: str = "off") -> RoadmapTarget:
     return RoadmapTarget(mode=mode, answer=answer, cache=cache, gate=gate,
-                         judge=judge, judge_provider=judge_provider, judge_model=judge_model)
+                         judge=judge, judge_provider=judge_provider, judge_model=judge_model, rerank=rerank)

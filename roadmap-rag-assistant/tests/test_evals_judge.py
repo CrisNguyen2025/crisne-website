@@ -253,12 +253,12 @@ def test_judge_auto_switches_provider_and_never_falls_back_to_the_answer_provide
     monkeypatch.setattr(settings, "llm_provider", "groq")
     target2 = RoadmapTarget(mode="fts", answer="llm", judge="llm")
     assert target2.judge_provider == "google_genai"
-    assert target2.judge_model == "gemini-2.5-pro"
+    assert target2.judge_model == "gemini-3.1-pro-preview"
     assert (target2.fallback_provider, target2.fallback_model) == (None, None)
 
     # Judge set to the answer provider: the other provider is a safe fallback
     target3 = RoadmapTarget(mode="fts", answer="llm", judge="llm", judge_provider="groq")
-    assert (target3.fallback_provider, target3.fallback_model) == ("google_genai", "gemini-2.5-pro")
+    assert (target3.fallback_provider, target3.fallback_model) == ("google_genai", "gemini-3.1-pro-preview")
 
 
 def test_rate_limited_judge_without_fallback_marks_the_sample_unavailable(tmp_path, monkeypatch):

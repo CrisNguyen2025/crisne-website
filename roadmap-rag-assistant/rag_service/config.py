@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     llm_model: str = "gemini-flash-latest"
     llm_provider: str = "google_genai"
     groq_api_key: str = ""
+    # More Groq keys, comma-separated; a rate-limited key hands the call to the next (rag_service/llm_keys.py)
+    groq_api_keys: str = ""
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")
@@ -23,6 +25,11 @@ class Settings(BaseSettings):
     rag_history_db: str = ""
     # Rewrite, expand and split the question with the LLM before searching (one extra LLM call per question)
     rag_query_transform: bool = False
+    # Reorder the retrieved candidates with the LLM before answering (one extra LLM call per question)
+    rag_rerank: bool = False
+    # Ask the LLM which claims of a RAG answer the documents do not support; any fails the answer
+    # (one extra LLM call per answer, and the answer is held until it returns)
+    rag_semantic_grounding: bool = False
 
     # ── Access ──
     # Shared with the Next.js proxy (RAG_INTERNAL_KEY there); empty = every request is rejected.

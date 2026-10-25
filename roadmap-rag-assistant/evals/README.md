@@ -65,18 +65,20 @@ Từ `roadmap-rag-assistant/`:
 .venv/bin/python -m evals.corpus_export                  # export lại corpus; báo lỗi nếu nội dung đổi mà chưa bump version
 .venv/bin/python -m evals.corpus_export --version 1.1    # ghi corpus version mới
 .venv/bin/python -m evals run --opt mode=fts             # offline, không cần API key
-.venv/bin/python -m evals run --opt mode=hybrid --profile hybrid   # cần GEMINI_API_KEY, dùng ngưỡng của hybrid
+.venv/bin/python -m evals run --opt mode=hybrid --opt gate=on   # cần GEMINI_API_KEY; gate=on lọc như /chat
+.venv/bin/python -m evals run --only public --opt mode=hybrid --opt gate=on --opt rerank=llm   # + rerank bằng LLM_PROVIDER: GỌI LLM mỗi câu
 .venv/bin/python -m evals run --only _routing            # chạy 1 dataset theo prefix path
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm   # chấm câu trả lời thật: GỌI LLM, tốn quota
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm --opt judge=llm \
-    --opt judge_provider=google_genai --opt judge_model=gemini-2.5-pro             # + LLM judge: GỌI thêm judge model
+    --opt judge_provider=google_genai --opt judge_model=gemini-3.1-pro-preview             # + LLM judge: GỌI thêm judge model
 .venv/bin/python -m evals diff evals/runs/<base> evals/runs/<head>   # regressed / fixed / added / removed
 .venv/bin/python -m evals sync-dataset --dry-run         # kéo golden set từ Langfuse: cần LANGFUSE_* trong .env, chỉ in thay đổi
 .venv/bin/python -m evals sync-dataset                   # ghi vào _answer/samples.jsonl (chỉ khi validate OK) → review diff → commit
 .venv/bin/python -m pytest tests/test_evals_kit.py tests/test_evals_judge.py tests/test_evals_sync_dataset.py   # offline
 ```
 
-`mode`: `fts` | `vector` | `hybrid` (mặc định `hybrid`).
+`mode`: `fts` | `vector` | `hybrid` (mặc định `hybrid`). `gate`: `off` | `on` (mặc định `off`; `on` là cách /chat chạy, số liệu
+retrieval nên đọc ở `gate=on`). `rerank`: `off` | `llm` (mặc định `off`, như `RAG_RERANK`).
 
 Exit code: `0` ok · `1` dataset / corpus không hợp lệ, dưới ngưỡng, hoặc `diff` có regressed · `2` nội dung target
 đang phục vụ (DB) khác corpus static.

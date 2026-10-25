@@ -1,7 +1,7 @@
 {
   "heldout.intent_cases.correct": 64,
-  "heldout.routing.correct": 145,
-  "heldout.routing.wrong": 23,
+  "heldout.routing.correct": 161,
+  "heldout.routing.wrong": 7,
   "stress.dropped": 0,
   "stress.misroute": 0,
   "stress.ok": 406,

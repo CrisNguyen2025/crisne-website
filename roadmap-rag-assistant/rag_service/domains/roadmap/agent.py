@@ -17,6 +17,7 @@ from typing import AsyncGenerator, Optional
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
+from rag_service.llm_keys import KeyRotatingLLM, parse_keys
 from rag_service.execution.executor import ActionExecutor
 from rag_service.core.generation.delivery import record_turn
 from rag_service.core.guards import input_problem, is_sensitive_request
@@ -35,6 +36,7 @@ from rag_service.observability import (
 )
 from rag_service.steps import step_event, with_steps
 from rag_service.core.augmentation.history import history_store
+from rag_service.core.retrieval.rerank import rerank
 from rag_service.core.retrieval.transform import HISTORY_TURNS, plan_queries
 from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
 from rag_service.domains.roadmap.retrieval.engine import knowledge_href, rag_engine
@@ -108,8 +110,9 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
         return SourceDeps(
             search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
-            accept=filter_on_topic,
+            accept=lambda query, matches: filter_on_topic(query, matches, rag_engine.corpus_vocabulary()),
             plan=_plan_queries if settings.rag_query_transform else None,
+            rerank=_rerank if settings.rag_rerank else None,
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
             href_of=knowledge_href,
             item_fields=_item_fields,
@@ -361,6 +364,16 @@ def _item_fields(doc) -> dict:
     return {"title": doc.title, "type": doc.doc_type, "topic": doc.topic_slug}
 
 
+def rerank_text(doc) -> str:
+    """What the reranker reads for a candidate: its name, place in the roadmap and description."""
+    where = f"[{doc.doc_type}] {doc.title}" + (f" ({doc.layer_title})" if doc.layer_title else "")
+    return f"{where}. {doc.description or ''} {doc.content_text or ''}".strip()
+
+
+async def _rerank(llm, query: str, matches: list) -> list:
+    return await rerank(llm, query, matches, rerank_text)
+
+
 def _describe_document(doc) -> dict:
     """Roadmap fields of a retrieved document for the trace and the retrieve step."""
     return {
@@ -422,21 +435,29 @@ def _build_gemini():
 
 
 def _build_groq():
-    api_key = settings.groq_api_key or os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
+    keys = parse_keys(
+        settings.groq_api_key or os.environ.get("GROQ_API_KEY", ""),
+        settings.groq_api_keys or os.environ.get("GROQ_API_KEYS", ""),
+    )
+    if not keys:
         print("[Agent] LLM_PROVIDER=groq but GROQ_API_KEY is not set.")
         return None
     from langchain_groq import ChatGroq
 
-    return ChatGroq(
-        model=settings.llm_model,
-        api_key=api_key,
-        temperature=PROFILE.temperature,
-        # Groq's free tier answers 429 when the per-minute limit is hit; retry with backoff.
-        max_retries=2,
-        timeout=25.0,
-        streaming=True,
-    )
+    models = [
+        ChatGroq(
+            model=settings.llm_model,
+            api_key=key,
+            temperature=PROFILE.temperature,
+            # Groq's free tier answers 429 when the per-minute limit is hit; retry with backoff.
+            # With more keys, one retry: a key out of daily tokens should hand over quickly.
+            max_retries=2 if len(keys) == 1 else 1,
+            timeout=25.0,
+            streaming=True,
+        )
+        for key in keys
+    ]
+    return models[0] if len(models) == 1 else KeyRotatingLLM(models)
 
 
 _PROVIDERS = {"google_genai": _build_gemini, "groq": _build_groq}

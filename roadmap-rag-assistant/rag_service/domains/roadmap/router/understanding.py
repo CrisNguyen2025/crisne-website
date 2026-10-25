@@ -22,6 +22,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     CAPABILITY_QUESTION,
     CONDITIONAL_REQUEST,
     CONVERSATION_RECALL,
+    CREATE_ROADMAP,
     CUD_VERBS,
     END_QUESTION,
     END_QUESTION_FOLDED,
@@ -35,6 +36,8 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     IDENTITY_STATEMENT,
     IMPERATIVE_START,
     LABEL,
+    LEARNING_PLAN_GOAL,
+    LEARNING_PLAN_NOUN,
     LEADING_FILLER,
     LEADING_GREETING,
     LIST_FILLER,
@@ -43,6 +46,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     OFF_TOPIC_HINTS,
     OFF_TOPIC_STRONG_HINTS,
     PLAN_PHRASES,
+    PRAISE,
     QUESTION_MARKERS,
     QUESTION_MARKERS_FOLDED,
     REQUEST_CUE,
@@ -52,6 +56,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     SUGGESTION,
     SYNTAX_QUESTION,
     SYNTAX_QUESTION_FOLDED,
+    THANKS,
     TRAILING_FILLER,
     TRAILING_FILLER_FOLDED,
     WRITE_BLOCKERS,
@@ -201,14 +206,22 @@ def understand(text: str) -> Understanding:
     )
     conditional = has_verb and has_object and CONDITIONAL_REQUEST.search(flat) is not None
 
-    if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(k in lower for k in PLAN_PHRASES):
+    learning_plan = (
+        LEARNING_PLAN_GOAL.search(flat) is not None and LEARNING_PLAN_NOUN.search(flat) is not None
+        and not CREATE_ROADMAP.search(flat)
+    )
+    thanks = THANKS.match(raw) is not None and "?" not in raw and not has_object and (
+        not has_search or PRAISE.search(lower) is not None
+    )
+
+    if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(k in lower for k in PLAN_PHRASES) or learning_plan:
         act = SpeechAct.PLAN
     # A recall word next to a roadmap listing or search ("liệt kê bài … tôi tên gì nhỉ") is the roadmap request
     elif (CONVERSATION_RECALL.search(lower) and not (has_object and has_search)) or (
         not has_object and (IDENTITY_STATEMENT.match(raw) or SELF_DISCLOSURE.search(raw))
     ):
         act = SpeechAct.RECALL
-    elif after_greeting != raw and not after_greeting.strip(" ?!.,"):
+    elif (after_greeting != raw and not after_greeting.strip(" ?!.,")) or thanks:
         act = SpeechAct.GREETING
     elif polite or conditional:
         act = SpeechAct.REQUEST

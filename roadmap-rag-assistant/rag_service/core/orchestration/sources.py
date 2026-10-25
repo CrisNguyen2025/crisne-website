@@ -13,6 +13,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.core.retrieval.rerank import RERANK_POOL
 from rag_service.core.retrieval.transform import QueryPlan, merge_ranked
 from rag_service.observability import current_trace, end_step, end_step_on_error, start_step
 from rag_service.steps import step_event
@@ -35,6 +36,8 @@ class SourceDeps:
     plan: Optional[Callable[[Any, str, str], Awaitable[QueryPlan]]] = None
     # Optional final check of the merged matches against the original question: (query, matches) -> matches.
     accept: Optional[Callable[[str, list], list]] = None
+    # Optional reordering of the candidates: (llm, query, matches) -> matches. Search fetches RERANK_POOL when set.
+    rerank: Optional[Callable[[Any, str, list], Awaitable[list]]] = None
 
 
 async def stream_words(text: str, delay: float) -> AsyncGenerator[dict, None]:
@@ -78,11 +81,14 @@ async def answer_from_sources(
     try:
         plan = await deps.plan(llm, query, session_id) if deps.plan else QueryPlan(query)
         queries = plan.queries()
+        pool = RERANK_POOL if deps.rerank else 4
         if len(queries) == 1:
-            matches = await search(query, limit=4)
+            matches = await search(query, limit=pool)
         else:
-            results = await asyncio.gather(*(search(q, limit=4) for q in queries))
-            matches = merge_ranked(results, 4)
+            results = await asyncio.gather(*(search(q, limit=pool) for q in queries))
+            matches = merge_ranked(results, pool)
+        if deps.rerank:
+            matches = (await deps.rerank(llm, query, matches))[:4]
         before_gate = len(matches)
         if deps.accept:
             # A rewrite resolved "bài đó" to a name, so the check also accepts the rewrite's words;

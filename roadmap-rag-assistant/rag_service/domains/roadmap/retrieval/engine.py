@@ -128,6 +128,16 @@ class HybridRagEngine:
             words |= title_terms(doc.title)
         return words
 
+    def corpus_vocabulary(self) -> set[str]:
+        """Content words of the current index, for the on-topic gate; rebuilt after each sync."""
+        from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary
+
+        docs = self._vector_store._docs_map
+        if getattr(self, "_vocabulary_of", None) is not docs:
+            self._vocabulary = corpus_vocabulary(docs.values())
+            self._vocabulary_of = docs
+        return self._vocabulary
+
     def known_topic_slugs(self) -> set[str]:
         """Slugs of every roadmap in the current index (valid targets for `/?topic=` links)."""
         return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}
