@@ -418,14 +418,14 @@ def _resolve_gemini_api_key() -> str:
     return ""
 
 
-def _build_gemini():
+def _build_gemini(model: str = ""):
     api_key = _resolve_gemini_api_key()
     if not api_key:
         return None
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     return ChatGoogleGenerativeAI(
-        model=settings.llm_model,
+        model=model or settings.llm_model,
         api_key=api_key,
         temperature=PROFILE.temperature,
         max_retries=1,
@@ -434,7 +434,7 @@ def _build_gemini():
     )
 
 
-def _build_groq():
+def _build_groq(model: str = ""):
     keys = parse_keys(
         settings.groq_api_key or os.environ.get("GROQ_API_KEY", ""),
         settings.groq_api_keys or os.environ.get("GROQ_API_KEYS", ""),
@@ -446,7 +446,7 @@ def _build_groq():
 
     models = [
         ChatGroq(
-            model=settings.llm_model,
+            model=model or settings.llm_model,
             api_key=key,
             temperature=PROFILE.temperature,
             # Groq's free tier answers 429 when the per-minute limit is hit; retry with backoff.
@@ -482,7 +482,27 @@ def build_agent():
         except Exception as exc:
             print(f"[Agent] Warning: Failed to init {provider} model ({type(exc).__name__}: {exc}). Using offline mode.")
 
-    return NextGenRoadmapAgent(llm_model=llm_model, tools=ALL_TOOLS)
+    return NextGenRoadmapAgent(llm_model=with_fallback_provider(llm_model, provider), tools=ALL_TOOLS)
+
+
+def with_fallback_provider(llm_model, provider: str):
+    """`llm_model` followed by LLM_FALLBACK_PROVIDER's model, used when every primary key is rate limited."""
+    fallback_provider = settings.llm_fallback_provider.strip().lower()
+    builder = _PROVIDERS.get(fallback_provider)
+    if not fallback_provider or fallback_provider == provider or builder is None:
+        return llm_model
+    try:
+        fallback = builder(settings.llm_fallback_model)
+    except Exception as exc:
+        print(f"[Agent] Fallback {fallback_provider} unavailable ({type(exc).__name__}: {exc}).")
+        return llm_model
+    if fallback is None:
+        return llm_model
+    if llm_model is None:
+        return fallback
+    primary = llm_model.models if isinstance(llm_model, KeyRotatingLLM) else [llm_model]
+    print(f"🤖 Fallback on rate limit: provider={fallback_provider}, model={settings.llm_fallback_model}.")
+    return KeyRotatingLLM([*primary, fallback])
 
 
 # Backward compatibility alias

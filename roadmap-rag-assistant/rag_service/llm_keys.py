@@ -10,6 +10,7 @@ with_structured_output / bind return a rotating wrapper too, sharing the same cu
 
 from __future__ import annotations
 
+import time
 from typing import Any, AsyncIterator, Callable, List, Sequence
 
 RATE_LIMIT_MARKS = ("429", "rate_limit", "rate limit", "RESOURCE_EXHAUSTED")
@@ -26,9 +27,14 @@ def parse_keys(*values: str) -> List[str]:
     return list(dict.fromkeys(k for k in keys if k and not k.startswith("your_")))
 
 
+# After moving off the first model, try it again after this long: its limit may have reset
+RETRY_FIRST_AFTER = 600.0
+
+
 class _Current:
     def __init__(self) -> None:
         self.index = 0
+        self.since = 0.0
 
 
 class KeyRotatingLLM:
@@ -40,16 +46,23 @@ class KeyRotatingLLM:
         self._current = current or _Current()
 
     @property
+    def models(self) -> List[Any]:
+        return list(self._models)
+
+    @property
     def key_count(self) -> int:
         return len(self._models)
 
     def _order(self) -> List[int]:
         start = self._current.index
+        if start and time.monotonic() - self._current.since > RETRY_FIRST_AFTER:
+            start = 0
         return [(start + i) % len(self._models) for i in range(len(self._models))]
 
     def _use(self, index: int) -> None:
         if index != self._current.index:
             print(f"[LLM] Key {self._current.index + 1} rate limited; switched to key {index + 1}/{len(self._models)}.")
+            self._current.since = time.monotonic()
         self._current.index = index
 
     def invoke(self, *args: Any, **kwargs: Any) -> Any:

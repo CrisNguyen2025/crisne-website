@@ -83,3 +83,36 @@ def test_structured_output_rotates_and_shares_the_current_key():
     llm = KeyRotatingLLM([_Model("k1", LIMITED), _Model("k2")])
     assert llm.with_structured_output("S").invoke("hi") == "k2:S"
     assert llm.invoke("hi") == "k2"
+
+
+def test_first_model_is_tried_again_after_a_while(monkeypatch):
+    import rag_service.llm_keys as keys
+
+    first, second = _Model("k1", LIMITED), _Model("k2")
+    llm = KeyRotatingLLM([first, second])
+    clock = [1000.0]
+    monkeypatch.setattr(keys.time, "monotonic", lambda: clock[0])
+    assert llm.invoke("hi") == "k2"
+    first.fail = None  # its limit reset
+    assert llm.invoke("hi") == "k2"  # still on the second within the window
+    clock[0] += keys.RETRY_FIRST_AFTER + 1
+    assert llm.invoke("hi") == "k1"
+
+
+def test_fallback_provider_is_appended_after_the_primary_keys(monkeypatch):
+    from rag_service.domains.roadmap import agent
+
+    monkeypatch.setattr(agent.settings, "llm_fallback_provider", "google_genai")
+    monkeypatch.setitem(agent._PROVIDERS, "google_genai", lambda model="": _Model(f"gemini:{model}"))
+    llm = agent.with_fallback_provider(KeyRotatingLLM([_Model("g1", LIMITED), _Model("g2", LIMITED)]), "groq")
+    assert llm.invoke("hi") == f"gemini:{agent.settings.llm_fallback_model}"
+
+
+def test_no_fallback_when_unset_or_same_provider(monkeypatch):
+    from rag_service.domains.roadmap import agent
+
+    primary = _Model("g1")
+    monkeypatch.setattr(agent.settings, "llm_fallback_provider", "")
+    assert agent.with_fallback_provider(primary, "groq") is primary
+    monkeypatch.setattr(agent.settings, "llm_fallback_provider", "groq")
+    assert agent.with_fallback_provider(primary, "groq") is primary

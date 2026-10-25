@@ -15,6 +15,7 @@ import os
 import re
 import sqlite3
 import time
+from collections import OrderedDict
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 from rag_service.config import settings
@@ -24,6 +25,8 @@ EMBEDDING_CACHE_PATH = Path(__file__).resolve().parents[2] / "data" / "embedding
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 # Seconds between embed requests (~90/min, under the 100/min free-tier limit)
 EMBEDDING_REQUEST_INTERVAL = 0.67
+# Query embeddings kept in memory (one embed request saved per repeated question)
+QUERY_CACHE_SIZE = 512
 # Hybrid results below this cosine similarity are dropped. On tests/eval_retrieval.py the lowest
 # relevant match scored 0.688 and the highest unrelated query 0.654. Re-check with the eval
 # when changing the embedding model.
@@ -76,6 +79,53 @@ def _embed_with_quota_retry(embedder, text: str, attempts: int = 8) -> list[floa
                 raise
             time.sleep(40)
     raise RuntimeError("unreachable")
+
+class _QueryVectorCache:
+    """Recent query embeddings in memory, so a repeated question costs no embed request.
+
+    Kept apart from the document cache: a query is embedded with embed_query, a document with
+    embed_documents, and the two give different vectors for the same text.
+    """
+
+    def __init__(self, size: int = QUERY_CACHE_SIZE) -> None:
+        self._size = size
+        self._items: "OrderedDict[str, List[float]]" = OrderedDict()
+
+    def get(self, query: str) -> Optional[List[float]]:
+        key = _embedding_key(query)
+        vec = self._items.get(key)
+        if vec is not None:
+            self._items.move_to_end(key)
+        return vec
+
+    def put(self, query: str, vec: List[float]) -> None:
+        self._items[_embedding_key(query)] = vec
+        self._items.move_to_end(_embedding_key(query))
+        while len(self._items) > self._size:
+            self._items.popitem(last=False)
+
+    def clear(self) -> None:
+        self._items.clear()
+
+
+_QUERY_VECTORS = _QueryVectorCache()
+
+
+# The warning is printed at most this often; every degraded turn is still flagged in its trace
+DEGRADED_LOG_INTERVAL = 60.0
+_last_degraded_log = [0.0]
+
+
+def _flag_degraded(reason: str) -> None:
+    from rag_service.observability import current_trace
+
+    now = time.monotonic()
+    if now - _last_degraded_log[0] > DEGRADED_LOG_INTERVAL:
+        _last_degraded_log[0] = now
+        print(f"[VectorStore] Query embedding unavailable ({reason}); searching with FTS5 only.")
+    if (trace := current_trace()) is not None:
+        trace.flags["embedding_degraded"] = True
+
 
 def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
     dot = sum(a * b for a, b in zip(v1, v2))
@@ -229,14 +279,25 @@ class HybridVectorStore:
             return [(self._docs_map[r["id"]], 1.0) for r in rows if r["id"] in self._docs_map]
 
     def _similarities(self, query: str) -> dict[str, float] | None:
-        """Cosine similarity of the query to every embedded doc; None when vectors are unavailable."""
+        """Cosine similarity of the query to every embedded doc; None when vectors are unavailable.
+
+        With an embedder configured, None means the search runs on FTS5 alone: the trace is flagged
+        `embedding_degraded` so those turns can be found.
+        """
         embedder = self._get_embedder()
-        if not embedder or not self._vectors:
+        if not embedder:
             return None
-        try:
-            q_emb = embedder.embed_query(query)
-        except Exception:
+        if not self._vectors:
+            _flag_degraded("no document vectors")
             return None
+        q_emb = _QUERY_VECTORS.get(query)
+        if q_emb is None:
+            try:
+                q_emb = embedder.embed_query(query)
+            except Exception as exc:
+                _flag_degraded(f"{type(exc).__name__}: {str(exc)[:120]}")
+                return None
+            _QUERY_VECTORS.put(query, q_emb)
         return {
             doc_id: _cosine_similarity(q_emb, emb)
             for doc_id, emb in self._vectors.items()

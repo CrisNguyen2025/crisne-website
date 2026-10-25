@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     # More Groq keys, comma-separated; a rate-limited key hands the call to the next (rag_service/llm_keys.py)
     groq_api_keys: str = ""
+    # Another provider for when every key of LLM_PROVIDER is rate limited; empty = none
+    llm_fallback_provider: str = ""
+    llm_fallback_model: str = "gemini-flash-latest"
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")
@@ -23,8 +26,9 @@ class Settings(BaseSettings):
     sqlite_db_path: str = "../prisma/dev.db"
     # Conversation memory file; empty keeps it in RAM (lost on restart)
     rag_history_db: str = ""
-    # Rewrite, expand and split the question with the LLM before searching (one extra LLM call per question)
-    rag_query_transform: bool = False
+    # Rewrite, expand and split the question with the LLM before searching. One extra LLM call, only for
+    # questions that refer back ("bài đó") or join several asks: 2 of 115 eval questions (2026-10-25)
+    rag_query_transform: bool = True
     # Reorder the retrieved candidates with the LLM before answering (one extra LLM call per question)
     rag_rerank: bool = False
     # Ask the LLM which claims of a RAG answer the documents do not support; any fails the answer
