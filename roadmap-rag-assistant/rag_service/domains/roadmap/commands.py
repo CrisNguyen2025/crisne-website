@@ -19,7 +19,7 @@ from rag_service.domains.roadmap.router.grounding import (
     QUESTION_TITLE_REPLY,
     build_grounding,
 )
-from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
+from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM, slash_command
 from rag_service.domains.roadmap.router.understanding import is_plain_listing
 from rag_service.domains.roadmap.router.write_gate import (
     BULK_DELETE_REQUEST,
@@ -163,7 +163,11 @@ class RoadmapCommands:
     ) -> AsyncGenerator[dict, None]:
         """Roadmap plan preview (/plan), template generation (/goal) and the topic list."""
         # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
-        if "/plan" in lower or "lập kế hoạch" in lower or "xem trước" in lower:
+        # Slash commands only. Words in a sentence ("xem trước", "template", "sinh nhanh") are left to the
+        # router: as substrings they caught questions ("bài nào nên xem trước khi học RAG?") and, for /goal,
+        # created a whole roadmap from "prompt template là gì, cách tạo prompt template tốt".
+        command = slash_command(lower)
+        if command == "plan":
             yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
             res = await preview_roadmap_plan.ainvoke({"query_or_template_id": content})
             yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
@@ -172,7 +176,7 @@ class RoadmapCommands:
             outcome["handled"] = True
             return
 
-        if "/goal" in lower or "sinh nhanh" in lower or ("template" in lower and ("tạo" in lower or "lộ trình" in lower)):
+        if command == "goal":
             if not is_owner():
                 async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                     yield ev

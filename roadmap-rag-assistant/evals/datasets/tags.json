@@ -10,6 +10,11 @@
     "polite-request",
     "question-in-name",
     "conditional-request",
-    "underspecified"
+    "underspecified",
+    "false-friend",
+    "negation",
+    "plan-goal",
+    "follow-up",
+    "slash-command"
   ]
 }

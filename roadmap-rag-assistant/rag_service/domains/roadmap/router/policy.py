@@ -75,6 +75,30 @@ ENTITY_PATTERNS = [
     r"items?m*", r"bai(?:\s+hoc)?", r"muc", r"lessons?"
 ]
 
+# Everyday or technical phrases holding an entity word that names no roadmap object: "mục tiêu", "mạng nơ-ron",
+# "bài toán", "Kafka topic", "layer normalization", "xóa item khỏi list". Removed (on the folded text) before
+# looking for an object, so "tạo mạng neural bằng PyTorch" is not a create and "cách tạo topic trong Kafka" is
+# not a question about using the assistant.
+_TECH = r"(?:kafka|mqtt|pub\s?sub|rabbitmq|sns|python|js|javascript|typescript|java|list|array|mang(?!\s+kien\s+thuc)|dict|set|tuple|pytorch|keras|tensorflow|react|redux)"
+FALSE_OBJECT = re.compile(
+    r"\bmuc\s+(?:tieu|dich|do|luc)\b"
+    r"|\bmang\s+(?:no-?\s?ron|neural|neuron|may\s+tinh|xa\s+hoi|luoi|lan|internet|wifi|di\s+dong|than\s+kinh)\b"
+    r"|\bbai\s+(?:toan|tho|hat|van|bao|phat\s+bieu|thuyet\s+trinh)\b"
+    r"|\b(?:kafka|mqtt|pub\s?sub|rabbitmq|sns)\s+topics?\b"
+    r"|\b(?:topics?|items?|layers?|groups?)\s+(?:trong|cua|khoi|tren|in|of|from)\s+(?:(?:mot|cai|the|a|an)\s+)?" + _TECH + r"\b"
+    r"|\blayers?\s+(?:normalization|norm|an|dense|tich\s+chap)\b|\b(?:hidden|dense|conv|attention|osi|batch)\s+layers?\b"
+    r"|\blist\s+items?\b|\bgroup\s+by\b"
+)
+
+# A follow-up may take its object from earlier turns only when it points back to one ("xóa nó đi", "sửa bài đó");
+# "tạo mạng neural" in the middle of a conversation names no earlier object.
+ANAPHORA_REF = re.compile(
+    r"\b(?:no|cai\s+(?:do|nay|kia)|bai\s+(?:do|nay|kia)|topic\s+(?:do|nay)|layer\s+(?:do|nay)|nhom\s+(?:do|nay)"
+    r"|muc\s+(?:do|nay)|chung|tat\s+ca\s+(?:chung|cac\s+bai\s+do))\b"
+)
+# English pointers, matched on the accented text: folded, "thêm" reads as "them" and "ít" as "it"
+ANAPHORA_REF_EN = re.compile(r"\b(?:it|that|this|them|those)\b")
+
 # Prompt suggestions ("gợi ý", "prompt mẫu") are help, not a search; "gợi ý bài về X" still searches
 SUGGESTION = re.compile(r"\b(?:gợi\s*ý|goi\s*y|prompt\s+mẫu|vài\s+prompt|ví\s+dụ\s+prompt)\b")
 
@@ -98,9 +122,13 @@ LIST_FILLER = re.compile(r"\b(?:đi|được\s+không|được|giúp|với|nhé|
 # it asks how to use the assistant: the knowledge base holds lessons, not usage docs, so a search finds nothing.
 HOW_TO = re.compile(
     r"^(?:cho\s+(?:tôi|mình)\s+hỏi\s+)?(?:cách|các\s+bước|quy\s+trình|hướng\s+dẫn)\s"
-    r"|\b(?:cách\s+(?:để|nào)|làm\s+thế\s+nào|như\s+thế\s+nào|thế\s+nào|làm\s+sao|ra\s+sao)\b",
+    r"|\b(?:cách\s+(?:để|nào)|làm\s+thế\s+nào|như\s+thế\s+nào|thế\s+nào|làm\s+sao|ra\s+sao)\b"
+    r"|\bhow\s+(?:do|can|should)\s+(?:i|we|you)\b|\bhow\s+to\b",
     re.IGNORECASE,
 )
+
+# "cho mình xem lại cấu trúc các layer", "show me the layers": a request to see roadmap content, answered by search
+SHOW_REQUEST = re.compile(r"^(?:cho\s+(?:tôi|mình|em|anh|chị)\s+(?:xem|coi)|show\s+me|hiển\s+thị)\b")
 
 ABOUT_ASSISTANT = re.compile(
     r"^\s*(?:bạn\s+là\s+(?:ai|gì)|bạn\s+tên\s+gì|bạn\s+là\s+bot|who\s+are\s+you"
@@ -115,10 +143,20 @@ PRAISE = re.compile(r"\b(?:nhiệt\s+tình|ghê|đỉnh|tuyệt|hay\s+quá|dễ\
 
 # Speech-act cues
 
-# Matched against the normalized message, so each phrase goes through the same normalization
+# Matched against the normalized message, so each phrase goes through the same normalization.
+# "lập kế hoạch" alone is not one: "agent lập kế hoạch nhiều bước hoạt động thế nào" is a lesson question.
 PLAN_PHRASES = [
-    normalize_vietnamese(p).lower() for p in ["lập kế hoạch", "xem trước roadmap", "preview plan", "generate roadmap"]
+    normalize_vietnamese(p).lower()
+    for p in ["lập kế hoạch học", "lên kế hoạch học", "xem trước roadmap", "preview plan", "generate roadmap"]
 ]
+
+SLASH_COMMAND = re.compile(r"^\s*/(plan|goal)\b")
+
+
+def slash_command(lower: str) -> Optional[str]:
+    """"plan" or "goal" for a message that starts with that slash command; anything else goes to the router."""
+    match = SLASH_COMMAND.match(lower)
+    return match.group(1) if match else None
 
 # A learning plan asked in plain words: a goal ("muốn học", "trở thành", "prepare for", "trong 6 tháng") and a
 # plan noun ("lộ trình", "study plan"). Matched on the folded message. "tạo lộ trình X" is a create, not a plan.
@@ -184,7 +222,7 @@ IDENTITY_STATEMENT = re.compile(
 SEARCH_WORDS = [
     "tìm", "kiếm", "tra cứu", "có bài nào", "danh sách", "liệt kê", "list",
     "giải thích", "hướng dẫn", "là gì", "thế nào", "làm sao", "search", "what is", "how to", "show me", "which",
-    "tại sao", "như thế nào"
+    "tại sao", "như thế nào", "để làm gì", "dùng để", "khác nhau", "what are", "difference", "differences"
 ]
 
 # Questions without "?" or a search word: "topic này có mấy bài", "bài Docker nằm ở đâu", "... làm được gì".
@@ -192,18 +230,18 @@ SEARCH_WORDS = [
 # How-to questions open with "cách" / "các bước" ("cách thêm bài vào layer"); "cách" elsewhere may be a name
 # ("tạo topic Cách mạng 4.0"), so mid-sentence only "cách để / cách nào / làm thế nào" counts.
 QUESTION_MARKERS = re.compile(
-    r"\b(?:có\s+mấy|bao\s+nhiêu|ở\s+đâu|những\s+gì|cái\s+gì|khi\s+nào)\b|\b(?:gì|nào|đâu)\s*[?!.]*$"
+    r"\b(?:có\s+mấy|bao\s+nhiêu|ở\s+đâu|những\s+gì|cái\s+gì|khi\s+nào)\b|\b(?:gì|nào|đâu)(?:\s+(?:thế|vậy|nhỉ|đó|nhé))?\s*[?!.]*$"
     r"|^(?:cho\s+(?:tôi|mình)\s+hỏi\s+)?(?:cách|các\s+bước|quy\s+trình)\s"
     r"|\b(?:cách\s+(?:để|nào)|làm\s+thế\s+nào)\b",
     re.IGNORECASE,
 )
 QUESTION_MARKERS_FOLDED = re.compile(
-    r"\b(?:bao\s+nhieu|nhung\s+gi|cai\s+gi)\b|\bgi\s*[?!.]*$|^(?:cach|cac\s+buoc|quy\s+trinh)\s"
+    r"\b(?:bao\s+nhieu|nhung\s+gi|cai\s+gi)\b|\bgi(?:\s+(?:the|vay|nhi|do))?\s*[?!.]*$|^(?:cach|cac\s+buoc|quy\s+trinh)\s"
 )
 
 # Change verbs, folded. "gỡ" is left out: folded it becomes "go", an English word
 CUD_VERB_WORDS = [
-    "tạo", "thêm", "xóa", "xoá", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
+    "tạo", "thêm", "xóa", "xoá", "bỏ bớt", "gỡ bỏ", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
     "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
 ]
 CUD_VERBS = [fold(v) for v in CUD_VERB_WORDS]
@@ -222,6 +260,11 @@ END_QUESTION = re.compile(
     r"\b(?:gì|nào|đâu|sao|thế\s+nào|bao\s+nhiêu|không|ko|k|chưa)\s*[?!.]*$", re.IGNORECASE
 )
 END_YES_NO = re.compile(r"\b(?:không|ko|k|chứ)\s*[?!.]*$", re.IGNORECASE)
+# English requests asked as a question ("can you add…", "could you please delete…"), on the folded text
+EN_POLITE_REQUEST = re.compile(
+    r"^(?:(?:hi|hey|hello)[\s,!]+)?(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:add|create|delete|remove|update|rename|move|make)\b"
+    r"|^please\s+(?:add|create|delete|remove|update|rename|move|make)\b"
+)
 REQUEST_CUE = re.compile(r"\b(?:có\s+thể|giúp|nhờ|làm\s+ơn|được)\b", re.IGNORECASE)
 # "chưa thì thêm vào", "nếu chưa có ... thì tạo", "chưa có bài X thì thêm": a change that depends on a check (folded)
 CONDITIONAL_REQUEST = re.compile(
@@ -233,6 +276,7 @@ CONDITIONAL_REQUEST = re.compile(
 HOW_TO_FOLDED = re.compile(
     r"^(?:cho\s+(?:toi|minh)\s+hoi\s+)?(?:cach|cac\s+buoc|quy\s+trinh|huong\s+dan)\s"
     r"|\b(?:cach\s+de|lam\s+the\s+nao|nhu\s+the\s+nao|the\s+nao|lam\s+sao|ra\s+sao)\b"
+    r"|\bhow\s+(?:do|can|should)\s+(?:i|we|you)\b|\bhow\s+to\b"
 )
 END_QUESTION_FOLDED = re.compile(r"\b(?:gi|sao|the\s+nao|bao\s+nhieu|khong|ko|k|chua)\s*[?!.]*$")
 END_YES_NO_FOLDED = re.compile(r"\b(?:khong|ko|k|chu)\s*[?!.]*$")
@@ -309,6 +353,10 @@ DECISION_TABLE: tuple[Row, ...] = (
     Row("search_word", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="search_word"),
     Row("roadmap_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, target=Target.ROADMAP),
     Row("known_title_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="known_title"),
+    # "cách tạo topic trong Kafka", "mạng nơ-ron dùng thế nào": a how-to about no roadmap object is a lesson question
+    Row("how_to_question", IntentType.KNOWLEDGE_QUERY, 0.85, act=SpeechAct.QUESTION, target=Target.NONE, needs="how_to"),
+    # "cho mình xem lại toàn bộ cấu trúc các layer": seeing roadmap content, not changing it
+    Row("show_request", IntentType.KNOWLEDGE_QUERY, 0.85, target=Target.ROADMAP, needs="show_request"),
     Row("greeting_opener", IntentType.CHITCHAT, 0.95, needs="opens_with_greeting"),
 )
 

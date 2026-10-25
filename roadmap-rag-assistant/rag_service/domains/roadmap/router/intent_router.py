@@ -19,6 +19,8 @@ from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
 from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.policy import (
+    ANAPHORA_REF,
+    ANAPHORA_REF_EN,
     COMMENTARY_ROWS,
     DECISION_TABLE,
     MIXED_INTENT_SPLIT,
@@ -134,6 +136,10 @@ class IntentRouter:
             return u.opens_with_greeting
         if row.needs == "write_blocker":
             return u.write_blocker is not None
+        if row.needs == "how_to":
+            return u.how_to
+        if row.needs == "show_request":
+            return u.show_request
         if row.needs == "known_title":  # checked last: it reads the title vocabulary
             return self.names_known_lesson(text)
         return row.needs is None
@@ -191,10 +197,12 @@ class IntentRouter:
     def has_change_request(self, text: str, follow_up: bool = False) -> bool:
         """The minimum before anything is written: a change verb and a roadmap object ("tạo topic X").
 
-        In a follow-up the object may come from earlier turns ("xóa nó đi"), so the verb is enough.
+        In a follow-up the object may come from earlier turns, but only when the message points back to it
+        ("xóa nó đi", "sửa bài đó"): a verb alone mid-conversation ("tạo mạng neural") is no evidence.
         """
         u = understand(text)
-        return u.has_change_verb and (follow_up or u.has_object)
+        points_back = ANAPHORA_REF.search(u.flat) is not None or ANAPHORA_REF_EN.search(u.lower) is not None
+        return u.has_change_verb and (u.has_object or (follow_up and points_back))
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""

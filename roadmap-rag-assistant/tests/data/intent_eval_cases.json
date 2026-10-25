@@ -53,11 +53,11 @@
   },
   {
     "message": "file .env dùng để làm gì",
-    "expected": null
+    "expected": "knowledge_query"
   },
   {
     "message": "cách lưu token in localStorage",
-    "expected": null
+    "expected": "knowledge_query"
   },
   {
     "message": "thời tiết hôm nay ở Hà Nội thế nào?",

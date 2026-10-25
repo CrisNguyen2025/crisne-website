@@ -62,6 +62,7 @@ from rag_service.domains.roadmap.router.grounding import (
 )
 from rag_service.state import session_store
 from rag_service.tools import ALL_TOOLS
+from rag_service.tools.rag_tools import preview_roadmap_plan
 
 
 # Placeholders the anaphora resolver leaves when no topic/layer is known from context
@@ -314,6 +315,26 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
 
         # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
         if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
+            async for ev in answer_from_sources(
+                query=content, session_id=session_id, owner=is_owner(), delay=delay,
+                llm=self.llm, deps=self._source_deps(),
+            ):
+                yield ev
+            return
+
+        # ── 5b. LEARNING PLAN: a matching blueprint is previewed (read-only), else an answer from the lessons ──
+        # Without this branch a plan request fell through to chitchat, where the model wrote a plan from nothing.
+        if intent_res.intent == IntentType.PLAN_GOAL:
+            template = rag_engine.template_for_goal(content)
+            if template is not None:
+                tid = template.get("id", "")
+                yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": tid}}
+                res = await preview_roadmap_plan.ainvoke({"query_or_template_id": tid})
+                yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
+                yield step_event("answer", "generation", "done", mode="plan")
+                async for ev in self._stream_text(res, delay):
+                    yield ev
+                return
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
                 llm=self.llm, deps=self._source_deps(),

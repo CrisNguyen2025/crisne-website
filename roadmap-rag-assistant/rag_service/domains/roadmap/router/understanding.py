@@ -28,7 +28,9 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     END_QUESTION_FOLDED,
     END_YES_NO_FOLDED,
     END_YES_NO,
+    EN_POLITE_REQUEST,
     ENTITY_PATTERNS,
+    FALSE_OBJECT,
     GREETING_PREFIX,
     GREETING_WORDS,
     HOW_TO,
@@ -53,6 +55,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     REQUEST_CUE_FOLDED,
     SEARCH_WORDS,
     SELF_DISCLOSURE,
+    SHOW_REQUEST,
     SUGGESTION,
     SYNTAX_QUESTION,
     SYNTAX_QUESTION_FOLDED,
@@ -88,6 +91,8 @@ class Understanding:
     flat: str                 # folded: no diacritics
     head: str                 # the command part, without a quoted or "tên là ..." name
     has_change_verb: bool
+    how_to: bool              # a how-to question ("cách …", "làm sao …", "how do I …")
+    show_request: bool        # "cho mình xem …", "show me …"
     has_object: bool          # names a roadmap object
     has_search_word: bool
     opens_with_greeting: bool # starts with a greeting or thanks word
@@ -154,7 +159,7 @@ def understand(text: str) -> Understanding:
     how_to, end_question = (HOW_TO, END_QUESTION) if accented else (HOW_TO_FOLDED, END_QUESTION_FOLDED)
 
     has_verb = any(re.search(rf"\b{re.escape(v)}\b", flat) for v in CUD_VERBS)
-    has_object = _has_any(ENTITY_PATTERNS, flat)
+    has_object = _has_any(ENTITY_PATTERNS, FALSE_OBJECT.sub(" ", flat))
     has_search = _has_phrase(SEARCH_WORDS, flat)
     imperative = bool(IMPERATIVE_START.search(flat))
     head = NAMED_PART.sub(" ", lower).strip()
@@ -198,11 +203,18 @@ def understand(text: str) -> Understanding:
     else:
         # "có thể thao tác gì ở dự án này": the capability cue is the question, even with "gì" mid-sentence
         asks = is_question_text(lower, flat) or capability or (not accented and bool(END_QUESTION_FOLDED.search(flat)))
-
     yes_no, request_cue = (END_YES_NO, REQUEST_CUE) if accented else (END_YES_NO_FOLDED, REQUEST_CUE_FOLDED)
+    # "không cần thêm bài nào nữa đâu" declines a change; "nào … đâu" is emphasis, not a question.
+    # A real question stays one: "đừng xóa bài X k", "đừng xóa bài X, rồi tìm bài về Docker".
+    if write_blocker == "negation" and "?" not in lower and not has_search and yes_no.search(lower) is None:
+        asks = False
     polite = (
         has_verb and has_object and not has_search
-        and yes_no.search(lower) is not None and request_cue.search(lower) is not None
+        and (
+            (yes_no.search(lower) is not None and request_cue.search(lower) is not None)
+            # "Can you add a new group called 'Testing'…?": asked, so it runs only after the preview
+            or EN_POLITE_REQUEST.search(flat) is not None
+        )
     )
     conditional = has_verb and has_object and CONDITIONAL_REQUEST.search(flat) is not None
 
@@ -239,6 +251,8 @@ def understand(text: str) -> Understanding:
         flat=flat,
         head=head,
         has_change_verb=has_verb,
+        how_to=(HOW_TO.search(lower) if accented else HOW_TO_FOLDED.search(flat)) is not None,
+        show_request=SHOW_REQUEST.search(lower) is not None and not has_verb,
         has_object=has_object,
         has_search_word=has_search,
         opens_with_greeting=any(re.search(rf"^\s*{re.escape(g)}\b", raw) for g in GREETING_WORDS),

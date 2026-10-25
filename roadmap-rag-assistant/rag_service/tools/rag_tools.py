@@ -90,7 +90,7 @@ async def preview_roadmap_plan(query_or_template_id: str) -> str:
     preview_text = rag_engine.format_plan_preview(template)
     return (
         f"{preview_text}\n\n"
-        f"💡 Bạn có thể nói: 'Hãy tạo lộ trình này bằng template {template.get('id')}' "
+        f"💡 Bạn có thể gõ: '/goal template {template.get('id')}' "
         f"để hoàn tất tạo tài liệu tự động!"
     )
 

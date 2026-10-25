@@ -43,7 +43,8 @@ OWNED = re.compile(
 # Printing or showing the process environment is sensitive by itself: no ownership cue is needed.
 # "đọc" is left out on purpose, since "cách đọc biến môi trường trong Node" is a lesson question.
 ENV_DUMP = re.compile(
-    r"\bin\s+ra\b|cho\s+(?:tôi\s+|mình\s+|em\s+)?xem|hiển\s+thị|\b(?:print|show|reveal|dump|echo)\b"
+    # "liệt kê" only with an owner ("liệt kê biến môi trường của server"): "cách liệt kê biến môi trường" is a lesson
+    r"liệt\s+kê(?=.*\bcủa\s+(?:server|hệ\s+thống|bạn|app|ứng\s+dụng|backend))|\bin\s+ra\b|cho\s+(?:tôi\s+|mình\s+|em\s+)?xem|hiển\s+thị|\b(?:print|show|reveal|dump|echo)\b"
 )
 ENV_SCOPE = re.compile(r"biến\s+môi\s+trường|environment\s+variables?|\benv\b")
 
