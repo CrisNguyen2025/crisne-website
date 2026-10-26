@@ -20,6 +20,9 @@ from rag_service.core.retrieval.hybrid import HybridVectorStore
 # Content edited outside the agent (web UI, Knowledge Triage approve, direct DB edits) never
 # notifies this service, so the index is rebuilt in the background once it is this old.
 INDEX_TTL_SECONDS = 30.0
+# A chat turn waits at most this long for the first index. Under quota the re-index can take minutes (each
+# document retries its embedding); past this the turn answers from what is indexed and the sync keeps running.
+SYNC_WAIT_SECONDS = 8.0
 
 
 THIN_DOC_MIN_WORDS = 4
@@ -103,7 +106,7 @@ class HybridRagEngine:
     async def search_live_knowledge(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
         """Search across live database entities (Roadmaps, Layers, Items, Content)."""
         if not self._is_synced:
-            await self.sync_live_database()
+            await self._wait_for_index()
         elif time.monotonic() - self._synced_at > INDEX_TTL_SECONDS and not (
             self._sync_task and not self._sync_task.done()
         ):
@@ -128,12 +131,23 @@ class HybridRagEngine:
             words |= title_terms(doc.title)
         return words
 
+    def start_background_sync(self) -> None:
+        """Index at startup, in the background: the first chat turn does not have to wait for it."""
+        if not self._is_synced and not (self._sync_task and not self._sync_task.done()):
+            self._sync_task = asyncio.create_task(self.sync_live_database())
+
+    async def _wait_for_index(self) -> None:
+        """Wait for the first index, for SYNC_WAIT_SECONDS at most. The sync itself keeps running after that."""
+        if self._is_synced:
+            return
+        self.start_background_sync()
+        await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
+
     async def catalog(self):
         """Names of the roadmap's topics, layers and lessons, for grounding a change (target_grounding.py)."""
         from rag_service.domains.roadmap.router.target_grounding import Catalog
 
-        if not self._is_synced:
-            await self.sync_live_database()
+        await self._wait_for_index()
         docs = self._vector_store._docs_map
         if getattr(self, "_catalog_of", None) is not docs:
             self._catalog = Catalog.from_documents(docs.values())

@@ -35,6 +35,9 @@ async def lifespan(app: FastAPI):
         adapter = HttpApiAdapter(settings.nextjs_api_base_url, settings.admin_api_key)
 
     init_adapter(adapter)
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    rag_engine.start_background_sync()  # index now, not on the first chat turn
     observability.get_langfuse()  # log once at startup whether tracing is on
     print(
         f"🚀 Roadmap RAG Assistant started "
