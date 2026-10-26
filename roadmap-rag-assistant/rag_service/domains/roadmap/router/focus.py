@@ -18,20 +18,26 @@ from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 # Matched on the folded text, so "bạn có biết" and "ban co biet" are one frame
 _LEAD = (
     r"(?:e|ê|ơi|oi|alo|hi|hello|hey|bot|ad|admin|ban|bạn|anh|chi|em|minh|toi|tui|cho|hoi|chut|nhe|nha|voi|ah|a"
-    r"|the|ok|oke|vay|con|thi|u|ua)"
+    r"|the|ok|oke|vay|con|thi|u|ua"
+    # spoken fillers, folded: ờ ơ ừ ừm ờm uh hmm
+    r"|o|om|um|uhm|uh|hmm+)"
 )
+# No "^": matched with a start position (re.match(text, pos)), which anchors there; "^" would not
 LEADING_FRAME = re.compile(
-    r"^(?:" + _LEAD + r"[\s,!]+)*"
-    r"(?:(?:ban\s+)?(?:co\s+)?biet\s+(?:gi\s+|chut\s+gi\s+)?(?:thong\s+tin\s+)?(?:ve\s+)?"
+    r"(?:" + _LEAD + r"[\s,!]+)*"
+    r"(?:(?:ban\s+)?(?:co\s+)?biet\s+(?:(?:cai\s+)?gi\s+|chut\s+gi\s+)?(?:thong\s+tin\s+)?(?:ve\s+)?"
     r"|cho\s+(?:minh|toi|em|tui|anh)\s+hoi\s+(?:chut\s+)?(?:(?:la|ve|thong\s+tin\s+ve)\s+)?"
     r"|cho\s+hoi\s+(?:ve\s+)?"
-    r"|(?:minh|toi|em|tui)\s+(?:muon|dang|can)\s+(?:tim\s+hieu|hoc|hieu|biet)\s+(?:them\s+)?(?:ve\s+)?"
+    r"|(?:minh|toi|em|tui)\s+(?:muon|dang|can)\s+(?:tim\s+hieu|hoc|hieu|biet|hoi)\s+(?:them\s+)?(?:ve\s+)?"
     r"|(?:hay\s+)?(?:giai\s+thich|noi|ke|tom\s+tat|trinh\s+bay)\s+(?:giup\s+(?:minh|toi|em)\s+)?(?:cho\s+(?:minh|toi|em)\s+)?(?:ve\s+)?"
     r"|thong\s+tin\s+ve\s+"
     r"|so\s+sanh\s+"
     r"|(?:tell\s+me\s+about|what\s+(?:is|are)(?:\s+an?)?|explain|how\s+to\s+use|how\s+does)\s+"
     r"|(?:cach\s+(?:dung|lam|cai|su\s+dung)\s+))"
 )
+# Spoken fillers and the determiner of "cái X ấy", anywhere a frame may start: ờ ơ ừm ờm uh hmm, thì là, cái.
+# Not "à" / "ừ": folded they are "a" / "u", real letters ("A/B testing").
+SPOKEN_FILLER = re.compile(r"(?:(?:o|om|um|uhm|uh|hmm+|thi\s+la|cai)[\s,]+)+")
 TRAILING_FRAME = re.compile(
     r"(?:\s+(?:la\s+(?:gi|cai\s+gi|sao)|nghia\s+la\s+(?:gi|sao)|dung\s+(?:de\s+)?lam\s+gi|de\s+lam\s+gi"
     r"|hoat\s+dong\s+(?:the\s+nao|ra\s+sao)|the\s+nao|ra\s+sao|nhu\s+the\s+nao|khac\s+nhau|khac\s+.*\s+cho\s+nao"
@@ -61,7 +67,11 @@ def _window(text: str) -> tuple[str, str, int, int]:
     m = re.search(r"[\s?!.,]+$", flat)
     if m:
         end = m.start()
-    while True:  # frames can stack: "ê bạn ơi, cho mình hỏi chút là …"
+    while True:  # frames can stack: "ê bạn ơi, cho mình hỏi chút là …", "biết cái gì về ờ cái telegram"
+        filler = SPOKEN_FILLER.match(flat, start, end)
+        if filler and filler.end() > start:
+            start = filler.end()
+            continue
         lead = LEADING_FRAME.match(flat, start, end)
         if lead and lead.end() > start:
             start = lead.end()
@@ -73,6 +83,10 @@ def _window(text: str) -> tuple[str, str, int, int]:
         break
     while start < end and flat[start] in " ,":
         start += 1
+    # Spoken "… ấy nó khác gì": the topic ends at "ấy"
+    spoken = re.search(r"\s+ay(?:\s|$)", flat[start:end])
+    if spoken:
+        end = start + spoken.start()
     while end > start and flat[end - 1] in " ,":
         end -= 1
     return original, flat, start, end

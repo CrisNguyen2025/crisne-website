@@ -147,3 +147,16 @@ def test_question_about_the_field_left_open_by_heuristics_is_a_search():
 
 def test_unclear_scope_leaves_the_message_to_the_router():
     assert _decide("bạn có biết về LoRA không", Scope.NONE).method != "scope"
+
+
+def test_a_lesson_name_inside_the_message_is_the_roadmap():
+    catalog = Catalog.from_documents([
+        SimpleNamespace(doc_type="item", title="Vector Database"),
+        SimpleNamespace(doc_type="item", title="Data Drift & Hallucination Rate"),
+        SimpleNamespace(doc_type="layer", title="04. Tầng Ops & Đánh giá (LLMOps)", layer_tag="04-OPS"),
+    ])
+    assert catalog.mentioned_in("ờ cho mình hỏi là cái vector database ấy nó khác gì")
+    assert catalog.mentioned_in("data drift là gì")  # one part of a joined title
+    # parts must stay specific: "đánh giá" alone, or a parenthesised abbreviation, is no lesson name
+    assert not catalog.mentioned_in("phim này đánh giá thế nào")
+    assert not catalog.mentioned_in("bạn có biết thông tin về telegram k")

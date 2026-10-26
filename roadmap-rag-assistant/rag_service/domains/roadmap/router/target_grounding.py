@@ -76,6 +76,40 @@ class Catalog:
             return True
         return self._match(name, self.layers)
 
+    def mentioned_in(self, text: str) -> bool:
+        """The message contains the name of a lesson, layer or topic ("cái vector database ấy khác gì …").
+
+        Whole phrases on the folded text. Only specific names count (two words or more, or six letters or
+        more), and a parenthesised abbreviation ("(RAG)") is dropped: short names match everyday words.
+        """
+        flat = " " + re.sub(r"[^\w\s-]", " ", fold(text or "")) + " "
+        flat = re.sub(r"\s+", " ", flat)
+        for name in self.mention_names():
+            if f" {name} " in flat:
+                return True
+        return False
+
+    def mention_names(self) -> set[str]:
+        cached = getattr(self, "_mention_names", None)
+        if cached is None:
+            cached = set()
+            for raw in self.items | self.layers | self.topics:
+                name = re.sub(r"\([^)]*\)", " ", raw)                 # "(rag)"
+                name = re.sub(r"^\d+\.\s*", "", name)                  # "03. tang rag" -> "tang rag"
+                full = re.sub(r"\s+", " ", re.sub(r"[^\w\s-]", " ", name)).strip()
+                if len(full.split()) >= 2 or len(full) >= 6:
+                    cached.add(full)
+                # A title joining two ideas is mentioned by either ("data drift & hallucination rate"), but a part
+                # must stay specific: two words or more, one of five letters or more. "danh gia" (đánh giá) or
+                # "system" alone would match everyday messages.
+                for part in re.split(r"\s*(?:&|/|\+|,|\bvs\b|\bva\b)\s*", name):
+                    part = re.sub(r"\s+", " ", re.sub(r"[^\w\s-]", " ", part)).strip()
+                    words = part.split()
+                    if len(words) >= 2 and any(len(w) >= 5 for w in words):
+                        cached.add(part)
+            self._mention_names = cached
+        return cached
+
     def has(self, level: Optional[EntityLevel], name: str) -> bool:
         if level == EntityLevel.TOPIC:
             return self._match(name, self.topics)

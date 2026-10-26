@@ -6,7 +6,7 @@ an off-topic subject; otherwise the target was "none" and "bạn có biết thô
 in the roadmap. Here the target comes from the roadmap's own data:
 
     1. no topic left once the question frame is removed (focus.py)       -> NONE
-    2. the topic names a lesson, layer or topic in the catalog           -> ROADMAP
+    2. the topic names, or the message contains, a lesson / layer / topic name in the catalog -> ROADMAP
     3. embeddings (scope_centroid.py, thresholds from evals/scope_tune.py):
          nearest >= roadmap_min                                          -> ROADMAP
          nearest >= gap_min + band                                       -> DOMAIN_GAP (the field, no lesson yet)
@@ -78,7 +78,7 @@ def classify_scope(
     focus = focus_of(text)
     if focus is None:
         return ScopeResult(Scope.NONE, None, "no topic")
-    if _names_catalog_entry(focus, catalog):
+    if _names_catalog_entry(focus, catalog) or (catalog is not None and catalog.mentioned_in(text)):
         return ScopeResult(Scope.ROADMAP, focus, "names a catalog entry")
     if centroids is None or query_vec is None or not thresholds:
         return ScopeResult(Scope.NONE, focus, "no embeddings: not decided without evidence")

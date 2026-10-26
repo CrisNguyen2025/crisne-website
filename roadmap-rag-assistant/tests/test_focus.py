@@ -44,3 +44,14 @@ def test_every_scope_sample_with_a_topic_has_a_focus_and_none_without():
         sample = json.loads(line)
         has_topic = sample["expected"]["target"] != "none"
         assert (focus_of(sample["input"]) is not None) == has_topic, sample["input"]
+
+
+@pytest.mark.parametrize("text,focus", [
+    ("ờ cho mình hỏi là cái vector database ấy nó khác gì với database bình thường à", "vector database"),
+    ("ừm cái semantic caching ấy dùng làm gì", "semantic caching"),
+    ("ờ thì là mình muốn hỏi về reranking", "reranking"),
+    ("bạn ơi bạn có biết cái gì về ờ cái telegram không", "telegram"),
+    ("a b testing là gì", "a b testing"),  # "à" folds to "a": not a filler
+])
+def test_spoken_fillers_and_cai_x_ay_leave_the_topic(text, focus):
+    assert focus_of(text) == focus
