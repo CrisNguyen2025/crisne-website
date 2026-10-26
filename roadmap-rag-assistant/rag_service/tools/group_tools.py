@@ -22,10 +22,9 @@ class CreateGroupInput(BaseModel):
     layer_id: str = Field(description="ID của layer chứa group")
     title: str = Field(description="Tên group, ví dụ: 'Core', 'Advanced'")
     level: str = Field(
-        default="",
         description=(
-            "Level identifier, ví dụ: 'core', 'intermediate', 'advanced'. "
-            "Để trống sẽ tự suy luận từ title."
+            "Level bắt buộc: 'core', 'intermediate' hoặc 'advanced'. "
+            "Không tự suy luận từ title; thiếu thì hỏi người dùng."
         ),
     )
 
@@ -50,7 +49,7 @@ class DeleteGroupInput(BaseModel):
 async def create_group(
     layer_id: str,
     title: str,
-    level: str = "",
+    level: str,
 ) -> str:
     """Tạo một Group mới bên trong một Layer.
 

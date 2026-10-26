@@ -55,6 +55,7 @@ from rag_service.domains.roadmap.router.scope import Scope, classify_for_routing
 from rag_service.domains.roadmap.router.understanding import instruction_part
 from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, CONTENT_UNCLEAR, DESCRIPTION_UNSUPPORTED
 from rag_service.domains.roadmap.router.policy import TOPIC_REFERENCE, TOPIC_REFERENCE_FOLDED
+from rag_service.adapters.levels import LEVEL_CHOICES, normalize_level
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import (
     EMPTY_MESSAGE_REPLY,
@@ -224,6 +225,20 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             async for ev in self._stream_text(reply, delay):
                 yield ev
             return
+
+        # ── 0a. A group or item waiting for its level: the answer completes the message it came from ──
+        if session_ctx.fresh_pending("pending_level_choice"):
+            waiting = session_ctx.pending_level_choice
+            session_ctx.pending_level_choice = None
+            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
+                async for ev in self._stream_text("Đã hủy, mình không thêm gì.", delay):
+                    yield ev
+                return
+            chosen = normalize_level(lower)
+            if chosen in LEVEL_CHOICES:
+                content = f"{waiting} level {chosen}"
+                lower = content.lower()
+            # Anything else is a new message, handled below as usual
 
         # ── 0. Pending roadmap change: confirmation or layer choice (roadmap domain) ──
         outcome = {"handled": False}

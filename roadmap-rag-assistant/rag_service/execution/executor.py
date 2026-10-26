@@ -9,6 +9,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from rag_service.adapters.errors import DuplicateEntityError
+from rag_service.nlp_cleaner import generate_short_code
 from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.router.entity_extractor import _generate_clean_short_code
@@ -89,7 +90,8 @@ class ActionExecutor:
                     try:
                         res = await adapter.create_topic(
                             title=ent.title,
-                            short_code=ent.short_code or "TOP",
+                            # The code is read from the title ("AI Engineering" -> AI), never a fixed one
+                            short_code=ent.short_code or generate_short_code(ent.title),
                             description=ent.description or "",
                         )
                     except DuplicateEntityError as dup:
@@ -218,6 +220,8 @@ class ActionExecutor:
                 return False, "❌ Không tìm thấy Layer đích để tạo Group."
 
             if act_type == ActionType.CREATE:
+                if any(not ent.level for ent in action.entities):
+                    return False, "❌ Thiếu level của group (core / intermediate / advanced)."
                 created_groups = []
                 skipped = []
                 for ent in action.entities:
@@ -225,7 +229,7 @@ class ActionExecutor:
                         res = await adapter.create_group(
                             layer_id=layer_id,
                             title=ent.title,
-                            level=ent.level or "core",
+                            level=ent.level or "",
                         )
                     except DuplicateEntityError as dup:
                         skipped.append(dup)
@@ -260,13 +264,15 @@ class ActionExecutor:
                 return False, "❌ Không tìm thấy Layer đích để thêm bài học (Item)."
 
             if act_type == ActionType.CREATE:
+                if any(not ent.level for ent in action.entities):
+                    return False, "❌ Thiếu level của bài học (core / intermediate / advanced)."
                 created_items = []
                 skipped = []
                 for ent in action.entities:
                     try:
                         res = await adapter.create_item(
                             layer_id=layer_id,
-                            level=ent.level or "core",
+                            level=ent.level or "",
                             title=ent.title,
                             description=ent.description or "",
                         )

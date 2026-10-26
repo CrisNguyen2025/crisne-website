@@ -42,7 +42,7 @@ class ImportItemsFromTextInput(BaseModel):
     """Input for importing many items from a pasted list."""
 
     layer_id: str = Field(description="ID của layer nhận các item")
-    level: str = Field(default="core", description="Level/group cho các item")
+    level: str = Field(description="Level/group cho các item: 'core' | 'intermediate' | 'advanced'")
     text: str = Field(description="Danh sách item, mỗi dòng một item (bullet '-', '*', '•' hoặc số thứ tự)")
 
 

@@ -103,7 +103,7 @@ async def test_resolve_unavailable_when_lookup_fails(adapter):
 @pytest.mark.asyncio
 async def test_unknown_topic_asks_back_without_writing(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
-    reply = await _chat(agent, "tạo giúp tôi 1 bài về xây dựng ai cơ bản trong ai topic", str(uuid.uuid4()))
+    reply = await _chat(agent, "tạo giúp tôi 1 bài về xây dựng ai cơ bản trong ai topic level core", str(uuid.uuid4()))
     adapter.create_item.assert_not_called()
     adapter.create_group.assert_not_called()
     assert "Không tìm thấy" in reply
@@ -114,7 +114,7 @@ async def test_unknown_topic_asks_back_without_writing(adapter):
 async def test_pick_offered_layer_by_number(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
     thread = str(uuid.uuid4())
-    reply = await _chat(agent, "tạo item Docker trong layer General", thread)
+    reply = await _chat(agent, "tạo item Docker trong layer General level core", thread)
     adapter.create_item.assert_not_called()
     assert "khớp nhiều layer" in reply
 
@@ -127,7 +127,7 @@ async def test_pick_offered_layer_by_number(adapter):
 async def test_pick_offered_layer_by_name(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
     thread = str(uuid.uuid4())
-    reply = await _chat(agent, "tạo item Docker trong be topic", thread)
+    reply = await _chat(agent, "tạo item Docker trong be topic level core", thread)
     adapter.create_item.assert_not_called()
     assert "Database" in reply
 
@@ -137,18 +137,19 @@ async def test_pick_offered_layer_by_name(adapter):
 
 
 @pytest.mark.asyncio
-async def test_topic_without_layers_offers_to_create_one(adapter):
+async def test_topic_without_layers_asks_for_a_named_layer(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
-    reply = await _chat(agent, "tạo item Docker trong empty topic", str(uuid.uuid4()))
+    reply = await _chat(agent, "tạo item Docker trong empty topic level core", str(uuid.uuid4()))
     adapter.create_item.assert_not_called()
-    assert "tạo layer mặc định" in reply
+    assert "tạo layer <tên>" in reply
+    assert "mặc định" not in reply
 
 
 @pytest.mark.asyncio
 async def test_known_layer_is_written_with_its_real_id(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
     thread = str(uuid.uuid4())
-    await _chat(agent, "tạo item Docker trong layer 02-DB", thread)
+    await _chat(agent, "tạo item Docker trong layer 02-DB level core", thread)
     # Without System 2 (no LLM in tests) the change is previewed; the layer is resolved before the card
     adapter.create_item.assert_not_called()
     await _chat(agent, "ok", thread)

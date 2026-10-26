@@ -152,7 +152,7 @@ def normalize_level(level: str) -> str:
         "pro": "advanced",
         "expert": "advanced",
     }
-    return mapping.get(lvl, lvl or "core")
+    return mapping.get(lvl, lvl)
 
 
 # ── TOPIC EXTRACTOR ──────────────────────────────────────────────────────
@@ -383,8 +383,8 @@ def extract_item_creation_params(content: str) -> tuple[list[str], str, str] | N
     """
     text = clean_conversational_text(content.strip().rstrip(" \t\n\r.?!"))
 
-    # Extract level if present (e.g. "level core", "level advanced", "mức nâng cao")
-    level = "core"
+    # Extract level if present (e.g. "level core", "level advanced", "mức nâng cao"); none is never guessed
+    level = ""
     level_m = re.search(r"(?:level|mức|cấp độ)\s+([\w\-]+)", text, re.IGNORECASE)
     remaining = text
     if level_m:

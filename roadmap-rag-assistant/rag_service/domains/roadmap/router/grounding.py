@@ -170,3 +170,21 @@ NO_TOPIC_REPLY = (
     "Mình chưa có topic nào đang mở trong cuộc trò chuyện này nên chưa biết bạn nói topic nào. "
     "Bạn gửi tên topic giúp mình, ví dụ: `thêm layer Basics vào topic AI Engineering`."
 )
+
+
+def level_choice_reply(noun: str, titles: str) -> str:
+    """Asked when a group or item names no level: the three levels, nothing chosen for the user."""
+    return (
+        f"Bạn muốn thêm {noun} {titles} ở level nào? Trả lời một trong: `core`, `intermediate`, `advanced`. "
+        "Gõ `hủy` nếu không thêm."
+    )
+
+
+BULK_LEVEL_ASK = (
+    "Bạn muốn thêm các bài này ở level nào? Gửi lại kèm level, ví dụ: `thêm bài … vào layer … level core`. "
+    "Level là `core`, `intermediate` hoặc `advanced`."
+)
+
+NO_DEFAULT_LAYER_REPLY = (
+    "Mình không tạo layer mặc định nữa. Bạn đặt tên layer giúp mình, ví dụ: `tạo layer Basics`."
+)

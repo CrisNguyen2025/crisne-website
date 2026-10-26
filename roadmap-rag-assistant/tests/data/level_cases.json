@@ -1,0 +1,21 @@
+{
+  "_comment": "Shared by tests/test_levels_required.py (Python) and tests/unit/roadmap-levels.test.ts (TypeScript). Keep both helpers equal to these rows.",
+  "normalize": [
+    ["core", "core"],
+    ["Core", "core"],
+    ["  CORE  ", "core"],
+    ["basic", "core"],
+    ["cơ bản", "core"],
+    ["Trung bình", "intermediate"],
+    ["trung cấp", "intermediate"],
+    ["Advanced", "advanced"],
+    ["nâng  cao", "advanced"],
+    ["Deep Dive", "deep dive"],
+    ["", ""]
+  ],
+  "default_title": [
+    ["core", "🟢 Core"],
+    ["nâng cao", "🔴 Advanced"],
+    ["deep dive", "Deep Dive"]
+  ]
+}

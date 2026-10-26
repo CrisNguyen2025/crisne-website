@@ -155,7 +155,7 @@ def test_levels_normalize_and_reuse_one_group(adapter):
     from rag_service.adapters.levels import default_group_title, normalize_level
 
     assert [normalize_level(x) for x in ("Core", " cơ bản ", "Nâng  cao", "Deep Dive", "")] == [
-        "core", "core", "advanced", "deep dive", "core",
+        "core", "core", "advanced", "deep dive", "",
     ]
     assert default_group_title("deep dive") == "Deep Dive" and default_group_title("Advanced") == "🔴 Advanced"
 

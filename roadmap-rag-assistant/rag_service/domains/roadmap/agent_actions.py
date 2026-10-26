@@ -47,8 +47,8 @@ class RoadmapAgentActions:
         ask = (
             f"Chưa xác định được layer để thêm {titles} trong topic `{topic_slug}`.\n\n"
             "**Chọn layer cho bài học:**\n"
-            "1. Tạo layer mặc định **General** — gõ `tạo layer mặc định`\n"
-            "2. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`"
+            "1. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`\n"
+            "2. Hoặc gõ số thứ tự của layer có sẵn"
         )
         async for ev in self._stream_text(ask, delay):
             yield ev

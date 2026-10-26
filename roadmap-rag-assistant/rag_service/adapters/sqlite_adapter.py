@@ -19,7 +19,7 @@ import aiosqlite
 import uuid_utils
 
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
-from rag_service.adapters.levels import default_group_title, normalize_level
+from rag_service.adapters.levels import default_group_title, normalize_level, require_level
 from rag_service.auth import owner_only
 from rag_service.write_grant import guard_writes
 
@@ -385,11 +385,11 @@ class SqliteAdapter:
         self,
         layer_id: str,
         title: str,
-        level: str = "",
+        level: str,
     ) -> dict:
         group_id = _uuid7()
         now = _now_iso()
-        group_level = normalize_level(level or re.sub(r"[^\w]", "-", title.lower())) or f"group-{int(datetime.now(timezone.utc).timestamp())}"
+        group_level = require_level(level)
 
         async with self._connect() as db:
             cursor = await db.execute(
@@ -472,7 +472,7 @@ class SqliteAdapter:
             if dup:
                 raise DuplicateEntityError("item", dup["title"], {**dup, "layerId": layer_id})
 
-            level = normalize_level(level)
+            level = require_level(level)
             group_id = await _find_or_create_group(db, layer_id, level, now)
 
             # Count existing items in group for order

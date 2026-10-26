@@ -58,8 +58,11 @@ class SingleEntity(BaseModel):
         description="For layers: formatted as '01-TAG', '02-TAG'.",
     )
     level: Optional[str] = Field(
-        "core",
-        description="For groups and items: 'core' | 'intermediate' | 'advanced'. Default 'core'.",
+        None,
+        description=(
+            "For groups and items: 'core' | 'intermediate' | 'advanced'. Fill it only when the user names a level; "
+            "never guess one. Leave it empty otherwise."
+        ),
     )
     description: Optional[str] = Field(
         "",

@@ -141,12 +141,12 @@ def test_extract_group_creation_params(prompt, expected_titles, expected_layer, 
         ("thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM level core", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM", "core"),
         ("tạo 2 item mock 1 và 2 trong layer aaa level core", ["mock 1", "mock 2"], "aaa", "core"),
         ("thêm 2 item mock 1 và 2 vào layer mock 1 level core", ["mock 1", "mock 2"], "mock 1", "core"),
-        ("thêm bài học Docker Basics vào layer devops", ["Docker Basics"], "devops", "core"),
+        ("thêm bài học Docker Basics vào layer devops", ["Docker Basics"], "devops", ""),
         # English
         ("create item Prompt Engineering in layer 01-LLM level core", ["Prompt Engineering"], "01-LLM", "core"),
         ("add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM", "core"),
         ("create 2 items mock 1 and 2 in layer 02-MOC level advanced", ["mock 1", "mock 2"], "02-MOC", "advanced"),
-        ("create items A, B and C in layer aaa", ["A", "B", "C"], "aaa", "core"),
+        ("create items A, B and C in layer aaa", ["A", "B", "C"], "aaa", ""),
     ],
 )
 def test_extract_item_creation_params(prompt, expected_titles, expected_layer, expected_level):

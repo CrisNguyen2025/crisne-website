@@ -10,7 +10,7 @@ import httpx
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
 from rag_service.write_grant import guard_writes
-from rag_service.adapters.levels import normalize_level
+from rag_service.adapters.levels import normalize_level, require_level
 
 
 @guard_writes
@@ -97,7 +97,7 @@ class HttpApiAdapter:
             "title": title,
             "shortCode": short_code,
             "description": description,
-            "layers": layers or [{"title": "General", "shortTag": "01-GEN"}],
+            "layers": layers or [],
         }
         data = await self._request("POST", "/api/v1/roadmaps", json=payload)
         return data.get("roadmap", data)
@@ -179,9 +179,7 @@ class HttpApiAdapter:
         level: str = "",
     ) -> dict:
         """POST /api/v1/roadmaps/groups"""
-        payload: dict = {"layerId": layer_id, "title": title}
-        if level:
-            payload["level"] = normalize_level(level)
+        payload: dict = {"layerId": layer_id, "title": title, "level": require_level(level)}
         data = await self._request("POST", "/api/v1/roadmaps/groups", json=payload)
         return data.get("group", data)
 
@@ -215,7 +213,7 @@ class HttpApiAdapter:
         """POST /api/v1/roadmaps/items"""
         payload = {
             "layerId": layer_id,
-            "level": normalize_level(level),
+            "level": require_level(level),
             "title": title,
             "description": description,
             "content": content or None,

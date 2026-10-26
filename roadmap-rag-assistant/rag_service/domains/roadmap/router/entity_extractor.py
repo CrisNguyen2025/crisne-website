@@ -207,7 +207,7 @@ class StructuredEntityExtractor:
 
 
         # 2. Extract and strip 'level core/intermediate/advanced'
-        entity_item_level = "core"
+        entity_item_level = ""  # named by the user or empty: never a default
         m_level = re.search(r"\blevel\s+([a-zA-Z0-9_-]+)", text, flags=re.IGNORECASE)
         if m_level:
             cand_lvl = m_level.group(1).lower().strip()

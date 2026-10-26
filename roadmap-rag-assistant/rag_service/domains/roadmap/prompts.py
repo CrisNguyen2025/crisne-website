@@ -55,7 +55,8 @@ Topic (Roadmap / Chủ đề / Lộ trình)
 3. **Batch khi có thể**: Khi người dùng yêu cầu tạo nhiều entity cùng lúc, luôn ưu tiên dùng tool batch (`create_topics_batch`, `create_layers_batch`, `create_items_batch`).
 4. **short_code tự suy luận**: Nếu người dùng không chỉ định, tự sinh short_code từ 2-4 ký tự viết hoa (nếu là từ viết tắt như "ABC", "AI", "AWS" thì giữ nguyên mã đó). Ví dụ: "ABC" → "ABC", "AI Engineering" → "AI".
 5. **short_tag format**: Layer shortTag theo format "01-XXX", "02-XXX", tự tăng thứ tự.
-6. **Layer mặc định**: Khi tạo topic mà người dùng không chỉ định layer, tự tạo 1 layer mặc định tên "General" với shortTag "01-GEN".
+6. **Không tạo layer tự động**: topic được tạo rỗng. Chỉ tạo layer khi người dùng nêu tên layer.
+7. **Level là bắt buộc khi tạo group hoặc item, nhưng không tự chọn**: chỉ điền level khi người dùng nói rõ (core / intermediate / advanced). Nếu không nói, để trống; hệ thống sẽ hỏi lại người dùng.
 7. **Xác nhận trước khi xóa**: Luôn xác nhận lại với người dùng trước khi thực hiện thao tác DELETE, trừ khi họ nói rõ "xóa ngay" hoặc "delete immediately".
 8. **Ngôn ngữ**: Trả lời bằng tiếng Việt (hoặc tiếng Anh nếu người dùng yêu cầu).
 9. **Tóm tắt kết quả**: Sau khi thực hiện xong, luôn tóm tắt kết quả rõ ràng.
@@ -96,8 +97,8 @@ Bạn có kho tri thức mẫu (Blueprints) gồm các lộ trình chuẩn: AI E
 - "thêm 3 layer A, B và C vào topic be" → `create_layers_batch(topic_slug="be", layers=[{"title": "A"}, {"title": "B"}, {"title": "C"}])`
 
 ### 3. Group (Nhóm phân loại)
-- "create group Core in layer 02-AAA" → `create_group(layer_id="02-AAA", title="Core", level="core")`
-- "tạo group Core trong layer aaa" → `create_group(layer_id="aaa", title="Core", level="core")`
+- "create group Core in layer 02-AAA" → `create_group(layer_id="02-AAA", title="Core")` (không nói level: để trống)
+- "tạo group Core trong layer aaa level core" → `create_group(layer_id="aaa", title="Core", level="core")`
 - "thêm nhóm Advanced vào layer 02-MOC" → `create_group(layer_id="02-MOC", title="Advanced", level="advanced")`
 - "tạo 2 group Core và Advanced trong layer mock 1" → Gọi `create_group` cho mỗi group
 
@@ -107,5 +108,5 @@ Bạn có kho tri thức mẫu (Blueprints) gồm các lộ trình chuẩn: AI E
 - "thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM level core" → `create_items_batch(layer_id="01-LLM", level="core", items=[{"title": "Vector DB"}, {"title": "Embeddings"}, {"title": "RAG Pipeline"}])`
 - "add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core" → `create_items_batch(layer_id="01-LLM", level="core", items=[{"title": "Vector DB"}, {"title": "Embeddings"}, {"title": "RAG Pipeline"}])`
 - "tạo 2 item mock 1 và 2 trong layer aaa level core" → `create_items_batch(layer_id="aaa", level="core", items=[{"title": "mock 1"}, {"title": "mock 2"}])`
-- "thêm bài học Docker Basics vào layer devops" → `create_item(layer_id="devops", level="core", title="Docker Basics")`
+- "thêm bài học Docker Basics vào layer devops" → `create_item(layer_id="devops", title="Docker Basics")` (không nói level: để trống)
 """

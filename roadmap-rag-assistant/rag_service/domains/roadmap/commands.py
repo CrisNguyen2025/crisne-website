@@ -14,8 +14,12 @@ from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
 from rag_service.execution.changes import ChangeSet
 from rag_service.write_grant import write_granted
 from rag_service.execution.dry_run import DryRunValidator
+from rag_service.adapters.levels import LEVEL_CHOICES, normalize_level as canonical_level
 from rag_service.domains.roadmap.router.grounding import (
     ACTION_NOT_ASKED_REPLY,
+    BULK_LEVEL_ASK,
+    NO_DEFAULT_LAYER_REPLY,
+    level_choice_reply,
     BATCH_LAYER_DELETE_REPLY,
     BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
@@ -145,15 +149,18 @@ class RoadmapCommands:
                 return
             if m:
                 name = m.group(1).strip()
-                is_default = name.lower() in ["mặc định", "default"]
-                layer_title = "General" if is_default else name
+                if name.lower() in ["mặc định", "default"]:
+                    async for ev in self._stream_text(NO_DEFAULT_LAYER_REPLY, delay):
+                        yield ev
+                    outcome["handled"] = True
+                    return
                 layer_action = StructuredRoadmapAction(
                     action=ActionType.CREATE,
                     entity_level=EntityLevel.LAYER,
                     target_parent_identifier=topic_slug,
-                    entities=[SingleEntity(title=layer_title, short_tag="01-GEN" if is_default else None)],
+                    entities=[SingleEntity(title=name)],
                 )
-                yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
+                yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": name}}
                 changes = ChangeSet.of(layer_action)
                 with write_granted("layer chosen for an allowed change"):
                     ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id, changes=changes)
@@ -246,7 +253,13 @@ class RoadmapCommands:
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
-        tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
+        level_m = re.search(r"\blevel\s+([\w\-]+)", raw_content, re.IGNORECASE)
+        bulk_level = canonical_level(level_m.group(1)) if level_m else ""
+        if bulk_level not in LEVEL_CHOICES:
+            async for ev in self._stream_text(BULK_LEVEL_ASK, delay):
+                yield ev
+            return
+        tool_args = {"layer_id": layer_in_view, "level": bulk_level, "text": raw_content}
         yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
         changes = ChangeSet("create", "item", layer_in_view)
         with write_granted("bulk import asked on its first line"):
@@ -254,7 +267,7 @@ class RoadmapCommands:
         yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
         if changes:
             yield changes.event()
-        async for ev in self._stream_text(res + "\n\n_Các item được thêm vào level `core`. Nói rõ level nếu muốn khác._", delay):
+        async for ev in self._stream_text(res + f"\n\n_Các item được thêm vào level `{bulk_level}`._", delay):
             yield ev
 
     async def _ask_confirmation(
@@ -338,6 +351,19 @@ class RoadmapCommands:
         # A delete to confirm is previewed once its layer is resolved (the preview names it)
         if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
             async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
+                yield ev
+            return
+
+        # A group or item is filed by level: a level the message does not name is asked for, never guessed
+        if (
+            resolved_action.action == ActionType.CREATE
+            and resolved_action.entity_level in (EntityLevel.GROUP, EntityLevel.ITEM)
+            and any(not e.level for e in resolved_action.entities)
+        ):
+            session_ctx.pending_level_choice = content
+            titles = ", ".join(f"**{e.title}**" for e in resolved_action.entities)
+            noun = "nhóm" if resolved_action.entity_level == EntityLevel.GROUP else "bài học"
+            async for ev in self._stream_text(level_choice_reply(noun, titles), delay):
                 yield ev
             return
 
