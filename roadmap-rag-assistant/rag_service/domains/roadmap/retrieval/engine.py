@@ -140,6 +140,16 @@ class HybridRagEngine:
             self._catalog_of = docs
         return self._catalog
 
+    def centroids(self):
+        """Domain signals from the indexed vectors (scope_centroid.py); None without embeddings. Rebuilt after a sync."""
+        from rag_service.domains.roadmap.retrieval.scope_centroid import DomainCentroids
+
+        docs = self._vector_store._docs_map
+        if getattr(self, "_centroids_of", None) is not docs:
+            self._centroids = DomainCentroids.from_store(self._vector_store)
+            self._centroids_of = docs
+        return self._centroids
+
     def corpus_vocabulary(self) -> set[str]:
         """Content words of the current index, for the on-topic gate; rebuilt after each sync."""
         from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary

@@ -1,0 +1,16 @@
+{
+  "signal": "nearest",
+  "roadmap_min": 0.7123,
+  "gap_min": 0.6259,
+  "uncertain_band": 0.008,
+  "overlap": {
+    "external_vs_gap": 0.0,
+    "gap_vs_roadmap": 0.0
+  },
+  "tuned_on": {
+    "split": "split-tune",
+    "n": 32,
+    "date": "2026-10-26",
+    "embedding_model": "models/gemini-embedding-001"
+  }
+}
