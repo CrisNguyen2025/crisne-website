@@ -15,6 +15,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from evals.router.holdout import _router, write_outcome
 from rag_service.domains.roadmap.retrieval.relevance import fold
@@ -22,7 +23,7 @@ from rag_service.domains.roadmap.router.understanding import understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 HERE = Path(__file__).parent
-SETS = ("polarity", "polarity_holdout", "target_holdout", "act_holdout")
+SETS = ("polarity", "polarity_holdout", "target_holdout", "act_holdout", "context_holdout")
 
 
 def labels_of(row: dict) -> dict:
@@ -36,7 +37,8 @@ async def run(path: Path) -> dict:
     fails = []
     for row in rows:
         for text in dict.fromkeys((row["text"], fold(row["text"]))):
-            got, why = await write_outcome(router, text)
+            history = [SimpleNamespace(role=h["role"], content=h["content"]) for h in row.get("history", [])]
+            got, why = await write_outcome(router, text, history)
             u = understand(normalize_vietnamese(text.strip()))
             out = {"P1_act": u.act.value, "P2_polarity": u.polarity, "P3_target": u.target.value}
             wrong = [f"{k}={out[k]}" for k, want in labels_of(row).items() if out[k] not in want.split("|")]

@@ -331,3 +331,65 @@ def test_emphatic_negation_is_not_a_question():
 def test_advice_question_is_left_to_the_llm_router():
     assert IntentRouter().decide("lộ trình nào phù hợp cho người mới").row == "advice_question"
     assert IntentRouter().decide("lộ trình nào phù hợp cho người mới").intent is None
+
+
+# ── Context: "topic vừa tạo" is read from this conversation, and a topic that is not known is asked for ──
+
+
+def _owner_reply(message: str, thread_id: str, active_topic: str | None) -> tuple[str, list[dict]]:
+    from rag_service.auth import set_actor
+    from rag_service.state import session_store
+
+    set_actor("owner")
+    ctx = session_store.get_or_create(thread_id)
+    ctx.active_topic_slug = active_topic
+    ctx.active_topic_title = "Data Engineering" if active_topic else None
+    agent = NextGenRoadmapAgent(llm_model=None)
+
+    async def run():
+        out = []
+        async for ev in agent.astream_events(
+            {"messages": [{"role": "user", "content": message}], "fast": True},
+            config={"configurable": {"thread_id": thread_id}},
+        ):
+            out.append(ev)
+        return out
+
+    events = asyncio.run(run())
+    return "".join(e.get("delta", "") for e in events if e.get("type") == "token"), events
+
+
+def test_topic_just_created_with_no_open_topic_asks_which_one():
+    from rag_service.domains.roadmap.router.grounding import NO_TOPIC_REPLY
+
+    text, events = _owner_reply("thêm layer Basics cho topic vừa tạo", "ctx-no-topic", active_topic=None)
+    assert text == NO_TOPIC_REPLY
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_vague_content_is_asked_back_with_the_open_topic_named():
+    from rag_service.domains.roadmap.router.grounding import content_unclear_reply
+
+    text, events = _owner_reply("tạo thông tin cho topic vừa tạo", "ctx-vague", active_topic="data-engineering")
+    assert text == content_unclear_reply("Data Engineering")
+    assert "layer" in text and "bài học" in text and "nhóm" in text
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_description_update_is_out_of_scope_and_says_so():
+    from rag_service.domains.roadmap.router.grounding import DESCRIPTION_UNSUPPORTED_REPLY
+
+    text, events = _owner_reply("sửa mô tả topic AI Engineering", "ctx-desc", active_topic="ai-engineering")
+    assert text == DESCRIPTION_UNSUPPORTED_REPLY
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_question_about_the_topic_just_created_is_not_a_command():
+    assert understand("topic vừa tạo có bao nhiêu bài").act.value != "command"
+
+
+def test_attributive_time_word_is_not_a_report():
+    from rag_service.domains.roadmap.router.polarity import polarity_of
+
+    assert polarity_of("thêm layer Basics cho topic vừa tạo").value == "affirm"
+    assert polarity_of("mình vừa tạo topic X rồi").value == "report"

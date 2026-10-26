@@ -34,6 +34,23 @@ Polarity is read by clause, not from listed phrases:
 Known gap (from `polarity_holdout.jsonl`): an adverb between a weak folded negator and the verb
 ("dung co tu y doi ten …") is not read as a decline. The change is still only a preview.
 
+## Conversation context: "topic vừa tạo"
+
+A reference to the conversation is read in two places, and it is never a change by itself:
+
+- **P2 (time word after a roadmap noun).** "topic vừa tạo", "bài mới thêm", "layer đã tạo lúc nãy": the time word
+  describes the noun, so it is not a report. A report keeps its subject before the time word ("mình vừa tạo
+  topic X rồi", "hôm qua đã xóa bài Y").
+- **P8 (vague content).** "tạo thông tin", "bổ sung nội dung", "thêm info" name no kind of entity. The change is
+  not guessed: the reply asks which kind (layer, bài học, nhóm), and names the open topic when there is one.
+- **Session (agent, not offline).** "topic vừa tạo", "topic đó", "topic này" are read from the open topic of this
+  conversation (`active_topic_slug`). With no topic open, the reply asks which topic.
+- **Out of scope.** Changing a topic's description is not supported: a description is set at create only. The
+  reply says so and nothing is written.
+
+Measured offline on `context_holdout.jsonl` (written before the rules): 0 written when not asked, 0 missed, 0 wrong
+phase. The session cases are tested with an empty and an open conversation in `tests/test_route_traps.py`.
+
 ## P1 act: questions, plans and code
 
 - "gì" and "nào" ask wherever they stand ("có playlist nào hay", "người ta dùng gì để …"), except as
@@ -110,6 +127,7 @@ P2 is wrong on 20 messages, 19 of them latent: sarcasm (P2 has no sarcasm value;
 | polarity | `python -m evals.router.phases --set polarity` | The P2 rules were written against it |
 | polarity holdout | `python -m evals.router.phases --set polarity_holdout` | Written after the rules; measured, never tuned on |
 | act holdout | `python -m evals.router.phases --set act_holdout` | Written before the P1 rules; measured, never tuned on |
+| context holdout | `python -m evals.router.phases --set context_holdout` | Written before the conversation-context rules; the session cases are tests, not this set |
 | target holdout | `python -m evals.router.phases --set target_holdout` | Written before the P3 rules; measured, never tuned on |
 
 The target holdout was written before the P3 rules. Two of its misses then showed bugs in the first version

@@ -53,7 +53,9 @@ from rag_service.domains.roadmap.router.policy import WRITE_NONE
 from rag_service.domains.roadmap.router.route_decision import decide_route
 from rag_service.domains.roadmap.router.scope import Scope, classify_for_routing
 from rag_service.domains.roadmap.router.understanding import instruction_part
-from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE
+from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, CONTENT_UNCLEAR, DESCRIPTION_UNSUPPORTED
+from rag_service.domains.roadmap.router.policy import TOPIC_REFERENCE, TOPIC_REFERENCE_FOLDED
+from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import (
     EMPTY_MESSAGE_REPLY,
     mixed_intent_reply,
@@ -62,6 +64,9 @@ from rag_service.domains.roadmap.router.grounding import (
     TOO_LONG_REPLY,
     UNCLEAR_REPLY,
     BLOCKED_CHANGE_REPLY,
+    DESCRIPTION_UNSUPPORTED_REPLY,
+    NO_TOPIC_REPLY,
+    content_unclear_reply,
     domain_gap_reply,
     no_match_reply,
     out_of_scope_reply,
@@ -330,8 +335,23 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             blocked = route_gate.reason == BLOCKED_CHANGE
             if (trace := current_trace()) is not None and route_gate.denied:
                 trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
+            if route_gate.reason == CONTENT_UNCLEAR:
+                reply = content_unclear_reply(session_ctx.active_topic_title or "")
+            elif route_gate.reason == DESCRIPTION_UNSUPPORTED:
+                reply = DESCRIPTION_UNSUPPORTED_REPLY
+            else:
+                reply = BLOCKED_CHANGE_REPLY if blocked else UNCLEAR_REPLY
             yield step_event("answer", "generation", "done", mode="blocked" if blocked else "unclear", fallback_reason=None)
-            async for ev in self._stream_text(BLOCKED_CHANGE_REPLY if blocked else UNCLEAR_REPLY, delay):
+            async for ev in self._stream_text(reply, delay):
+                yield ev
+            return
+
+        # ── 3d. "topic vừa tạo" with no topic open in this conversation: ask which one, never guess ──
+        if route_gate.mode != WRITE_NONE and not session_ctx.active_topic_slug and (
+            TOPIC_REFERENCE.search(lower) or TOPIC_REFERENCE_FOLDED.search(fold(lower))
+        ):
+            yield step_event("answer", "generation", "done", mode="unclear", fallback_reason=None)
+            async for ev in self._stream_text(NO_TOPIC_REPLY, delay):
                 yield ev
             return
 

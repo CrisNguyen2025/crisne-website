@@ -21,6 +21,10 @@ from rag_service.domains.roadmap.router.object_sense import names_another_place,
 from rag_service.domains.roadmap.router.polarity import BLOCKER_OF, NONE as NO_POLARITY, polarity_of
 from rag_service.domains.roadmap.router.policy import (  # cues and their vocabulary live in policy.py
     ADVICE,
+    DESCRIPTION_UPDATE,
+    DESCRIPTION_UPDATE_FOLDED,
+    VAGUE_CONTENT,
+    VAGUE_CONTENT_FOLDED,
     ASK_FRAME,
     ASK_FRAME_FOLDED,
     MID_QUESTION_WORD,
@@ -105,6 +109,8 @@ class Understanding:
     opens_with_greeting: bool # starts with a greeting or thanks word
     asks_usage: bool          # what the assistant can do, or how to make a change: answered with the help card
     write_blocker: Optional[str] = None  # names a change it does not ask for: negation | hypothetical | past_report
+    vague_content: bool = False          # P8: the change's content is a vague noun ("tạo thông tin …")
+    description_update: bool = False     # P8: asks to change a topic's description (not supported)
     advice: bool = False                 # asks which to choose ("lộ trình nào phù hợp", "nên học FE hay BE")
     polarity: str = "none"               # P2: affirm | decline | hypothetical | report | none (polarity.py)
 
@@ -297,6 +303,8 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
         write_blocker=write_blocker,
         polarity=polarity,
         advice=ADVICE.search(flat) is not None,
+        vague_content=has_verb and (VAGUE_CONTENT if accented else VAGUE_CONTENT_FOLDED).search(lower if accented else flat) is not None,
+        description_update=has_verb and (DESCRIPTION_UPDATE if accented else DESCRIPTION_UPDATE_FOLDED).search(lower if accented else flat) is not None,
     )
 
 

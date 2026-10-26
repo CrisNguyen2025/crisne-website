@@ -26,7 +26,14 @@ from rag_service.domains.roadmap.router.scope import ScopeResult, out_of_scope_a
 from rag_service.domains.roadmap.router.policy import Target
 from rag_service.domains.roadmap.router.target_grounding import Catalog, Grounding, ground_change
 from rag_service.domains.roadmap.router.verifier import WriteVerdict, verify_write
-from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, UNCONFIRMED_GUESS, WriteGate, gate_route
+from rag_service.domains.roadmap.router.write_gate import (
+    BLOCKED_CHANGE,
+    CONTENT_UNCLEAR,
+    DESCRIPTION_UNSUPPORTED,
+    UNCONFIRMED_GUESS,
+    WriteGate,
+    gate_route,
+)
 from rag_service.domains.roadmap.router.write_policy import BLOCKED, KEEP, REROUTE, WritePlan, gate_mode_for, plan_write
 
 
@@ -80,6 +87,16 @@ class RouteOutcome:
         }
 
 
+def _unsupported_change(u) -> Optional[str]:
+    if u.act.value not in ("command", "request"):
+        return None
+    if u.description_update:
+        return DESCRIPTION_UNSUPPORTED
+    if u.vague_content:
+        return CONTENT_UNCLEAR
+    return None
+
+
 def is_write_candidate(gate: WriteGate) -> bool:
     return gate.mode in (WRITE_ALLOW, WRITE_CONFIRM) or (gate.denied and gate.reason == UNCONFIRMED_GUESS)
 
@@ -105,6 +122,12 @@ async def decide_route(
     if decision.write == WRITE_DENY and decision.understanding.write_blocker == "negation":
         declined = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
         return RouteOutcome(declined, "heuristic", decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE))
+    # P8: a change that cannot be made as asked is answered here, with no model call: its content names no kind
+    # of entity ("tạo thông tin cho topic"), or it asks for a description update, which is set at create only
+    unsupported = _unsupported_change(decision.understanding)
+    if unsupported is not None:
+        ask = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
+        return RouteOutcome(ask, "heuristic", decision, WriteGate(WRITE_DENY, unsupported))
     scope: Optional[ScopeResult] = None
     # Keywords named no target: read it from the roadmap's data (scope.py). An outside topic is answered
     # "out of scope" here, before the LLM router, retrieval or System 2 is called.

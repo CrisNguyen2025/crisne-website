@@ -269,6 +269,25 @@ CUD_VERB_WORDS = [
     "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
 ]
 CUD_VERBS = [fold(v) for v in CUD_VERB_WORDS]
+# P8: a change whose content is a vague noun ("tạo thông tin cho topic", "thêm nội dung", "bổ sung info") names no
+# kind of entity: a layer, a lesson or a group must be named. Asked back, never guessed.
+# "dữ liệu" and "data" are left out: "chuyển dữ liệu từ Pinecone sang pgvector" is a question about a system.
+_VAGUE_VERBS = "|".join(re.escape(v) for v in CUD_VERB_WORDS + ["bổ sung"])
+_VAGUE_VERBS_FOLDED = "|".join(re.escape(fold(v)) for v in CUD_VERB_WORDS + ["bổ sung"])
+VAGUE_CONTENT = re.compile(
+    rf"\b(?:{_VAGUE_VERBS})\s+(?:một\s+|vài\s+|thêm\s+)?(?:thông\s+tin|nội\s+dung|info|content)\b",
+    re.IGNORECASE,
+)
+VAGUE_CONTENT_FOLDED = re.compile(
+    rf"\b(?:{_VAGUE_VERBS_FOLDED})\s+(?:mot\s+|vai\s+|them\s+)?(?:thong\s+tin|noi\s+dung|info|content)\b"
+)
+# P8 (session): "topic vừa tạo", "topic đó" name a topic from the conversation; with no topic open, ask which one
+TOPIC_REFERENCE = re.compile(r"\btopic\s+(?:vừa\s+tạo|mới\s+tạo|vừa\s+thêm|đó|này|mới)\b")
+TOPIC_REFERENCE_FOLDED = re.compile(r"\btopic\s+(?:vua\s+tao|moi\s+tao|vua\s+them|do|nay|moi)\b")
+# P8: a topic's description cannot be changed after it is created (only at create); the update is not offered
+DESCRIPTION_UPDATE = re.compile(r"\b(?:sửa|cập\s+nhật|đổi|thay\s+đổi|bổ\s+sung|thêm)\s+(?:mô\s+tả|description)\b", re.IGNORECASE)
+DESCRIPTION_UPDATE_FOLDED = re.compile(r"\b(?:sua|cap\s+nhat|doi|thay\s+doi|bo\s+sung|them)\s+(?:mo\s+ta|description)\b")
+
 # The verbs that ask for each kind of change, folded. An extracted change must be asked for by one of its
 # own verbs: a preview never shows a delete for "khỏi tạo topic X" (write_gate.gate_action).
 ACTION_VERBS = {

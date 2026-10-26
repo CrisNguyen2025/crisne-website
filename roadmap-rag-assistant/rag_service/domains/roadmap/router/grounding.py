@@ -149,3 +149,24 @@ def with_grounding(message: str, context: Optional[dict]) -> str:
     """Prefix the user message with the page context hint, for LLM-facing prompts only."""
     hint = build_grounding(context)
     return f"{hint}\n{message}" if hint else message
+
+DESCRIPTION_UNSUPPORTED_REPLY = (
+    "Mình chưa sửa được mô tả của topic: mô tả chỉ đặt được lúc tạo topic. Bạn có thể tạo topic mới kèm mô tả, "
+    "hoặc thêm layer, bài học, nhóm vào topic hiện có."
+)
+
+
+def content_unclear_reply(topic_title: str = "") -> str:
+    """Asked back when a change names no kind of entity; names the open topic when there is one."""
+    topic = f"topic **{topic_title}**" if topic_title else "topic …"
+    return (
+        f"Bạn muốn thêm gì vào {topic}? Mình cần biết loại mục: layer, bài học hay nhóm. Ví dụ: "
+        f"`thêm layer Basics vào {topic_title or 'topic …'}`, `thêm bài Kafka vào layer …` "
+        f"hoặc `tạo nhóm Core trong layer …`."
+    )
+
+
+NO_TOPIC_REPLY = (
+    "Mình chưa có topic nào đang mở trong cuộc trò chuyện này nên chưa biết bạn nói topic nào. "
+    "Bạn gửi tên topic giúp mình, ví dụ: `thêm layer Basics vào topic AI Engineering`."
+)

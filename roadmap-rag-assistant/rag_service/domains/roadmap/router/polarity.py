@@ -147,13 +147,30 @@ def split_affirmed(text: str) -> tuple[str, str]:
     return " | ".join(a for a in parts["affirmed"] if a), " | ".join(d for d in parts["declined"] if d)
 
 
+# "topic vừa tạo", "bài mới thêm", "layer đã tạo lúc nãy": the time word describes the noun, it does not report.
+# A report has its subject before the time word ("mình vừa tạo", "hôm qua đã xóa"), so the word goes.
+ATTRIBUTIVE = re.compile(
+    r"(topic|chủ\s+đề|layer|bài(?:\s+học)?|nhóm|mục|item|lộ\s+trình|group|lesson)\s+(?:mới|vừa|đã|lúc\s+nãy)\s+(?=\S)"
+)
+ATTRIBUTIVE_FOLDED = re.compile(
+    r"(topic|chu de|layer|bai(?:\s+hoc)?|nhom|muc|item|lo trinh|group|lesson)\s+(?:moi|vua|da|luc nay)\s+(?=\S)"
+)
+
+
+def _without_attributive_time(lower: str, flat: str, accented: bool) -> tuple[str, str]:
+    if accented:
+        return ATTRIBUTIVE.sub(r"\1 ", lower), flat
+    return lower, ATTRIBUTIVE_FOLDED.sub(r"\1 ", flat)
+
+
 def polarity_of(text: str) -> Polarity:
     lower = normalize_vietnamese(text).lower()
     flat = fold(lower)
+    accented = lower != flat
+    lower, flat = _without_attributive_time(lower, flat, accented)
     parts = _parts(text)
     affirmed = " | ".join(a for a in parts["affirmed"] if a)
     declined = " | ".join(d for d in parts["declined"] if d)
-    accented = lower != flat
     # Hypothetical and reported changes keep their patterns (policy.py): they hold the verb inside a frame
     blockers = WRITE_BLOCKERS if accented else WRITE_BLOCKERS_FOLDED
     for name, value in (("hypothetical", HYPOTHETICAL), ("past_report", REPORT)):

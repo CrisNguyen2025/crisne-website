@@ -36,6 +36,8 @@ from rag_service.domains.roadmap.router.understanding import echoes_question, un
 UNCONFIRMED_GUESS = "unconfirmed_guess"  # only the LLM chose a change, without a change verb + object or confidence
 BLOCKED_CHANGE = "blocked_change"        # the message names a change it does not ask for (policy: write blockers)
 ACTION_NOT_ASKED = "action_not_asked"    # the extracted change is not the one the message's verb asks for
+CONTENT_UNCLEAR = "content_unclear"        # "tạo thông tin cho topic": which kind of entity to add is not named
+DESCRIPTION_UNSUPPORTED = "description_unsupported"  # a topic's description is set at create only
 QUESTION_AS_TITLE = "question_as_title"  # the extractor took the user's question as the new entry's name
 BULK_DELETE_REQUEST = "bulk_delete"      # "xóa hết": never done in one message
 
