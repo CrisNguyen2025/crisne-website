@@ -226,3 +226,34 @@ def test_visitor_change_never_calls_system2():
     assert "WriteVerdict" not in llm.schemas and not llm.extracted
     assert "owner" in text.lower() or "chủ" in text.lower()
     set_actor("owner")
+
+
+class _System2Llm(_FixedLlm):
+    """The router decides by heuristics; System 2 returns a full roadmap change; the extractor must not run."""
+
+    def __init__(self, verdict):
+        super().__init__(IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.95))
+        self.verdict = verdict
+
+    async def ainvoke(self, prompt):
+        self.calls += 1
+        return self.verdict
+
+
+def test_write_reuses_system2_change_without_a_second_extraction(mock_adapter):
+    from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+    from rag_service.domains.roadmap.router.verifier import Act, TargetSystem, WriteVerdict
+
+    set_actor("owner")
+    change = StructuredRoadmapAction(
+        action=ActionType.CREATE, entity_level=EntityLevel.TOPIC,
+        entities=[SingleEntity(title="tạo topic Kubernetes")], raw_intent_summary="Tạo topic Kubernetes",
+    )
+    verdict = WriteVerdict(
+        intent=IntentType.ROADMAP_CUD, act=Act.COMMAND, target_system=TargetSystem.ROADMAP,
+        action=ActionType.CREATE, entity_level=EntityLevel.TOPIC, confidence=0.95, change=change,
+    )
+    llm = _System2Llm(verdict)
+    steps, text = _run(NextGenRoadmapAgent(llm_model=llm), 'tạo topic tên là "Kubernetes"', "safety-s2-reuse")
+    assert llm.schemas == ["WriteVerdict"]  # one call: System 2; the extractor was not asked
+    assert "Kubernetes" in text

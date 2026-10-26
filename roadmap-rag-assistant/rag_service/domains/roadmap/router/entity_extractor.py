@@ -115,23 +115,30 @@ class StructuredEntityExtractor:
                 )
                 res: StructuredRoadmapAction = await self._structured_llm.ainvoke(formatted)
                 if isinstance(res, StructuredRoadmapAction):
-                    # Sanitize any accidental verb leakage
-                    for ent in res.entities:
-                        ent.title = self._sanitize_title(ent.title)
-                        if not ent.short_code:
-                            ent.short_code = _generate_clean_short_code(ent.title)
-                        elif any(v in ent.short_code.lower() for v in ["tat", "tao", "them"]):
-                            # Correct accidentally leaked acronym
-                            ent.short_code = _generate_clean_short_code(ent.title)
-                    if not res.target_parent_identifier and default_parent:
-                        res.target_parent_identifier = default_parent
-                    return res
+                    return self.from_verified(res, default_parent=default_parent)
             except Exception as exc:
                 print(f"[EntityExtractor] LLM extraction error ({exc}), falling back to deterministic parser.")
                 llm_breaker.record_failure(exc)
 
         # 2. Robust Deterministic Parser (Offline / Fallback)
         return self._deterministic_extract(prompt, default_parent=default_parent)
+
+    def from_verified(
+        self, res: StructuredRoadmapAction, default_parent: Optional[str] = None
+    ) -> StructuredRoadmapAction:
+        """An action read by a model (this extractor or System 2), cleaned the same way before it runs."""
+        res = res.model_copy(deep=True)
+        for ent in res.entities:
+            # Sanitize any accidental verb leakage
+            ent.title = self._sanitize_title(ent.title)
+            if not ent.short_code:
+                ent.short_code = _generate_clean_short_code(ent.title)
+            elif any(v in ent.short_code.lower() for v in ["tat", "tao", "them"]):
+                # Correct accidentally leaked acronym
+                ent.short_code = _generate_clean_short_code(ent.title)
+        if not res.target_parent_identifier and default_parent:
+            res.target_parent_identifier = default_parent
+        return res
 
     def _sanitize_title(self, title: str) -> str:
         """Strip verbs and entity words from title strictly, while preserving numbered names like 'Bài 1'."""

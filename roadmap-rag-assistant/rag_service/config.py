@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     # Model for routing and write verification (System 2), same provider; empty = LLM_MODEL.
     # A small model is enough for a structured classification and keeps writes fast (e.g. llama-3.1-8b-instant).
     llm_model_router: str = ""
+    # Reasoning effort for that model when it is a reasoning model (gpt-oss on Groq); empty = provider default
+    llm_router_reasoning_effort: str = "low"
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")

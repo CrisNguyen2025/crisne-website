@@ -327,6 +327,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             async for ev in self.handle_cud(
                 content=content, lower=lower, page_context=page_context,
                 session_id=session_id, session_ctx=session_ctx, delay=delay, gate=route_gate,
+                verdict=outcome.verdict,
             ):
                 yield ev
             return
@@ -473,7 +474,7 @@ def _build_gemini(model: str = ""):
     )
 
 
-def _build_groq(model: str = ""):
+def _build_groq(model: str = "", reasoning_effort: str = ""):
     keys = parse_keys(
         settings.groq_api_key or os.environ.get("GROQ_API_KEY", ""),
         settings.groq_api_keys or os.environ.get("GROQ_API_KEYS", ""),
@@ -493,6 +494,8 @@ def _build_groq(model: str = ""):
             max_retries=2 if len(keys) == 1 else 1,
             timeout=25.0,
             streaming=True,
+            # Only reasoning models take it (gpt-oss): a structured classification needs little reasoning
+            **({"reasoning_effort": reasoning_effort} if reasoning_effort and "gpt-oss" in (model or settings.llm_model) else {}),
         )
         for key in keys
     ]
@@ -522,10 +525,13 @@ def build_agent():
             print(f"[Agent] Warning: Failed to init {provider} model ({type(exc).__name__}: {exc}). Using offline mode.")
 
     router_llm = None
-    if settings.llm_model_router.strip() and builder is not None:
+    router_model = settings.llm_model_router.strip() or settings.llm_model
+    effort = settings.llm_router_reasoning_effort.strip()
+    if builder is not None and llm_model is not None and (settings.llm_model_router.strip() or effort):
         try:
-            router_llm = with_fallback_provider(builder(settings.llm_model_router.strip()), provider)
-            print(f"🤖 Router / write verification model: {settings.llm_model_router}.")
+            build = (lambda m: builder(m, reasoning_effort=effort)) if builder is _build_groq else builder
+            router_llm = with_fallback_provider(build(router_model), provider)
+            print(f"🤖 Router / write verification model: {router_model} (reasoning_effort={effort or 'default'}).")
         except Exception as exc:
             print(f"[Agent] Router model unavailable ({type(exc).__name__}: {exc}); using LLM_MODEL.")
     return NextGenRoadmapAgent(

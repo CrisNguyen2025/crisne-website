@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
+from rag_service.domains.roadmap.router.grounding import build_grounding
 from rag_service.domains.roadmap.router.intent_router import Decision, IntentRouter
 from rag_service.domains.roadmap.router.policy import NAMED_PART, WRITE_ALLOW, WRITE_CONFIRM, WRITE_DENY, WRITE_NONE
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
@@ -64,7 +65,7 @@ async def decide_route(
     if not owner:
         return RouteOutcome(intent_res, method, decision, gate)
 
-    verdict = await verify_write(verifier_llm, content, history)
+    verdict = await verify_write(verifier_llm, content, history, build_grounding(page_context))
     grounding = (
         ground_change(verdict, catalog or Catalog(), page_context)
         if verdict is not None and verdict.is_roadmap_change

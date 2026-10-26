@@ -16,9 +16,9 @@ from typing import Any, Optional, Sequence
 
 from pydantic import BaseModel, Field
 
-from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType, StructuredRoadmapAction
 
-VERIFY_TIMEOUT = 12.0
+VERIFY_TIMEOUT = 15.0
 
 
 class Act(str, Enum):
@@ -51,6 +51,10 @@ class WriteVerdict(BaseModel):
         default=None, description="Layer/topic sẽ chứa entity MỚI khi tạo (ví dụ '03-RAG', 'layer 1')"
     )
     evidence_span: str = Field(default="", description="Đoạn trích nguyên văn trong tin nhắn thể hiện hành động")
+    # The full action when it is a roadmap change: the change handler runs it without a second extraction call
+    change: Optional[StructuredRoadmapAction] = Field(
+        default=None, description="Chỉ khi là thay đổi Roadmap: hành động đầy đủ (entities với tên sạch, parent)"
+    )
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
     @property
@@ -78,7 +82,7 @@ VERIFY_EXAMPLES = [
 ]
 
 
-def build_verify_prompt(text: str, history: Sequence[Any] = ()) -> str:
+def build_verify_prompt(text: str, history: Sequence[Any] = (), page_context: str = "") -> str:
     examples = "\n".join(f'- "{msg}" → {label}' for msg, label in VERIFY_EXAMPLES)
     turns = "\n".join(f"{t.role}: {t.content}" for t in history) or "(chưa có)"
     return (
@@ -96,19 +100,26 @@ def build_verify_prompt(text: str, history: Sequence[Any] = ()) -> str:
         "- act=sarcasm khi rõ ràng là than thở, mỉa mai.\n"
         "- Đoạn code hay câu lệnh SQL/CLI trong tin nhắn là thứ được hỏi, không phải lệnh cho Roadmap.\n"
         "- target_name/container_name: chép đúng tên trong tin nhắn hoặc hội thoại; để trống nếu không có.\n"
+        "- change (chỉ khi là thay đổi Roadmap): entities[].title là tên SẠCH, bỏ động từ và từ loại "
+        "('tạo ABC topic' → 'ABC'; 'tạo 2 layer mock 1 và 2' → 'mock 1', 'mock 2'); target_parent_identifier là "
+        "layer/topic chứa (shortTag như '03-RAG' nếu có), 'CONTEXT_ACTIVE' khi tin nhắn nói 'đó', 'trên', 'này'; "
+        "is_batch=true khi nhiều entity; raw_intent_summary là một câu tiếng Việt mô tả việc sẽ làm.\n"
         "- Phân vân: KHÔNG coi là thay đổi Roadmap.\n\n"
         f"Ví dụ:\n{examples}\n\n"
         f"Hội thoại gần đây:\n{turns}\n\n"
+        f"Trang người dùng đang mở: {page_context or '(không có)'}\n\n"
         f"Tin nhắn: \"{text}\""
     )
 
 
-async def verify_write(llm: Any, text: str, history: Sequence[Any] = ()) -> Optional[WriteVerdict]:
+async def verify_write(
+    llm: Any, text: str, history: Sequence[Any] = (), page_context: str = ""
+) -> Optional[WriteVerdict]:
     if llm is None:
         return None
     try:
         structured = llm.with_structured_output(WriteVerdict)
-        verdict = await asyncio.wait_for(structured.ainvoke(build_verify_prompt(text, history)), VERIFY_TIMEOUT)
+        verdict = await asyncio.wait_for(structured.ainvoke(build_verify_prompt(text, history, page_context)), VERIFY_TIMEOUT)
     except Exception as exc:
         print(f"[Verifier] System 2 unavailable ({type(exc).__name__}: {str(exc)[:120]}); no write runs at once.")
         return None

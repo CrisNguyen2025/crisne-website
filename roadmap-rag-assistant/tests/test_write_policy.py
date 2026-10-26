@@ -163,7 +163,7 @@ def _decide(text, verdict, catalog=None, history=()):
         router = IntentRouter()
         original = route_decision.verify_write
 
-        async def fake(llm, content, hist=()):
+        async def fake(llm, content, hist=(), page_context=""):
             return verdict
 
         route_decision.verify_write = fake

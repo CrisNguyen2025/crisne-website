@@ -271,6 +271,7 @@ class RoadmapCommands:
     async def handle_cud(
         self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float,
         gate: WriteGate = WriteGate(WRITE_ALLOW),
+        verdict=None,
     ) -> AsyncGenerator[dict, None]:
         """Roadmap create/update/delete: extract the action, ask back when a target is unclear, then confirm or run it.
 
@@ -281,10 +282,13 @@ class RoadmapCommands:
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
-        # Page context is added only for the LLM extractor; heuristics keep the raw text.
-        action: StructuredRoadmapAction = await self.extractor.aextract(
-            content, page_context=build_grounding(page_context)
-        )
+        # System 2 already read the change (router/verifier.py): reuse it, no second extraction call.
+        # Otherwise the extractor runs; page context is added only for its LLM, heuristics keep the raw text.
+        verified = getattr(verdict, "change", None) if verdict is not None and verdict.is_roadmap_change else None
+        if verified is not None and verified.entities:
+            action: StructuredRoadmapAction = self.extractor.from_verified(verified)
+        else:
+            action = await self.extractor.aextract(content, page_context=build_grounding(page_context))
         resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
 
         # One write decision for this change (write_gate.py): denied changes stop here with the reason as reply
