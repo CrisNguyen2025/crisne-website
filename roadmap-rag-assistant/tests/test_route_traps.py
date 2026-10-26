@@ -239,3 +239,22 @@ def test_route_names_the_phase_that_settled_it():
     outcome = asyncio.run(decide_route(IntentRouter(), "mình không định xóa bài Redis"))
     assert outcome.decided_by == "P2_polarity"
     assert outcome.trace()["P2_polarity"] == "decline" and outcome.write == "none"
+
+
+def test_stress_rows_carry_valid_phase_labels():
+    import json
+    from pathlib import Path
+
+    from rag_service.domains.roadmap.router.policy import SpeechAct, Target
+
+    allowed = {
+        "P1_act": {a.value for a in SpeechAct},
+        "P2_polarity": {"affirm", "decline", "hypothetical", "report", "none"},
+        "P3_target": {t.value for t in Target},
+    }
+    path = Path(__file__).resolve().parents[1] / "evals/router/stress_confuse.jsonl"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        phases = json.loads(line)["phases"]
+        assert "P1_act" in phases
+        for phase, labels in phases.items():
+            assert set(labels.split("|")) <= allowed[phase], (phase, labels)

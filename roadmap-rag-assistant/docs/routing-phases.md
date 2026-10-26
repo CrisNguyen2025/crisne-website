@@ -43,6 +43,25 @@ Known gap (from `polarity_holdout.jsonl`): an adverb between a weak folded negat
 feed a wrong output into a later one: a P2 miss reaches P6 as a change. Read the trace from P0 down, and fix
 the first phase whose output is wrong.
 
+The stress set does this for you. Each row carries hand labels for P1–P3 (`"phases"`, `a|b` = either is
+right), written from what the sentence means under this table's definitions, not from the router's output.
+A failure is charged to the first labelled phase that is wrong, and to `decided_by` when P1–P3 are right.
+The report also counts a phase as **latent** when it is wrong on a message whose branch is still right: a
+later phase covered for it this time.
+
+Offline stress run when the labels were added (2026-10-26):
+
+| First wrong phase | Failures | Concept gap |
+|---|---|---|
+| P3 target | 52 | Roadmap nouns in another sense ("nhóm Zalo", "layer mask", "DELETE FROM topics") read as the roadmap |
+| P1 act | 46 | Question frames without a question word ("so sánh …", "cho mình hỏi về …", "… có gì hay"); plan requests phrased as "tạo kế hoạch …" |
+| P5 LLM router | 32 | Needs the model (offline fallback) |
+| P5 table | 7 | |
+| P6 System 2 | 5 | Needs the model (offline fallback) |
+
+P2 is wrong on 20 messages, 19 of them latent: sarcasm (P2 has no sarcasm value; System 2 has) and
+"bạn mình nói …", where the subject of the reporting verb ends in "mình".
+
 ## Measuring
 
 | Set | Command | Use |

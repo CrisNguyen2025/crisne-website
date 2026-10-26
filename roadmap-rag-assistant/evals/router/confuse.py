@@ -6,6 +6,12 @@
 stress_confuse.jsonl holds base messages by confusion type (entity word in another sense, CUD verb in a
 technical question, negation, reported speech, sarcasm, code, injection in a name…); each is run as written
 and with noise: no diacritics, a greeting, an emoji, a typo, all caps. Measured, never tuned on.
+
+Rows also carry hand labels for the early phases ("phases": P1_act, P2_polarity, P3_target; "a|b" = either is
+right), written from the sentence's meaning, not from the router's output. A failure is charged to the first
+labelled phase that is wrong; when P1–P3 are right it is charged to the phase that settled the route
+(RouteOutcome.decided_by). A phase can also be wrong on a message whose branch is right: that is counted as
+latent, a miss a later phase happened to cover.
 """
 import asyncio
 import collections
@@ -19,6 +25,8 @@ from pathlib import Path
 
 from evals.router.holdout import _router, write_outcome
 from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.router.understanding import understand
+from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 random.seed(7)
 
@@ -74,6 +82,21 @@ def branch(write: str, why: str) -> str:
             "out_of_scope": "O", "unclear": "U"}.get(intent, intent)
 
 
+def wrong_phases(text: str, labels: dict) -> list[str]:
+    """The labelled early phases (P1–P3) whose output differs from the hand label, in phase order."""
+    u = understand(normalize_vietnamese(text.strip()))
+    got = {"P1_act": u.act.value, "P2_polarity": u.polarity, "P3_target": u.target.value}
+    return [phase for phase in ("P1_act", "P2_polarity", "P3_target")
+            if phase in labels and got[phase] not in labels[phase].split("|")]
+
+
+def first_miss(wrong: list[str], why: str) -> str:
+    if wrong:
+        return wrong[0]
+    m = re.search(r"decided_by=(\w+)", why)
+    return m.group(1) if m else why.split()[0]
+
+
 STRESS = Path(__file__).parent / "stress_confuse.jsonl"
 # Messy messages, measured only (never used to tune rules): several kinds of noise in one message
 MESSY = Path(__file__).parent / "messy.jsonl"
@@ -104,6 +127,10 @@ async def run(
             bad_write = row["write"] == "no" and got_write == "now"
             missed = row["write"] in ("now", "any") and got_write == "none" and b not in ("D",) and "C" in row["want"]
             wrong_branch = b not in row["want"].split("|")
+            wrong = wrong_phases(text, row.get("phases", {}))
+            for phase in wrong:
+                stats["_phase_" + phase]["wrong"] += 1
+                stats["_phase_" + phase]["latent"] += not (bad_write or missed or wrong_branch)
             s["write_now_violation"] += bad_write
             s["preview_violation"] += row["write"] == "no" and got_write == "preview"
             s["missed_write"] += missed
@@ -113,7 +140,7 @@ async def run(
             stats["_variant_" + vname]["write_now_violation"] += bad_write
             if bad_write or missed or wrong_branch:
                 kind = "WRITE_NOW" if bad_write else "MISSED" if missed else "branch"
-                fails.append((kind, row["cat"], vname, row["want"], b, got_write, text, why))
+                fails.append((kind, row["cat"], vname, row["want"], b, got_write, text, why, first_miss(wrong, why)))
     total = collections.Counter()
     for k, v in stats.items():
         if not k.startswith("_"):
@@ -146,13 +173,14 @@ def main(argv) -> int:
     for k in sorted(k for k in stats if k.startswith("_variant_")):
         v = stats[k]
         print(f"  {k[9:]:14} n={v['n']:3} wrong_branch={v['wrong_branch']:3} write_now={v['write_now_violation']:2}")
-    # Failures by the phase that settled the route (route_decision.RouteOutcome.decided_by): where to fix first
-    phases = collections.Counter(re.search(r"decided_by=(\w+)", f[7]).group(1) if "decided_by=" in f[7] else f[7].split()[0]
-                                 for f in fails)
-    print("\nfailures by deciding phase:", dict(phases.most_common()))
+    # Each failure charged to its first wrong phase: where to fix first
+    print("\nfailures by first wrong phase:", dict(collections.Counter(f[8] for f in fails).most_common()))
+    print("early phases wrong (all messages; latent = branch still right):")
+    for k in sorted(k for k in stats if k.startswith("_phase_")):
+        print(f"  {k[7:]:12} wrong={stats[k]['wrong']:3} latent={stats[k]['latent']:3}")
     print("\nfailures:")
     for f in sorted(fails, key=lambda x: (x[0] != "WRITE_NOW", x[0] != "MISSED", x[1])):
-        print(f"  {f[0]:9} [{f[1]}/{f[2]}] want={f[3]} got={f[4]}/{f[5]} | {f[6][:80]!r} | {f[7]}")
+        print(f"  {f[0]:9} {f[8]:12} [{f[1]}/{f[2]}] want={f[3]} got={f[4]}/{f[5]} | {f[6][:80]!r} | {f[7]}")
 
 
     if messy:  # measured only: no baseline to hold, but a write at once still fails the run
