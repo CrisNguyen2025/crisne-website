@@ -38,6 +38,9 @@ class SourceDeps:
     accept: Optional[Callable[[str, list], list]] = None
     # Optional reordering of the candidates: (llm, query, matches) -> matches. Search fetches RERANK_POOL when set.
     rerank: Optional[Callable[[Any, str, list], Awaitable[list]]] = None
+    # Optional gate for the reranker: (query, matches) -> True when the order is uncertain enough to pay for it.
+    # None reranks every question.
+    rerank_needed: Optional[Callable[[str, list], bool]] = None
 
 
 async def stream_words(text: str, delay: float) -> AsyncGenerator[dict, None]:
@@ -87,8 +90,10 @@ async def answer_from_sources(
         else:
             results = await asyncio.gather(*(search(q, limit=pool) for q in queries))
             matches = merge_ranked(results, pool)
-        if deps.rerank:
+        if deps.rerank and (deps.rerank_needed is None or deps.rerank_needed(query, matches)):
             matches = (await deps.rerank(llm, query, matches))[:4]
+        elif deps.rerank:
+            matches = matches[:4]
         before_gate = len(matches)
         if deps.accept:
             # A rewrite resolved "bài đó" to a name, so the check also accepts the rewrite's words;

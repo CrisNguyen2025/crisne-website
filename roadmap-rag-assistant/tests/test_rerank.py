@@ -57,3 +57,13 @@ def test_no_model_or_single_match_skips_the_call():
     assert _run(None, _matches("a", "b")) == ["a", "b"]
     assert _run(llm, _matches("a")) == ["a"]
     assert llm.prompts == []
+
+
+def test_rerank_runs_only_when_the_order_is_uncertain(monkeypatch):
+    from rag_service.domains.roadmap import agent
+
+    monkeypatch.setattr(agent, "_rerank_gap", lambda: 0.03)
+    monkeypatch.setattr(agent.rag_engine._vector_store, "_similarities", lambda q: {"a": 0.80, "b": 0.79, "c": 0.70})
+    close = [(SimpleNamespace(id="a"), 1), (SimpleNamespace(id="b"), 1)]
+    apart = [(SimpleNamespace(id="a"), 1), (SimpleNamespace(id="c"), 1)]
+    assert agent._rerank_needed("q", close) and not agent._rerank_needed("q", apart)

@@ -124,6 +124,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             accept=lambda query, matches: filter_on_topic(query, matches, rag_engine.corpus_vocabulary()),
             plan=_plan_queries if settings.rag_query_transform else None,
             rerank=_rerank if settings.rag_rerank else None,
+            rerank_needed=_rerank_needed,
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
             href_of=knowledge_href,
             item_fields=_item_fields,
@@ -428,6 +429,24 @@ def rerank_text(doc) -> str:
 
 async def _rerank(llm, query: str, matches: list) -> list:
     return await rerank(llm, query, matches, rerank_text)
+
+
+def _rerank_gap() -> float:
+    if settings.rag_rerank_gap.strip().lower() != "auto":
+        return float(settings.rag_rerank_gap)
+    from rag_service.domains.roadmap.router.scope import load_thresholds
+
+    return float(((load_thresholds() or {}).get("rerank") or {}).get("rerank_below_gap", 0.0))
+
+
+def _rerank_needed(query: str, matches: list) -> bool:
+    """Rerank only when the two best documents are close (tuned on the tune split: about a quarter of questions)."""
+    gap = _rerank_gap()
+    if gap <= 0 or len(matches) < 2:
+        return len(matches) >= 2
+    sims = rag_engine._vector_store._similarities(query) or {}
+    top = sorted((sims.get(doc.id, 0.0) for doc, _ in matches), reverse=True)
+    return len(top) < 2 or top[0] - top[1] < gap
 
 
 def _describe_document(doc) -> dict:

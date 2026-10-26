@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     rag_query_transform: bool = True
     # Reorder the retrieved candidates with the LLM before answering (one extra LLM call per question)
     rag_rerank: bool = False
+    # With RAG_RERANK: rerank only when the two best documents are this close (cosine); 0 reranks every question.
+    # "auto" reads the gap tuned by evals/scope_tune.py (scope_thresholds.json, rerank.rerank_below_gap).
+    rag_rerank_gap: str = "auto"
     # Ask the LLM which claims of a RAG answer the documents do not support; any fails the answer
     # (one extra LLM call per answer, and the answer is held until it returns)
     rag_semantic_grounding: bool = False

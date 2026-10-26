@@ -71,8 +71,56 @@ def pick(features: list[tuple[str, float]]) -> dict:
     }
 
 
+def rerank_gaps(split: str) -> list[tuple[bool, float]]:
+    """(right document ranked first, top1 - top2 cosine) for the public retrieval samples of a split.
+
+    Split by sample number: even ids tune, odd ids holdout, fixed so the halves never move.
+    """
+    from evals.target import RoadmapTarget
+    from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary, filter_on_topic
+
+    target = RoadmapTarget(mode="hybrid")
+    store = target._get_store()
+    knowledge, documents = target._load()
+    vocab = corpus_vocabulary(knowledge)
+    doc_ids = {d["source_id"]: d["doc_id"] for d in documents}
+    rows = []
+    path = ROOT / "evals/datasets/public/roadmap/samples.jsonl"
+    for line in path.read_text(encoding="utf-8").splitlines():
+        sample = json.loads(line)
+        wanted = {c["section_id"] for c in sample["expected"].get("contexts", [])}
+        number = int(sample["id"].rsplit("-", 1)[1])
+        if not wanted or (number % 2 == 0) != (split == "tune"):
+            continue
+        matches = filter_on_topic(sample["input"], store.hybrid_search(sample["input"], 5), vocab)
+        sims = store._similarities(sample["input"]) or {}
+        top = sorted((sims.get(doc.id, 0.0) for doc, _ in matches), reverse=True)
+        gap = top[0] - top[1] if len(top) > 1 else 1.0
+        first = bool(matches) and doc_ids[matches[0][0].id] in wanted
+        rows.append((first, round(gap, 4)))
+    return rows
+
+
+# A reranker call costs seconds: it should run for at most this share of questions
+MAX_RERANK_SHARE = 0.4
+
+
+def pick_rerank_gap(rows: list[tuple[bool, float]]) -> dict:
+    """The gap below which a question is reranked: most misranked caught with rerank share <= MAX_RERANK_SHARE."""
+    best = {"rerank_below_gap": 0.0, "misranked_caught": 0, "rerank_share": 0.0}
+    for threshold in sorted({g for _, g in rows}):
+        cut = threshold + 1e-4
+        share = sum(g < cut for _, g in rows) / len(rows)
+        caught = sum((not first) and g < cut for first, g in rows)
+        if share <= MAX_RERANK_SHARE and caught > best["misranked_caught"]:
+            best = {"rerank_below_gap": round(cut, 4), "misranked_caught": caught, "rerank_share": round(share, 3)}
+    best["misranked"] = sum(not first for first, _ in rows)
+    return best
+
+
 def main(argv: list[str]) -> int:
     result = pick(tune_features())
+    result["rerank"] = pick_rerank_gap(rerank_gaps("tune"))
     print(json.dumps(result, indent=2, ensure_ascii=False))
     if "--dry-run" not in argv:
         THRESHOLDS.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

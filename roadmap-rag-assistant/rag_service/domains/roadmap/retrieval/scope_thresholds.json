@@ -12,5 +12,11 @@
     "n": 32,
     "date": "2026-10-26",
     "embedding_model": "models/gemini-embedding-001"
+  },
+  "rerank": {
+    "rerank_below_gap": 0.0295,
+    "misranked_caught": 2,
+    "rerank_share": 0.235,
+    "misranked": 3
   }
 }
