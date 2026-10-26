@@ -191,9 +191,10 @@ def test_change_to_a_missing_lesson_is_never_run_at_once():
     assert out.gate.mode == WRITE_CONFIRM
 
 
-def test_negation_system2_reads_is_blocked():
+def test_negation_is_never_written_or_previewed():
+    # The heuristics now read "khỏi tạo …" as a declined change, so it is not even a write candidate
     out = _decide("thôi khỏi tạo topic System Design nữa", _verdict(act=Act.NEGATION, entity_level=EntityLevel.TOPIC))
-    assert out.gate.mode == WRITE_DENY
+    assert out.gate.mode in (WRITE_DENY, WRITE_NONE)
 
 
 # ── Sensitive guard reads the request, not the names ─────────────────────

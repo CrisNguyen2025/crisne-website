@@ -245,6 +245,13 @@ CUD_VERB_WORDS = [
     "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
 ]
 CUD_VERBS = [fold(v) for v in CUD_VERB_WORDS]
+# The verbs that ask for each kind of change, folded. An extracted change must be asked for by one of its
+# own verbs: a preview never shows a delete for "khỏi tạo topic X" (write_gate.gate_action).
+ACTION_VERBS = {
+    "create": ("tao", "them", "add", "create", "make", "new", "lap"),
+    "update": ("sua", "doi", "cap nhat", "update", "rename", "chuyen", "di chuyen", "move", "edit"),
+    "delete": ("xoa", "bo bot", "go bo", "huy", "delete", "remove"),
+}
 # A change verb right before a roadmap noun: "tạo lộ trình Docker từ đầu" creates a topic, it is not a plan request
 CREATE_ROADMAP = re.compile(
     rf"\b(?:{'|'.join(re.escape(v) for v in CUD_VERBS)})\s+(?:(?:a|an|new|mot|cai)\s+)?(?:lo\s+trinh|roadmap|topic|chu\s+de)\b"
@@ -299,7 +306,8 @@ LABEL = re.compile(r"^\s*([^:\n]{1,30}):\s*(?=\S)")
 _VERBS_ACC = "|".join(re.escape(v) for v in CUD_VERB_WORDS)
 WRITE_BLOCKER_PATTERNS = {
     # "đừng xóa bài X", "không cần tạo topic Y", "khoan, chưa thêm bài Z vội" (not "chưa có … thì thêm": a condition)
-    "negation": rf"\b(?:đừng|không\s+cần|không\s+muốn|thôi\s+không|khoan|chưa)\b(?!\s+(?:thì|có\b[^,]*\bthì)\b)"
+    # "khỏi tạo …" and "không phải xóa, …" decline too; "thôi" alone does not ("thôi xóa luôn đi" = go ahead)
+    "negation": rf"\b(?:đừng|không\s+cần|không\s+muốn|không\s+phải|thôi\s+không|khỏi|khoan|chưa)\b(?!\s+(?:thì|có\b[^,]*\bthì)\b)"
                 rf"(?:\s+\w+){{0,2}}\s+(?:{_VERBS_ACC})\b",
     # "nếu xóa topic X thì …", "lỡ xóa nhầm bài Y thì …": the change sits inside the "if" part
     "hypothetical": rf"\b(?:nếu|lỡ|giả\s+sử|khi)\b(?:\s+\w+){{0,3}}\s+(?:{_VERBS_ACC})\b.*\bthì\b",

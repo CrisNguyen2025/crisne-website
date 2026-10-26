@@ -15,7 +15,9 @@ from rag_service.execution.changes import ChangeSet
 from rag_service.write_grant import write_granted
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.domains.roadmap.router.grounding import (
+    ACTION_NOT_ASKED_REPLY,
     BATCH_LAYER_DELETE_REPLY,
+    BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
     QUESTION_TITLE_REPLY,
     build_grounding,
@@ -25,6 +27,8 @@ from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.domains.roadmap.router.write_gate import (
+    ACTION_NOT_ASKED,
+    BLOCKED_CHANGE,
     BULK_DELETE_REQUEST,
     QUESTION_AS_TITLE,
     WriteGate,
@@ -294,7 +298,12 @@ class RoadmapCommands:
         # One write decision for this change (write_gate.py): denied changes stop here with the reason as reply
         gate = gate_action(gate, resolved_action, content, lower)
         if gate.denied:
-            reply = {QUESTION_AS_TITLE: QUESTION_TITLE_REPLY, BULK_DELETE_REQUEST: BULK_DELETE_REPLY}[gate.reason]
+            reply = {
+                QUESTION_AS_TITLE: QUESTION_TITLE_REPLY,
+                BULK_DELETE_REQUEST: BULK_DELETE_REPLY,
+                BLOCKED_CHANGE: BLOCKED_CHANGE_REPLY,
+                ACTION_NOT_ASKED: ACTION_NOT_ASKED_REPLY,
+            }[gate.reason]
             async for ev in self._stream_text(reply, delay):
                 yield ev
             return

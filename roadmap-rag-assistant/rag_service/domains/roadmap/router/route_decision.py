@@ -58,6 +58,12 @@ async def decide_route(
     scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]] = None,
 ) -> RouteOutcome:
     decision = router.decide(content)
+    # A declined change ("thôi khỏi tạo topic X", "đừng xóa bài Y") is settled by the heuristics: nothing is
+    # changed and the reply says so, with no LLM router call. Hypothetical or reported changes are often real
+    # questions ("nếu xóa layer 1 thì sao?"), so they keep routing.
+    if decision.write == WRITE_DENY and decision.understanding.write_blocker == "negation":
+        declined = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
+        return RouteOutcome(declined, "heuristic", decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE))
     scope: Optional[ScopeResult] = None
     # Keywords named no target: read it from the roadmap's data (scope.py). An outside topic is answered
     # "out of scope" here, before the LLM router, retrieval or System 2 is called.

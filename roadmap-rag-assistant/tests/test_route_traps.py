@@ -130,3 +130,68 @@ def test_plan_goal_without_a_blueprint_answers_from_the_lessons(monkeypatch):
     monkeypatch.setattr(agent_module, "answer_from_sources", fake_answer)
     _events("Lên cho anh một khung chương trình học Flutter từ căn bản")
     assert seen == ["Lên cho anh một khung chương trình học Flutter từ căn bản"]
+
+
+# ── A declined change never becomes a preview, and a preview is always the change asked for ──
+
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction  # noqa: E402
+from rag_service.domains.roadmap.router.write_gate import ACTION_NOT_ASKED, BLOCKED_CHANGE, WriteGate, gate_action  # noqa: E402
+
+DECLINED = [
+    "thôi khỏi tạo topic System Design nữa",
+    "khỏi thêm bài Kafka nhé",
+    "không phải xóa, mình chỉ muốn ẩn bài Redis",
+    "đừng xóa bài Docker nhé",
+]
+
+
+def _action(kind: str, level: str = "topic", title: str = "System Design") -> StructuredRoadmapAction:
+    return StructuredRoadmapAction(
+        action=ActionType(kind), entity_level=EntityLevel(level), entities=[SingleEntity(title=title)]
+    )
+
+
+@pytest.mark.parametrize("text", DECLINED)
+def test_declined_change_is_blocked_by_the_heuristics(text):
+    assert IntentRouter().decide(text).write == WRITE_DENY
+
+
+@pytest.mark.parametrize("text", DECLINED)
+@pytest.mark.parametrize("kind", ["create", "delete", "update"])
+def test_declined_change_is_never_previewed_whatever_the_extractor_read(text, kind):
+    # e.g. System 2 timed out, so the change went to the extractor, which read "khỏi tạo topic X" as a delete
+    gate = gate_action(WriteGate("confirm"), _action(kind), text, text.lower())
+    assert gate.mode == WRITE_DENY and gate.reason == BLOCKED_CHANGE
+
+
+@pytest.mark.parametrize("text,kind", [
+    ("tạo topic System Design", "delete"),
+    ("thêm bài Kafka vào layer 1", "delete"),
+    ("xóa bài Semantic Caching", "create"),
+])
+def test_preview_must_be_the_change_the_verb_asks_for(text, kind):
+    gate = gate_action(WriteGate("confirm"), _action(kind), text, text.lower())
+    assert gate.mode == WRITE_DENY and gate.reason == ACTION_NOT_ASKED
+
+
+@pytest.mark.parametrize("text,kind", [
+    ("tạo topic System Design", "create"),
+    ("xoa bai semantic caching", "delete"),
+    ("đổi tên topic AI Architecture thành AI Systems", "update"),
+    ("chuyển bài RAG sang layer AI", "update"),
+    ("bỏ bớt cái topic docker swarm ra đi", "delete"),
+    ("could you please delete the lesson about semantic caching?", "delete"),
+    ("thôi xóa luôn đi", "delete"),  # "thôi" alone is "go ahead", not a decline
+])
+def test_matching_verb_keeps_the_change(text, kind):
+    assert gate_action(WriteGate("confirm"), _action(kind), text, text.lower()).mode != WRITE_DENY
+
+
+@pytest.mark.parametrize("text", DECLINED)
+def test_declined_change_gets_the_nothing_changed_reply_without_a_model(text):
+    from rag_service.domains.roadmap.router.grounding import BLOCKED_CHANGE_REPLY
+
+    events = _events(text)
+    reply = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert reply.strip() == BLOCKED_CHANGE_REPLY.strip()
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]

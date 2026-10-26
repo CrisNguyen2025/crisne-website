@@ -74,6 +74,12 @@ BATCH_LAYER_DELETE_REPLY = (
     "ví dụ: `xóa layer mock 1 trong topic fe`."
 )
 
+# The extracted change is not the one the message's verb asks for ("khỏi tạo topic X" read as a delete)
+ACTION_NOT_ASKED_REPLY = (
+    "Mình chưa chắc bạn muốn thay đổi gì nên chưa làm gì cả. "
+    "Bạn nói rõ giúp mình nhé, ví dụ: `tạo topic …`, `xóa bài …` hoặc `đổi tên bài … thành …`."
+)
+
 BLOCKED_CHANGE_REPLY = (
     "Tôi hiểu đây không phải yêu cầu thay đổi nên không sửa gì trong roadmap. "
     "Nếu bạn muốn thay đổi, hãy gửi lệnh trực tiếp, ví dụ: `xóa bài Kafka` hoặc `tạo topic AI Engineering`."

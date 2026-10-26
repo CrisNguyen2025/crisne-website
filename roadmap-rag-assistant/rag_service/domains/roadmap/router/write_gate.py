@@ -14,6 +14,7 @@ from typing import Optional
 
 from rag_service.domains.roadmap.router.grounding import BULK_DELETE
 from rag_service.domains.roadmap.router.policy import (
+    ACTION_VERBS,
     CUD_MIN_CONFIDENCE,
     IMMEDIATE_DELETE_WORDS,
     WRITE_ALLOW,
@@ -27,11 +28,15 @@ from rag_service.domains.roadmap.router.schemas import (
     IntentType,
     StructuredRoadmapAction,
 )
-from rag_service.domains.roadmap.router.understanding import echoes_question
+import re
+
+from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.router.understanding import echoes_question, understand
 
 # Reasons a change is denied; the agent maps each to the reply the user sees
 UNCONFIRMED_GUESS = "unconfirmed_guess"  # only the LLM chose a change, without a change verb + object or confidence
 BLOCKED_CHANGE = "blocked_change"        # the message names a change it does not ask for (policy: write blockers)
+ACTION_NOT_ASKED = "action_not_asked"    # the extracted change is not the one the message's verb asks for
 QUESTION_AS_TITLE = "question_as_title"  # the extractor took the user's question as the new entry's name
 BULK_DELETE_REQUEST = "bulk_delete"      # "xóa hết": never done in one message
 
@@ -70,8 +75,17 @@ def gate_route(
 
 def gate_action(route_gate: WriteGate, action: StructuredRoadmapAction, message: str, lower: str) -> WriteGate:
     """May this extracted change run now? Deletes and route-level confirmations get a preview card first."""
+    # Checked on the message itself, whatever routed it here (heuristics, LLM router, System 2):
+    # a declined, hypothetical or reported change is never previewed.
+    if understand(message).write_blocker:
+        return WriteGate(WRITE_DENY, BLOCKED_CHANGE)
     if action.action == ActionType.CREATE and any(echoes_question(e.title, message) for e in action.entities):
         return WriteGate(WRITE_DENY, QUESTION_AS_TITLE)
+    # The change must be the one asked for: "khỏi tạo topic X" read as a delete, or "thêm" read as a delete,
+    # is a misreading, so it is not offered as a preview. Read on the message itself.
+    flat = fold(message.lower())
+    if not any(re.search(rf"\b{re.escape(v)}\b", flat) for v in ACTION_VERBS[action.action.value]):
+        return WriteGate(WRITE_DENY, ACTION_NOT_ASKED)
     if action.action == ActionType.DELETE and BULK_DELETE.search(lower):
         return WriteGate(WRITE_DENY, BULK_DELETE_REQUEST)
     if action.action == ActionType.DELETE and (action.is_batch or not any(w in lower for w in IMMEDIATE_DELETE_WORDS)):
