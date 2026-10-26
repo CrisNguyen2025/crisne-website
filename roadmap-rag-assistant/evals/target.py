@@ -108,6 +108,7 @@ class RoadmapTarget:
         self._knowledge: list[KnowledgeDocument] | None = None
         self._documents: list[dict] | None = None
         self._store: HybridVectorStore | None = None
+        self._scope_parts = None
 
     def _load(self) -> tuple[list[KnowledgeDocument], list[dict]]:
         if self._knowledge is None:
@@ -152,11 +153,30 @@ class RoadmapTarget:
         return [Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score) for doc, score in matches]
 
     def scope(self, text: str, run_as: str | None = None) -> ScopeResult:
-        """What the message is about, as the chat decides it before routing."""
+        """What the message is about, as the chat decides it before routing: keywords first, then the
+        roadmap's data (router/scope.py) when keywords name no target. Offline (mode=fts) has no embeddings."""
+        from rag_service.domains.roadmap.retrieval.scope_centroid import DomainCentroids
+        from rag_service.domains.roadmap.router.scope import classify_scope, load_thresholds
+        from rag_service.domains.roadmap.router.target_grounding import Catalog
         from rag_service.domains.roadmap.router.understanding import understand
+        from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
-        target = understand(text).target.value
-        return ScopeResult(target={"off_topic": "external", "roadmap": "roadmap"}.get(target, "none"))
+        keyword = understand(text).target.value
+        if keyword in ("off_topic", "roadmap"):
+            return ScopeResult(target={"off_topic": "external", "roadmap": "roadmap"}[keyword])
+        store = self._get_store()
+        if self._scope_parts is None:
+            self._scope_parts = (Catalog.from_documents(self._load()[0]), DomainCentroids.from_store(store))
+        catalog, centroids = self._scope_parts
+        vec = None
+        embedder = store._get_embedder()
+        if centroids is not None and embedder is not None:
+            try:
+                vec = embedder.embed_query(normalize_vietnamese(text))
+            except Exception as exc:
+                raise TargetUnavailable("embedding_unavailable") from exc
+        result = classify_scope(text, catalog=catalog, centroids=centroids, query_vec=vec, thresholds=load_thresholds())
+        return ScopeResult(target=result.scope.value, focus=result.focus, score=result.nearest)
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
         if is_sensitive_request(text, instruction=instruction_part(text)):

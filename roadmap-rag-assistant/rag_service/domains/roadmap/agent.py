@@ -10,6 +10,8 @@ Architecture:
 
 from __future__ import annotations
 
+import dataclasses
+
 import asyncio
 import os
 from pathlib import Path
@@ -49,6 +51,7 @@ from rag_service.domains.roadmap.router import (
 )
 from rag_service.domains.roadmap.router.policy import WRITE_NONE
 from rag_service.domains.roadmap.router.route_decision import decide_route
+from rag_service.domains.roadmap.router.scope import Scope, classify_for_routing
 from rag_service.domains.roadmap.router.understanding import instruction_part
 from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE
 from rag_service.domains.roadmap.router.grounding import (
@@ -59,6 +62,7 @@ from rag_service.domains.roadmap.router.grounding import (
     TOO_LONG_REPLY,
     UNCLEAR_REPLY,
     BLOCKED_CHANGE_REPLY,
+    domain_gap_reply,
     no_match_reply,
     out_of_scope_reply,
 )
@@ -264,6 +268,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 self.router, content, recent,
                 verifier_llm=self.router_llm, catalog=await rag_engine.catalog(), page_context=page_context,
                 owner=is_owner(),
+                scope_fn=lambda text: classify_for_routing(text, rag_engine, rag_engine.query_vector),
             )
         except BaseException as exc:
             end_step_on_error(router_step, exc)
@@ -298,6 +303,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             trace.flags["target"] = understood.target.value
             trace.flags["intent"] = intent_res.intent.value
             trace.flags["write"] = route_gate.mode
+            if outcome.scope is not None:
+                trace.flags["scope"] = outcome.scope.scope.value
             if not is_owner() and route_gate.mode != WRITE_NONE:
                 trace.flags["visitor_write_attempt"] = True
             if method.startswith(("rate_limited", "llm_error")):
@@ -338,9 +345,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
 
         # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
         if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
+            deps = self._source_deps()
+            if outcome.scope is not None and outcome.scope.scope == Scope.DOMAIN_GAP:
+                # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
+                focus_topic = outcome.scope.focus
+                deps = dataclasses.replace(deps, no_match_reply=lambda owner: domain_gap_reply(focus_topic, owner))
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=self._source_deps(),
+                llm=self.llm, deps=deps,
             ):
                 yield ev
             return

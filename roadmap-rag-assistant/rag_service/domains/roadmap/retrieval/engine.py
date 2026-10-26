@@ -140,6 +140,23 @@ class HybridRagEngine:
             self._catalog_of = docs
         return self._catalog
 
+    async def query_vector(self, text: str):
+        """The query embedding the search will use (cached, so the search does not embed it again); None offline."""
+        from rag_service.core.retrieval.hybrid import _QUERY_VECTORS
+
+        cached = _QUERY_VECTORS.get(text)
+        if cached is not None:
+            return cached
+        embedder = self._vector_store._get_embedder()
+        if embedder is None:
+            return None
+        try:
+            vec = await asyncio.to_thread(embedder.embed_query, text)
+        except Exception:
+            return None
+        _QUERY_VECTORS.put(text, vec)
+        return vec
+
     def centroids(self):
         """Domain signals from the indexed vectors (scope_centroid.py); None without embeddings. Rebuilt after a sync."""
         from rag_service.domains.roadmap.retrieval.scope_centroid import DomainCentroids

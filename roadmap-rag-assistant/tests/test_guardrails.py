@@ -132,9 +132,14 @@ def test_agent_refuses_sensitive_request_without_tools():
     assert "GEMINI_API_KEY" not in text
 
 
-def test_no_match_reply_offers_create_only_to_owner():
-    assert "tạo topic" in no_match_reply(owner=True)
-    assert "tạo topic" not in no_match_reply(owner=False)
+def test_no_match_reply_offers_nothing_to_create():
+    # A question that found nothing may be about anything: creating is offered only for a topic of the
+    # roadmap's field (domain_gap_reply), and only to the owner
+    from rag_service.domains.roadmap.router.grounding import domain_gap_reply
+
+    assert "tạo topic" not in no_match_reply(owner=True) and "tạo topic" not in no_match_reply(owner=False)
+    assert "thêm bài LoRA" in domain_gap_reply("LoRA", owner=True)
+    assert "thêm bài" not in domain_gap_reply("LoRA", owner=False)
 
 
 def _reply(text: str, thread_id: str = "guardrails") -> tuple[str, list[dict]]:

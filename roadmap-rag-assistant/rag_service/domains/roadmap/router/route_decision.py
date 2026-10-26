@@ -11,12 +11,14 @@ measure is what the chat does.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence
+from typing import Any, Awaitable, Callable, Optional, Sequence
 
 from rag_service.domains.roadmap.router.grounding import build_grounding
 from rag_service.domains.roadmap.router.intent_router import Decision, IntentRouter
 from rag_service.domains.roadmap.router.policy import NAMED_PART, WRITE_ALLOW, WRITE_CONFIRM, WRITE_DENY, WRITE_NONE
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
+from rag_service.domains.roadmap.router.scope import ScopeResult, out_of_scope_act
+from rag_service.domains.roadmap.router.policy import Target
 from rag_service.domains.roadmap.router.target_grounding import Catalog, Grounding, ground_change
 from rag_service.domains.roadmap.router.verifier import WriteVerdict, verify_write
 from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, UNCONFIRMED_GUESS, WriteGate, gate_route
@@ -32,6 +34,7 @@ class RouteOutcome:
     plan: Optional[WritePlan] = None
     verdict: Optional[WriteVerdict] = None
     grounding: Optional[Grounding] = None
+    scope: Optional[ScopeResult] = None
 
     @property
     def write(self) -> str:
@@ -52,18 +55,27 @@ async def decide_route(
     catalog: Optional[Catalog] = None,
     page_context: Optional[dict] = None,
     owner: bool = True,
+    scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]] = None,
 ) -> RouteOutcome:
-    intent_res, method = await router.aroute(content, history)
     decision = router.decide(content)
+    scope: Optional[ScopeResult] = None
+    # Keywords named no target: read it from the roadmap's data (scope.py). An outside topic is answered
+    # "out of scope" here, before the LLM router, retrieval or System 2 is called.
+    if scope_fn is not None and decision.understanding.target == Target.NONE:
+        scope = await scope_fn(content)
+        if out_of_scope_act(decision.understanding.act.value, scope.scope):
+            out = IntentClassificationResult(intent=IntentType.OUT_OF_SCOPE, confidence=0.9, needs_cud_extraction=False)
+            return RouteOutcome(out, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
+    intent_res, method = await router.aroute(content, history)
     gate = gate_route(
         intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write
     )
     if not is_write_candidate(gate):
-        return RouteOutcome(intent_res, method, decision, gate)
+        return RouteOutcome(intent_res, method, decision, gate, scope=scope)
     # A visitor can never write: the change handler answers "owner only" before extracting anything,
     # so System 2 is not called (a visitor sending change-like messages cannot spend the model's quota)
     if not owner:
-        return RouteOutcome(intent_res, method, decision, gate)
+        return RouteOutcome(intent_res, method, decision, gate, scope=scope)
 
     verdict = await verify_write(verifier_llm, content, history, build_grounding(page_context))
     grounding = (
@@ -87,15 +99,15 @@ async def decide_route(
             needs_confirmation=mode == WRITE_CONFIRM,
         )
         return RouteOutcome(cud, method, decision, WriteGate(mode, None if mode == WRITE_ALLOW else plan.reason),
-                            plan, verdict, grounding)
+                            plan, verdict, grounding, scope=scope)
     if plan.outcome == KEEP:
-        return RouteOutcome(intent_res, method, decision, gate, plan, verdict, grounding)
+        return RouteOutcome(intent_res, method, decision, gate, plan, verdict, grounding, scope=scope)
     if plan.outcome == BLOCKED:
-        return RouteOutcome(intent_res, method, decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE), plan, verdict, grounding)
+        return RouteOutcome(intent_res, method, decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE), plan, verdict, grounding, scope=scope)
     assert plan.outcome == REROUTE
     rerouted = IntentClassificationResult(
         intent=plan.intent or IntentType.KNOWLEDGE_QUERY,
         confidence=verdict.confidence if verdict else 0.5,
         needs_cud_extraction=False,
     )
-    return RouteOutcome(rerouted, f"{method}+reroute", decision, WriteGate(WRITE_NONE), plan, verdict, grounding)
+    return RouteOutcome(rerouted, f"{method}+reroute", decision, WriteGate(WRITE_NONE), plan, verdict, grounding, scope=scope)

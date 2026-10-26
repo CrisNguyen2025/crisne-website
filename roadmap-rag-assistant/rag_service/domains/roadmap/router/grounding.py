@@ -25,18 +25,13 @@ _OUT_OF_SCOPE_HEAD = (
     "Bạn có thể thử:\n"
     "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
 )
-OUT_OF_SCOPE_REPLY = (
-    _OUT_OF_SCOPE_HEAD
-    + "- 🗺️ **Tạo topic**: `tạo topic AI Engineering`\n"
-    "- 📖 **Thêm bài học**: `thêm bài học Vector Database vào layer này`"
-)
+# No create suggestion, for owners either: a topic outside the roadmap is not a lesson to add
+OUT_OF_SCOPE_REPLY = _OUT_OF_SCOPE_HEAD + "- 📋 **Xem danh sách**: `liệt kê topic`"
 
 
 def out_of_scope_reply(owner: bool) -> str:
-    """Out-of-scope refusal; write commands are suggested to owners only."""
-    if owner:
-        return OUT_OF_SCOPE_REPLY
-    return _OUT_OF_SCOPE_HEAD + "- 📋 **Xem danh sách**: `liệt kê topic`"
+    """Out-of-scope refusal: the topic is outside the roadmap, so nothing is offered to create."""
+    return OUT_OF_SCOPE_REPLY
 
 
 # Shown when the message is neither a greeting nor a clear request
@@ -105,11 +100,21 @@ SENSITIVE_REPLY = (
 )
 
 def no_match_reply(owner: bool) -> str:
-    """Reply for a knowledge query with no result; only owners are offered the create commands."""
-    head = "Tôi chưa tìm thấy bài học hoặc tài liệu nào phù hợp trong Roadmap.\n\n"
-    if owner:
-        return head + "Bạn có thể thử từ khóa khác, hoặc tạo mới bằng lệnh: `tạo topic ...` hoặc `thêm bài học ... vào layer ...`."
-    return head + "Bạn có thể thử lại với từ khóa khác, ví dụ: `tìm bài học về Docker`."
+    """Reply for a roadmap question with no result. Creating is offered only for a topic of the roadmap's
+    field (domain_gap_reply): a question that found nothing may be about anything."""
+    return (
+        "Tôi chưa tìm thấy bài học hoặc tài liệu nào phù hợp trong Roadmap.\n\n"
+        "Bạn có thể thử lại với từ khóa khác, ví dụ: `tìm bài học về Docker`."
+    )
+
+
+def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
+    """The topic belongs to the roadmap's field but no lesson covers it yet; owners may add one."""
+    name = f"**{topic}**" if topic else "chủ đề này"
+    reply = f"Roadmap chưa có bài học về {name}. Chủ đề này thuộc lĩnh vực của lộ trình nhưng chưa được bổ sung."
+    if owner and topic:
+        reply += f"\n\nBạn có thể thêm: `thêm bài {topic} vào layer ...`"
+    return reply
 
 
 def build_grounding(context: Optional[dict]) -> str:
