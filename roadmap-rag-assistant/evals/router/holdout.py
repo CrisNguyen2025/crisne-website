@@ -78,6 +78,45 @@ def _catalog():
     return _CATALOG
 
 
+_SCOPE = None
+
+
+def _scope_fn(live: bool):
+    """Scope as the chat reads it (router/scope.py). Live runs (--llm) embed the message; offline runs (CI)
+    never call the network, so they read catalog names only (never external without evidence)."""
+    global _SCOPE
+    if _SCOPE is None:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from evals.target import RoadmapTarget
+        from rag_service.domains.roadmap.retrieval.scope_centroid import DomainCentroids
+
+        def build():
+            target = RoadmapTarget(mode="hybrid" if live else "fts")
+            store = target._get_store()
+            return store, DomainCentroids.from_store(store)
+
+        with ThreadPoolExecutor(1) as pool:  # _load runs its own event loop
+            _SCOPE = pool.submit(build).result()
+    store, centroids = _SCOPE
+
+    async def scope(text: str):
+        import asyncio
+
+        from rag_service.domains.roadmap.router.scope import classify_scope, load_thresholds
+
+        vec = None
+        embedder = store._get_embedder() if live else None
+        if centroids is not None and embedder is not None:
+            try:
+                vec = await asyncio.to_thread(embedder.embed_query, text)
+            except Exception:
+                vec = None
+        return classify_scope(text, catalog=_catalog(), centroids=centroids, query_vec=vec, thresholds=load_thresholds())
+
+    return scope
+
+
 async def write_outcome(router, text: str, history=(), context=None) -> tuple[str, str]:
     """The agent's decision order up to the write decision; nothing runs. Returns (now | preview | none, why)."""
     from rag_service.core.guards import is_sensitive_request
@@ -102,6 +141,7 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
     outcome = await decide_route(
         router, content, list(history),
         verifier_llm=getattr(router, "verifier_llm", None), catalog=_catalog(), page_context=context,
+        scope_fn=_scope_fn(live=getattr(router, "verifier_llm", None) is not None),
     )
     why = (
         f"{outcome.method} row={outcome.decision.row} intent={outcome.intent_res.intent.value} "

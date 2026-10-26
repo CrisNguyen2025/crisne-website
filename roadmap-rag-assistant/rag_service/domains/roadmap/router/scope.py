@@ -98,6 +98,11 @@ def out_of_scope_act(act: str, scope: Scope) -> bool:
     return scope == Scope.EXTERNAL and act in ("question", "statement", "command", "request")
 
 
+def search_act(act: str, scope: Scope) -> bool:
+    """SCOPE_ROUTE, ROADMAP and DOMAIN_GAP columns: a question or statement about the field is a search."""
+    return scope in (Scope.ROADMAP, Scope.DOMAIN_GAP) and act in ("question", "statement")
+
+
 async def classify_for_routing(text: str, engine: Any, embed: Optional[Callable[[str], Any]] = None) -> ScopeResult:
     """classify_scope with the live engine: catalog, centroids and a cached query vector (the search reuses it)."""
     catalog = await engine.catalog()

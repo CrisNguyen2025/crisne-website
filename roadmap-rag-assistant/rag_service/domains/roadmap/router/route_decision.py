@@ -17,7 +17,7 @@ from rag_service.domains.roadmap.router.grounding import build_grounding
 from rag_service.domains.roadmap.router.intent_router import Decision, IntentRouter
 from rag_service.domains.roadmap.router.policy import NAMED_PART, WRITE_ALLOW, WRITE_CONFIRM, WRITE_DENY, WRITE_NONE
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
-from rag_service.domains.roadmap.router.scope import ScopeResult, out_of_scope_act
+from rag_service.domains.roadmap.router.scope import ScopeResult, out_of_scope_act, search_act
 from rag_service.domains.roadmap.router.policy import Target
 from rag_service.domains.roadmap.router.target_grounding import Catalog, Grounding, ground_change
 from rag_service.domains.roadmap.router.verifier import WriteVerdict, verify_write
@@ -66,6 +66,10 @@ async def decide_route(
         if out_of_scope_act(decision.understanding.act.value, scope.scope):
             out = IntentClassificationResult(intent=IntentType.OUT_OF_SCOPE, confidence=0.9, needs_cud_extraction=False)
             return RouteOutcome(out, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
+        # A question about the roadmap's field that the heuristics left open: a search, no LLM router needed
+        if decision.intent is None and search_act(decision.understanding.act.value, scope.scope):
+            found = IntentClassificationResult(intent=IntentType.KNOWLEDGE_QUERY, confidence=0.85, needs_cud_extraction=False)
+            return RouteOutcome(found, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
     intent_res, method = await router.aroute(content, history)
     gate = gate_route(
         intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write

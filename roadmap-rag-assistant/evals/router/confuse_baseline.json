@@ -1,7 +1,7 @@
 {
-  "n": 408,
+  "n": 498,
   "write_now_violation": 0,
   "missed_write": 3,
-  "wrong_branch": 117,
+  "wrong_branch": 151,
   "preview_violation": 74
 }

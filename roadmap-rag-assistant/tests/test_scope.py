@@ -136,3 +136,14 @@ def test_router_prompt_examples_never_come_from_the_scope_eval_set():
     samples = [json.loads(line)["input"] for line in path.read_text(encoding="utf-8").splitlines()]
     seen = {s.lower() for s in samples} | {focus_of(s) for s in samples if focus_of(s)}
     assert not [m for m, _ in ROUTER_EXAMPLES if m.lower() in seen or focus_of(m) in seen]
+
+
+def test_question_about_the_field_left_open_by_heuristics_is_a_search():
+    out = _decide("bạn có biết gì về semantic caching không nhỉ", Scope.ROADMAP)
+    assert out.intent_res.intent == IntentType.KNOWLEDGE_QUERY and out.method == "scope"
+    gap = _decide("bạn có biết về LoRA không", Scope.DOMAIN_GAP)
+    assert gap.intent_res.intent == IntentType.KNOWLEDGE_QUERY
+
+
+def test_unclear_scope_leaves_the_message_to_the_router():
+    assert _decide("bạn có biết về LoRA không", Scope.NONE).method != "scope"

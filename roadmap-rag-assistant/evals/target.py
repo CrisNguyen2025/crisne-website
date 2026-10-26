@@ -133,6 +133,10 @@ class RoadmapTarget:
         store = self._get_store()
         search = {"fts": store.search_fts, "vector": store.search_vector, "hybrid": store.hybrid_search}[self.mode]
         doc_ids = {doc["source_id"]: doc["doc_id"] for doc in self._load()[1]}
+        if self.mode in ("vector", "hybrid") and store._get_embedder() is not None and store._similarities(text) is None:
+            # The query could not be embedded (quota): the search would silently run on FTS5 only, so this sample
+            # would measure the degraded mode. Reported as unavailable, like a judge or model outage.
+            raise TargetUnavailable("embedding_unavailable")
         if self.rerank:
             from rag_service.core.retrieval.rerank import RERANK_POOL, rerank
             from rag_service.domains.roadmap.agent import _PROVIDERS, rerank_text
