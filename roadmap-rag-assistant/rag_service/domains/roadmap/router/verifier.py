@@ -69,16 +69,12 @@ class WriteVerdict(BaseModel):
 
     @property
     def says_roadmap_command(self) -> bool:
-        """System 2 reads a command or request to change this roadmap, whether or not it named the action."""
-        return (
-            self.intent == IntentType.ROADMAP_CUD
-            and self.act in (Act.COMMAND, Act.REQUEST)
-            and self.target_system == TargetSystem.ROADMAP
-        )
+        """System 2 reads a command or request aimed at this roadmap, whatever intent or action it filled in."""
+        return self.act in (Act.COMMAND, Act.REQUEST) and self.target_system == TargetSystem.ROADMAP
 
     @property
     def is_roadmap_change(self) -> bool:
-        return self.says_roadmap_command and self.action is not None
+        return self.says_roadmap_command and self.intent == IntentType.ROADMAP_CUD and self.action is not None
 
 
 VERIFY_EXAMPLES = [

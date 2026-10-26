@@ -232,3 +232,16 @@ def test_roadmap_command_without_an_action_is_previewed_not_rerouted():
     v = WriteVerdict(intent=IntentType.ROADMAP_CUD, act="command", target_system="roadmap")
     plan = plan_write(gate_mode=WRITE_ALLOW, s1_change=True, verdict=v, grounding=None, explicit_name=False)
     assert plan.outcome == PREVIEW
+
+
+@pytest.mark.parametrize("intent", [IntentType.KNOWLEDGE_QUERY, IntentType.CHITCHAT, IntentType.ROADMAP_CUD])
+def test_system_2_overrules_a_command_only_with_a_reason(intent):
+    from rag_service.domains.roadmap.router.verifier import WriteVerdict
+
+    # A command aimed at the roadmap, with the wrong intent or no action: previewed, never rerouted
+    v = WriteVerdict(intent=intent, act="command", target_system="roadmap")
+    assert plan_write(gate_mode=WRITE_ALLOW, s1_change=True, verdict=v, grounding=None, explicit_name=False).outcome == PREVIEW
+    # With a reason (another system, a question) it still overrules
+    for act, target in (("command", "external"), ("question", "roadmap")):
+        v = WriteVerdict(intent=IntentType.KNOWLEDGE_QUERY, act=act, target_system=target)
+        assert plan_write(gate_mode=WRITE_ALLOW, s1_change=True, verdict=v, grounding=None, explicit_name=False).outcome != PREVIEW
