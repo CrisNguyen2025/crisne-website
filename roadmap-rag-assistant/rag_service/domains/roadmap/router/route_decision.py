@@ -50,6 +50,7 @@ async def decide_route(
     verifier_llm: Any = None,
     catalog: Optional[Catalog] = None,
     page_context: Optional[dict] = None,
+    owner: bool = True,
 ) -> RouteOutcome:
     intent_res, method = await router.aroute(content, history)
     decision = router.decide(content)
@@ -57,6 +58,10 @@ async def decide_route(
         intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write
     )
     if not is_write_candidate(gate):
+        return RouteOutcome(intent_res, method, decision, gate)
+    # A visitor can never write: the change handler answers "owner only" before extracting anything,
+    # so System 2 is not called (a visitor sending change-like messages cannot spend the model's quota)
+    if not owner:
         return RouteOutcome(intent_res, method, decision, gate)
 
     verdict = await verify_write(verifier_llm, content, history)

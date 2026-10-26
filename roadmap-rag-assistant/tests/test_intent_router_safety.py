@@ -216,3 +216,13 @@ def test_low_confidence_llm_change_asks_back():
     steps, _ = _run(NextGenRoadmapAgent(llm_model=llm), "xóa nó đi", thread)
     assert steps["route"]["method"] == "llm"
     assert steps["answer"]["mode"] == "unclear" and not llm.extracted
+
+
+def test_visitor_change_never_calls_system2():
+    # A visitor cannot write: System 2 is skipped and the change handler answers "owner only"
+    set_actor("visitor")
+    llm = _FixedLlm(IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.95, needs_cud_extraction=True))
+    steps, text = _run(NextGenRoadmapAgent(llm_model=llm), "tạo topic Kubernetes", "safety-visitor-write")
+    assert "WriteVerdict" not in llm.schemas and not llm.extracted
+    assert "owner" in text.lower() or "chủ" in text.lower()
+    set_actor("owner")

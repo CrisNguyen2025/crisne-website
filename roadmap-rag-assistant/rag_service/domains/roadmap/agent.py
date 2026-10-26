@@ -263,6 +263,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             outcome = await decide_route(
                 self.router, content, recent,
                 verifier_llm=self.router_llm, catalog=await rag_engine.catalog(), page_context=page_context,
+                owner=is_owner(),
             )
         except BaseException as exc:
             end_step_on_error(router_step, exc)
@@ -297,6 +298,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             trace.flags["target"] = understood.target.value
             trace.flags["intent"] = intent_res.intent.value
             trace.flags["write"] = route_gate.mode
+            if not is_owner() and route_gate.mode != WRITE_NONE:
+                trace.flags["visitor_write_attempt"] = True
             if outcome.plan is not None:
                 trace.flags["write_plan"] = outcome.plan.outcome
                 # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
