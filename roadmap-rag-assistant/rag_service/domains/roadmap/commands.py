@@ -7,6 +7,8 @@ carries it out: extraction, target checks, confirmation and the executor.
 from __future__ import annotations
 
 import re
+
+from rag_service.domains.roadmap.retrieval.relevance import fold
 from typing import AsyncGenerator
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
@@ -67,6 +69,12 @@ class RoadmapCommands:
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting: confirm/cancel a previewed action, or pick a layer."""
+        plain = " ".join(re.sub(r"[^\w\s]", " ", fold(lower)).split())
+        if plain in ("tao layer mac dinh", "tao layer default"):
+            async for ev in self._stream_text(NO_DEFAULT_LAYER_REPLY, delay):
+                yield ev
+            outcome["handled"] = True
+            return
         # ── 0. Pending Action Confirmation ────────────────────────────────────
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
@@ -321,6 +329,19 @@ class RoadmapCommands:
                 yield ev
             return
 
+        # A group or item is filed by level: a level the message does not name is asked for, never guessed
+        if (
+            resolved_action.action == ActionType.CREATE
+            and resolved_action.entity_level in (EntityLevel.GROUP, EntityLevel.ITEM)
+            and any(not e.level for e in resolved_action.entities)
+        ):
+            session_ctx.pending_level_choice = content
+            titles = ", ".join(f"**{e.title}**" for e in resolved_action.entities)
+            noun = "nhóm" if resolved_action.entity_level == EntityLevel.GROUP else "bài học"
+            async for ev in self._stream_text(level_choice_reply(noun, titles), delay):
+                yield ev
+            return
+
         # Layer actions need a known topic: ask back with the topic list instead of guessing.
         if resolved_action.entity_level == EntityLevel.LAYER:
             topic_ref = resolved_action.target_parent_identifier
@@ -351,19 +372,6 @@ class RoadmapCommands:
         # A delete to confirm is previewed once its layer is resolved (the preview names it)
         if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
             async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
-                yield ev
-            return
-
-        # A group or item is filed by level: a level the message does not name is asked for, never guessed
-        if (
-            resolved_action.action == ActionType.CREATE
-            and resolved_action.entity_level in (EntityLevel.GROUP, EntityLevel.ITEM)
-            and any(not e.level for e in resolved_action.entities)
-        ):
-            session_ctx.pending_level_choice = content
-            titles = ", ".join(f"**{e.title}**" for e in resolved_action.entities)
-            noun = "nhóm" if resolved_action.entity_level == EntityLevel.GROUP else "bài học"
-            async for ev in self._stream_text(level_choice_reply(noun, titles), delay):
                 yield ev
             return
 
