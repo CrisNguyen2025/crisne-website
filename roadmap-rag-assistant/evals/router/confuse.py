@@ -113,7 +113,13 @@ def main(argv) -> int:
         print(f"  {f[0]:9} [{f[1]}/{f[2]}] want={f[3]} got={f[4]}/{f[5]} | {f[6][:80]!r} | {f[7]}")
 
 
-    return 1 if total.get("write_now_violation") or total.get("missed_write") else 0
+    # A ratchet against confuse_baseline.json: no write at once, and no more misses or wrong branches than stored
+    baseline = json.loads((Path(__file__).parent / "confuse_baseline.json").read_text(encoding="utf-8"))
+    worse = [k for k in ("missed_write", "wrong_branch") if total.get(k, 0) > baseline[k]]
+    if total.get("write_now_violation"):
+        worse.insert(0, "write_now_violation")
+    print("\nratchet:", "FAIL " + ", ".join(worse) if worse else "ok", f"(baseline {baseline})")
+    return 1 if worse else 0
 
 
 if __name__ == "__main__":
