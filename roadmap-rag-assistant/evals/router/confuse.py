@@ -13,6 +13,7 @@ import json
 import random
 import re
 import sys
+from types import SimpleNamespace
 
 from pathlib import Path
 
@@ -32,6 +33,17 @@ def typo(text: str) -> str:
     return " ".join(words)
 
 
+# Chat shorthand people type, the reverse of normalization's teencode table
+TO_SHORTHAND = [("không", "ko"), ("gì", "j"), ("được", "dc"), ("với", "vs"), ("vậy", "z"), ("mình", "mk")]
+
+
+def combined(text: str) -> str:
+    """Several kinds of noise at once: shorthand, no diacritics, a typo, a greeting and an emoji."""
+    for word, short in TO_SHORTHAND:
+        text = re.sub(rf"\b{word}\b", short, text)
+    return "ê ad ơi " + typo(fold(text)) + " 🙏"
+
+
 VARIANTS = {
     "orig": lambda t: t,
     "no-diacritics": lambda t: fold(t),
@@ -39,6 +51,7 @@ VARIANTS = {
     "emoji": lambda t: t + " nha 😅",
     "typo": typo,
     "upper": lambda t: t.upper(),
+    "combined": combined,
 }
 
 
@@ -62,18 +75,28 @@ def branch(write: str, why: str) -> str:
 
 
 STRESS = Path(__file__).parent / "stress_confuse.jsonl"
+# Messy messages, measured only (never used to tune rules): several kinds of noise in one message
+MESSY = Path(__file__).parent / "messy.jsonl"
+MESSY_VARIANTS = ("orig", "no-diacritics", "combined")
+STRESS_VARIANTS = ("orig", "no-diacritics", "greeting", "emoji", "typo", "upper")
 
 
-async def run(use_llm: bool, path: Path = STRESS, max_calls: int | None = None) -> dict:
+async def run(
+    use_llm: bool, path: Path = STRESS, max_calls: int | None = None, variants: tuple[str, ...] | None = None
+) -> dict:
     router = _router(use_llm, max_calls)
+    variants = variants or (MESSY_VARIANTS if path == MESSY else STRESS_VARIANTS)
     whys = []
     base = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     stats = collections.defaultdict(lambda: collections.Counter())
     fails = []
     for row in base:
+        history = [SimpleNamespace(**h) for h in row.get("history", [])]
         for vname, fn in VARIANTS.items():
+            if variants is not None and vname not in variants:
+                continue
             text = fn(row["text"])
-            got_write, why = await write_outcome(router, text)
+            got_write, why = await write_outcome(router, text, history)
             whys.append(why)
             b = branch(got_write, why)
             s = stats[row["cat"]]
@@ -107,10 +130,12 @@ def main(argv) -> int:
     from evals.router.holdout import max_calls_arg
 
     use_llm, max_calls = "--llm" in argv, max_calls_arg(argv)
+    messy = "--set" in argv and argv[argv.index("--set") + 1] == "messy"
+    path, variants = (MESSY, MESSY_VARIANTS) if messy else (STRESS, STRESS_VARIANTS)
     if use_llm:
-        n = sum(1 for l in STRESS.read_text(encoding="utf-8").splitlines() if l.strip()) * len(VARIANTS)
+        n = sum(1 for l in path.read_text(encoding="utf-8").splitlines() if l.strip()) * len(variants)
         print(f"Live model: {n} messages, up to {2 * n} calls (router + System 2); budget {max_calls or 'unlimited'}.")
-    report = asyncio.run(run(use_llm, max_calls=max_calls))
+    report = asyncio.run(run(use_llm, path=path, max_calls=max_calls, variants=variants))
     total, stats, fails = report["total"], report["stats"], report["fails"]
     print("TOTAL", total)
     print("\nby category:")
@@ -126,6 +151,11 @@ def main(argv) -> int:
         print(f"  {f[0]:9} [{f[1]}/{f[2]}] want={f[3]} got={f[4]}/{f[5]} | {f[6][:80]!r} | {f[7]}")
 
 
+    if messy:  # measured only: no baseline to hold, but a write at once still fails the run
+        if str(total.get("validity", "")).startswith("INVALID"):
+            print(total["validity"])
+            return 2
+        return 1 if total.get("write_now_violation") else 0
     # A ratchet against confuse_baseline.json: no write at once, and no more misses or wrong branches than stored
     baseline = json.loads((Path(__file__).parent / "confuse_baseline.json").read_text(encoding="utf-8"))
     worse = [k for k in ("missed_write", "wrong_branch") if total.get(k, 0) > baseline[k]]
