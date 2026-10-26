@@ -14,7 +14,7 @@ import asyncio
 from enum import Enum
 from typing import Any, Optional, Sequence
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from rag_service.llm_keys import invoke_structured
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType, StructuredRoadmapAction
@@ -58,14 +58,27 @@ class WriteVerdict(BaseModel):
     )
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    @model_validator(mode="after")
+    def _one_action(self) -> "WriteVerdict":
+        # The action is in two places; models often fill only `change` ("tạo topic Data Engineering" came back
+        # with action=None and change.action=create). One fact: take the missing half from the other.
+        if self.change is not None:
+            self.action = self.action or self.change.action
+            self.entity_level = self.entity_level or self.change.entity_level
+        return self
+
     @property
-    def is_roadmap_change(self) -> bool:
+    def says_roadmap_command(self) -> bool:
+        """System 2 reads a command or request to change this roadmap, whether or not it named the action."""
         return (
             self.intent == IntentType.ROADMAP_CUD
             and self.act in (Act.COMMAND, Act.REQUEST)
             and self.target_system == TargetSystem.ROADMAP
-            and self.action is not None
         )
+
+    @property
+    def is_roadmap_change(self) -> bool:
+        return self.says_roadmap_command and self.action is not None
 
 
 VERIFY_EXAMPLES = [

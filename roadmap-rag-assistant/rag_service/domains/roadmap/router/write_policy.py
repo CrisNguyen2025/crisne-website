@@ -8,6 +8,7 @@ Inputs, for a message the write gate (write_gate.gate_route) left as a write can
 | situation                                                        | outcome                         |
 |------------------------------------------------------------------|---------------------------------|
 | System 2 unavailable                                             | never at once: a denied gate keeps its ask-back, anything else is previewed |
+| System 2: a roadmap command, but no action named                 | as if System 2 were unavailable: an incomplete reading agrees, it is no "not a change" |
 | System 2: not a roadmap change (question, negation, external…)   | route to System 2's intent; a negation or sarcasm gets the "nothing changed" reply |
 | a change, but the target / container is not in the roadmap       | preview: the change handler asks back with the closest names |
 | a new topic                                                      | at once only with an explicit name ("tên là X", quoted) and System 1 + gate allow; else preview |
@@ -58,6 +59,9 @@ def plan_write(
     grounding: Optional[Grounding],
     explicit_name: bool,
 ) -> WritePlan:
+    if verdict is not None and verdict.says_roadmap_command and verdict.action is None:
+        # Incomplete, not a disagreement: never rerouted as "not a change", only previewed
+        return WritePlan(PREVIEW, "system 2 read a roadmap command but named no action")
     if verdict is None:
         # Without System 2 nothing runs at once. A gate that already said no keeps its ask-back
         # ("xóa nó đi" at low confidence); any other candidate is only previewed.

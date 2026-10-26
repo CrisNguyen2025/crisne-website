@@ -210,3 +210,25 @@ def test_negation_is_never_written_or_previewed():
 ])
 def test_sensitive_guard_reads_the_request_not_the_names(text, sensitive):
     assert is_sensitive_request(text, instruction=instruction_part(text)) is sensitive
+
+
+# ── An incomplete System 2 reading agrees; it is never a "not a change" (2026-10-26, "tạo topic Data Engineering") ──
+
+
+def test_action_given_only_in_change_is_the_verdicts_action():
+    from rag_service.domains.roadmap.router.schemas import SingleEntity, StructuredRoadmapAction
+    from rag_service.domains.roadmap.router.verifier import WriteVerdict
+
+    v = WriteVerdict(
+        intent=IntentType.ROADMAP_CUD, act="command", target_system="roadmap",
+        change=StructuredRoadmapAction(action="create", entity_level="topic", entities=[SingleEntity(title="Data Engineering")]),
+    )
+    assert v.action == ActionType.CREATE and v.entity_level == EntityLevel.TOPIC and v.is_roadmap_change
+
+
+def test_roadmap_command_without_an_action_is_previewed_not_rerouted():
+    from rag_service.domains.roadmap.router.verifier import WriteVerdict
+
+    v = WriteVerdict(intent=IntentType.ROADMAP_CUD, act="command", target_system="roadmap")
+    plan = plan_write(gate_mode=WRITE_ALLOW, s1_change=True, verdict=v, grounding=None, explicit_name=False)
+    assert plan.outcome == PREVIEW
