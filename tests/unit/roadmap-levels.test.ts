@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { defaultGroupTitle, findOrCreateGroup, normalizeLevel } from "@/lib/roadmap/levels";
+import { defaultGroupTitle, findOrCreateGroup, normalizeLevel, requireLevel } from "@/lib/roadmap/levels";
+import shared from "../../roadmap-rag-assistant/tests/data/level_cases.json";
 
 describe("normalizeLevel", () => {
   it.each([
@@ -13,10 +14,31 @@ describe("normalizeLevel", () => {
     ["Advanced", "advanced"],
     ["nâng  cao", "advanced"],
     ["Deep Dive", "deep dive"],
-    ["", "core"],
-    [undefined, "core"],
+    ["", ""],
+    [undefined, ""],
   ])("%s -> %s", (input, expected) => {
     expect(normalizeLevel(input)).toBe(expected);
+  });
+});
+
+describe("shared with rag_service/adapters/levels.py", () => {
+  it.each(shared.normalize as [string, string][])("normalizes %s -> %s", (input, expected) => {
+    expect(normalizeLevel(input)).toBe(expected);
+  });
+
+  it.each(shared.default_title as [string, string][])("titles %s as %s", (input, title) => {
+    expect(defaultGroupTitle(input)).toBe(title);
+  });
+});
+
+describe("requireLevel", () => {
+  it("keeps a given level", () => {
+    expect(requireLevel("Nâng cao")).toBe("advanced");
+  });
+
+  it("throws when no level was given: nothing is filed under a default", () => {
+    expect(() => requireLevel("")).toThrow(/level is required/);
+    expect(() => requireLevel(undefined)).toThrow(/core \| intermediate \| advanced/);
   });
 });
 
@@ -40,6 +62,12 @@ describe("findOrCreateGroup", () => {
       },
     };
   }
+
+  it("refuses to file a group or item without a level", async () => {
+    const db = fakeDb([]);
+    await expect(findOrCreateGroup(db as never, "layer-1", "")).rejects.toThrow(/level is required/);
+    expect(db.roadmapGroup.create).not.toHaveBeenCalled();
+  });
 
   it("reuses a legacy group whose level differs only in case", async () => {
     const db = fakeDb([{ id: "g1", level: "Core" }]);

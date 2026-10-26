@@ -346,7 +346,7 @@ interface MasterPanelProps {
   onReorderGroupItems: (layerId: string, level: RoadmapLevel, newItems: ChecklistItem[]) => void;
   onOpenCreateLayer: () => void;
   onOpenCreateItem: (layerId: string, level: RoadmapLevel) => void;
-  onAddGroup?: (layerId: string, title: string) => void;
+  onAddGroup?: (layerId: string, title: string, level: string) => void;
   onEditGroup?: (groupId: string, title: string) => void;
   onDeleteGroup?: (groupId: string) => void;
   onEditLayer?: (layerId: string, title: string, shortTag: string, subtitle?: string) => void;
@@ -991,7 +991,7 @@ export function MasterPanel({
                               type="button"
                               onClick={() => {
                                 setActiveDropdownId(null);
-                                onOpenCreateItem(layer.id, layer.groups[0]?.level || 'core');
+                                onOpenCreateItem(layer.id, '');
                               }}
                               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted text-foreground transition-colors text-left"
                             >
@@ -1127,7 +1127,7 @@ export function MasterPanel({
         isOpen={Boolean(targetGroupLayer)}
         layer={targetGroupLayer}
         onClose={() => setTargetGroupLayer(null)}
-        onSubmit={(layerId, title) => onAddGroup?.(layerId, title)}
+        onSubmit={(layerId, title, level) => onAddGroup?.(layerId, title, level)}
       />
 
       <EditGroupModal

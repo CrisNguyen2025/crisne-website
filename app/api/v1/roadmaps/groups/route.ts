@@ -13,11 +13,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { layerId, title, level } = body;
 
-    if (!layerId || !title) {
-      return NextResponse.json({ error: 'layerId and title are required' }, { status: 400 });
+    const groupLevel = normalizeLevel(level);
+    if (!layerId || !title || !groupLevel) {
+      return NextResponse.json(
+        { error: 'layerId, title and level are required (core | intermediate | advanced)' },
+        { status: 400 }
+      );
     }
-
-    const groupLevel = normalizeLevel(level || title.toLowerCase().replace(/[^\w]/g, '-')) || `group-${Date.now()}`;
 
     const siblings = await prisma.roadmapGroup.findMany({
       where: { layerId },
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
     });
     // Items are filed by level, so two groups with one level would split them
     const duplicate =
-      findDuplicate(siblings, title) ?? (level ? siblings.find((g) => normalizeLevel(g.level) === groupLevel) : undefined);
+      findDuplicate(siblings, title) ?? siblings.find((g) => normalizeLevel(g.level) === groupLevel);
     if (duplicate) return duplicateResponse('group', duplicate);
     const count = siblings.length;
 

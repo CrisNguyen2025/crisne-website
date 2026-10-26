@@ -56,6 +56,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     const level = normalizeLevel(triage.level);
+    if (!level) {
+      return NextResponse.json(
+        { error: "Chọn level cho bài này (core | intermediate | advanced) trước khi duyệt." },
+        { status: 400 }
+      );
+    }
 
     // A lesson with this title is already in the layer: keep the draft for editing, don't add a copy
     const layerItems = await prisma.roadmapItem.findMany({

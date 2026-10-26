@@ -15,7 +15,10 @@ export async function POST(req: NextRequest) {
     const level = body.level ? normalizeLevel(body.level) : '';
 
     if (!layerId || !level || !title) {
-      return NextResponse.json({ error: 'layerId, level, and title are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'layerId, title and level are required (core | intermediate | advanced)' },
+        { status: 400 }
+      );
     }
 
     // A lesson title appears once per layer, whatever its level

@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     let targetGroupId: string | undefined = undefined;
 
-    if (level) {
+    if (normalizeLevel(level)) {
       const existingItem = await prisma.roadmapItem.findUnique({
         where: { id },
         include: { group: true },

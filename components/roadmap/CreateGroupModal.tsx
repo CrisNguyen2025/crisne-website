@@ -3,13 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FolderPlus } from 'lucide-react';
-import { RoadmapLayer } from '@/lib/roadmap/types';
+import { RoadmapLayer, RoadmapLevel } from '@/lib/roadmap/types';
+
+const LEVEL_OPTIONS: RoadmapLevel[] = ['core', 'intermediate', 'advanced'];
 
 interface CreateGroupModalProps {
   isOpen: boolean;
   layer: RoadmapLayer | null;
   onClose: () => void;
-  onSubmit: (layerId: string, title: string) => void;
+  onSubmit: (layerId: string, title: string, level: RoadmapLevel) => void;
 }
 
 export function CreateGroupModal({
@@ -19,6 +21,7 @@ export function CreateGroupModal({
   onSubmit,
 }: CreateGroupModalProps) {
   const [title, setTitle] = useState('');
+  const [level, setLevel] = useState<RoadmapLevel | ''>('');
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
 
@@ -34,8 +37,13 @@ export function CreateGroupModal({
       setError('Please enter a group title.');
       return;
     }
-    onSubmit(layer.id, title.trim());
+    if (!level) {
+      setError('Chọn level: core, intermediate hoặc advanced.');
+      return;
+    }
+    onSubmit(layer.id, title.trim(), level);
     setTitle('');
+    setLevel('');
     setError('');
     onClose();
   };
@@ -76,6 +84,23 @@ export function CreateGroupModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div className="space-y-1.5">
+            <label className="font-semibold text-muted-foreground">Level *</label>
+            <div className="flex gap-2">
+              {LEVEL_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setLevel(opt)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                    level === opt ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 text-foreground'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-1.5">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
               <FolderPlus className="w-3.5 h-3.5 text-primary" /> Group title *

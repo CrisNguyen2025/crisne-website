@@ -5,11 +5,14 @@ import { createPortal } from 'react-dom';
 import { X, Sparkles, FileText, AlignLeft, Folder } from 'lucide-react';
 import { RoadmapLayer, RoadmapLevel } from '@/lib/roadmap/types';
 
+const LEVEL_OPTIONS: RoadmapLevel[] = ['core', 'intermediate', 'advanced'];
+
 interface CreateItemModalProps {
   isOpen: boolean;
   layers: RoadmapLayer[];
   targetLayerId: string;
-  targetLevel: RoadmapLevel;
+  /** The level of the group the user opened from; empty when none was picked, so the modal asks. */
+  targetLevel: RoadmapLevel | '';
   onClose: () => void;
   onSubmit: (layerId: string, level: RoadmapLevel, title: string, description: string) => void;
 }
@@ -24,6 +27,7 @@ export function CreateItemModal({
 }: CreateItemModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [level, setLevel] = useState<RoadmapLevel | ''>(targetLevel);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
 
@@ -32,13 +36,14 @@ export function CreateItemModal({
   }, []);
 
   const currentLayer = layers.find((l) => l.id === targetLayerId);
-  const currentGroup = currentLayer?.groups.find((g) => g.level === targetLevel);
+  const currentGroup = currentLayer?.groups.find((g) => g.level === level);
 
   React.useEffect(() => {
     if (isOpen) {
       setTitle('');
       setDescription('');
       setError('');
+      setLevel(targetLevel);
     }
   }, [isOpen]);
 
@@ -46,7 +51,7 @@ export function CreateItemModal({
 
   const getGroupDisplayName = () => {
     if (currentGroup?.title) return currentGroup.title;
-    switch (targetLevel) {
+    switch (level) {
       case 'core':
         return '🟢 Core';
       case 'intermediate':
@@ -54,7 +59,7 @@ export function CreateItemModal({
       case 'advanced':
         return '🔴 Advanced';
       default:
-        return targetLevel;
+        return level || 'Chưa chọn level';
     }
   };
 
@@ -68,7 +73,11 @@ export function CreateItemModal({
       setError('Please enter a brief description for this item.');
       return;
     }
-    onSubmit(targetLayerId, targetLevel, title.trim(), description.trim());
+    if (!level) {
+      setError('Chọn level: core, intermediate hoặc advanced.');
+      return;
+    }
+    onSubmit(targetLayerId, level, title.trim(), description.trim());
     onClose();
   };
 
@@ -111,6 +120,23 @@ export function CreateItemModal({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+          <div className="space-y-1.5">
+            <label className="font-semibold text-muted-foreground">Level *</label>
+            <div className="flex gap-2">
+              {LEVEL_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setLevel(opt)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                    level === opt ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 text-foreground'
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-1">
             <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-primary" /> Item title *

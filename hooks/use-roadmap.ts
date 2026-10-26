@@ -137,14 +137,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         shortTag: shortTag.trim().toUpperCase(),
         title: title.trim(),
         subtitle: subtitle?.trim() || '',
-        groups: [
-          {
-            id: `temp-grp-core-${Date.now()}`,
-            level: 'core',
-            title: '🟢 Core',
-            items: [],
-          },
-        ],
+        groups: [],
       };
 
       const updatedLayers = (prev: RoadmapLayer[]) => [...prev, optimisticLayer];
@@ -288,9 +281,11 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
   // 4.1 Add Group to Layer with Instant Optimistic UI
   const addGroup = useCallback(
-    async (layerId: string, title: string, level?: string) => {
+    async (layerId: string, title: string, level: string) => {
+      // A group is filed under a level the user picked; none is never guessed
+      if (!level) throw new Error('Chọn level cho group: core, intermediate hoặc advanced.');
       const tempGroupId = `temp-grp-${Date.now()}`;
-      const groupLevel = (level || 'core') as RoadmapLevel;
+      const groupLevel = level as RoadmapLevel;
       const optimisticGroup = {
         id: tempGroupId,
         level: groupLevel,

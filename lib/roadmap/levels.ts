@@ -18,11 +18,21 @@ const DEFAULT_TITLES: Record<string, string> = {
   advanced: '🔴 Advanced',
 };
 
-/** Canonical level: known aliases map to core | intermediate | advanced; custom levels are kept, lowercased. */
+/** The levels a group or item can be filed under; a missing level is asked for, never defaulted. */
+export const LEVEL_CHOICES = ['core', 'intermediate', 'advanced'] as const;
+
+/** Canonical level: known aliases map to core | intermediate | advanced; custom levels are kept, lowercased. Empty stays empty. */
 export function normalizeLevel(raw: string | null | undefined): string {
   const level = (raw ?? '').normalize('NFC').trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!level) return 'core';
+  if (!level) return '';
   return LEVEL_ALIASES[level] ?? level;
+}
+
+/** The canonical level of a group or item; throws when none was given. */
+export function requireLevel(raw: string | null | undefined): string {
+  const level = normalizeLevel(raw);
+  if (!level) throw new Error('level is required: core | intermediate | advanced');
+  return level;
 }
 
 /** Title of a group created for a level; custom levels are title-cased. */
@@ -38,7 +48,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
  * Existing groups are matched after normalizing, so a legacy "Core" group is reused rather than split.
  */
 export async function findOrCreateGroup(db: Db, layerId: string, rawLevel: string) {
-  const level = normalizeLevel(rawLevel);
+  const level = requireLevel(rawLevel);
   const groups = await db.roadmapGroup.findMany({
     where: { layerId },
     include: { _count: { select: { items: true } } },
