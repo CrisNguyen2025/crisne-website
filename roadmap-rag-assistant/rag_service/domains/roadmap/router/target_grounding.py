@@ -110,6 +110,10 @@ class Catalog:
             self._mention_names = cached
         return cached
 
+    def has_place(self, name: str) -> bool:
+        """A topic or layer of this roadmap: somewhere a lesson can live ("fe", "03-RAG", "AI Engineering")."""
+        return self.has(EntityLevel.TOPIC, name) or self.has_layer(name)
+
     def has(self, level: Optional[EntityLevel], name: str) -> bool:
         if level == EntityLevel.TOPIC:
             return self._match(name, self.topics)

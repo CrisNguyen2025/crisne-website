@@ -203,3 +203,25 @@ async def stream_confirmed(client, message: str, thread_id: str) -> str:
     assert second.status_code == 200
     return second.text
 
+
+
+@pytest.fixture
+def catalog_topics(monkeypatch):
+    """Add topic names to the roadmap catalog, for tests whose mock adapter has topics the index does not.
+
+    In production the catalog and the adapter read the same database; P3 asks the catalog whether a place
+    named without its noun ("layer trong fe") is a topic of the roadmap (router/object_sense.py).
+    """
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    real = rag_engine.catalog
+
+    def add(*names: str) -> None:
+        async def catalog():
+            found = await real()
+            found.topics |= set(names)
+            return found
+
+        monkeypatch.setattr(rag_engine, "catalog", catalog)
+
+    return add

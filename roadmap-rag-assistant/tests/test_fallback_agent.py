@@ -66,7 +66,8 @@ async def test_fallback_layer_creation_vn(fallback_agent, mock_adapter):
 
 
 @pytest.mark.asyncio
-async def test_fallback_layer_creation_en(fallback_agent, mock_adapter):
+async def test_fallback_layer_creation_en(fallback_agent, mock_adapter, catalog_topics):
+    catalog_topics("fe")
     # "aaa" is lowercase: nothing in the message says it is a name, so the change is previewed first
     config = {"configurable": {"thread_id": "layer-en"}}
     res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "create aaa layer on fe"}]}, config=config)

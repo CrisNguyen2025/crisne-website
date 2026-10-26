@@ -258,3 +258,44 @@ def test_stress_rows_carry_valid_phase_labels():
         assert "P1_act" in phases
         for phase, labels in phases.items():
             assert set(labels.split("|")) <= allowed[phase], (phase, labels)
+
+
+# ── P3 target: a roadmap noun in code or in another place names no roadmap object (router/object_sense.py) ──
+
+from rag_service.domains.roadmap.router.object_sense import names_another_place  # noqa: E402
+from rag_service.domains.roadmap.router.target_grounding import Catalog  # noqa: E402
+from rag_service.domains.roadmap.router.understanding import understand  # noqa: E402
+
+
+@pytest.mark.parametrize("text", [
+    "tạo layer mới trong Docker image",
+    "xóa nhóm chat trên Messenger",
+    "thêm item mới vào menu nhà hàng",
+    "xoa item khoi gio hang shopee",
+    "giải thích câu lệnh `DELETE FROM topics WHERE id = 1`",
+    "hàm list.remove(item) trong Python",
+    "file create_topic.py báo lỗi",
+])
+def test_noun_in_code_or_another_place_is_not_a_roadmap_object(text):
+    assert understand(text).target.value != "roadmap"
+
+
+@pytest.mark.parametrize("text", [
+    "thêm bài Kafka Streams vào layer 03-RAG",
+    "xóa bài Docker khỏi layer 1",
+    "tạo topic Data Engineering cho mình",          # "cho" is "for", not a place
+    "please rename the topic AI Architecture to AI Systems",  # "to" is not a place
+    "sua lai ten bai so 4 thanh Asynchronous Programming in JS",  # the new name is not read for places
+    "trong roadmap của tui có bài nào nói về indexing trong mysql ko?",
+    "add them topic clean architecture vao phase 3 ho mk vs",  # a part of the roadmap
+    "thêm bài Redis vào đây",
+])
+def test_roadmap_noun_with_a_roadmap_place_stays_roadmap(text):
+    assert understand(text).target.value == "roadmap"
+
+
+def test_place_named_without_its_noun_is_read_from_the_catalog():
+    catalog = Catalog(topics={"fe"})
+    assert names_another_place("xóa tất cả layer trong fe")
+    assert not names_another_place("xóa tất cả layer trong fe", catalog.has_place)
+    assert names_another_place("tạo layer mask trong figma", catalog.has_place)

@@ -118,6 +118,8 @@ class IntentRouter:
         self._llm = llm_model
         # Folded words of every lesson/layer/topic title; a statement naming one is a knowledge question
         self._vocabulary = vocabulary
+        # Is a name a topic or layer of the roadmap? (Catalog.has_place; set by route_decision when it has one)
+        self.known_place: Optional[Callable[[str], bool]] = None
 
     def names_known_lesson(self, text: str) -> bool:
         """True when the message shares a content word with a roadmap title ("LLM chấm điểm ..." -> LLM-as-a-Judge)."""
@@ -127,7 +129,7 @@ class IntentRouter:
 
     def understand(self, text: str) -> Understanding:
         """The two axes of the message: speech act and target (understanding.py)."""
-        return understand(text)
+        return understand(text, self.known_place)
 
     def _matches(self, row: Row, u: Understanding, text: str) -> bool:
         if row.act is not None and u.act not in (row.act if isinstance(row.act, tuple) else (row.act,)):
@@ -150,7 +152,7 @@ class IntentRouter:
 
     def decide(self, text: str) -> Decision:
         """Apply the policy decision table (policy.py section 3) to the message's act × target. Sub-5ms, no LLM."""
-        u = understand(text)
+        u = understand(text, self.known_place)
         decision = next(
             (Decision(row.intent, row.confidence, row.write, row.name, u)
              for row in DECISION_TABLE if self._matches(row, u, text)),
@@ -204,12 +206,12 @@ class IntentRouter:
         In a follow-up the object may come from earlier turns, but only when the message points back to it
         ("xóa nó đi", "sửa bài đó"): a verb alone mid-conversation ("tạo mạng neural") is no evidence.
         """
-        u = understand(text)
+        u = understand(text, self.known_place)
         return u.has_change_verb and (u.has_object or (follow_up and self.points_back(text)))
 
     def points_back(self, text: str) -> bool:
         """The message refers to an object named in earlier turns ("xóa nó đi", "sửa bài đó", "delete it")."""
-        u = understand(text)
+        u = understand(text, self.known_place)
         return ANAPHORA_REF.search(u.flat) is not None or ANAPHORA_REF_EN.search(u.lower) is not None
 
     async def aclassify(self, text: str) -> IntentClassificationResult:

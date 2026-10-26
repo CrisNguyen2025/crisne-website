@@ -197,7 +197,8 @@ def test_mixed_intents_ask_back_without_tools():
     assert not [e for e in events if e.get("type") == "tool_start"]
 
 
-def test_delete_all_is_refused():
+def test_delete_all_is_refused(catalog_topics):
+    catalog_topics("fe")
     set_actor("owner")
     for message in ["xóa hết topic luôn", "xóa tất cả layer trong fe ngay"]:
         text, events = _reply(message, f"bulk-{message}")

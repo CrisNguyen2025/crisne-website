@@ -1,0 +1,30 @@
+{"text": "tạo topic mới trong Kafka cluster", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "thêm layer adjustment trong Photoshop", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "xóa nhóm chat trên Messenger", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "đổi tên mục trong Google Drive", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "thêm bài nhạc vào album", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "tạo nhóm học tập trên Discord", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "sửa bài văn cho em gái", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "xóa item khỏi giỏ hàng Shopee", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "thêm topic vào hàng đợi RabbitMQ", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "chuyển nhóm khách hàng sang CRM mới", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "tạo layer mới trong Docker image", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "thêm group vào Active Directory", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "xóa bài đăng trên Facebook", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "chạy `rm -rf layer_cache` có sao không", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "lệnh kubectl delete topic-controller dùng thế nào", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "hàm list.remove(item) trong Python", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "file create_topic.py báo lỗi", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "câu SQL `UPDATE items SET title = 'x'` bị sai chỗ nào", "phases": {"P3_target": "none|off_topic"}, "write": "no"}
+{"text": "thêm bài Kafka Streams vào layer 03-RAG", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "tạo topic Platform Engineering trong roadmap", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "chuyển bài Hybrid Search sang layer 2", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "thêm bài GraphQL vào topic AI Engineering", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "xóa bài Semantic Caching trong layer 03-RAG", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "tạo topic Data Engineering cho mình", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "thêm bài Redis vào đây", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "thêm bài Vector Index vào mảng kiến thức RAG", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "tạo cho em topic Golang", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "thêm bài Kafka cho layer 2", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "đổi tên bài RAG thành RAG nâng cao giúp mình", "phases": {"P3_target": "roadmap"}, "write": "any"}
+{"text": "xóa bài Docker khỏi layer 1", "phases": {"P3_target": "roadmap"}, "write": "any"}

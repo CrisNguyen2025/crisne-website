@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
+from rag_service.domains.roadmap.router.object_sense import names_another_place, strip_code
 from rag_service.domains.roadmap.router.polarity import BLOCKER_OF, NONE as NO_POLARITY, polarity_of
 from rag_service.domains.roadmap.router.policy import (  # cues and their vocabulary live in policy.py
     ABOUT_ASSISTANT,
@@ -150,8 +151,12 @@ def strip_noise(lower: str) -> str:
     return s or lower.strip()
 
 
-def understand(text: str) -> Understanding:
-    """Read the act and the target of a message. Sub-millisecond, no LLM."""
+def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -> Understanding:
+    """Read the act and the target of a message. Sub-millisecond, no LLM.
+
+    known_place: is this name a topic or layer of the roadmap? (the catalog, when the caller has it). Without it
+    a place named without its noun ("layer trong fe") reads as another system.
+    """
     raw = normalize_vietnamese(text).lower().strip()
     lower = strip_noise(raw)
     flat = fold(lower)
@@ -160,7 +165,8 @@ def understand(text: str) -> Understanding:
     how_to, end_question = (HOW_TO, END_QUESTION) if accented else (HOW_TO_FOLDED, END_QUESTION_FOLDED)
 
     has_verb = any(re.search(rf"\b{re.escape(v)}\b", flat) for v in CUD_VERBS)
-    has_object = _has_any(ENTITY_PATTERNS, FALSE_OBJECT.sub(" ", flat))
+    # P3: a roadmap noun names this roadmap's object unless it sits in code or in another place (object_sense.py)
+    has_object = _has_any(ENTITY_PATTERNS, strip_code(FALSE_OBJECT.sub(" ", fold(lower)))) and not names_another_place(lower, known_place)
     has_search = _has_phrase(SEARCH_WORDS, flat)
     imperative = bool(IMPERATIVE_START.search(flat))
     head = NAMED_PART.sub(" ", lower).strip()

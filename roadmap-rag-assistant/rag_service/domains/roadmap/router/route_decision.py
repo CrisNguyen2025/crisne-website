@@ -95,6 +95,9 @@ async def decide_route(
     owner: bool = True,
     scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]] = None,
 ) -> RouteOutcome:
+    # P3 reads a place named without its noun ("layer trong fe") against the roadmap's own topics and layers
+    if catalog is not None:
+        router.known_place = catalog.has_place
     decision = router.decide(content)
     # A declined change ("thôi khỏi tạo topic X", "đừng xóa bài Y") is settled by the heuristics: nothing is
     # changed and the reply says so, with no LLM router call. Hypothetical or reported changes are often real
