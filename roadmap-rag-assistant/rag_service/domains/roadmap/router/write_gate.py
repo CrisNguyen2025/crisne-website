@@ -32,6 +32,7 @@ from rag_service.domains.roadmap.router.understanding import echoes_question
 # Reasons a change is denied; the agent maps each to the reply the user sees
 UNCONFIRMED_GUESS = "unconfirmed_guess"  # only the LLM chose a change, without a change verb + object or confidence
 BLOCKED_CHANGE = "blocked_change"        # the message names a change it does not ask for (policy: write blockers)
+UNNAMED_OBJECT = "unnamed_object"        # not denied: the object has no name of its own, so the change is previewed
 QUESTION_AS_TITLE = "question_as_title"  # the extractor took the user's question as the new entry's name
 BULK_DELETE_REQUEST = "bulk_delete"      # "xóa hết": never done in one message
 
@@ -47,12 +48,17 @@ class WriteGate:
 
 
 def gate_route(
-    result: IntentClassificationResult, method: str, has_change_request: bool, heuristic_write: str = WRITE_NONE
+    result: IntentClassificationResult,
+    method: str,
+    has_change_request: bool,
+    heuristic_write: str = WRITE_NONE,
+    named: bool = True,
 ) -> WriteGate:
     """May this routed message change data?
 
     `has_change_request`: a change verb and an object (or a follow-up). `heuristic_write`: the policy table's write
     decision for the message; a heuristic deny wins over the LLM router (two signals must agree before a write).
+    `named`: the message names its object (Understanding.named_object); without it a change is only previewed.
     """
     if result.intent != IntentType.ROADMAP_CUD and not result.needs_cud_extraction:
         return WriteGate(WRITE_NONE)
@@ -61,7 +67,14 @@ def gate_route(
     # A change only the LLM router chose needs the same evidence a heuristic row needs, and high confidence
     if method != "heuristic" and (result.confidence < CUD_MIN_CONFIDENCE or not has_change_request):
         return WriteGate(WRITE_DENY, UNCONFIRMED_GUESS)
-    return WriteGate(WRITE_CONFIRM if result.needs_confirmation else WRITE_ALLOW)
+    if result.needs_confirmation:
+        return WriteGate(WRITE_CONFIRM)
+    # Runs at once only when the message names its object ("bài Redis Cluster", "topic tên là X", "layer 03-RAG").
+    # A lowercase phrase after an entity word may be anything ("mục yêu thích", "layer dropout", "nhóm chat"):
+    # that change is previewed, so a misread message can never write by itself, however it is worded.
+    if not named:
+        return WriteGate(WRITE_CONFIRM, UNNAMED_OBJECT)
+    return WriteGate(WRITE_ALLOW)
 
 
 def gate_action(route_gate: WriteGate, action: StructuredRoadmapAction, message: str, lower: str) -> WriteGate:

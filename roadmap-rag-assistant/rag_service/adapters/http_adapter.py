@@ -9,9 +9,11 @@ import httpx
 
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
+from rag_service.write_grant import guard_writes
 from rag_service.adapters.levels import normalize_level
 
 
+@guard_writes
 class HttpApiAdapter:
     """Adapter that proxies all CUD operations through the Next.js REST API."""
 

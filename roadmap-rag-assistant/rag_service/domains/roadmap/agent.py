@@ -262,7 +262,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         decision = self.router.decide(content)
         understood = decision.understanding
         route_gate = gate_route(
-            intent_res, method, self.router.has_change_request(content, follow_up=bool(recent)), decision.write
+            intent_res, method, self.router.has_change_request(content, follow_up=bool(recent)), decision.write,
+            named=understood.named_object or bool(recent and self.router.points_back(content)),
         )
         end_step(
             router_step,

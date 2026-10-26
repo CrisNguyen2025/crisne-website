@@ -44,6 +44,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     LEADING_GREETING,
     LIST_FILLER,
     LIST_TOPICS,
+    NAMED_ENTITY,
     NAMED_PART,
     OFF_TOPIC_HINTS,
     OFF_TOPIC_STRONG_HINTS,
@@ -93,6 +94,7 @@ class Understanding:
     has_change_verb: bool
     how_to: bool              # a how-to question ("cách …", "làm sao …", "how do I …")
     show_request: bool        # "cho mình xem …", "show me …"
+    named_object: bool        # the object has a name of its own: quoted, "tên là …", or a proper name / code
     has_object: bool          # names a roadmap object
     has_search_word: bool
     opens_with_greeting: bool # starts with a greeting or thanks word
@@ -251,6 +253,7 @@ def understand(text: str) -> Understanding:
         flat=flat,
         head=head,
         has_change_verb=has_verb,
+        named_object=NAMED_PART.search(raw) is not None or NAMED_ENTITY.search(normalize_vietnamese(text)) is not None,
         how_to=(HOW_TO.search(lower) if accented else HOW_TO_FOLDED.search(flat)) is not None,
         show_request=SHOW_REQUEST.search(lower) is not None and not has_verb,
         has_object=has_object,

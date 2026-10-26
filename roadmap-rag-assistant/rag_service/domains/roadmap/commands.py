@@ -12,6 +12,7 @@ from typing import AsyncGenerator
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
 from rag_service.execution.changes import ChangeSet
+from rag_service.write_grant import write_granted
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.domains.roadmap.router.grounding import (
     BATCH_LAYER_DELETE_REPLY,
@@ -20,7 +21,9 @@ from rag_service.domains.roadmap.router.grounding import (
     build_grounding,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM, slash_command
-from rag_service.domains.roadmap.router.understanding import is_plain_listing
+from rag_service.domains.roadmap.retrieval.relevance import content_words
+from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
+from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.domains.roadmap.router.write_gate import (
     BULK_DELETE_REQUEST,
     QUESTION_AS_TITLE,
@@ -36,12 +39,21 @@ from rag_service.tools.layer_resolver import resolve_layer, topic_named_in_messa
 
 class RoadmapCommands:
     def bulk_import_applies(self, raw_content: str, lower: str, page_context) -> bool:
-        """A pasted list of two or more items: imported when a layer is open, otherwise the user is asked which."""
+        """A pasted list of two or more items asked to be added: the same evidence as any other change.
+
+        The first line must ask for it: a change verb with a roadmap object ("thêm các bài sau:"), or, while a
+        layer is open, a change verb alone ("thêm:"). A list by itself is not a request: "tóm tắt giúp mình:\\n- RAG"
+        or "thêm các bước sau vào quy trình:\\n- review code" used to be imported into the open layer.
+        """
         titles = parse_item_list(raw_content)
+        if len(titles) < 2:
+            return False
+        first = normalize_vietnamese(raw_content.strip().splitlines()[0])
+        u = understand(first)
+        if not u.has_change_verb:
+            return False
         layer_in_view = (page_context or {}).get("layerId")
-        if layer_in_view and len(titles) >= 2:
-            return True
-        return not layer_in_view and len(titles) >= 2 and re.search(r"\bthêm\b|\badd\b", lower) is not None
+        return u.has_object or (bool(layer_in_view) and len(content_words(first)) <= 2)
 
     async def handle_pending(
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
@@ -60,7 +72,8 @@ class RoadmapCommands:
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 changes = ChangeSet.of(pending_act)
-                ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id, changes=changes)
+                with write_granted("confirmed preview"):
+                    ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -111,7 +124,8 @@ class RoadmapCommands:
                 tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
                 changes = ChangeSet.of(pending_item)
-                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
+                with write_granted("layer chosen for an allowed change"):
+                    ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -136,7 +150,8 @@ class RoadmapCommands:
                 )
                 yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": layer_title}}
                 changes = ChangeSet.of(layer_action)
-                ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id, changes=changes)
+                with write_granted("layer chosen for an allowed change"):
+                    ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": "create_layer", "result": layer_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -148,7 +163,8 @@ class RoadmapCommands:
                 pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
                 yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
                 changes = ChangeSet.of(pending_item)
-                ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
+                with write_granted("layer chosen for an allowed change"):
+                    ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
                 yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -186,7 +202,8 @@ class RoadmapCommands:
             tid = m.group(1) if m else "ai-engineering"
             yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
             changes = ChangeSet("create", "topic")
-            res = await generate_roadmap_from_template.coroutine(template_id=tid, changes=changes)
+            with write_granted("owner /goal command"):
+                res = await generate_roadmap_from_template.coroutine(template_id=tid, changes=changes)
             yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
             if changes:
                 yield changes.event()
@@ -227,7 +244,8 @@ class RoadmapCommands:
         tool_args = {"layer_id": layer_in_view, "level": "core", "text": raw_content}
         yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
         changes = ChangeSet("create", "item", layer_in_view)
-        res = await import_items_from_text.coroutine(**tool_args, changes=changes)
+        with write_granted("bulk import asked on its first line"):
+            res = await import_items_from_text.coroutine(**tool_args, changes=changes)
         yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
         if changes:
             yield changes.event()
@@ -363,7 +381,8 @@ class RoadmapCommands:
 
         remembered_layer = session_ctx.active_layer_id
         changes = ChangeSet.of(resolved_action)
-        ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id, changes=changes)
+        with write_granted("write gate allow"):
+            ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id, changes=changes)
         yield {"type": "tool_end", "name": tool_name, "result": result_msg, "is_error": not ok}
         if changes:
             yield changes.event()

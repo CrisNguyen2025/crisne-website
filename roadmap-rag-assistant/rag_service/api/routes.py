@@ -22,6 +22,7 @@ from rag_service.api.schemas import (
 from rag_service.auth import Actor, OWNER_ONLY_MESSAGE, is_owner, parse_actor, set_actor
 from rag_service.config import settings
 from rag_service.tools import ALL_TOOLS
+from rag_service.write_grant import write_granted
 
 router = APIRouter()
 
@@ -277,7 +278,8 @@ async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionC
     ctx.pending_confirmation = None
     executor = ActionExecutor()
     changes = ChangeSet.of(action)
-    ok, msg = await executor.aexecute(action, session_id=tid, changes=changes)
+    with write_granted("confirmed preview"):
+        ok, msg = await executor.aexecute(action, session_id=tid, changes=changes)
     return ActionConfirmResponse(success=ok, message=msg, changes=changes.to_dict() if changes else None)
 
 

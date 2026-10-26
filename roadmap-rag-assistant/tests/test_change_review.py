@@ -46,6 +46,7 @@ def _run(adapter, action, session_id="change-review"):
     return ok, changes
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_create_records_each_new_row_and_skips_existing(adapter):
     asyncio.run(adapter.create_topic("Backend", "BE"))
     ok, changes = _run(adapter, _action(ActionType.CREATE, EntityLevel.TOPIC, None, "Backend", "Frontend"))
@@ -58,6 +59,7 @@ def test_create_records_each_new_row_and_skips_existing(adapter):
     assert data["skipped"] == ["Backend"]
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_create_with_every_entity_existing_changes_nothing(adapter):
     asyncio.run(adapter.create_topic("Backend", "BE"))
     ok, changes = _run(adapter, _action(ActionType.CREATE, EntityLevel.TOPIC, None, "backend"))
@@ -65,6 +67,7 @@ def test_create_with_every_entity_existing_changes_nothing(adapter):
     assert ok and not changes
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_delete_topic_lists_the_rows_removed_with_it(adapter):
     topic = asyncio.run(adapter.create_topic("Backend", "BE"))
     layer = asyncio.run(adapter.create_layer(topic["slug"], "Docker", "01-DOC"))
@@ -81,6 +84,7 @@ def test_delete_topic_lists_the_rows_removed_with_it(adapter):
     assert data["removed"] == 4
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_delete_layer_snapshots_it_by_id(adapter):
     topic = asyncio.run(adapter.create_topic("Backend", "BE"))
     layer = asyncio.run(adapter.create_layer(topic["slug"], "Docker", "01-DOC"))

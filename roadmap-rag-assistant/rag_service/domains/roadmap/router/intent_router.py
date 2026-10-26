@@ -201,8 +201,12 @@ class IntentRouter:
         ("xóa nó đi", "sửa bài đó"): a verb alone mid-conversation ("tạo mạng neural") is no evidence.
         """
         u = understand(text)
-        points_back = ANAPHORA_REF.search(u.flat) is not None or ANAPHORA_REF_EN.search(u.lower) is not None
-        return u.has_change_verb and (u.has_object or (follow_up and points_back))
+        return u.has_change_verb and (u.has_object or (follow_up and self.points_back(text)))
+
+    def points_back(self, text: str) -> bool:
+        """The message refers to an object named in earlier turns ("xóa nó đi", "sửa bài đó", "delete it")."""
+        u = understand(text)
+        return ANAPHORA_REF.search(u.flat) is not None or ANAPHORA_REF_EN.search(u.lower) is not None
 
     async def aclassify(self, text: str) -> IntentClassificationResult:
         """Classify message intent, falling back to LLM structured output if ambiguous."""

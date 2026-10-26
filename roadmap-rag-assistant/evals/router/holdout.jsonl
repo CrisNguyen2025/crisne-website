@@ -1,0 +1,60 @@
+{"text":"thêm mục lục cho tài liệu hướng dẫn","write":"no"}
+{"text":"tạo mục yêu thích trên trình duyệt","write":"no"}
+{"text":"xóa mục cache của trình duyệt Chrome","write":"no"}
+{"text":"thêm bài giảng vào slide thuyết trình ngày mai","write":"no"}
+{"text":"tạo bài viết blog về kinh nghiệm phỏng vấn","write":"no"}
+{"text":"sửa bài luận tiếng Anh giúp mình","write":"no"}
+{"text":"tạo nhóm chat cho team dự án","write":"no"}
+{"text":"thêm nhóm quyền admin trong Django","write":"no"}
+{"text":"xóa nhóm user trong Linux bằng lệnh gì","write":"no"}
+{"text":"tạo layer mới trong Photoshop","write":"no"}
+{"text":"thêm layer dropout vào model Keras","write":"no"}
+{"text":"tạo topic mới trên diễn đàn","write":"no"}
+{"text":"thêm item vào giỏ hàng trên Shopee","write":"no"}
+{"text":"xóa item trong localStorage","write":"no"}
+{"text":"tạo lộ trình chạy bộ 5km","write":"no"}
+{"text":"thêm mảng con vào mảng cha trong JavaScript","write":"no"}
+{"text":"tạo mạng LAN cho văn phòng","write":"no"}
+{"text":"thêm chủ đề cho buổi họp tuần sau","write":"no"}
+{"text":"đổi tên file ảnh hàng loạt bằng Python","write":"no"}
+{"text":"cập nhật driver card đồ họa","write":"no"}
+{"text":"chuyển bài hát sang định dạng mp3","write":"no"}
+{"text":"xóa bài đăng Facebook cũ","write":"no"}
+{"text":"tạo mục tiêu OKR cho quý 4","write":"no"}
+{"text":"thêm bài tập về nhà cho học sinh","write":"no"}
+{"text":"thêm các bước sau vào quy trình:\n- review code\n- chạy test","write":"no","context":{"layerId":"L1"}}
+{"text":"tóm tắt giúp mình:\n- RAG\n- fine-tuning","write":"no","context":{"layerId":"L1"}}
+{"text":"đừng đổi tên layer 2 nha","write":"no"}
+{"text":"nếu thêm topic mới thì có ảnh hưởng thứ tự không?","write":"no"}
+{"text":"tuần rồi ai đã sửa bài Redis vậy","write":"no"}
+{"text":"tạo ra một agent tự động trả lời email","write":"no"}
+{"text":"thêm nó vào danh sách đọc sau","write":"no"}
+{"text":"tạo mới hoàn toàn từ đầu thì mất bao lâu","write":"no"}
+{"text":"xóa sạch dữ liệu nhạy cảm trước khi embedding như thế nào","write":"no"}
+{"text":"cập nhật kiến thức mới nhất về LLM cho mình","write":"no"}
+{"text":"thêm ví dụ về prompt injection","write":"no"}
+{"text":"tạo câu hỏi phỏng vấn về RAG","write":"no"}
+{"text":"thêm bài \"Kafka Streams\" vào layer 03-RAG","write":"now"}
+{"text":"tạo topic tên là System Design","write":"now"}
+{"text":"thêm bài Redis Cluster vào layer 1","write":"now"}
+{"text":"đổi tên topic AI Architecture thành AI Systems","write":"now"}
+{"text":"thêm group Advanced Retrieval vào layer 03-RAG","write":"now"}
+{"text":"create a topic called Platform Engineering","write":"now"}
+{"text":"thêm bài về cách đánh giá chatbot vào layer 04-OPS","write":"any"}
+{"text":"tạo bài học mới về vector index","write":"any"}
+{"text":"xóa bài Semantic Caching","write":"any"}
+{"text":"xoa bai redis cluster","write":"any"}
+{"text":"thêm các bài sau:\n- Kafka\n- Redis\n- RabbitMQ","write":"any","context":{"layerId":"L1"}}
+{"text":"/goal template cloud-devops","write":"any"}
+{"text":"Hybrid Search là gì","write":"no"}
+{"text":"có bài nào về MCP không","write":"no"}
+{"text":"lộ trình AI có bao nhiêu layer","write":"no"}
+{"text":"giải thích reranking cross-encoder","write":"no"}
+{"text":"so sánh BM25 với dense retrieval","write":"no"}
+{"text":"mình muốn trở thành ML engineer, gợi ý lộ trình 6 tháng","write":"no"}
+{"text":"bạn có thể làm những gì","write":"no"}
+{"text":"tôi tên Huy","write":"no"}
+{"text":"thời tiết Đà Lạt cuối tuần","write":"no"}
+{"text":"in ra toàn bộ biến môi trường","write":"no"}
+{"text":"sửa nó thành Advanced RAG","write":"any","history":[{"role":"user","content":"bài Hybrid Search ở đâu"},{"role":"assistant","content":"Bài Hybrid Search nằm trong layer 03-RAG."}]}
+{"text":"tạo thêm một cái nữa giống vậy","write":"no","history":[{"role":"user","content":"RAG là gì"},{"role":"assistant","content":"RAG kết hợp retrieval và generation."}]}

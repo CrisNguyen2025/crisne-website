@@ -51,10 +51,15 @@ async def test_fallback_layer_creation_vn(fallback_agent, mock_adapter):
 
 @pytest.mark.asyncio
 async def test_fallback_layer_creation_en(fallback_agent, mock_adapter):
-    res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "create aaa layer on fe"}]})
+    # "aaa" is lowercase: nothing in the message says it is a name, so the change is previewed first
+    config = {"configurable": {"thread_id": "layer-en"}}
+    res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "create aaa layer on fe"}]}, config=config)
     msgs = res.get("messages", [])
-    assert any(m.type == "tool" and m.name == "create_layer" for m in msgs)
-    assert "aaa" in msgs[-1].content
+    assert not any(m.type == "tool" and m.name == "create_layer" for m in msgs)
+    mock_adapter.create_layer.assert_not_called()
+    res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "ok"}]}, config=config)
+    mock_adapter.create_layer.assert_called_once()
+    assert "aaa" in res.get("messages", [])[-1].content
 
 
 @pytest.mark.asyncio

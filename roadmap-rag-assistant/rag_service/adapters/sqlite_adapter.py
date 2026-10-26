@@ -21,6 +21,7 @@ import uuid_utils
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
 from rag_service.adapters.levels import default_group_title, normalize_level
 from rag_service.auth import owner_only
+from rag_service.write_grant import guard_writes
 
 
 
@@ -58,6 +59,7 @@ def _slugify(text: str) -> str:
     return slug or f"topic-{int(datetime.now(timezone.utc).timestamp())}"
 
 
+@guard_writes
 class SqliteAdapter:
     """Adapter that reads/writes directly to the SQLite database file."""
 

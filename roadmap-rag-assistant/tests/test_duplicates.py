@@ -40,6 +40,7 @@ def test_normalize_title_ignores_case_and_spacing_not_diacritics():
     assert normalize_title("Cơ bản") != normalize_title("Co ban")
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_sqlite_refuses_duplicates_at_every_level(adapter):
     async def run():
         topic = await adapter.create_topic("Backend", "BE")
@@ -146,6 +147,7 @@ def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
     assert " be`" not in reply and " fe`" not in reply and "aaa" not in reply
 
 
+@pytest.mark.usefixtures("write_grant")
 def test_levels_normalize_and_reuse_one_group(adapter):
     """'Core', 'cơ bản' and 'core' land in one group; a custom level gets its own title-cased group."""
     import asyncio

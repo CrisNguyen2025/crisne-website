@@ -35,6 +35,18 @@ def owner_access(monkeypatch):
     current_actor.reset(token)
 
 
+@pytest.fixture
+def write_grant():
+    """A write grant for tests of the write logic itself (executor, adapters, write tools).
+
+    Not autouse: every other test runs without one, so a path that writes without passing a decision point fails.
+    """
+    from rag_service.write_grant import write_granted
+
+    with write_granted("test of the write logic"):
+        yield
+
+
 class LiveApiBlocked(RuntimeError):
     """A test reached the roadmap adapter without choosing one: it would have used the running Next.js database."""
 

@@ -23,13 +23,6 @@ INDEX_TTL_SECONDS = 30.0
 
 
 THIN_DOC_MIN_WORDS = 4
-# Words of any learning goal or template title that name no field ("AWS Solutions Architect" is not
-# "AI & LLM Architecture"): left out when matching a goal to a blueprint
-GOAL_FILLER_TERMS = {
-    "plan", "study", "roadmap", "learning", "path", "guide", "course", "master", "mastering", "complete", "full",
-    "architect", "architecture", "engineer", "engineering", "developer", "junior", "senior", "interview",
-    "interviews", "certification", "career", "become", "step", "scratch", "platform", "system", "design",
-}
 
 
 def is_thin(doc: KnowledgeDocument) -> bool:
@@ -182,18 +175,20 @@ class HybridRagEngine:
     # ── Blueprint Methods for /plan and /goal ─────────────────────────────
 
     def template_for_goal(self, message: str) -> dict | None:
-        """The blueprint a learning goal names by a technical term ("DevOps", "AI engineer", "frontend"), or None.
+        """The blueprint whose declared field a learning goal names ("DevOps", "AI engineer", "frontend"), or None.
 
-        Only the template's title, short code and domain count: its description repeats generic words
-        ("lộ trình", "hệ thống") that every goal has.
+        Matched against what the template declares about itself, its shortCode and domain keywords, never
+        its title: titles hold generic words ("Architecture", "Roadmap", "Master") that any goal may use.
+        A new template is matched by filling in its domain, with no word list to keep in step.
         """
         from rag_service.domains.roadmap.retrieval.relevance import fold, technical_terms
 
-        terms = technical_terms(message) - GOAL_FILLER_TERMS
+        terms = technical_terms(message)
         best, best_hits = None, 0
         for template in self._templates.values():
-            words = set(re.findall(r"\w+", fold(f"{template.get('title', '')} {template.get('shortCode', '')} {template.get('domain', '')}")))
-            hits = sum(1 for t in terms if any(w == t or (len(t) >= 4 and (w.startswith(t) or t.startswith(w)) and len(w) >= 4) for w in words))
+            declared = f"{template.get('shortCode', '')} {template.get('domain', '')}"
+            words = {w for w in re.findall(r"\w+", fold(declared))}
+            hits = sum(1 for t in terms if t in words or (len(t) >= 5 and any(len(w) >= 5 and w.startswith(t) for w in words)))
             if hits > best_hits:
                 best, best_hits = template, hits
         return best
