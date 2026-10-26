@@ -7,6 +7,8 @@ import json
 import sqlite3
 
 import httpx
+
+from tests.conftest import stream_confirmed
 import pytest
 
 from rag_service.adapters.sqlite_adapter import SqliteAdapter
@@ -116,11 +118,7 @@ def test_children_are_cut_at_the_limit():
 async def test_stream_sends_change_review_and_repeats_it_on_done(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
-        resp = await client.post(
-            "/chat/stream",
-            json={"message": "tạo cho tôi 3 topic A, B và C", "thread_id": "change-review-stream"},
-        )
-    body = resp.text
+        body = await stream_confirmed(client, "tạo cho tôi 3 topic A, B và C", "change-review-stream")
     assert "event: change_review" in body
     # The card arrives right after the tool finishes, before the reply text
     assert body.index("event: tool_end") < body.index("event: change_review") < body.index("event: token")

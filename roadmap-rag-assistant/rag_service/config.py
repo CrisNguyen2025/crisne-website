@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Another provider for when every key of LLM_PROVIDER is rate limited; empty = none
     llm_fallback_provider: str = ""
     llm_fallback_model: str = "gemini-flash-latest"
+    # Model for routing and write verification (System 2), same provider; empty = LLM_MODEL.
+    # A small model is enough for a structured classification and keeps writes fast (e.g. llama-3.1-8b-instant).
+    llm_model_router: str = ""
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")

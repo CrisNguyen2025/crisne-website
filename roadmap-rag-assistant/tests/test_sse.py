@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import httpx
+
+from tests.conftest import stream_confirmed
 import pytest
 
 from rag_service.api.server import app
@@ -12,19 +14,17 @@ from rag_service.api.server import app
 async def test_chat_stream_endpoint_returns_sse(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
-        resp = await client.post(
-            "/chat/stream",
-            json={"message": "tạo cho tôi 3 topic A, B và C", "thread_id": "test-stream"},
-        )
+        resp = await client.post("/chat/stream", json={"message": "hybrid search là gì", "thread_id": "test-stream-ct"})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
 
-        body = resp.text
+        # A new topic without an explicit name is previewed first; the confirmed turn runs it
+        body = await stream_confirmed(client, "tạo cho tôi 3 topic A, B và C", "test-stream")
         assert "event: tool_start" in body
         assert "event: tool_end" in body
         assert "event: token" in body
         assert "event: done" in body
-        assert "create_topics_batch" in body
+        assert "create_topic" in body  # a confirmed batch reports the singular tool name
 
 
 @pytest.mark.asyncio

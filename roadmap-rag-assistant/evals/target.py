@@ -26,6 +26,7 @@ from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
 from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary, filter_on_topic
 from rag_service.domains.roadmap.router.grounding import MIXED_INTENT_REPLY, SENSITIVE_REPLY, is_sensitive_request
+from rag_service.domains.roadmap.router.understanding import instruction_part
 from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
 MODES = ("fts", "vector", "hybrid")
@@ -151,7 +152,7 @@ class RoadmapTarget:
         return [Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score) for doc, score in matches]
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
-        if is_sensitive_request(text):
+        if is_sensitive_request(text, instruction=instruction_part(text)):
             return RouteResult(behavior="refuse")
         if self._router.has_mixed_intents(text):
             return RouteResult(behavior="clarify")

@@ -37,9 +37,10 @@ LOWER_IS_BETTER = ("stress.wrong_write", "stress.dropped", "stress.misroute")
 def decide(router, text: str) -> dict:
     """The decision the agent would take before any LLM call, as plain fields for the snapshot."""
     from rag_service.domains.roadmap.router.grounding import is_sensitive_request
+    from rag_service.domains.roadmap.router.understanding import instruction_part
     from rag_service.domains.roadmap.router.understanding import is_plain_listing
 
-    if is_sensitive_request(text):
+    if is_sensitive_request(text, instruction=instruction_part(text)):
         return {"route": "refuse"}
     if is_plain_listing(text):
         return {"route": "list_topics"}

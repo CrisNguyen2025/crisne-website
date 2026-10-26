@@ -375,7 +375,7 @@
 {"input": "giải thích Docker Compose là gì?", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=search_word", "act=question", "target=none", "search_word"]}
 {"input": "group by trong SQL dùng thế nào", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=search_word", "act=question", "target=none", "search_word"]}
 {"input": "hello", "route": "chitchat", "confirm": false, "confidence": 0.95, "write": "none", "rules": ["row=greeting", "act=greeting", "target=none", "greeting_opener"]}
-{"input": "hello ban bot, ban lam dc nhung gi the", "route": "chitchat", "confirm": false, "confidence": 0.95, "write": "none", "rules": ["row=greeting_opener", "act=question", "target=none", "greeting_opener"]}
+{"input": "hello ban bot, ban lam dc nhung gi the", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "usage", "greeting_opener"]}
 {"input": "hello hello hello hello", "route": "chitchat", "confirm": false, "confidence": 0.95, "write": "none", "rules": ["row=greeting_opener", "act=statement", "target=none", "greeting_opener"]}
 {"input": "hom qua toi da tao topic Test Router", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=command", "target=roadmap", "change_verb", "object", "blocker=past_report"]}
 {"input": "how do I add a lesson to a layer?", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "change_verb", "object", "usage"]}

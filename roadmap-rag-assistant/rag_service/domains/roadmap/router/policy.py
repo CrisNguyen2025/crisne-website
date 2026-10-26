@@ -255,15 +255,6 @@ IMPERATIVE_START = re.compile(rf"^(?:(?:ban\s+oi|vui\s+long|nho\s+ban|ho\s+minh|
 
 # In a command, the object's name: everything after "tên là" and anything quoted
 NAMED_PART = re.compile(r"\b(?:tên\s+là|có\s+tên|với\s+tên|named|called)\s+.*$|[\"“'‘`][^\"”'’`]*[\"”'’`]")
-# A roadmap object named on its own: an entity word followed by a proper name or a code ("bài Redis Cluster",
-# "layer 03-RAG", "topic AI Architecture"). Matched case-sensitively on the normalized message; a lowercase
-# phrase after the word ("mục tiêu học tập", "layer dropout") names nothing, so a change from it is previewed.
-NAMED_ENTITY = re.compile(
-    r"(?i:\b(?:topic|chủ\s+đề|lộ\s+trình|roadmap|layer|mảng(?:\s+kiến\s+thức)?|group|nhóm|item|bài(?:\s+học)?|mục|lesson)s?)"
-    r"\s+(?:(?i:mới)\s+)?[A-Z0-9][\w.+#&/-]*"
-    # or written before it: "tạo ABC topic", "thêm Redis lesson"
-    r"|\b[A-Z0-9][\w.+#&/-]*\s+(?i:topic|layer|group|item|lesson|roadmap)s?\b"
-)
 # A question word that ends a command: "tạo topic như thế nào", "thêm bài được không"
 END_QUESTION = re.compile(
     r"\b(?:gì|nào|đâu|sao|thế\s+nào|bao\s+nhiêu|không|ko|k|chưa)\s*[?!.]*$", re.IGNORECASE

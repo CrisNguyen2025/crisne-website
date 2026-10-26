@@ -48,7 +48,9 @@ from rag_service.domains.roadmap.router import (
     normalize_vietnamese,
 )
 from rag_service.domains.roadmap.router.policy import WRITE_NONE
-from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, gate_route
+from rag_service.domains.roadmap.router.route_decision import decide_route
+from rag_service.domains.roadmap.router.understanding import instruction_part
+from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE
 from rag_service.domains.roadmap.router.grounding import (
     EMPTY_MESSAGE_REPLY,
     mixed_intent_reply,
@@ -92,11 +94,15 @@ async def _plan_queries(llm, query: str, session_id: str):
 class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
-    def __init__(self, llm_model: Optional[object] = None, tools: Optional[list] = None) -> None:
+    def __init__(
+        self, llm_model: Optional[object] = None, tools: Optional[list] = None, router_llm: Optional[object] = None
+    ) -> None:
         self.llm = llm_model
+        # System 2 (routing + write verification); a small model when LLM_MODEL_ROUTER is set
+        self.router_llm = router_llm or llm_model
         self.typing_delay = float(os.getenv("RAG_TYPING_DELAY_MS", "5")) / 1000
         self.tools = {t.name: t for t in (tools or ALL_TOOLS)}
-        self.router = IntentRouter(llm_model=llm_model, vocabulary=rag_engine.title_vocabulary)
+        self.router = IntentRouter(llm_model=self.router_llm, vocabulary=rag_engine.title_vocabulary)
         self.extractor = StructuredEntityExtractor(llm_model=llm_model)
         self.executor = ActionExecutor()
 
@@ -219,7 +225,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             return
 
         # ── 0c. Sensitive guard: secrets, system prompt, prompt injection ─────
-        if is_sensitive_request(content):
+        if is_sensitive_request(content, instruction=instruction_part(content)):
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "sensitive"
             async for ev in self._stream_text(SENSITIVE_REPLY, delay):
@@ -253,22 +259,25 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         intent_res: IntentClassificationResult
         recent = history_store.get_recent(session_id, HISTORY_TURNS)
         try:
-            intent_res, method = await self.router.aroute(content, recent)
+            # System 1, the write gate, and for a write candidate System 2 + grounding (router/route_decision.py)
+            outcome = await decide_route(
+                self.router, content, recent,
+                verifier_llm=self.router_llm, catalog=await rag_engine.catalog(), page_context=page_context,
+            )
         except BaseException as exc:
             end_step_on_error(router_step, exc)
             raise
-        # The heuristic decision with its reasons (policy row, axes, cues) and the write gate, kept with the route
-        # so a misroute shows which rule fired and whether data could have changed
-        decision = self.router.decide(content)
+        intent_res, method, decision, route_gate = outcome.intent_res, outcome.method, outcome.decision, outcome.gate
         understood = decision.understanding
-        route_gate = gate_route(
-            intent_res, method, self.router.has_change_request(content, follow_up=bool(recent)), decision.write,
-            named=understood.named_object or bool(recent and self.router.points_back(content)),
-        )
         end_step(
             router_step,
             output=intent_res.model_dump(mode="json"),
-            metadata={"method": method, **understood.summary(), "rules": decision.rules, "write": route_gate.mode},
+            metadata={
+                "method": method, **understood.summary(), "rules": decision.rules, "write": route_gate.mode,
+                "write_plan": outcome.plan.reason if outcome.plan else None,
+                "verdict": outcome.verdict.model_dump(mode="json") if outcome.verdict else None,
+                "grounding": outcome.grounding.status if outcome.grounding else None,
+            },
         )
         yield step_event(
             "route",
@@ -288,6 +297,11 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             trace.flags["target"] = understood.target.value
             trace.flags["intent"] = intent_res.intent.value
             trace.flags["write"] = route_gate.mode
+            if outcome.plan is not None:
+                trace.flags["write_plan"] = outcome.plan.outcome
+                # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
+                if method == "heuristic" and outcome.plan.outcome in ("reroute", "blocked"):
+                    trace.flags["router_disagreement"] = True
 
         # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
         if intent_res.intent == IntentType.OUT_OF_SCOPE:
@@ -504,7 +518,16 @@ def build_agent():
         except Exception as exc:
             print(f"[Agent] Warning: Failed to init {provider} model ({type(exc).__name__}: {exc}). Using offline mode.")
 
-    return NextGenRoadmapAgent(llm_model=with_fallback_provider(llm_model, provider), tools=ALL_TOOLS)
+    router_llm = None
+    if settings.llm_model_router.strip() and builder is not None:
+        try:
+            router_llm = with_fallback_provider(builder(settings.llm_model_router.strip()), provider)
+            print(f"🤖 Router / write verification model: {settings.llm_model_router}.")
+        except Exception as exc:
+            print(f"[Agent] Router model unavailable ({type(exc).__name__}: {exc}); using LLM_MODEL.")
+    return NextGenRoadmapAgent(
+        llm_model=with_fallback_provider(llm_model, provider), tools=ALL_TOOLS, router_llm=router_llm
+    )
 
 
 def with_fallback_provider(llm_model, provider: str):

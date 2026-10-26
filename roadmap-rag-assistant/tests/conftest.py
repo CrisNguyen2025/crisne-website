@@ -16,6 +16,23 @@ TEST_INTERNAL_KEY = "test-internal-key"
 
 
 @pytest.fixture(autouse=True)
+def no_live_llm(monkeypatch):
+    """Tests never call a real model: build_agent() runs offline unless a test injects its own LLM.
+
+    The API keys in .env would otherwise make HTTP-level tests depend on a provider's answer and quota.
+    Evals (evals/) are where live models are measured.
+    """
+    import rag_service.api.routes as routes
+
+    monkeypatch.setattr(settings, "llm_provider", "offline")
+    monkeypatch.setattr(settings, "llm_fallback_provider", "")
+    monkeypatch.setattr(settings, "llm_model_router", "")
+    monkeypatch.setattr(routes, "_agent", None)
+    yield
+    routes._agent = None
+
+
+@pytest.fixture(autouse=True)
 def closed_llm_breaker():
     """The LLM circuit breaker is process-wide: a 429 in one test must not skip the LLM in the next."""
     llm_breaker.reset()
@@ -169,3 +186,20 @@ def event_loop():
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
+
+
+async def stream_confirmed(client, message: str, thread_id: str) -> str:
+    """POST a change to /chat/stream; tests run without System 2, so it is previewed: confirm it with "ok".
+
+    Returns the body of the turn that ran the change (the first one when nothing was previewed).
+    """
+    from rag_service.state import session_store
+
+    first = await client.post("/chat/stream", json={"message": message, "thread_id": thread_id})
+    assert first.status_code == 200
+    if not session_store.get_or_create(thread_id).pending_confirmation:
+        return first.text
+    second = await client.post("/chat/stream", json={"message": "ok", "thread_id": thread_id})
+    assert second.status_code == 200
+    return second.text
+

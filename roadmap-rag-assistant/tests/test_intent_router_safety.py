@@ -95,7 +95,7 @@ def test_llm_change_guess_on_underspecified_message_is_stopped(text):
     thread = f"safety-underspecified-{text}"
     history_store.clear(thread)
     steps, _ = _run(NextGenRoadmapAgent(llm_model=llm), text, thread)
-    assert steps["answer"]["mode"] == "unclear" and llm.calls == 1
+    assert steps["answer"]["mode"] == "unclear" and not llm.extracted
 
 
 def test_polite_request_shows_a_confirmation_card_instead_of_writing():
@@ -144,9 +144,22 @@ class _FixedLlm:
     def __init__(self, result: IntentClassificationResult):
         self.result = result
         self.calls = 0
+        self.schemas: list[str] = []
 
     def with_structured_output(self, schema):
-        return self
+        outer = self
+
+        class _Bound:
+            async def ainvoke(self, prompt):
+                outer.schemas.append(schema.__name__)  # recorded when called, not when the client is built
+                return await outer.ainvoke(prompt)
+
+        return _Bound()
+
+    @property
+    def extracted(self) -> bool:
+        """The CUD extractor ran: a change was about to be written."""
+        return "StructuredRoadmapAction" in self.schemas
 
     async def ainvoke(self, prompt):
         self.calls += 1
@@ -188,8 +201,8 @@ def test_llm_guess_without_change_request_asks_back(result):
     assert steps["route"]["method"] == "llm"
     assert steps["answer"]["mode"] == "unclear"
     assert "chưa hiểu rõ" in text
-    # Only the router called the LLM: nothing was extracted or written
-    assert llm.calls == 1
+    # The router (and System 2 for a change guess) read it; nothing was extracted or written
+    assert not llm.extracted
 
 
 def test_low_confidence_llm_change_asks_back():
@@ -202,4 +215,4 @@ def test_low_confidence_llm_change_asks_back():
     llm = _FixedLlm(IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.6))
     steps, _ = _run(NextGenRoadmapAgent(llm_model=llm), "xóa nó đi", thread)
     assert steps["route"]["method"] == "llm"
-    assert steps["answer"]["mode"] == "unclear" and llm.calls == 1
+    assert steps["answer"]["mode"] == "unclear" and not llm.extracted

@@ -44,7 +44,6 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     LEADING_GREETING,
     LIST_FILLER,
     LIST_TOPICS,
-    NAMED_ENTITY,
     NAMED_PART,
     OFF_TOPIC_HINTS,
     OFF_TOPIC_STRONG_HINTS,
@@ -94,7 +93,6 @@ class Understanding:
     has_change_verb: bool
     how_to: bool              # a how-to question ("cách …", "làm sao …", "how do I …")
     show_request: bool        # "cho mình xem …", "show me …"
-    named_object: bool        # the object has a name of its own: quoted, "tên là …", or a proper name / code
     has_object: bool          # names a roadmap object
     has_search_word: bool
     opens_with_greeting: bool # starts with a greeting or thanks word
@@ -253,7 +251,6 @@ def understand(text: str) -> Understanding:
         flat=flat,
         head=head,
         has_change_verb=has_verb,
-        named_object=NAMED_PART.search(raw) is not None or NAMED_ENTITY.search(normalize_vietnamese(text)) is not None,
         how_to=(HOW_TO.search(lower) if accented else HOW_TO_FOLDED.search(flat)) is not None,
         show_request=SHOW_REQUEST.search(lower) is not None and not has_verb,
         has_object=has_object,
@@ -280,3 +277,31 @@ def echoes_question(title: str, message: str) -> bool:
     words = fold(normalize_vietnamese(message).lower()).split()
     title_words = set(fold(normalize_vietnamese(title).lower()).split())
     return bool(words) and sum(w in title_words for w in words) / len(words) >= 0.8
+
+
+# The entity word a change names, accented or folded ("topic", "bài học", "layer", "nhóm")
+_ENTITY_WORD = re.compile(
+    r"\b(?:topics?|chủ\s+đề|chu\s+de|lộ\s+trình|lo\s+trinh|roadmaps?|layers?|mảng|mang|groups?|nhóm|nhom|items?"
+    r"|bài(?:\s+học)?|bai(?:\s+hoc)?|mục|muc|lessons?)\b",
+    re.IGNORECASE,
+)
+
+
+def instruction_part(text: str) -> str:
+    """The message without the names it carries: what is asked, not what is named.
+
+    "tạo topic System Prompt Engineering" → "tạo topic"; "thêm bài 'x' vào layer 1" → "thêm bài  vào layer 1".
+    For the sensitive guard: a lesson named "System Prompt Engineering" is not a request for the system prompt.
+    """
+    lower = normalize_vietnamese(text).lower().strip()
+    # a greeting or filler first ("ê bạn ơi, tạo topic …") still leaves a command
+    head = NAMED_PART.sub(" ", strip_noise(lower))
+    if IMPERATIVE_START.search(fold(head)):
+        match = _ENTITY_WORD.search(head)
+        if match:
+            rest = head[match.end():]
+            # keep the routing words after the name ("vào layer 1"), drop the name itself
+            tail = re.search(r"\b(?:vào|trong|sang|thành|into|to|under)\b.*$", rest)
+            head = head[:match.end()] + (" " + tail.group(0) if tail else "")
+    return re.sub(r"\s+", " ", head).strip()
+

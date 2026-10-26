@@ -72,6 +72,8 @@ Từ `roadmap-rag-assistant/`:
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm --opt judge=llm \
     --opt judge_provider=google_genai --opt judge_model=gemini-3.1-pro-preview             # + LLM judge: GỌI thêm judge model
 .venv/bin/python -m evals diff evals/runs/<base> evals/runs/<head>   # regressed / fixed / added / removed
+.venv/bin/python -m evals.router.holdout [--llm]          # write safety, held-out set: write_now_violations phải = 0
+.venv/bin/python -m evals.router.confuse [--llm]          # stress: 68 câu gây nhầm × 6 kiểu nhiễu; ratchet: evals/router/confuse_baseline.json
 .venv/bin/python -m evals sync-dataset --dry-run         # kéo golden set từ Langfuse: cần LANGFUSE_* trong .env, chỉ in thay đổi
 .venv/bin/python -m evals sync-dataset                   # ghi vào _answer/samples.jsonl (chỉ khi validate OK) → review diff → commit
 .venv/bin/python -m pytest tests/test_evals_kit.py tests/test_evals_judge.py tests/test_evals_sync_dataset.py   # offline

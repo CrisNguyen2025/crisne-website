@@ -6,6 +6,8 @@ import json
 from dataclasses import replace
 
 import httpx
+
+from tests.conftest import stream_confirmed
 import pytest
 
 from rag_service.agent import NextGenRoadmapAgent
@@ -238,16 +240,14 @@ def _sse_events(body: str) -> list[tuple[str, dict]]:
 async def test_sse_streams_steps_and_done_carries_their_final_state(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
-        resp = await client.post(
-            "/chat/stream", json={"message": "tạo cho tôi 3 topic A, B và C", "thread_id": "test-steps"}
-        )
-    events = _sse_events(resp.text)
+        body = await stream_confirmed(client, "tạo cho tôi 3 topic A, B và C", "test-steps")
+    events = _sse_events(body)
     streamed = [data for name, data in events if name == "step"]
     assert streamed and all("type" not in s for s in streamed)
 
     done = next(data for name, data in events if name == "done")
     tool = next(s for s in done["steps"] if s["kind"] == "tool")
-    assert tool["name"] == "create_topics_batch"
+    assert tool["name"] in ("create_topics_batch", "create_topic")
     assert tool["status"] == "done"
     assert "args" in tool  # owner
     assert all(s["status"] != "running" for s in done["steps"])

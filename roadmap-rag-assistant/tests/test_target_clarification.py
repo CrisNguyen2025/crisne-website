@@ -147,7 +147,11 @@ async def test_topic_without_layers_offers_to_create_one(adapter):
 @pytest.mark.asyncio
 async def test_known_layer_is_written_with_its_real_id(adapter):
     agent = FallbackAgent(tools=ALL_TOOLS)
-    await _chat(agent, "tạo item Docker trong layer 02-DB", str(uuid.uuid4()))
+    thread = str(uuid.uuid4())
+    await _chat(agent, "tạo item Docker trong layer 02-DB", thread)
+    # Without System 2 (no LLM in tests) the change is previewed; the layer is resolved before the card
+    adapter.create_item.assert_not_called()
+    await _chat(agent, "ok", thread)
     adapter.create_item.assert_called_once()
     assert adapter.create_item.call_args.kwargs["layer_id"] == "be-db"
 

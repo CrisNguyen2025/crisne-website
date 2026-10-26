@@ -28,26 +28,50 @@ HOLDOUT = ROOT / "holdout.jsonl"
 
 
 def _router(use_llm: bool):
+    """The router and System 2 model the chat uses (LLM_MODEL_ROUTER when set), or neither offline."""
     from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
     llm = None
     if use_llm:
         from rag_service.domains.roadmap.agent import build_agent
 
-        llm = build_agent().llm
-    return IntentRouter(llm_model=llm)
+        llm = build_agent().router_llm
+    router = IntentRouter(llm_model=llm)
+    router.verifier_llm = llm
+    return router
+
+
+_CATALOG = None
+
+
+def _catalog():
+    """The roadmap catalog of the eval corpus (prisma/dev.db), as the chat builds it from its index."""
+    global _CATALOG
+    if _CATALOG is None:
+        from evals.target import RoadmapTarget
+        from rag_service.domains.roadmap.router.target_grounding import Catalog
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        # _load runs its own event loop: keep it off the caller's
+        with ThreadPoolExecutor(1) as pool:
+            docs = pool.submit(lambda: RoadmapTarget(mode="fts")._load()[0]).result()
+        _CATALOG = Catalog.from_documents(docs)
+    return _CATALOG
 
 
 async def write_outcome(router, text: str, history=(), context=None) -> tuple[str, str]:
-    from rag_service.domains.roadmap.commands import RoadmapCommands
-    from rag_service.domains.roadmap.router.policy import WRITE_ALLOW, WRITE_CONFIRM, slash_command
-    from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
-    from rag_service.domains.roadmap.router.write_gate import gate_route
+    """The agent's decision order up to the write decision; nothing runs. Returns (now | preview | none, why)."""
     from rag_service.core.guards import is_sensitive_request
+    from rag_service.domains.roadmap.commands import RoadmapCommands
+    from rag_service.domains.roadmap.router.policy import slash_command
+    from rag_service.domains.roadmap.router.route_decision import decide_route
+    from rag_service.domains.roadmap.router.understanding import instruction_part
+    from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
     content = normalize_vietnamese(text.strip())
     lower = content.lower()
-    if is_sensitive_request(content):
+    if is_sensitive_request(content, instruction=instruction_part(content)):
         return "none", "sensitive"
     if slash_command(lower) == "goal":
         return "now", "/goal"
@@ -57,18 +81,15 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
         return "now", "bulk import"
     if router.mixed_intent_steps(content):
         return "none", "mixed"
-    res, method = await router.aroute(content, list(history))
-    decision = router.decide(content)
-    gate = gate_route(
-        res, method, router.has_change_request(content, follow_up=bool(history)), decision.write,
-        named=decision.understanding.named_object or bool(history and router.points_back(content)),
+    outcome = await decide_route(
+        router, content, list(history),
+        verifier_llm=getattr(router, "verifier_llm", None), catalog=_catalog(), page_context=context,
     )
-    why = f"{method} row={decision.row} intent={res.intent.value} gate={gate.mode}"
-    if gate.mode == WRITE_ALLOW:
-        return "now", why
-    if gate.mode == WRITE_CONFIRM:
-        return "preview", why
-    return "none", why
+    why = (
+        f"{outcome.method} row={outcome.decision.row} intent={outcome.intent_res.intent.value} "
+        f"gate={outcome.gate.mode}" + (f" plan={outcome.plan.outcome}:{outcome.plan.reason}" if outcome.plan else "")
+    )
+    return {"run": "now", "preview": "preview"}.get(outcome.write, "none"), why
 
 
 async def run(use_llm: bool) -> dict:

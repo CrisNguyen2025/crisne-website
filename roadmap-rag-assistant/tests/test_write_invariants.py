@@ -134,3 +134,18 @@ def test_held_out_messages_never_write_at_once_where_they_must_not():
     report = asyncio.run(run(use_llm=False))
     assert report["metrics"]["write_now_violations"] == 0, [l for l in report["lines"] if l.startswith("WRITE_NOW")]
     assert report["metrics"]["missed_writes"] == 0, [l for l in report["lines"] if l.startswith("MISSED")]
+
+
+def test_stress_set_offline_never_writes_at_once_and_does_not_regress():
+    """evals/router/stress_confuse.jsonl x noise, heuristics only. A ratchet: lower numbers are accepted by
+    updating evals/router/confuse_baseline.json; higher ones fail."""
+    import json
+    from pathlib import Path
+
+    from evals.router.confuse import run
+
+    baseline = json.loads((Path(__file__).resolve().parents[1] / "evals/router/confuse_baseline.json").read_text())
+    total = asyncio.run(run(False))["total"]
+    assert total.get("write_now_violation", 0) == 0
+    for key in ("missed_write", "wrong_branch"):
+        assert total.get(key, 0) <= baseline[key], f"{key}: {total.get(key, 0)} > baseline {baseline[key]}"

@@ -5,6 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import httpx
+
+from tests.conftest import stream_confirmed
 import pytest
 
 from rag_service.adapters.http_adapter import HttpApiAdapter
@@ -128,7 +130,8 @@ async def test_visitor_can_still_read(mock_adapter, visitor_headers):
 
 @pytest.mark.asyncio
 async def test_owner_can_create_topics(mock_adapter, owner_headers):
-    await _stream("tạo cho tôi 3 topic A, B và C", owner_headers, "owner-create")
+    async with _client(owner_headers) as client:
+        await stream_confirmed(client, "tạo cho tôi 3 topic A, B và C", "owner-create")
 
     mock_adapter.create_topic.assert_called()
 

@@ -31,9 +31,15 @@ INJECTION = re.compile(
 )
 # "Reveal" verbs only count together with a secret that belongs to the system,
 # so lesson questions like "token JWT là gì" or "lưu token in localStorage" stay in scope.
-REVEAL = re.compile(r"\bin(?:\s+ra)?\b|hiển\s+thị|cho\s+(?:tôi\s+|mình\s+|em\s+)?xem|\bđọc\b|tiết\s+lộ|\b(?:print|show|reveal|dump|cat|echo)\b")
+REVEAL = re.compile(
+    r"\bin(?:\s+ra)?\b|hiển\s+thị|cho\s+(?:tôi\s+|mình\s+|em\s+)?xem|\bđọc\b|tiết\s+lộ|\b(?:print|show|reveal|dump|cat|echo)\b"
+    # asking to be given it: "cho mình xin cái admin key", "gửi mình token", "give me the api key"
+    r"|\bxin\b|\bgửi\b|\b(?:give|send)\s+me\b"
+)
 ENV_FILE = re.compile(r"\.env\b")
-SECRET = re.compile(r"api[\s_-]?keys?|secrets?|tokens?|passwords?|mật\s+khẩu|biến\s+môi\s+trường|credentials?")
+SECRET = re.compile(
+    r"api[\s_-]?keys?|(?:admin|access|private|secret)[\s_-]?keys?|secrets?|tokens?|passwords?|mật\s+khẩu|biến\s+môi\s+trường|credentials?"
+)
 OWNED = re.compile(
     r"giá\s+trị|\bvalue\b|hiện\s+tại|\bcurrent\b|của\s+(?:bạn|hệ\s+thống|server|backend|ứng\s+dụng|app)"
     r"|\byour\s+(?:api|secrets?|tokens?|passwords?|credentials?|env)"
@@ -49,12 +55,19 @@ ENV_DUMP = re.compile(
 ENV_SCOPE = re.compile(r"biến\s+môi\s+trường|environment\s+variables?|\benv\b")
 
 
-def is_sensitive_request(message: str) -> bool:
-    """True when the message asks for secrets, config or the system prompt, or tries prompt injection."""
+def is_sensitive_request(message: str, instruction: Optional[str] = None) -> bool:
+    """True when the message asks for secrets, config or the system prompt, or tries prompt injection.
+
+    `instruction`: the message without the names it carries, as the domain strips them. Asking for something
+    is read there, so an entry named after the system prompt is not a request for it; injection and env-var
+    names are read on the whole message, since a stored name reaches later prompts.
+    """
     if ENV_VAR_NAME.search(message):
         return True
-    lower = message.lower()
-    if SYSTEM_PROMPT.search(lower) or INJECTION.search(lower):
+    if INJECTION.search(message.lower()):
+        return True
+    lower = (instruction if instruction is not None else message).lower()
+    if SYSTEM_PROMPT.search(lower):
         return True
     if ENV_DUMP.search(lower) and ENV_SCOPE.search(lower):
         return True

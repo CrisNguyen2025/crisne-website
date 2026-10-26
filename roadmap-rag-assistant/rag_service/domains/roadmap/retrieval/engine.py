@@ -128,6 +128,18 @@ class HybridRagEngine:
             words |= title_terms(doc.title)
         return words
 
+    async def catalog(self):
+        """Names of the roadmap's topics, layers and lessons, for grounding a change (target_grounding.py)."""
+        from rag_service.domains.roadmap.router.target_grounding import Catalog
+
+        if not self._is_synced:
+            await self.sync_live_database()
+        docs = self._vector_store._docs_map
+        if getattr(self, "_catalog_of", None) is not docs:
+            self._catalog = Catalog.from_documents(docs.values())
+            self._catalog_of = docs
+        return self._catalog
+
     def corpus_vocabulary(self) -> set[str]:
         """Content words of the current index, for the on-topic gate; rebuilt after each sync."""
         from rag_service.domains.roadmap.retrieval.relevance import corpus_vocabulary

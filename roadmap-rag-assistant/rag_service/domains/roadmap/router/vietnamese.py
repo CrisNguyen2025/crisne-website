@@ -6,6 +6,7 @@ and traditional vs modern tone mark placement (e.g., 'xoá' vs 'xóa', 'huỷ' v
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 # Mapping traditional tone placement to canonical modern standard
@@ -32,7 +33,21 @@ def normalize_vietnamese(text: str) -> str:
     for trad, mod in TRADITIONAL_TO_MODERN.items():
         if trad in norm:
             norm = norm.replace(trad, mod)
-    return norm
+    # 3. Chat shorthand ("dc ko", "j z"): every rule and the LLM then read one spelling
+    return expand_teencode(norm)
+
+
+# Chat shorthand with one meaning. Only lowercase standalone tokens: "DC Comics" or "K8s" are names.
+# Left out on purpose: "vs" (versus), "e", "r", "ad", "k" (handled where it ends a yes/no question).
+TEENCODE = {
+    "dc": "được", "đc": "được", "ko": "không", "hok": "không", "hông": "không", "khum": "không",
+    "j": "gì", "mk": "mình", "mik": "mình", "bik": "biết", "bít": "biết", "ns": "nói", "z": "vậy",
+}
+_TEENCODE_TOKEN = re.compile(r"(?<![\w./-])(" + "|".join(sorted(TEENCODE, key=len, reverse=True)) + r")(?![\w./-])")
+
+
+def expand_teencode(text: str) -> str:
+    return _TEENCODE_TOKEN.sub(lambda m: TEENCODE[m.group(1)], text)
 
 
 import re
