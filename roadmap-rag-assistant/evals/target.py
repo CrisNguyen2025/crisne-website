@@ -19,7 +19,7 @@ from pathlib import Path
 from evals.corpus_export import DEV_DB, build_documents, load_knowledge, read_existing
 from evals.kit import judge as kit_judge
 from evals.kit.corpus import content_hash
-from evals.kit.target import Answer, Hit, RouteResult, TargetUnavailable
+from evals.kit.target import Answer, Hit, RouteResult, ScopeResult, TargetUnavailable
 from rag_service.config import settings
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 from rag_service.core.retrieval.hybrid import HybridVectorStore
@@ -100,7 +100,7 @@ class RoadmapTarget:
         self._judge_llm = None
         self._fallback_judge_llm = None
         self._judge_cache: dict | None = None
-        capabilities = {"retrieve", "route"} | ({"answer"} if answer == "llm" else set())
+        capabilities = {"retrieve", "route", "scope"} | ({"answer"} if answer == "llm" else set())
         self.capabilities = frozenset(capabilities | ({"judge"} if judge == "llm" else set()))
         self._agent = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -150,6 +150,13 @@ class RoadmapTarget:
         if self.gate:
             matches = filter_on_topic(text, matches, corpus_vocabulary(self._load()[0]))
         return [Hit(doc_id=doc_ids[doc.id], section_id=doc_ids[doc.id], score=score) for doc, score in matches]
+
+    def scope(self, text: str, run_as: str | None = None) -> ScopeResult:
+        """What the message is about, as the chat decides it before routing."""
+        from rag_service.domains.roadmap.router.understanding import understand
+
+        target = understand(text).target.value
+        return ScopeResult(target={"off_topic": "external", "roadmap": "roadmap"}.get(target, "none"))
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
         if is_sensitive_request(text, instruction=instruction_part(text)):

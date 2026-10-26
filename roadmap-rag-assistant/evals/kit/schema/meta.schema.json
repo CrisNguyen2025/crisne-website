@@ -2,26 +2,68 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "evals/kit/schema/meta.schema.json",
   "title": "Dataset meta",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "object",
-  "required": ["owner", "acl_tier", "scorers"],
+  "required": [
+    "owner",
+    "acl_tier",
+    "scorers"
+  ],
   "additionalProperties": false,
   "properties": {
-    "owner": { "type": "string", "minLength": 1 },
-    "acl_tier": { "enum": ["public", "internal", "confidential"] },
-    "default_role": { "type": ["string", "null"] },
-    "scorers": { "type": "array", "items": { "enum": ["retrieval", "route", "answer", "judge"] } },
-    "k": { "type": "integer" },
-    "thresholds": { "type": "object" },
-    "profiles": { "type": "object", "description": "name -> thresholds overriding the default ones, picked with --profile" },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "acl_tier": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential"
+      ]
+    },
+    "default_role": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scorers": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "retrieval",
+          "route",
+          "answer",
+          "judge",
+          "scope"
+        ]
+      }
+    },
+    "k": {
+      "type": "integer"
+    },
+    "thresholds": {
+      "type": "object"
+    },
+    "profiles": {
+      "type": "object",
+      "description": "name -> thresholds overriding the default ones, picked with --profile"
+    },
     "langfuse_sync": {
       "type": "object",
       "description": "Written by `evals sync-dataset`: the Langfuse dataset, when it was last synced, active samples from it",
       "additionalProperties": false,
       "properties": {
-        "dataset": { "type": "string" },
-        "synced_at": { "type": "string" },
-        "samples": { "type": "integer" }
+        "dataset": {
+          "type": "string"
+        },
+        "synced_at": {
+          "type": "string"
+        },
+        "samples": {
+          "type": "integer"
+        }
       }
     }
   }

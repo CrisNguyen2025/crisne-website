@@ -23,6 +23,13 @@ class RouteResult:
     route: list[str] = field(default_factory=list)  # empty = no decision (e.g. deferred to an LLM router)
 
 
+@dataclass(frozen=True)
+class ScopeResult:
+    target: str  # roadmap | domain_gap | external | none
+    focus: str | None = None  # the topic the message is about, once the question frame is removed
+    score: float | None = None  # domain score when an embedding was available
+
+
 class TargetUnavailable(Exception):
     """The target could not answer for a reason outside the system under test (e.g. provider quota).
 
@@ -48,6 +55,10 @@ class Target(Protocol):
     capabilities: frozenset[str]
 
     def retrieve(self, text: str, k: int, run_as: str | None = None) -> list[Hit]: ...
+
+    def scope(self, text: str, run_as: str | None = None) -> "ScopeResult":
+        """Only with the "scope" capability: what the message is about (roadmap / domain_gap / external / none)."""
+        ...
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult: ...
 

@@ -1,0 +1,70 @@
+{"id": "scope-001", "input": "Hybrid Search là gì", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-002", "input": "bạn có biết thông tin về reranking k", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-003", "input": "cho mình hỏi chút là semantic caching dùng làm gì", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-004", "input": "chunking tài liệu thế nào cho hợp lý", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-005", "input": "what is a vector database", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-006", "input": "tom tat giup minh ve prompt injection", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "command"}}
+{"id": "scope-007", "input": "giải thích LLM-as-a-judge đi", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "command"}}
+{"id": "scope-008", "input": "mình muốn tìm hiểu về context window", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune", "frame-heavy"], "act": "statement"}}
+{"id": "scope-009", "input": "nói về circuit breaker cho agent đi", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "command"}}
+{"id": "scope-010", "input": "rate limiting cho API LLM", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "statement"}}
+{"id": "scope-011", "input": "LoRA là gì", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-012", "input": "bạn có biết thông tin về RLHF không", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-013", "input": "lượng tử hóa model xuống 4-bit hoạt động thế nào", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-014", "input": "what is mixture of experts", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-015", "input": "giải thích knowledge distillation cho mình", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "command"}}
+{"id": "scope-016", "input": "mình muốn tìm hiểu về diffusion model", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune", "frame-heavy"], "act": "statement"}}
+{"id": "scope-017", "input": "so sánh GAN và VAE", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-018", "input": "PEFT khác full fine-tuning chỗ nào", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-019", "input": "cho mình hỏi về DPO", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-020", "input": "nói về reinforcement learning đi", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "command"}}
+{"id": "scope-021", "input": "bạn có biết thông tin về telegram k", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-022", "input": "giá vàng hôm nay bao nhiêu", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-023", "input": "cách dùng Photoshop để xóa phông", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-024", "input": "hàm VLOOKUP trong Excel dùng thế nào", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-025", "input": "tạo nhóm Zalo cho lớp học", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "command"}}
+{"id": "scope-026", "input": "kết quả bóng đá tối qua", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-027", "input": "công thức nấu phở bò", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-028", "input": "mua iPhone 17 ở đâu rẻ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-029", "input": "mình muốn đi du lịch Đà Nẵng", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "statement"}}
+{"id": "scope-030", "input": "thêm item vào giỏ hàng Shopee", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "command"}}
+{"id": "scope-031", "input": "lịch chiếu phim cuối tuần", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
+{"id": "scope-032", "input": "tell me about Instagram reels", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-033", "input": "bài đó sao", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-034", "input": "?", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-035", "input": "cái kia thì sao", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-036", "input": "thế còn cái trên", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-037", "input": "hmm", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "statement"}}
+{"id": "scope-038", "input": "ok vậy còn gì nữa", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-039", "input": "vậy à", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "statement"}}
+{"id": "scope-040", "input": "nó là gì", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-tune"], "act": "question"}}
+{"id": "scope-041", "input": "bạn có biết gì về query rewriting không", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-042", "input": "multi-agent system dùng khi nào", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-043", "input": "giai thich guardrails cho LLM", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "command"}}
+{"id": "scope-044", "input": "mình đang tìm hiểu golden dataset để đánh giá", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout", "frame-heavy"], "act": "statement"}}
+{"id": "scope-045", "input": "speculative decoding là gì vậy", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-046", "input": "so sánh BM25 và dense retrieval", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-047", "input": "data drift trong LLMOps nghĩa là sao", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-048", "input": "tell me about model context protocol", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-049", "input": "bạn có biết thông tin về vLLM không", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-050", "input": "Whisper chuyển giọng nói thành văn bản thế nào", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "question"}}
+{"id": "scope-051", "input": "federated learning là gì", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "question"}}
+{"id": "scope-052", "input": "giải thích transformer attention cho người mới", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "command"}}
+{"id": "scope-053", "input": "mình muốn học prompt tuning", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "statement"}}
+{"id": "scope-054", "input": "cho hỏi về contrastive learning", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-055", "input": "what is QLoRA", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "question"}}
+{"id": "scope-056", "input": "bạn có biết thông tin về Facebook Marketplace k", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-057", "input": "tỷ giá đô hôm nay", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
+{"id": "scope-058", "input": "cách cài driver máy in Canon", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
+{"id": "scope-059", "input": "Google Sheets có hàm nào đếm ô trống", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
+{"id": "scope-060", "input": "tạo nhóm Messenger cho gia đình", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "command"}}
+{"id": "scope-061", "input": "viết thơ tặng mẹ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "command"}}
+{"id": "scope-062", "input": "mình muốn mua xe máy cũ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "statement"}}
+{"id": "scope-063", "input": "how to edit videos in CapCut", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
+{"id": "scope-064", "input": "cho mình hỏi về luật giao thông mới", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout", "frame-heavy"], "act": "question"}}
+{"id": "scope-065", "input": "thời tiết Huế mai thế nào", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
+{"id": "scope-066", "input": "bài trên thì sao", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "question"}}
+{"id": "scope-067", "input": "cái này là gì", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "question"}}
+{"id": "scope-068", "input": "còn nữa không", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "question"}}
+{"id": "scope-069", "input": "ừ", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "statement"}}
+{"id": "scope-070", "input": "thế à", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "statement"}}

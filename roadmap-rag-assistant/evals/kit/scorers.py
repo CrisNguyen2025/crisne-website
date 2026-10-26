@@ -59,6 +59,15 @@ def score_route(sample: dict, target: Target, k: int, run_as: str | None) -> dic
     return {"passed": passed, "got": {"behavior": got.behavior, "route": got.route}}
 
 
+@scorer("scope", "scope")
+def score_scope(sample: dict, target: Target, k: int, run_as: str | None) -> dict | None:
+    want = sample["expected"].get("target")
+    if want is None:
+        return None
+    got = target.scope(sample["input"], run_as)
+    return {"passed": got.target == want, "want": want, "got": got.target, "focus": got.focus, "score": got.score}
+
+
 @scorer("answer", "answer")
 def score_answer(sample: dict, target: Target, k: int, run_as: str | None) -> dict | None:
     expected = sample["expected"]

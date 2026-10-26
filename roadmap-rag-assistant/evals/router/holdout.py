@@ -35,7 +35,19 @@ def _router(use_llm: bool, max_calls: int | None = None):
 
     llm = None
     if use_llm:
+        from rag_service.config import settings
         from rag_service.domains.roadmap.agent import build_agent
+        from rag_service.llm_keys import parse_keys
+
+        # Evals spend the extra keys (GROQ_API_KEYS) so the production key (GROQ_API_KEY) keeps its quota.
+        # Without extra keys they fall back to the main key, with a warning.
+        if parse_keys(settings.groq_api_keys):
+            import os
+
+            settings.groq_api_key = ""
+            os.environ.pop("GROQ_API_KEY", None)  # _build_groq also reads the environment
+        else:
+            print("[evals] GROQ_API_KEYS is empty: evals will use GROQ_API_KEY and its daily quota.")
 
         llm = build_agent().router_llm
         if llm is not None and max_calls:

@@ -15,6 +15,13 @@
     "negation",
     "plan-goal",
     "follow-up",
-    "slash-command"
+    "slash-command",
+    "scope-roadmap",
+    "scope-gap",
+    "scope-external",
+    "scope-none",
+    "frame-heavy",
+    "split-tune",
+    "split-holdout"
   ]
 }

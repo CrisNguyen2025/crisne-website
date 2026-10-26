@@ -37,6 +37,10 @@ class AclGuard:
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
         return self.target.route(text, run_as)
 
+    def scope(self, text: str, run_as: str | None = None):
+        # Scope returns no sections, so there is nothing to check for leaks
+        return self.target.scope(text, run_as)
+
     def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer:
         answer = self.target.answer(text, history, run_as)
         self._check(answer.citations, run_as, "answer")

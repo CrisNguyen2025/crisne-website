@@ -54,7 +54,18 @@ def _judge(rows: list[dict], k: int) -> dict:
     }
 
 
-METRICS = {"retrieval": _retrieval, "judge": _judge}
+def _scope(rows: list[dict], k: int) -> dict:
+    return {
+        "n": len(rows),
+        "accuracy": _ratio(sum(r["passed"] for r in rows), len(rows)),
+        # The costly direction: an outside topic treated as the roadmap's (answered from it, or a write offered)
+        "external_admitted": sum(r["want"] == "external" and r["got"] in ("roadmap", "domain_gap") for r in rows),
+        # An in-corpus topic refused as outside the roadmap
+        "roadmap_refused": sum(r["want"] == "roadmap" and r["got"] == "external" for r in rows),
+    }
+
+
+METRICS = {"retrieval": _retrieval, "judge": _judge, "scope": _scope}
 
 
 def summarize(results: list[dict], k: int) -> dict:
