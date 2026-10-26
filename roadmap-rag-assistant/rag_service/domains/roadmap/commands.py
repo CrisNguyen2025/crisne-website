@@ -60,7 +60,8 @@ class RoadmapCommands:
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting: confirm/cancel a previewed action, or pick a layer."""
         # ── 0. Pending Action Confirmation ────────────────────────────────────
-        if session_ctx.pending_confirmation:
+        # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
+        if session_ctx.fresh_pending("pending_confirmation"):
             if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
                 pending_act = session_ctx.pending_confirmation
                 session_ctx.pending_confirmation = None
@@ -92,7 +93,7 @@ class RoadmapCommands:
             session_ctx.pending_confirmation = None
 
         # ── 0b. Pending layer choice for an item without a target layer ──────
-        if session_ctx.pending_layer_choice:
+        if session_ctx.fresh_pending("pending_layer_choice"):
             pending_item = session_ctx.pending_layer_choice
             topic_slug = session_ctx.pending_layer_topic
             options = session_ctx.pending_layer_options

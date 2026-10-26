@@ -28,6 +28,11 @@ const jsonError = (error: string, status: number, headers?: Record<string, strin
 // Ids the service already returned (e.g. an action_preview's action_id) keep their prefix.
 const scopeThreadId = (id: string, actor: Actor) => (id.startsWith(`${actor}:`) ? id : `${actor}:${id}`);
 
+// A missing or "default" thread would be shared by every caller that sends none (their history, their
+// pending preview), so it gets its own id; the service refuses "default" too. Returned in x-thread-id.
+const ownThreadId = (id: unknown): string =>
+  typeof id === "string" && id.trim() && id.trim().toLowerCase() !== "default" ? id : crypto.randomUUID();
+
 async function forward(req: NextRequest, context: RouteContext, allowedPaths: Set<string>) {
   const path = (await context.params).path.join("/");
   if (!allowedPaths.has(path)) return jsonError("Not found", 404);
@@ -48,6 +53,7 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
   }
 
   let body: string | undefined;
+  let threadId: string | undefined;
   if (req.method === "POST") {
     let payload: unknown;
     try {
@@ -65,7 +71,8 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
     }
 
     const scoped: Record<string, unknown> = { ...payload };
-    scoped.thread_id = scopeThreadId(typeof scoped.thread_id === "string" ? scoped.thread_id : "default", actor);
+    threadId = ownThreadId(scoped.thread_id);
+    scoped.thread_id = scopeThreadId(threadId, actor);
     if (typeof scoped.action_id === "string") scoped.action_id = scopeThreadId(scoped.action_id, actor);
     body = JSON.stringify(scoped);
   }
@@ -91,6 +98,8 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
       "Content-Type": upstream.headers.get("content-type") ?? "application/json",
       "Cache-Control": "no-cache, no-transform",
       "X-Accel-Buffering": "no",
+      // The thread this turn ran in (unscoped), so a client that sent none can continue it
+      ...(threadId ? { "x-thread-id": threadId } : {}),
     },
   });
 }

@@ -268,10 +268,10 @@ async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionC
 
     tid = req.action_id or req.thread_id
     ctx = session_store.get_or_create(tid)
-    if not ctx.pending_confirmation:
+    if not ctx.fresh_pending("pending_confirmation"):
         return ActionConfirmResponse(
             success=False,
-            message="Không có thao tác nào đang chờ xác nhận."
+            message="Không có thao tác nào đang chờ xác nhận (hoặc thao tác đã hết hạn sau 10 phút)."
         )
 
     action = ctx.pending_confirmation

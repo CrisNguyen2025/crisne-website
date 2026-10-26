@@ -67,7 +67,19 @@ describe("Roadmap Assistant proxy — who the caller is", () => {
     await callPost("chat/stream", { message: "tạo topic X" });
 
     expect(forwarded().headers["x-actor"]).toBe("owner");
-    expect(forwarded().body.thread_id).toBe("owner:default");
+    expect(forwarded().body.thread_id).toMatch(/^owner:[0-9a-f-]{36}$/);
+  });
+
+  it("gives a turn without a thread, or with the shared 'default', its own thread and returns it", async () => {
+    const first = await callPost("chat/stream", { message: "RAG là gì" });
+    const second = await callPost("chat/stream", { message: "RAG là gì", thread_id: "default" });
+
+    const [a, b] = [forwarded(0).body.thread_id, forwarded(1).body.thread_id];
+    expect(a).toMatch(/^visitor:[0-9a-f-]{36}$/);
+    expect(b).toMatch(/^visitor:[0-9a-f-]{36}$/);
+    expect(a).not.toBe(b);
+    expect(first.headers.get("x-thread-id")).toBe(a.replace(/^visitor:/, ""));
+    expect(second.headers.get("x-thread-id")).toBe(b.replace(/^visitor:/, ""));
   });
 
   it("never lets a visitor claim the owner's role or thread", async () => {

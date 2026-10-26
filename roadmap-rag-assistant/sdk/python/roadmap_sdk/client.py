@@ -12,6 +12,8 @@ Usage:
 
 from __future__ import annotations
 
+import uuid
+
 import httpx
 
 from roadmap_sdk.types import ChatResponse
@@ -26,11 +28,13 @@ class RoadmapAssistantClient:
         timeout: float = 120.0,
     ) -> None:
         self._client = httpx.Client(base_url=base_url, timeout=timeout)
+        # One conversation per client unless the caller names one: the service refuses a shared "default"
+        self.thread_id = uuid.uuid4().hex
 
     def chat(
         self,
         message: str,
-        thread_id: str = "default",
+        thread_id: str | None = None,
     ) -> ChatResponse:
         """Send a natural language prompt to the assistant.
 
@@ -43,7 +47,7 @@ class RoadmapAssistantClient:
         """
         resp = self._client.post(
             "/chat",
-            json={"message": message, "thread_id": thread_id},
+            json={"message": message, "thread_id": thread_id or self.thread_id},
         )
         resp.raise_for_status()
         return ChatResponse.from_dict(resp.json())

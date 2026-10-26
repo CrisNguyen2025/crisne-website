@@ -7,9 +7,9 @@ from rag_service.api.schemas import ChatRequest
 
 
 def test_accepts_exactly_the_limit():
-    assert len(ChatRequest(message="x" * 2000).message) == 2000
+    assert len(ChatRequest(message="x" * 2000, thread_id="t1").message) == 2000
 
 
 def test_refuses_one_character_over_the_limit():
     with pytest.raises(ValidationError):
-        ChatRequest(message="x" * 2001)
+        ChatRequest(message="x" * 2001, thread_id="t1")

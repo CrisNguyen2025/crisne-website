@@ -75,9 +75,9 @@ def test_with_grounding_keeps_message_when_no_context():
 
 
 def test_chat_request_accepts_context():
-    req = ChatRequest(message="thêm item", context={"roadmapSlug": "fe", "layerId": "L1"})
+    req = ChatRequest(message="thêm item", thread_id="t1", context={"roadmapSlug": "fe", "layerId": "L1"})
     assert req.context["layerId"] == "L1"
-    assert ChatRequest(message="hi").context is None
+    assert ChatRequest(message="hi", thread_id="t1").context is None
 
 
 def test_sanitize_title_strips_page_context_hint():

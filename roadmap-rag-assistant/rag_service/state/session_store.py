@@ -6,10 +6,22 @@ across stateless chat messages.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+import time
+
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
+
+
+# A previewed change or a layer choice older than this is dropped: an "ok" an hour later must not run it
+PENDING_TTL_SECONDS = 600.0
+_PENDING_FIELDS = ("pending_confirmation", "pending_layer_choice")
+
+
+def _now() -> float:
+    """Clock for pending expiry; tests replace this, not time.monotonic (the event loop reads that one)."""
+    return time.monotonic()
 
 
 class SessionContext(BaseModel):
@@ -26,6 +38,26 @@ class SessionContext(BaseModel):
     # Existing layers offered for that create, answerable by number or name.
     pending_layer_options: List[dict] = Field(default_factory=list)
     recent_created_entities: List[dict] = Field(default_factory=list)
+    # When each pending field was set (time.monotonic); stamped on assignment
+    pending_since: Dict[str, float] = Field(default_factory=dict)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+        if name in _PENDING_FIELDS:
+            stamps = dict(self.pending_since)
+            if value is None:
+                stamps.pop(name, None)
+            else:
+                stamps[name] = _now()
+            super().__setattr__("pending_since", stamps)
+
+    def fresh_pending(self, name: str = "pending_confirmation") -> Any:
+        """The pending value if it is still within PENDING_TTL_SECONDS; an expired one is cleared."""
+        value = getattr(self, name)
+        if value is not None and _now() - self.pending_since.get(name, 0.0) > PENDING_TTL_SECONDS:
+            setattr(self, name, None)
+            return None
+        return value
 
 
 class SessionStore:
