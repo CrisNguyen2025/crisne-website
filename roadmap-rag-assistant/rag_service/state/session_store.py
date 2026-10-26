@@ -11,6 +11,7 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+from rag_service.core.bounded import BoundedStore
 from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 
@@ -64,14 +65,13 @@ class SessionStore:
     """In-memory multi-turn session storage."""
 
     def __init__(self) -> None:
-        self._sessions: Dict[str, SessionContext] = {}
+        # Bounded: every chat is a new thread, so a plain dict grew for as long as the process ran
+        self._sessions: BoundedStore[SessionContext] = BoundedStore()
 
     def get_or_create(self, session_id: str) -> SessionContext:
         """Retrieve existing session context or instantiate a new one."""
         sid = session_id or "default"
-        if sid not in self._sessions:
-            self._sessions[sid] = SessionContext(session_id=sid)
-        return self._sessions[sid]
+        return self._sessions.get_or_create(sid, lambda: SessionContext(session_id=sid))
 
     def set_active_topic(self, session_id: str, slug: str, title: str = "") -> None:
         ctx = self.get_or_create(session_id)
@@ -94,8 +94,7 @@ class SessionStore:
         ctx.pending_confirmation = action
 
     def clear(self, session_id: str) -> None:
-        if session_id in self._sessions:
-            del self._sessions[session_id]
+        self._sessions.pop(session_id)
         # Imported here: generation imports the agent's dependencies, which import this module.
         from rag_service.core.augmentation.history import history_store
 

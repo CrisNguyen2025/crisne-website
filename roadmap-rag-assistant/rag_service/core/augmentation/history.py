@@ -5,9 +5,12 @@ from __future__ import annotations
 import os
 import sqlite3
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Dict, List, Literal, Protocol
+from typing import Deque, List, Literal, Protocol
+
+from rag_service.core.bounded import BoundedStore
 
 Role = Literal["user", "assistant"]
 
@@ -28,18 +31,23 @@ class HistoryStore(Protocol):
     def clear(self, thread_id: str) -> None: ...
 
 
+# Conversation turns kept on disk this long; purged when the store opens
+HISTORY_RETENTION_SECONDS = 30 * 24 * 3600
+
+
 class InMemoryHistoryStore:
     """Per-process store; lost on restart. Keeps at most `max_messages` per thread."""
 
     def __init__(self, max_messages: int = 50) -> None:
-        self._threads: Dict[str, Deque[Turn]] = {}
+        # Bounded by thread count and idle time; each thread keeps its last `max_messages`
+        self._threads: BoundedStore[Deque[Turn]] = BoundedStore()
         self._max = max_messages
 
     def append(self, thread_id: str, role: Role, content: str) -> None:
         if not content:
             return
         sid = thread_id or "default"
-        self._threads.setdefault(sid, deque(maxlen=self._max)).append(Turn(role, content))
+        self._threads.get_or_create(sid, lambda: deque(maxlen=self._max)).append(Turn(role, content))
 
     def get_recent(self, thread_id: str, n: int) -> List[Turn]:
         turns = self._threads.get(thread_id or "default")
@@ -71,6 +79,11 @@ class SqliteHistoryStore:
                  content TEXT NOT NULL)"""
         )
         self._db.execute("CREATE INDEX IF NOT EXISTS chat_turn_thread ON chat_turn(thread_id, id)")
+        # Older files have no created_at: added here, their rows stay (NULL is never purged)
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(chat_turn)")}
+        if "created_at" not in columns:
+            self._db.execute("ALTER TABLE chat_turn ADD COLUMN created_at REAL")
+        self._db.execute("DELETE FROM chat_turn WHERE created_at < ?", (time.time() - HISTORY_RETENTION_SECONDS,))
         self._db.commit()
 
     def append(self, thread_id: str, role: Role, content: str) -> None:
@@ -79,7 +92,8 @@ class SqliteHistoryStore:
         sid = thread_id or "default"
         with self._lock:
             self._db.execute(
-                "INSERT INTO chat_turn (thread_id, role, content) VALUES (?, ?, ?)", (sid, role, content)
+                "INSERT INTO chat_turn (thread_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (sid, role, content, time.time()),
             )
             # Keep only the newest `max_messages` per thread
             self._db.execute(
