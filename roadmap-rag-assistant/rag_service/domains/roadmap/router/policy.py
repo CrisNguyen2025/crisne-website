@@ -386,6 +386,13 @@ ROUTER_EXAMPLES = [
     ("lập kế hoạch học backend trong 3 tháng", "PLAN_GOAL"),
     ("giá vàng hôm nay", "OUT_OF_SCOPE"),
     ("abc xyz", "UNCLEAR"),
+    # The topic decides, not the question frame (router/scope.py). None of these is in the scope eval set.
+    ("bạn có biết thông tin về embedding model không", "KNOWLEDGE_QUERY"),
+    ("bạn có biết thông tin về Stable Diffusion không", "KNOWLEDGE_QUERY"),
+    ("bạn có biết thông tin về Zoom k", "OUT_OF_SCOPE"),
+    ("cho mình hỏi về thủ tục làm hộ chiếu", "OUT_OF_SCOPE"),
+    ("text-to-speech hoạt động thế nào", "KNOWLEDGE_QUERY"),
+    ("cách dùng Google Maps", "OUT_OF_SCOPE"),
 ]
 
 # Clause joiners used to spot several requests in one message ("tìm bài A rồi tạo topic B").

@@ -21,6 +21,27 @@ def is_rate_limited(exc: BaseException) -> bool:
     return "RateLimit" in type(exc).__name__ or any(mark in text for mark in RATE_LIMIT_MARKS)
 
 
+# The model answered but not with the structured output (gpt-oss on Groq skipped the tool call on about half
+# of the router calls measured): worth one more try, and not a provider failure for the circuit breaker
+MISSED_STRUCTURE_MARKS = ("did not call a tool", "tool_use_failed", "Failed to call a function", "output_parse_failed")
+
+
+def missed_structure(exc: BaseException) -> bool:
+    return any(mark in str(exc) for mark in MISSED_STRUCTURE_MARKS)
+
+
+async def invoke_structured(llm: Any, schema: Any, prompt: Any, attempts: int = 2) -> Any:
+    """llm.with_structured_output(schema).ainvoke(prompt), tried again when the model skipped the structure."""
+    structured = llm.with_structured_output(schema)
+    for attempt in range(attempts):
+        try:
+            return await structured.ainvoke(prompt)
+        except Exception as exc:
+            if attempt + 1 < attempts and missed_structure(exc) and not is_rate_limited(exc):
+                continue
+            raise
+
+
 def parse_keys(*values: str) -> List[str]:
     """Comma-separated keys from each value, blanks and repeats dropped, order kept."""
     keys = (k.strip() for v in values for k in (v or "").split(","))

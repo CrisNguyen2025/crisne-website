@@ -122,3 +122,17 @@ def test_domain_gap_with_no_lesson_says_so(monkeypatch):
 
     asyncio.run(run())
     assert "chưa có bài học về **lora**" in seen["reply"]
+
+
+def test_router_prompt_examples_never_come_from_the_scope_eval_set():
+    # An eval sample in the prompt would measure memory, not the router (the holdout split especially)
+    import json
+    from pathlib import Path
+
+    from rag_service.domains.roadmap.router.focus import focus_of
+    from rag_service.domains.roadmap.router.policy import ROUTER_EXAMPLES
+
+    path = Path(__file__).resolve().parents[1] / "evals/datasets/_scope/samples.jsonl"
+    samples = [json.loads(line)["input"] for line in path.read_text(encoding="utf-8").splitlines()]
+    seen = {s.lower() for s in samples} | {focus_of(s) for s in samples if focus_of(s)}
+    assert not [m for m, _ in ROUTER_EXAMPLES if m.lower() in seen or focus_of(m) in seen]

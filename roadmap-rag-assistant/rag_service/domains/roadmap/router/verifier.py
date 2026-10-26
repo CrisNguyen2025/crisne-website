@@ -16,6 +16,7 @@ from typing import Any, Optional, Sequence
 
 from pydantic import BaseModel, Field
 
+from rag_service.llm_keys import invoke_structured
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType, StructuredRoadmapAction
 
 VERIFY_TIMEOUT = 15.0
@@ -118,8 +119,9 @@ async def verify_write(
     if llm is None:
         return None
     try:
-        structured = llm.with_structured_output(WriteVerdict)
-        verdict = await asyncio.wait_for(structured.ainvoke(build_verify_prompt(text, history, page_context)), VERIFY_TIMEOUT)
+        verdict = await asyncio.wait_for(
+            invoke_structured(llm, WriteVerdict, build_verify_prompt(text, history, page_context)), VERIFY_TIMEOUT
+        )
     except Exception as exc:
         print(f"[Verifier] System 2 unavailable ({type(exc).__name__}: {str(exc)[:120]}); no write runs at once.")
         return None

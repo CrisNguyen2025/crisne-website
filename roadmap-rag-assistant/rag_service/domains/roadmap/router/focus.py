@@ -48,23 +48,48 @@ NO_TOPIC = re.compile(
 )
 
 
+def _window(text: str) -> tuple[str, str, int, int]:
+    """(normalized text, its folded form, start, end) of the topic once frames are removed.
+
+    Folding keeps one character per character for NFC Vietnamese, so the window indexes both strings.
+    """
+    original = re.sub(r"\s+", " ", normalize_vietnamese(text)).strip()
+    flat = fold(original)
+    if len(flat) != len(original):  # a character folded to several: work on the folded text only
+        original = flat
+    start, end = 0, len(flat)
+    m = re.search(r"[\s?!.,]+$", flat)
+    if m:
+        end = m.start()
+    while True:  # frames can stack: "ê bạn ơi, cho mình hỏi chút là …"
+        lead = LEADING_FRAME.match(flat, start, end)
+        if lead and lead.end() > start:
+            start = lead.end()
+            continue
+        trail = TRAILING_FRAME.search(flat[start:end])
+        if trail and trail.start() < end - start:
+            end = start + trail.start()
+            continue
+        break
+    while start < end and flat[start] in " ,":
+        start += 1
+    while end > start and flat[end - 1] in " ,":
+        end -= 1
+    return original, flat, start, end
+
+
 def focus_of(text: str) -> Optional[str]:
     """The topic of the message, folded and lowercase; None when it names none.
 
     "bạn có biết thông tin về telegram k" -> "telegram"; "so sánh GAN và VAE" -> "gan | vae";
     "bài đó sao" -> None.
     """
-    flat = fold(normalize_vietnamese(text)).strip()
-    flat = re.sub(r"[\s?!.,]+$", "", flat)
-    flat = re.sub(r"\s+", " ", flat)
-    previous = None
-    while previous != flat:  # frames can stack: "ê bạn ơi, cho mình hỏi chút là …"
-        previous = flat
-        flat = LEADING_FRAME.sub("", flat, count=1).strip()
-        flat = TRAILING_FRAME.sub("", flat).strip(" ,")
-    if NO_TOPIC.match(flat):
+    _, flat, start, end = _window(text)
+    topic = flat[start:end]
+    if NO_TOPIC.match(topic):
         return None
-    parts = re.split(r"\s+(?:va|voi|vs|and|or|hay|hoac)\s+", flat)
+    parts = re.split(r"\s+(?:va|voi|vs|and|or|hay|hoac)\s+", topic)
     if len(parts) == 2 and all(p.strip() for p in parts):
         return " | ".join(p.strip() for p in parts)
-    return flat or None
+    return topic or None
+

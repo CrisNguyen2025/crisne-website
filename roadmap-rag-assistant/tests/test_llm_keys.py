@@ -116,3 +116,28 @@ def test_no_fallback_when_unset_or_same_provider(monkeypatch):
     assert agent.with_fallback_provider(primary, "groq") is primary
     monkeypatch.setattr(agent.settings, "llm_fallback_provider", "groq")
     assert agent.with_fallback_provider(primary, "groq") is primary
+
+
+def test_structured_call_is_tried_again_when_the_model_skipped_the_tool():
+    from rag_service.llm_keys import invoke_structured
+
+    class _Llm:
+        def __init__(self, errors):
+            self.errors, self.calls = list(errors), 0
+
+        def with_structured_output(self, schema):
+            return self
+
+        async def ainvoke(self, prompt):
+            self.calls += 1
+            if self.errors:
+                raise self.errors.pop(0)
+            return "verdict"
+
+    skipped = RuntimeError("Tool choice is required, but model did not call a tool")
+    llm = _Llm([skipped])
+    assert asyncio.run(invoke_structured(llm, dict, "p")) == "verdict" and llm.calls == 2
+    limited = _Llm([LIMITED])
+    with pytest.raises(RateLimitError):  # a rate limit is not retried here: the key rotation handles it
+        asyncio.run(invoke_structured(limited, dict, "p"))
+    assert limited.calls == 1

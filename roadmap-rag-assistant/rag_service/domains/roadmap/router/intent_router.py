@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence
 
 from rag_service.llm_breaker import llm_breaker
+from rag_service.llm_keys import invoke_structured, missed_structure
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
 from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.policy import (
@@ -91,6 +92,9 @@ def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
         "- PLAN_GOAL: muốn lập kế hoạch hoặc sinh lộ trình trọn gói\n"
         "- CHITCHAT: chào hỏi, cảm ơn, hỏi trợ lý/dự án làm được gì, cách dùng\n"
         "- OUT_OF_SCOPE: không liên quan đến roadmap/topic/layer/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n"
+        "Phân biệt theo CHỦ ĐỀ được hỏi (bỏ khung câu như 'bạn có biết thông tin về', 'cho mình hỏi'):\n"
+        "  - chủ đề thuộc lĩnh vực của roadmap (AI, LLM, RAG, MLOps…), kể cả khi roadmap chưa có bài → KNOWLEDGE_QUERY\n"
+        "  - chủ đề thuộc lĩnh vực khác (ứng dụng, mạng xã hội, đời sống, tài chính, phần mềm văn phòng…) → OUT_OF_SCOPE\n"
         "- UNCLEAR: không đủ thông tin để biết người dùng muốn gì\n\n"
         "Quy tắc:\n"
         "- Câu hỏi (kể cả không có dấu \"?\", ví dụ kết thúc bằng \"gì\", \"nào\", \"không\") KHÔNG BAO GIỜ là ROADMAP_CUD.\n"
@@ -233,13 +237,14 @@ class IntentRouter:
         elif self._llm is not None:
             method = "llm_error"
             try:
-                structured_llm = self._llm.with_structured_output(IntentClassificationResult)
-                res = await structured_llm.ainvoke(build_router_prompt(text, history))
+                res = await invoke_structured(self._llm, IntentClassificationResult, build_router_prompt(text, history))
                 if isinstance(res, IntentClassificationResult):
                     return res, "llm"
             except Exception as exc:
                 print(f"[IntentRouter] LLM classification error: {exc}")
-                llm_breaker.record_failure(exc)
+                # A skipped structured output is the model's answer, not the provider failing
+                if not missed_structure(exc):
+                    llm_breaker.record_failure(exc)
 
         # Default fallback
         return IntentClassificationResult(
