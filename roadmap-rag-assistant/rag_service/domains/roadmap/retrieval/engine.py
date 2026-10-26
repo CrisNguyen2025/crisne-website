@@ -22,7 +22,7 @@ from rag_service.core.retrieval.hybrid import HybridVectorStore
 INDEX_TTL_SECONDS = 30.0
 # A chat turn waits at most this long for the first index. Under quota the re-index can take minutes (each
 # document retries its embedding); past this the turn answers from what is indexed and the sync keeps running.
-SYNC_WAIT_SECONDS = 8.0
+SYNC_WAIT_SECONDS = 3.0
 
 
 THIN_DOC_MIN_WORDS = 4
