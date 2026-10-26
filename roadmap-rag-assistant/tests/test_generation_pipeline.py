@@ -288,3 +288,54 @@ def test_core_never_names_a_business_domain():
         for m in banned.finditer(p.read_text(encoding="utf-8"))
     ]
     assert not hits, hits
+
+
+# ── grounding_policy "sentence": stream by sentence, drop claims the answer must not make ──
+
+
+def _rag_events(reply: str, monkeypatch):
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    monkeypatch.setattr(rag_engine, "known_topic_slugs", lambda: {"ops"})
+
+    async def run():
+        req = GenerationRequest(mode="rag", query="docker là gì", thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9)])
+        return [ev async for ev in generation_pipeline.astream(RecordingLLM(reply), req)]
+
+    return asyncio.run(run())
+
+
+def test_roadmap_answers_stream_sentence_by_sentence():
+    assert PROFILE.grounding_policy == "sentence"
+
+
+def test_first_sentence_is_sent_before_the_answer_ends(monkeypatch):
+    # SourceChannel (the <sources> line) releases text per line, so a multi-line answer streams line by line
+    # Long enough to pass the PII filter's 40-character hold, as a real answer is
+    lines = [
+        "Docker đóng gói ứng dụng cùng toàn bộ thư viện vào một image.",
+        "Image đó chạy giống nhau trên máy dev, máy test và production.",
+        "Container khởi động nhanh hơn máy ảo vì dùng chung kernel của host.",
+        "Xem bài Docker trong roadmap để biết các lệnh build và run cơ bản.",
+    ]
+    events = _rag_events("\n".join(lines), monkeypatch)
+    tokens = [i for i, e in enumerate(events) if e.get("type") == "token"]
+    assert len(tokens) >= 2  # not one block held until the grounding check
+    assert "Docker đóng gói ứng dụng" in events[tokens[0]]["delta"]
+
+
+def test_a_claim_in_the_middle_is_dropped_and_the_note_added(monkeypatch):
+    events = _rag_events("Docker đóng gói ứng dụng.\n✅ Đã tạo bài Docker mới cho bạn.\nXem bài để biết thêm.", monkeypatch)
+    text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
+    assert "Đã tạo" not in text
+    assert "Docker đóng gói ứng dụng." in text and "Xem bài để biết thêm." in text
+    assert PROFILE.grounding_note.strip() in text
+
+
+def test_claim_filter_lets_long_text_without_a_sentence_end_flow():
+    from rag_service.core.generation.grounding import FAIL_PATTERNS
+    from rag_service.core.generation.guardrails import ClaimStreamFilter
+
+    f = ClaimStreamFilter(FAIL_PATTERNS)
+    assert f.feed("x" * 450) == "x" * 450  # past MAX_HOLD it is let through
+    assert f.feed("Hệ thống sẽ sớm cập nhật thêm. ") == "" and f.dropped

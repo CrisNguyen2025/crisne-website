@@ -51,7 +51,8 @@ class DomainProfile:
     # ── S4: what to do when the grounding check finds issues (mode "rag") ──
     # "fallback": hold the answer until checked, replace it with the caller's fallback on failure (TTFT
     #             grows to the full generation time). "note": stream at once, append grounding_note.
-    grounding_policy: Literal["fallback", "note"] = "fallback"
+    # "sentence": stream sentence by sentence, drop the ones matching grounding_fail_on, append grounding_note.
+    grounding_policy: Literal["fallback", "note", "sentence"] = "fallback"
     # Only findings precise enough to withhold an answer. ungrounded_terms is word-overlap based and flags
     # paraphrases ("Cơ sở dữ liệu vector" for "Vector Database"), so it is a trace/guard warning only.
     # unbacked_action: the model claims a save/create/update, but this pipeline never writes anything.

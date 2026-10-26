@@ -42,3 +42,8 @@ def check_grounding(answer: str, context: str, question: str) -> dict:
     # Answers never run a write: a claim of having created/saved/changed something is invented
     actions = [m.group(0) for m in ACTION_CLAIM.finditer(answer)]
     return {"ungrounded_terms": ungrounded, "future_promise": promises, "unbacked_action": actions}
+
+
+# The findings a "sentence" policy removes while streaming, by grounding key (guardrails.ClaimStreamFilter)
+FAIL_PATTERNS = {"future_promise": FUTURE_PROMISE, "unbacked_action": ACTION_CLAIM}
+

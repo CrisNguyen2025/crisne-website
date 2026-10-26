@@ -27,6 +27,7 @@ from rag_service.core.generation.cite_channel import CiteChannel, CitationTracke
 from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.faithfulness import unsupported_claims
+from rag_service.core.generation.grounding import FAIL_PATTERNS
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.generation.generate import StreamResult, astream
 from rag_service.llm_breaker import llm_breaker
@@ -66,9 +67,15 @@ class GenerationPipeline:
             return tracker.feed(text) if tracker else text
 
         pii = guardrails.PiiStreamFilter() if profile.mask_output_pii else guardrails.NoFilter()  # S4
-        # Under "fallback" a RAG answer is held until the grounding check passes.
+        # Under "fallback" a RAG answer is held until the grounding check passes; under "sentence" each sentence
+        # streams once it ends, and one making a fail_on claim is dropped.
         hold = is_rag and profile.grounding_policy == "fallback"
         held: list[str] = []
+        claims = (
+            guardrails.ClaimStreamFilter({k: FAIL_PATTERNS[k] for k in profile.grounding_fail_on if k in FAIL_PATTERNS})
+            if is_rag and profile.grounding_policy == "sentence"
+            else guardrails.NoFilter()
+        )
 
         yield step_event("answer", "generation", "running")
         gen = start_step(
@@ -78,16 +85,18 @@ class GenerationPipeline:
             input=prompt,
         )
         result = StreamResult()
+        emitted = False  # any text sent yet (outside "fallback")
         try:
             async for delta in astream(llm, prompt, result):  # S2
                 text = channel.feed(delta) if channel else delta
                 if cite:
                     text = cite.feed(text)
                 clean.append(text)
-                if safe := track(pii.feed(links.feed(text))):
+                if safe := track(claims.feed(pii.feed(links.feed(text)))):
                     if hold:
                         held.append(safe)
                     else:
+                        emitted = True
                         yield token_event(safe)  # S5
             if channel:
                 tail = channel.flush()
@@ -97,10 +106,11 @@ class GenerationPipeline:
                 links_tail = links.feed(tail)
             else:
                 links_tail = ""
-            if rest := track(pii.feed(links_tail + links.flush()) + pii.flush()):
+            if rest := track(claims.feed(pii.feed(links_tail + links.flush()) + pii.flush()) + claims.flush()):
                 if hold:
                     held.append(rest)
                 else:
+                    emitted = True
                     yield token_event(rest)
         except Exception as exc:
             print(f"[Generation] {req.mode} LLM error ({type(exc).__name__}: {exc}). Falling back.")
@@ -121,6 +131,8 @@ class GenerationPipeline:
             "dropped_documents": len(req.sources) - len(documents),
             "removed_links": links.removed,
         }
+        if getattr(claims, "dropped", None):
+            sections["dropped_claims"] = claims.dropped
         if cite and tracker:
             sections["citations"] = len(tracker.citations)
             sections["invalid_citations"] = cite.invalid
@@ -141,7 +153,9 @@ class GenerationPipeline:
         def guard_step() -> dict:
             return step_event("guard", "guard", "done", grounding="issues" if report.issues else "ok", **report.found)
 
-        if report is not None and report.failed and hold:
+        # "sentence" with every sentence dropped sent nothing: the caller's fallback replaces it cleanly
+        withheld = hold or (getattr(claims, "dropped", None) and not emitted)
+        if report is not None and report.failed and withheld:
             end_step(
                 gen,
                 output=answer,

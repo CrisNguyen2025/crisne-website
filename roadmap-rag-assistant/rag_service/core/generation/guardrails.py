@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Iterable, List
 
@@ -67,6 +68,49 @@ class PiiStreamFilter:
     def flush(self) -> str:
         out, self._buf = self._buf, ""
         return mask_pii(out)
+
+
+class ClaimStreamFilter:
+    """Streams a sentence as soon as it ends, and drops a sentence that makes a claim the answer must not.
+
+    For grounding_policy "sentence": the reader sees text after the first sentence instead of after the whole
+    answer, yet never sees "✅ đã tạo X" (unbacked_action) or "sẽ sớm cập nhật" (future_promise).
+    `patterns` maps a grounding key to its regex (grounding.FAIL_PATTERNS); `dropped` lists what was removed.
+    """
+
+    # A sentence ends at . ! ? or a newline; a longer run without one is let through so text keeps flowing
+    END = re.compile(r"[.!?…]+[\s)\]\"']*|\n")
+    MAX_HOLD = 400
+
+    def __init__(self, patterns: dict) -> None:
+        self._patterns = patterns
+        self._buf = ""
+        self.dropped: List[str] = []
+
+    def _check(self, sentence: str) -> str:
+        for key, rx in self._patterns.items():
+            if rx.search(sentence):
+                self.dropped.append(f"{key}: {sentence.strip()[:120]}")
+                return ""
+        return sentence
+
+    def feed(self, text: str) -> str:
+        self._buf += text
+        out = []
+        while True:
+            match = self.END.search(self._buf)
+            if match is None:
+                break
+            sentence, self._buf = self._buf[: match.end()], self._buf[match.end():]
+            out.append(self._check(sentence))
+        if len(self._buf) > self.MAX_HOLD:
+            out.append(self._check(self._buf))
+            self._buf = ""
+        return "".join(out)
+
+    def flush(self) -> str:
+        out, self._buf = self._check(self._buf), ""
+        return out
 
 
 class NoFilter:
