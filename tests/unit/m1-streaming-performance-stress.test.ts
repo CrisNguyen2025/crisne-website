@@ -84,7 +84,7 @@ describe("Challenger M1-2: Streaming, Performance & Memoization Stress Suite", (
         const lastBlock = blocks[blocks.length - 1];
 
         if (lastBlock.kind === "paragraph") {
-          const rendered = renderInline(lastBlock.lines.join(" "), true);
+          const rendered = renderInline(lastBlock.lines.join(" "));
           expect(Array.isArray(rendered)).toBe(true);
           elementCounts.push(rendered.length);
         }
