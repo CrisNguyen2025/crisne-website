@@ -9,6 +9,8 @@ class Settings(BaseSettings):
 
     # ── LLM ──
     gemini_api_key: str = ""
+    # More Gemini keys, comma-separated: used in turn for embeddings when one is rate limited
+    gemini_api_keys: str = ""
     llm_model: str = "gemini-flash-latest"
     llm_provider: str = "google_genai"
     groq_api_key: str = ""

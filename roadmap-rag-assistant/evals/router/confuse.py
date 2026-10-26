@@ -64,8 +64,9 @@ def branch(write: str, why: str) -> str:
 STRESS = Path(__file__).parent / "stress_confuse.jsonl"
 
 
-async def run(use_llm: bool, path: Path = STRESS) -> dict:
-    router = _router(use_llm)
+async def run(use_llm: bool, path: Path = STRESS, max_calls: int | None = None) -> dict:
+    router = _router(use_llm, max_calls)
+    whys = []
     base = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     stats = collections.defaultdict(lambda: collections.Counter())
     fails = []
@@ -73,6 +74,7 @@ async def run(use_llm: bool, path: Path = STRESS) -> dict:
         for vname, fn in VARIANTS.items():
             text = fn(row["text"])
             got_write, why = await write_outcome(router, text)
+            whys.append(why)
             b = branch(got_write, why)
             s = stats[row["cat"]]
             s["n"] += 1
@@ -93,11 +95,22 @@ async def run(use_llm: bool, path: Path = STRESS) -> dict:
     for k, v in stats.items():
         if not k.startswith("_"):
             total.update(v)
+    if use_llm:
+        from evals.router.budget import validity
+        from evals.router.holdout import model_call_counts
+
+        total["validity"] = validity(*model_call_counts(whys))
     return {"total": dict(total), "stats": stats, "fails": fails}
 
 
 def main(argv) -> int:
-    report = asyncio.run(run("--llm" in argv))
+    from evals.router.holdout import max_calls_arg
+
+    use_llm, max_calls = "--llm" in argv, max_calls_arg(argv)
+    if use_llm:
+        n = sum(1 for l in STRESS.read_text(encoding="utf-8").splitlines() if l.strip()) * len(VARIANTS)
+        print(f"Live model: {n} messages, up to {2 * n} calls (router + System 2); budget {max_calls or 'unlimited'}.")
+    report = asyncio.run(run(use_llm, max_calls=max_calls))
     total, stats, fails = report["total"], report["stats"], report["fails"]
     print("TOTAL", total)
     print("\nby category:")
@@ -119,6 +132,9 @@ def main(argv) -> int:
     if total.get("write_now_violation"):
         worse.insert(0, "write_now_violation")
     print("\nratchet:", "FAIL " + ", ".join(worse) if worse else "ok", f"(baseline {baseline})")
+    if str(total.get("validity", "")).startswith("INVALID"):
+        print(total["validity"], "— the numbers above measure the offline fallback, not the model")
+        return 2
     return 1 if worse else 0
 
 

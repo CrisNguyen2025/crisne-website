@@ -27,8 +27,10 @@ ROOT = Path(__file__).parent
 HOLDOUT = ROOT / "holdout.jsonl"
 
 
-def _router(use_llm: bool):
-    """The router and System 2 model the chat uses (LLM_MODEL_ROUTER when set), or neither offline."""
+def _router(use_llm: bool, max_calls: int | None = None):
+    """The router and System 2 model the chat uses (LLM_MODEL_ROUTER when set), or neither offline.
+
+    `max_calls` caps the model calls of the run (evals/router/budget.py)."""
     from rag_service.domains.roadmap.router.intent_router import IntentRouter
 
     llm = None
@@ -36,6 +38,10 @@ def _router(use_llm: bool):
         from rag_service.domains.roadmap.agent import build_agent
 
         llm = build_agent().router_llm
+        if llm is not None and max_calls:
+            from evals.router.budget import BudgetedLLM
+
+            llm = BudgetedLLM(llm, max_calls)
     router = IntentRouter(llm_model=llm)
     router.verifier_llm = llm
     return router
@@ -92,11 +98,19 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
     return {"run": "now", "preview": "preview"}.get(outcome.write, "none"), why
 
 
-async def run(use_llm: bool) -> dict:
-    router = _router(use_llm)
+def model_call_counts(whys: list[str]) -> tuple[int, int]:
+    """(turns that needed the model, turns where it was unavailable), read from the decision strings."""
+    from evals.router.budget import is_unavailable
+
+    model = [w for w in whys if not w.startswith(("heuristic row", "sensitive", "/", "bulk", "mixed")) or "plan=" in w]
+    return len(model), sum(1 for w in model if is_unavailable(w))
+
+
+async def run(use_llm: bool, max_calls: int | None = None) -> dict:
+    router = _router(use_llm, max_calls)
     rows = [json.loads(line) for line in HOLDOUT.read_text(encoding="utf-8").splitlines() if line.strip()]
     metrics = {"n": len(rows), "write_now_violations": 0, "write_preview_violations": 0, "missed_writes": 0}
-    lines = []
+    lines, whys = [], []
     for row in rows:
         history = [SimpleNamespace(**h) for h in row.get("history", [])]
         got, why = await write_outcome(router, row["text"], history, row.get("context"))
@@ -112,15 +126,31 @@ async def run(use_llm: bool) -> dict:
             metrics["missed_writes"] += 1
             flag = "MISSED"
         lines.append(f"{flag:9} want={want:4} got={got:7} | {row['text'][:70]!r} | {why}")
+        whys.append(why)
+    if use_llm:
+        from evals.router.budget import validity
+
+        metrics["validity"] = validity(*model_call_counts(whys))
     return {"metrics": metrics, "lines": lines}
 
 
+def max_calls_arg(argv: list[str]) -> int | None:
+    if "--max-llm-calls" in argv:
+        return int(argv[argv.index("--max-llm-calls") + 1])
+    return None
+
+
 def main(argv: list[str]) -> int:
-    report = asyncio.run(run("--llm" in argv))
+    use_llm, max_calls = "--llm" in argv, max_calls_arg(argv)
+    if use_llm:
+        print(f"Live model: up to 2 calls per message (router + System 2); budget {max_calls or 'unlimited'}.")
+    report = asyncio.run(run(use_llm, max_calls))
     for line in report["lines"]:
         if "-v" in argv or line[:9].strip():
             print(line)
     print(json.dumps(report["metrics"], indent=2))
+    if report["metrics"].get("validity", "").startswith("INVALID"):
+        return 2
     return 1 if report["metrics"]["write_now_violations"] else 0
 
 

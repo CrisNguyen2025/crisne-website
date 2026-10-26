@@ -51,3 +51,22 @@ def test_failed_query_embedding_flags_the_trace(monkeypatch):
     monkeypatch.setattr("rag_service.observability.current_trace", lambda: trace)
     assert _store(_Embedder(fail=True))._similarities("RAG là gì") is None
     assert trace.flags["embedding_degraded"] is True
+
+
+def test_rate_limited_embedding_key_hands_over_to_the_next():
+    from rag_service.core.retrieval.hybrid import RotatingEmbeddings
+
+    class _Emb:
+        def __init__(self, fail):
+            self.fail, self.calls = fail, 0
+
+        def embed_query(self, text):
+            self.calls += 1
+            if self.fail:
+                raise RuntimeError("429 RESOURCE_EXHAUSTED")
+            return [0.5]
+
+    first, second = _Emb(True), _Emb(False)
+    emb = RotatingEmbeddings([first, second])
+    assert emb.embed_query("x") == [0.5] and emb.embed_query("y") == [0.5]
+    assert first.calls == 1  # the working key stays current

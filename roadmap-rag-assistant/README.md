@@ -168,3 +168,21 @@ PYTHONPATH=. pytest tests/ -v
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | (trống: tắt) | Bật trace từng bước (retrieve, generation, guard) theo thread |
 
 Mỗi lượt chat in một dòng `[turn]` gồm: `intent`, `route` (heuristic, vocabulary, llm), `queries`, `rewritten`, `retrieved` (trước cổng on-topic), `on_topic` (sau cổng), `mode`, `grounding`, `sources`. Đủ để biết lượt đó hỏng ở bước nào mà không cần replay.
+
+## Observability: trace flags worth an alert
+
+Each chat turn's Langfuse trace carries flags (also in the `[turn]` log line). Alert on their rate, not on
+single turns:
+
+| flag | means | suggested alert |
+|---|---|---|
+| `embedding_degraded` | the query could not be embedded: search ran on FTS5 only (weaker off-topic rejection) | > 5% of turns over 1 h |
+| `system2_unavailable` | a write candidate got no System 2 verdict: it was previewed instead of run | > 10% of write candidates over 1 h |
+| `router_llm_unavailable` | the LLM router failed or was rate limited: the turn fell back to a default intent | > 10% of turns over 1 h |
+| `llm_fallback` | the answer model failed: the reply is the formatted sources | > 5% of turns over 1 h |
+| `router_disagreement` | System 1 read a change that System 2 or the data did not confirm | review weekly; each is a golden-sample candidate |
+| `visitor_write_attempt` | a visitor sent a change request | a spike means probing |
+
+Keys: `GROQ_API_KEYS` and `GEMINI_API_KEYS` (comma-separated) rotate when one key is rate limited; `LLM_FALLBACK_PROVIDER`
+takes over when every key of `LLM_PROVIDER` is. Live-model evals take `--max-llm-calls N` and exit 2 (INVALID) when
+more than 10% of their model calls failed.

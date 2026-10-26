@@ -80,6 +80,39 @@ def _embed_with_quota_retry(embedder, text: str, attempts: int = 8) -> list[floa
             time.sleep(40)
     raise RuntimeError("unreachable")
 
+class RotatingEmbeddings:
+    """Several embedding keys: a rate-limited key hands the call to the next (as llm_keys does for chat).
+
+    Without it one exhausted free-tier key turned every search into FTS5 only (embedding_degraded).
+    """
+
+    def __init__(self, embedders: List[Any]) -> None:
+        self._embedders = embedders
+        self._current = 0
+
+    def _call(self, method: str, arg: Any) -> Any:
+        from rag_service.llm_keys import is_rate_limited
+
+        last: Optional[BaseException] = None
+        for step in range(len(self._embedders)):
+            i = (self._current + step) % len(self._embedders)
+            try:
+                result = getattr(self._embedders[i], method)(arg)
+                self._current = i
+                return result
+            except Exception as exc:
+                if not is_rate_limited(exc):
+                    raise
+                last = exc
+        raise last  # type: ignore[misc]
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._call("embed_query", text)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self._call("embed_documents", texts)
+
+
 class _QueryVectorCache:
     """Recent query embeddings in memory, so a repeated question costs no embed request.
 
@@ -180,14 +213,18 @@ class HybridVectorStore:
     def _get_embedder(self):
         if self._embedder is not None:
             return self._embedder
-        api_key = settings.gemini_api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if api_key and not api_key.startswith("your_"):
+        from rag_service.llm_keys import parse_keys
+
+        keys = parse_keys(
+            settings.gemini_api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "",
+            settings.gemini_api_keys or os.environ.get("GEMINI_API_KEYS", ""),
+        )
+        if keys:
             try:
                 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-                self._embedder = GoogleGenerativeAIEmbeddings(
-                    model=EMBEDDING_MODEL,
-                    google_api_key=api_key,
-                )
+
+                embedders = [GoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, google_api_key=k) for k in keys]
+                self._embedder = embedders[0] if len(embedders) == 1 else RotatingEmbeddings(embedders)
             except Exception as exc:
                 print(f"[VectorStore] Embeddings init warning: {exc}")
         return self._embedder

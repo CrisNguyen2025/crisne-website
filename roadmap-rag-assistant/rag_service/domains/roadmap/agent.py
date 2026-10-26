@@ -300,8 +300,12 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             trace.flags["write"] = route_gate.mode
             if not is_owner() and route_gate.mode != WRITE_NONE:
                 trace.flags["visitor_write_attempt"] = True
+            if method.startswith(("rate_limited", "llm_error")):
+                trace.flags["router_llm_unavailable"] = True
             if outcome.plan is not None:
                 trace.flags["write_plan"] = outcome.plan.outcome
+                if outcome.verdict is None:
+                    trace.flags["system2_unavailable"] = True
                 # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
                 if method == "heuristic" and outcome.plan.outcome in ("reroute", "blocked"):
                     trace.flags["router_disagreement"] = True
