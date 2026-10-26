@@ -1,0 +1,55 @@
+{"text": "mình không định xóa bài Redis", "polarity": "decline", "write": "no"}
+{"text": "bỏ ý định xóa bài Redis đi", "polarity": "decline", "write": "no"}
+{"text": "không xóa bài Redis đâu", "polarity": "decline", "write": "no"}
+{"text": "thôi đừng tạo topic System Design", "polarity": "decline", "write": "no"}
+{"text": "chẳng cần thêm bài Kafka vào layer 1", "polarity": "decline", "write": "no"}
+{"text": "chả muốn đổi tên topic AI Architecture nữa", "polarity": "decline", "write": "no"}
+{"text": "mình chưa muốn xóa bài Docker", "polarity": "decline", "write": "no"}
+{"text": "khỏi phải sửa bài Semantic Caching", "polarity": "decline", "write": "no"}
+{"text": "hủy việc xóa bài Redis nhé", "polarity": "decline", "write": "no"}
+{"text": "không có ý định thêm bài Kafka đâu", "polarity": "decline", "write": "no"}
+{"text": "tạm thời đừng đổi tên bài RAG", "polarity": "decline", "write": "no"}
+{"text": "cấm xóa bài Docker", "polarity": "decline", "write": "no"}
+{"text": "chớ có xóa topic AI Engineering", "polarity": "decline", "write": "no"}
+{"text": "mình không còn muốn tạo topic System Design", "polarity": "decline", "write": "no"}
+{"text": "không cần phải xóa bài Redis", "polarity": "decline", "write": "no"}
+{"text": "thôi bỏ vụ thêm bài Kafka đi", "polarity": "decline", "write": "no"}
+{"text": "dẹp vụ xóa bài Docker đi", "polarity": "decline", "write": "no"}
+{"text": "mình nghĩ lại rồi, không thêm bài Kafka nữa", "polarity": "decline", "write": "no"}
+{"text": "à không, đừng xóa bài Redis", "polarity": "decline", "write": "no"}
+{"text": "không, mình không muốn xóa topic AI Engineering", "polarity": "decline", "write": "no"}
+{"text": "ko xoa bai redis nha", "polarity": "decline", "write": "no"}
+{"text": "dung xoa bai docker", "polarity": "decline", "write": "no"}
+{"text": "k can them bai kafka vao layer 1", "polarity": "decline", "write": "no"}
+{"text": "chẳng việc gì phải xóa bài Redis", "polarity": "decline", "write": "no"}
+{"text": "đâu cần xóa bài Docker", "polarity": "decline", "write": "no"}
+{"text": "nếu xóa bài Redis thì các bài liên quan có mất không", "polarity": "hypothetical", "write": "no"}
+{"text": "giả sử mình đổi tên topic AI Architecture thì link cũ còn chạy không", "polarity": "hypothetical", "write": "no"}
+{"text": "lỡ tay xóa topic AI Engineering thì khôi phục được không", "polarity": "hypothetical", "write": "no"}
+{"text": "trường hợp thêm bài Kafka vào layer 1 thì thứ tự có đổi không", "polarity": "hypothetical", "write": "no"}
+{"text": "khi xóa layer 1 thì các bài bên trong đi đâu", "polarity": "hypothetical", "write": "no"}
+{"text": "hôm qua mình đã xóa bài Redis rồi", "polarity": "report", "write": "no"}
+{"text": "ai đã đổi tên topic AI Architecture vậy", "polarity": "report", "write": "no"}
+{"text": "sếp bảo xóa bài Docker, bạn thấy sao", "polarity": "report", "write": "no"}
+{"text": "mình vừa thêm bài Kafka vào layer 1", "polarity": "report", "write": "no"}
+{"text": "đồng nghiệp mới tạo topic System Design", "polarity": "report", "write": "no"}
+{"text": "xóa bài Redis", "polarity": "affirm", "write": "any"}
+{"text": "xóa bài Redis đi", "polarity": "affirm", "write": "any"}
+{"text": "thôi xóa bài Redis luôn đi", "polarity": "affirm", "write": "any"}
+{"text": "không, xóa bài Redis đi", "polarity": "affirm", "write": "any"}
+{"text": "tạo topic System Design", "polarity": "affirm", "write": "any"}
+{"text": "thêm bài Kafka vào layer 1", "polarity": "affirm", "write": "any"}
+{"text": "đổi tên topic AI Architecture thành AI Systems", "polarity": "affirm", "write": "any"}
+{"text": "ok xóa bài Docker giúp mình", "polarity": "affirm", "write": "any"}
+{"text": "mình muốn xóa bài Docker", "polarity": "affirm", "write": "any"}
+{"text": "mình cần thêm bài Kafka vào layer 1", "polarity": "affirm", "write": "any"}
+{"text": "giúp mình tạo topic System Design nhé", "polarity": "affirm", "write": "any"}
+{"text": "bạn xóa giúp mình bài Redis được không", "polarity": "affirm", "write": "any"}
+{"text": "không phải sửa, xóa bài Redis đi", "polarity": "affirm", "write": "any"}
+{"text": "đừng sửa nữa, xóa luôn bài Docker", "polarity": "affirm", "write": "any"}
+{"text": "chưa có bài Kafka thì thêm vào layer 1", "polarity": "affirm", "write": "any"}
+{"text": "nếu chưa có bài Kafka thì thêm vào layer 1 giúp mình", "polarity": "affirm", "write": "any"}
+{"text": "xoa bai redis", "polarity": "affirm", "write": "any"}
+{"text": "them bai kafka vao layer 1", "polarity": "affirm", "write": "any"}
+{"text": "tao topic system design", "polarity": "affirm", "write": "any"}
+{"text": "please delete the lesson Redis", "polarity": "affirm", "write": "any"}

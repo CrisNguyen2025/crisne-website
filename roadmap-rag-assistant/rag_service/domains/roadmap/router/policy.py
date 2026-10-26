@@ -302,13 +302,10 @@ TRAILING_FILLER_FOLDED = re.compile(rf"(?:[\s,]+(?:nhe|nha|nhi|thanks|thank\s+yo
 LABEL = re.compile(r"^\s*([^:\n]{1,30}):\s*(?=\S)")
 
 # Write blockers: the message names a change but does not ask for one. Written accented; folded twins are built
-# below for unaccented input. A blocked change is never written (write policy: deny).
+# below for unaccented input. A blocked change is never written (write policy: deny). A declined change
+# ("đừng xóa bài X", "bỏ ý định xóa bài X") is read by clause in polarity.py, not by a pattern here.
 _VERBS_ACC = "|".join(re.escape(v) for v in CUD_VERB_WORDS)
 WRITE_BLOCKER_PATTERNS = {
-    # "đừng xóa bài X", "không cần tạo topic Y", "khoan, chưa thêm bài Z vội" (not "chưa có … thì thêm": a condition)
-    # "khỏi tạo …" and "không phải xóa, …" decline too; "thôi" alone does not ("thôi xóa luôn đi" = go ahead)
-    "negation": rf"\b(?:đừng|không\s+cần|không\s+muốn|không\s+phải|thôi\s+không|khỏi|khoan|chưa)\b(?!\s+(?:thì|có\b[^,]*\bthì)\b)"
-                rf"(?:\s+\w+){{0,2}}\s+(?:{_VERBS_ACC})\b",
     # "nếu xóa topic X thì …", "lỡ xóa nhầm bài Y thì …": the change sits inside the "if" part
     "hypothetical": rf"\b(?:nếu|lỡ|giả\s+sử|khi)\b(?:\s+\w+){{0,3}}\s+(?:{_VERBS_ACC})\b.*\bthì\b",
     # "hôm qua tôi đã tạo topic X", "tôi vừa thêm bài Y rồi", "ai đã xóa bài Z"
@@ -377,8 +374,6 @@ WRITE_DENY = "deny"        # never runs; the user gets a reply saying why
 
 # A change only the LLM router chose (no heuristic row) needs this confidence, plus a change verb and an object
 CUD_MIN_CONFIDENCE = 0.8
-# A single delete skips the preview card only when the message says to do it now
-IMMEDIATE_DELETE_WORDS = ("ngay", "immediately", "luôn")
 
 # ── 5. LLM router examples and clause split ────────────────────────────────
 

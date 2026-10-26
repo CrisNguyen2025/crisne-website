@@ -172,8 +172,8 @@ def _action(action, title="Kafka", batch=False):
         (_action(ActionType.DELETE), "xóa hết bài trong layer", WRITE_DENY, BULK_DELETE_REQUEST),
         (_action(ActionType.DELETE), "xóa bài Kafka", WRITE_CONFIRM, "delete"),
         (_action(ActionType.DELETE, batch=True), "xóa bài Kafka và Redis luôn", WRITE_CONFIRM, "delete"),
-        # A single delete said to run now keeps the route-level decision
-        (_action(ActionType.DELETE), "xóa bài Kafka ngay", WRITE_ALLOW, None),
+        # A delete is always previewed, even said to run now: it cannot be undone
+        (_action(ActionType.DELETE), "xóa bài Kafka ngay", WRITE_CONFIRM, "delete"),
         (_action(ActionType.CREATE), "thêm bài Kafka vào layer Backend", WRITE_ALLOW, None),
     ],
 )

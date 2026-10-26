@@ -1,0 +1,31 @@
+{"text": "mình chẳng hề muốn xóa bài Kafka", "polarity": "decline", "write": "no"}
+{"text": "đừng có tự ý đổi tên topic AI Engineering", "polarity": "decline", "write": "no"}
+{"text": "không được xóa layer 1", "polarity": "decline", "write": "no"}
+{"text": "chưa cần thêm topic Rust đâu", "polarity": "decline", "write": "no"}
+{"text": "thôi khỏi, không thêm bài Redis nữa", "polarity": "decline", "write": "no"}
+{"text": "hoãn việc tạo topic Data Engineering lại", "polarity": "decline", "write": "no"}
+{"text": "mình không bảo bạn xóa bài Docker", "polarity": "decline", "write": "no"}
+{"text": "không nên xóa bài Semantic Caching", "polarity": "decline", "write": "no"}
+{"text": "đừng đụng vào, cũng đừng xóa bài RAG", "polarity": "decline", "write": "no"}
+{"text": "ko can doi ten bai rag dau", "polarity": "decline", "write": "no"}
+{"text": "khong duoc xoa topic ai engineering", "polarity": "decline", "write": "no"}
+{"text": "never delete the lesson Redis", "polarity": "decline", "write": "no"}
+{"text": "please don't remove the Kafka lesson", "polarity": "decline", "write": "no"}
+{"text": "bỏ kế hoạch thêm bài GraphQL đi", "polarity": "decline", "write": "no"}
+{"text": "chả cần sửa bài Docker làm gì", "polarity": "decline", "write": "no"}
+{"text": "giả dụ mình xóa topic AI Engineering thì tiến độ có mất không", "polarity": "hypothetical", "write": "no"}
+{"text": "lỡ đổi tên bài RAG thì bookmark còn không", "polarity": "hypothetical", "write": "no"}
+{"text": "nhỡ thêm trùng bài Kafka thì sao", "polarity": "hypothetical", "write": "no"}
+{"text": "team lead nói xóa bài Docker, có nên không", "polarity": "report", "write": "no"}
+{"text": "bạn mình vừa xóa bài Redis rồi", "polarity": "report", "write": "no"}
+{"text": "hồi nãy mình đã tạo topic Rust", "polarity": "report", "write": "no"}
+{"text": "ừ, xóa bài Kafka đi", "polarity": "affirm", "write": "any"}
+{"text": "không cần hỏi lại, xóa bài Redis", "polarity": "affirm", "write": "any"}
+{"text": "thôi được, thêm bài GraphQL vào layer 1", "polarity": "affirm", "write": "any"}
+{"text": "chưa có topic Rust thì tạo giúp mình", "polarity": "affirm", "write": "any"}
+{"text": "đừng hỏi nữa, tạo topic Data Engineering", "polarity": "affirm", "write": "any"}
+{"text": "đổi tên bài RAG thành RAG nâng cao giúp mình", "polarity": "affirm", "write": "any"}
+{"text": "mình quyết định xóa bài Docker", "polarity": "affirm", "write": "any"}
+{"text": "khong can hoi, xoa bai redis", "polarity": "affirm", "write": "any"}
+{"text": "remove the lesson Kafka please", "polarity": "affirm", "write": "any"}
+{"text": "ok thêm bài Redis Streams vào layer 1 luôn", "polarity": "affirm", "write": "any"}

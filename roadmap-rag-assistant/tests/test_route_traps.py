@@ -195,3 +195,47 @@ def test_declined_change_gets_the_nothing_changed_reply_without_a_model(text):
     reply = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
     assert reply.strip() == BLOCKED_CHANGE_REPLY.strip()
     assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+# ── P2 polarity: read by clause, not by listed phrases (router/polarity.py) ──
+
+from rag_service.domains.roadmap.router.polarity import polarity_of, split_affirmed  # noqa: E402
+
+
+@pytest.mark.parametrize("text,want", [
+    ("mình không định xóa bài Redis", "decline"),
+    ("bỏ ý định xóa bài Redis đi", "decline"),
+    ("hoãn việc tạo topic Data Engineering lại", "decline"),  # tone marks moved by normalization
+    ("cam xoa bai docker", "decline"),                        # weak folded negator right before the verb
+    ("dau can xoa bai docker", "decline"),                    # … or after modal words
+    ("trường hợp thêm bài Kafka vào layer 1 thì thứ tự có đổi không", "hypothetical"),
+    ("sếp bảo xóa bài Docker, bạn thấy sao", "report"),
+    ("không phải sửa, xóa bài Redis đi", "affirm"),
+    ("chưa có bài Kafka thì thêm vào layer 1", "affirm"),
+    ("cho mình xóa bài Docker", "affirm"),                    # "cho" here is "let me", not "chớ"
+    ("đúng rồi xóa bài Docker đi", "affirm"),
+    ("mình bảo xóa bài Docker đi mà", "affirm"),              # the user's own "bảo" is not a report
+])
+def test_polarity_is_read_by_clause(text, want):
+    assert polarity_of(text).value == want
+
+
+def test_only_the_affirmed_part_carries_the_change_to_write():
+    affirmed, declined = split_affirmed("đừng xóa bài Docker, rồi tạo topic Docker Compose")
+    assert "tao" in affirmed and "xoa" not in affirmed and "xoa" in declined
+    gate = gate_action(WriteGate("confirm"), _action("delete", "item", "Docker"),
+                       "đừng xóa bài Docker, rồi tạo topic Docker Compose", "")
+    assert gate.mode == WRITE_DENY and gate.reason == ACTION_NOT_ASKED
+
+
+def test_every_delete_is_previewed():
+    for text in ("xóa bài Redis luôn", "xóa bài Redis ngay", "delete the lesson Redis immediately"):
+        assert gate_action(WriteGate("allow"), _action("delete", "item", "Redis"), text, text.lower()).mode == "confirm"
+
+
+def test_route_names_the_phase_that_settled_it():
+    from rag_service.domains.roadmap.router.route_decision import decide_route
+
+    outcome = asyncio.run(decide_route(IntentRouter(), "mình không định xóa bài Redis"))
+    assert outcome.decided_by == "P2_polarity"
+    assert outcome.trace()["P2_polarity"] == "decline" and outcome.write == "none"

@@ -146,6 +146,10 @@ def main(argv) -> int:
     for k in sorted(k for k in stats if k.startswith("_variant_")):
         v = stats[k]
         print(f"  {k[9:]:14} n={v['n']:3} wrong_branch={v['wrong_branch']:3} write_now={v['write_now_violation']:2}")
+    # Failures by the phase that settled the route (route_decision.RouteOutcome.decided_by): where to fix first
+    phases = collections.Counter(re.search(r"decided_by=(\w+)", f[7]).group(1) if "decided_by=" in f[7] else f[7].split()[0]
+                                 for f in fails)
+    print("\nfailures by deciding phase:", dict(phases.most_common()))
     print("\nfailures:")
     for f in sorted(fails, key=lambda x: (x[0] != "WRITE_NOW", x[0] != "MISSED", x[1])):
         print(f"  {f[0]:9} [{f[1]}/{f[2]}] want={f[3]} got={f[4]}/{f[5]} | {f[6][:80]!r} | {f[7]}")

@@ -16,7 +16,6 @@ from rag_service.domains.roadmap.router.grounding import BULK_DELETE
 from rag_service.domains.roadmap.router.policy import (
     ACTION_VERBS,
     CUD_MIN_CONFIDENCE,
-    IMMEDIATE_DELETE_WORDS,
     WRITE_ALLOW,
     WRITE_CONFIRM,
     WRITE_DENY,
@@ -30,7 +29,7 @@ from rag_service.domains.roadmap.router.schemas import (
 )
 import re
 
-from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.router.polarity import split_affirmed
 from rag_service.domains.roadmap.router.understanding import echoes_question, understand
 
 # Reasons a change is denied; the agent maps each to the reply the user sees
@@ -81,13 +80,14 @@ def gate_action(route_gate: WriteGate, action: StructuredRoadmapAction, message:
         return WriteGate(WRITE_DENY, BLOCKED_CHANGE)
     if action.action == ActionType.CREATE and any(echoes_question(e.title, message) for e in action.entities):
         return WriteGate(WRITE_DENY, QUESTION_AS_TITLE)
-    # The change must be the one asked for: "khỏi tạo topic X" read as a delete, or "thêm" read as a delete,
-    # is a misreading, so it is not offered as a preview. Read on the message itself.
-    flat = fold(message.lower())
-    if not any(re.search(rf"\b{re.escape(v)}\b", flat) for v in ACTION_VERBS[action.action.value]):
+    # The change must be the one asked for, by a verb in the affirmed part of the message (polarity.py):
+    # "khỏi tạo topic X" read as a delete, or "đừng sửa, xóa bài Y" read as an update, is not previewed.
+    affirmed, _ = split_affirmed(message)
+    if not any(re.search(rf"\b{re.escape(v)}\b", affirmed) for v in ACTION_VERBS[action.action.value]):
         return WriteGate(WRITE_DENY, ACTION_NOT_ASKED)
     if action.action == ActionType.DELETE and BULK_DELETE.search(lower):
         return WriteGate(WRITE_DENY, BULK_DELETE_REQUEST)
-    if action.action == ActionType.DELETE and (action.is_batch or not any(w in lower for w in IMMEDIATE_DELETE_WORDS)):
+    # A delete always shows a preview first, "xóa luôn" included: it cannot be undone
+    if action.action == ActionType.DELETE:
         return WriteGate(WRITE_CONFIRM, "delete")
     return route_gate

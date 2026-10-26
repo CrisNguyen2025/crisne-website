@@ -284,6 +284,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 "write_plan": outcome.plan.reason if outcome.plan else None,
                 "verdict": outcome.verdict.model_dump(mode="json") if outcome.verdict else None,
                 "grounding": outcome.grounding.status if outcome.grounding else None,
+                "phases": outcome.trace(),
             },
         )
         yield step_event(

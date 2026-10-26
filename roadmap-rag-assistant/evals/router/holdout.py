@@ -146,6 +146,7 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
     why = (
         f"{outcome.method} row={outcome.decision.row} intent={outcome.intent_res.intent.value} "
         f"gate={outcome.gate.mode}" + (f" plan={outcome.plan.outcome}:{outcome.plan.reason}" if outcome.plan else "")
+        + f" decided_by={outcome.decided_by}"
     )
     return {"run": "now", "preview": "preview"}.get(outcome.write, "none"), why
 

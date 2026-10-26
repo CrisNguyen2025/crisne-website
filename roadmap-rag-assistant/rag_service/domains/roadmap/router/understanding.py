@@ -17,6 +17,7 @@ from typing import Optional
 
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
+from rag_service.domains.roadmap.router.polarity import BLOCKER_OF, NONE as NO_POLARITY, polarity_of
 from rag_service.domains.roadmap.router.policy import (  # cues and their vocabulary live in policy.py
     ABOUT_ASSISTANT,
     CAPABILITY_QUESTION,
@@ -62,8 +63,6 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     THANKS,
     TRAILING_FILLER,
     TRAILING_FILLER_FOLDED,
-    WRITE_BLOCKERS,
-    WRITE_BLOCKERS_FOLDED,
     SpeechAct,
     Target,
 )
@@ -98,6 +97,7 @@ class Understanding:
     opens_with_greeting: bool # starts with a greeting or thanks word
     asks_usage: bool          # what the assistant can do, or how to make a change: answered with the help card
     write_blocker: Optional[str] = None  # names a change it does not ask for: negation | hypothetical | past_report
+    polarity: str = "none"               # P2: affirm | decline | hypothetical | report | none (polarity.py)
 
     def summary(self) -> dict:
         """For the route step and the trace: the two axes and the cues behind them."""
@@ -109,6 +109,7 @@ class Understanding:
             "object": self.has_object,
             "search_word": self.has_search_word,
             "blocker": self.write_blocker,
+            "polarity": self.polarity,
         }
 
 
@@ -176,9 +177,9 @@ def understand(text: str) -> Understanding:
     )
     syntax = (SYNTAX_QUESTION.search(lower) if accented else SYNTAX_QUESTION_FOLDED.search(flat)) is not None
     asks_usage = capability or usage_how_to or syntax
-    blockers = WRITE_BLOCKERS if accented else WRITE_BLOCKERS_FOLDED
-    write_blocker = next((name for name, rx in blockers.items() if rx.search(lower if accented else flat)), None) \
-        if has_verb else None
+    # P2: is the named change asked for? (polarity.py)
+    polarity = polarity_of(lower).value if has_verb else NO_POLARITY
+    write_blocker = BLOCKER_OF.get(polarity)
 
     # ── Target: off-topic first, then the assistant, then the roadmap ──
     if _has_phrase(OFF_TOPIC_STRONG_HINTS, flat) or (not has_object and _has_phrase(OFF_TOPIC_HINTS, flat)):
@@ -258,6 +259,7 @@ def understand(text: str) -> Understanding:
         opens_with_greeting=any(re.search(rf"^\s*{re.escape(g)}\b", raw) for g in GREETING_WORDS),
         asks_usage=asks_usage,
         write_blocker=write_blocker,
+        polarity=polarity,
     )
 
 

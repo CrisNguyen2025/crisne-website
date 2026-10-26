@@ -3,7 +3,7 @@
   "heldout.routing.correct": 223,
   "stress.dropped": 0,
   "stress.misroute": 0,
-  "stress.ok": 406,
-  "stress.undecided": 98,
+  "stress.ok": 410,
+  "stress.undecided": 94,
   "stress.wrong_write": 0
 }

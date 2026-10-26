@@ -6,6 +6,11 @@ measure is what the chat does.
     System 1 (IntentRouter.aroute: heuristics, then the LLM router for what they leave)
       → write gate (gate_route: blocked changes, changes without evidence)
       → write candidate? System 2 (verifier.verify_write) → grounding (target_grounding) → write_policy.plan_write
+
+Every message passes the same phases (docs/routing-phases.md). `RouteOutcome.trace` records each phase's
+output and `decided_by` the phase that settled the route, so a wrong answer names the phase to fix:
+
+    P0 clean  P1 act  P2 polarity  P3 target  P4 scope  P5 table / LLM router  P6 System 2  P7 grounding  P8 gate
 """
 
 from __future__ import annotations
@@ -40,6 +45,39 @@ class RouteOutcome:
     def write(self) -> str:
         """run | preview | none, for logs and evals."""
         return {WRITE_ALLOW: "run", WRITE_CONFIRM: "preview"}.get(self.gate.mode, "none")
+
+    @property
+    def decided_by(self) -> str:
+        """The phase that settled this route: where to look first when it is wrong."""
+        u = self.decision.understanding
+        if self.method == "scope":
+            return "P4_scope"
+        if self.plan is not None:
+            if self.plan.reason.startswith("system 2"):
+                return "P6_verify"
+            if self.grounding is not None and self.grounding.ungrounded:
+                return "P7_ground"
+            return "P8_gate"
+        if self.gate.denied:
+            return "P2_polarity" if self.gate.reason == BLOCKED_CHANGE and u.write_blocker else "P8_gate"
+        return "P5_table" if self.method == "heuristic" else "P5_llm"
+
+    def trace(self) -> dict:
+        """Each phase's output, in order (P0 cleaning is inside understand(): its result is `focus`)."""
+        u = self.decision.understanding
+        return {
+            "P0_focus": self.scope.focus if self.scope else None,
+            "P1_act": u.act.value,
+            "P2_polarity": u.polarity,
+            "P3_target": u.target.value,
+            "P4_scope": self.scope.scope.value if self.scope else None,
+            "P5_route": f"{self.method}:{self.decision.row or self.intent_res.intent.value}",
+            "P6_verify": f"{self.verdict.act.value}/{self.verdict.action.value if self.verdict.action else '-'}"
+            if self.verdict else None,
+            "P7_ground": self.grounding.status if self.grounding else None,
+            "P8_gate": f"{self.gate.mode}:{self.gate.reason}" if self.gate.reason else self.gate.mode,
+            "decided_by": self.decided_by,
+        }
 
 
 def is_write_candidate(gate: WriteGate) -> bool:
