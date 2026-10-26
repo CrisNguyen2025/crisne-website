@@ -28,6 +28,11 @@ asyncio_mode = "auto"
 # The Python SDK lives in sdk/python and is tested here without being installed
 pythonpath = [".", "sdk/python"]
 
+[tool.hatch.build.targets.wheel]
+# The project is named roadmap-rag-assistant but the code lives in rag_service: hatchling cannot guess it,
+# so `pip install -e ".[dev]"` (README, CI) failed before metadata was even read.
+packages = ["rag_service"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
