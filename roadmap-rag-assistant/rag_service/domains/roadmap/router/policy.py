@@ -239,6 +239,30 @@ QUESTION_MARKERS_FOLDED = re.compile(
     r"\b(?:bao\s+nhieu|nhung\s+gi|cai\s+gi)\b|\bgi(?:\s+(?:the|vay|nhi|do))?\s*[?!.]*$|^(?:cach|cac\s+buoc|quy\s+trinh)\s"
 )
 
+# P1: a question needs no question word at its end. Vietnamese question words "gì" and "nào" ask wherever they
+# stand ("có playlist nào hay", "người ta dùng gì để …"), except as indefinites or in an emphatic negation:
+# "gì đó", "nào đó", "gì cũng", "nào cũng", "bất kỳ … nào", "không cần gì", "chẳng … nào". Folded "nao" is left
+# out (não, "tạo topic về não"). Asking and comparing frames are questions too.
+MID_QUESTION_WORD = re.compile(r"\b(?:gì|nào)\b(?!\s+(?:đó|cũng|hết)\b)")
+MID_QUESTION_WORD_FOLDED = re.compile(r"\bgi\b(?!\s+(?:do|cung|het)\b)")
+NOT_A_QUESTION_BEFORE = re.compile(r"\b(?:không|chẳng|chả|bất\s+kỳ|bất\s+cứ|khong|chang|bat\s+ky|bat\s+cu)\b[^,.;!?]*$")
+ASK_FRAME = re.compile(
+    r"\b(?:cho\s+(?:(?:mình|tôi|em|tui|tớ|anh|chị|minh|toi|tui|to|anh|chi)\s+)?hỏi|muốn\s+hỏi|xin\s+hỏi|hỏi\s+(?:chút|xíu|về))\b"
+    r"|\bso\s+sánh\b|\bhay\b[^,.;!?]*\bhơn\b|\bvs\b[^,.;!?]*\bhơn\b"
+)
+ASK_FRAME_FOLDED = re.compile(
+    r"\b(?:cho\s+(?:(?:minh|toi|em|tui|to|anh|chi)\s+)?hoi|muon\s+hoi|xin\s+hoi|hoi\s+(?:chut|xiu|ve))\b"
+    r"|\bso\s+sanh\b|\bvs\b[^,.;!?]*\bhon\b"
+)
+# An advice question asks which to choose, not where a lesson is: the LLM router answers it
+ADVICE = re.compile(r"\b(?:phu\s+hop|nen\s+(?:chon|hoc|bat\s+dau)|recommend(?:ed)?|suitable)\b")
+# P1: asking for a learning plan. "kế hoạch học" / "study plan" anywhere, or a plan-making verb (not a change
+# verb: "tạo lộ trình Docker" creates a topic) before "lộ trình" / "roadmap".
+PLAN_REQUEST = re.compile(
+    r"\b(?:ke\s+hoach\s+hoc|study\s+plan|learning\s+(?:plan|path))\b"
+    r"|\b(?:len|lap|xay\s+dung|thiet\s+ke|vach|goi\s+y|de\s+xuat|design|build)\s+(?:(?:cho|giup)\s+\w+\s+)?(?:mot\s+)?(?:lo\s+trinh|roadmap)\b"
+)
+
 # Change verbs, folded. "gỡ" is left out: folded it becomes "go", an English word
 CUD_VERB_WORDS = [
     "tạo", "thêm", "xóa", "xoá", "bỏ bớt", "gỡ bỏ", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
@@ -356,6 +380,8 @@ DECISION_TABLE: tuple[Row, ...] = (
     # A search word ("là gì", "tìm") is a search by itself; a weak question marker ("?", trailing "k") also
     # needs roadmap content or a known lesson title, else the message goes to the LLM router
     Row("search_word", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="search_word"),
+    # "lộ trình nào phù hợp cho người mới", "nên học FE hay BE trước": which to choose is advice, not a lookup
+    Row("advice_question", None, 0.0, act=SpeechAct.QUESTION, needs="advice"),
     Row("roadmap_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, target=Target.ROADMAP),
     Row("known_title_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="known_title"),
     # "cách tạo topic trong Kafka", "mạng nơ-ron dùng thế nào": a how-to about no roadmap object is a lesson question

@@ -20,6 +20,13 @@ from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.domains.roadmap.router.object_sense import names_another_place, strip_code
 from rag_service.domains.roadmap.router.polarity import BLOCKER_OF, NONE as NO_POLARITY, polarity_of
 from rag_service.domains.roadmap.router.policy import (  # cues and their vocabulary live in policy.py
+    ADVICE,
+    ASK_FRAME,
+    ASK_FRAME_FOLDED,
+    MID_QUESTION_WORD,
+    MID_QUESTION_WORD_FOLDED,
+    NOT_A_QUESTION_BEFORE,
+    PLAN_REQUEST,
     ABOUT_ASSISTANT,
     CAPABILITY_QUESTION,
     CONDITIONAL_REQUEST,
@@ -98,6 +105,7 @@ class Understanding:
     opens_with_greeting: bool # starts with a greeting or thanks word
     asks_usage: bool          # what the assistant can do, or how to make a change: answered with the help card
     write_blocker: Optional[str] = None  # names a change it does not ask for: negation | hypothetical | past_report
+    advice: bool = False                 # asks which to choose ("lộ trình nào phù hợp", "nên học FE hay BE")
     polarity: str = "none"               # P2: affirm | decline | hypothetical | report | none (polarity.py)
 
     def summary(self) -> dict:
@@ -122,6 +130,15 @@ def _has_phrase(phrases: list[str], flat: str) -> bool:
     return any(re.search(rf"\b{re.escape(fold(p))}\b", flat) for p in phrases)
 
 
+def asks_mid_sentence(lower: str, flat: str, accented: bool) -> bool:
+    """P1: a question word mid-sentence ("có playlist nào hay") or an asking / comparing frame ("cho mình hỏi về …")."""
+    words, frame = (MID_QUESTION_WORD, ASK_FRAME) if accented else (MID_QUESTION_WORD_FOLDED, ASK_FRAME_FOLDED)
+    text = lower if accented else flat
+    if frame.search(text):
+        return True
+    return any(not NOT_A_QUESTION_BEFORE.search(text[:m.start()]) for m in words.finditer(text))
+
+
 def is_question_text(lower: str, flat: str) -> bool:
     """A question anywhere in the text: "?", a search word, a question marker or a trailing "không / k / ko".
 
@@ -141,8 +158,11 @@ def strip_noise(lower: str) -> str:
     for _ in range(3):  # they come in any order: "Hi\nViệc cần làm: …"
         before = s
         s = LEADING_FILLER.sub("", LEADING_GREETING.sub("", s, count=1), count=1)
+        # P0: a label names what follows ("Câu hỏi: …"); a clause that asks ("đoạn này sai ở đâu: …") is kept
         label = LABEL.match(s)
-        if label and not _has_any(ENTITY_PATTERNS, fold(label.group(1))):
+        if label and not _has_any(ENTITY_PATTERNS, fold(label.group(1))) and not (
+            "?" in label.group(1) or QUESTION_MARKERS.search(label.group(1)) or END_QUESTION.search(label.group(1))
+        ):
             s = s[label.end():]
         s = s.strip()
         if s == before:
@@ -164,7 +184,9 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
     accented = lower != flat
     how_to, end_question = (HOW_TO, END_QUESTION) if accented else (HOW_TO_FOLDED, END_QUESTION_FOLDED)
 
-    has_verb = any(re.search(rf"\b{re.escape(v)}\b", flat) for v in CUD_VERBS)
+    # A verb in code ("db.items.remove(…)", `DELETE FROM …`) is not the user's
+    code_free = fold(strip_code(lower))
+    has_verb = any(re.search(rf"\b{re.escape(v)}\b", code_free) for v in CUD_VERBS)
     # P3: a roadmap noun names this roadmap's object unless it sits in code or in another place (object_sense.py)
     has_object = _has_any(ENTITY_PATTERNS, strip_code(FALSE_OBJECT.sub(" ", fold(lower)))) and not names_another_place(lower, known_place)
     has_search = _has_phrase(SEARCH_WORDS, flat)
@@ -206,10 +228,18 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
         # A command names its object after the verb, and the name may hold question words
         # ("tạo topic tên là Tại sao Docker", "thêm bài Làm sao deploy vào layer X"): only "?" or a
         # question word ending the message ("tạo topic như thế nào") outside the name makes it a question.
-        asks = "?" in head or bool(end_question.search(cue_head))
+        # A final "nào" after a command is a particle ("tạo topic Rust nào"); it asks only after a roadmap noun
+        # ("xóa bài nào")
+        ending = end_question.search(cue_head)
+        if ending and fold(ending.group(0)).strip(" ?!.") == "nao":
+            ending = re.search(r"\b(?:topic|layer|bai|nhom|muc|item|group)\s+nao\s*[?!.]*$", fold(cue_head))
+        asks = "?" in head or bool(ending)
     else:
         # "có thể thao tác gì ở dự án này": the capability cue is the question, even with "gì" mid-sentence
-        asks = is_question_text(lower, flat) or capability or (not accented and bool(END_QUESTION_FOLDED.search(flat)))
+        asks = (
+            is_question_text(lower, flat) or capability or (not accented and bool(END_QUESTION_FOLDED.search(flat)))
+            or asks_mid_sentence(lower, flat, accented)
+        )
     yes_no, request_cue = (END_YES_NO, REQUEST_CUE) if accented else (END_YES_NO_FOLDED, REQUEST_CUE_FOLDED)
     # "không cần thêm bài nào nữa đâu" declines a change; "nào … đâu" is emphasis, not a question.
     # A real question stays one: "đừng xóa bài X k", "đừng xóa bài X, rồi tìm bài về Docker".
@@ -225,7 +255,7 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
     )
     conditional = has_verb and has_object and CONDITIONAL_REQUEST.search(flat) is not None
 
-    learning_plan = (
+    learning_plan = PLAN_REQUEST.search(flat) is not None or (
         LEARNING_PLAN_GOAL.search(flat) is not None and LEARNING_PLAN_NOUN.search(flat) is not None
         and not CREATE_ROADMAP.search(flat)
     )
@@ -266,6 +296,7 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
         asks_usage=asks_usage,
         write_blocker=write_blocker,
         polarity=polarity,
+        advice=ADVICE.search(flat) is not None,
     )
 
 

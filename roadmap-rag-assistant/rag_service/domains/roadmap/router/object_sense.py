@@ -26,8 +26,8 @@ from typing import Callable, Optional
 from rag_service.domains.roadmap.retrieval.relevance import fold
 
 CODE_SPAN = re.compile(r"`[^`]*`")
-# A token holding an identifier character between letters or digits, or a call
-IDENTIFIER = re.compile(r"\S*\w[-_./(]\w?\S*")
+# A token holding - _ . / between letters or digits, or a call "(": not a word followed by punctuation ("Xóa.")
+IDENTIFIER = re.compile(r"\S*\w(?:[-_./]\w|\()\S*")
 
 PREPOSITIONS = {"trong", "trên", "ở", "vào", "sang", "khỏi", "in", "on", "into"}
 # Typed without diacritics; "sang" (sáng) and "o" (ô, ơ) only count on unaccented text

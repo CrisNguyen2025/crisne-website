@@ -4,6 +4,7 @@
     .venv/bin/python -m evals.router.phases --set polarity      # same
     .venv/bin/python -m evals.router.phases --set polarity_holdout
     .venv/bin/python -m evals.router.phases --set target_holdout
+    .venv/bin/python -m evals.router.phases --set act_holdout
 
 Each row has a text, its expected write ("no": never written or previewed; "any": reaches a write) and hand
 labels for the phases it tests: "polarity" (P2, older rows) or "phases" {"P1_act" | "P2_polarity" |
@@ -21,7 +22,7 @@ from rag_service.domains.roadmap.router.understanding import understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 HERE = Path(__file__).parent
-SETS = ("polarity", "polarity_holdout", "target_holdout")
+SETS = ("polarity", "polarity_holdout", "target_holdout", "act_holdout")
 
 
 def labels_of(row: dict) -> dict:

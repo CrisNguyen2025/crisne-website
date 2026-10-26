@@ -1,0 +1,23 @@
+{"text": "Spotify có playlist nào hay cho lúc code", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "vector database nào phù hợp cho dự án nhỏ", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "bài nào trong layer 1 nên học trước", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "Docker và Podman cái nào nhẹ hơn", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "so sánh BM25 với TF-IDF", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "so sánh giúp mình RAG với long context", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "cho mình hỏi về reranker", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "cho em hỏi chút về embedding", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "mình muốn hỏi về prompt caching", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "LangChain hay LlamaIndex dễ học hơn", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "đoạn code này sai ở đâu: items.remove(x)", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "câu `DELETE FROM layers` có nguy hiểm không", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "người ta dùng gì để đánh giá RAG", "phases": {"P1_act": "question"}, "write": "no"}
+{"text": "lập cho mình kế hoạch học Rust 6 tuần", "phases": {"P1_act": "plan"}, "write": "no"}
+{"text": "tạo giúp em kế hoạch học tiếng Anh", "phases": {"P1_act": "plan"}, "write": "no"}
+{"text": "lên lộ trình học MLOps cho mình", "phases": {"P1_act": "plan"}, "write": "no"}
+{"text": "thiết kế lộ trình học backend từ đầu", "phases": {"P1_act": "plan"}, "write": "no"}
+{"text": "make me a study plan for system design", "phases": {"P1_act": "plan"}, "write": "no"}
+{"text": "hôm nay mình đọc mấy bài về RAG", "phases": {"P1_act": "statement|command|request"}, "write": "no"}
+{"text": "không cần gì thêm đâu, cảm ơn", "phases": {"P1_act": "statement|command|request"}, "write": "no"}
+{"text": "tạo topic Rust nào", "phases": {"P1_act": "command|request"}, "write": "any"}
+{"text": "thêm bài gì đó về Kafka vào layer 1", "phases": {"P1_act": "command|request"}, "write": "any"}
+{"text": "xóa bài Redis đi, bài nào cũng được giữ lại trừ nó", "phases": {"P1_act": "command|request"}, "write": "any"}

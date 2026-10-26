@@ -34,6 +34,22 @@ Polarity is read by clause, not from listed phrases:
 Known gap (from `polarity_holdout.jsonl`): an adverb between a weak folded negator and the verb
 ("dung co tu y doi ten …") is not read as a decline. The change is still only a preview.
 
+## P1 act: questions, plans and code
+
+- "gì" and "nào" ask wherever they stand ("có playlist nào hay", "người ta dùng gì để …"), except as
+  indefinites ("gì đó", "nào cũng", "bất kỳ … nào") or in an emphatic negation ("không cần gì"). Folded
+  "nao" is not read mid-sentence (não).
+- Asking and comparing frames are questions: "cho mình hỏi", "muốn hỏi", "so sánh", "A hay B … hơn".
+- A final "nào" after a command is a particle ("tạo topic Rust nào"); it asks right after a roadmap noun
+  ("xóa bài nào").
+- A plan request: "kế hoạch học" / "study plan" anywhere, or a plan-making verb (lên, lập, thiết kế, xây
+  dựng; not a change verb) before "lộ trình" / "roadmap".
+- A verb in code is not the user's (`db.items.remove(…)`). P0 keeps a leading clause that asks
+  ("đoạn này sai ở đâu: …"); only a label ("Câu hỏi: …") is removed.
+- P5: an advice question ("lộ trình nào phù hợp", "nên học FE hay BE") is left to the LLM router.
+
+Known gap (from `act_holdout.jsonl`): unaccented "nao" mid-sentence ("cai nao nhe hon") and "hay … hon".
+
 ## P3 target: which sense of a roadmap noun
 
 "topic", "layer", "bài", "nhóm", "mục", "item" also name things in other systems. The sense is read from
@@ -71,14 +87,14 @@ later phase covered for it this time.
 
 Offline stress runs (2026-10-26), failures by first wrong phase:
 
-| First wrong phase | When labels were added | After P3 place phrases | Concept gap left |
-|---|---|---|---|
-| P3 target | 52 | 24 | A noun followed by another system's name, no place phrase (see P3) |
-| P1 act | 46 | 41 | Question frames without a question word ("so sánh …", "cho mình hỏi về …", "… có gì hay"); plan requests phrased as "tạo kế hoạch …" |
-| P5 LLM router | 32 | 37 | Needs the model (offline fallback) |
-| P5 table | 7 | 7 | |
-| P6 System 2 | 5 | 5 | Needs the model (offline fallback) |
-| wrong branch, total | 143 | 115 | |
+| First wrong phase | When labels were added | After P3 place phrases | After P1 frames | Concept gap left |
+|---|---|---|---|---|
+| P3 target | 52 | 24 | 24 | A noun followed by another system's name, no place phrase (see P3) |
+| P1 act | 46 | 41 | 4 | Unaccented "nao" / "hay … hon" (see P1) |
+| P5 LLM router | 32 | 37 | 62 | Needs the model: questions now read right but naming no roadmap word wait for the LLM router or embeddings |
+| P5 table | 7 | 7 | 7 | |
+| P6 System 2 | 5 | 5 | 5 | Needs the model (offline fallback) |
+| wrong branch, total | 143 | 115 | 103 | |
 
 P2 is wrong on 20 messages, 19 of them latent: sarcasm (P2 has no sarcasm value; System 2 has) and
 "bạn mình nói …", where the subject of the reporting verb ends in "mình".
@@ -93,6 +109,7 @@ P2 is wrong on 20 messages, 19 of them latent: sarcasm (P2 has no sarcasm value;
 | messy | `python -m evals.router.confuse --set messy` | Measured only |
 | polarity | `python -m evals.router.phases --set polarity` | The P2 rules were written against it |
 | polarity holdout | `python -m evals.router.phases --set polarity_holdout` | Written after the rules; measured, never tuned on |
+| act holdout | `python -m evals.router.phases --set act_holdout` | Written before the P1 rules; measured, never tuned on |
 | target holdout | `python -m evals.router.phases --set target_holdout` | Written before the P3 rules; measured, never tuned on |
 
 The target holdout was written before the P3 rules. Two of its misses then showed bugs in the first version

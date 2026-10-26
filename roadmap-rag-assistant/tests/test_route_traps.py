@@ -299,3 +299,35 @@ def test_place_named_without_its_noun_is_read_from_the_catalog():
     assert names_another_place("xóa tất cả layer trong fe")
     assert not names_another_place("xóa tất cả layer trong fe", catalog.has_place)
     assert names_another_place("tạo layer mask trong figma", catalog.has_place)
+
+
+# ── P1 act: questions without a final question word, plan requests, verbs in code ──
+
+
+@pytest.mark.parametrize("text,act", [
+    ("Spotify có playlist nào hay cho lúc code", "question"),   # a question word mid-sentence
+    ("người ta dùng gì để đánh giá RAG", "question"),
+    ("cho mình hỏi về reranker", "question"),                   # an asking frame
+    ("so sánh BM25 với TF-IDF", "question"),                    # a comparing frame
+    ("LangChain hay LlamaIndex dễ học hơn", "question"),
+    ("đoạn code này sai ở đâu: items.remove(x)", "question"),   # an asking clause is not a label; code holds no verb
+    ("lập cho mình kế hoạch học Rust 6 tuần", "plan"),
+    ("lên lộ trình học MLOps cho mình", "plan"),
+    ("make me a study plan for system design", "plan"),
+    ("hôm nay mình đọc mấy bài về RAG", "statement"),
+    ("thêm bài gì đó về Kafka vào layer 1", "command"),         # "gì đó" is an indefinite
+    ("tạo topic Rust nào", "command"),                          # a final "nào" after a command is a particle
+    ("xóa bài nào", "question"),                                # … but asks right after a roadmap noun
+    ("Xóa.", "command"),                                        # a word before punctuation is not an identifier
+])
+def test_act_is_read_from_the_sentence(text, act):
+    assert understand(text).act.value == act
+
+
+def test_emphatic_negation_is_not_a_question():
+    assert understand("không cần gì thêm đâu, cảm ơn").act.value != "question"
+
+
+def test_advice_question_is_left_to_the_llm_router():
+    assert IntentRouter().decide("lộ trình nào phù hợp cho người mới").row == "advice_question"
+    assert IntentRouter().decide("lộ trình nào phù hợp cho người mới").intent is None

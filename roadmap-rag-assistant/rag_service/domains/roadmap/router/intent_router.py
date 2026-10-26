@@ -142,6 +142,8 @@ class IntentRouter:
             return u.opens_with_greeting
         if row.needs == "write_blocker":
             return u.write_blocker is not None
+        if row.needs == "advice":
+            return u.advice
         if row.needs == "how_to":
             return u.how_to
         if row.needs == "show_request":

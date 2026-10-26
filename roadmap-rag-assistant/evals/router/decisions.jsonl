@@ -381,7 +381,7 @@
 {"input": "how do I add a lesson to a layer?", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "change_verb", "object", "usage"]}
 {"input": "hybird search la gi", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=search_word", "act=question", "target=none", "search_word"]}
 {"input": "hybrid search là gì", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=search_word", "act=question", "target=none", "search_word"]}
-{"input": "hôm nay ăn gì trưa nay vừa rẻ vừa ngon quanh khu Cầu Giấy", "route": "out_of_scope", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=off_topic", "act=statement", "target=off_topic"]}
+{"input": "hôm nay ăn gì trưa nay vừa rẻ vừa ngon quanh khu Cầu Giấy", "route": "out_of_scope", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=off_topic", "act=question", "target=off_topic"]}
 {"input": "hôm qua tôi đã tạo topic Test Router", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=command", "target=roadmap", "change_verb", "object", "blocker=past_report"]}
 {"input": "hôm qua tôi đã tạo topic Test Router k", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=roadmap_question", "act=question", "target=roadmap", "change_verb", "object", "blocker=past_report"]}
 {"input": "hôm qua tôi đã tạo topic Test Router nhé ạ", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=command", "target=roadmap", "change_verb", "object", "blocker=past_report"]}
@@ -446,7 +446,7 @@
 {"input": "lệnh xóa bài là gì?", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "change_verb", "object", "search_word", "usage"]}
 {"input": "lộ trình AI Architecture có những layer nào", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=roadmap_question", "act=question", "target=roadmap", "object"]}
 {"input": "lộ trình hiện tại của mình có bao nhiêu bài tất cả vậy?", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=roadmap_question", "act=question", "target=roadmap", "object"]}
-{"input": "lộ trình nào phù hợp cho người mới", "route": "undecided", "write": "none", "rules": ["row=-", "act=statement", "target=roadmap", "object"]}
+{"input": "lộ trình nào phù hợp cho người mới", "route": "undecided", "write": "none", "rules": ["row=advice_question", "act=question", "target=roadmap", "object"]}
 {"input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=request", "target=roadmap", "change_verb", "object", "blocker=hypothetical"]}
 {"input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không k", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=request", "target=roadmap", "change_verb", "object", "blocker=hypothetical"]}
 {"input": "lỡ xóa nhầm bài Docker Compose thì khôi phục được không nhé ạ", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=request", "target=roadmap", "change_verb", "object", "blocker=hypothetical"]}
