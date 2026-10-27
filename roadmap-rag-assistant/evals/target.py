@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import uuid
 from pathlib import Path
 
@@ -40,6 +41,8 @@ CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
 JUDGE_CACHE_FILE = Path(__file__).parent / ".cache" / "judge.json"
 # Code whose change can change an answer; any edit here invalidates the whole cache
 CODE_GLOBS = ("rag_service/core/**/*.py", "rag_service/domains/**/*.py")
+# "Hệ thống hiện chưa có bài nào nói trực tiếp về …": the answer's own admission that the topic is not in the roadmap
+NO_DIRECT_LESSON = re.compile(r"chưa có [^.\n]{0,20}nào [^.\n]{0,60}(trực tiếp|đề cập|nói về)")
 
 
 def _code_fingerprint() -> str:
@@ -283,6 +286,9 @@ class RoadmapTarget:
         intent = steps.get("route", {}).get("intent")
         mode = steps.get("answer", {}).get("mode")
         if reply.strip() == SENSITIVE_REPLY.strip() or intent == "out_of_scope" or mode == "no_match":
+            return "refuse"
+        # The model says the roadmap has no lesson on it, after retrieving neighbours it did not use
+        if NO_DIRECT_LESSON.search(reply):
             return "refuse"
         if reply.strip().startswith(MIXED_INTENT_REPLY) or mode == "unclear":
             return "clarify"

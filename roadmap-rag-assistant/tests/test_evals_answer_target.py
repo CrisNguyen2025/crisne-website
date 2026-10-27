@@ -37,6 +37,23 @@ def test_answer_is_opt_in_so_the_default_run_stays_offline():
         ("?", {"route": {"intent": "chitchat"}, "answer": {"mode": "unclear"}}, "clarify"),
         ("Bạn tên là Cris.", {"route": {"intent": "chitchat"}, "answer": {"mode": "llm"}}, "answer"),
         ("context", {"route": {"intent": "knowledge_query"}, "answer": {"mode": "context"}}, "answer"),
+        # The model's own "no lesson on it" reply, after retrieval kept neighbours (roadmap-047)
+        (
+            "Hệ thống hiện chưa có bài nào nói trực tiếp về **knowledge distillation** từ model lớn sang model nhỏ.",
+            {"route": {"intent": "knowledge_query"}, "answer": {"mode": "llm"}},
+            "refuse",
+        ),
+        (
+            "Hệ thống hiện chưa có tài liệu nào đề cập đến kiến trúc **Mixture of Experts**.",
+            {"route": {"intent": "knowledge_query"}, "answer": {"mode": "llm"}},
+            "refuse",
+        ),
+        # A grounded answer that merely mentions a missing part is still an answer
+        (
+            "Reranking là bước sắp xếp lại kết quả; chưa có bài nào về tối ưu chi phí.",
+            {"route": {"intent": "knowledge_query"}, "answer": {"mode": "llm"}},
+            "answer",
+        ),
     ],
 )
 def test_behavior_mapping(reply, steps, expected):
