@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { Popconfirm } from "antd";
 import { CreateTopicModal } from "./CreateTopicModal";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useCanWrite } from "@/hooks/use-can-write";
 import {
   fetchStorageScan,
   triggerCleanupUnused,
@@ -50,6 +51,7 @@ export function HomeDashboard({
     getCachedStorageScan()
   );
   const [isCleaning, setIsCleaning] = useState(false);
+  const canWrite = useCanWrite();
 
   const loadScan = () => {
     fetchStorageScan()
@@ -114,85 +116,99 @@ export function HomeDashboard({
           </h2>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            <button
-              type="button"
-              onClick={openModal}
-              className="h-8 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Create Topic</span>
-            </button>
-
-            {/* 1-Line Storage Usage & Upload Limit Tracker (unified h-8 & rounded-xl size) */}
-            {!storageScan ? (
-              <div className="h-8 w-48 rounded-xl bg-muted/40 border border-border/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent shrink-0" />
-            ) : (
-              <div className="h-8 inline-flex items-center gap-2 px-3 rounded-xl bg-card border border-border/60 text-xs text-muted-foreground transition-all duration-300 hover:border-border shadow-2xs animate-in fade-in shrink-0">
-                <div
-                  className="flex items-center gap-1.5 text-foreground font-semibold cursor-help"
-                  title={`Max upload: ${formatBytes(storageScan.maxFileSizeBytes, 0)}/file • Storage: ${storageScan.isR2 ? "Cloudflare R2" : "Local"}`}
+            {/* Creating topics and the storage tracker are for the owner; the APIs check it again */}
+            {canWrite && (
+              <>
+                <button
+                  type="button"
+                  onClick={openModal}
+                  className="h-8 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
                 >
-                  <HardDrive className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span>
-                    {formatBytes(
-                      storageScan.usedBytes + storageScan.unusedBytes
-                    )}{" "}
-                    / {formatBytes(storageScan.totalLimitBytes)}
-                  </span>
-                </div>
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Create Topic</span>
+                </button>
 
-                <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
-                  {storageScan.totalFiles.length} file
-                  {storageScan.totalFiles.length === 1 ? "" : "s"}
-                </span>
-
-                {storageScan.unusedFiles.length > 0 ? (
-                  <>
-                    <span className="text-border/80">•</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-amber-500 font-medium text-[11px]">
-                        {storageScan.unusedFiles.length} unused
-                      </span>
-                      <Popconfirm
-                        title="Clear unused files?"
-                        description={`Permanently delete ${storageScan.unusedFiles.length} file(s) (${formatBytes(
-                          storageScan.unusedBytes
-                        )})?`}
-                        onConfirm={handleCleanup}
-                        okText="Clear Unused"
-                        cancelText="Cancel"
-                        okButtonProps={{ danger: true, size: "small", loading: isCleaning }}
-                        cancelButtonProps={{ size: "small", disabled: isCleaning }}
-                        icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
-                        placement="bottomRight"
-                        zIndex={9999}
-                      >
-                        <button
-                          type="button"
-                          disabled={isCleaning}
-                          className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                          title="Clean up orphaned files"
-                        >
-                          {isCleaning ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
-                          <span>Clear</span>
-                        </button>
-                      </Popconfirm>
-                    </div>
-                  </>
+                {/* 1-Line Storage Usage & Upload Limit Tracker (unified h-8 & rounded-xl size) */}
+                {!storageScan ? (
+                  <div className="h-8 w-48 rounded-xl bg-muted/40 border border-border/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent shrink-0" />
                 ) : (
-                  <>
-                    <span className="text-border/80">•</span>
-                    <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>All clean</span>
+                  <div className="h-8 inline-flex items-center gap-2 px-3 rounded-xl bg-card border border-border/60 text-xs text-muted-foreground transition-all duration-300 hover:border-border shadow-2xs animate-in fade-in shrink-0">
+                    <div
+                      className="flex items-center gap-1.5 text-foreground font-semibold cursor-help"
+                      title={`Max upload: ${formatBytes(storageScan.maxFileSizeBytes, 0)}/file • Storage: ${storageScan.isR2 ? "Cloudflare R2" : "Local"}`}
+                    >
+                      <HardDrive className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span>
+                        {formatBytes(
+                          storageScan.usedBytes + storageScan.unusedBytes
+                        )}{" "}
+                        / {formatBytes(storageScan.totalLimitBytes)}
+                      </span>
+                    </div>
+
+                    <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
+                      {storageScan.totalFiles.length} file
+                      {storageScan.totalFiles.length === 1 ? "" : "s"}
                     </span>
-                  </>
+
+                    {storageScan.unusedFiles.length > 0 ? (
+                      <>
+                        <span className="text-border/80">•</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-amber-500 font-medium text-[11px]">
+                            {storageScan.unusedFiles.length} unused
+                          </span>
+                          <Popconfirm
+                            title="Clear unused files?"
+                            description={`Permanently delete ${storageScan.unusedFiles.length} file(s) (${formatBytes(
+                              storageScan.unusedBytes
+                            )})?`}
+                            onConfirm={handleCleanup}
+                            okText="Clear Unused"
+                            cancelText="Cancel"
+                            okButtonProps={{
+                              danger: true,
+                              size: "small",
+                              loading: isCleaning,
+                            }}
+                            cancelButtonProps={{
+                              size: "small",
+                              disabled: isCleaning,
+                            }}
+                            icon={
+                              <Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />
+                            }
+                            placement="bottomRight"
+                            zIndex={9999}
+                          >
+                            <button
+                              type="button"
+                              disabled={isCleaning}
+                              className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                              title="Clean up orphaned files"
+                            >
+                              {isCleaning ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                              <span>Clear</span>
+                            </button>
+                          </Popconfirm>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-border/80">•</span>
+                        <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-[11px]">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>All clean</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
 
             <ThemeToggle className="h-8 w-8 rounded-xl border border-border/60 bg-card hover:bg-muted/80 text-foreground shadow-2xs" />
