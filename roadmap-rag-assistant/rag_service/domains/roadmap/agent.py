@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
-from rag_service.auth import is_owner
+from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.config import settings
 from rag_service.llm_keys import KeyRotatingLLM, parse_keys
 from rag_service.execution.executor import ActionExecutor
@@ -51,6 +51,7 @@ from rag_service.domains.roadmap.router import (
 )
 from rag_service.domains.roadmap.router.policy import WRITE_NONE
 from rag_service.domains.roadmap.router.route_decision import decide_route
+from rag_service.domains.roadmap.router.focus import focus_written
 from rag_service.domains.roadmap.router.scope import Scope, classify_for_routing
 from rag_service.domains.roadmap.router.understanding import instruction_part
 from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, CONTENT_UNCLEAR, DESCRIPTION_UNSUPPORTED
@@ -68,6 +69,7 @@ from rag_service.domains.roadmap.router.grounding import (
     DESCRIPTION_UNSUPPORTED_REPLY,
     NO_TOPIC_REPLY,
     content_unclear_reply,
+    unnamed_create_reply,
     domain_gap_reply,
     no_match_reply,
     out_of_scope_reply,
@@ -257,6 +259,12 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
+        # ── 0d. A create that names nothing ("tôi có thể tạo topic mới không?"): ask for the name ──
+        if (unnamed := unnamed_create_reply(content)) is not None:
+            async for ev in self._stream_text(unnamed if is_owner() else OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+
         # ── 1–2. Plan/goal and topic listing (roadmap domain: commands.py) ──
         outcome = {"handled": False}
         async for ev in self.handle_plan_and_listing(content=content, lower=lower, delay=delay, outcome=outcome):
@@ -385,7 +393,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             deps = self._source_deps()
             if outcome.scope is not None and outcome.scope.scope == Scope.DOMAIN_GAP:
                 # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
-                focus_topic = outcome.scope.focus
+                focus_topic = focus_written(content) or outcome.scope.focus  # folded focus is for matching only
                 deps = dataclasses.replace(deps, no_match_reply=lambda owner: domain_gap_reply(focus_topic, owner))
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,

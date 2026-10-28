@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
+
 from rag_service.auth import set_actor
 from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
 from rag_service.state import session_store
@@ -102,3 +104,28 @@ def test_update_is_answered_before_any_preview(mock_adapter):
     assert "chưa sửa được" in text
     assert not [e for e in events if e.get("type") in ("action_preview", "tool_start")]
     assert not session_store.get_or_create(thread).pending_confirmation
+
+
+# ── A create that names nothing is asked for its name (2026-10-28, live: "tôi có thể tạo topic mới không?") ──
+
+
+@pytest.mark.parametrize("text,example", [
+    ("tôi có thể tạo topic mới không?", "tạo topic"),
+    ("tạo topic mới", "tạo topic"),
+    ("bạn có thể thêm bài mới không?", "thêm bài"),
+    ("toi co the tao layer moi khong", "layer"),
+])
+def test_unnamed_create_is_asked_for_a_name_and_nothing_is_previewed(mock_adapter, text, example):
+    set_actor("owner")
+    thread = f"unnamed-{uuid.uuid4()}"
+    reply, events = _turn(NextGenRoadmapAgent(llm_model=None), text, thread)
+    assert "tên" in reply and example in reply
+    assert "level nào" not in reply
+    assert not [e for e in events if e.get("type") in ("action_preview", "tool_start")]
+    mock_adapter.create_topic.assert_not_awaited()
+
+
+def test_named_create_is_still_a_create(mock_adapter):
+    set_actor("owner")
+    reply, _ = _turn(NextGenRoadmapAgent(llm_model=None), "tạo topic AI Engineering", f"named-{uuid.uuid4()}")
+    assert "AI Engineering" in reply

@@ -121,7 +121,7 @@ def test_domain_gap_with_no_lesson_says_so(monkeypatch):
             config={"configurable": {"thread_id": "scope-gap"}})]
 
     asyncio.run(run())
-    assert "chưa có bài học về **lora**" in seen["reply"]
+    assert "chưa có bài học về **LoRA**" in seen["reply"]  # named as written, not the folded focus
 
 
 def test_router_prompt_examples_never_come_from_the_scope_eval_set():

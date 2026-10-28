@@ -18,6 +18,8 @@ import re
 from typing import Optional
 
 from rag_service.core.guards import MAX_MESSAGE_CHARS, TOO_LONG_REPLY, is_sensitive_request  # noqa: F401
+from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 _OUT_OF_SCOPE_HEAD = (
     "Xin lỗi, thông tin này nằm ngoài dữ liệu Roadmap nên tôi không tra cứu được "
@@ -48,7 +50,8 @@ EMPTY_MESSAGE_REPLY = (
     "- 📋 `liệt kê topic`"
 )
 
-MIXED_INTENT_REPLY = "Tin nhắn có cả yêu cầu tìm kiếm và yêu cầu thay đổi roadmap, tôi làm lần lượt từng bước."
+# Steps are of different kinds, not always a search and a change ("bạn làm được gì, rồi tìm bài Y")
+MIXED_INTENT_REPLY = "Tin nhắn có nhiều yêu cầu khác nhau, tôi làm lần lượt từng bước."
 
 
 def mixed_intent_reply(steps: list[str]) -> str:
@@ -73,6 +76,36 @@ BATCH_LAYER_DELETE_REPLY = (
     "Hiện tại tôi chỉ xóa được từng layer một. Hãy gửi lệnh riêng cho mỗi layer, "
     "ví dụ: `xóa layer mock 1 trong topic fe`."
 )
+
+# "tôi có thể tạo topic mới không?", "tạo topic mới": a create that names nothing. Matched folded, on the whole message.
+UNNAMED_CREATE = re.compile(
+    r"^(?:(?:toi|minh|em|ban|anh|chi)\s+)?(?:co\s+the\s+)?(?:tao|them|create|add)\s+(?:(?:mot|1|a|new)\s+)?"
+    r"(?P<noun>topic|chu\s+de|lo\s+trinh|roadmap|layer|nhom|group|bai(?:\s+hoc)?|item|lesson)"
+    r"(?:\s+(?:moi|new))?(?:\s+(?:duoc\s+)?(?:khong|ko|hong|chu|nhe|nha|di|giup(?:\s+minh)?))*\s*[?.!]*$"
+)
+_UNNAMED_EXAMPLES = {
+    "topic": ("topic", "tạo topic AI Engineering"),
+    "layer": ("layer", "thêm layer Basics vào topic …"),
+    "group": ("nhóm", "tạo nhóm Core trong layer … level core"),
+    "item": ("bài học", "thêm bài Kafka vào layer … level core"),
+}
+
+
+def unnamed_create_reply(text: str) -> Optional[str]:
+    """Asked back when a create names nothing: whether it can, and the syntax with a name. None for any other message."""
+    m =UNNAMED_CREATE.match(fold(normalize_vietnamese(text).lower().strip()))
+    if m is None:
+        return None
+    noun = m.group("noun")
+    kind = (
+        "layer" if noun == "layer"
+        else "group" if noun in ("nhom", "group")
+        else "item" if noun.startswith("bai") or noun in ("item", "lesson")
+        else "topic"
+    )
+    name, example = _UNNAMED_EXAMPLES[kind]
+    return f"Được, mình tạo {name} được. Bạn gửi tên {name} giúp mình, ví dụ: `{example}`."
+
 
 # The executor runs create and delete only: an update is answered here, never previewed
 UPDATE_NOT_SUPPORTED_REPLY = (

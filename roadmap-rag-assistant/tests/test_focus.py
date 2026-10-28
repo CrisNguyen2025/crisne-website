@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_service.domains.roadmap.router.focus import focus_of
+from rag_service.domains.roadmap.router.focus import focus_of, focus_written
 
 
 @pytest.mark.parametrize("text,focus", [
@@ -55,3 +55,18 @@ def test_every_scope_sample_with_a_topic_has_a_focus_and_none_without():
 ])
 def test_spoken_fillers_and_cai_x_ay_leave_the_topic(text, focus):
     assert focus_of(text) == focus
+
+
+# ── A reply names the topic as written (2026-10-28, live: "cach fine-tune llama 3 bang lora tren 1 gpu") ──
+
+
+@pytest.mark.parametrize("text,written", [
+    ("cách fine-tune Llama 3 bằng LoRA trên 1 GPU", "fine-tune Llama 3 bằng LoRA trên 1 GPU"),
+    ("bạn có biết thông tin về Telegram không", "Telegram"),
+])
+def test_written_focus_keeps_tones_and_case(text, written):
+    assert written in focus_written(text)
+
+
+def test_written_focus_is_none_without_a_topic():
+    assert focus_written("bài đó sao") is None

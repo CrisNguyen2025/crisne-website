@@ -86,3 +86,21 @@ def test_thanks_identity_and_recall_are_chitchat(text):
 def test_thanks_followed_by_a_question_still_searches():
     res = IntentRouter().classify_heuristics("cảm ơn, giờ giải thích RAG là gì giúp mình")
     assert res is not None and res.intent == IntentType.KNOWLEDGE_QUERY
+
+
+# ── Off-topic cues keep their tones (2026-10-28, live: "kích thước" read as "thuốc", the question was split) ──
+
+
+@pytest.mark.parametrize("text", [
+    "nên chọn kích thước chunk thế nào?",
+    "Chunking trong RAG là gì, nên chọn kích thước chunk thế nào?",
+])
+def test_a_folded_twin_of_an_off_topic_cue_is_not_off_topic(text):
+    router = IntentRouter()
+    assert router.decide(text).intent != IntentType.OUT_OF_SCOPE
+    assert router.mixed_intent_steps(text) == []
+
+
+@pytest.mark.parametrize("text", ["mua thuốc cảm ở đâu", "mua thuoc cam o dau", "hoá đơn tháng này bao nhiêu"])
+def test_off_topic_cues_still_match_as_written(text):
+    assert IntentRouter().decide(text).intent == IntentType.OUT_OF_SCOPE

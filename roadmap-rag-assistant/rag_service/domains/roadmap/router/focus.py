@@ -107,3 +107,12 @@ def focus_of(text: str) -> Optional[str]:
         return " | ".join(p.strip() for p in parts)
     return topic or None
 
+
+def focus_written(text: str) -> Optional[str]:
+    """The same topic as focus_of, as the user wrote it (tones and case kept): for a reply that names it."""
+    original, flat, start, end = _window(text)
+    topic = flat[start:end]
+    if not topic or NO_TOPIC.match(topic):
+        return None
+    return original[start:end]
+

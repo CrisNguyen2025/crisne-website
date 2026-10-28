@@ -136,6 +136,20 @@ def _has_phrase(phrases: list[str], flat: str) -> bool:
     return any(re.search(rf"\b{re.escape(fold(p))}\b", flat) for p in phrases)
 
 
+def _has_cue(phrases: list[str], lower: str, flat: str) -> bool:
+    """_has_phrase, but a span the user wrote with tones must carry the cue's own tones.
+
+    Folded, "thuốc" (medicine) is "kích thước" (size); a span typed without tones still matches.
+    """
+    for p in phrases:
+        written_cue = normalize_vietnamese(p).lower()
+        for m in re.finditer(rf"\b{re.escape(fold(p))}\b", flat):
+            span = lower[m.start():m.end()] if len(lower) == len(flat) else ""
+            if not span or span == fold(span) or span == written_cue:
+                return True
+    return False
+
+
 def asks_mid_sentence(lower: str, flat: str, accented: bool) -> bool:
     """P1: a question word mid-sentence ("có playlist nào hay") or an asking / comparing frame ("cho mình hỏi về …")."""
     words, frame = (MID_QUESTION_WORD, ASK_FRAME) if accented else (MID_QUESTION_WORD_FOLDED, ASK_FRAME_FOLDED)
@@ -216,7 +230,7 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
     write_blocker = BLOCKER_OF.get(polarity)
 
     # ── Target: off-topic first, then the assistant, then the roadmap ──
-    if _has_phrase(OFF_TOPIC_STRONG_HINTS, flat) or (not has_object and _has_phrase(OFF_TOPIC_HINTS, flat)):
+    if _has_cue(OFF_TOPIC_STRONG_HINTS, lower, flat) or (not has_object and _has_cue(OFF_TOPIC_HINTS, lower, flat)):
         target = Target.OFF_TOPIC
     elif (
         (SUGGESTION.search(lower) and not re.search(r"\bvề\b", lower))
