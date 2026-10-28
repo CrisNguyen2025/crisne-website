@@ -72,6 +72,16 @@ def _generate_clean_short_code(title: str) -> str:
     return "".join(w[0] for w in words if w).upper()[:4]
 
 
+LEVEL_CLAUSE = re.compile(r"\blevel\s+([a-zA-Z0-9_-]+)", flags=re.IGNORECASE)
+
+
+def named_level(text: str) -> str:
+    """The level the message names ("… level core"), or empty: never a default."""
+    m = LEVEL_CLAUSE.search(text or "")
+    cand = m.group(1).lower() if m else ""
+    return cand if cand in ("core", "intermediate", "advanced") else ""
+
+
 # Words that can follow "trong"/"topic" but are keywords or urgency switches, never a topic or layer name.
 PARENT_STOPWORDS = {
     "topic", "topics", "layer", "layers", "group", "item", "core", "đó", "the", "a", "an",
@@ -115,7 +125,7 @@ class StructuredEntityExtractor:
                 )
                 res: StructuredRoadmapAction = await self._structured_llm.ainvoke(formatted)
                 if isinstance(res, StructuredRoadmapAction):
-                    return self.from_verified(res, default_parent=default_parent)
+                    return self.from_verified(res, default_parent=default_parent, text=prompt)
             except Exception as exc:
                 print(f"[EntityExtractor] LLM extraction error ({exc}), falling back to deterministic parser.")
                 llm_breaker.record_failure(exc)
@@ -124,11 +134,17 @@ class StructuredEntityExtractor:
         return self._deterministic_extract(prompt, default_parent=default_parent)
 
     def from_verified(
-        self, res: StructuredRoadmapAction, default_parent: Optional[str] = None
+        self, res: StructuredRoadmapAction, default_parent: Optional[str] = None, text: str = ""
     ) -> StructuredRoadmapAction:
-        """An action read by a model (this extractor or System 2), cleaned the same way before it runs."""
+        """An action read by a model (this extractor or System 2), cleaned the same way before it runs.
+
+        Models leave `level` empty even when the message names one; the level the message names fills it.
+        """
         res = res.model_copy(deep=True)
+        level = named_level(text)
         for ent in res.entities:
+            if not ent.level and level:
+                ent.level = level
             # Sanitize any accidental verb leakage
             ent.title = self._sanitize_title(ent.title)
             if not ent.short_code:
@@ -207,13 +223,8 @@ class StructuredEntityExtractor:
 
 
         # 2. Extract and strip 'level core/intermediate/advanced'
-        entity_item_level = ""  # named by the user or empty: never a default
-        m_level = re.search(r"\blevel\s+([a-zA-Z0-9_-]+)", text, flags=re.IGNORECASE)
-        if m_level:
-            cand_lvl = m_level.group(1).lower().strip()
-            if cand_lvl in ["core", "intermediate", "advanced"]:
-                entity_item_level = cand_lvl
-            text = re.sub(r"\blevel\s+[a-zA-Z0-9_-]+", "", text, flags=re.IGNORECASE).strip()
+        entity_item_level = named_level(text)
+        text = LEVEL_CLAUSE.sub("", text).strip()
 
         # 3. Determine Action
         # Action and level words are matched folded, so "xoa bai" and "xóa bài" are the same request

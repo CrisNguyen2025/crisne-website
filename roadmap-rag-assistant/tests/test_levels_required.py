@@ -101,3 +101,49 @@ def test_adapter_refuses_a_group_without_a_level():
     adapter = SqliteAdapter.__new__(SqliteAdapter)  # no database: the level is checked before any write
     with write_granted("test"), pytest.raises(ValueError):
         asyncio.run(adapter.create_group("layer-id", "Core", ""))
+
+
+# ── System 2 leaves the level empty (2026-10-28, live: "core" asked the level again, in a loop) ──
+
+
+def _change_without_level(title: str, layer: str):
+    from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+
+    return StructuredRoadmapAction(
+        action=ActionType.CREATE, entity_level=EntityLevel.ITEM, target_parent_identifier=layer,
+        entities=[SingleEntity(title=title)],
+    )
+
+
+def test_level_named_in_the_message_fills_a_model_reading_without_one():
+    from rag_service.domains.roadmap.router.entity_extractor import StructuredEntityExtractor
+
+    text = 'thêm bài "QA Abot Test" vào layer 04-ops level core'
+    action = StructuredEntityExtractor().from_verified(_change_without_level("QA Abot Test", "04-ops"), text=text)
+    assert [e.level for e in action.entities] == ["core"]
+    # No level in the message: still empty, never guessed
+    action = StructuredEntityExtractor().from_verified(_change_without_level("QA Abot Test", "04-ops"), text="thêm bài QA")
+    assert not action.entities[0].level
+
+
+def test_level_answer_is_not_asked_again_when_system2_drops_the_level(monkeypatch):
+    from rag_service.domains.roadmap.router import route_decision
+    from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType
+    from rag_service.domains.roadmap.router.verifier import Act, TargetSystem, WriteVerdict
+
+    async def system2_without_level(llm, content, history=(), page_context=""):
+        return WriteVerdict(
+            intent=IntentType.ROADMAP_CUD, act=Act.COMMAND, target_system=TargetSystem.ROADMAP,
+            action=ActionType.CREATE, entity_level=EntityLevel.ITEM, container_name="04-ops", confidence=0.9,
+            change=_change_without_level("QA Abot Test", "04-ops"),
+        )
+
+    monkeypatch.setattr(route_decision, "verify_write", system2_without_level)
+    set_actor("owner")
+    agent = NextGenRoadmapAgent(llm_model=None)
+    thread = f"level-system2-{uuid.uuid4()}"
+    text, _ = _turn(agent, 'thêm bài "QA Abot Test" vào layer 04-ops', thread)
+    assert "level nào" in text
+    text, _ = _turn(agent, "core", thread)
+    assert "level nào" not in text
+    assert session_store.get_or_create(thread).pending_level_choice is None

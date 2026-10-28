@@ -311,7 +311,7 @@ class RoadmapCommands:
         # Otherwise the extractor runs; page context is added only for its LLM, heuristics keep the raw text.
         verified = getattr(verdict, "change", None) if verdict is not None and verdict.is_roadmap_change else None
         if verified is not None and verified.entities:
-            action: StructuredRoadmapAction = self.extractor.from_verified(verified)
+            action: StructuredRoadmapAction = self.extractor.from_verified(verified, text=content)
         else:
             action = await self.extractor.aextract(content, page_context=build_grounding(page_context))
         resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
