@@ -74,10 +74,28 @@ BATCH_LAYER_DELETE_REPLY = (
     "ví dụ: `xóa layer mock 1 trong topic fe`."
 )
 
+# The executor runs create and delete only: an update is answered here, never previewed
+UPDATE_NOT_SUPPORTED_REPLY = (
+    "Abot chưa sửa được topic, layer, nhóm hay bài học qua chat. Bạn mở mục đó trên trang Roadmap để sửa trực tiếp. "
+    "Tạo mới hoặc xóa thì Abot làm được, ví dụ: `thêm bài … vào layer …` hoặc `xóa bài …`."
+)
+
+
+def batch_entity_delete_reply(noun: str) -> str:
+    return f"Hiện tại tôi chỉ xóa được từng {noun} một. Hãy gửi lệnh riêng cho mỗi {noun}, ví dụ: `xóa {noun} …`."
+
+
+def unresolved_entity_reply(noun: str, name: str, candidates: list[dict]) -> str:
+    """Asked back when the lesson or group to delete is not one entity of the roadmap; nothing is deleted."""
+    if not candidates:
+        return f"Không tìm thấy {noun} `{name}` trong Roadmap nên mình chưa xóa gì. Bạn kiểm tra lại tên giúp mình nhé."
+    listing = "\n".join(f"- {c['title']} (layer {c['layer_title']})" for c in candidates[:10])
+    return f"Có nhiều {noun} khớp với `{name}`:\n{listing}\n\nBạn gửi lại tên đầy đủ của {noun} cần xóa nhé."
+
 # The extracted change is not the one the message's verb asks for ("khỏi tạo topic X" read as a delete)
 ACTION_NOT_ASKED_REPLY = (
     "Mình chưa chắc bạn muốn thay đổi gì nên chưa làm gì cả. "
-    "Bạn nói rõ giúp mình nhé, ví dụ: `tạo topic …`, `xóa bài …` hoặc `đổi tên bài … thành …`."
+    "Bạn nói rõ giúp mình nhé, ví dụ: `tạo topic …`, `thêm bài … vào layer …` hoặc `xóa bài …`."
 )
 
 BLOCKED_CHANGE_REPLY = (

@@ -126,6 +126,17 @@ def test_level_named_in_the_message_fills_a_model_reading_without_one():
     assert not action.entities[0].level
 
 
+def test_level_clause_is_not_left_on_the_layer_or_the_title():
+    from rag_service.domains.roadmap.router.entity_extractor import StructuredEntityExtractor
+
+    text = 'thêm bài "QA Abot Test" vào layer 04-ops level core'
+    action = StructuredEntityExtractor().from_verified(
+        _change_without_level("QA Abot Test level core", "04-ops level core"), text=text
+    )
+    assert action.target_parent_identifier == "04-ops"
+    assert [(e.title, e.level) for e in action.entities] == [("QA Abot Test", "core")]
+
+
 def test_level_answer_is_not_asked_again_when_system2_drops_the_level(monkeypatch):
     from rag_service.domains.roadmap.router import route_decision
     from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, IntentType

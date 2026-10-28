@@ -26,7 +26,10 @@ from rag_service.domains.roadmap.router.grounding import (
     BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
     QUESTION_TITLE_REPLY,
+    UPDATE_NOT_SUPPORTED_REPLY,
+    batch_entity_delete_reply,
     build_grounding,
+    unresolved_entity_reply,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM, slash_command
 from rag_service.domains.roadmap.retrieval.relevance import content_words
@@ -44,7 +47,7 @@ from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, 
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.tools.rag_tools import generate_roadmap_from_template, preview_roadmap_plan
-from rag_service.tools.layer_resolver import resolve_layer, topic_named_in_message
+from rag_service.tools.layer_resolver import resolve_entity, resolve_layer, topic_named_in_message
 
 
 class RoadmapCommands:
@@ -328,6 +331,30 @@ class RoadmapCommands:
             async for ev in self._stream_text(reply, delay):
                 yield ev
             return
+
+        # The executor runs create and delete only: a change it cannot run is answered, never previewed
+        if resolved_action.action == ActionType.UPDATE:
+            async for ev in self._stream_text(UPDATE_NOT_SUPPORTED_REPLY, delay):
+                yield ev
+            return
+
+        # A lesson or group to delete is named, but the API takes its id: resolve it before the preview names it
+        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level in (EntityLevel.ITEM, EntityLevel.GROUP):
+            noun = "bài học" if resolved_action.entity_level == EntityLevel.ITEM else "nhóm"
+            if resolved_action.is_batch or len(resolved_action.entities) != 1:
+                async for ev in self._stream_text(batch_entity_delete_reply(noun), delay):
+                    yield ev
+                return
+            name = resolved_action.entities[0].title
+            kind = "item" if resolved_action.entity_level == EntityLevel.ITEM else "group"
+            found = await resolve_entity(kind, name, topic_slug=(page_context or {}).get("roadmapSlug"))
+            if found.status != "found":
+                async for ev in self._stream_text(unresolved_entity_reply(noun, name, found.candidates), delay):
+                    yield ev
+                return
+            resolved_action.target_parent_identifier = found.entity_id
+            resolved_action.entities[0].title = found.title
+            note = None  # the layer the anaphora resolver filled in is not where the delete goes
 
         # A group or item is filed by level: a level the message does not name is asked for, never guessed
         if (

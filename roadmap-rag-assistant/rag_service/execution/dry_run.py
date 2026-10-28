@@ -29,7 +29,12 @@ class DryRunValidator:
         if note:
             lines.append(f"_{note}_")
 
-        if action.target_parent_identifier and action.entity_level != EntityLevel.TOPIC:
+        # A delete holds the id of the entity itself there, not where it lives: the card names it below
+        if (
+            action.target_parent_identifier
+            and action.entity_level != EntityLevel.TOPIC
+            and action.action != ActionType.DELETE
+        ):
             lines.append(f"- **Vị trí đích (Parent):** `{action.target_parent_identifier}`")
 
         lines.append("- **Danh sách thực thể:**")

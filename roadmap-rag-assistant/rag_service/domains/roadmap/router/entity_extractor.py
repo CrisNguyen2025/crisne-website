@@ -142,7 +142,11 @@ class StructuredEntityExtractor:
         """
         res = res.model_copy(deep=True)
         level = named_level(text)
+        # The level clause is not part of any name: models sometimes leave it on the layer ("04-ops level core")
+        if res.target_parent_identifier:
+            res.target_parent_identifier = LEVEL_CLAUSE.sub("", res.target_parent_identifier).strip() or None
         for ent in res.entities:
+            ent.title = LEVEL_CLAUSE.sub("", ent.title).strip() or ent.title
             if not ent.level and level:
                 ent.level = level
             # Sanitize any accidental verb leakage

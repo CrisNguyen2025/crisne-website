@@ -252,10 +252,11 @@ class ActionExecutor:
                 before = await snapshot_before_delete(adapter, "group", group_id)
                 ok = await adapter.delete_group(group_id=group_id)
                 asyncio.create_task(rag_engine.sync_live_database())
+                name = action.entities[0].title if action.entities else group_id
                 if ok:
                     changes.deleted(group_id, before)
-                    return True, f"🗑️ Đã xóa group `{group_id}`."
-                return False, f"⚠️ Không tìm thấy group `{group_id}` trong hệ thống."
+                    return True, f"🗑️ Đã xóa group **{name}**."
+                return False, f"⚠️ Không tìm thấy group **{name}** trong hệ thống."
 
         # ── 4. ITEM LEVEL ─────────────────────────────────────────────────
         elif level == EntityLevel.ITEM:
@@ -303,10 +304,12 @@ class ActionExecutor:
                 before = await snapshot_before_delete(adapter, "item", item_id)
                 ok = await adapter.delete_item(item_id=item_id)
                 asyncio.create_task(rag_engine.sync_live_database())
+                # handle_cud resolved the name to the id: the reply names the lesson, not its id
+                name = action.entities[0].title if action.entities else item_id
                 if ok:
                     changes.deleted(item_id, before)
-                    return True, f"🗑️ Đã xóa bài học `{item_id}`."
-                return False, f"⚠️ Không tìm thấy bài học `{item_id}` trong hệ thống."
+                    return True, f"🗑️ Đã xóa bài học **{name}**."
+                return False, f"⚠️ Không tìm thấy bài học **{name}** trong hệ thống."
 
         return False, f"Thao tác {act_type.value} trên cấp {level.value} chưa được hỗ trợ."
 

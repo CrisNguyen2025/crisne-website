@@ -155,6 +155,71 @@ async def resolve_layer(identifier: str | None, topic_slug: str | None = None) -
     return LayerResolution("not_found", candidates=layers)
 
 
+@dataclass
+class EntityResolution:
+    status: ResolutionStatus
+    entity_id: str | None = None
+    title: str | None = None
+    # The matches when ambiguous. Each: {"id", "title", "layer_title", "topic_slug"}.
+    candidates: list[dict] = field(default_factory=list)
+
+
+_ENTITY_HINT_WORDS = re.compile(r"^(?:bài học|bài|mục|item|lesson|nhóm|group)\s+", re.IGNORECASE)
+
+
+async def _load_groups_and_items() -> tuple[list[dict], list[dict]]:
+    from rag_service.tools import get_adapter
+
+    adapter = get_adapter()
+    groups: list[dict] = []
+    items: list[dict] = []
+    for topic in await adapter.list_topics():
+        slug = topic.get("slug")
+        if not slug:
+            continue
+        detail = await adapter.get_topic(slug) or {}
+        for layer in detail.get("layers") or []:
+            where = {"layer_title": (layer.get("title") or "").strip(), "topic_slug": slug}
+            for group in layer.get("groups") or []:
+                groups.append({"id": group.get("id", ""), "title": (group.get("title") or "").strip(), **where})
+                for item in group.get("items") or []:
+                    items.append({"id": item.get("id", ""), "title": (item.get("title") or "").strip(), **where})
+    return groups, items
+
+
+async def resolve_entity(kind: Literal["group", "item"], name: str | None, topic_slug: str | None = None) -> EntityResolution:
+    """The id of the group or lesson a change names: exact id → exact title → whole-word title match.
+
+    A tier with several matches is ambiguous (narrowed to `topic_slug` first), never a guess.
+    """
+    raw = (name or "").strip()
+    if not raw:
+        return EntityResolution("not_found")
+    try:
+        groups, items = await _load_groups_and_items()
+    except Exception as exc:
+        print(f"[resolve_entity] Could not load {kind}s for '{raw}': {exc}")
+        return EntityResolution("unavailable")
+    entities = groups if kind == "group" else items
+
+    for e in entities:
+        if e["id"] == raw:
+            return EntityResolution("found", entity_id=e["id"], title=e["title"])
+
+    wanted = _ENTITY_HINT_WORDS.sub("", raw).strip().lower()
+    for matches in (
+        [e for e in entities if e["title"].lower() == wanted],
+        [e for e in entities if _contains_word(e["title"].lower(), wanted)],
+    ):
+        in_topic = [m for m in matches if topic_slug and m["topic_slug"] == topic_slug]
+        matches = in_topic if len(matches) > 1 and in_topic else matches
+        if len(matches) == 1:
+            return EntityResolution("found", entity_id=matches[0]["id"], title=matches[0]["title"])
+        if len(matches) > 1:
+            return EntityResolution("ambiguous", candidates=matches)
+    return EntityResolution("not_found")
+
+
 def describe_unresolved(identifier: str, res: LayerResolution) -> str:
     """Message for tools that cannot ask back: why the layer was not used."""
     if res.status == "ambiguous":
