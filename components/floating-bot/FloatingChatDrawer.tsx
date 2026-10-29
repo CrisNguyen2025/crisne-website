@@ -54,7 +54,7 @@ export function FloatingChatDrawer({
 
   const viewport = useAssistantViewport(isOpen);
 
-  // Auto-scroll to bottom on new messages or during streaming
+  // Auto-scroll to bottom on new messages or during streamingss
   useEffect(() => {
     if (isOpen && !showScrollBottom) {
       messagesEndRef.current?.scrollIntoView({
@@ -122,11 +122,15 @@ export function FloatingChatDrawer({
   ) => {
     if (chip.type === "project") {
       window.dispatchEvent(
-        new CustomEvent("project:open-modal", { detail: { projectId: chip.id } })
+        new CustomEvent("project:open-modal", {
+          detail: { projectId: chip.id },
+        })
       );
     } else if (chip.type === "roadmap") {
       window.dispatchEvent(
-        new CustomEvent("roadmap:select-layer", { detail: { layerId: chip.id } })
+        new CustomEvent("roadmap:select-layer", {
+          detail: { layerId: chip.id },
+        })
       );
     }
 
@@ -189,7 +193,9 @@ export function FloatingChatDrawer({
                     Cris Assistant
                   </h3>
                   <p className="truncate text-xs leading-tight text-muted-foreground">
-                    {isLoading ? "Đang trả lời…" : "Digital Twin của Cris Nguyen"}
+                    {isLoading
+                      ? "Đang trả lời…"
+                      : "Digital Twin của Cris Nguyen"}
                   </p>
                 </div>
               </div>
@@ -270,7 +276,8 @@ export function FloatingChatDrawer({
                       <strong className="font-semibold text-foreground">
                         Cris Nguyen
                       </strong>
-                      . Hãy hỏi tôi về kinh nghiệm chuyên môn, các dự án thực tế, kiến trúc hệ thống hoặc cơ hội hợp tác!
+                      . Hãy hỏi tôi về kinh nghiệm chuyên môn, các dự án thực
+                      tế, kiến trúc hệ thống hoặc cơ hội hợp tác!
                     </p>
                   </div>
 
