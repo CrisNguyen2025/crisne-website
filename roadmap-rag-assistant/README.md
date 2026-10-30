@@ -2,6 +2,8 @@
 
 Mini RAG service cho phép CUD (Create / Update / Delete) các entity Roadmap qua ngôn ngữ tự nhiên.
 
+> Thuật ngữ domain: [`../GLOSSARY.md`](../GLOSSARY.md) · Quyết định kiến trúc: [`../docs/adr/`](../docs/adr/)
+
 ## Architecture
 
 ```

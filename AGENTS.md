@@ -109,3 +109,14 @@ This project is indexed by GitNexus as **crisne-website** (13626 symbols, 21653 
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+## 📖 Core docs — Glossary & ADR
+
+Nguồn sự thật về ngôn ngữ domain và quyết định kiến trúc. Index: `docs/README.md`.
+
+- Trước khi đặt tên hoặc thiết kế: đọc `GLOSSARY.md`, dùng đúng thuật ngữ, tránh các từ trong `_Avoid_`.
+- Không đi ngược một ADR trong `docs/adr/` khi chưa hỏi user. ADR ưu tiên hơn plan/context cũ trong `docs/`.
+- Chỉ ghi `GLOSSARY.md` và `docs/adr/` trong buổi `/grill-with-docs` hoặc khi user yêu cầu, kể cả khi skill `domain-modeling` tự kích hoạt.
+- Thuật ngữ giữ tiếng Anh như tên trong code, định nghĩa viết tiếng Việt. Glossary không chứa chi tiết implementation.
+- ADR đã chốt thì không sửa nội dung: viết ADR mới, đổi ADR cũ sang `superseded by ADR-NNNN`.
+- Repo public: không ghi email, key, token, URL nội bộ vào core docs.
