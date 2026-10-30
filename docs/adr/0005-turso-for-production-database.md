@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Turso (SQLite qua libsql) cho database production
 
-Từ 2026-09-26 (commit `a38fea1`), production dùng Turso thông qua driver adapter libsql của Prisma, còn local chạy file SQLite; cùng một schema SQLite cho cả hai môi trường. Lý do chọn Turso thay vì Postgres (ví dụ Neon hoặc Supabase) chưa được ghi lại; cần xác nhận trong buổi `/grill-with-docs` trước khi chuyển sang `accepted`.
+Từ 2026-09-26 (commit `a38fea1`), production dùng Turso thông qua driver adapter libsql của Prisma, còn local chạy file SQLite. Repo vốn dùng SQLite từ đầu, nên Turso là đường ngắn nhất lên production: giữ một schema Prisma và một dialect cho cả hai môi trường, kết nối qua mạng mà không cần connection pool (hợp với serverless trên Vercel), và có gói free.
 
 ## Consequences
 

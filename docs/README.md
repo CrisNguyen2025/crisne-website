@@ -7,7 +7,7 @@ Khi có mâu thuẫn, thứ tự ưu tiên là: **Core → Runbook → Working**
 | File | Nội dung |
 |---|---|
 | [`../GLOSSARY.md`](../GLOSSARY.md) | Thuật ngữ domain (chỉ thuật ngữ) |
-| [`adr/`](adr/) | Quyết định kiến trúc. `proposed` = còn chờ xác nhận lý do |
+| [`adr/`](adr/) | Quyết định kiến trúc |
 | [`DEPLOY_ENV.md`](DEPLOY_ENV.md) | ENV của Vercel và Render |
 | [`PROJECT_STRUCTURE.md`](PROJECT_STRUCTURE.md) | Cấu trúc thư mục |
 
@@ -17,12 +17,12 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 
 | # | Quyết định | Status |
 |---|---|---|
-| [0001](adr/0001-roadmap-assistant-separate-python-service.md) | Roadmap Assistant là service Python riêng | proposed |
+| [0001](adr/0001-roadmap-assistant-separate-python-service.md) | Roadmap Assistant là service Python riêng | accepted |
 | [0002](adr/0002-roadmap-assistant-access-via-proxy.md) | Chỉ nhận request qua proxy Next.js, quyền ghi theo Actor | accepted |
 | [0003](adr/0003-langfuse-owns-feedback.md) | Langfuse là nơi duy nhất giữ Feedback và Golden Set | accepted |
 | [0004](adr/0004-embeddings-always-gemini.md) | Embeddings luôn dùng Gemini | accepted |
-| [0005](adr/0005-turso-for-production-database.md) | Turso cho database production | proposed |
-| [0006](adr/0006-in-memory-vector-search.md) | Tìm kiếm vector trong bộ nhớ | proposed |
+| [0005](adr/0005-turso-for-production-database.md) | Turso cho database production | accepted |
+| [0006](adr/0006-in-memory-vector-search.md) | Tìm kiếm vector trong bộ nhớ | accepted |
 | [0007](adr/0007-glossary-accepts-synonyms.md) | Glossary chấp nhận tên đồng nghĩa qua `_Also_` | accepted |
 
 ## Runbook: cách setup / vận hành
