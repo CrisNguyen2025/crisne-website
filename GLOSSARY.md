@@ -2,15 +2,14 @@
 
 Website cá nhân của Cris: portfolio, learning roadmap có trợ lý AI, ghi chú và workflow builder. Glossary chỉ chứa thuật ngữ; quyết định kiến trúc nằm trong `docs/adr/`.
 
-## Roadmap
+`_Also_` là tên đồng nghĩa hợp lệ, dùng tên nào cũng được; code mới theo tên đang có trong code. `_Avoid_` là tên nên tránh. Xem ADR-0007.
 
-**Roadmap**:
-Toàn bộ khu vực học tập của site, gồm mọi Topic.
-_Avoid_: dùng "roadmap" để chỉ một Topic
+## Roadmap
 
 **Topic**:
 Một lộ trình học theo một chủ đề, ví dụ "AI & LLM Architecture", định danh bằng slug.
-_Avoid_: roadmap (khi nói về một lộ trình), course
+_Also_: Roadmap
+_Avoid_: course, lộ trình con
 
 **Layer**:
 Một mảng kiến thức trong Topic, có short tag dạng "02-LLM".
@@ -26,12 +25,13 @@ _Avoid_: category, cluster
 
 **Lesson**:
 Một bài học trong Group, có nội dung rich text.
-_Avoid_: item, knowledge node, bài viết
+_Also_: Item
+_Avoid_: knowledge node, bài viết
 
 ## Roadmap Assistant
 
 **Roadmap Assistant**:
-Chatbot trên các trang Roadmap, trả lời từ nội dung Roadmap và cho Owner thay đổi Roadmap bằng lời.
+Chatbot trên các trang Topic, trả lời từ nội dung các Topic và cho Owner thay đổi chúng bằng lời.
 _Avoid_: RAG bot, roadmap chatbot
 
 **Actor**:
@@ -52,7 +52,8 @@ _Avoid_: session, conversation
 
 **Change**:
 Yêu cầu tạo, sửa hoặc xoá một Topic, Layer, Group hoặc Lesson.
-_Avoid_: CUD, write, mutation
+_Also_: CUD
+_Avoid_: write, mutation
 
 **Preview**:
 Thẻ mô tả một Change đang chờ Owner xác nhận hoặc huỷ.
@@ -63,16 +64,17 @@ Change đã được Preview nhưng chưa được xác nhận hay huỷ.
 _Avoid_: queued action
 
 **Scope**:
-Phạm vi của một tin nhắn: thuộc Roadmap, thuộc lĩnh vực nhưng chưa có Lesson (Domain Gap), hay ở ngoài (External).
+Phạm vi của một tin nhắn: thuộc các Topic, thuộc lĩnh vực nhưng chưa có Lesson (Domain Gap), hay ở ngoài (External).
 _Avoid_: topic (khi nói về phạm vi)
 
 **Domain Gap**:
-Câu hỏi thuộc lĩnh vực của Roadmap nhưng chưa có Lesson nào trả lời.
+Câu hỏi thuộc lĩnh vực của các Topic nhưng chưa có Lesson nào trả lời.
 _Avoid_: no-context, missing lesson
 
 **Out of Scope**:
-Tin nhắn không liên quan tới Roadmap; Roadmap Assistant từ chối trả lời.
-_Avoid_: off-topic
+Tin nhắn không liên quan tới các Topic; Roadmap Assistant từ chối trả lời.
+_Also_: off-topic
+_Avoid_: external question
 
 **Plan**:
 Dàn ý một Topic mới mà Roadmap Assistant đề xuất, chưa ghi vào dữ liệu.

@@ -115,6 +115,7 @@ This project is indexed by GitNexus as **crisne-website** (13626 symbols, 21653 
 Nguồn sự thật về ngôn ngữ domain và quyết định kiến trúc. Index: `docs/README.md`.
 
 - Trước khi đặt tên hoặc thiết kế: đọc `GLOSSARY.md`, dùng đúng thuật ngữ, tránh các từ trong `_Avoid_`.
+- Tên trong `_Also_` là đồng nghĩa hợp lệ, không bắt lỗi khi dùng. Code mới đặt theo tên đang có trong code (ví dụ `RoadmapItem`, `roadmap`), không theo tên chính của glossary (ADR-0007).
 - Không đi ngược một ADR trong `docs/adr/` khi chưa hỏi user. ADR ưu tiên hơn plan/context cũ trong `docs/`.
 - Chỉ ghi `GLOSSARY.md` và `docs/adr/` trong buổi `/grill-with-docs` hoặc khi user yêu cầu, kể cả khi skill `domain-modeling` tự kích hoạt.
 - Thuật ngữ giữ tiếng Anh như tên trong code, định nghĩa viết tiếng Việt. Glossary không chứa chi tiết implementation.

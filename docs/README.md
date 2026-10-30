@@ -23,6 +23,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0004](adr/0004-embeddings-always-gemini.md) | Embeddings luôn dùng Gemini | accepted |
 | [0005](adr/0005-turso-for-production-database.md) | Turso cho database production | proposed |
 | [0006](adr/0006-in-memory-vector-search.md) | Tìm kiếm vector trong bộ nhớ | proposed |
+| [0007](adr/0007-glossary-accepts-synonyms.md) | Glossary chấp nhận tên đồng nghĩa qua `_Also_` | accepted |
 
 ## Runbook: cách setup / vận hành
 
