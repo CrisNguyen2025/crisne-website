@@ -40,7 +40,6 @@ Có thể đã cũ. Chỉ đọc khi cần lịch sử; quyết định còn hi�
 
 - Backlog: [`RAG_PRODUCTION_READINESS.md`](RAG_PRODUCTION_READINESS.md)
 - Workflow Builder: [`workflow-builder-design.md`](workflow-builder-design.md) (code tham chiếu), [`workflow-builder-context-v3.md`](workflow-builder-context-v3.md) (ADR-0006 tham chiếu)
-- Khác: `Misc-context.md`
 - Backup: `backup*.md`, `backup6.json`
 
 ## Archive: đã xong, chỉ giữ làm lịch sử
@@ -50,3 +49,4 @@ Có thể đã cũ. Chỉ đọc khi cần lịch sử; quyết định còn hi�
 - Roadmap Assistant: `abot-ux-plan.md`, `abot-followup-plan.md`
 - Workflow Builder: `workflow-builder-plan.md`, `workflow-builder-handoff.md`, `workflow-builder-context.md`, `workflow-builder-context-v2.md`
 - Fix log: `CACHE_BUSTING_FIX.md`, `FAVORITES_*.md`, `IMPLEMENTATION_SUMMARY.md`
+- Checklist deploy auth giai đoạn 0: `Misc-context.md` (ENV đã chuyển sang [`DEPLOY_ENV.md`](DEPLOY_ENV.md))
