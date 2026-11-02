@@ -79,3 +79,6 @@ roadmap-rag-assistant/data/history.db*
 
 # Eval answer cache (roadmap-rag-assistant/evals/target.py)
 roadmap-rag-assistant/evals/.cache/
+
+# Backups written by scripts/flatten-to-sections.ts (contain the roadmap as it was)
+flatten-backup-*.json

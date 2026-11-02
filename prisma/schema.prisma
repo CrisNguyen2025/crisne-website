@@ -105,7 +105,6 @@ model Roadmap {
   id          String         @id @default(uuid(7))
   slug        String         @unique // e.g. "ai-architecture", "backend-roadmap"
   title       String         // e.g. "AI & LLM Architecture"
-  shortCode   String?        @default("AI") // e.g. "AI", "BE", "FE", "DEV"
   description String?
   icon        String?        @default("Layers")
   order       Int            @default(0)
@@ -113,44 +112,14 @@ model Roadmap {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
-  layers      RoadmapLayer[]
-}
-
-model RoadmapLayer {
-  id         String         @id @default(uuid(7))
-  roadmapId  String
-  roadmap    Roadmap        @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  order      Int            @default(0)
-  shortTag   String         // e.g. "01-DB", "02-LLM"
-  title      String
-  subtitle   String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-
-  groups     RoadmapGroup[]
-
-  @@index([roadmapId])
-}
-
-model RoadmapGroup {
-  id        String        @id @default(uuid(7))
-  layerId   String
-  layer     RoadmapLayer  @relation(fields: [layerId], references: [id], onDelete: Cascade)
-  title     String        // unique within the layer (ADR-0008)
-  order     Int           @default(0)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  items     RoadmapItem[]
-
-  @@unique([layerId, title])
-  @@index([layerId])
+  items       RoadmapItem[]
 }
 
 model RoadmapItem {
   id          String       @id @default(uuid(7))
-  groupId     String
-  group       RoadmapGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  roadmapId   String
+  roadmap     Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  section     String?      // Optional mục of the topic (ADR-0009); null = chung
   title       String
   description String?
   content     String?      // Rich-text HTML content from Lexical editor
@@ -158,7 +127,8 @@ model RoadmapItem {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  @@index([groupId])
+  @@unique([roadmapId, title])
+  @@index([roadmapId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,9 +299,7 @@ model KnowledgeTriage {
   comment      String?  // Detail feedback from user
   status       String   @default("PENDING") // PENDING | DRAFTED | APPROVED | DISMISSED
   roadmapSlug  String?  // Target topic/roadmap slug
-  layerId      String?  // Target layer id
-  layerTag     String?  // Target layer short tag e.g. "02-LLM"
-  groupTitle   String?  // Target group by name; created on approve when missing (ADR-0008)
+  section      String?  // Target mục of the topic (ADR-0009); null = chung
   draftTitle   String?
   draftContent String?  // Rich text or markdown content
   verifyScore  Int?     // 0 - 100
