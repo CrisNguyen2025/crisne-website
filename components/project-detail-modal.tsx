@@ -262,7 +262,7 @@ export function ProjectDetailModal({
               />
 
               <motion.button
-                className="absolute top-4 right-4 z-10 p-2.5 rounded-full bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white transition-colors cursor-pointer"
+                className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-10 p-2.5 rounded-full bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white transition-colors cursor-pointer"
                 onClick={onClose}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
@@ -272,7 +272,7 @@ export function ProjectDetailModal({
               </motion.button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-8 pb-8 sm:pb-8">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-8 pb-[max(2rem,calc(1.5rem+env(safe-area-inset-bottom)))] sm:pb-8">
               <motion.div variants={contentVariants}>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span

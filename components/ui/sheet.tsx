@@ -10,7 +10,8 @@ type SheetSide = "right" | "left" | "bottom";
 const SIDE_CLASSES: Record<SheetSide, string> = {
   right: "inset-y-0 right-0 h-full w-full max-w-xl border-l slide-in-from-right",
   left: "inset-y-0 left-0 h-full w-full max-w-sm border-r slide-in-from-left",
-  bottom: "inset-x-0 bottom-0 max-h-[90dvh] w-full rounded-t-2xl border-t slide-in-from-bottom",
+  bottom:
+    "inset-x-0 bottom-0 max-h-[90dvh] w-full rounded-t-3xl border-t border-border/80 pb-[max(1rem,env(safe-area-inset-bottom))] slide-in-from-bottom",
 };
 
 interface SheetProps {
@@ -42,6 +43,11 @@ export function Sheet({ open, onClose, side = "right", children, className, labe
           className
         )}
       >
+        {side === "bottom" && (
+          <div className="flex w-full items-center justify-center pt-2.5 pb-1">
+            <div className="h-1 w-10 rounded-full bg-muted-foreground/30" />
+          </div>
+        )}
         {children}
       </div>
     </div>,

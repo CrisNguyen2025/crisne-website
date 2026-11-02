@@ -408,8 +408,13 @@ function RoadmapWorkspace() {
         )}
       </div>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="shrink-0 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur-md px-2 py-2 md:hidden z-20 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      {/* Mobile Bottom Navigation (Hidden when reading lesson to maximize viewport) */}
+      <nav
+        className={cn(
+          "shrink-0 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur-md px-2 py-2 md:hidden z-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-all duration-200",
+          isReaderOpen && "hidden"
+        )}
+      >
         <button
           type="button"
           onClick={handleSelectHome}

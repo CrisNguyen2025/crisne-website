@@ -57,9 +57,9 @@ export function FloatingQuickBar({
   return (
     <aside
       aria-label="Cris AI Quick Bar"
-      style={viewport.quickBarStyle}
+      style={isVisible ? viewport.quickBarStyle : undefined}
       className={cn(
-        "fixed bottom-4 left-1/2 -translate-x-1/2 z-[9990] flex w-[92vw] max-w-lg items-center gap-2 rounded-full border border-border/80 bg-background/95 px-3 py-1.5 shadow-2xl backdrop-blur-md transition-all duration-300 ease-out",
+        "fixed bottom-4 max-md:bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[9990] flex w-[92vw] max-w-lg items-center gap-2 rounded-full border border-border/80 bg-background/95 px-3 py-1.5 shadow-2xl backdrop-blur-md transition-all duration-300 ease-out",
         isVisible
           ? "translate-y-0 opacity-100 pointer-events-auto"
           : "translate-y-16 opacity-0 pointer-events-none",

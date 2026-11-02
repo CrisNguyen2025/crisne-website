@@ -70,7 +70,7 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
         title={label}
         onClick={() => (isOpen ? close() : setIsOpen(true))}
         className={cn(
-          "flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+          "relative flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 touch-manipulation after:absolute after:-inset-2.5 after:content-['']",
           isOpen && "bg-muted text-foreground",
           triggerClassName
         )}

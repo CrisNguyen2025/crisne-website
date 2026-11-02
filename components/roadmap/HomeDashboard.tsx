@@ -70,9 +70,9 @@ export function HomeDashboard({
   };
 
   return (
-    <div className="flex-1 w-full h-full overflow-y-auto bg-background p-6 md:p-12 space-y-10 select-none">
+    <div className="flex-1 w-full h-full overflow-y-auto bg-background p-4 sm:p-6 md:p-12 pb-[max(5.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] md:pb-12 space-y-6 sm:space-y-10 select-none">
       {/* ── Top Hero Banner centered ─────────────── */}
-      <div className="w-full flex flex-col items-center text-center space-y-3 pb-8 border-b border-border/50">
+      <div className="w-full flex flex-col items-center text-center space-y-3 pb-6 sm:pb-8 border-b border-border/50">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
           <Sparkles className="size-3.5" />
           <span>Knowledge & Architecture Hub</span>
@@ -207,7 +207,7 @@ export function HomeDashboard({
                 <div
                   key={r.slug}
                   onClick={() => onSelectRoadmap(r.slug)}
-                  className="group relative p-6 rounded-2xl border border-border/70 bg-card hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 cursor-pointer flex flex-col justify-between gap-4"
+                  className="group relative p-5 sm:p-6 rounded-2xl border border-border/70 bg-card hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.99] transition-all duration-200 cursor-pointer flex flex-col justify-between gap-4"
                 >
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">

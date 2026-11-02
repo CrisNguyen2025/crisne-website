@@ -196,7 +196,7 @@ export function HeroSection() {
             Hi, I&apos;m
           </span>
           <SparklesText
-            className="inline-block text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
+            className="inline-block text-4xl min-[400px]:text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
             sparklesCount={6}
             delayMs={0}
             colors={SPARKLE_COLORS}
@@ -204,7 +204,7 @@ export function HeroSection() {
             Cris
           </SparklesText>{" "}
           <SparklesText
-            className="inline-block text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
+            className="inline-block text-4xl min-[400px]:text-5xl sm:text-7xl md:text-8xl lg:text-9xl"
             sparklesCount={6}
             delayMs={350}
             colors={SPARKLE_COLORS}

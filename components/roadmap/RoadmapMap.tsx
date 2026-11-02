@@ -57,7 +57,7 @@ export function RoadmapMap({
             ))}
           </div>
         ) : (
-          <ol className="relative flex flex-col gap-6 p-4 pb-24 md:min-h-full md:flex-row md:items-start md:gap-4 md:p-6">
+          <ol className="relative flex flex-col gap-6 p-4 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] md:min-h-full md:flex-row md:items-start md:gap-4 md:p-6">
             {layers.map((layer) => {
               const { total, withContent } = layerCoverage(layer);
               const isDone = total > 0 && withContent === total;

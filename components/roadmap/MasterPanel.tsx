@@ -324,7 +324,7 @@ export function MasterPanel({
         )}
 
         {!isLoading && !isError && (
-          <div key={selectedLayerId} className="px-2 pb-24 animate-in fade-in duration-150 lg:pb-6">
+          <div key={selectedLayerId} className="px-2 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] animate-in fade-in duration-150 lg:pb-6">
             {displayLayers.map((layer) => (
               <LayerSection
                 key={layer.id}

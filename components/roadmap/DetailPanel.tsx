@@ -150,10 +150,11 @@ function DetailContent({
               <button
                 type="button"
                 onClick={onBack}
-                aria-label="Back"
-                className="lg:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer shrink-0"
+                aria-label="Back to lessons list"
+                className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 -ml-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted active:scale-95 transition-all cursor-pointer shrink-0 font-medium text-xs border border-border/50 bg-background/50 shadow-2xs"
               >
                 <ChevronLeft className="size-4" />
+                <span>Lessons</span>
               </button>
             )}
 
@@ -212,7 +213,7 @@ function DetailContent({
         </div>
 
         {/* Reader Container */}
-        <div className="pb-10 pt-4 md:pt-6 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
+        <div className="pb-[max(4.5rem,calc(3rem+env(safe-area-inset-bottom)))] pt-4 md:pt-6 space-y-6 max-w-[92%] md:max-w-[85%] w-full mx-auto">
           <article className="space-y-5">
             {/* Meta & Title */}
             <header className="space-y-3 select-text">
@@ -301,39 +302,39 @@ function DetailContent({
 
             {/* Navigation Footer (Prev / Next) */}
             {(prevLesson || nextLesson) && (
-              <footer className="mt-10 pt-6 border-t border-border flex items-stretch justify-between gap-4">
+              <footer className="mt-10 pt-6 border-t border-border/70 flex flex-col sm:flex-row items-stretch justify-between gap-3">
                 {prevLesson ? (
                   <button
                     type="button"
                     onClick={onSelectPrev}
-                    className="group flex flex-1 flex-col items-start gap-1 p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors text-left cursor-pointer"
+                    className="group flex flex-1 flex-col items-start gap-1 p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 active:scale-[0.99] transition-all text-left cursor-pointer"
                   >
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                      <ChevronLeft className="size-3.5" /> Previous
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors font-medium">
+                      <ChevronLeft className="size-3.5" /> Previous lesson
                     </span>
-                    <span className="text-sm font-medium text-foreground line-clamp-1">
+                    <span className="text-sm font-semibold text-foreground line-clamp-1">
                       {prevLesson.title}
                     </span>
                   </button>
                 ) : (
-                  <div className="flex-1" />
+                  <div className="hidden sm:flex flex-1" />
                 )}
 
                 {nextLesson ? (
                   <button
                     type="button"
                     onClick={onSelectNext}
-                    className="group flex flex-1 flex-col items-end gap-1 p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors text-right cursor-pointer"
+                    className="group flex flex-1 flex-col items-end gap-1 p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 active:scale-[0.99] transition-all text-right cursor-pointer"
                   >
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                      Next <ChevronRight className="size-3.5" />
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors font-medium">
+                      Next lesson <ChevronRight className="size-3.5" />
                     </span>
-                    <span className="text-sm font-medium text-foreground line-clamp-1">
+                    <span className="text-sm font-semibold text-foreground line-clamp-1">
                       {nextLesson.title}
                     </span>
                   </button>
                 ) : (
-                  <div className="flex-1" />
+                  <div className="hidden sm:flex flex-1" />
                 )}
               </footer>
             )}
@@ -372,7 +373,7 @@ function DetailContent({
         <button
           type="button"
           onClick={scrollToTop}
-          className="absolute bottom-5 left-5 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 border border-border/20 flex items-center justify-center animate-in fade-in zoom-in-75 cursor-pointer"
+          className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-5 z-30 p-2.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-200 border border-border/20 flex items-center justify-center animate-in fade-in zoom-in-75 cursor-pointer"
           title="Scroll to top"
           aria-label="Scroll to top"
         >
