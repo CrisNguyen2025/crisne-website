@@ -34,6 +34,7 @@ from rag_service.domains.roadmap.router.grounding import (
     unresolved_entity_reply,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM, slash_command
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
@@ -51,6 +52,25 @@ from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.tools.rag_tools import generate_roadmap_from_template, preview_roadmap_plan
 from rag_service.tools.layer_resolver import resolve_entity, resolve_layer, topic_named_in_message
+
+
+def named_template(content: str, command: str) -> dict | None:
+    """The blueprint a /plan or /goal names: `template <id>`, its id or title, or the field of the goal; else None.
+
+    Never a default or a loose word match: "/goal học Rust" used to write the ai-engineering sample roadmap,
+    and "/plan lộ trình học rust" previewed cloud-devops on the words "lộ trình".
+    """
+    arg = content.strip()[len(command) + 1:].strip()
+    m = re.search(r"template\s+([\w-]+)", arg, re.IGNORECASE)
+    return rag_engine.get_template(m.group(1) if m else arg) or rag_engine.template_for_goal(arg)
+
+
+def no_template_reply() -> str:
+    names = ", ".join(f"`{t['id']}` ({t['title']})" for t in rag_engine.list_templates())
+    return (
+        "⚠️ Chưa có blueprint phù hợp với mục tiêu này nên mình không tạo gì. "
+        f"Các mẫu hiện có: {names}. Gõ `/plan template <id>` để xem trước hoặc `/goal template <id>` để tạo."
+    )
 
 
 class RoadmapCommands:
@@ -247,9 +267,18 @@ class RoadmapCommands:
         # router: as substrings they caught questions ("bài nào nên xem trước khi học RAG?") and, for /goal,
         # created a whole roadmap from "prompt template là gì, cách tạo prompt template tốt".
         command = slash_command(lower)
+        template = named_template(content, command) if command else None
+        # A visitor's /goal gets the owner-only reply below, whatever it names
+        if command and template is None and (command == "plan" or is_owner()):
+            async for ev in self._stream_text(no_template_reply(), delay):
+                yield ev
+            outcome["handled"] = True
+            return
+
         if command == "plan":
-            yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": content}}
-            res = await preview_roadmap_plan.ainvoke({"query_or_template_id": content})
+            tid = template.get("id", "")
+            yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": tid}}
+            res = await preview_roadmap_plan.ainvoke({"query_or_template_id": tid})
             yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
             async for ev in self._stream_text(res, delay):
                 yield ev
@@ -262,8 +291,7 @@ class RoadmapCommands:
                     yield ev
                 outcome["handled"] = True
                 return
-            m = re.search(r"template\s+([\w-]+)", lower)
-            tid = m.group(1) if m else "ai-engineering"
+            tid = template.get("id", "")
             yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
             changes = ChangeSet("create", "topic")
             with write_granted("owner /goal command"):

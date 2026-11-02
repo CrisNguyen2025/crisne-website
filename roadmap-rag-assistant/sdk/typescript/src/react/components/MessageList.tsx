@@ -13,6 +13,7 @@ import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
 import {
   formatTime,
+  formatStepsDigest,
   formatToolDisplayName,
   toStepItems,
 } from "../utils/formatters";
@@ -123,14 +124,6 @@ export function MessageList({
           const isLast = msg.id === messages[messages.length - 1]?.id;
           const isLive = !isUser && isStreaming && isLast;
           const toolCalls = msg.toolCalls ?? [];
-          const toolRunning = toolCalls.some(
-            (tc) => tc.endedAt === undefined && isLive
-          );
-          // Waiting for the model after tools finished (or before any tool started).
-          const showThinking = isLive && !msg.content && !toolRunning;
-          const thinkingSince =
-            toolCalls[toolCalls.length - 1]?.endedAt ??
-            new Date(msg.timestamp).getTime();
 
           if (isUser) {
             return (
@@ -183,53 +176,27 @@ export function MessageList({
                 detail: tc.result,
               }));
 
-          // Between steps (e.g. the model extracting entities) nothing is running yet:
-          // keep the header live instead of showing "Thought for" before the answer starts.
-          if (
-            msg.steps?.length &&
-            isLive &&
-            !msg.content &&
-            !stepItems.some((s) => s.running)
-          ) {
-            const lastEnd = msg.steps[msg.steps.length - 1].endedAt;
-            stepItems.push({
-              id: `${msg.id}-thinking`,
-              label: "Đang suy nghĩ…",
-              startedAt: lastEnd ?? thinkingSince,
-              running: true,
-            });
-          }
+          const stepsDigest = msg.steps?.length
+            ? formatStepsDigest(msg.steps)
+            : [...new Set(toolCalls.map((tc) => formatToolDisplayName(tc.name)))].join(", ") || undefined;
 
-          if (!msg.steps?.length && toolCalls.length === 0) {
-            if (showThinking) {
-              stepItems.push({
-                id: `${msg.id}-thinking`,
-                label: "Đang suy nghĩ…",
-                startedAt: thinkingSince,
-                running: true,
-              });
-            } else if (msg.firstTokenAt && thinkingSince) {
-              // Only streamed answers: a static greeting has no thinking to show
-              stepItems.push({
-                id: `${msg.id}-thinking`,
-                label: "Đã suy nghĩ",
-                startedAt: thinkingSince,
-                endedAt: msg.firstTokenAt,
-                running: false,
-              });
-            }
-          }
+          // Waiting for the model, or a streamed answer; a static greeting has no thinking to show.
+          // Gaps between steps are not rows: the header shows "Đang suy nghĩ…" on its own.
+          const showSteps = stepItems.length > 0 || (isLive && !msg.content) || !!msg.firstTokenAt;
 
           return (
             <div key={msg.id} className="group flex flex-col gap-2">
               {/* Step summary (Thinking & Tools), placed at top of response like Claude */}
-              {stepItems.length > 0 && (
+              {showSteps && (
                 <div className="-mx-1">
                   <CollapsibleStepsSummary
                     steps={stepItems}
                     expandedTools={expandedTools}
                     onToggleTool={toggleToolExpand}
                     isLive={isLive}
+                    startedAt={new Date(msg.timestamp).getTime()}
+                    firstTokenAt={msg.firstTokenAt}
+                    digest={stepsDigest}
                   />
                 </div>
               )}

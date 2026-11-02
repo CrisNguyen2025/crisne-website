@@ -24,8 +24,6 @@ export { CalloutAlert } from './components/CalloutAlert';
 export type { CalloutAlertProps, CalloutType } from './components/CalloutAlert';
 
 // Thinking Process & Tool Execution UX
-export { ThoughtProcess } from './components/ThoughtProcess';
-export type { ThoughtProcessProps } from './components/ThoughtProcess';
 export { ToolExecutionCard } from './components/ToolExecutionCard';
 export type { ToolExecutionCardProps } from './components/ToolExecutionCard';
 export { ChangeReviewCard } from './components/ChangeReviewCard';

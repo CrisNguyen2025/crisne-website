@@ -53,6 +53,17 @@ const WIDGET_THEME_VARS: React.CSSProperties = {
     "--muted": "#F4F3F0",
     "--primary": "#C2410C",
     "--primary-foreground": "#FFFFFF",
+    // Step rows (ToolStepRow). Namespaced: the host app has its own --border and --accent.
+    "--chat-text": "#1F1E1C",
+    "--chat-text-secondary": "#4D4B46",
+    "--chat-text-muted": "#6B6862",
+    "--chat-text-subtle": "#8C8983",
+    "--chat-surface": "#F4F3F0",
+    "--chat-border": "#E6E4DF",
+    "--chat-accent": "#C2410C",
+    "--chat-success": "#3F7D58",
+    "--chat-warning": "#B54708",
+    "--chat-danger": "#B42318",
   } as React.CSSProperties),
 };
 

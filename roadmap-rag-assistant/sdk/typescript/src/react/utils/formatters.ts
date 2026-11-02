@@ -140,8 +140,24 @@ export function toStepItems(msgId: string, steps: AssistantStepEvent[], isLive: 
       startedAt: st.startedAt,
       endedAt: st.endedAt,
       running: isLive && st.status === 'running',
+      interrupted,
       detail: formatStepDetail(st),
       items: st.items,
     };
   });
+}
+
+/** What a turn did, in one line: documents found, then each tool once. */
+export function formatStepsDigest(steps: AssistantStepEvent[]): string | undefined {
+  const parts: string[] = [];
+  const docs = steps
+    .filter((st) => st.kind === 'retrieval' && st.status === 'done')
+    .reduce((sum, st) => sum + (st.count ?? 0), 0);
+  if (docs) parts.push(`Tra cứu ${docs} tài liệu`);
+  for (const st of steps) {
+    if (st.kind !== 'tool') continue;
+    const name = formatToolDisplayName(st.name ?? 'tool');
+    if (!parts.includes(name)) parts.push(name);
+  }
+  return parts.length ? parts.join(', ') : undefined;
 }

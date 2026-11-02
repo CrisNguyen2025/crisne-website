@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
 import {
-  fileExistsInProject,
   readProjectFile,
   renderComponentToHtml,
   parseSseLines,
@@ -15,7 +14,6 @@ describe("Tier 1 — Thinking & Tool Call UX (F6 - F8)", () => {
   const clientPath = "roadmap-rag-assistant/sdk/typescript/src/client.ts";
   const hookPath = "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts";
   const toolStepRowPath = "roadmap-rag-assistant/sdk/typescript/src/react/ToolStepRow.tsx";
-  const thoughtProcessPath = "roadmap-rag-assistant/sdk/typescript/src/react/components/ThoughtProcess.tsx";
   const toolCardPath = "roadmap-rag-assistant/sdk/typescript/src/react/components/ToolExecutionCard.tsx";
 
   // ==========================================
@@ -163,67 +161,21 @@ describe("Tier 1 — Thinking & Tool Call UX (F6 - F8)", () => {
       expect(formatThoughtBadge(2000, true)).toBe("Thinking (2s)...");
     });
 
-    it("verifies ThoughtProcess component structure if present or renders canonical mock", async () => {
-      // Either use imported ThoughtProcess if created by worker, or test canonical DOM contract
-      let html: string;
-      if (fileExistsInProject(thoughtProcessPath)) {
-        // @ts-ignore
-        const mod: any = await import("@/roadmap-rag-assistant/sdk/typescript/src/react/components/ThoughtProcess");
-        html = renderComponentToHtml(
-          React.createElement(mod.ThoughtProcess || (mod as any).default, {
-            thinking: "Phân tích câu hỏi...",
-            durationMs: 3200,
-            isThinking: false,
-            initiallyExpanded: false,
-          })
-        );
-      } else {
-        // Canonical Claude-style collapsible container contract
-        const CanonicalThoughtProcess = ({
-          thinking,
-          durationMs,
-          isThinking,
-          expanded = false,
-        }: {
-          thinking: string;
-          durationMs: number;
-          isThinking?: boolean;
-          expanded?: boolean;
-        }) => {
-          const seconds = Math.round(durationMs / 1000);
-          return React.createElement(
-            "div",
-            { className: "my-2 text-xs" },
-            React.createElement(
-              "button",
-              {
-                type: "button",
-                "aria-expanded": expanded,
-                className: "flex items-center gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer font-medium",
-              },
-              React.createElement("span", null, `Thought for ${seconds} seconds`)
-            ),
-            expanded &&
-              React.createElement(
-                "div",
-                {
-                  className: "mt-1.5 border-l-2 border-border/60 pl-3 py-1 text-muted-foreground/80 italic whitespace-pre-wrap",
-                },
-                thinking
-              )
-          );
-        };
+    it("renders the step summary header with the turn's duration and a toggle", async () => {
+      const { CollapsibleStepsSummary } = await import(
+        "@/roadmap-rag-assistant/sdk/typescript/src/react/ToolStepRow"
+      );
+      const html = renderComponentToHtml(
+        React.createElement(CollapsibleStepsSummary, {
+          steps: [{ id: "s1", label: "Phân loại câu hỏi", startedAt: 0, endedAt: 1_000, running: false }],
+          expandedTools: {},
+          onToggleTool: () => {},
+          startedAt: 0,
+          firstTokenAt: 3_200,
+        })
+      );
 
-        html = renderComponentToHtml(
-          React.createElement(CanonicalThoughtProcess, {
-            thinking: "Phân tích câu hỏi...",
-            durationMs: 3200,
-            expanded: false,
-          })
-        );
-      }
-
-      expect(html).toContain("Đã suy nghĩ");
+      expect(html).toContain("Đã xử lý 3s");
       expect(html).toContain("aria-expanded");
     });
 
@@ -339,7 +291,7 @@ describe("Tier 1 — Thinking & Tool Call UX (F6 - F8)", () => {
       expect(html).toContain("Truy vấn cơ sở dữ liệu");
       expect(html).toContain("Kết nối thất bại (500)");
       expect(html).toContain("Connection timeout to PostgreSQL");
-      expect(html).toContain("text-[#B42318]"); // Error tone color
+      expect(html).toContain("text-[color:var(--chat-danger,#B42318)]"); // Error tone color
     });
 
     it("preserves tool arguments without dropping to empty object", () => {

@@ -238,7 +238,7 @@ describe("Tier 4 — Real-World Claude-Style Chat Scenarios", () => {
 
       expect(html).toContain("Kiểm tra cache Redis");
       expect(html).toContain("ECONNREFUSED");
-      expect(html).toContain("text-[#B42318]"); // Error tone
+      expect(html).toContain("text-[color:var(--chat-danger,#B42318)]"); // Error tone
       expect(html).toContain("Kích Hoạt Fallback");
       expect(html).toContain("border-l-amber-500");
     });

@@ -52,8 +52,6 @@ export { MarkdownTable } from './react/components/MarkdownTable';
 export type { MarkdownTableProps } from './react/components/MarkdownTable';
 export { CalloutAlert } from './react/components/CalloutAlert';
 export type { CalloutAlertProps, CalloutType } from './react/components/CalloutAlert';
-export { ThoughtProcess } from './react/components/ThoughtProcess';
-export type { ThoughtProcessProps } from './react/components/ThoughtProcess';
 export { ToolExecutionCard } from './react/components/ToolExecutionCard';
 export type { ToolExecutionCardProps } from './react/components/ToolExecutionCard';
 export { ChangeReviewCard } from './react/components/ChangeReviewCard';

@@ -28,10 +28,7 @@ import { POST, buildAntiSlopSystemPrompt, ANTI_SLOP_SYSTEM_PROMPT } from "@/app/
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RoadmapChatClient } from "@/roadmap-rag-assistant/sdk/typescript/src/client";
-import {
-  ThoughtProcess,
-  formatThoughtBadge,
-} from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/ThoughtProcess";
+import { CollapsibleStepsSummary } from "@/roadmap-rag-assistant/sdk/typescript/src/react/ToolStepRow";
 
 // Mock next/server after() for request lifecycle
 vi.mock("next/server", async (importOriginal) => ({
@@ -873,18 +870,6 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       expect(result.response?.thinking).toBeUndefined();
     });
 
-    it("ThoughtProcess component renders null (no ghost badge) when thinking is empty or undefined", () => {
-      const emptyHtml = renderToStaticMarkup(
-        React.createElement(ThoughtProcess, { thinking: "", isThinking: false })
-      );
-      expect(emptyHtml).toBe("");
-
-      const undefinedHtml = renderToStaticMarkup(
-        React.createElement(ThoughtProcess, { thinking: undefined, isThinking: false })
-      );
-      expect(undefinedHtml).toBe("");
-    });
-
     it("handles whitespace-only thinking block without leaking into tokens", async () => {
       const client = new RoadmapChatClient();
       const stream = createSseStreamFromEvents([
@@ -1065,61 +1050,99 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
   });
 
   // =========================================================================
-  // SECTION 12: Collapsible ThoughtProcess Component UI Invariants (M2 Challenger)
+  // SECTION 12: Collapsible step summary header invariants
   // =========================================================================
-  describe("Section 12: Collapsible ThoughtProcess Component UI Invariants (M2 Challenger)", () => {
-    it("renders active thinking state with pulsing amber dot and live label", () => {
+  describe("Section 12: CollapsibleStepsSummary header invariants", () => {
+    const base = { expandedTools: {}, onToggleTool: () => {} };
+    const step = (over: Record<string, unknown> = {}) => ({
+      id: "s1",
+      label: "Tra cứu cơ sở tri thức",
+      startedAt: 1_000,
+      endedAt: 4_000,
+      running: false,
+      ...over,
+    });
+
+    it("names the running step and keeps the live timer while live", () => {
       const html = renderToStaticMarkup(
-        React.createElement(ThoughtProcess, {
-          thinking: "Analyzing request...",
-          isThinking: true,
-          durationMs: 3000,
+        React.createElement(CollapsibleStepsSummary, {
+          ...base,
+          isLive: true,
+          startedAt: Date.now() - 3_000,
+          steps: [step({ label: "Đang tra cứu cơ sở tri thức…", endedAt: undefined, running: true })],
         })
       );
-
+      expect(html).toContain("Đang tra cứu cơ sở tri thức…");
       expect(html).toContain("animate-pulse");
-      expect(html).toContain("bg-amber-500");
-      expect(html).toContain("Thinking (3s)...");
+      expect(html).toContain("tabular-nums");
+    });
+
+    it("shows 'Đang suy nghĩ…' between steps instead of a finished label", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, {
+          ...base,
+          isLive: true,
+          startedAt: Date.now() - 5_000,
+          steps: [step()],
+        })
+      );
+      expect(html).toContain("Đang suy nghĩ…");
+      expect(html).not.toContain("Đã xử lý");
+    });
+
+    it("stops the turn at the first token, or at a step that ended after it", () => {
+      const atToken = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, { ...base, startedAt: 0, firstTokenAt: 7_000, steps: [step()] })
+      );
+      expect(atToken).toContain("Đã xử lý 7s");
+
+      const afterToken = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, {
+          ...base,
+          startedAt: 0,
+          firstTokenAt: 7_000,
+          steps: [step(), step({ id: "s2", startedAt: 7_000, endedAt: 9_500 })],
+        })
+      );
+      expect(afterToken).toContain("Đã xử lý 9s");
+    });
+
+    it("labels error, interrupted and sub-second turns", () => {
+      const error = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, { ...base, startedAt: 0, steps: [step({ tone: "error" })] })
+      );
+      expect(error).toContain("Lỗi: Tra cứu cơ sở tri thức");
+
+      const stopped = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, {
+          ...base,
+          startedAt: 0,
+          steps: [step({ interrupted: true, tone: "warning" })],
+        })
+      );
+      expect(stopped).toContain("Đã dừng sau 4s");
+
+      const quick = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, { ...base, startedAt: 0, firstTokenAt: 400, steps: [] })
+      );
+      expect(quick).toContain("Đã suy nghĩ");
+      expect(quick).not.toContain("<1s");
+      // Nothing to expand without steps
+      expect(quick).not.toContain("aria-expanded");
+    });
+
+    it("shows the digest only once the turn finished cleanly", () => {
+      const html = renderToStaticMarkup(
+        React.createElement(CollapsibleStepsSummary, {
+          ...base,
+          startedAt: 0,
+          firstTokenAt: 5_000,
+          steps: [step()],
+          digest: "Tra cứu 3 tài liệu",
+        })
+      );
+      expect(html).toContain("Tra cứu 3 tài liệu");
       expect(html).toContain("aria-expanded=\"false\"");
-    });
-
-    it("renders completed thought state with green checkmark and 'Đã suy nghĩ X giây'", () => {
-      const html = renderToStaticMarkup(
-        React.createElement(ThoughtProcess, {
-          thinking: "Completed thought process.",
-          isThinking: false,
-          durationMs: 4200,
-        })
-      );
-
-      expect(html).toContain("Đã suy nghĩ 4 giây");
-      expect(html).toContain("text-[#3F7D58]"); // Checkmark green color
-      expect(html).not.toContain("animate-pulse");
-    });
-
-    it("renders expanded state with monospace muted typography and visible content", () => {
-      const html = renderToStaticMarkup(
-        React.createElement(ThoughtProcess, {
-          thinking: "Step 1: Graph traversal\nStep 2: Topological sort",
-          isThinking: false,
-          durationMs: 1000,
-          expanded: true,
-        })
-      );
-
-      expect(html).toContain("aria-expanded=\"true\"");
-      expect(html).toContain("Step 1: Graph traversal");
-      expect(html).toContain("font-mono");
-      expect(html).toContain("italic");
-      expect(html).toContain("text-muted-foreground");
-    });
-
-    it("formatThoughtBadge formats singular and plural seconds accurately", () => {
-      expect(formatThoughtBadge(800, false)).toBe("Đã suy nghĩ 1 giây");
-      expect(formatThoughtBadge(1000, false)).toBe("Đã suy nghĩ 1 giây");
-      expect(formatThoughtBadge(2000, false)).toBe("Đã suy nghĩ 2 giây");
-      expect(formatThoughtBadge(5000, false)).toBe("Đã suy nghĩ 5 giây");
-      expect(formatThoughtBadge(2500, true)).toBe("Thinking (3s)...");
     });
   });
 });

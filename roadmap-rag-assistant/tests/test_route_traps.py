@@ -92,6 +92,32 @@ def test_slash_commands_are_read(text, command):
     assert slash_command(text) == command
 
 
+@pytest.mark.parametrize("text,command,template", [
+    ("/goal template cloud-devops", "goal", "cloud-devops"),
+    ("/plan ai-engineering", "plan", "ai-engineering"),
+    ("/plan Lộ trình Next.js Fullstack", "plan", "nextjs-fullstack"),
+    ("/goal lộ trình học DevOps", "goal", "cloud-devops"),
+    # No default and no loose word match: these used to give the ai-engineering / cloud-devops samples
+    ("/goal học Rust", "goal", None),
+    ("/goal", "goal", None),
+    ("/plan lộ trình học rust", "plan", None),
+])
+def test_slash_command_uses_only_the_blueprint_it_names(text, command, template):
+    from rag_service.domains.roadmap.commands import named_template
+
+    found = named_template(text, command)
+    assert (found.get("id") if found else None) == template
+
+
+@pytest.mark.parametrize("message", ["/goal học Rust", "/plan lộ trình học rust"])
+def test_slash_command_without_a_blueprint_writes_nothing(message, mock_adapter):
+    text, events = _owner_reply(message, f"no-blueprint-{message[1:5]}", None)
+    assert [ev for ev in events if ev.get("type") == "tool_start"] == []
+    assert "Chưa có blueprint phù hợp" in text
+    mock_adapter.create_topic.assert_not_called()
+    mock_adapter.create_item.assert_not_called()
+
+
 @pytest.mark.parametrize("goal,template", [
     ("lên lộ trình học DevOps trong 3 tháng", "cloud-devops"),
     ("lộ trình học Kubernetes cho người mới", "cloud-devops"),
