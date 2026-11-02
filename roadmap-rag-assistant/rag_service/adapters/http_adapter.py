@@ -1,6 +1,6 @@
 """HTTP API Adapter — calls the Next.js REST API at /api/v1/roadmaps/*.
 
-Maps 1:1 to the 14 endpoints already available in the crisne-website backend.
+Maps 1:1 to the endpoints of the crisne-website backend (ADR-0009: a topic's lessons, each with a section).
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ import httpx
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
 from rag_service.write_grant import guard_writes
-from rag_service.adapters.groups import GroupChoiceRequired, clean_group_title
 
 
 @guard_writes
@@ -22,11 +21,7 @@ class HttpApiAdapter:
         headers = {"Content-Type": "application/json"}
         if admin_key:
             headers["x-admin-key"] = admin_key
-        self._client = httpx.AsyncClient(
-            base_url=self._base_url,
-            timeout=10.0,
-            headers=headers,
-        )
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=10.0, headers=headers)
 
     async def close(self) -> None:
         """Gracefully close the underlying HTTP client."""
@@ -34,12 +29,7 @@ class HttpApiAdapter:
 
     # ── Helpers ──────────────────────────────────────────────────────────
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        json: dict | None = None,
-    ) -> dict:
+    async def _request(self, method: str, path: str, json: dict | None = None) -> dict:
         # Every write sends ADMIN_API_KEY: only the site owner may trigger one
         if method.upper() != "GET":
             require_owner()
@@ -49,16 +39,12 @@ class HttpApiAdapter:
             if body.get("code") == "DUPLICATE":
                 existing = body.get("existing") or {}
                 raise DuplicateEntityError(body.get("kind", "entity"), existing.get("title", ""), existing)
-        if resp.status_code == 400:
-            body = resp.json() if resp.content else {}
-            if body.get("code") == "GROUP_REQUIRED":
-                raise GroupChoiceRequired(body.get("groups") or [])
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:
             return {}
         return resp.json()
 
-    # ── Topics (Roadmaps) ────────────────────────────────────────────────
+    # ── Topics ───────────────────────────────────────────────────────────
 
     async def list_topics(self) -> list[dict]:
         """GET /api/v1/roadmaps"""
@@ -66,7 +52,7 @@ class HttpApiAdapter:
         return data.get("roadmaps", [])
 
     async def export_full_hierarchy(self) -> list[dict]:
-        """GET /api/v1/roadmaps/full-export
+        """GET /api/v1/roadmaps/full-export: every topic with its lessons.
 
         Raises unless the response holds a `roadmaps` list: an empty list is the only way to say "no roadmap".
         """
@@ -77,169 +63,71 @@ class HttpApiAdapter:
         return roadmaps
 
     async def get_topic(self, slug: str) -> dict | None:
-        """GET /api/v1/roadmaps/{slug}"""
+        """GET /api/v1/roadmaps/{slug}: the topic, its lessons in page order, and its sections."""
         try:
-            return await self._request("GET", f"/api/v1/roadmaps/{slug}")
+            data = await self._request("GET", f"/api/v1/roadmaps/{slug}")
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return None
             raise
+        return {**data.get("roadmap", {}), "items": data.get("items", []), "sections": data.get("sections", [])}
 
-    async def create_topic(
-        self,
-        title: str,
-        short_code: str,
-        description: str = "",
-        layers: list[dict] | None = None,
-    ) -> dict:
+    async def create_topic(self, title: str, description: str = "") -> dict:
         """POST /api/v1/roadmaps"""
-        payload = {
-            "title": title,
-            "shortCode": short_code,
-            "description": description,
-            "layers": layers or [],
-        }
-        data = await self._request("POST", "/api/v1/roadmaps", json=payload)
+        data = await self._request("POST", "/api/v1/roadmaps", json={"title": title, "description": description})
         return data.get("roadmap", data)
 
     async def update_topic(self, slug: str, **kwargs: object) -> dict:
         """PATCH /api/v1/roadmaps/{slug}"""
-        payload: dict = {}
-        if "title" in kwargs:
-            payload["title"] = kwargs["title"]
-        if "short_code" in kwargs:
-            payload["shortCode"] = kwargs["short_code"]
-        if "description" in kwargs:
-            payload["description"] = kwargs["description"]
-        if "is_locked" in kwargs:
-            payload["isLocked"] = kwargs["is_locked"]
+        payload = {k: v for k, v in kwargs.items() if k in ("title", "description", "isLocked")}
         data = await self._request("PATCH", f"/api/v1/roadmaps/{slug}", json=payload)
         return data.get("roadmap", data)
 
     async def delete_topic(self, slug: str) -> bool:
         """DELETE /api/v1/roadmaps/{slug}"""
         try:
-            data = await self._request("DELETE", f"/api/v1/roadmaps/{slug}")
-            return data.get("success", True)
+            await self._request("DELETE", f"/api/v1/roadmaps/{slug}")
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 return False
             raise
+        return True
 
-    # ── Layers ───────────────────────────────────────────────────────────
-
-    async def create_layer(
-        self,
-        topic_slug: str,
-        title: str,
-        short_tag: str,
-        subtitle: str = "",
-    ) -> dict:
-        """POST /api/v1/roadmaps/{slug}/layers"""
-        payload = {
-            "title": title,
-            "shortTag": short_tag,
-            "subtitle": subtitle,
-        }
-        data = await self._request(
-            "POST", f"/api/v1/roadmaps/{topic_slug}/layers", json=payload
-        )
-        return data.get("layer", data)
-
-    async def update_layer(self, layer_id: str, **kwargs: object) -> dict:
-        """PATCH /api/v1/roadmaps/layers/{id}"""
-        payload: dict = {}
-        if "title" in kwargs:
-            payload["title"] = kwargs["title"]
-        if "short_tag" in kwargs:
-            payload["shortTag"] = kwargs["short_tag"]
-        if "subtitle" in kwargs:
-            payload["subtitle"] = kwargs["subtitle"]
-        data = await self._request(
-            "PATCH", f"/api/v1/roadmaps/layers/{layer_id}", json=payload
-        )
-        return data.get("layer", data)
-
-    async def delete_layer(self, layer_id: str) -> bool:
-        """DELETE /api/v1/roadmaps/layers/{id}"""
-        try:
-            data = await self._request(
-                "DELETE", f"/api/v1/roadmaps/layers/{layer_id}"
-            )
-            return data.get("success", True)
-        except httpx.HTTPStatusError:
-            return False
-
-    # ── Groups ───────────────────────────────────────────────────────────
-
-    async def create_group(
-        self,
-        layer_id: str,
-        title: str,
-    ) -> dict:
-        """POST /api/v1/roadmaps/groups"""
-        payload: dict = {"layerId": layer_id, "title": clean_group_title(title)}
-        data = await self._request("POST", "/api/v1/roadmaps/groups", json=payload)
-        return data.get("group", data)
-
-    async def update_group(self, group_id: str, title: str) -> dict:
-        """PATCH /api/v1/roadmaps/groups/{id}"""
-        data = await self._request(
-            "PATCH", f"/api/v1/roadmaps/groups/{group_id}", json={"title": title}
-        )
-        return data.get("group", data)
-
-    async def delete_group(self, group_id: str) -> bool:
-        """DELETE /api/v1/roadmaps/groups/{id}"""
-        try:
-            data = await self._request(
-                "DELETE", f"/api/v1/roadmaps/groups/{group_id}"
-            )
-            return data.get("success", True)
-        except httpx.HTTPStatusError:
-            return False
-
-    # ── Items ────────────────────────────────────────────────────────────
+    # ── Lessons ──────────────────────────────────────────────────────────
 
     async def create_item(
         self,
-        layer_id: str,
-        group_title: str,
+        topic_slug: str,
+        section: str | None,
         title: str,
         description: str = "",
         content: str = "",
     ) -> dict:
-        """POST /api/v1/roadmaps/items — raises GroupChoiceRequired when the API cannot settle the group"""
-        payload = {
-            "layerId": layer_id,
-            "groupTitle": clean_group_title(group_title) or None,
-            "title": title,
-            "description": description,
-            "content": content or None,
-        }
+        """POST /api/v1/roadmaps/items"""
+        payload = {"roadmapSlug": topic_slug, "section": section, "title": title, "description": description}
+        if content:
+            payload["content"] = content
         data = await self._request("POST", "/api/v1/roadmaps/items", json=payload)
         return data.get("item", data)
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         """PATCH /api/v1/roadmaps/items/{id}"""
-        payload: dict = {}
-        if "title" in kwargs:
-            payload["title"] = kwargs["title"]
-        if "description" in kwargs:
-            payload["description"] = kwargs["description"]
-        if "group_title" in kwargs:
-            payload["groupTitle"] = clean_group_title(kwargs["group_title"])
-        data = await self._request(
-            "PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload
-        )
+        payload = {k: v for k, v in kwargs.items() if k in ("title", "description", "section")}
+        data = await self._request("PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload)
         return data.get("item", data)
 
     async def delete_item(self, item_id: str) -> bool:
         """DELETE /api/v1/roadmaps/items/{id}"""
-        try:
-            data = await self._request(
-                "DELETE", f"/api/v1/roadmaps/items/{item_id}"
-            )
-            return data.get("success", True)
-        except httpx.HTTPStatusError:
-            return False
+        await self._request("DELETE", f"/api/v1/roadmaps/items/{item_id}")
+        return True
+
+    async def update_section(self, topic_slug: str, from_name: str, to_name: str) -> dict:
+        """PATCH /api/v1/roadmaps/{slug}/sections"""
+        return await self._request(
+            "PATCH", f"/api/v1/roadmaps/{topic_slug}/sections", json={"from": from_name, "to": to_name}
+        )
+
+    async def update_item_order(self, topic_slug: str, ordered_ids: list[str]) -> bool:
+        """POST /api/v1/roadmaps/items/reorder"""
+        await self._request("POST", "/api/v1/roadmaps/items/reorder", json={"orderedItemIds": ordered_ids})
+        return True

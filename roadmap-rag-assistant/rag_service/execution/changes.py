@@ -4,8 +4,8 @@ Contract (data of each SSE `change_review` event, JSON):
 
     id        str    Unique per executed action.
     action    str    create | delete
-    level     str    topic | layer | group | item
-    parent    str    Optional. Where the entries were created (topic slug or layer id).
+    level     str    topic | item
+    parent    str    Optional. Where the entries were created (topic slug).
     added     int    Rows written, children included.
     removed   int    Rows deleted, children included (a delete cascades).
     entries   list   [{op, level, title, id*, code*, children*}]
@@ -27,39 +27,24 @@ MAX_CHILDREN = 50
 
 
 def _children(level: str, node: dict) -> list[dict]:
-    """Rows under a topic or layer snapshot that a delete removes with it, parents first."""
-    rows: list[dict] = []
-    if level == "topic":
-        for layer in node.get("layers") or []:
-            rows.append({"level": "layer", "title": layer.get("title") or ""})
-            rows.extend(_children("layer", layer))
-    elif level == "layer":
-        for group in node.get("groups") or []:
-            rows.append({"level": "group", "title": group.get("title") or ""})
-            rows.extend(_children("group", group))
-    elif level == "group":
-        rows.extend({"level": "item", "title": i.get("title") or ""} for i in node.get("items") or [])
-    return rows
+    """Rows under a topic snapshot that a delete removes with it, in page order (ADR-0009: lessons only)."""
+    if level != "topic":
+        return []
+    return [{"level": "item", "title": i.get("title") or ""} for i in node.get("items") or []]
 
 
 async def snapshot_before_delete(adapter: Any, level: str, ident: str) -> Optional[dict]:
-    """The row (and its subtree) a delete is about to remove, or None when it cannot be read.
+    """The row (and its lessons) a delete is about to remove, or None when it cannot be read.
 
     Best effort: the review falls back to the identifier when the read fails.
     """
     try:
         if level == "topic":
             return await adapter.get_topic(ident)
-        children_key = {"layer": "layers", "group": "groups", "item": "items"}
         for topic in await adapter.export_full_hierarchy():
-            nodes = [topic]
-            for key in ("layers", "groups", "items"):
-                nodes = [child for n in nodes for child in n.get(key) or []]
-                if key == children_key[level]:
-                    break
-            for node in nodes:
-                if ident in (node.get("id"), node.get("shortTag"), node.get("title")):
-                    return node
+            for item in topic.get("items") or []:
+                if ident in (item.get("id"), item.get("title")):
+                    return item
     except Exception as exc:
         print(f"[ChangeSet] Snapshot of {level} '{ident}' skipped: {exc}")
     return None
@@ -84,7 +69,7 @@ class ChangeSet:
     def created(
         self, title: str, row: Optional[dict] = None, code: Optional[str] = None, level: Optional[str] = None
     ) -> None:
-        """A row written; *level* defaults to the action's (a template writes a topic and its children)."""
+        """A row written; *level* defaults to the action's."""
         row = row or {}
         self.entries.append(
             {

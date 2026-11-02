@@ -18,26 +18,14 @@ from rag_service.tools.topic_tools import (
     delete_topic,
     list_topics,
 )
-from rag_service.tools.layer_tools import (
-    create_layer,
-    create_layers_batch,
-    delete_layer,
-    update_layer,
-)
-from rag_service.tools.group_tools import (
-    create_group,
-    delete_group,
-    update_group,
-)
 from rag_service.tools.item_tools import (
     create_item,
     create_items_batch,
-    import_items_from_text,
     delete_item,
+    import_items_from_text,
+    rename_section,
     update_item,
 )
-
-from rag_service.tools.layer_resolver import resolve_layer_id
 
 ALL_TOOLS = [
     # Topics
@@ -45,20 +33,12 @@ ALL_TOOLS = [
     create_topics_batch,
     list_topics,
     delete_topic,
-    # Layers
-    create_layer,
-    create_layers_batch,
-    update_layer,
-    delete_layer,
-    # Groups
-    create_group,
-    update_group,
-    delete_group,
-    # Items
+    # Lessons and sections
     create_item,
     create_items_batch,
     import_items_from_text,
     update_item,
+    rename_section,
     delete_item,
 ]
 

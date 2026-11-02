@@ -1,7 +1,10 @@
 """Abstract base adapter — Protocol interface for all data operations.
 
-Both HttpApiAdapter and SqliteAdapter implement this protocol so tools
-remain completely agnostic about the underlying data source.
+Both HttpApiAdapter and SqliteAdapter implement this protocol so tools remain agnostic about the
+underlying data source. A topic holds its lessons directly; a lesson may name a section (ADR-0009).
+
+Write methods are named create_*, update_* or delete_*: the write guard (rag_service/write_grant.py)
+covers exactly those prefixes, so every write goes through it.
 """
 
 from __future__ import annotations
@@ -13,107 +16,54 @@ from typing import Protocol, runtime_checkable
 class BaseAdapter(Protocol):
     """Protocol that every roadmap data adapter must satisfy."""
 
-    # ── Topics (Roadmaps) ────────────────────────────────────────────────
+    # ── Topics ───────────────────────────────────────────────────────────
 
     async def list_topics(self) -> list[dict]:
-        """Return a list of all topics with basic metadata."""
+        """All topics with basic metadata and their lesson count."""
         ...
 
     async def get_topic(self, slug: str) -> dict | None:
-        """Fetch full topic hierarchy by slug. Returns None if not found."""
+        """A topic with its lessons in page order and its sections. None if not found."""
         ...
 
-    async def create_topic(
-        self,
-        title: str,
-        short_code: str,
-        description: str = "",
-        layers: list[dict] | None = None,
-    ) -> dict:
-        """Create a new topic/roadmap with optional initial layers.
-
-        Each layer dict should have keys: title, shortTag, subtitle (optional).
-        If *layers* is None or empty, the adapter should create a default layer.
-        Returns the created topic dict.
-        """
+    async def create_topic(self, title: str, description: str = "") -> dict:
+        """Create a topic. Raises DuplicateEntityError when a topic has the same title."""
         ...
 
     async def update_topic(self, slug: str, **kwargs: object) -> dict:
-        """Update topic fields (title, shortCode, description, isLocked).
-
-        Returns the updated topic dict.
-        """
+        """Update title, description or isLocked. Returns the updated topic."""
         ...
 
     async def delete_topic(self, slug: str) -> bool:
-        """Delete a topic by slug. Returns True on success, False if not found."""
+        """Delete a topic and its lessons. False if not found."""
         ...
 
-    # ── Layers ───────────────────────────────────────────────────────────
-
-    async def create_layer(
-        self,
-        topic_slug: str,
-        title: str,
-        short_tag: str,
-        subtitle: str = "",
-    ) -> dict:
-        """Create a new layer inside a topic. Returns the created layer dict."""
-        ...
-
-    async def update_layer(self, layer_id: str, **kwargs: object) -> dict:
-        """Update layer fields (title, shortTag, subtitle).
-
-        Returns the updated layer dict.
-        """
-        ...
-
-    async def delete_layer(self, layer_id: str) -> bool:
-        """Delete a layer by ID. Returns True on success."""
-        ...
-
-    # ── Groups ───────────────────────────────────────────────────────────
-
-    async def create_group(
-        self,
-        layer_id: str,
-        title: str,
-    ) -> dict:
-        """Create a named group inside a layer; the title is unique within the layer. Returns the group dict."""
-        ...
-
-    async def update_group(self, group_id: str, title: str) -> dict:
-        """Update a group's title. Returns the updated group dict."""
-        ...
-
-    async def delete_group(self, group_id: str) -> bool:
-        """Delete a group by ID. Returns True on success."""
-        ...
-
-    # ── Items ────────────────────────────────────────────────────────────
+    # ── Lessons ──────────────────────────────────────────────────────────
 
     async def create_item(
         self,
-        layer_id: str,
-        group_title: str,
+        topic_slug: str,
+        section: str | None,
         title: str,
         description: str = "",
         content: str = "",
     ) -> dict:
-        """Create a new item in a group of the layer, picked by adapters.groups.pick_group.
-
-        Raises GroupChoiceRequired when no group is named and the layer does not settle it.
-        Returns the created item dict.
-        """
+        """Add a lesson to a topic, into `section` (or outside any section). Raises DuplicateEntityError
+        when the topic already has a lesson with that title."""
         ...
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
-        """Update item fields (title, description, group_title: moves it to that group of its layer).
-
-        Returns the updated item dict.
-        """
+        """Update title, description or section. A section moves the lesson; blank takes it out."""
         ...
 
     async def delete_item(self, item_id: str) -> bool:
-        """Delete an item by ID. Returns True on success."""
+        """Delete a lesson by ID. True on success."""
+        ...
+
+    async def update_section(self, topic_slug: str, from_name: str, to_name: str) -> dict:
+        """Rename a section: every lesson in it moves to the new name (merging if the name exists)."""
+        ...
+
+    async def update_item_order(self, topic_slug: str, ordered_ids: list[str]) -> bool:
+        """Set the page order of a topic's lessons."""
         ...

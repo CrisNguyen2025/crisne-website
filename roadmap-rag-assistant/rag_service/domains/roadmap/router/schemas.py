@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class IntentType(str, Enum):
-    ROADMAP_CUD = "roadmap_cud"         # Create, update, or delete roadmap/layer/group/item
+    ROADMAP_CUD = "roadmap_cud"         # Create or delete a topic or lesson; rename a section
     KNOWLEDGE_QUERY = "knowledge_query" # Ask about existing lessons, concepts, search docs
     PLAN_GOAL = "plan_goal"             # A learning plan, answered from the existing lessons
     CHITCHAT = "chitchat"               # Greetings, thanks, identity questions
@@ -27,10 +27,8 @@ class ActionType(str, Enum):
 
 
 class EntityLevel(str, Enum):
-    TOPIC = "topic"   # Top-level Roadmap
-    LAYER = "layer"   # Knowledge domain within a roadmap
-    GROUP = "group"   # Named group of lessons inside a layer (ADR-0008)
-    ITEM = "item"     # Individual lesson or knowledge node
+    TOPIC = "topic"   # A topic (Roadmap); holds its lessons directly (ADR-0009)
+    ITEM = "item"     # A lesson, optionally in a section of its topic
 
 
 class SingleEntity(BaseModel):
@@ -39,10 +37,10 @@ class SingleEntity(BaseModel):
         description=(
             "The pure, clean name of the entity. "
             "CRITICAL: Strip out any action verbs ('tạo', 'thêm', 'create', 'add', 'make', 'new') "
-            "and category words ('topic', 'chủ đề', 'lộ trình', 'layer', 'group', 'nhóm', 'item', 'bài học'). "
+            "and category words ('topic', 'chủ đề', 'lộ trình', 'item', 'bài học', 'mục'). "
             "Example: for 'tạo ABC topic', title MUST be 'ABC'. "
-            "For 'create aaa layer on fe', title MUST be 'aaa'. "
-            "For 'tạo 2 layer mock 1 và 2', title is 'mock 1' for the first, 'mock 2' for the second."
+            "For 'thêm bài aaa vào topic fe', title MUST be 'aaa'. "
+            "For 'thêm 2 bài mock 1 và 2', title is 'mock 1' for the first, 'mock 2' for the second."
         ),
     )
     short_code: Optional[str] = Field(
@@ -53,15 +51,11 @@ class SingleEntity(BaseModel):
             "For title 'AI Engineering' -> short_code 'AIE' or 'AI'."
         ),
     )
-    short_tag: Optional[str] = Field(
-        None,
-        description="For layers: formatted as '01-TAG', '02-TAG'.",
-    )
-    group_title: Optional[str] = Field(
+    section: Optional[str] = Field(
         None,
         description=(
-            "For items only: the name of the group the lesson goes into, as the user names it "
-            "(\"vào nhóm Fundamentals\" -> \"Fundamentals\"). Never guess one; leave it empty otherwise."
+            "For lessons only: the section (mục) of the topic the lesson goes into, as the user names it "
+            "(\"vào mục RAG\" -> \"RAG\"). Never guess one; leave it empty otherwise."
         ),
     )
     description: Optional[str] = Field(
@@ -77,14 +71,13 @@ class StructuredRoadmapAction(BaseModel):
     )
     entity_level: EntityLevel = Field(
         ...,
-        description="Hierarchy tier: 'topic' | 'layer' | 'group' | 'item'.",
+        description="What the action is about: 'topic' | 'item'.",
     )
     target_parent_identifier: Optional[str] = Field(
         None,
         description=(
-            "Slug, ID, or name of the parent entity this action belongs to. "
-            "For a layer, this is the topic slug/name (e.g. 'be', 'fe', 'ai-architecture'). "
-            "For a group or item, this is the layer ID or shortTag (e.g. '01-LLM', '02-AAA'). "
+            "Slug or name of the topic this action belongs to (e.g. 'ai-engineering', 'be'). "
+            "For a lesson, the topic it is in. "
             "If the prompt refers to 'đó' or 'trên' or previous context, set to 'CONTEXT_ACTIVE'."
         ),
     )
@@ -92,7 +85,7 @@ class StructuredRoadmapAction(BaseModel):
         ...,
         description=(
             "List of entities to create/update/delete. "
-            "If the user asks to create 2 layers 'mock 1 và 2', this list MUST contain 2 elements: "
+            "If the user asks to add 2 lessons 'mock 1 và 2', this list MUST contain 2 elements: "
             "[{'title': 'mock 1'}, {'title': 'mock 2'}]."
         ),
     )

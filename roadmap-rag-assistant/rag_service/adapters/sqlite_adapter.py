@@ -5,7 +5,7 @@ Bypasses the Next.js API layer entirely. Useful for:
 - Testing without starting the Next.js server
 - Bulk import / migration pipelines
 
-Schema matches the Prisma models: Roadmap, RoadmapLayer, RoadmapGroup, RoadmapItem.
+Schema matches the Prisma models: Roadmap and RoadmapItem (with roadmapId and section, ADR-0009).
 All IDs use UUID v7 for time-ordered uniqueness.
 """
 
@@ -18,33 +18,11 @@ from datetime import datetime, timezone
 import aiosqlite
 import uuid_utils
 
-from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
-from rag_service.adapters.groups import GroupChoiceRequired, clean_group_title, pick_group
+from rag_service.adapters.errors import DuplicateEntityError, find_duplicate, normalize_title
+from rag_service.adapters.sections import resolve_section, sections_in_order
 from rag_service.auth import owner_only
 from rag_service.write_grant import guard_writes
 
-
-
-async def _resolve_group(db, layer_id: str, group_title: str, now: str) -> str:
-    """The group a lesson goes to (pick_group), created when the named title is new; raises GroupChoiceRequired."""
-    cursor = await db.execute(
-        'SELECT id, title FROM RoadmapGroup WHERE layerId = ? ORDER BY "order", createdAt', (layer_id,)
-    )
-    groups = [dict(r) for r in await cursor.fetchall()]
-    kind, picked = pick_group(groups, group_title=group_title)
-    if kind == "existing":
-        return picked["id"]
-    if kind == "ask":
-        raise GroupChoiceRequired(picked)
-    group_id = _uuid7()
-    await db.execute(
-        """
-        INSERT INTO RoadmapGroup (id, layerId, title, "order", createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (group_id, layer_id, picked, len(groups) + 1, now, now),
-    )
-    return group_id
 
 def _uuid7() -> str:
     return str(uuid_utils.uuid7())
@@ -55,7 +33,6 @@ def _now_iso() -> str:
 
 
 def _slugify(text: str) -> str:
-    """Generate a URL-safe slug from text, matching the Next.js API logic."""
     slug = text.lower().strip()
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_-]+", "-", slug)
@@ -72,11 +49,7 @@ class SqliteAdapter:
 
         p = Path(db_path)
         if not p.exists() and "dev.db" in db_path:
-            root_prisma = (
-                Path(__file__).resolve().parent.parent.parent.parent
-                / "prisma"
-                / "dev.db"
-            )
+            root_prisma = Path(__file__).resolve().parent.parent.parent.parent / "prisma" / "dev.db"
             cwd_prisma = Path("prisma/dev.db")
             if root_prisma.exists():
                 self._db_path = str(root_prisma)
@@ -95,17 +68,30 @@ class SqliteAdapter:
             await db.execute("PRAGMA foreign_keys=ON")
             yield db
 
-    # ── Topics (Roadmaps) ────────────────────────────────────────────────
+    async def _find_topic(self, db, identifier: str):
+        """The topic by slug, then by title (case-insensitive), or None."""
+        cursor = await db.execute(
+            "SELECT * FROM Roadmap WHERE slug = ? OR lower(slug) = lower(?) OR lower(title) = lower(?)",
+            (identifier, identifier, identifier),
+        )
+        return await cursor.fetchone()
+
+    async def _items_of(self, db, roadmap_id: str) -> list[dict]:
+        cursor = await db.execute(
+            'SELECT * FROM RoadmapItem WHERE roadmapId = ? ORDER BY "order" ASC', (roadmap_id,)
+        )
+        return [dict(r) for r in await cursor.fetchall()]
+
+    # ── Topics ───────────────────────────────────────────────────────────
 
     async def list_topics(self) -> list[dict]:
         async with self._connect() as db:
             cursor = await db.execute(
                 """
-                SELECT r.id, r.slug, r.title, r.shortCode, r.description,
-                       r.icon, r."order", r.isLocked,
-                       COUNT(l.id) as layer_count
+                SELECT r.id, r.slug, r.title, r.description, r.icon, r."order", r.isLocked,
+                       COUNT(i.id) AS item_count
                 FROM Roadmap r
-                LEFT JOIN RoadmapLayer l ON l.roadmapId = r.id
+                LEFT JOIN RoadmapItem i ON i.roadmapId = r.id
                 GROUP BY r.id
                 ORDER BY r."order" ASC
                 """
@@ -116,438 +102,194 @@ class SqliteAdapter:
                     "id": row["id"],
                     "slug": row["slug"],
                     "title": row["title"],
-                    "shortCode": row["shortCode"],
                     "description": row["description"],
                     "icon": row["icon"],
                     "order": row["order"],
                     "isLocked": bool(row["isLocked"]),
-                    "_count": {"layers": row["layer_count"]},
+                    "_count": {"items": row["item_count"]},
                 }
                 for row in rows
             ]
 
     async def export_full_hierarchy(self) -> list[dict]:
-        """Fetch all roadmaps with layers, groups, and items."""
-        topics = await self.list_topics()
+        """Every topic with its lessons, in page order."""
         results = []
-        for t in topics:
-            full = await self.get_topic(t["slug"])
+        for topic in await self.list_topics():
+            full = await self.get_topic(topic["slug"])
             if full:
                 results.append(full)
         return results
 
     async def get_topic(self, slug: str) -> dict | None:
         async with self._connect() as db:
-            cursor = await db.execute(
-                "SELECT * FROM Roadmap WHERE slug = ?", (slug,)
-            )
-            row = await cursor.fetchone()
+            row = await self._find_topic(db, slug)
             if not row:
                 return None
             topic = dict(row)
-
-            # Fetch layers
-            cursor = await db.execute(
-                'SELECT * FROM RoadmapLayer WHERE roadmapId = ? ORDER BY "order" ASC',
-                (topic["id"],),
-            )
-            layers = [dict(r) for r in await cursor.fetchall()]
-            for layer in layers:
-                # Fetch groups
-                cursor = await db.execute(
-                    'SELECT * FROM RoadmapGroup WHERE layerId = ? ORDER BY "order" ASC',
-                    (layer["id"],),
-                )
-                groups = [dict(r) for r in await cursor.fetchall()]
-                for group in groups:
-                    # Fetch items
-                    cursor = await db.execute(
-                        'SELECT * FROM RoadmapItem WHERE groupId = ? ORDER BY "order" ASC',
-                        (group["id"],),
-                    )
-                    group["items"] = [dict(r) for r in await cursor.fetchall()]
-                layer["groups"] = groups
-
-            topic["layers"] = layers
+            items = await self._items_of(db, topic["id"])
+            topic["items"] = items
+            topic["sections"] = sections_in_order(items)
             return topic
 
     @owner_only
-    async def create_topic(
-        self,
-        title: str,
-        short_code: str,
-        description: str = "",
-        layers: list[dict] | None = None,
-    ) -> dict:
+    async def create_topic(self, title: str, description: str = "") -> dict:
         topic_id = _uuid7()
         slug = _slugify(title)
         now = _now_iso()
 
         async with self._connect() as db:
-            # Same title or slug means the topic exists: report it instead of minting a copy
             cursor = await db.execute("SELECT id, slug, title FROM Roadmap")
             topics = [dict(r) for r in await cursor.fetchall()]
             dup = find_duplicate(topics, title) or next((t for t in topics if t["slug"] == slug), None)
             if dup:
                 raise DuplicateEntityError("topic", dup["title"], dup)
 
-            # Get next order
-            cursor = await db.execute("SELECT COUNT(*) as cnt FROM Roadmap")
-            row = await cursor.fetchone()
-            order = (row["cnt"] if row else 0) + 1
-
+            order = len(topics) + 1
             await db.execute(
                 """
-                INSERT INTO Roadmap (id, slug, title, shortCode, description, icon, "order", isLocked, createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, 'Layers', ?, 0, ?, ?)
+                INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, 'Layers', ?, 0, ?, ?)
                 """,
-                (topic_id, slug, title.strip(), short_code.strip().upper(),
-                 description.strip() or None, order, now, now),
+                (topic_id, slug, title.strip(), description.strip() or None, order, now, now),
             )
-
-            # Create initial layers
-            # No default layer: a topic starts empty unless layers are given
-            layer_list = layers or []
-            for idx, layer in enumerate(layer_list):
-                layer_id = _uuid7()
-                await db.execute(
-                    """
-                    INSERT INTO RoadmapLayer (id, roadmapId, "order", shortTag, title, subtitle, createdAt, updatedAt)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (layer_id, topic_id, idx + 1,
-                     layer.get("shortTag", f"{idx + 1:02d}-GEN").strip().upper(),
-                     layer.get("title", "General").strip(),
-                     layer.get("subtitle", "").strip(),
-                     now, now),
-                )
-
             await db.commit()
 
-        return {
-            "id": topic_id,
-            "slug": slug,
-            "title": title.strip(),
-            "shortCode": short_code.strip().upper(),
-            "description": description.strip(),
-        }
+        return {"id": topic_id, "slug": slug, "title": title.strip(), "description": description.strip()}
 
     @owner_only
     async def update_topic(self, slug: str, **kwargs: object) -> dict:
-        now = _now_iso()
         async with self._connect() as db:
-            sets: list[str] = ['updatedAt = ?']
-            vals: list[object] = [now]
-
-            if "title" in kwargs:
+            row = await self._find_topic(db, slug)
+            if not row:
+                raise ValueError(f"Topic '{slug}' not found")
+            sets, args = ["updatedAt = ?"], [_now_iso()]
+            if kwargs.get("title") is not None:
                 sets.append("title = ?")
-                vals.append(str(kwargs["title"]).strip())
-            if "short_code" in kwargs:
-                sets.append("shortCode = ?")
-                vals.append(str(kwargs["short_code"]).strip().upper())
-            if "description" in kwargs:
+                args.append(str(kwargs["title"]).strip())
+            if kwargs.get("description") is not None:
                 sets.append("description = ?")
-                vals.append(str(kwargs["description"]).strip())
-            if "is_locked" in kwargs:
+                args.append(str(kwargs["description"]).strip() or None)
+            if kwargs.get("isLocked") is not None:
                 sets.append("isLocked = ?")
-                vals.append(1 if kwargs["is_locked"] else 0)
-
-            vals.append(slug)
-            await db.execute(
-                f'UPDATE Roadmap SET {", ".join(sets)} WHERE slug = ?', vals
-            )
+                args.append(1 if kwargs["isLocked"] else 0)
+            await db.execute(f"UPDATE Roadmap SET {', '.join(sets)} WHERE id = ?", (*args, row["id"]))
             await db.commit()
-
-            cursor = await db.execute(
-                "SELECT * FROM Roadmap WHERE slug = ?", (slug,)
-            )
-            row = await cursor.fetchone()
-            return dict(row) if row else {}
+            cursor = await db.execute("SELECT * FROM Roadmap WHERE id = ?", (row["id"],))
+            return dict(await cursor.fetchone())
 
     @owner_only
     async def delete_topic(self, slug: str) -> bool:
-        norm_slug = _slugify(slug)
         async with self._connect() as db:
-            cursor = await db.execute(
-                """
-                SELECT id, slug FROM Roadmap
-                WHERE slug = ?
-                   OR slug = ?
-                   OR lower(slug) = lower(?)
-                   OR lower(title) = lower(?)
-                   OR upper(shortCode) = upper(?)
-                """,
-                (slug, norm_slug, slug, slug, slug),
-            )
-            row = await cursor.fetchone()
+            row = await self._find_topic(db, slug)
             if not row:
                 return False
             await db.execute("DELETE FROM Roadmap WHERE id = ?", (row["id"],))
             await db.commit()
             return True
 
-
-    # ── Layers ───────────────────────────────────────────────────────────
-
-    @owner_only
-    async def create_layer(
-        self,
-        topic_slug: str,
-        title: str,
-        short_tag: str,
-        subtitle: str = "",
-    ) -> dict:
-        layer_id = _uuid7()
-        now = _now_iso()
-
-        async with self._connect() as db:
-            # Find roadmap by slug
-            cursor = await db.execute(
-                "SELECT id FROM Roadmap WHERE slug = ?", (topic_slug,)
-            )
-            roadmap_row = await cursor.fetchone()
-            if not roadmap_row:
-                raise ValueError(f"Topic '{topic_slug}' not found")
-            roadmap_id = roadmap_row["id"]
-
-            cursor = await db.execute(
-                "SELECT id, title, shortTag FROM RoadmapLayer WHERE roadmapId = ?", (roadmap_id,)
-            )
-            dup = find_duplicate([dict(r) for r in await cursor.fetchall()], title)
-            if dup:
-                raise DuplicateEntityError("layer", dup["title"], dup)
-
-            # Get next order
-            cursor = await db.execute(
-                'SELECT COUNT(*) as cnt FROM RoadmapLayer WHERE roadmapId = ?',
-                (roadmap_id,),
-            )
-            row = await cursor.fetchone()
-            order = (row["cnt"] if row else 0) + 1
-
-            await db.execute(
-                """
-                INSERT INTO RoadmapLayer (id, roadmapId, "order", shortTag, title, subtitle, createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (layer_id, roadmap_id, order, short_tag.strip().upper(),
-                 title.strip(), subtitle.strip(), now, now),
-            )
-
-            # No group yet: the first item names one (_resolve_group), so empty layers stay empty
-
-            await db.commit()
-
-        return {
-            "id": layer_id,
-            "title": title.strip(),
-            "shortTag": short_tag.strip().upper(),
-            "subtitle": subtitle.strip(),
-            "order": order,
-        }
-
-    @owner_only
-    async def update_layer(self, layer_id: str, **kwargs: object) -> dict:
-        now = _now_iso()
-        async with self._connect() as db:
-            sets: list[str] = ['updatedAt = ?']
-            vals: list[object] = [now]
-
-            if "title" in kwargs:
-                sets.append("title = ?")
-                vals.append(str(kwargs["title"]).strip())
-            if "short_tag" in kwargs:
-                sets.append("shortTag = ?")
-                vals.append(str(kwargs["short_tag"]).strip().upper())
-            if "subtitle" in kwargs:
-                sets.append("subtitle = ?")
-                vals.append(str(kwargs["subtitle"]).strip())
-
-            vals.append(layer_id)
-            await db.execute(
-                f'UPDATE RoadmapLayer SET {", ".join(sets)} WHERE id = ?', vals
-            )
-            await db.commit()
-
-            cursor = await db.execute(
-                "SELECT * FROM RoadmapLayer WHERE id = ?", (layer_id,)
-            )
-            row = await cursor.fetchone()
-            return dict(row) if row else {}
-
-    @owner_only
-    async def delete_layer(self, layer_id: str) -> bool:
-        async with self._connect() as db:
-            await db.execute("DELETE FROM RoadmapLayer WHERE id = ?", (layer_id,))
-            await db.commit()
-            return True
-
-    # ── Groups ───────────────────────────────────────────────────────────
-
-    @owner_only
-    async def create_group(
-        self,
-        layer_id: str,
-        title: str,
-    ) -> dict:
-        group_id = _uuid7()
-        now = _now_iso()
-        title = clean_group_title(title)
-
-        async with self._connect() as db:
-            cursor = await db.execute(
-                "SELECT id, title FROM RoadmapGroup WHERE layerId = ?", (layer_id,)
-            )
-            siblings = [dict(r) for r in await cursor.fetchall()]
-            # A group is known by its title, so the title is unique within the layer (ADR-0008)
-            dup = find_duplicate(siblings, title)
-            if dup:
-                raise DuplicateEntityError("group", dup["title"], dup)
-            order = len(siblings) + 1
-
-            await db.execute(
-                """
-                INSERT INTO RoadmapGroup (id, layerId, title, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (group_id, layer_id, title, order, now, now),
-            )
-            await db.commit()
-
-        return {
-            "id": group_id,
-            "layerId": layer_id,
-            "title": title,
-            "order": order,
-        }
-
-    @owner_only
-    async def update_group(self, group_id: str, title: str) -> dict:
-        now = _now_iso()
-        async with self._connect() as db:
-            await db.execute(
-                'UPDATE RoadmapGroup SET title = ?, updatedAt = ? WHERE id = ?',
-                (title.strip(), now, group_id),
-            )
-            await db.commit()
-            cursor = await db.execute(
-                "SELECT * FROM RoadmapGroup WHERE id = ?", (group_id,)
-            )
-            row = await cursor.fetchone()
-            return dict(row) if row else {}
-
-    @owner_only
-    async def delete_group(self, group_id: str) -> bool:
-        async with self._connect() as db:
-            await db.execute(
-                "DELETE FROM RoadmapGroup WHERE id = ?", (group_id,)
-            )
-            await db.commit()
-            return True
-
-    # ── Items ────────────────────────────────────────────────────────────
+    # ── Lessons ──────────────────────────────────────────────────────────
 
     @owner_only
     async def create_item(
         self,
-        layer_id: str,
-        group_title: str,
+        topic_slug: str,
+        section: str | None,
         title: str,
         description: str = "",
         content: str = "",
     ) -> dict:
-        item_id = _uuid7()
-        now = _now_iso()
-
         async with self._connect() as db:
-            # A lesson title appears once per layer, whatever its group
-            cursor = await db.execute(
-                """
-                SELECT i.id, i.title, g.title AS groupTitle FROM RoadmapItem i
-                JOIN RoadmapGroup g ON g.id = i.groupId WHERE g.layerId = ?
-                """,
-                (layer_id,),
-            )
-            dup = find_duplicate([dict(r) for r in await cursor.fetchall()], title)
+            topic = await self._find_topic(db, topic_slug)
+            if not topic:
+                raise ValueError(f"Topic '{topic_slug}' not found")
+            items = await self._items_of(db, topic["id"])
+            dup = find_duplicate(items, title)
             if dup:
-                raise DuplicateEntityError("item", dup["title"], {**dup, "layerId": layer_id})
+                raise DuplicateEntityError("item", dup["title"], {**dup, "roadmapSlug": topic["slug"]})
 
-            group_id = await _resolve_group(db, layer_id, group_title, now)
-
-            # Count existing items in group for order
-            cursor = await db.execute(
-                "SELECT COUNT(*) as cnt FROM RoadmapItem WHERE groupId = ?",
-                (group_id,),
-            )
-            row = await cursor.fetchone()
-            order = (row["cnt"] if row else 0) + 1
-
+            used = resolve_section([i.get("section") for i in items], section)
+            order = max((i["order"] for i in items), default=0) + 1
+            item_id, now = _uuid7(), _now_iso()
             await db.execute(
                 """
-                INSERT INTO RoadmapItem (id, groupId, title, description, content, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (item_id, group_id, title.strip(), description.strip(), content or None, order, now, now),
+                (item_id, topic["id"], used, title.strip(), description.strip(), content or None, order, now, now),
             )
             await db.commit()
-
         return {
             "id": item_id,
+            "roadmapSlug": topic["slug"],
+            "section": used,
             "title": title.strip(),
             "description": description.strip(),
-            "layerId": layer_id,
-            "groupId": group_id,
-            "createdAt": now,
-            "updatedAt": now,
+            "order": order,
         }
 
     @owner_only
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
-        now = _now_iso()
         async with self._connect() as db:
-            sets: list[str] = ['updatedAt = ?']
-            vals: list[object] = [now]
-
-            if "title" in kwargs:
+            cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
+            current = await cursor.fetchone()
+            if not current:
+                raise ValueError(f"Lesson '{item_id}' not found")
+            sets, args = ["updatedAt = ?"], [_now_iso()]
+            if kwargs.get("title") is not None:
+                title = str(kwargs["title"]).strip()
+                siblings = await self._items_of(db, current["roadmapId"])
+                dup = find_duplicate([s for s in siblings if s["id"] != item_id], title)
+                if dup:
+                    raise DuplicateEntityError("item", dup["title"], dup)
                 sets.append("title = ?")
-                vals.append(str(kwargs["title"]).strip())
-            if "description" in kwargs:
+                args.append(title)
+            if kwargs.get("description") is not None:
                 sets.append("description = ?")
-                vals.append(str(kwargs["description"]).strip())
-
-            # Moving to another group of the item's layer (cross-group movement)
-            if clean_group_title(kwargs.get("group_title")):
-                cursor = await db.execute(
-                    """
-                    SELECT i.groupId, g.layerId
-                    FROM RoadmapItem i
-                    JOIN RoadmapGroup g ON g.id = i.groupId
-                    WHERE i.id = ?
-                    """,
-                    (item_id,),
-                )
-                item_row = await cursor.fetchone()
-                if item_row:
-                    target_id = await _resolve_group(db, item_row["layerId"], str(kwargs["group_title"]), now)
-                    if target_id != item_row["groupId"]:
-                        sets.append("groupId = ?")
-                        vals.append(target_id)
-
-            vals.append(item_id)
-            await db.execute(
-                f'UPDATE RoadmapItem SET {", ".join(sets)} WHERE id = ?', vals
-            )
+                args.append(str(kwargs["description"]).strip())
+            if "section" in kwargs:
+                siblings = await self._items_of(db, current["roadmapId"])
+                others = [s.get("section") for s in siblings if s["id"] != item_id]
+                sets.append("section = ?")
+                args.append(resolve_section(others, kwargs["section"]))  # type: ignore[arg-type]
+            await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))
             await db.commit()
-
-            cursor = await db.execute(
-                "SELECT * FROM RoadmapItem WHERE id = ?", (item_id,)
-            )
-            row = await cursor.fetchone()
-            return dict(row) if row else {}
+            cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
+            return dict(await cursor.fetchone())
 
     @owner_only
     async def delete_item(self, item_id: str) -> bool:
         async with self._connect() as db:
-            await db.execute("DELETE FROM RoadmapItem WHERE id = ?", (item_id,))
+            cursor = await db.execute("DELETE FROM RoadmapItem WHERE id = ?", (item_id,))
             await db.commit()
-            return True
+            return cursor.rowcount > 0
+
+    @owner_only
+    async def update_section(self, topic_slug: str, from_name: str, to_name: str) -> dict:
+        async with self._connect() as db:
+            topic = await self._find_topic(db, topic_slug)
+            if not topic:
+                raise ValueError(f"Topic '{topic_slug}' not found")
+            items = await self._items_of(db, topic["id"])
+            wanted = normalize_title(from_name)
+            moving = [i for i in items if i.get("section") and normalize_title(i["section"]) == wanted]
+            if not moving:
+                raise ValueError(f"No section '{from_name}' in '{topic_slug}'")
+            target = resolve_section([i.get("section") for i in items], to_name)
+            for item in moving:
+                await db.execute("UPDATE RoadmapItem SET section = ?, updatedAt = ? WHERE id = ?", (target, _now_iso(), item["id"]))
+            await db.commit()
+        return {"renamed": len(moving), "section": target}
+
+    @owner_only
+    async def update_item_order(self, topic_slug: str, ordered_ids: list[str]) -> bool:
+        async with self._connect() as db:
+            topic = await self._find_topic(db, topic_slug)
+            if not topic:
+                raise ValueError(f"Topic '{topic_slug}' not found")
+            for index, item_id in enumerate(ordered_ids, start=1):
+                await db.execute(
+                    "UPDATE RoadmapItem SET \"order\" = ? WHERE id = ? AND roadmapId = ?",
+                    (index, item_id, topic["id"]),
+                )
+            await db.commit()
+        return True
