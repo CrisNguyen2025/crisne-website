@@ -26,6 +26,9 @@ export default defineConfig({
       LANGFUSE_RELEASE: "test-release",
       TURSO_DATABASE_URL: "",
       TURSO_AUTH_TOKEN: "",
+      // Write routes notify the Roadmap Assistant; tests that need it stub these
+      RAG_SERVICE_URL: "",
+      RAG_INTERNAL_KEY: "",
     },
   },
 });

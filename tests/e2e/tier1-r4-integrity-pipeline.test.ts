@@ -62,12 +62,11 @@ describe("Tier 1 — R4: Integrity & Verification Pipeline", () => {
     }
   });
 
-  it("pre-commit AI review rules exist in AGENTS.md or project memory", () => {
+  it("code review rules stay in AGENTS.md", () => {
     const agentsPath = "AGENTS.md";
     expect(fileExistsInProject(agentsPath)).toBe(true);
     const content = readProjectFile(agentsPath);
-    expect(content).toContain("AI Pre-commit Review Rules");
-    expect(content).toContain("[R01][error]");
-    expect(content).toContain("[R02][error]");
+    expect(content).toContain("Don't import server-only code in client components");
+    expect(content).toContain("Không hardcode secret, API key, token, password trong code");
   });
 });
