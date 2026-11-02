@@ -27,6 +27,7 @@ from rag_service.domains.roadmap.router.grounding import (
     BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
     QUESTION_TITLE_REPLY,
+    TARGET_MISSING_REPLY,
     UPDATE_NOT_SUPPORTED_REPLY,
     batch_entity_delete_reply,
     build_grounding,
@@ -41,6 +42,7 @@ from rag_service.domains.roadmap.router.write_gate import (
     BLOCKED_CHANGE,
     BULK_DELETE_REQUEST,
     QUESTION_AS_TITLE,
+    TARGET_MISSING,
     WriteGate,
     gate_action,
 )
@@ -391,6 +393,7 @@ class RoadmapCommands:
                 BULK_DELETE_REQUEST: BULK_DELETE_REPLY,
                 BLOCKED_CHANGE: BLOCKED_CHANGE_REPLY,
                 ACTION_NOT_ASKED: ACTION_NOT_ASKED_REPLY,
+                TARGET_MISSING: TARGET_MISSING_REPLY,
             }[gate.reason]
             async for ev in self._stream_text(reply, delay):
                 yield ev

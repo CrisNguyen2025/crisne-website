@@ -136,6 +136,11 @@ BLOCKED_CHANGE_REPLY = (
     "Nếu bạn muốn thay đổi, hãy gửi lệnh trực tiếp, ví dụ: `xóa bài Kafka` hoặc `tạo topic AI Engineering`."
 )
 
+TARGET_MISSING_REPLY = (
+    "Mình chưa biết bạn muốn thay đổi mục nào nên chưa làm gì cả. Bạn gửi lại kèm tên cụ thể giúp mình nhé, "
+    "ví dụ: `thêm bài Hybrid Search vào layer 03-RAG` hoặc `xóa bài Kafka`."
+)
+
 QUESTION_TITLE_REPLY = (
     "Tên bạn đưa trông giống một câu hỏi nên tôi chưa tạo gì. Nếu muốn tạo mới, hãy gửi lại kèm tên rõ ràng, "
     "ví dụ: `tạo topic AI Engineering`."

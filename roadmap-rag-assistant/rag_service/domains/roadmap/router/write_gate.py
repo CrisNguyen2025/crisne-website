@@ -40,6 +40,10 @@ CONTENT_UNCLEAR = "content_unclear"        # "tạo thông tin cho topic": which
 DESCRIPTION_UNSUPPORTED = "description_unsupported"  # a topic's description is set at create only
 QUESTION_AS_TITLE = "question_as_title"  # the extractor took the user's question as the new entry's name
 BULK_DELETE_REQUEST = "bulk_delete"      # "xóa hết": never done in one message
+TARGET_MISSING = "target_missing"        # "xóa nó", "thêm bài này": no entity named, only a pointing word
+
+# Words that point at something instead of naming it; the anaphora resolver fills parents, never entity names
+POINTING_WORDS = {"này", "đó", "đấy", "kia", "ấy", "nó", "cái này", "cái đó", "this", "that", "it"}
 
 
 @dataclass(frozen=True)
@@ -82,6 +86,9 @@ def gate_action(route_gate: WriteGate, action: StructuredRoadmapAction, message:
         return WriteGate(WRITE_DENY, BLOCKED_CHANGE)
     if action.action == ActionType.CREATE and any(echoes_question(e.title, message) for e in action.entities):
         return WriteGate(WRITE_DENY, QUESTION_AS_TITLE)
+    # A preview needs a name to show: "XÓA 0 TOPIC" or a lesson called "này" is a question to ask back
+    if not action.entities or all(e.title.strip().lower() in POINTING_WORDS for e in action.entities):
+        return WriteGate(WRITE_DENY, TARGET_MISSING)
     # The change must be the one asked for, by a verb in the affirmed part of the message (polarity.py):
     # "khỏi tạo topic X" read as a delete, or "đừng sửa, xóa bài Y" read as an update, is not previewed.
     affirmed, _ = split_affirmed(message)

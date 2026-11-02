@@ -21,6 +21,10 @@ TRADITIONAL_TO_MODERN = {
     "Oè": "Òe", "Oé": "Óe", "Oẻ": "Ỏe", "Oẽ": "Õe", "Oẹ": "Ọe",
     "Uỳ": "Ùy", "Uý": "Úy", "Uỷ": "Ủy", "Uỹ": "Ũy", "Uỵ": "Ụy",
 }
+# Only an open syllable moves its tone: "toàn", "khoảng", "quý" are already modern ("tòan" is a typo)
+_TRADITIONAL_TONE = re.compile(
+    r"(?<![qQ])(" + "|".join(map(re.escape, TRADITIONAL_TO_MODERN)) + r")(?!\w)"
+)
 
 
 def normalize_vietnamese(text: str) -> str:
@@ -30,9 +34,7 @@ def normalize_vietnamese(text: str) -> str:
     # 1. Unicode NFC normalization (composes decomposed NFD accents from macOS/Telex)
     norm = unicodedata.normalize("NFC", text)
     # 2. Canonicalize vowel tone placement (e.g. 'xoá' -> 'xóa', 'huỷ' -> 'hủy')
-    for trad, mod in TRADITIONAL_TO_MODERN.items():
-        if trad in norm:
-            norm = norm.replace(trad, mod)
+    norm = _TRADITIONAL_TONE.sub(lambda m: TRADITIONAL_TO_MODERN[m.group(1)], norm)
     # 3. Chat shorthand ("dc ko", "j z"): every rule and the LLM then read one spelling
     return expand_teencode(norm)
 
