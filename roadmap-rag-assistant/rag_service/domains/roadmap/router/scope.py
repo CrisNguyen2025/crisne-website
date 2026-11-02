@@ -64,7 +64,7 @@ def _names_catalog_entry(focus: str, catalog: Any) -> bool:
     from rag_service.domains.roadmap.router.schemas import EntityLevel
 
     parts = [p.strip() for p in focus.split("|")]
-    return any(catalog.has(level, part) for part in parts for level in (EntityLevel.ITEM, EntityLevel.LAYER, EntityLevel.TOPIC))
+    return any(catalog.has(level, part) for part in parts for level in (EntityLevel.ITEM, EntityLevel.TOPIC))
 
 
 def classify_scope(

@@ -150,10 +150,10 @@ def split_affirmed(text: str) -> tuple[str, str]:
 # "topic vừa tạo", "bài mới thêm", "layer đã tạo lúc nãy": the time word describes the noun, it does not report.
 # A report has its subject before the time word ("mình vừa tạo", "hôm qua đã xóa"), so the word goes.
 ATTRIBUTIVE = re.compile(
-    r"(topic|chủ\s+đề|layer|bài(?:\s+học)?|nhóm|mục|item|lộ\s+trình|group|lesson)\s+(?:mới|vừa|đã|lúc\s+nãy)\s+(?=\S)"
+    r"(topic|chủ\s+đề|bài(?:\s+học)?|mục|item|lộ\s+trình|lesson)\s+(?:mới|vừa|đã|lúc\s+nãy)\s+(?=\S)"
 )
 ATTRIBUTIVE_FOLDED = re.compile(
-    r"(topic|chu de|layer|bai(?:\s+hoc)?|nhom|muc|item|lo trinh|group|lesson)\s+(?:moi|vua|da|luc nay)\s+(?=\S)"
+    r"(topic|chu de|bai(?:\s+hoc)?|muc|item|lo trinh|lesson)\s+(?:moi|vua|da|luc nay)\s+(?=\S)"
 )
 
 

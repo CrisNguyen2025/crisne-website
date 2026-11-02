@@ -19,7 +19,7 @@ from rag_service.steps import with_steps
 
 @pytest.fixture(autouse=True)
 def roadmap_data(mock_adapter):
-    """Agent turns here read topics and layers: give them the mock roadmap (conftest blocks the live API)."""
+    """Agent turns here read topics and topic: give them the mock roadmap (conftest blocks the live API)."""
     return mock_adapter
 
 
@@ -28,10 +28,10 @@ ACTS = [
     ("tôi tên gì?", SpeechAct.RECALL),
     ("xin chào", SpeechAct.GREETING),
     ("bạn tạo topic AI được không", SpeechAct.REQUEST),
-    ("chưa có bài Redis thì thêm vào layer Backend", SpeechAct.REQUEST),
-    ("cách thêm bài vào layer", SpeechAct.QUESTION),
+    ("chưa có bài Redis thì thêm vào topic Backend", SpeechAct.REQUEST),
+    ("cách thêm bài vào topic", SpeechAct.QUESTION),
     ("tạo topic như thế nào", SpeechAct.QUESTION),
-    ("thêm bài Caching vào layer Backend", SpeechAct.COMMAND),
+    ("thêm bài Caching vào topic Backend", SpeechAct.COMMAND),
     ("tạo topic tên là Tại sao Docker", SpeechAct.COMMAND),
     ("xóa nó đi", SpeechAct.COMMAND),
     ("Kafka", SpeechAct.STATEMENT),
@@ -44,9 +44,9 @@ TARGETS = [
     ("bạn là ai", Target.ASSISTANT),
     ("gợi ý vài prompt", Target.ASSISTANT),
     # How to make a change is a question about using the assistant, not about roadmap content
-    ("cách thêm bài vào layer", Target.ASSISTANT),
+    ("cách thêm bài vào topic", Target.ASSISTANT),
     ("tạo topic như thế nào", Target.ASSISTANT),
-    ("thêm bài Làm sao deploy Next.js vào layer DevOps", Target.ROADMAP),
+    ("thêm bài Làm sao deploy Next.js vào topic DevOps", Target.ROADMAP),
     ("topic này có mấy bài", Target.ROADMAP),
     ("xoa bai kafka", Target.ROADMAP),
     ("Kafka", Target.NONE),
@@ -66,13 +66,13 @@ def test_target(text, target):
 # Pairs with the same keywords: the axis that separates them, and the intents they must reach
 LOOK_ALIKES = [
     # Same verb and object, different act
-    ("cách thêm bài vào layer", "thêm bài Caching vào layer Backend",
+    ("cách thêm bài vào topic", "thêm bài Caching vào topic Backend",
      (SpeechAct.QUESTION, SpeechAct.COMMAND), (IntentType.CHITCHAT, IntentType.ROADMAP_CUD)),
     # Same question shape, different target
     ("có thể thao tác gì ở dự án này", "topic AI có những bài gì",
      (Target.ASSISTANT, Target.ROADMAP), (IntentType.CHITCHAT, IntentType.KNOWLEDGE_QUERY)),
     # Same "có thể ... không", but only one asks for a change
-    ("có thể thêm bài Kafka vào layer Backend không", "topic AI có bài Kafka không",
+    ("có thể thêm bài Kafka vào topic Backend không", "topic AI có bài Kafka không",
      (SpeechAct.REQUEST, SpeechAct.QUESTION), (IntentType.ROADMAP_CUD, IntentType.KNOWLEDGE_QUERY)),
 ]
 
@@ -87,11 +87,11 @@ def test_look_alikes_differ_on_one_axis(a, b, axis, intents):
 
 
 def test_question_words_inside_a_quoted_name_are_not_read():
-    u = understand('thêm bài "Docker là gì" vào layer DevOps')
+    u = understand('thêm bài "Docker là gì" vào topic DevOps')
     assert u.act == SpeechAct.COMMAND and "docker là gì" not in u.head
 
 
-@pytest.mark.parametrize("text", ["có thể thao tác gì ở dự án này", "cách thêm bài vào layer"])
+@pytest.mark.parametrize("text", ["có thể thao tác gì ở dự án này", "cách thêm bài vào topic"])
 def test_usage_questions_get_the_help_card_not_the_llm(text):
     async def run():
         steps, out = {}, ""
@@ -136,7 +136,7 @@ def test_plain_listing_is_a_listing(text):
 @pytest.mark.parametrize(
     "text",
     [
-        "danh sách topic có bài Docker không, tạo layer mới cũng được",
+        "danh sách topic có bài Docker không, tạo topic mới cũng được",
         "cho tôi xem danh sách topic, cách thêm bài như thế nào",
         "list topic đi, không phải, tìm bài RAG",
     ],
@@ -148,15 +148,15 @@ def test_listing_mixed_with_other_requests_is_not_a_listing(text):
 
 
 def test_label_before_colon_is_read_by_its_command():
-    u = understand("danh sách việc cần làm: thêm bài Redis vào layer Backend")
+    u = understand("danh sách việc cần làm: thêm bài Redis vào topic Backend")
     assert u.act == SpeechAct.COMMAND and u.target == Target.ROADMAP
     assert IntentRouter().classify_heuristics(
-        "danh sách việc cần làm: thêm bài Redis vào layer Backend"
+        "danh sách việc cần làm: thêm bài Redis vào topic Backend"
     ).intent == IntentType.ROADMAP_CUD
 
 
 def test_recall_does_not_hijack_a_roadmap_request():
-    u = understand("liệt kê bài học trong layer General của topic ZZ Test, tôi tên gì nhỉ")
+    u = understand("liệt kê bài học trong topic General của topic ZZ Test, tôi tên gì nhỉ")
     assert u.act != SpeechAct.RECALL and u.target == Target.ROADMAP
     # Plain recall still works
     assert understand("tôi tên gì nhỉ").act == SpeechAct.RECALL

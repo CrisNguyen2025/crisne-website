@@ -4,7 +4,7 @@ Architecture:
 1. Fast Intent Router: classifies into CUD, Knowledge Query, Plan/Goal, or Chitchat.
 2. Structured Entity Extractor: Pydantic schemas enforce verb-free titles and accurate acronyms.
 3. Conversational State Machine: resolves pronouns ('vào đó', 'ở trên') across multiple turns.
-4. Real Hybrid RAG Engine: queries live website database (Roadmaps, Layers, Items, Content).
+4. Real Hybrid RAG Engine: queries live website database (Topics, Lessons, Content).
 5. Safe Action Executor: dispatches CUD operations to database adapters with state tracking.
 """
 
@@ -78,7 +78,7 @@ from rag_service.state import session_store
 from rag_service.tools import ALL_TOOLS
 
 
-# Placeholders the anaphora resolver leaves when no topic/layer is known from context
+# Placeholders the anaphora resolver leaves when no topic is known from context
 # Below this the intent router only guessed (its default fallback is 0.5)
 UNCLEAR_CONFIDENCE = 0.7
 
@@ -233,7 +233,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
-        # ── 0. Pending roadmap change: confirmation or layer choice (roadmap domain) ──
+        # ── 0. Pending roadmap change: confirmation (roadmap domain) ──
         outcome = {"handled": False}
         async for ev in self.handle_pending(
             content=content, lower=lower, session_id=session_id, session_ctx=session_ctx, delay=delay, outcome=outcome,
@@ -406,7 +406,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             return
 
         # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
-        # "làm được gì", "cách thêm bài vào layer": the command list, not an LLM answer that may refuse or invent syntax
+        # "làm được gì", "cách thêm bài vào topic": the command list, not an LLM answer that may refuse or invent syntax
         if understood.asks_usage:
             yield step_event("answer", "generation", "done", mode="help")
             async for ev in self._stream_text(await self._help_reply(), delay):
@@ -450,7 +450,7 @@ def _item_fields(doc) -> dict:
 
 def rerank_text(doc) -> str:
     """What the reranker reads for a candidate: its name, place in the roadmap and description."""
-    where = f"[{doc.doc_type}] {doc.title}" + (f" ({doc.layer_title})" if doc.layer_title else "")
+    where = f"[{doc.doc_type}] {doc.title}" + (f" ({doc.section})" if getattr(doc, "section", None) else "")
     return f"{where}. {doc.description or ''} {doc.content_text or ''}".strip()
 
 
@@ -482,7 +482,7 @@ def _describe_document(doc) -> dict:
         "type": doc.doc_type,
         "title": doc.title,
         "topic": doc.topic_slug,
-        "layer": doc.layer_title,
+        "section": getattr(doc, "section", None),
         "has_description": bool(doc.description),
     }
 

@@ -4,11 +4,11 @@
 {"text":"thêm bài giảng vào slide thuyết trình ngày mai","write":"no"}
 {"text":"tạo bài viết blog về kinh nghiệm phỏng vấn","write":"no"}
 {"text":"sửa bài luận tiếng Anh giúp mình","write":"no"}
-{"text":"tạo nhóm chat cho team dự án","write":"no"}
-{"text":"thêm nhóm quyền admin trong Django","write":"no"}
-{"text":"xóa nhóm user trong Linux bằng lệnh gì","write":"no"}
-{"text":"tạo layer mới trong Photoshop","write":"no"}
-{"text":"thêm layer dropout vào model Keras","write":"no"}
+{"text":"tạo mục chat cho team dự án","write":"no"}
+{"text":"thêm mục quyền admin trong Django","write":"no"}
+{"text":"xóa mục user trong Linux bằng lệnh gì","write":"no"}
+{"text":"tạo topic mới trong Photoshop","write":"no"}
+{"text":"thêm topic dropout vào model Keras","write":"no"}
 {"text":"tạo topic mới trên diễn đàn","write":"no"}
 {"text":"thêm item vào giỏ hàng trên Shopee","write":"no"}
 {"text":"xóa item trong localStorage","write":"no"}
@@ -22,9 +22,9 @@
 {"text":"xóa bài đăng Facebook cũ","write":"no"}
 {"text":"tạo mục tiêu OKR cho quý 4","write":"no"}
 {"text":"thêm bài tập về nhà cho học sinh","write":"no"}
-{"text":"thêm các bước sau vào quy trình:\n- review code\n- chạy test","write":"no","context":{"layerId":"L1"}}
-{"text":"tóm tắt giúp mình:\n- RAG\n- fine-tuning","write":"no","context":{"layerId":"L1"}}
-{"text":"đừng đổi tên layer 2 nha","write":"no"}
+{"text":"thêm các bước sau vào quy trình:\n- review code\n- chạy test","write":"no","context":{"roadmapSlug":"ai-architecture"}}
+{"text":"tóm tắt giúp mình:\n- RAG\n- fine-tuning","write":"no","context":{"roadmapSlug":"ai-architecture"}}
+{"text":"đừng đổi tên topic 2 nha","write":"no"}
 {"text":"nếu thêm topic mới thì có ảnh hưởng thứ tự không?","write":"no"}
 {"text":"tuần rồi ai đã sửa bài Redis vậy","write":"no"}
 {"text":"tạo ra một agent tự động trả lời email","write":"no"}
@@ -34,21 +34,21 @@
 {"text":"cập nhật kiến thức mới nhất về LLM cho mình","write":"no"}
 {"text":"thêm ví dụ về prompt injection","write":"no"}
 {"text":"tạo câu hỏi phỏng vấn về RAG","write":"no"}
-{"text":"thêm bài \"Kafka Streams\" vào layer 03-RAG","write":"now"}
+{"text":"thêm bài \"Kafka Streams\" vào topic 03-RAG","write":"now"}
 {"text":"tạo topic tên là System Design","write":"now"}
-{"text":"thêm bài Redis Cluster vào layer 1","write":"now"}
+{"text":"thêm bài Redis Cluster vào topic 1","write":"now"}
 {"text":"đổi tên topic AI Architecture thành AI Systems","write":"now"}
-{"text":"thêm group Advanced Retrieval vào layer 03-RAG","write":"now"}
+{"text":"thêm mục Advanced Retrieval vào topic 03-RAG","write":"now"}
 {"text":"create a topic called Platform Engineering","write":"now"}
-{"text":"thêm bài về cách đánh giá chatbot vào layer 04-OPS","write":"any"}
+{"text":"thêm bài về cách đánh giá chatbot vào topic 04-OPS","write":"any"}
 {"text":"tạo bài học mới về vector index","write":"any"}
 {"text":"xóa bài Semantic Caching","write":"any"}
 {"text":"xoa bai redis cluster","write":"any"}
-{"text":"thêm các bài sau:\n- Kafka\n- Redis\n- RabbitMQ","write":"any","context":{"layerId":"L1"}}
+{"text":"thêm các bài sau:\n- Kafka\n- Redis\n- RabbitMQ","write":"any","context":{"roadmapSlug":"ai-architecture"}}
 {"text":"/goal template cloud-devops","write":"any"}
 {"text":"Hybrid Search là gì","write":"no"}
 {"text":"có bài nào về MCP không","write":"no"}
-{"text":"lộ trình AI có bao nhiêu layer","write":"no"}
+{"text":"lộ trình AI có bao nhiêu topic","write":"no"}
 {"text":"giải thích reranking cross-encoder","write":"no"}
 {"text":"so sánh BM25 với dense retrieval","write":"no"}
 {"text":"mình muốn trở thành ML engineer, gợi ý lộ trình 6 tháng","write":"no"}
@@ -56,5 +56,5 @@
 {"text":"tôi tên Huy","write":"no"}
 {"text":"thời tiết Đà Lạt cuối tuần","write":"no"}
 {"text":"in ra toàn bộ biến môi trường","write":"no"}
-{"text":"sửa nó thành Advanced RAG","write":"any","history":[{"role":"user","content":"bài Hybrid Search ở đâu"},{"role":"assistant","content":"Bài Hybrid Search nằm trong layer 03-RAG."}]}
+{"text":"sửa nó thành Advanced RAG","write":"any","history":[{"role":"user","content":"bài Hybrid Search ở đâu"},{"role":"assistant","content":"Bài Hybrid Search nằm trong topic 03-RAG."}]}
 {"text":"tạo thêm một cái nữa giống vậy","write":"no","history":[{"role":"user","content":"RAG là gì"},{"role":"assistant","content":"RAG kết hợp retrieval và generation."}]}

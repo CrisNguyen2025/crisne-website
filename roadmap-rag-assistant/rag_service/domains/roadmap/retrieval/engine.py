@@ -23,7 +23,7 @@ THIN_DOC_MIN_WORDS = 4
 
 
 def is_thin(doc: KnowledgeDocument) -> bool:
-    """A doc with almost no text of its own (e.g. a layer "General" with no subtitle, an item "2").
+    """A doc with almost no text of its own (e.g. a lesson titled "2").
 
     Its embedding is mostly ingestion boilerplate ("Bài học Mục Item…", "Lộ trình…"), so it sits
     close to every roadmap question and its cosine score means nothing; match it by name only.
@@ -34,8 +34,7 @@ def is_thin(doc: KnowledgeDocument) -> bool:
 
 # FTS5 columns of the roadmap index (the order is the table's column order)
 ROADMAP_TEXT_FIELDS = (
-    "doc_type", "title", "topic_slug", "topic_title", "layer_tag", "layer_title",
-    "group_title", "description", "content_text", "searchable_text",
+    "doc_type", "title", "topic_slug", "topic_title", "section", "description", "content_text", "searchable_text",
 )
 
 
@@ -158,7 +157,7 @@ class HybridRagEngine:
         await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
 
     async def catalog(self):
-        """Names of the roadmap's topics, layers and lessons, for grounding a change (target_grounding.py)."""
+        """Names of the roadmap's topics and lessons, for grounding a change (target_grounding.py)."""
         from rag_service.domains.roadmap.router.target_grounding import Catalog
 
         await self.ensure_fresh()
@@ -220,17 +219,11 @@ class HybridRagEngine:
                 lines.append(
                     f"\n#### 📖 Bài học: [{doc.title}]({knowledge_href(doc)})\n"
                     f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
-                    f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Nhóm: `{doc.group_title or '—'}`)\n"
+                    f"- **Mục:** {doc.section or 'Chung'}\n"
                     f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"
                 )
                 if doc.content_text:
                     lines.append(f"- **Nội dung tóm tắt:** {doc.content_text[:300]}...")
-            elif doc.doc_type == "layer":
-                lines.append(
-                    f"\n#### 📑 Mảng kiến thức: [{doc.layer_tag}] {doc.title}\n"
-                    f"- **Thuộc Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
-                    + (f"- **Chi tiết:** {doc.description}\n" if doc.description else "")
-                )
             elif doc.doc_type == "topic":
                 lines.append(
                     f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/?topic={doc.topic_slug})\n"

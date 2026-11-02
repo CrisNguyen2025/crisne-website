@@ -2,7 +2,7 @@
 
 Handles:
 - "vào đó", "trong đó", "cho nó", "in it", "to that topic" -> active_topic_slug
-- "thêm vào layer vừa tạo" -> active_layer_id
+- "thêm bài vào topic vừa tạo" -> active_topic_slug
 - Missing parent identifier -> automatically inferred from active conversation state
 """
 
@@ -31,28 +31,13 @@ class AnaphoraResolver:
 
         is_anaphora = target in ["CONTEXT_ACTIVE", "đó", "nó", "this", "it", None]
 
-        # 1. Resolving Layer parent (needs Topic slug)
-        if action.entity_level == EntityLevel.LAYER:
-            if is_anaphora or not target:
-                if ctx.active_topic_slug:
-                    action.target_parent_identifier = ctx.active_topic_slug
-                    topic_name = ctx.active_topic_title or ctx.active_topic_slug
-                    note = f"Tự động gán vào topic đang thao tác: **{topic_name}** (`{ctx.active_topic_slug}`)"
-                else:
-                    note = "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic (ví dụ: 'trong topic Backend')."
-
-        # 2. Resolving Group or Item parent (needs Layer ID or Topic)
-        elif action.entity_level in [EntityLevel.GROUP, EntityLevel.ITEM]:
-            if is_anaphora or not target:
-                if ctx.active_layer_id:
-                    action.target_parent_identifier = ctx.active_layer_id
-                    layer_name = ctx.active_layer_title or ctx.active_layer_id
-                    note = f"Tự động gán vào layer gần nhất: **{layer_name}**"
-                elif ctx.active_topic_slug:
-                    action.target_parent_identifier = ctx.active_topic_slug
-                    topic_name = ctx.active_topic_title or ctx.active_topic_slug
-                    note = f"Tự động gán vào topic: **{topic_name}**"
-                else:
-                    note = "Chưa có layer hoặc topic nào được chọn. Vui lòng chỉ định rõ tên layer hoặc topic."
+        # A lesson belongs to a topic (ADR-0009): an anaphoric or missing topic is the open one
+        if action.entity_level == EntityLevel.ITEM and (is_anaphora or not target):
+            if ctx.active_topic_slug:
+                action.target_parent_identifier = ctx.active_topic_slug
+                topic_name = ctx.active_topic_title or ctx.active_topic_slug
+                note = f"Tự động gán vào topic: **{topic_name}**"
+            else:
+                note = "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic."
 
         return action, note

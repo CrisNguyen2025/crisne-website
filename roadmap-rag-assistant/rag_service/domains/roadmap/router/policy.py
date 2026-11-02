@@ -67,11 +67,9 @@ OFF_TOPIC_STRONG_HINTS = [
     "kể chuyện", "dịch giúp", "dịch đoạn", "translate",
 ]
 
-# Roadmap objects, folded (typo-tolerant)
+# Roadmap objects, folded (typo-tolerant): a topic, a lesson, a section (ADR-0009)
 ENTITY_PATTERNS = [
     r"topics?c*", r"chu\s+de", r"lo\s+trinh", r"roadmaps?",
-    r"layers?r*", r"mang(?:\s+kien\s+thuc)?",
-    r"groups?", r"nhom",
     r"items?m*", r"bai(?:\s+hoc)?", r"muc", r"lessons?"
 ]
 

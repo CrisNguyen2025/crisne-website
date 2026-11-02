@@ -18,7 +18,6 @@ class DryRunValidator:
         """Render a clean Telegram-style Action Card for user review."""
         action_verbs = {
             ActionType.CREATE: ("➕ TẠO MỚI", "Sẽ tạo mới"),
-            ActionType.UPDATE: ("✏️ CẬP NHẬT", "Sẽ sửa đổi"),
             ActionType.DELETE: ("🗑️ XÓA DỮ LIỆU", "Sẽ xóa vĩnh viễn"),
         }
         badge, desc = action_verbs.get(action.action, ("📋 THAO TÁC", "Sẽ thực hiện"))
@@ -40,10 +39,8 @@ class DryRunValidator:
         lines.append("- **Danh sách thực thể:**")
         for idx, ent in enumerate(action.entities, 1):
             details = []
-            if ent.short_code:
-                details.append(f"Mã: `{ent.short_code}`")
-            if ent.group_title and action.entity_level == EntityLevel.ITEM:
-                details.append(f"Nhóm: `{ent.group_title}`")
+            if ent.section and action.entity_level == EntityLevel.ITEM:
+                details.append(f"Mục: `{ent.section}`")
             detail_str = f" ({', '.join(details)})" if details else ""
             lines.append(f"  {idx}. **{ent.title}**{detail_str}")
 

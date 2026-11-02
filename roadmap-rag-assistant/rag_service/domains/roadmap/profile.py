@@ -13,7 +13,7 @@ from rag_service.core.generation.profile import DomainProfile
 from rag_service.domains.roadmap.links import roadmap_link_allowed
 from rag_service.domains.roadmap.prompts import PROMPT_SUGGESTION_FORMAT
 
-_DOC_KIND = {"item": "Bài học", "layer": "Mảng kiến thức", "topic": "Lộ trình (Topic)"}
+_DOC_KIND = {"item": "Bài học", "topic": "Lộ trình (Topic)"}
 
 
 def _known_links() -> Callable[[str], bool]:
@@ -31,9 +31,7 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
     if doc.doc_type != "topic":
         lines.append(f"Thuộc lộ trình: {doc.topic_title} (`{doc.topic_slug}`)")
     if doc.doc_type == "item":
-        lines.append(f"Layer: [{doc.layer_tag}] {doc.layer_title} (Nhóm: `{doc.group_title or '—'}`)")
-    if doc.doc_type == "layer" and doc.layer_tag:
-        lines.append(f"Mã layer: {doc.layer_tag}")
+        lines.append(f"Mục: {doc.section or 'Chung'}")
     if doc.description:
         lines.append(f"Mô tả: {doc.description}")
     if doc.doc_type == "item" and doc.content_text:

@@ -43,14 +43,6 @@ class SingleEntity(BaseModel):
             "For 'thêm 2 bài mock 1 và 2', title is 'mock 1' for the first, 'mock 2' for the second."
         ),
     )
-    short_code: Optional[str] = Field(
-        None,
-        description=(
-            "Uppercase 2-4 letter abbreviation derived ONLY from the clean title. "
-            "Never derive from the action verb. For title 'ABC' -> short_code 'ABC'. "
-            "For title 'AI Engineering' -> short_code 'AIE' or 'AI'."
-        ),
-    )
     section: Optional[str] = Field(
         None,
         description=(

@@ -47,9 +47,7 @@ def to_document(kd: KnowledgeDocument, doc_id: str = "") -> dict:
         "sections": [{"section_id": doc_id, "text": kd.description or kd.content_text or ""}],
         "metadata": {
             "topic": kd.topic_slug,
-            "layer": kd.layer_tag,
-            "layer_title": kd.layer_title,
-            "group_title": kd.group_title,
+            "section": kd.section,
         },
     }
 
@@ -57,8 +55,7 @@ def to_document(kd: KnowledgeDocument, doc_id: str = "") -> dict:
 def _new_id(kd: KnowledgeDocument) -> str:
     if kd.doc_type == "topic":
         return kd.topic_slug
-    layer = f"{kd.topic_slug}/{(kd.layer_tag or 'layer').lower()}"
-    return layer if kd.doc_type == "layer" else f"{layer}/{slugify(kd.title)}"
+    return kd.topic_slug if kd.doc_type == "topic" else f"{kd.topic_slug}/{slugify(kd.title)}"
 
 
 def read_existing() -> tuple[list[dict], dict]:
@@ -74,7 +71,7 @@ def build_documents(knowledge: list[KnowledgeDocument], previous: list[dict]) ->
     by_title = {doc["title"]: doc["doc_id"] for doc in previous}
     taken = set(by_source.values()) | set(by_title.values())
     documents = []
-    for kd in sorted(knowledge, key=lambda d: (d.topic_slug, d.layer_tag or "", d.doc_type, d.title)):
+    for kd in sorted(knowledge, key=lambda d: (d.topic_slug, d.section or "", d.doc_type, d.title)):
         doc_id = by_source.get(kd.id) or by_title.get(kd.title)
         if doc_id is None:
             base = doc_id = _new_id(kd)

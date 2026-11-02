@@ -43,7 +43,7 @@ POSITION_OR_TIME = {
 }
 # The roadmap's objects, and the words people use for its parts ("phần frontend", "phase 3", "chương 2")
 OBJECT_NOUN = re.compile(
-    r"\b(?:topics?|chu\s+de|lo\s+trinh|roadmaps?|layers?|mang(?:\s+kien\s+thuc)?|groups?|nhom|items?|bai(?:\s+hoc)?"
+    r"\b(?:topics?|chu\s+de|lo\s+trinh|roadmaps?|items?|bai(?:\s+hoc)?"
     r"|muc|lessons?)\b"
 )
 PART_NOUN = re.compile(r"\b(?:phan|phases?|chuong|chapters?|modules?|sections?|tang|giai\s+doan)\b")

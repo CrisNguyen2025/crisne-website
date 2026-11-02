@@ -1,29 +1,19 @@
-"""Roadmap commands: create, update and delete through the agent (owner only).
+"""Roadmap commands: create and delete topics and lessons through the agent (owner only), ADR-0009.
 
 Mixed into NextGenRoadmapAgent. The agent decides that a message is a roadmap change; this module
-carries it out: extraction, target checks, confirmation and the executor.
+carries it out: extraction, target checks, confirmation and the executor. A lesson belongs to a topic;
+when the topic is not known the user is asked for it, never guessed.
 """
 
 from __future__ import annotations
 
 import re
-
-from rag_service.domains.roadmap.retrieval.relevance import fold
 from typing import AsyncGenerator
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
-from rag_service.execution.changes import ChangeSet
-from rag_service.write_grant import write_granted
-from rag_service.execution.dry_run import DryRunValidator
-from rag_service.adapters.errors import find_duplicate
-from rag_service.adapters.groups import GroupChoiceRequired
-from rag_service.domains.roadmap.router.entity_extractor import named_group
 from rag_service.domains.roadmap.router.grounding import (
     ACTION_NOT_ASKED_REPLY,
-    NO_DEFAULT_LAYER_REPLY,
-    group_choice_reply,
-    BATCH_LAYER_DELETE_REPLY,
     BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
     QUESTION_TITLE_REPLY,
@@ -34,7 +24,7 @@ from rag_service.domains.roadmap.router.grounding import (
     unresolved_entity_reply,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
-from rag_service.domains.roadmap.retrieval.relevance import content_words
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
 from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.domains.roadmap.router.write_gate import (
@@ -46,19 +36,20 @@ from rag_service.domains.roadmap.router.write_gate import (
     WriteGate,
     gate_action,
 )
-from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
+from rag_service.execution.changes import ChangeSet
+from rag_service.execution.dry_run import DryRunValidator
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
-from rag_service.tools.layer_resolver import resolve_entity, resolve_layer, topic_named_in_message
+from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
+from rag_service.write_grant import write_granted
 
 
 class RoadmapCommands:
     def bulk_import_applies(self, raw_content: str, lower: str, page_context) -> bool:
-        """A pasted list of two or more items asked to be added: the same evidence as any other change.
+        """A pasted list of two or more lessons asked to be added: the same evidence as any other change.
 
         The first line must ask for it: a change verb with a roadmap object ("thêm các bài sau:"), or, while a
-        layer is open, a change verb alone ("thêm:"). A list by itself is not a request: "tóm tắt giúp mình:\\n- RAG"
-        or "thêm các bước sau vào quy trình:\\n- review code" used to be imported into the open layer.
+        topic is open, a change verb alone ("thêm:"). A list by itself is not a request.
         """
         titles = parse_item_list(raw_content)
         if len(titles) < 2:
@@ -67,20 +58,13 @@ class RoadmapCommands:
         u = understand(first)
         if not u.has_change_verb:
             return False
-        layer_in_view = (page_context or {}).get("layerId")
-        return u.has_object or (bool(layer_in_view) and len(content_words(first)) <= 2)
+        topic_in_view = (page_context or {}).get("roadmapSlug")
+        return u.has_object or (bool(topic_in_view) and len(first.split()) <= 2)
 
     async def handle_pending(
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
-        """Finish a roadmap change that was waiting: confirm/cancel a previewed action, or pick a layer."""
-        plain = " ".join(re.sub(r"[^\w\s]", " ", fold(lower)).split())
-        if plain in ("tao layer mac dinh", "tao layer default"):
-            async for ev in self._stream_text(NO_DEFAULT_LAYER_REPLY, delay):
-                yield ev
-            outcome["handled"] = True
-            return
-        # ── 0. Pending Action Confirmation ────────────────────────────────────
+        """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
             if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
@@ -114,134 +98,11 @@ class RoadmapCommands:
             # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
             session_ctx.pending_confirmation = None
 
-        # ── 0a. Pending group choice for a lesson whose group is not settled (ADR-0008) ──
-        if session_ctx.fresh_pending("pending_group_choice"):
-            pending_lesson = session_ctx.pending_group_choice
-            options = session_ctx.pending_group_options
-            session_ctx.pending_group_choice = None
-            session_ctx.pending_group_options = []
-            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
-                async for ev in self._stream_text("Đã hủy, mình không thêm gì.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            chosen = self._answered_group(content, lower, options)
-            if chosen:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                    outcome["handled"] = True
-                    return
-                for ent in pending_lesson.entities:
-                    ent.group_title = chosen
-                tool_name = f"{pending_lesson.action.value}_{pending_lesson.entity_level.value}"
-                yield {"type": "tool_start", "name": tool_name, "args": {"group_title": chosen}}
-                changes = ChangeSet.of(pending_lesson)
-                ok, item_msg = await self._execute_change(
-                    pending_lesson, session_id, session_ctx, changes, "group chosen for an allowed change"
-                )
-                yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
-                if changes:
-                    yield changes.event()
-                async for ev in self._stream_text(item_msg, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else is a new message, handled below as usual
-
-        # ── 0b. Pending layer choice for an item without a target layer ──────
-        if session_ctx.fresh_pending("pending_layer_choice"):
-            pending_item = session_ctx.pending_layer_choice
-            topic_slug = session_ctx.pending_layer_topic
-            options = session_ctx.pending_layer_options
-            session_ctx.pending_layer_choice = None
-            session_ctx.pending_layer_topic = None
-            session_ctx.pending_layer_options = []
-            m = re.match(r"^tạo layer\s+(.+)$", content, re.IGNORECASE)
-            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
-                async for ev in self._stream_text("Đã hủy thêm bài học.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-
-            # Pick one of the offered layers by number or by name.
-            picked = None
-            if options and lower.isdigit() and 1 <= int(lower) <= len(options):
-                picked = options[int(lower) - 1]
-            elif options and not m:
-                named = [o for o in options if lower in (o["title"].lower(), o["shortTag"].lower(), o["id"].lower())]
-                picked = named[0] if len(named) == 1 else None
-            if picked:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                    outcome["handled"] = True
-                    return
-                pending_item.target_parent_identifier = picked["id"]
-                session_store.set_active_layer(session_id, layer_id=picked["id"], title=picked["title"])
-                tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
-                yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
-                changes = ChangeSet.of(pending_item)
-                ok, item_msg = await self._execute_change(
-                    pending_item, session_id, session_ctx, changes, "layer chosen for an allowed change"
-                )
-                yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
-                if changes:
-                    yield changes.event()
-                async for ev in self._stream_text(item_msg, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            if m and not is_owner():
-                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            if m:
-                name = m.group(1).strip()
-                if name.lower() in ["mặc định", "default"]:
-                    async for ev in self._stream_text(NO_DEFAULT_LAYER_REPLY, delay):
-                        yield ev
-                    outcome["handled"] = True
-                    return
-                layer_action = StructuredRoadmapAction(
-                    action=ActionType.CREATE,
-                    entity_level=EntityLevel.LAYER,
-                    target_parent_identifier=topic_slug,
-                    entities=[SingleEntity(title=name)],
-                )
-                yield {"type": "tool_start", "name": "create_layer", "args": {"topic": topic_slug, "title": name}}
-                changes = ChangeSet.of(layer_action)
-                with write_granted("layer chosen for an allowed change"):
-                    ok, layer_msg = await self.executor.aexecute(layer_action, session_id=session_id, changes=changes)
-                yield {"type": "tool_end", "name": "create_layer", "result": layer_msg, "is_error": not ok}
-                if changes:
-                    yield changes.event()
-                if not ok:
-                    async for ev in self._stream_text(layer_msg, delay):
-                        yield ev
-                    outcome["handled"] = True
-                    return
-                pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
-                yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
-                changes = ChangeSet.of(pending_item)
-                ok, item_msg = await self._execute_change(
-                    pending_item, session_id, session_ctx, changes, "layer chosen for an allowed change"
-                )
-                yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
-                if changes:
-                    yield changes.event()
-                async for ev in self._stream_text(f"{layer_msg}\n\n{item_msg}", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else: drop the pending choice and handle as a fresh message.
-
     async def handle_listing(
         self, *, content: str, lower: str, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
         """The topic list."""
-        # Only a plain listing request: "danh sách topic có bài Docker không, tạo layer" is not one (router decides)
+        # Only a plain listing request: "danh sách topic có bài Docker không, thêm bài" is not one (router decides)
         if LIST_TOPICS.search(lower) and is_plain_listing(content):
             yield {"type": "tool_start", "name": "list_topics", "args": {}}
             res = await self.tools["list_topics"].ainvoke({})
@@ -254,13 +115,13 @@ class RoadmapCommands:
     async def handle_bulk_import(
         self, *, raw_content: str, lower: str, page_context, delay: float
     ) -> AsyncGenerator[dict, None]:
-        """Import the pasted items into the open layer (owner only), or ask for the layer first."""
+        """Import the pasted lessons into the open topic (owner only), or ask for the topic first."""
         titles = parse_item_list(raw_content)
-        layer_in_view = (page_context or {}).get("layerId")
-        if not layer_in_view:
+        topic_in_view = (page_context or {}).get("roadmapSlug")
+        if not topic_in_view:
             ask = (
-                f"Tôi thấy {len(titles)} dòng item nhưng chưa biết thêm vào layer nào. "
-                "Hãy mở layer đích trên trang rồi gửi lại danh sách, hoặc nói rõ tên layer."
+                f"Tôi thấy {len(titles)} dòng bài nhưng chưa biết thêm vào topic nào. "
+                "Hãy mở topic đích trên trang rồi gửi lại danh sách, hoặc nói rõ tên topic."
             )
             async for ev in self._stream_text(ask, delay):
                 yield ev
@@ -269,12 +130,9 @@ class RoadmapCommands:
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
-        # The group the first line names ("… vào nhóm X"); none: the layer's only group, else the tool asks (ADR-0008)
-        first_line = raw_content.strip().splitlines()[0] if raw_content.strip() else ""
-        bulk_group = named_group(first_line, lesson=True)
-        tool_args = {"layer_id": layer_in_view, "group_title": bulk_group, "text": raw_content}
+        tool_args = {"topic": topic_in_view, "section": "", "text": raw_content}
         yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
-        changes = ChangeSet("create", "item", layer_in_view)
+        changes = ChangeSet("create", "item", topic_in_view)
         with write_granted("bulk import asked on its first line"):
             res = await import_items_from_text.coroutine(**tool_args, changes=changes)
         yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
@@ -286,30 +144,9 @@ class RoadmapCommands:
     async def _execute_change(
         self, action: StructuredRoadmapAction, session_id: str, session_ctx, changes: ChangeSet, reason: str
     ) -> tuple[bool, str]:
-        """Run the change; a lesson whose group is not settled is asked back and kept for the answer (ADR-0008)."""
-        try:
-            with write_granted(reason):
-                return await self.executor.aexecute(action, session_id=session_id, changes=changes)
-        except GroupChoiceRequired as ask:
-            session_ctx.pending_group_choice = action
-            session_ctx.pending_group_options = ask.titles
-            titles = ", ".join(f"**{e.title}**" for e in action.entities)
-            return False, group_choice_reply(titles, ask.titles)
-
-    def _answered_group(self, content: str, lower: str, options: list[str]) -> str:
-        """The group an answer picks: a number or a name from the options, or `nhóm X` for a new one; else empty.
-
-        Any other text is a new message, never a group name: a group is created only when the answer says so.
-        """
-        # An emoji or closing punctuation is not part of the answer ("Production 😅")
-        content = re.sub(r"^[\W_]+|[\W_]+$", "", content.strip())
-        lower = content.lower()
-        if lower.isdigit() and 1 <= int(lower) <= len(options):
-            return options[int(lower) - 1]
-        named = find_duplicate([{"title": o} for o in options], content)
-        if named:
-            return named["title"]
-        return named_group(content, lesson=True)
+        """Run the change under a write grant."""
+        with write_granted(reason):
+            return await self.executor.aexecute(action, session_id=session_id, changes=changes)
 
     async def _ask_confirmation(
         self, action: StructuredRoadmapAction, note, session_id: str, session_ctx, delay: float
@@ -331,7 +168,7 @@ class RoadmapCommands:
         gate: WriteGate = WriteGate(WRITE_ALLOW),
         verdict=None,
     ) -> AsyncGenerator[dict, None]:
-        """Roadmap create/update/delete: extract the action, ask back when a target is unclear, then confirm or run it.
+        """Roadmap create/delete: extract the action, ask back when a target is unclear, then confirm or run it.
 
         `gate` is the route-level write decision (write_gate.gate_route); gate_action refines it for the extracted change.
         """
@@ -341,7 +178,6 @@ class RoadmapCommands:
                 yield ev
             return
         # System 2 already read the change (router/verifier.py): reuse it, no second extraction call.
-        # Otherwise the extractor runs; page context is added only for its LLM, heuristics keep the raw text.
         verified = getattr(verdict, "change", None) if verdict is not None and verdict.is_roadmap_change else None
         if verified is not None and verified.entities:
             action: StructuredRoadmapAction = self.extractor.from_verified(verified, text=content)
@@ -369,98 +205,61 @@ class RoadmapCommands:
                 yield ev
             return
 
-        # A lesson or group to delete is named, but the API takes its id: resolve it before the preview names it
-        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level in (EntityLevel.ITEM, EntityLevel.GROUP):
-            noun = "bài học" if resolved_action.entity_level == EntityLevel.ITEM else "nhóm"
+        # A lesson to delete is named, but the API takes its id: resolve it before the preview names it
+        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.ITEM:
             if resolved_action.is_batch or len(resolved_action.entities) != 1:
-                async for ev in self._stream_text(batch_entity_delete_reply(noun), delay):
+                async for ev in self._stream_text(batch_entity_delete_reply("bài học"), delay):
                     yield ev
                 return
             name = resolved_action.entities[0].title
-            kind = "item" if resolved_action.entity_level == EntityLevel.ITEM else "group"
-            found = await resolve_entity(kind, name, topic_slug=(page_context or {}).get("roadmapSlug"))
+            found = await resolve_lesson(name, topic_slug=(page_context or {}).get("roadmapSlug"))
             if found.status != "found":
-                async for ev in self._stream_text(unresolved_entity_reply(noun, name, found.candidates), delay):
+                async for ev in self._stream_text(unresolved_entity_reply("bài học", name, found.candidates), delay):
                     yield ev
                 return
-            resolved_action.target_parent_identifier = found.entity_id
+            resolved_action.target_parent_identifier = found.lesson_id
             resolved_action.entities[0].title = found.title
-            note = None  # the layer the anaphora resolver filled in is not where the delete goes
+            note = None  # the topic the anaphora resolver filled in is not where the delete goes
 
-        # Layer actions need a known topic: ask back with the topic list instead of guessing.
-        if resolved_action.entity_level == EntityLevel.LAYER:
-            topic_ref = resolved_action.target_parent_identifier
-            if topic_ref in ANAPHORA_TARGETS or not topic_ref or not await self._topic_known(topic_ref):
-                async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
-                    yield ev
-                return
+        # A topic delete names the topic: resolve it so the preview names the right one
+        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.TOPIC:
+            ref = resolved_action.target_parent_identifier or (
+                resolved_action.entities[0].title if resolved_action.entities else ""
+            )
+            found_topic = await resolve_topic(ref)
+            if found_topic.status == "found" and found_topic.slug:
+                resolved_action.target_parent_identifier = found_topic.slug
 
-            # Resolve the layer inside that topic before showing the preview; the id goes into target.
-            if resolved_action.action == ActionType.DELETE:
-                if resolved_action.is_batch:
-                    async for ev in self._stream_text(BATCH_LAYER_DELETE_REPLY, delay):
-                        yield ev
-                    return
-                layer_name = resolved_action.entities[0].title if resolved_action.entities else ""
-                layer_res = await resolve_layer(layer_name, topic_slug=topic_ref)
-                if layer_res.status != "found" or layer_res.topic_slug != topic_ref:
-                    in_topic = [c for c in layer_res.candidates if c["topic_slug"] == topic_ref][:10]
-                    listing = "\n".join(f"- `{c['shortTag'] or c['id']}` — {c['title']}" for c in in_topic)
-                    ask = f"Không tìm thấy layer `{layer_name}` trong topic `{topic_ref}`."
-                    if listing:
-                        ask += f"\n\n**Các layer trong topic này:**\n{listing}\n\nHãy gửi lại kèm tên hoặc shortTag chính xác."
-                    async for ev in self._stream_text(ask, delay):
-                        yield ev
-                    return
-                resolved_action.target_parent_identifier = layer_res.layer_id
-
-        # A delete to confirm is previewed once its layer is resolved (the preview names it)
+        # A delete to confirm is previewed once its target is resolved (the preview names it)
         if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
             async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
                 yield ev
             return
 
-        is_item_create = (
-            resolved_action.entity_level == EntityLevel.ITEM
-            and resolved_action.action == ActionType.CREATE
-        )
-        # A topic named in the message ("… của topic Machine Learning") beats the open page and the session
-        topic_slug = (
-            await topic_named_in_message(content)
-            or (page_context or {}).get("roadmapSlug")
-            or session_ctx.active_topic_slug
-        )
+        # A lesson needs a topic: the one named in the message, the open page, or the session's; else ask.
+        is_item_create = resolved_action.entity_level == EntityLevel.ITEM and resolved_action.action == ActionType.CREATE
+        if is_item_create:
+            topic_ref = resolved_action.target_parent_identifier
+            if not topic_ref or topic_ref in ANAPHORA_TARGETS:
+                topic_ref = (
+                    await topic_named_in_message(content)
+                    or (page_context or {}).get("roadmapSlug")
+                    or session_ctx.active_topic_slug
+                )
+            if not topic_ref or not await self._topic_known(topic_ref):
+                async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
+                    yield ev
+                return
+            resolved_action.target_parent_identifier = topic_ref
 
-        # Item create without a layer: offer to create a default or named layer.
-        if is_item_create and not resolved_action.target_parent_identifier and topic_slug:
-            async for ev in self._ask_layer_choice(session_ctx, resolved_action, topic_slug, delay):
-                yield ev
-            return
-
-        # Check the target exists before writing; ask back instead of guessing.
-        target = resolved_action.target_parent_identifier
-        if resolved_action.action == ActionType.CREATE and target:
-            if resolved_action.entity_level in (EntityLevel.ITEM, EntityLevel.GROUP):
-                layer_res = await resolve_layer(target, topic_slug=topic_slug)
-                if layer_res.status == "found":
-                    resolved_action.target_parent_identifier = layer_res.layer_id
-                    session_store.set_active_layer(
-                        session_id, layer_id=layer_res.layer_id, title=layer_res.layer_title or ""
-                    )
-                elif layer_res.status != "unavailable":
-                    async for ev in self._ask_target_choice(
-                        session_ctx, resolved_action, target, layer_res, topic_slug, delay
-                    ):
-                        yield ev
-                    return
         # Asked politely or on a condition ("có thể thêm ... không", "chưa thì thêm vào"): show it, run on "ok"
         if gate.mode == WRITE_CONFIRM:
             async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
                 yield ev
             return
 
-        if resolved_action.is_batch and resolved_action.entity_level != EntityLevel.GROUP:
-            tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}s_batch"
+        if resolved_action.is_batch and resolved_action.entity_level == EntityLevel.ITEM:
+            tool_name = f"{resolved_action.action.value}_items_batch"
         else:
             tool_name = f"{resolved_action.action.value}_{resolved_action.entity_level.value}"
 
@@ -472,7 +271,6 @@ class RoadmapCommands:
         }
         yield {"type": "tool_start", "name": tool_name, "args": tool_args}
 
-        remembered_layer = session_ctx.active_layer_id
         changes = ChangeSet.of(resolved_action)
         ok, result_msg = await self._execute_change(
             resolved_action, session_id, session_ctx, changes, "write gate allow"
@@ -480,21 +278,6 @@ class RoadmapCommands:
         yield {"type": "tool_end", "name": tool_name, "result": result_msg, "is_error": not ok}
         if changes:
             yield changes.event()
-
-        # The remembered layer may have been deleted since: forget it and ask again.
-        if (
-            not ok
-            and is_item_create
-            and topic_slug
-            and remembered_layer
-            and resolved_action.target_parent_identifier == remembered_layer
-        ):
-            session_ctx.active_layer_id = None
-            session_ctx.active_layer_title = None
-            resolved_action.target_parent_identifier = None
-            async for ev in self._ask_layer_choice(session_ctx, resolved_action, topic_slug, delay):
-                yield ev
-            return
 
         full_reply = result_msg
         if note:

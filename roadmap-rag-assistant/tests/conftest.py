@@ -106,71 +106,45 @@ def mock_adapter():
     """Create a mock adapter with all methods as AsyncMock."""
     adapter = AsyncMock()
 
-    # Default return values for common operations
+    # Default return values for common operations (ADR-0009: a topic holds lessons, some in a section)
     adapter.list_topics.return_value = [
         {
             "id": "test-id-1",
             "slug": "test-topic",
             "title": "Test Topic",
-            "shortCode": "TT",
             "description": "",
             "icon": "Layers",
             "order": 1,
             "isLocked": False,
-            "_count": {"layers": 1},
+            "_count": {"items": 1},
         }
     ]
     adapter.get_topic.return_value = {
         "id": "test-id-1",
         "slug": "test-topic",
         "title": "Test Topic",
-        "layers": [
-            {
-                "id": "layer-id",
-                "shortTag": "01-NL",
-                "title": "New Layer",
-            }
-        ],
+        "items": [{"id": "item-id-1", "title": "Existing Lesson", "section": "New Section", "order": 1}],
+        "sections": ["New Section"],
     }
     adapter.create_topic.return_value = {
         "id": "new-id",
         "slug": "new-topic",
         "title": "New Topic",
-        "shortCode": "NT",
     }
     adapter.delete_topic.return_value = True
-    adapter.create_layer.return_value = {
-        "id": "layer-id",
-        "title": "New Layer",
-        "shortTag": "01-NL",
-        "order": 1,
-    }
-    adapter.update_layer.return_value = {
-        "id": "layer-id",
-        "title": "Updated Layer",
-    }
-    adapter.delete_layer.return_value = True
-    adapter.create_group.return_value = {
-        "id": "group-id",
-        "title": "New Group",
-        "order": 1,
-    }
-    adapter.update_group.return_value = {
-        "id": "group-id",
-        "title": "Updated Group",
-    }
-    adapter.delete_group.return_value = True
     adapter.create_item.return_value = {
         "id": "item-id",
         "title": "New Item",
         "description": "",
-        "layerId": "layer-id",
-        "groupId": "group-id",
+        "section": None,
+        "roadmapSlug": "test-topic",
     }
     adapter.update_item.return_value = {
         "id": "item-id",
         "title": "Updated Item",
     }
+    adapter.update_section.return_value = {"renamed": 1, "section": "Renamed"}
+    adapter.update_item_order.return_value = True
     adapter.delete_item.return_value = True
 
     # Register mock adapter globally

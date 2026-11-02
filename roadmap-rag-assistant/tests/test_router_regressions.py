@@ -13,7 +13,7 @@ UNACCENTED = [
     ("sua lai ten bai so 4 thanh Asynchronous Programming", IntentType.ROADMAP_CUD),
     ("tim bai ve websocket", IntentType.KNOWLEDGE_QUERY),
     ("cho xem danh sach cac topic trong phan frontend", IntentType.KNOWLEDGE_QUERY),
-    ("chuyen bai RAG sang layer AI", IntentType.ROADMAP_CUD),
+    ("chuyen bai RAG sang topic AI", IntentType.ROADMAP_CUD),
     ("Chuyển topic Docker lên đầu", IntentType.ROADMAP_CUD),
 ]
 
@@ -73,7 +73,7 @@ def test_creating_a_roadmap_is_not_a_plan_request(text, intent):
 
 
 def test_roadmap_question_without_a_goal_is_not_a_plan():
-    res = IntentRouter().classify_heuristics("cho mình xem lại toàn bộ cấu trúc các layer của roadmap đang học")
+    res = IntentRouter().classify_heuristics("cho mình xem lại toàn bộ cấu trúc các topic của roadmap đang học")
     assert res is None or res.intent != IntentType.PLAN_GOAL
 
 

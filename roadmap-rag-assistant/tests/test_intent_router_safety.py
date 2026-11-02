@@ -20,7 +20,7 @@ from rag_service.steps import with_steps
 
 @pytest.fixture(autouse=True)
 def roadmap_data(mock_adapter):
-    """Agent turns here read topics and layers: give them the mock roadmap (conftest blocks the live API)."""
+    """Agent turns here read topics and topic: give them the mock roadmap (conftest blocks the live API)."""
     return mock_adapter
 
 
@@ -29,12 +29,12 @@ IMPLICIT_QUESTIONS = [
     ("dự án này làm được những gì", IntentType.CHITCHAT),
     ("co the thao tac gi o day", IntentType.CHITCHAT),
     ("topic này có mấy bài", IntentType.KNOWLEDGE_QUERY),
-    ("layer Backend có bao nhiêu bài học", IntentType.KNOWLEDGE_QUERY),
+    ("topic Backend có bao nhiêu bài học", IntentType.KNOWLEDGE_QUERY),
     ("bài Docker nằm ở đâu", IntentType.KNOWLEDGE_QUERY),
 ]
 
 # Change requests that must stay changes: "não" is not "nào", and a polite question keeps its verb
-CHANGES = ["tạo topic AI Engineering", "tạo topic về não bộ", "thêm bài Caching vào layer Backend"]
+CHANGES = ["tạo topic AI Engineering", "tạo topic về não bộ", "thêm bài Caching vào topic Backend"]
 
 
 @pytest.mark.parametrize("text,intent", IMPLICIT_QUESTIONS)
@@ -53,23 +53,23 @@ def test_change_requests_still_route_to_cud(text):
 TRICKY_SHAPES = [
     # 1. How-to question with a change verb: asks how to use the assistant, answered with the help card
     # (a knowledge search finds nothing: the knowledge base holds lessons, not usage docs)
-    ("cách thêm bài vào layer", IntentType.CHITCHAT, False),
+    ("cách thêm bài vào topic", IntentType.CHITCHAT, False),
     ("các bước xóa một topic", IntentType.CHITCHAT, False),
-    ("làm thế nào để tạo layer mới", IntentType.CHITCHAT, False),
+    ("làm thế nào để tạo topic mới", IntentType.CHITCHAT, False),
     ("muốn xóa topic thì làm sao", IntentType.CHITCHAT, False),
     ("hướng dẫn chunking", IntentType.KNOWLEDGE_QUERY, False),
     ("tạo topic Cách mạng công nghiệp", IntentType.ROADMAP_CUD, False),
     # 2. Change asked politely as a question
-    ("có thể thêm bài Kafka vào layer Backend không", IntentType.ROADMAP_CUD, True),
+    ("có thể thêm bài Kafka vào topic Backend không", IntentType.ROADMAP_CUD, True),
     ("bạn tạo topic AI được không", IntentType.ROADMAP_CUD, True),
     # 3. Question words inside the name
     ("tạo topic tên là Tại sao Docker", IntentType.ROADMAP_CUD, False),
-    ("thêm bài Làm sao deploy Next.js vào layer DevOps", IntentType.ROADMAP_CUD, False),
-    ('thêm bài "Docker là gì" vào layer DevOps', IntentType.ROADMAP_CUD, False),
+    ("thêm bài Làm sao deploy Next.js vào topic DevOps", IntentType.ROADMAP_CUD, False),
+    ('thêm bài "Docker là gì" vào topic DevOps', IntentType.ROADMAP_CUD, False),
     ("tạo topic như thế nào", IntentType.CHITCHAT, False),
     # 4. Change on a condition
     ("topic AI có bài Docker chưa, chưa thì thêm vào", IntentType.ROADMAP_CUD, True),
-    ("nếu chưa có bài Redis thì thêm vào layer Backend", IntentType.ROADMAP_CUD, True),
+    ("nếu chưa có bài Redis thì thêm vào topic Backend", IntentType.ROADMAP_CUD, True),
 ]
 
 # 5. Too little to decide: left to the LLM router, whose guessed changes the write guard stops
@@ -127,7 +127,7 @@ def test_change_request_needs_verb_and_object_unless_follow_up():
 def test_question_echoed_as_title_is_caught_but_real_titles_are_kept():
     message = "có thể thao tác gì ở dự án này"
     assert echoes_question(message, message)
-    assert not echoes_question("Docker là gì", "thêm bài Docker là gì vào layer Backend")
+    assert not echoes_question("Docker là gì", "thêm bài Docker là gì vào topic Backend")
     assert not echoes_question("AI Engineering", "tạo topic AI Engineering")
 
 
@@ -211,7 +211,7 @@ def test_low_confidence_llm_change_asks_back():
     thread = "safety-low-confidence"
     history_store.clear(thread)
     history_store.append(thread, "user", "tìm bài Kafka")
-    history_store.append(thread, "assistant", "Bài Kafka nằm trong layer Backend.")
+    history_store.append(thread, "assistant", "Bài Kafka nằm trong topic Backend.")
     llm = _FixedLlm(IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.6))
     steps, _ = _run(NextGenRoadmapAgent(llm_model=llm), "xóa nó đi", thread)
     assert steps["route"]["method"] == "llm"

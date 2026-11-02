@@ -341,9 +341,9 @@ def echoes_question(title: str, message: str) -> bool:
     return bool(words) and sum(w in title_words for w in words) / len(words) >= 0.8
 
 
-# The entity word a change names, accented or folded ("topic", "bài học", "layer", "nhóm")
+# The entity word a change names, accented or folded ("topic", "bài học", "mục")
 _ENTITY_WORD = re.compile(
-    r"\b(?:topics?|chủ\s+đề|chu\s+de|lộ\s+trình|lo\s+trinh|roadmaps?|layers?|mảng|mang|groups?|nhóm|nhom|items?"
+    r"\b(?:topics?|chủ\s+đề|chu\s+de|lộ\s+trình|lo\s+trinh|roadmaps?|items?"
     r"|bài(?:\s+học)?|bai(?:\s+hoc)?|mục|muc|lessons?)\b",
     re.IGNORECASE,
 )

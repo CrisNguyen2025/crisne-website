@@ -1,12 +1,11 @@
 """Page-context grounding and scope guardrail helpers.
 
-- build_grounding(): turns the page context sent by the web client (current roadmap, layer)
-  into a short hint line, so references like "thêm vào layer này" resolve to the right target.
+- build_grounding(): turns the page context sent by the web client (current topic, section)
+  into a short hint line, so references like "thêm vào mục này" resolve to the right target.
 - OUT_OF_SCOPE_REPLY / out_of_scope_reply(): refusal used when a message is unrelated to roadmaps.
 - EMPTY_MESSAGE_REPLY, TOO_LONG_REPLY, RETRIEVAL_ERROR_REPLY: fixed replies for bad input and retrieval failure.
 - UNCLEAR_REPLY: shown instead of the greeting when the intent is a low-confidence guess.
 - MIXED_INTENT_REPLY, BULK_DELETE / BULK_DELETE_REPLY: ask back on several requests at once, refuse "delete all".
-- BATCH_LAYER_DELETE_REPLY: layers are deleted one at a time.
 - is_sensitive_request() / SENSITIVE_REPLY: refuse requests for secrets, config or the system prompt,
   and prompt-injection attempts, before any routing or LLM call.
 - no_match_reply(): answer when a knowledge query finds nothing; never echoes the user's text.
@@ -91,7 +90,7 @@ def _with_examples(head: str, intro: str, commands: list[str]) -> str:
 # No create suggestion, for owners either: a topic outside the roadmap is not a lesson to add
 OUT_OF_SCOPE_REPLY = (
     "Xin lỗi, thông tin này nằm ngoài dữ liệu Roadmap nên tôi không tra cứu được "
-    "(ví dụ: hợp đồng, hóa đơn, thời tiết). Tôi chỉ hỗ trợ lộ trình học tập: topic, layer, nhóm và bài học."
+    "(ví dụ: hợp đồng, hóa đơn, thời tiết). Tôi chỉ hỗ trợ lộ trình học tập: topic, mục và bài học."
 )
 
 
@@ -127,33 +126,26 @@ def mixed_intent_reply(steps: list[str]) -> str:
         + "\n\n".join(f"**Bước {i}**\n\n{example_blocks(step)}" for i, step in enumerate(steps, 1))
     )
 
-# "xóa hết topic", "xóa tất cả layer", "delete all items": not a named target.
+# "xóa hết topic", "xóa tất cả bài", "delete all items": not a named target.
 BULK_DELETE = re.compile(
-    r"\b(?:hết|tất\s+cả|toàn\s+bộ)\s+(?:các\s+)?(?:topics?|chủ\s+đề|lộ\s+trình|roadmaps?|layers?|nhóm|groups?|items?|bài|mục|lessons?)"
-    r"|\b(?:delete|remove)\s+all\b|\ball\s+(?:topics|roadmaps|layers|groups|items|lessons)\b",
+    r"\b(?:hết|tất\s+cả|toàn\s+bộ)\s+(?:các\s+)?(?:topics?|chủ\s+đề|lộ\s+trình|roadmaps?|items?|bài|mục|lessons?)"
+    r"|\b(?:delete|remove)\s+all\b|\ball\s+(?:topics|roadmaps|items|lessons)\b",
     re.IGNORECASE,
 )
 BULK_DELETE_REPLY = (
     "Tôi không hỗ trợ xóa toàn bộ trong một lệnh. "
-    "Hãy nêu tên cụ thể, ví dụ:\n\n" + example_blocks("xóa layer mock 1 và mock 2 trong topic fe")
-)
-
-BATCH_LAYER_DELETE_REPLY = (
-    "Hiện tại tôi chỉ xóa được từng layer một. Hãy gửi lệnh riêng cho mỗi layer, "
-    "ví dụ:\n\n" + example_blocks("xóa layer mock 1 trong topic fe")
+    "Hãy nêu tên cụ thể, ví dụ:\n\n" + example_blocks("xóa bài mock 1 và mock 2 trong topic fe")
 )
 
 # "tôi có thể tạo topic mới không?", "tạo topic mới": a create that names nothing. Matched folded, on the whole message.
 UNNAMED_CREATE = re.compile(
     r"^(?:(?:toi|minh|em|ban|anh|chi)\s+)?(?:co\s+the\s+)?(?:tao|them|create|add)\s+(?:(?:mot|1|a|new)\s+)?"
-    r"(?P<noun>topic|chu\s+de|lo\s+trinh|roadmap|layer|nhom|group|bai(?:\s+hoc)?|item|lesson)"
+    r"(?P<noun>topic|chu\s+de|lo\s+trinh|roadmap|bai(?:\s+hoc)?|item|lesson|muc)"
     r"(?:\s+(?:moi|new))?(?:\s+(?:duoc\s+)?(?:khong|ko|hong|chu|nhe|nha|di|giup(?:\s+minh)?))*\s*[?.!]*$"
 )
 _UNNAMED_EXAMPLES = {
     "topic": ("topic", "tạo topic AI Engineering"),
-    "layer": ("layer", "thêm layer Basics vào topic …"),
-    "group": ("nhóm", "tạo nhóm Core trong layer …"),
-    "item": ("bài học", "thêm bài Kafka vào nhóm … của layer …"),
+    "item": ("bài học", "thêm bài Kafka vào topic … mục …"),
 }
 
 
@@ -163,20 +155,15 @@ def unnamed_create_reply(text: str) -> Optional[str]:
     if m is None:
         return None
     noun = m.group("noun")
-    kind = (
-        "layer" if noun == "layer"
-        else "group" if noun in ("nhom", "group")
-        else "item" if noun.startswith("bai") or noun in ("item", "lesson")
-        else "topic"
-    )
+    kind = "item" if noun.startswith("bai") or noun in ("item", "lesson", "muc") else "topic"
     name, example = _UNNAMED_EXAMPLES[kind]
     return f"Được, mình tạo {name} được. Bạn gửi tên {name} giúp mình, ví dụ:\n\n" + example_blocks(example)
 
 
 # The executor runs create and delete only: an update is answered here, never previewed
 UPDATE_NOT_SUPPORTED_REPLY = (
-    "Abot chưa sửa được topic, layer, nhóm hay bài học qua chat. Bạn mở mục đó trên trang Roadmap để sửa trực tiếp. "
-    "Tạo mới hoặc xóa thì Abot làm được, ví dụ:\n\n" + example_blocks("thêm bài … vào layer …", "xóa bài …")
+    "Abot chưa sửa được topic hay bài học qua chat. Bạn mở bài đó trên trang Roadmap để sửa trực tiếp. "
+    "Thêm mới hoặc xóa thì Abot làm được, ví dụ:\n\n" + example_blocks("thêm bài … vào topic …", "xóa bài …")
 )
 
 
@@ -188,16 +175,16 @@ def batch_entity_delete_reply(noun: str) -> str:
 
 
 def unresolved_entity_reply(noun: str, name: str, candidates: list[dict]) -> str:
-    """Asked back when the lesson or group to delete is not one entity of the roadmap; nothing is deleted."""
+    """Asked back when the lesson to delete is not one entity of the roadmap; nothing is deleted."""
     if not candidates:
         return f"Không tìm thấy {noun} `{name}` trong Roadmap nên mình chưa xóa gì. Bạn kiểm tra lại tên giúp mình nhé."
-    listing = "\n".join(f"- {c['title']} (layer {c['layer_title']})" for c in candidates[:10])
+    listing = "\n".join(f"- {c['title']} (mục {c.get('section') or 'Chung'})" for c in candidates[:10])
     return f"Có nhiều {noun} khớp với `{name}`:\n{listing}\n\nBạn gửi lại tên đầy đủ của {noun} cần xóa nhé."
 
 # The extracted change is not the one the message's verb asks for ("khỏi tạo topic X" read as a delete)
 ACTION_NOT_ASKED_REPLY = (
     "Mình chưa chắc bạn muốn thay đổi gì nên chưa làm gì cả. "
-    "Bạn nói rõ giúp mình nhé, ví dụ:\n\n" + example_blocks("tạo topic …", "thêm bài … vào layer …", "xóa bài …")
+    "Bạn nói rõ giúp mình nhé, ví dụ:\n\n" + example_blocks("tạo topic …", "thêm bài … vào topic …", "xóa bài …")
 )
 
 BLOCKED_CHANGE_REPLY = (
@@ -207,7 +194,7 @@ BLOCKED_CHANGE_REPLY = (
 
 TARGET_MISSING_REPLY = (
     "Mình chưa biết bạn muốn thay đổi mục nào nên chưa làm gì cả. Bạn gửi lại kèm tên cụ thể giúp mình nhé, "
-    "ví dụ:\n\n" + example_blocks("thêm bài Hybrid Search vào layer 03-RAG", "xóa bài Kafka")
+    "ví dụ:\n\n" + example_blocks("thêm bài Hybrid Search vào topic AI Engineering mục RAG", "xóa bài Kafka")
 )
 
 QUESTION_TITLE_REPLY = (
@@ -255,7 +242,7 @@ def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
     name = f"**{topic}**" if topic else "chủ đề này"
     reply = f"Roadmap chưa có bài học về {name}. Chủ đề này thuộc lĩnh vực của lộ trình nhưng chưa được bổ sung."
     if owner and topic:
-        reply += "\n\nBạn có thể thêm:\n\n" + example_blocks(f"thêm bài {topic} vào layer …")
+        reply += "\n\nBạn có thể thêm:\n\n" + example_blocks(f"thêm bài {topic} vào topic …")
     return reply
 
 
@@ -266,13 +253,13 @@ def build_grounding(context: Optional[dict]) -> str:
 
     parts: list[str] = []
     slug = (context.get("roadmapSlug") or "").strip()
-    layer_id = (context.get("layerId") or "").strip()
+    section = (context.get("section") or "").strip()
     item_id = (context.get("itemId") or "").strip()
 
     if slug:
         parts.append(f"roadmap='{slug}'")
-    if layer_id:
-        parts.append(f"layerId='{layer_id}'")
+    if section:
+        parts.append(f"section='{section}'")
     if item_id:
         parts.append(f"itemId='{item_id}'")
 
@@ -288,37 +275,20 @@ def with_grounding(message: str, context: Optional[dict]) -> str:
 
 DESCRIPTION_UNSUPPORTED_REPLY = (
     "Mình chưa sửa được mô tả của topic: mô tả chỉ đặt được lúc tạo topic. Bạn có thể tạo topic mới kèm mô tả, "
-    "hoặc thêm layer, bài học, nhóm vào topic hiện có."
+    "hoặc thêm bài học vào topic hiện có."
 )
 
 
 def content_unclear_reply(topic_title: str = "") -> str:
     """Asked back when a change names no kind of entity; names the open topic when there is one."""
     topic = f"topic **{topic_title}**" if topic_title else "topic …"
-    return f"Bạn muốn thêm gì vào {topic}? Mình cần biết loại mục: layer, bài học hay nhóm. Ví dụ:\n\n" + example_blocks(
-        f"thêm layer Basics vào {topic_title or 'topic …'}", "thêm bài Kafka vào layer …", "tạo nhóm Core trong layer …"
+    return (
+        f"Bạn muốn thêm gì vào {topic}? Mình cần biết tên bài (và mục nếu có). Ví dụ:\n\n"
+        + example_blocks(f"thêm bài Kafka vào topic {topic_title or '…'} mục …", "xóa bài Kafka")
     )
 
 
 NO_TOPIC_REPLY = (
     "Mình chưa có topic nào đang mở trong cuộc trò chuyện này nên chưa biết bạn nói topic nào. "
-    "Bạn gửi tên topic giúp mình, ví dụ:\n\n" + example_blocks("thêm layer Basics vào topic AI Engineering")
-)
-
-
-def group_choice_reply(titles: str, groups: list[str]) -> str:
-    """Asked when a lesson names no group and its layer has none or several (ADR-0008); nothing chosen for the user."""
-    if not groups:
-        return (
-            f"Layer này chưa có nhóm nào. Bạn muốn thêm bài {titles} vào nhóm tên gì? "
-            "Trả lời theo mẫu dưới, hoặc bỏ qua nếu không thêm:\n\n" + example_blocks("nhóm Fundamentals", "hủy")
-        )
-    listing = "\n".join(f"{i}. **{g}**" for i, g in enumerate(groups, 1))
-    return (
-        f"Bạn muốn thêm bài {titles} vào nhóm nào?\n{listing}\n\n"
-        "Trả lời số thứ tự hoặc tên nhóm. Để tạo nhóm mới hoặc bỏ qua:\n\n" + example_blocks("nhóm <tên mới>", "hủy")
-    )
-
-NO_DEFAULT_LAYER_REPLY = (
-    "Mình không tạo layer mặc định nữa. Bạn đặt tên layer giúp mình, ví dụ:\n\n" + example_blocks("tạo layer Basics")
+    "Bạn gửi tên topic giúp mình, ví dụ:\n\n" + example_blocks("thêm bài Basics vào topic AI Engineering")
 )

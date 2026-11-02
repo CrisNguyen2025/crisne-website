@@ -1,6 +1,6 @@
 {"text": "mình chẳng hề muốn xóa bài Kafka", "polarity": "decline", "write": "no"}
 {"text": "đừng có tự ý đổi tên topic AI Engineering", "polarity": "decline", "write": "no"}
-{"text": "không được xóa layer 1", "polarity": "decline", "write": "no"}
+{"text": "không được xóa topic 1", "polarity": "decline", "write": "no"}
 {"text": "chưa cần thêm topic Rust đâu", "polarity": "decline", "write": "no"}
 {"text": "thôi khỏi, không thêm bài Redis nữa", "polarity": "decline", "write": "no"}
 {"text": "hoãn việc tạo topic Data Engineering lại", "polarity": "decline", "write": "no"}
@@ -21,11 +21,11 @@
 {"text": "hồi nãy mình đã tạo topic Rust", "polarity": "report", "write": "no"}
 {"text": "ừ, xóa bài Kafka đi", "polarity": "affirm", "write": "any"}
 {"text": "không cần hỏi lại, xóa bài Redis", "polarity": "affirm", "write": "any"}
-{"text": "thôi được, thêm bài GraphQL vào layer 1", "polarity": "affirm", "write": "any"}
+{"text": "thôi được, thêm bài GraphQL vào topic 1", "polarity": "affirm", "write": "any"}
 {"text": "chưa có topic Rust thì tạo giúp mình", "polarity": "affirm", "write": "any"}
 {"text": "đừng hỏi nữa, tạo topic Data Engineering", "polarity": "affirm", "write": "any"}
 {"text": "đổi tên bài RAG thành RAG nâng cao giúp mình", "polarity": "affirm", "write": "any"}
 {"text": "mình quyết định xóa bài Docker", "polarity": "affirm", "write": "any"}
 {"text": "khong can hoi, xoa bai redis", "polarity": "affirm", "write": "any"}
 {"text": "remove the lesson Kafka please", "polarity": "affirm", "write": "any"}
-{"text": "ok thêm bài Redis Streams vào layer 1 luôn", "polarity": "affirm", "write": "any"}
+{"text": "ok thêm bài Redis Streams vào topic 1 luôn", "polarity": "affirm", "write": "any"}

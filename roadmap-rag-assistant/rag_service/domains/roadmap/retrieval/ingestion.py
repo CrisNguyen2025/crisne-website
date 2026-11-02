@@ -14,13 +14,11 @@ from pydantic import BaseModel, Field
 
 class KnowledgeDocument(BaseModel):
     id: str = Field(..., description="Entity ID in database (UUIDv7)")
-    doc_type: str = Field(..., description="'topic' | 'layer' | 'item'")
+    doc_type: str = Field(..., description="'topic' | 'item'")
     title: str = Field(..., description="Title of the entity")
     topic_slug: str = Field(..., description="Slug of the parent Roadmap topic")
     topic_title: str = Field(..., description="Display title of the Roadmap topic")
-    layer_tag: Optional[str] = Field(None, description="e.g. '01-DB', '02-LLM'")
-    layer_title: Optional[str] = Field(None, description="Title of the parent layer")
-    group_title: Optional[str] = Field(None, description="Title of the parent group (items only)")
+    section: Optional[str] = Field(None, description="The lesson's section (mục) of the topic, items only (ADR-0009)")
     description: Optional[str] = Field("", description="Summary description")
     content_text: Optional[str] = Field("", description="Plain text extracted from Lexical HTML")
     searchable_text: str = Field(..., description="Combined text representation for indexing")
@@ -67,10 +65,9 @@ class DatabaseIngestionWorker:
             slug = full_topic.get("slug", "")
             topic_title = full_topic.get("title", "")
             topic_desc = full_topic.get("description", "")
-            topic_code = full_topic.get("shortCode", "")
 
-            # 1. Topic Document
-            topic_search_text = f"Lộ trình Chủ đề Topic: {topic_title} (Mã: {topic_code}). {topic_desc}".strip()
+            # 1. Topic document
+            topic_search_text = f"Lộ trình Chủ đề Topic: {topic_title}. {topic_desc}".strip()
             docs.append(
                 KnowledgeDocument(
                     id=full_topic.get("id", slug),
@@ -83,66 +80,33 @@ class DatabaseIngestionWorker:
                 )
             )
 
-            layers = full_topic.get("layers", [])
-            for layer in layers:
-                layer_id = layer.get("id", "")
-                layer_tag = layer.get("shortTag", "")
-                layer_title = layer.get("title", "")
-                layer_subtitle = layer.get("subtitle", "")
+            # 2. Lesson documents, in page order; each names its section, or none
+            for item in full_topic.get("items", []):
+                item_id = item.get("id", "")
+                item_title = item.get("title", "")
+                item_desc = item.get("description", "")
+                section = item.get("section") or None
+                clean_content = strip_html(item.get("content", ""))
 
-                # 2. Layer Document
-                layer_search_text = (
-                    f"Mảng kiến thức Layer: [{layer_tag}] {layer_title} trong Lộ trình {topic_title}. "
-                    f"{layer_subtitle}"
+                item_search_text = (
+                    f"Bài học Mục Item: {item_title}. "
+                    f"Lộ trình: {topic_title} ({slug})"
+                    + (f" -> Mục: {section}" if section else "")
+                    + f". Mô tả: {item_desc}. Nội dung chi tiết: {clean_content}"
                 ).strip()
+
                 docs.append(
                     KnowledgeDocument(
-                        id=layer_id,
-                        doc_type="layer",
-                        title=layer_title,
+                        id=item_id,
+                        doc_type="item",
+                        title=item_title,
                         topic_slug=slug,
                         topic_title=topic_title,
-                        layer_tag=layer_tag,
-                        layer_title=layer_title,
-                        description=layer_subtitle,
-                        searchable_text=layer_search_text,
+                        section=section,
+                        description=item_desc,
+                        content_text=clean_content[:1500],  # truncated for retrieval context
+                        searchable_text=item_search_text,
                     )
                 )
-
-                # Groups and items
-                for group in layer.get("groups", []):
-                    group_title = group.get("title", "")
-                    items = group.get("items", [])
-
-                    for item in items:
-                        item_id = item.get("id", "")
-                        item_title = item.get("title", "")
-                        item_desc = item.get("description", "")
-                        raw_content = item.get("content", "")
-                        clean_content = strip_html(raw_content)
-
-                        # 3. Item / Lesson Document
-                        item_search_text = (
-                            f"Bài học Mục Item: {item_title}. "
-                            f"Lộ trình: {topic_title} ({slug}) -> Layer: [{layer_tag}] {layer_title} -> Group: {group_title}. "
-                            f"Mô tả: {item_desc}. "
-                            f"Nội dung chi tiết: {clean_content}"
-                        ).strip()
-
-                        docs.append(
-                            KnowledgeDocument(
-                                id=item_id,
-                                doc_type="item",
-                                title=item_title,
-                                topic_slug=slug,
-                                topic_title=topic_title,
-                                layer_tag=layer_tag,
-                                layer_title=layer_title,
-                                group_title=group_title,
-                                description=item_desc,
-                                content_text=clean_content[:1500],  # truncated for retrieval context
-                                searchable_text=item_search_text,
-                            )
-                        )
 
         return docs

@@ -44,152 +44,6 @@
     }
   },
   {
-    "message": "tạo layer Testing trong topic qa",
-    "expected": {
-      "action": "create",
-      "entity_level": "layer",
-      "target": "qa",
-      "titles": [
-        "Testing"
-      ]
-    }
-  },
-  {
-    "message": "thêm layer Kiến thức nền trong topic be",
-    "expected": {
-      "action": "create",
-      "entity_level": "layer",
-      "target": "be",
-      "titles": [
-        "Kiến thức nền"
-      ]
-    }
-  },
-  {
-    "message": "xóa layer Docker trong topic devops",
-    "expected": {
-      "action": "delete",
-      "entity_level": "layer",
-      "target": "devops",
-      "titles": [
-        "Docker"
-      ]
-    }
-  },
-  {
-    "message": "đổi tên layer 2 thành Kiến thức nền tảng Backend",
-    "expected": {
-      "action": "update",
-      "entity_level": "layer",
-      "target": "2",
-      "titles": [
-        "Kiến thức nền tảng Backend"
-      ]
-    },
-    "schema_gap": true
-  },
-  {
-    "message": "rename layer 2 to Backend Foundations",
-    "expected": {
-      "action": "update",
-      "entity_level": "layer",
-      "target": "2",
-      "titles": [
-        "Backend Foundations"
-      ]
-    },
-    "schema_gap": true
-  },
-  {
-    "message": "sua ten layer 3 thanh Frontend",
-    "expected": {
-      "action": "update",
-      "entity_level": "layer",
-      "target": "3",
-      "titles": [
-        "Frontend"
-      ]
-    },
-    "schema_gap": true
-  },
-  {
-    "message": "tạo group Testing trong layer 1",
-    "expected": {
-      "action": "create",
-      "entity_level": "group",
-      "target": "1",
-      "titles": [
-        "Testing"
-      ]
-    }
-  },
-  {
-    "message": "xóa group Redis trong layer 01-LLM",
-    "expected": {
-      "action": "delete",
-      "entity_level": "group",
-      "target": "01-LLM",
-      "titles": [
-        "Redis"
-      ]
-    }
-  },
-  {
-    "message": "Can you add a new group called 'Testing & CI/CD' under layer 1?",
-    "expected": {
-      "action": "create",
-      "entity_level": "group",
-      "target": "1",
-      "titles": [
-        "Testing & CI/CD"
-      ]
-    }
-  },
-  {
-    "message": "thêm bài git rebase vào layer 1",
-    "expected": {
-      "action": "create",
-      "entity_level": "item",
-      "target": "1",
-      "titles": [
-        "git rebase"
-      ]
-    }
-  },
-  {
-    "message": "thêm bài Docker compose vào layer 02-AAA",
-    "expected": {
-      "action": "create",
-      "entity_level": "item",
-      "target": "02-AAA",
-      "titles": [
-        "Docker compose"
-      ]
-    }
-  },
-  {
-    "message": "Add item Redis to layer 02-AAA",
-    "expected": {
-      "action": "create",
-      "entity_level": "item",
-      "target": "02-AAA",
-      "titles": [
-        "Redis"
-      ]
-    }
-  },
-  {
-    "message": "them bai rest api vao layer 1",
-    "expected": {
-      "action": "create",
-      "entity_level": "item",
-      "target": "1",
-      "titles": [
-        "rest api"
-      ]
-    }
-  },
-  {
     "message": "xóa bài redux",
     "expected": {
       "action": "delete",
@@ -212,17 +66,6 @@
     }
   },
   {
-    "message": "xóa bài redux trong layer 1",
-    "expected": {
-      "action": "delete",
-      "entity_level": "item",
-      "target": "1",
-      "titles": [
-        "redux"
-      ]
-    }
-  },
-  {
     "message": "tạo topic AI Engineering và topic Data Engineering",
     "expected": {
       "action": "create",
@@ -235,10 +78,131 @@
     }
   },
   {
-    "message": "tạo 2 layer mock 1 và mock 2 trong topic be",
+    "message": "tạo topic Testing",
     "expected": {
       "action": "create",
-      "entity_level": "layer",
+      "entity_level": "topic",
+      "target": null,
+      "titles": [
+        "Testing"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài Kiến thức nền vào topic be mục Nền tảng",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "Kiến thức nền"
+      ]
+    }
+  },
+  {
+    "message": "xóa bài Docker trong topic devops",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": "devops",
+      "titles": [
+        "Docker"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài Testing vào topic be mục Core",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "Testing"
+      ]
+    }
+  },
+  {
+    "message": "xóa bài Redis trong topic be",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "Redis"
+      ]
+    }
+  },
+  {
+    "message": "Can you add a new lesson called 'Testing & CI/CD' in topic be?",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "Testing & CI/CD"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài git rebase vào topic be",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "git rebase"
+      ]
+    }
+  },
+  {
+    "message": "thêm bài Docker compose vào topic devops",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "devops",
+      "titles": [
+        "Docker compose"
+      ]
+    }
+  },
+  {
+    "message": "Add item Redis to topic devops",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "devops",
+      "titles": [
+        "Redis"
+      ]
+    }
+  },
+  {
+    "message": "them bai rest api vao topic be",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "rest api"
+      ]
+    }
+  },
+  {
+    "message": "xóa bài redux trong topic be",
+    "expected": {
+      "action": "delete",
+      "entity_level": "item",
+      "target": "be",
+      "titles": [
+        "redux"
+      ]
+    }
+  },
+  {
+    "message": "thêm 2 bài mock 1 và mock 2 vào topic be",
+    "expected": {
+      "action": "create",
+      "entity_level": "item",
       "target": "be",
       "titles": [
         "mock 1",
