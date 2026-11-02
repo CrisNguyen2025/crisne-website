@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { RoadmapLayer } from '@/lib/roadmap/types';
 import { slugify } from '@/lib/utils';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -149,6 +150,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       where: { id: roadmap.id },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({
       success: true,
       deletedSlug: roadmap.slug,
@@ -220,6 +222,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       data: updateData,
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ roadmap: updated });
   } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/[slug]] Error:', error);

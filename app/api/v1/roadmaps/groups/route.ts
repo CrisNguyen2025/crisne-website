@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 // POST /api/v1/roadmaps/groups - Create a custom group in a layer
 export async function POST(req: NextRequest) {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ group: newGroup }, { status: 201 });
   } catch (error) {
     console.error('[API POST /api/v1/roadmaps/groups] Error:', error);

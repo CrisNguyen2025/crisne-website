@@ -12,26 +12,17 @@ export interface WelcomeSuggestion {
  * One example per thing the assistant does. Each prompt is sent verbatim when tapped,
  * so it must read as a complete request the server can act on.
  */
-export function getWelcomeSuggestions(context?: PageContext, canWrite = false): WelcomeSuggestion[] {
-  // Readers (no write access) get only read-only examples: a write example would only
-  // bounce back with "owner only". Writing examples are offered to the owner alone.
+export function getWelcomeSuggestions(context?: PageContext, _canWrite = false): WelcomeSuggestion[] {
+  // Read-only and the same for everyone: no chip writes or names a subject. The widget does not know which
+  // topics and lessons exist; the help reply does (the server builds its examples from the live roadmap),
+  // so it is one tap away, writing commands included for the owner.
   const topic = context?.roadmapSlug;
-  const quickAction = canWrite
-    ? {
-        label: 'Thao tác nhanh',
-        prompt: topic
-          ? `Tạo 2 layer Mock 1 và Mock 2 trong topic ${topic}`
-          : 'Tạo 2 layer Mock 1 và Mock 2',
-      }
-    : {
-        label: 'Xem lộ trình',
-        prompt: topic ? `Topic ${topic} có những layer nào?` : 'Có những lộ trình nào trên website?',
-      };
-
   return [
-    quickAction,
-    { label: 'Tra cứu tri thức', prompt: 'Website có bài nào về Docker hoặc Database không?' },
-    { label: 'Lập kế hoạch', prompt: '/plan Lộ trình Next.js Fullstack' },
+    {
+      label: 'Xem lộ trình',
+      prompt: topic ? `Topic ${topic} có những layer nào?` : 'Có những lộ trình nào trên website?',
+    },
+    { label: 'Tra cứu & gợi ý', prompt: 'Bạn làm được gì?' },
   ];
 }
 

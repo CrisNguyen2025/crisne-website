@@ -37,11 +37,6 @@ from rag_service.tools.item_tools import (
     update_item,
 )
 
-from rag_service.tools.rag_tools import (
-    generate_roadmap_from_template,
-    preview_roadmap_plan,
-    search_roadmap_templates,
-)
 from rag_service.tools.layer_resolver import resolve_layer_id
 
 ALL_TOOLS = [
@@ -65,10 +60,6 @@ ALL_TOOLS = [
     import_items_from_text,
     update_item,
     delete_item,
-    # Mini-RAG & Document Generation
-    search_roadmap_templates,
-    generate_roadmap_from_template,
-    preview_roadmap_plan,
 ]
 
 # ── Adapter singleton ───────────────────────────────────────────────────

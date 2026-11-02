@@ -128,7 +128,7 @@ def test_agent_refuses_sensitive_request_without_tools():
     events = asyncio.run(run())
     assert not [e for e in events if e.get("type") == "tool_start"]
     text = "".join(e.get("delta", "") for e in events if e.get("type") == "token")
-    assert text == SENSITIVE_REPLY
+    assert text.startswith(SENSITIVE_REPLY)
     assert "GEMINI_API_KEY" not in text
 
 
@@ -159,13 +159,13 @@ def _reply(text: str, thread_id: str = "guardrails") -> tuple[str, list[dict]]:
 
 
 def test_empty_and_too_long_messages_get_fixed_replies():
-    assert _reply("   ")[0] == EMPTY_MESSAGE_REPLY
+    assert _reply("   ")[0].startswith(EMPTY_MESSAGE_REPLY)
     assert _reply("a" * (MAX_MESSAGE_CHARS + 1))[0] == TOO_LONG_REPLY
 
 
 def test_out_of_scope_reply_offers_create_only_to_owner():
-    assert out_of_scope_reply(owner=True) == OUT_OF_SCOPE_REPLY
-    assert "tạo topic" not in out_of_scope_reply(owner=False)
+    assert out_of_scope_reply(owner=True).startswith(OUT_OF_SCOPE_REPLY)
+    assert "tạo topic" not in out_of_scope_reply(owner=True) and "tạo topic" not in out_of_scope_reply(owner=False)
 
 
 def test_stale_delete_confirmation_is_dropped_by_another_message():
@@ -192,8 +192,9 @@ def test_mixed_intents_ask_back_without_tools():
     set_actor("owner")
     text, events = _reply("tìm bài Docker rồi tạo topic K8s", "mixed")
     assert text.startswith(MIXED_INTENT_REPLY)
-    assert text.index("1. `tìm bài Docker`") < text.index("2. `tạo topic K8s`")
-    assert "Gửi bước 1 trước: `tìm bài Docker`" in text
+    # Each step is a one-line block the widget can copy or send, in the order asked
+    assert text.index("```text\ntìm bài Docker\n```") < text.index("```text\ntạo topic K8s\n```")
+    assert text.index("**Bước 1**") < text.index("tìm bài Docker") < text.index("**Bước 2**")
     assert not [e for e in events if e.get("type") == "tool_start"]
 
 
@@ -234,9 +235,33 @@ def test_out_of_scope_reply_names_the_scope_without_intro():
 
 def test_unclear_message_gets_short_reply_not_greeting():
     text, _ = _reply("xyz qwerty", "unclear")
-    assert text == UNCLEAR_REPLY
+    assert text.startswith(UNCLEAR_REPLY) and "Xin chào" not in text
 
 
 def test_greeting_still_gets_intro():
     text, _ = _reply("chào bạn", "greeting")
     assert "Xin chào" in text
+
+
+def test_example_commands_are_blocks_the_widget_can_send(monkeypatch):
+    """Inline `code` has no copy or send button: every suggested command is a one-line text block."""
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+    from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
+    from rag_service.domains.roadmap.router.grounding import (
+        empty_message_reply,
+        empty_roadmap_reply,
+        example_blocks,
+        sensitive_reply,
+        unclear_reply,
+    )
+
+    lesson = KnowledgeDocument(id="i", doc_type="item", title="Hybrid Search", topic_slug="ai", topic_title="AI",
+                               searchable_text="Hybrid Search")
+    monkeypatch.setattr(rag_engine, "_is_synced", True)
+    monkeypatch.setattr(rag_engine._vector_store, "_docs_map", {"i": lesson})
+
+    assert example_blocks("liệt kê topic", "tạo topic A") == "```text\nliệt kê topic\n```\n\n```text\ntạo topic A\n```"
+    for reply in (out_of_scope_reply(False), unclear_reply(True), empty_message_reply(False), sensitive_reply(),
+                  no_match_reply(False), empty_roadmap_reply(True)):
+        assert "\n\n```text\n" in reply  # a fence is only read on its own line
+        assert "`liệt kê topic`" not in reply

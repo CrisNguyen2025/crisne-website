@@ -283,6 +283,7 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
         not has_search or PRAISE.search(lower) is not None
     )
 
+    # The removed /plan and /goal commands still read as a learning-plan question
     if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(k in lower for k in PLAN_PHRASES) or learning_plan:
         act = SpeechAct.PLAN
     # A recall word next to a roadmap listing or search ("liệt kê bài … tôi tên gì nhỉ") is the roadmap request

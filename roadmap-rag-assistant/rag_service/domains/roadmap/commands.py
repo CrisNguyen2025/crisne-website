@@ -33,8 +33,7 @@ from rag_service.domains.roadmap.router.grounding import (
     build_grounding,
     unresolved_entity_reply,
 )
-from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM, slash_command
-from rag_service.domains.roadmap.retrieval.engine import rag_engine
+from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
 from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
@@ -50,27 +49,7 @@ from rag_service.domains.roadmap.router.write_gate import (
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
-from rag_service.tools.rag_tools import generate_roadmap_from_template, preview_roadmap_plan
 from rag_service.tools.layer_resolver import resolve_entity, resolve_layer, topic_named_in_message
-
-
-def named_template(content: str, command: str) -> dict | None:
-    """The blueprint a /plan or /goal names: `template <id>`, its id or title, or the field of the goal; else None.
-
-    Never a default or a loose word match: "/goal học Rust" used to write the ai-engineering sample roadmap,
-    and "/plan lộ trình học rust" previewed cloud-devops on the words "lộ trình".
-    """
-    arg = content.strip()[len(command) + 1:].strip()
-    m = re.search(r"template\s+([\w-]+)", arg, re.IGNORECASE)
-    return rag_engine.get_template(m.group(1) if m else arg) or rag_engine.template_for_goal(arg)
-
-
-def no_template_reply() -> str:
-    names = ", ".join(f"`{t['id']}` ({t['title']})" for t in rag_engine.list_templates())
-    return (
-        "⚠️ Chưa có blueprint phù hợp với mục tiêu này nên mình không tạo gì. "
-        f"Các mẫu hiện có: {names}. Gõ `/plan template <id>` để xem trước hoặc `/goal template <id>` để tạo."
-    )
 
 
 class RoadmapCommands:
@@ -258,53 +237,10 @@ class RoadmapCommands:
                 return
             # Anything else: drop the pending choice and handle as a fresh message.
 
-    async def handle_plan_and_listing(
+    async def handle_listing(
         self, *, content: str, lower: str, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
-        """Roadmap plan preview (/plan), template generation (/goal) and the topic list."""
-        # ── 1. Plan / Goal Mode ───────────────────────────────────────────────
-        # Slash commands only. Words in a sentence ("xem trước", "template", "sinh nhanh") are left to the
-        # router: as substrings they caught questions ("bài nào nên xem trước khi học RAG?") and, for /goal,
-        # created a whole roadmap from "prompt template là gì, cách tạo prompt template tốt".
-        command = slash_command(lower)
-        template = named_template(content, command) if command else None
-        # A visitor's /goal gets the owner-only reply below, whatever it names
-        if command and template is None and (command == "plan" or is_owner()):
-            async for ev in self._stream_text(no_template_reply(), delay):
-                yield ev
-            outcome["handled"] = True
-            return
-
-        if command == "plan":
-            tid = template.get("id", "")
-            yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": tid}}
-            res = await preview_roadmap_plan.ainvoke({"query_or_template_id": tid})
-            yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
-            async for ev in self._stream_text(res, delay):
-                yield ev
-            outcome["handled"] = True
-            return
-
-        if command == "goal":
-            if not is_owner():
-                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            tid = template.get("id", "")
-            yield {"type": "tool_start", "name": "generate_roadmap_from_template", "args": {"template_id": tid}}
-            changes = ChangeSet("create", "topic")
-            with write_granted("owner /goal command"):
-                res = await generate_roadmap_from_template.coroutine(template_id=tid, changes=changes)
-            yield {"type": "tool_end", "name": "generate_roadmap_from_template", "result": res}
-            if changes:
-                yield changes.event()
-            async for ev in self._stream_text(res, delay):
-                yield ev
-            outcome["handled"] = True
-            return
-
-        # ── 2. List Topics / Navigation ───────────────────────────────────────
+        """The topic list."""
         # Only a plain listing request: "danh sách topic có bài Docker không, tạo layer" is not one (router decides)
         if LIST_TOPICS.search(lower) and is_plain_listing(content):
             yield {"type": "tool_start", "name": "list_topics", "args": {}}

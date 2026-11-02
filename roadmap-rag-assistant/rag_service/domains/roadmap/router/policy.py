@@ -108,14 +108,24 @@ CAPABILITY_QUESTION = re.compile(
     r"|\b(?:thao\s+tac|chuc\s+nang|tinh\s+nang)\b"
 )
 
-# "liệt kê topic", "danh sách các topic", "list all topics", "xem danh sách topic"
+# What visitors call a Topic: "topic", "lộ trình", "roadmap" (GLOSSARY: Topic is a lộ trình, _Also_ Roadmap)
+TOPIC_NOUN = r"(?:topics?|lộ\s+trình|roadmaps?)"
+# "liệt kê topic", "danh sách các lộ trình", "list all topics", "xem danh sách topic",
+# and the questions "có những lộ trình nào", "website có roadmap gì", "có bao nhiêu topic"
 LIST_TOPICS = re.compile(
-    r"\b(?:liệt\s+kê|danh\s+sách|list|xem|các|cho\s+(?:tôi|mình)\s+xem)\s+(?:(?:all|tất\s+cả|các|hiện\s+có)\s+)*"
-    r"(?:danh\s+sách\s+)?topics?\b|\btopics?\s+hiện\s+có\b|\bcác\s+topic\b",
+    rf"\b(?:liệt\s+kê|danh\s+sách|list|xem|các|cho\s+(?:tôi|mình)\s+xem)\s+(?:(?:all|tất\s+cả|các|hiện\s+có)\s+)*"
+    rf"(?:danh\s+sách\s+)?{TOPIC_NOUN}\b|\b{TOPIC_NOUN}\s+hiện\s+có\b|\bcác\s+{TOPIC_NOUN}\b"
+    rf"|\bcó\s+(?:những\s+|các\s+)?{TOPIC_NOUN}\s+(?:nào|gì)\b|\bnhững\s+{TOPIC_NOUN}\s+nào\b"
+    rf"|\bcó\s+bao\s+nhiêu\s+{TOPIC_NOUN}\b",
     re.IGNORECASE,
 )
-# Filler that may follow a plain listing request: "liệt kê topic đi được không", "list all topics được không"
-LIST_FILLER = re.compile(r"\b(?:đi|được\s+không|được|giúp|với|nhé|ạ|hiện\s+có|cho\s+tôi|cho\s+mình|xem)\b", re.IGNORECASE)
+# Filler that may follow a plain listing request: "liệt kê topic đi được không", "list all topics được không",
+# "có những lộ trình nào trên website vậy", "hiện tại website đang có lộ trình gì"
+LIST_FILLER = re.compile(
+    r"\b(?:đi|được\s+không|được|giúp|với|nhé|ạ|hiện\s+có|cho\s+tôi|cho\s+mình|xem|hiện\s+(?:tại|nay)|đang|"
+    r"vậy|thế|trên\s+(?:website|web|trang\s+web|trang|site|hệ\s+thống)|website|trang\s+web|hệ\s+thống|ở\s+đây)\b",
+    re.IGNORECASE,
+)
 
 
 # How-to wording. With a change verb and a roadmap object ("cách thêm bài vào layer", "muốn xóa topic thì làm sao")
@@ -150,13 +160,6 @@ PLAN_PHRASES = [
     for p in ["lập kế hoạch học", "lên kế hoạch học", "xem trước roadmap", "preview plan", "generate roadmap"]
 ]
 
-SLASH_COMMAND = re.compile(r"^\s*/(plan|goal)\b")
-
-
-def slash_command(lower: str) -> Optional[str]:
-    """"plan" or "goal" for a message that starts with that slash command; anything else goes to the router."""
-    match = SLASH_COMMAND.match(lower)
-    return match.group(1) if match else None
 
 # A learning plan asked in plain words: a goal ("muốn học", "trở thành", "prepare for", "trong 6 tháng") and a
 # plan noun ("lộ trình", "study plan"). Matched on the folded message. "tạo lộ trình X" is a create, not a plan.

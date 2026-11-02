@@ -127,7 +127,7 @@ async def list_topics() -> str:
     adapter = get_adapter()
     topics = await adapter.list_topics()
     if not topics:
-        return "📋 Chưa có topic nào trong hệ thống."
+        return "📋 Hiện website chưa có lộ trình (topic) nào."
     lines = [
         f"- {t['title']} (slug: {t['slug']}, "
         f"layers: {t.get('_count', {}).get('layers', '?')})"

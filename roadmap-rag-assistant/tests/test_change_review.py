@@ -132,7 +132,7 @@ async def test_stream_sends_change_review_and_repeats_it_on_done(mock_adapter, o
 async def test_read_only_turn_sends_no_change_review(mock_adapter, owner_headers):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
-        resp = await client.post("/chat/stream", json={"message": "/plan tạo lộ trình AI", "thread_id": "change-review-ro"})
+        resp = await client.post("/chat/stream", json={"message": "Docker là gì?", "thread_id": "change-review-ro"})
     body = resp.text
     assert "event: change_review" not in body
     assert '"changes"' not in body
@@ -156,7 +156,7 @@ async def test_confirm_returns_the_changes(mock_adapter, owner_headers):
     assert [c["title"] for c in entry["children"]] == ["New Layer"]
 
 
-# ── Writes outside the executor: bulk import and template generation ────────
+# ── Writes outside the executor: bulk import ────────────────────────────────
 
 
 @pytest.mark.asyncio
@@ -183,47 +183,8 @@ async def test_import_records_new_items_and_skips_existing(mock_adapter):
     assert data["added"] == 2 and data["skipped"] == ["Docker"]
 
 
-@pytest.mark.asyncio
-async def test_template_records_topic_layers_and_items(mock_adapter):
-    from rag_service.tools.rag_tools import generate_roadmap_from_template
-
-    mock_adapter.create_topic.return_value = {"id": "t1", "slug": "ai-test", "title": "AI Test"}
-    mock_adapter.get_topic.return_value = {
-        "slug": "ai-test",
-        "layers": [
-            {"id": "layer-1", "shortTag": "01-LLM", "title": "LLM"},
-            {"id": "layer-2", "shortTag": "02-RAG", "title": "RAG"},
-        ],
-    }
-    changes = ChangeSet("create", "topic")
-    await generate_roadmap_from_template.coroutine(template_id="ai-engineering", custom_title="AI Test", changes=changes)
-
-    data = changes.to_dict()
-    levels = [e["level"] for e in data["entries"]]
-    assert data["entries"][0]["level"] == "topic"
-    assert data["entries"][0]["title"] == "AI Test" and data["entries"][0]["id"] == "t1"
-    assert levels.count("layer") == 2
-    assert levels.count("item") == mock_adapter.create_item.call_count >= 3
-    assert data["added"] == len(levels)
-
-
 def test_hidden_changes_param_is_not_offered_to_the_llm():
     from rag_service.tools.item_tools import create_items_batch, import_items_from_text
-    from rag_service.tools.rag_tools import generate_roadmap_from_template
 
-    for t in (create_items_batch, import_items_from_text, generate_roadmap_from_template):
+    for t in (create_items_batch, import_items_from_text):
         assert "changes" not in t.args
-
-
-@pytest.mark.asyncio
-async def test_goal_stream_sends_change_review(mock_adapter, owner_headers):
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
-        resp = await client.post(
-            "/chat/stream", json={"message": "/goal template ai-engineering", "thread_id": "change-review-goal"}
-        )
-    body = resp.text
-    assert "event: change_review" in body
-    done = json.loads(body.split("event: done\ndata: ")[1].split("\n")[0])
-    [change] = done["changes"]
-    assert change["entries"][0]["level"] == "topic"

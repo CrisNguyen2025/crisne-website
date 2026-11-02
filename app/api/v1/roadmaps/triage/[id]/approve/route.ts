@@ -4,6 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from "@/lib/roadmap/duplicates";
 import { markdownToPlainText, markdownToSafeHtml } from "@/lib/roadmap/markdown";
 import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from "@/lib/roadmap/groups";
+import { notifyRoadmapChanged } from "@/lib/roadmap/rag-reindex";
 
 const DESCRIPTION_MAX_LENGTH = 200;
 
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
     const { createdItem, updatedTriage } = approved;
 
+    notifyRoadmapChanged();
     return NextResponse.json({
       success: true,
       createdItem,

@@ -6,7 +6,7 @@ act × target to an intent. Messages it cannot map go to the vocabulary check, t
 Subsystems:
 - ROADMAP_CUD: Structured CUD Extractor & Executor
 - KNOWLEDGE_QUERY: Real Hybrid RAG Engine (search existing topics/layers/items/lessons)
-- PLAN_GOAL: Autonomous blueprint generation / preview
+- PLAN_GOAL: Learning plan, answered from the owner's own lessons
 - CHITCHAT: Conversational assistant greetings and help
 """
 

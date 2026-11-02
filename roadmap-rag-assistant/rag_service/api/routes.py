@@ -255,6 +255,18 @@ async def health() -> HealthResponse:
     )
 
 
+@router.post("/internal/reindex", status_code=202)
+async def reindex() -> dict:
+    """Next.js calls this after each roadmap write; the rebuild runs in the background.
+
+    Behind the internal key like every route; it only re-reads the roadmap, so any actor may trigger it.
+    """
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    rag_engine.request_reindex()
+    return {"status": "queued"}
+
+
 @router.post("/chat/confirm", response_model=ActionConfirmResponse, response_model_exclude_none=True)
 async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionConfirmResponse:
     """Confirm and execute a pending dry-run CUD action."""

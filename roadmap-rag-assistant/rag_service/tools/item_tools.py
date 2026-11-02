@@ -168,10 +168,14 @@ async def create_items_batch(
 
 def group_choice_message(ask: GroupChoiceRequired) -> str:
     """Ask for the group by listing the layer's groups (ADR-0008); nothing was created."""
+    from rag_service.domains.roadmap.router.grounding import example_blocks
+
     if not ask.titles:
-        return "⚠️ Layer này chưa có nhóm nào. Gửi lại kèm tên nhóm, ví dụ: `… vào nhóm Fundamentals`."
+        return "⚠️ Layer này chưa có nhóm nào. Gửi lại kèm tên nhóm, ví dụ:\n\n" + example_blocks("… vào nhóm Fundamentals")
     listing = ", ".join(f"**{t}**" for t in ask.titles)
-    return f"⚠️ Layer này có nhiều nhóm: {listing}. Gửi lại kèm tên nhóm, ví dụ: `… vào nhóm {ask.titles[0]}`."
+    return f"⚠️ Layer này có nhiều nhóm: {listing}. Gửi lại kèm tên nhóm, ví dụ:\n\n" + example_blocks(
+        f"… vào nhóm {ask.titles[0]}"
+    )
 
 
 _LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+(.+?)\s*$")

@@ -113,6 +113,8 @@ def test_domain_gap_with_no_lesson_says_so(monkeypatch):
 
     monkeypatch.setattr(agent_module, "classify_for_routing", gap)
     monkeypatch.setattr(agent_module, "answer_from_sources", capture)
+    # A roadmap with lessons, just none on LoRA (an empty one gets empty_roadmap_reply, test_empty_roadmap.py)
+    monkeypatch.setattr(agent_module.rag_engine, "is_empty", lambda: False)
 
     async def run():
         agent = NextGenRoadmapAgent(llm_model=None)

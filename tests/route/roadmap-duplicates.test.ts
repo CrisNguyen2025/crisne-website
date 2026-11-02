@@ -67,6 +67,24 @@ describe("create routes refuse duplicates with 409", () => {
     expect(data.layers.create).toHaveLength(1);
   });
 
+  it("topic: created without layers, as the Roadmap Assistant and WebMCP send it", async () => {
+    for (const body of [{ layers: [] }, {}]) {
+      prismaMock.roadmap.findMany.mockResolvedValueOnce([]);
+      prismaMock.roadmap.create.mockImplementationOnce(async ({ data }) => ({ id: "t3", ...data }));
+      const res = await createTopic(post("/api/v1/roadmaps", { title: "Backend", shortCode: "BE", ...body }));
+      expect(res.status).toBe(201);
+    }
+    expect(prismaMock.roadmap.create.mock.calls[0][0].data.layers.create).toEqual([]);
+  });
+
+  it("topic: a layer without a title or shortTag is refused", async () => {
+    for (const layers of [[{ title: "Core" }], [{ title: " ", shortTag: "01-X" }], "Core"]) {
+      const res = await createTopic(post("/api/v1/roadmaps", { title: "Backend", shortCode: "BE", layers }));
+      expect(res.status).toBe(400);
+    }
+    expect(prismaMock.roadmap.create).not.toHaveBeenCalled();
+  });
+
   it("layer: same title already in the topic", async () => {
     prismaMock.roadmap.findUnique
       .mockResolvedValueOnce({ id: "t1" })

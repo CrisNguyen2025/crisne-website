@@ -48,10 +48,6 @@ export function formatToolDisplayName(name: string): string {
     case 'delete_group':
     case 'delete_item':
       return 'Xóa thực thể Roadmap';
-    case 'preview_roadmap_plan':
-      return 'Phác thảo kế hoạch Roadmap (/plan)';
-    case 'generate_roadmap_from_template':
-      return 'Sinh nhanh từ Blueprint (/goal)';
     case 'list_topics':
       return 'Liệt kê danh sách Topic';
     default:

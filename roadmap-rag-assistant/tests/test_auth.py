@@ -112,10 +112,9 @@ async def test_visitor_cannot_skip_delete_confirmation_with_ngay(mock_adapter, v
 
 
 @pytest.mark.asyncio
-async def test_visitor_cannot_generate_a_roadmap_from_a_template(mock_adapter, visitor_headers):
+async def test_old_goal_command_writes_nothing(mock_adapter, visitor_headers):
     body = await _stream("/goal template ai-engineering", visitor_headers, "visitor-goal")
 
-    assert "owner" in body
     assert "generate_roadmap_from_template" not in body
     mock_adapter.create_topic.assert_not_called()
 

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { resolveRoadmapId } from '@/lib/roadmap/resolveRoadmap';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ layer: newLayer }, { status: 201 });
   } catch (error) {
     console.error('[API POST /api/v1/roadmaps/[slug]/layers] Error:', error);

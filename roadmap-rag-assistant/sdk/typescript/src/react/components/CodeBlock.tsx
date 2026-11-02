@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { CheckIcon, CopyIcon, PlayIcon } from "../icons";
+import { isRunnableSnippet } from "../utils/snippets";
 
 export interface CodeBlockProps {
   lang?: string;
   code: string;
   showLineNumbers?: boolean;
+  /** Sends a one-line snippet as a message; not offered for one with a blank to fill in or a delete */
   onRun?: (code: string) => void;
   /** Snippet currently being run; the matching snippet shows a spinner and the rest are disabled */
   runningCode?: string | null;
@@ -225,7 +227,7 @@ export function CodeBlock({
         <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-[13px] text-foreground">
           {code}
         </code>
-        {onRun && (
+        {onRun && isRunnableSnippet(snippet) && (
           <button
             type="button"
             onClick={() => onRun(snippet)}

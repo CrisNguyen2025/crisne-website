@@ -11,8 +11,6 @@ import re
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
-from rag_service.adapters.sqlite_adapter import SqliteAdapter
-
 
 class KnowledgeDocument(BaseModel):
     id: str = Field(..., description="Entity ID in database (UUIDv7)")
@@ -57,34 +55,13 @@ class DatabaseIngestionWorker:
         return get_adapter()
 
     async def ingest_all(self) -> List[KnowledgeDocument]:
-        """Fetch all roadmaps, layers, groups, and items from the database."""
+        """Fetch all roadmaps, layers, groups, and items from the database.
+
+        An empty list means the roadmap is empty. A source that cannot be read raises, so the caller keeps
+        its index; reading another database instead (prisma/dev.db) would index content the site does not have.
+        """
         docs: List[KnowledgeDocument] = []
-
-        active_adapter = self.adapter
-        try:
-            full_topics = await active_adapter.export_full_hierarchy()
-        except Exception as exc:
-            err_str = str(exc).lower()
-            if any(k in err_str for k in ["connection", "connect", "timeout", "network", "errno"]):
-                from rag_service.adapters.sqlite_adapter import SqliteAdapter
-                active_adapter = SqliteAdapter()
-                try:
-                    full_topics = await active_adapter.export_full_hierarchy()
-                except Exception:
-                    full_topics = []
-            else:
-                full_topics = []
-
-        if not full_topics:
-            try:
-                topics = await active_adapter.list_topics()
-                for t in topics:
-                    slug = t.get("slug", "")
-                    ft = await active_adapter.get_topic(slug)
-                    if ft:
-                        full_topics.append(ft)
-            except Exception:
-                pass
+        full_topics = await self.adapter.export_full_hierarchy()
 
         for full_topic in full_topics:
             slug = full_topic.get("slug", "")

@@ -8,6 +8,13 @@ from __future__ import annotations
 
 from typing import AsyncGenerator, Optional
 
+from rag_service.domains.roadmap.router.grounding import (
+    CREATE_TOPIC_EXAMPLE,
+    example_blocks,
+    plan_examples,
+    search_examples,
+    topic_examples,
+)
 from rag_service.domains.roadmap.router.schemas import ActionType, StructuredRoadmapAction
 from rag_service.tools import get_adapter
 from rag_service.tools.layer_resolver import LayerResolution
@@ -15,6 +22,20 @@ from rag_service.tools.layer_resolver import LayerResolution
 # Words that point back at the layer/entity in context ("tạo bài đó" = the open layer)
 ANAPHORA_TARGETS = ("CONTEXT_ACTIVE", "đó", "nó", "this", "it")
 LAYER_VERBS = {ActionType.CREATE: "tạo", ActionType.DELETE: "xóa", ActionType.UPDATE: "sửa"}
+EMPTY_ROADMAP_NOTE = "_Roadmap chưa có bài nào để tra cứu. Tạo topic và bài học trước, tôi sẽ gợi ý tra cứu từ chính chúng._"
+
+
+def _labelled(label: str, *commands: str) -> str:
+    """A label line, then its example commands as blocks the widget can copy or send. Empty without commands."""
+    return f"{label}\n\n{example_blocks(*commands)}" if commands else ""
+
+
+def _reading_sections() -> list[str]:
+    """Search and learning-plan examples built from lessons and topics that exist; a note when there are none."""
+    searches = [*search_examples(), *topic_examples()]
+    if not searches:
+        return [EMPTY_ROADMAP_NOTE]
+    return [_labelled("🔎 **Tra cứu**", *searches), _labelled("🧭 **Gợi ý bài nên học**", *plan_examples())]
 
 
 async def _example_names() -> tuple[str, str]:
@@ -46,9 +67,8 @@ class RoadmapAgentActions:
         titles = ", ".join(f"**{e.title}**" for e in action.entities)
         ask = (
             f"Chưa xác định được layer để thêm {titles} trong topic `{topic_slug}`.\n\n"
-            "**Chọn layer cho bài học:**\n"
-            "1. Tạo layer mới theo tên bạn nhập — gõ `tạo layer <tên>`\n"
-            "2. Hoặc gõ số thứ tự của layer có sẵn"
+            "**Chọn layer cho bài học:** gõ số thứ tự của layer có sẵn, hoặc tạo layer mới theo tên bạn nhập:\n\n"
+            + example_blocks("tạo layer <tên>")
         )
         async for ev in self._stream_text(ask, delay):
             yield ev
@@ -79,7 +99,7 @@ class RoadmapAgentActions:
         titles = ", ".join(e.title for e in action.entities) or "<tên layer>"
         ask = (
             f"{head}\n\n**Các topic hiện có:**\n{listing}\n\n"
-            f"Hãy gửi lại kèm tên topic, ví dụ: `{verb} layer {titles} trong topic <slug>`."
+            "Hãy gửi lại kèm tên topic, ví dụ:\n\n" + example_blocks(f"{verb} layer {titles} trong topic <slug>")
         )
         async for ev in self._stream_text(ask, delay):
             yield ev
@@ -87,16 +107,15 @@ class RoadmapAgentActions:
     async def _greeting_reply(self) -> str:
         """Greeting whose examples name a topic and layer that exist, so they work when copied."""
         topic_slug, layer_title = await _example_names()
-        return (
-            "Xin chào! Tôi là **Abot** — trợ lý quản lý hệ thống tài liệu & lộ trình học tập.\n\n"
-            "Bạn có thể yêu cầu tôi:\n"
-            "- 🗺️ **Tạo topic**: `tạo topic <tên topic>`\n"
-            f"- 📑 **Tạo layer**: `tạo layer <tên layer> trong topic {topic_slug}`\n"
-            f"- 📖 **Thêm bài học**: `thêm bài học <tên bài> vào layer {layer_title}`\n"
-            "- 🧠 **Tra cứu tri thức**: `Website có bài nào về Docker hoặc Database không?`\n"
-            "- 📋 **Lập kế hoạch**: `/plan Lộ trình Next.js Fullstack`\n\n"
-            "_Tên đã có sẵn sẽ không bị tạo trùng._"
-        )
+        sections = [
+            "Xin chào! Tôi là **Abot** — trợ lý quản lý hệ thống tài liệu & lộ trình học tập. Bạn có thể yêu cầu tôi:",
+            *_reading_sections(),
+            _labelled("🗺️ **Tạo topic**", CREATE_TOPIC_EXAMPLE),
+            _labelled("📑 **Tạo layer**", f"tạo layer <tên layer> trong topic {topic_slug}"),
+            _labelled("📖 **Thêm bài học**", f"thêm bài học <tên bài> vào layer {layer_title}"),
+            "_Tên đã có sẵn sẽ không bị tạo trùng._",
+        ]
+        return "\n\n".join(s for s in sections if s)
 
     async def _help_reply(self) -> str:
         """Answer to "làm được gì" / "cách thêm bài vào layer": every command, with names that exist.
@@ -104,22 +123,24 @@ class RoadmapAgentActions:
         Fixed text, not the LLM: the commands must match what the router and extractor accept.
         """
         topic_slug, layer_title = await _example_names()
-        return (
-            "Tôi quản lý roadmap học tập và tra cứu bài học trong đó. Gõ lệnh theo mẫu:\n\n"
-            "**Tra cứu**\n"
-            "- 🔎 `tìm bài về Docker` · `topic AI có những bài gì`\n\n"
-            "**Thêm mới**\n"
-            "- 🗺️ Topic: `tạo topic <tên topic>`\n"
-            f"- 📑 Layer: `tạo layer <tên layer> trong topic {topic_slug}`\n"
-            f"- 📖 Bài học: `thêm bài <tên bài> vào layer {layer_title}`\n\n"
-            "**Sửa, chuyển, xóa**\n"
-            "- ✏️ `đổi tên bài <tên cũ> thành <tên mới>`\n"
-            f"- 🔀 `chuyển bài <tên bài> sang layer {layer_title}`\n"
-            "- 🗑️ `xóa bài <tên bài>` (luôn hỏi xác nhận trước khi xóa)\n\n"
-            "**Lập kế hoạch**\n"
-            "- 📋 `/plan Lộ trình Next.js Fullstack`\n\n"
-            "_Tên đã có sẵn sẽ không bị tạo trùng. Lệnh hỏi dạng \"… được không\" sẽ hiện thẻ xác nhận trước khi chạy._"
-        )
+        sections = [
+            "Tôi quản lý roadmap học tập và tra cứu bài học trong đó. Gõ lệnh theo mẫu:",
+            *_reading_sections(),
+            _labelled(
+                "➕ **Thêm mới**",
+                CREATE_TOPIC_EXAMPLE,
+                f"tạo layer <tên layer> trong topic {topic_slug}",
+                f"thêm bài <tên bài> vào layer {layer_title}",
+            ),
+            _labelled(
+                "✏️ **Sửa, chuyển, xóa** (xóa luôn hỏi xác nhận trước)",
+                "đổi tên bài <tên cũ> thành <tên mới>",
+                f"chuyển bài <tên bài> sang layer {layer_title}",
+                "xóa bài <tên bài>",
+            ),
+            "_Tên đã có sẵn sẽ không bị tạo trùng. Lệnh hỏi dạng \"… được không\" sẽ hiện thẻ xác nhận trước khi chạy._",
+        ]
+        return "\n\n".join(s for s in sections if s)
 
     async def _ask_target_choice(
         self,
@@ -162,8 +183,8 @@ class RoadmapAgentActions:
         ]
         tail = ["", "Gõ **số thứ tự** hoặc **tên layer** để chọn."]
         if topic_slug:
-            tail.append(f"Hoặc gõ `tạo layer <tên>` để tạo layer mới trong topic `{topic_slug}`.")
-        tail.append("Gõ `hủy` để bỏ qua.")
+            tail += ["", f"Hoặc tạo layer mới trong topic `{topic_slug}`:", "", example_blocks("tạo layer <tên>")]
+        tail += ["", "Hoặc bỏ qua:", "", example_blocks("hủy")]
         ask = "\n".join([head, "", *lines, *tail])
         async for ev in self._stream_text(ask, delay):
             yield ev

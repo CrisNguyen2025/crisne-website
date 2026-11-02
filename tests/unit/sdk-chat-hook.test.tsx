@@ -149,7 +149,7 @@ describe("useRoadmapAssistantChat", () => {
   });
 
   describe("greeting follows access (P0-1)", () => {
-    it("rebuilds the untouched greeting when canWrite becomes true", () => {
+    it("rebuilds the untouched greeting when canWrite becomes true, still with no write chip", () => {
       const { result, rerender } = renderHook(
         ({ canWrite }: { canWrite: boolean }) => useRoadmapAssistantChat({ baseUrl: BASE, canWrite }),
         { initialProps: { canWrite: false } }
@@ -157,7 +157,12 @@ describe("useRoadmapAssistantChat", () => {
       expect(result.current.messages[0].suggestions?.[0].prompt).toBe("Có những lộ trình nào trên website?");
 
       rerender({ canWrite: true });
-      expect(result.current.messages[0].suggestions?.[0].prompt).toBe("Tạo 2 layer Mock 1 và Mock 2");
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0].id).toBe(WELCOME_MESSAGE_ID);
+      expect(result.current.messages[0].suggestions?.map((s) => s.prompt)).toEqual([
+        "Có những lộ trình nào trên website?",
+        "Bạn làm được gì?",
+      ]);
     });
 
     it("keeps the conversation when access changes after a message was sent", async () => {

@@ -60,7 +60,7 @@ async def test_list_topics(mock_adapter):
 async def test_list_topics_empty(mock_adapter):
     mock_adapter.list_topics.return_value = []
     result = await list_topics.ainvoke({})
-    assert "Chưa có topic" in result
+    assert "chưa có lộ trình (topic) nào" in result
 
 
 @pytest.mark.asyncio

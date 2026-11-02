@@ -23,15 +23,24 @@ function syncCache(slug: string, updater: (cached: { roadmap: RoadmapMeta; layer
   }
 }
 
-export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId?: string) {
+/** Loads the topic `slug` and keeps it in sync. An empty slug (Home, no topic open) loads nothing. */
+export function useRoadmap(slug: string, initialActiveItemId?: string) {
   const [roadmapMeta, setRoadmapMeta] = useState<RoadmapMeta | null>(() => roadmapCache.get(slug)?.roadmap || null);
   const [layers, setLayers] = useState<RoadmapLayer[]>(() => roadmapCache.get(slug)?.layers || []);
   const [activeItemId, setActiveItemId] = useState<string>(initialActiveItemId || '');
   const [selectedLayerId, setSelectedLayerId] = useState<string | 'all'>('all');
-  const [isLoading, setIsLoading] = useState<boolean>(() => !roadmapCache.has(slug));
+  const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(slug) && !roadmapCache.has(slug));
   const [isError, setIsError] = useState<boolean>(false);
-  // The topic no longer exists (404), e.g. deleted through the assistant while open
-  const [isNotFound, setIsNotFound] = useState<boolean>(false);
+  // The slug that answered 404 (e.g. deleted through the assistant while open). Kept per slug: a 404 for the
+  // topic just left must not mark the one just opened as missing.
+  const [notFoundSlug, setNotFoundSlug] = useState<string | null>(null);
+  const isNotFound = Boolean(slug) && notFoundSlug === slug;
+  // The slug on screen: a response for another one (the user switched topics meanwhile) only fills the cache.
+  // Synced in an effect declared before the load effect, so it is current when a load starts.
+  const currentSlugRef = useRef(slug);
+  useEffect(() => {
+    currentSlugRef.current = slug;
+  }, [slug]);
 
   // Keep a ref of initialActiveItemId so loadRoadmap doesn't recreate when clicking items
   const initialActiveItemIdRef = useRef(initialActiveItemId);
@@ -74,12 +83,14 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       }
     }
     setIsError(false);
-    setIsNotFound(false);
+    setNotFoundSlug(null);
 
+    const isCurrent = () => currentSlugRef.current === targetSlug;
     try {
       const data = await roadmapService.fetchRoadmapBySlug(targetSlug);
       // Update cache
       roadmapCache.set(targetSlug, data);
+      if (!isCurrent()) return;
 
       setRoadmapMeta(data.roadmap);
       setLayers(data.layers);
@@ -112,26 +123,29 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       // Also on a silent refresh: the cached copy of a deleted topic must not stay on screen
       if ((err as { status?: number }).status === 404) {
         roadmapCache.delete(targetSlug);
-        setIsNotFound(true);
+        setNotFoundSlug(targetSlug);
         return;
       }
+      if (!isCurrent()) return;
       console.error('[useRoadmap] Failed to load roadmap:', err);
       if (!cached && !silent) {
         setIsError(true);
       }
     } finally {
-      if (!silent) {
+      if (!silent && isCurrent()) {
         setIsLoading(false);
       }
     }
   }, []);
 
   useEffect(() => {
+    if (!slug) return;
     loadRoadmap(slug);
   }, [slug, loadRoadmap]);
 
   // Re-fetch the open roadmap when the assistant creates/updates/deletes data
   useEffect(() => {
+    if (!slug) return;
     const handleUpdate = () => loadRoadmap(slug, true);
     window.addEventListener('roadmap:updated', handleUpdate);
     return () => window.removeEventListener('roadmap:updated', handleUpdate);

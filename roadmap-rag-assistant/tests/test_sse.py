@@ -28,7 +28,8 @@ async def test_chat_stream_endpoint_returns_sse(mock_adapter, owner_headers):
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_plan_mode(mock_adapter, owner_headers):
+async def test_chat_stream_old_plan_command_is_a_read_only_question(mock_adapter, owner_headers):
+    """/plan is gone: the text is read as a learning-plan question, answered from the lessons, nothing written."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
         resp = await client.post(
@@ -37,9 +38,9 @@ async def test_chat_stream_plan_mode(mock_adapter, owner_headers):
         )
         assert resp.status_code == 200
         body = resp.text
-        assert "event: tool_start" in body
-        assert "preview_roadmap_plan" in body
+        assert "preview_roadmap_plan" not in body
         assert "event: done" in body
+        mock_adapter.create_topic.assert_not_called()
 
 
 @pytest.mark.asyncio

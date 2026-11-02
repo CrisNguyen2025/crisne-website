@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -23,6 +24,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ item: updated });
   } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/items/[id]/content] Error:', error);

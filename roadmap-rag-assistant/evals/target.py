@@ -285,7 +285,7 @@ class RoadmapTarget:
     def _behavior(reply: str, steps: dict) -> str:
         intent = steps.get("route", {}).get("intent")
         mode = steps.get("answer", {}).get("mode")
-        if reply.strip() == SENSITIVE_REPLY.strip() or intent == "out_of_scope" or mode == "no_match":
+        if reply.strip().startswith(SENSITIVE_REPLY) or intent == "out_of_scope" or mode == "no_match":
             return "refuse"
         # The model says the roadmap has no lesson on it, after retrieving neighbours it did not use
         if NO_DIRECT_LESSON.search(reply):

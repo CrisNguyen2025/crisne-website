@@ -121,7 +121,6 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
     """The agent's decision order up to the write decision; nothing runs. Returns (now | preview | none, why)."""
     from rag_service.core.guards import is_sensitive_request
     from rag_service.domains.roadmap.commands import RoadmapCommands
-    from rag_service.domains.roadmap.router.policy import slash_command
     from rag_service.domains.roadmap.router.route_decision import decide_route
     from rag_service.domains.roadmap.router.understanding import instruction_part
     from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
@@ -130,10 +129,6 @@ async def write_outcome(router, text: str, history=(), context=None) -> tuple[st
     lower = content.lower()
     if is_sensitive_request(content, instruction=instruction_part(content)):
         return "none", "sensitive"
-    if slash_command(lower) == "goal":
-        return "now", "/goal"
-    if slash_command(lower) == "plan":
-        return "none", "/plan"
     if RoadmapCommands.bulk_import_applies(None, text.strip(), lower, context):
         return "now", "bulk import"
     if router.mixed_intent_steps(content):

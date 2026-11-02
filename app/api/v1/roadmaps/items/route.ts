@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from '@/lib/roadmap/groups';
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 // POST /api/v1/roadmaps/items - Create item in a group
 export async function POST(req: NextRequest) {
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({
       item: {
         id: newItem.id,

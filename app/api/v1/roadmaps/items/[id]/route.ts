@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from '@/lib/roadmap/groups';
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -41,6 +42,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ item: updated });
   } catch (error) {
     if (error instanceof GroupChoiceRequired) return groupChoiceResponse(error);
@@ -61,6 +63,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       where: { id },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/items/[id]] Error:', error);

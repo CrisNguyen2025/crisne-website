@@ -15,7 +15,7 @@ import dataclasses
 import asyncio
 import os
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Callable, Optional
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.config import settings
@@ -58,24 +58,24 @@ from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, CONTEN
 from rag_service.domains.roadmap.router.policy import TOPIC_REFERENCE, TOPIC_REFERENCE_FOLDED
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import (
-    EMPTY_MESSAGE_REPLY,
     mixed_intent_reply,
     RETRIEVAL_ERROR_REPLY,
-    SENSITIVE_REPLY,
     TOO_LONG_REPLY,
-    UNCLEAR_REPLY,
     BLOCKED_CHANGE_REPLY,
     DESCRIPTION_UNSUPPORTED_REPLY,
     NO_TOPIC_REPLY,
     content_unclear_reply,
     unnamed_create_reply,
     domain_gap_reply,
+    empty_message_reply,
+    empty_roadmap_reply,
     no_match_reply,
     out_of_scope_reply,
+    sensitive_reply,
+    unclear_reply,
 )
 from rag_service.state import session_store
 from rag_service.tools import ALL_TOOLS
-from rag_service.tools.rag_tools import preview_roadmap_plan
 
 
 # Placeholders the anaphora resolver leaves when no topic/layer is known from context
@@ -95,6 +95,11 @@ def log_turn(thread_id: str, steps: dict, tools: list[str], metadata: dict) -> N
         f"mode={answer.get('mode')} fallback={answer.get('fallback_reason')} "
         f"grounding={metadata.get('grounding')} sources={len(metadata.get('sources', []))} tools={tools}"
     )
+
+
+def _unless_empty(reply: Callable[[bool], str]) -> Callable[[bool], str]:
+    """A "nothing found" reply, unless the roadmap holds nothing at all: then say that, not "try another keyword"."""
+    return lambda owner: empty_roadmap_reply(owner) if rag_engine.is_empty() else reply(owner)
 
 
 async def _plan_queries(llm, query: str, session_id: str):
@@ -124,7 +129,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         async for ev in stream_words(text, delay):
             yield ev
 
-    def _source_deps(self) -> SourceDeps:
+    def _source_deps(self, query: str = "") -> SourceDeps:
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
         return SourceDeps(
             search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
@@ -136,7 +141,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             href_of=knowledge_href,
             item_fields=_item_fields,
             trace_fields=_describe_document,
-            no_match_reply=no_match_reply,
+            # Suggests lessons that exist, never the one just searched for
+            no_match_reply=_unless_empty(lambda owner: no_match_reply(owner, query)),
             retrieval_error_reply=RETRIEVAL_ERROR_REPLY,
             pipeline=generation_pipeline,
             adapter_mode=settings.rag_adapter_mode,
@@ -220,7 +226,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         # ── Input guard: empty or oversized messages never reach routing ─────
         problem = input_problem(content)
         if problem:
-            reply = EMPTY_MESSAGE_REPLY if problem == "empty" else TOO_LONG_REPLY
+            reply = empty_message_reply(is_owner()) if problem == "empty" else TOO_LONG_REPLY
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = problem
             async for ev in self._stream_text(reply, delay):
@@ -240,7 +246,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         if is_sensitive_request(content, instruction=instruction_part(content)):
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "sensitive"
-            async for ev in self._stream_text(SENSITIVE_REPLY, delay):
+            async for ev in self._stream_text(sensitive_reply(), delay):
                 yield ev
             return
 
@@ -250,9 +256,9 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
-        # ── 1–2. Plan/goal and topic listing (roadmap domain: commands.py) ──
+        # ── 1. Topic listing (roadmap domain: commands.py) ──
         outcome = {"handled": False}
-        async for ev in self.handle_plan_and_listing(content=content, lower=lower, delay=delay, outcome=outcome):
+        async for ev in self.handle_listing(content=content, lower=lower, delay=delay, outcome=outcome):
             yield ev
         if outcome["handled"]:
             return
@@ -348,7 +354,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             elif route_gate.reason == DESCRIPTION_UNSUPPORTED:
                 reply = DESCRIPTION_UNSUPPORTED_REPLY
             else:
-                reply = BLOCKED_CHANGE_REPLY if blocked else UNCLEAR_REPLY
+                reply = BLOCKED_CHANGE_REPLY if blocked else unclear_reply(is_owner())
             yield step_event("answer", "generation", "done", mode="blocked" if blocked else "unclear", fallback_reason=None)
             async for ev in self._stream_text(reply, delay):
                 yield ev
@@ -375,11 +381,13 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
 
         # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
         if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
-            deps = self._source_deps()
+            deps = self._source_deps(content)
             if outcome.scope is not None and outcome.scope.scope == Scope.DOMAIN_GAP:
                 # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
                 focus_topic = focus_written(content) or outcome.scope.focus  # folded focus is for matching only
-                deps = dataclasses.replace(deps, no_match_reply=lambda owner: domain_gap_reply(focus_topic, owner))
+                deps = dataclasses.replace(
+                    deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
+                )
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
                 llm=self.llm, deps=deps,
@@ -387,22 +395,12 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
                 yield ev
             return
 
-        # ── 5b. LEARNING PLAN: a matching blueprint is previewed (read-only), else an answer from the lessons ──
+        # ── 5b. LEARNING PLAN: answered from the owner's own lessons, never from a ready-made template ──
         # Without this branch a plan request fell through to chitchat, where the model wrote a plan from nothing.
         if intent_res.intent == IntentType.PLAN_GOAL:
-            template = rag_engine.template_for_goal(content)
-            if template is not None:
-                tid = template.get("id", "")
-                yield {"type": "tool_start", "name": "preview_roadmap_plan", "args": {"query_or_template_id": tid}}
-                res = await preview_roadmap_plan.ainvoke({"query_or_template_id": tid})
-                yield {"type": "tool_end", "name": "preview_roadmap_plan", "result": res}
-                yield step_event("answer", "generation", "done", mode="plan")
-                async for ev in self._stream_text(res, delay):
-                    yield ev
-                return
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=self._source_deps(),
+                llm=self.llm, deps=self._source_deps(content),
             ):
                 yield ev
             return
@@ -429,7 +427,7 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
             yield step_event(
                 "answer", "generation", "done", mode="unclear", fallback_reason=self._llm_fallback_reason(llm_failed)
             )
-            async for ev in self._stream_text(UNCLEAR_REPLY, delay):
+            async for ev in self._stream_text(unclear_reply(is_owner()), delay):
                 yield ev
             return
 

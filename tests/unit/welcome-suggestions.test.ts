@@ -6,22 +6,18 @@ import {
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/welcome";
 
 describe("welcome suggestions", () => {
-  it("owner: targets the open topic when the page has one", () => {
-    const [create] = getWelcomeSuggestions({ roadmapSlug: "backend" }, true);
-    expect(create.prompt).toBe("Tạo 2 layer Mock 1 và Mock 2 trong topic backend");
-  });
-
-  it("owner: leaves the topic out when the page has none, so the server asks", () => {
-    const [create] = getWelcomeSuggestions(undefined, true);
-    expect(create.prompt).toBe("Tạo 2 layer Mock 1 và Mock 2");
-  });
-
-  it("reader: no write example at all, only read-only ones", () => {
-    const suggestions = getWelcomeSuggestions({ roadmapSlug: "backend" }, false);
-    for (const { prompt } of suggestions) {
-      expect(prompt).not.toMatch(/^Tạo /);
+  it("no write example for anyone: a chip never writes mock data into the roadmap", () => {
+    for (const canWrite of [true, false]) {
+      const suggestions = getWelcomeSuggestions({ roadmapSlug: "backend" }, canWrite);
+      for (const { prompt } of suggestions) {
+        expect(prompt).not.toMatch(/^Tạo |Mock/);
+      }
+      expect(suggestions[0].prompt).toBe("Topic backend có những layer nào?");
     }
-    expect(suggestions[0].prompt).toBe("Topic backend có những layer nào?");
+  });
+
+  it("asks for the topic list when the page has no topic open", () => {
+    expect(getWelcomeSuggestions(undefined, true)[0].prompt).toBe("Có những lộ trình nào trên website?");
   });
 
   it("reader is the default: a greeting built without access info shows no write example", () => {
@@ -37,6 +33,18 @@ describe("welcome suggestions", () => {
       for (const { prompt } of getWelcomeSuggestions(undefined, canWrite)) {
         expect(prompt).not.toContain("\n");
       }
+    }
+  });
+});
+
+describe("welcome suggestions name no subject", () => {
+  it("never suggests a search for a lesson the roadmap may not have", () => {
+    for (const canWrite of [true, false]) {
+      for (const { prompt } of getWelcomeSuggestions(undefined, canWrite)) {
+        expect(prompt).not.toMatch(/Docker|DevOps|Database/);
+      }
+      // The help reply carries searches built from the live roadmap
+      expect(getWelcomeSuggestions(undefined, canWrite).map((s) => s.prompt)).toContain("Bạn làm được gì?");
     }
   });
 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate, normalizeTitle } from '@/lib/roadmap/duplicates';
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -56,9 +57,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!layers || !Array.isArray(layers) || layers.length === 0) {
+    // Layers are optional: the Roadmap Assistant and WebMCP create a topic first and add layers later.
+    // The create form asks for at least one on its own.
+    const layerList: unknown[] = layers ?? [];
+    const validLayer = (layer: unknown) =>
+      typeof (layer as { title?: unknown })?.title === 'string' &&
+      typeof (layer as { shortTag?: unknown })?.shortTag === 'string' &&
+      (layer as { title: string }).title.trim() !== '';
+    if (!Array.isArray(layerList) || !layerList.every(validLayer)) {
       return NextResponse.json(
-        { error: 'At least one layer menu item is required.' },
+        { error: 'Each layer needs a title and a shortTag.' },
         { status: 400 }
       );
     }
@@ -80,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     // Repeated layer titles in the same request collapse to one
     const seenLayers = new Set<string>();
-    const uniqueLayers = (layers as { title: string; shortTag: string; subtitle?: string }[]).filter((layer) => {
+    const uniqueLayers = (layerList as { title: string; shortTag: string; subtitle?: string }[]).filter((layer) => {
       const key = normalizeTitle(layer.title);
       if (seenLayers.has(key)) return false;
       seenLayers.add(key);
@@ -114,6 +122,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    notifyRoadmapChanged();
     return NextResponse.json({ roadmap: createdRoadmap }, { status: 201 });
   } catch (error) {
     console.error('[API POST /api/v1/roadmaps] Error:', error);

@@ -40,7 +40,7 @@ export function ChatComposer({
           placeholder={
             isLoading
               ? "Abot đang trả lời…"
-              : "Hỏi Abot hoặc gõ /plan…"
+              : "Hỏi Abot…"
           }
           className="min-w-0 flex-1 bg-transparent py-1 text-[16px] md:text-sm font-normal tracking-[-0.01em] leading-normal text-[#1F1E1C] outline-none placeholder:text-[#6B6862]/70 placeholder:font-normal placeholder:text-sm disabled:opacity-50"
         />

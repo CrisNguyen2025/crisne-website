@@ -66,19 +66,15 @@ class HttpApiAdapter:
         return data.get("roadmaps", [])
 
     async def export_full_hierarchy(self) -> list[dict]:
-        """GET /api/v1/roadmaps/full-export"""
-        try:
-            data = await self._request("GET", "/api/v1/roadmaps/full-export")
-            return data.get("roadmaps", [])
-        except Exception:
-            # Fallback to fetching topics one by one
-            topics = await self.list_topics()
-            results = []
-            for t in topics:
-                full = await self.get_topic(t["slug"])
-                if full:
-                    results.append(full)
-            return results
+        """GET /api/v1/roadmaps/full-export
+
+        Raises unless the response holds a `roadmaps` list: an empty list is the only way to say "no roadmap".
+        """
+        data = await self._request("GET", "/api/v1/roadmaps/full-export")
+        roadmaps = data.get("roadmaps")
+        if not isinstance(roadmaps, list):
+            raise ValueError("full-export response has no 'roadmaps' list")
+        return roadmaps
 
     async def get_topic(self, slug: str) -> dict | None:
         """GET /api/v1/roadmaps/{slug}"""

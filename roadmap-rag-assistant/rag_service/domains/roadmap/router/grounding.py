@@ -14,41 +14,107 @@
 
 from __future__ import annotations
 
+import random
 import re
 from typing import Optional
 
 from rag_service.core.guards import MAX_MESSAGE_CHARS, TOO_LONG_REPLY, is_sensitive_request  # noqa: F401
-from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.retrieval.relevance import content_words, fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
-_OUT_OF_SCOPE_HEAD = (
-    "Xin lỗi, thông tin này nằm ngoài dữ liệu Roadmap nên tôi không tra cứu được "
-    "(ví dụ: hợp đồng, hóa đơn, thời tiết). Tôi chỉ hỗ trợ lộ trình học tập: topic, layer, nhóm và bài học.\n\n"
-    "Bạn có thể thử:\n"
-    "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
-)
+def example_blocks(*commands: str) -> str:
+    """Example commands, each in its own one-line ```text block.
+
+    The chat widget gives each block a copy button, and a send button unless the command still has a blank to
+    fill in ("<tên>", "…") or deletes something. A blank line goes before every block: a fence is only read on its
+    own line. Inline `code` gets neither button, so every command a reply suggests goes here.
+    """
+    return "\n\n".join(f"```text\n{command}\n```" for command in commands)
+
+
+LIST_EXAMPLE = "liệt kê topic"
+# The owner names their own topics: an example never picks a subject for them
+CREATE_TOPIC_EXAMPLE = "tạo topic <tên topic>"
+
+
+def _names_a_subject(title: str) -> bool:
+    """A title worth searching for: one real word at least, not a bare number or code ("2", "01")."""
+    return any(len(w) >= 3 and not w.isdigit() for w in content_words(title))
+
+
+def _indexed_docs(kind: str) -> list:
+    """Documents of one kind ("item", "topic") in the live index whose title names a subject."""
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    return [d for d in rag_engine._vector_store._docs_map.values() if d.doc_type == kind and _names_a_subject(d.title or "")]
+
+
+def _unrelated(title: str, exclude: str) -> bool:
+    """The title shares no content word with the message just answered, so it is not that search again."""
+    return not (content_words(title) & content_words(exclude)) if exclude else True
+
+
+def search_examples(exclude: str = "", limit: int = 1) -> list[str]:
+    """Searches that find something on this roadmap now: a lesson it holds, picked at random each time.
+
+    None when the roadmap has no lesson. What the user just searched for is never suggested back (exclude).
+    """
+    titles = [d.title for d in _indexed_docs("item") if _unrelated(d.title, exclude)]
+    return [f"tìm bài học về {t}" for t in random.sample(titles, min(limit, len(titles)))]
+
+
+def topic_examples(exclude: str = "", limit: int = 1) -> list[str]:
+    """A question about a topic the roadmap holds; none when it has no topic."""
+    titles = [d.title for d in _indexed_docs("topic") if _unrelated(d.title, exclude)]
+    return [f"topic {t} có những bài gì" for t in random.sample(titles, min(limit, len(titles)))]
+
+
+def plan_examples() -> list[str]:
+    """A learning-plan question about a topic the roadmap holds, answered from its lessons; none when empty."""
+    titles = [d.title for d in _indexed_docs("topic")]
+    return [f"Mình muốn học {random.choice(titles)}, nên đọc bài nào trước?"] if titles else []
+
+
+def browse_examples(exclude: str = "") -> list[str]:
+    """What a reader can try: a real lesson to search, and the topic list. Nothing on an empty roadmap."""
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+    if rag_engine.is_empty():
+        return []
+    return [*search_examples(exclude), LIST_EXAMPLE]
+
+
+def _with_examples(head: str, intro: str, commands: list[str]) -> str:
+    return f"{head}\n\n{intro}\n\n{example_blocks(*commands)}" if commands else head
+
+
 # No create suggestion, for owners either: a topic outside the roadmap is not a lesson to add
-OUT_OF_SCOPE_REPLY = _OUT_OF_SCOPE_HEAD + "- 📋 **Xem danh sách**: `liệt kê topic`"
+OUT_OF_SCOPE_REPLY = (
+    "Xin lỗi, thông tin này nằm ngoài dữ liệu Roadmap nên tôi không tra cứu được "
+    "(ví dụ: hợp đồng, hóa đơn, thời tiết). Tôi chỉ hỗ trợ lộ trình học tập: topic, layer, nhóm và bài học."
+)
 
 
 def out_of_scope_reply(owner: bool) -> str:
     """Out-of-scope refusal: the topic is outside the roadmap, so nothing is offered to create."""
-    return OUT_OF_SCOPE_REPLY
+    return _with_examples(OUT_OF_SCOPE_REPLY, "Bạn có thể thử:", browse_examples())
 
 
 # Shown when the message is neither a greeting nor a clear request
-UNCLEAR_REPLY = (
-    "Tôi chưa hiểu rõ yêu cầu của bạn. Bạn có thể thử một trong các lệnh sau:\n"
-    "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
-    "- 🗺️ **Tạo topic**: `tạo topic AI Engineering`\n"
-    "- 📋 **Xem danh sách**: `liệt kê topic`"
-)
+UNCLEAR_REPLY = "Tôi chưa hiểu rõ yêu cầu của bạn."
 
-EMPTY_MESSAGE_REPLY = (
-    "Bạn muốn tôi giúp gì? Ví dụ:\n"
-    "- 🔎 `tìm bài học về Docker`\n"
-    "- 📋 `liệt kê topic`"
-)
+
+def unclear_reply(owner: bool) -> str:
+    commands = [*browse_examples(), *([CREATE_TOPIC_EXAMPLE] if owner else [])]
+    return _with_examples(UNCLEAR_REPLY, "Bạn có thể thử một trong các lệnh sau:", commands)
+
+
+EMPTY_MESSAGE_REPLY = "Bạn muốn tôi giúp gì?"
+
+
+def empty_message_reply(owner: bool) -> str:
+    commands = [*browse_examples(), *([CREATE_TOPIC_EXAMPLE] if owner else [])]
+    return _with_examples(EMPTY_MESSAGE_REPLY, "Ví dụ:", commands)
 
 # Steps are of different kinds, not always a search and a change ("bạn làm được gì, rồi tìm bài Y")
 MIXED_INTENT_REPLY = "Tin nhắn có nhiều yêu cầu khác nhau, tôi làm lần lượt từng bước."
@@ -56,10 +122,10 @@ MIXED_INTENT_REPLY = "Tin nhắn có nhiều yêu cầu khác nhau, tôi làm l�
 
 def mixed_intent_reply(steps: list[str]) -> str:
     """Ask back with the user's own clauses as ordered commands, so the next message is one copy away."""
-    lines = [MIXED_INTENT_REPLY, ""]
-    lines += [f"{i}. `{step}`" for i, step in enumerate(steps, 1)]
-    lines += ["", f"Gửi bước 1 trước: `{steps[0]}`, xong rồi gửi tiếp các bước sau theo thứ tự."]
-    return "\n".join(lines)
+    return (
+        f"{MIXED_INTENT_REPLY} Gửi lần lượt từng bước theo thứ tự, bắt đầu từ bước 1:\n\n"
+        + "\n\n".join(f"**Bước {i}**\n\n{example_blocks(step)}" for i, step in enumerate(steps, 1))
+    )
 
 # "xóa hết topic", "xóa tất cả layer", "delete all items": not a named target.
 BULK_DELETE = re.compile(
@@ -69,12 +135,12 @@ BULK_DELETE = re.compile(
 )
 BULK_DELETE_REPLY = (
     "Tôi không hỗ trợ xóa toàn bộ trong một lệnh. "
-    "Hãy nêu tên cụ thể, ví dụ: `xóa layer mock 1 và mock 2 trong topic fe`."
+    "Hãy nêu tên cụ thể, ví dụ:\n\n" + example_blocks("xóa layer mock 1 và mock 2 trong topic fe")
 )
 
 BATCH_LAYER_DELETE_REPLY = (
     "Hiện tại tôi chỉ xóa được từng layer một. Hãy gửi lệnh riêng cho mỗi layer, "
-    "ví dụ: `xóa layer mock 1 trong topic fe`."
+    "ví dụ:\n\n" + example_blocks("xóa layer mock 1 trong topic fe")
 )
 
 # "tôi có thể tạo topic mới không?", "tạo topic mới": a create that names nothing. Matched folded, on the whole message.
@@ -104,18 +170,21 @@ def unnamed_create_reply(text: str) -> Optional[str]:
         else "topic"
     )
     name, example = _UNNAMED_EXAMPLES[kind]
-    return f"Được, mình tạo {name} được. Bạn gửi tên {name} giúp mình, ví dụ: `{example}`."
+    return f"Được, mình tạo {name} được. Bạn gửi tên {name} giúp mình, ví dụ:\n\n" + example_blocks(example)
 
 
 # The executor runs create and delete only: an update is answered here, never previewed
 UPDATE_NOT_SUPPORTED_REPLY = (
     "Abot chưa sửa được topic, layer, nhóm hay bài học qua chat. Bạn mở mục đó trên trang Roadmap để sửa trực tiếp. "
-    "Tạo mới hoặc xóa thì Abot làm được, ví dụ: `thêm bài … vào layer …` hoặc `xóa bài …`."
+    "Tạo mới hoặc xóa thì Abot làm được, ví dụ:\n\n" + example_blocks("thêm bài … vào layer …", "xóa bài …")
 )
 
 
 def batch_entity_delete_reply(noun: str) -> str:
-    return f"Hiện tại tôi chỉ xóa được từng {noun} một. Hãy gửi lệnh riêng cho mỗi {noun}, ví dụ: `xóa {noun} …`."
+    return (
+        f"Hiện tại tôi chỉ xóa được từng {noun} một. Hãy gửi lệnh riêng cho mỗi {noun}, ví dụ:\n\n"
+        + example_blocks(f"xóa {noun} …")
+    )
 
 
 def unresolved_entity_reply(noun: str, name: str, candidates: list[dict]) -> str:
@@ -128,22 +197,22 @@ def unresolved_entity_reply(noun: str, name: str, candidates: list[dict]) -> str
 # The extracted change is not the one the message's verb asks for ("khỏi tạo topic X" read as a delete)
 ACTION_NOT_ASKED_REPLY = (
     "Mình chưa chắc bạn muốn thay đổi gì nên chưa làm gì cả. "
-    "Bạn nói rõ giúp mình nhé, ví dụ: `tạo topic …`, `thêm bài … vào layer …` hoặc `xóa bài …`."
+    "Bạn nói rõ giúp mình nhé, ví dụ:\n\n" + example_blocks("tạo topic …", "thêm bài … vào layer …", "xóa bài …")
 )
 
 BLOCKED_CHANGE_REPLY = (
     "Tôi hiểu đây không phải yêu cầu thay đổi nên không sửa gì trong roadmap. "
-    "Nếu bạn muốn thay đổi, hãy gửi lệnh trực tiếp, ví dụ: `xóa bài Kafka` hoặc `tạo topic AI Engineering`."
+    "Nếu bạn muốn thay đổi, hãy gửi lệnh trực tiếp, ví dụ:\n\n" + example_blocks("xóa bài Kafka", "tạo topic <tên topic>")
 )
 
 TARGET_MISSING_REPLY = (
     "Mình chưa biết bạn muốn thay đổi mục nào nên chưa làm gì cả. Bạn gửi lại kèm tên cụ thể giúp mình nhé, "
-    "ví dụ: `thêm bài Hybrid Search vào layer 03-RAG` hoặc `xóa bài Kafka`."
+    "ví dụ:\n\n" + example_blocks("thêm bài Hybrid Search vào layer 03-RAG", "xóa bài Kafka")
 )
 
 QUESTION_TITLE_REPLY = (
     "Tên bạn đưa trông giống một câu hỏi nên tôi chưa tạo gì. Nếu muốn tạo mới, hãy gửi lại kèm tên rõ ràng, "
-    "ví dụ: `tạo topic AI Engineering`."
+    "ví dụ:\n\n" + example_blocks(CREATE_TOPIC_EXAMPLE)
 )
 
 RATE_LIMITED_REPLY = "LLM đang tạm ngưng do hết hạn mức sử dụng. Bạn vui lòng thử lại sau."
@@ -154,20 +223,31 @@ RETRIEVAL_ERROR_REPLY = (
 )
 
 
-SENSITIVE_REPLY = (
-    "Xin lỗi, tôi không thể cung cấp thông tin cấu hình, khóa bí mật hay chỉ dẫn nội bộ của hệ thống.\n\n"
-    "Tôi có thể giúp bạn với lộ trình học tập, ví dụ:\n"
-    "- 🔎 **Tìm kiếm**: `tìm bài học về Docker`\n"
-    "- 📋 **Xem danh sách**: `liệt kê topic`"
-)
+SENSITIVE_REPLY = "Xin lỗi, tôi không thể cung cấp thông tin cấu hình, khóa bí mật hay chỉ dẫn nội bộ của hệ thống."
 
-def no_match_reply(owner: bool) -> str:
-    """Reply for a roadmap question with no result. Creating is offered only for a topic of the roadmap's
-    field (domain_gap_reply): a question that found nothing may be about anything."""
-    return (
-        "Tôi chưa tìm thấy bài học hoặc tài liệu nào phù hợp trong Roadmap.\n\n"
-        "Bạn có thể thử lại với từ khóa khác, ví dụ: `tìm bài học về Docker`."
-    )
+
+def sensitive_reply() -> str:
+    return _with_examples(SENSITIVE_REPLY, "Tôi có thể giúp bạn với lộ trình học tập, ví dụ:", browse_examples())
+
+
+NO_MATCH_REPLY = "Tôi chưa tìm thấy bài học hoặc tài liệu nào phù hợp trong Roadmap."
+
+
+def no_match_reply(owner: bool, query: str = "") -> str:
+    """Reply for a roadmap question with no result: lessons that do exist, never the search that just failed.
+
+    Creating is offered only for a topic of the roadmap's field (domain_gap_reply): a question that found nothing
+    may be about anything.
+    """
+    return _with_examples(NO_MATCH_REPLY, "Roadmap hiện có, bạn thử xem:", browse_examples(exclude=query))
+
+
+def empty_roadmap_reply(owner: bool) -> str:
+    """The roadmap holds no topic at all: say so, instead of suggesting searches that cannot find anything."""
+    reply = "Hiện website chưa có lộ trình nào, nên tôi chưa có bài học hay tài liệu để trả lời câu hỏi này."
+    if owner:
+        reply += "\n\nBạn có thể bắt đầu bằng cách tạo topic đầu tiên:\n\n" + example_blocks(CREATE_TOPIC_EXAMPLE)
+    return reply
 
 
 def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
@@ -175,7 +255,7 @@ def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
     name = f"**{topic}**" if topic else "chủ đề này"
     reply = f"Roadmap chưa có bài học về {name}. Chủ đề này thuộc lĩnh vực của lộ trình nhưng chưa được bổ sung."
     if owner and topic:
-        reply += f"\n\nBạn có thể thêm: `thêm bài {topic} vào layer ...`"
+        reply += "\n\nBạn có thể thêm:\n\n" + example_blocks(f"thêm bài {topic} vào layer …")
     return reply
 
 
@@ -215,16 +295,14 @@ DESCRIPTION_UNSUPPORTED_REPLY = (
 def content_unclear_reply(topic_title: str = "") -> str:
     """Asked back when a change names no kind of entity; names the open topic when there is one."""
     topic = f"topic **{topic_title}**" if topic_title else "topic …"
-    return (
-        f"Bạn muốn thêm gì vào {topic}? Mình cần biết loại mục: layer, bài học hay nhóm. Ví dụ: "
-        f"`thêm layer Basics vào {topic_title or 'topic …'}`, `thêm bài Kafka vào layer …` "
-        f"hoặc `tạo nhóm Core trong layer …`."
+    return f"Bạn muốn thêm gì vào {topic}? Mình cần biết loại mục: layer, bài học hay nhóm. Ví dụ:\n\n" + example_blocks(
+        f"thêm layer Basics vào {topic_title or 'topic …'}", "thêm bài Kafka vào layer …", "tạo nhóm Core trong layer …"
     )
 
 
 NO_TOPIC_REPLY = (
     "Mình chưa có topic nào đang mở trong cuộc trò chuyện này nên chưa biết bạn nói topic nào. "
-    "Bạn gửi tên topic giúp mình, ví dụ: `thêm layer Basics vào topic AI Engineering`."
+    "Bạn gửi tên topic giúp mình, ví dụ:\n\n" + example_blocks("thêm layer Basics vào topic AI Engineering")
 )
 
 
@@ -233,14 +311,14 @@ def group_choice_reply(titles: str, groups: list[str]) -> str:
     if not groups:
         return (
             f"Layer này chưa có nhóm nào. Bạn muốn thêm bài {titles} vào nhóm tên gì? "
-            "Trả lời dạng `nhóm Fundamentals`, hoặc gõ `hủy` nếu không thêm."
+            "Trả lời theo mẫu dưới, hoặc bỏ qua nếu không thêm:\n\n" + example_blocks("nhóm Fundamentals", "hủy")
         )
     listing = "\n".join(f"{i}. **{g}**" for i, g in enumerate(groups, 1))
     return (
         f"Bạn muốn thêm bài {titles} vào nhóm nào?\n{listing}\n\n"
-        "Trả lời số thứ tự hoặc tên nhóm, `nhóm <tên mới>` để tạo nhóm mới, hoặc `hủy` nếu không thêm."
+        "Trả lời số thứ tự hoặc tên nhóm. Để tạo nhóm mới hoặc bỏ qua:\n\n" + example_blocks("nhóm <tên mới>", "hủy")
     )
 
 NO_DEFAULT_LAYER_REPLY = (
-    "Mình không tạo layer mặc định nữa. Bạn đặt tên layer giúp mình, ví dụ: `tạo layer Basics`."
+    "Mình không tạo layer mặc định nữa. Bạn đặt tên layer giúp mình, ví dụ:\n\n" + example_blocks("tạo layer Basics")
 )

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
 // POST /api/v1/roadmaps/items/reorder - Reorder items within group
 export async function POST(req: NextRequest) {
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
       )
     );
 
+    notifyRoadmapChanged();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[API POST /api/v1/roadmaps/items/reorder] Error:', error);

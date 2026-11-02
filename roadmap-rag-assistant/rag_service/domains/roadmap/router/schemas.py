@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 class IntentType(str, Enum):
     ROADMAP_CUD = "roadmap_cud"         # Create, update, or delete roadmap/layer/group/item
     KNOWLEDGE_QUERY = "knowledge_query" # Ask about existing lessons, concepts, search docs
-    PLAN_GOAL = "plan_goal"             # /plan preview outline or /goal end-to-end generation
+    PLAN_GOAL = "plan_goal"             # A learning plan, answered from the existing lessons
     CHITCHAT = "chitchat"               # Greetings, thanks, identity questions
     OUT_OF_SCOPE = "out_of_scope"       # Unrelated to roadmaps (weather, finance, general coding...)
     UNCLEAR = "unclear"                 # LLM router could not tell; the user is asked to rephrase

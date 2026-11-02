@@ -31,6 +31,8 @@ Có hai nguồn khác nhau, và chúng có thể không chứa cùng một nội
 
 Dòng khởi động của server in nguồn đang dùng. Mỗi lượt chat in một dòng `[turn]` với intent, mode, fallback và tool, để tìm được hội thoại trong log mà không cần ảnh chụp màn hình.
 
+Index luôn đi theo nguồn: mỗi route ghi roadmap bên Next.js gọi `POST /internal/reindex` sau khi ghi xong, lượt chat kế tiếp chờ tối đa 3 giây để có index mới. Thay đổi không đi qua API (script, sửa thẳng DB) được bắt bằng TTL 30 giây. Roadmap rỗng làm index rỗng; nguồn không đọc được thì giữ index cũ, không chuyển sang `prisma/dev.db`.
+
 Chạy server có tự reload khi sửa code: `yarn rag:dev` (từ thư mục gốc).
 
 ## Quick Start
@@ -147,7 +149,7 @@ và UI hiện một dải "Nguồn" duy nhất ở cuối câu trả lời. Quy 
 | 6 | Chào hỏi, hỏi về trợ lý, hỏi lại điều đã nói | `chitchat` | Không |
 | 7 | Ngoài phạm vi roadmap | `out_of_scope` | Không |
 | 8 | Tạo, sửa, xoá topic/layer/group/item | `roadmap_cud` | Không: kết quả là thao tác, không phải tri thức |
-| 9 | `/plan`, `/goal` | `plan_goal` | Không |
+| 9 | Hỏi kế hoạch học ("muốn học DevOps trong 3 tháng"), trả lời từ các bài đã có | `plan_goal` / như dòng 1–4 | Như dòng 1–4 |
 
 ## Run Tests
 

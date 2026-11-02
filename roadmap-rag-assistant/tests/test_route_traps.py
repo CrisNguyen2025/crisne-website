@@ -12,9 +12,8 @@ import pytest
 
 from rag_service.domains.roadmap import agent as agent_module
 from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
-from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.router.intent_router import IntentRouter
-from rag_service.domains.roadmap.router.policy import WRITE_DENY, slash_command
+from rag_service.domains.roadmap.router.policy import WRITE_DENY
 from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
 from rag_service.domains.roadmap.router.write_gate import gate_route
 
@@ -37,16 +36,6 @@ REAL_CHANGES = [
     "thêm bài toán tối ưu vào layer 1",
     "bỏ bớt cái topic docker swarm ra đi",
 ]
-
-# Phrases that used to start /plan or /goal as substrings, before the router saw them
-NOT_COMMANDS = [
-    "bài nào nên xem trước khi học RAG?",
-    "prompt template là gì, cách tạo prompt template tốt",
-    "có bài nào về template cho lộ trình học không",
-    "làm sao để mô hình sinh nhanh hơn",
-    "lập kế hoạch học backend trong 3 tháng",
-]
-
 
 @pytest.mark.parametrize("text", FALSE_FRIENDS)
 @pytest.mark.parametrize("follow_up", [False, True])
@@ -82,56 +71,6 @@ def test_english_pointer_is_read_on_accented_text():
     assert not IntentRouter().has_change_request("thêm mục tiêu học tập", follow_up=True)
 
 
-@pytest.mark.parametrize("text", NOT_COMMANDS)
-def test_only_a_leading_slash_is_a_command(text):
-    assert slash_command(text.lower()) is None
-
-
-@pytest.mark.parametrize("text,command", [("/plan ai engineering", "plan"), ("/goal template ai-engineering", "goal")])
-def test_slash_commands_are_read(text, command):
-    assert slash_command(text) == command
-
-
-@pytest.mark.parametrize("text,command,template", [
-    ("/goal template cloud-devops", "goal", "cloud-devops"),
-    ("/plan ai-engineering", "plan", "ai-engineering"),
-    ("/plan Lộ trình Next.js Fullstack", "plan", "nextjs-fullstack"),
-    ("/goal lộ trình học DevOps", "goal", "cloud-devops"),
-    # No default and no loose word match: these used to give the ai-engineering / cloud-devops samples
-    ("/goal học Rust", "goal", None),
-    ("/goal", "goal", None),
-    ("/plan lộ trình học rust", "plan", None),
-])
-def test_slash_command_uses_only_the_blueprint_it_names(text, command, template):
-    from rag_service.domains.roadmap.commands import named_template
-
-    found = named_template(text, command)
-    assert (found.get("id") if found else None) == template
-
-
-@pytest.mark.parametrize("message", ["/goal học Rust", "/plan lộ trình học rust"])
-def test_slash_command_without_a_blueprint_writes_nothing(message, mock_adapter):
-    text, events = _owner_reply(message, f"no-blueprint-{message[1:5]}", None)
-    assert [ev for ev in events if ev.get("type") == "tool_start"] == []
-    assert "Chưa có blueprint phù hợp" in text
-    mock_adapter.create_topic.assert_not_called()
-    mock_adapter.create_item.assert_not_called()
-
-
-@pytest.mark.parametrize("goal,template", [
-    ("lên lộ trình học DevOps trong 3 tháng", "cloud-devops"),
-    ("lộ trình học Kubernetes cho người mới", "cloud-devops"),
-    ("Mình muốn học để trở thành AI engineer, lên giúp lộ trình", "ai-engineering"),
-    ("e muon di lam frontend dev thi nen hoc theo lo trinh nhu the nao", "nextjs-fullstack"),
-    ("Lên cho anh một khung chương trình học Flutter từ căn bản", None),
-    # "Architect" is not "AI & LLM Architecture"
-    ("study plan for AWS Solutions Architect certification", None),
-])
-def test_goal_picks_the_blueprint_it_names(goal, template):
-    found = rag_engine.template_for_goal(goal)
-    assert (found.get("id") if found else None) == template
-
-
 def _events(message: str) -> list[dict]:
     agent = NextGenRoadmapAgent(llm_model=None)
 
@@ -141,12 +80,12 @@ def _events(message: str) -> list[dict]:
     return asyncio.run(run())
 
 
-def test_plan_goal_with_a_blueprint_previews_it_read_only():
-    tools = [ev.get("name") for ev in _events("lên lộ trình học DevOps trong 3 tháng") if ev.get("type") == "tool_start"]
-    assert tools == ["preview_roadmap_plan"]
-
-
-def test_plan_goal_without_a_blueprint_answers_from_the_lessons(monkeypatch):
+@pytest.mark.parametrize("message", [
+    "lên lộ trình học DevOps trong 3 tháng",
+    "Lên cho anh một khung chương trình học Flutter từ căn bản",
+    "/goal template cloud-devops",  # the removed commands are read as a plan question too
+])
+def test_plan_goal_answers_from_the_lessons_and_writes_nothing(message, monkeypatch, mock_adapter):
     seen = []
 
     async def fake_answer(**kwargs):
@@ -154,8 +93,10 @@ def test_plan_goal_without_a_blueprint_answers_from_the_lessons(monkeypatch):
         yield {"type": "token", "content": "ok"}
 
     monkeypatch.setattr(agent_module, "answer_from_sources", fake_answer)
-    _events("Lên cho anh một khung chương trình học Flutter từ căn bản")
-    assert seen == ["Lên cho anh một khung chương trình học Flutter từ căn bản"]
+    events = _events(message)
+    assert seen == [message]
+    assert [ev for ev in events if ev.get("type") == "tool_start"] == []
+    mock_adapter.create_topic.assert_not_called()
 
 
 # ── A declined change never becomes a preview, and a preview is always the change asked for ──

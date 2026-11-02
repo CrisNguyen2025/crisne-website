@@ -123,7 +123,8 @@ function RoadmapWorkspace() {
   }, [refreshRoadmaps]);
 
   const currentView: "home" | "roadmap" = topic ? "roadmap" : "home";
-  const activeSlug: string = topic || "ai-architecture";
+  // Home opens no topic: nothing to load, so no request for a slug that may not exist
+  const activeSlug: string = topic || "";
 
   const {
     roadmapMeta,
