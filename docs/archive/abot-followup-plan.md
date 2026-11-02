@@ -1,6 +1,6 @@
 # Abot — kế hoạch xử lý các phần còn lệch sau P0–P2
 
-Nguồn: bước đối chiếu với `docs/abot-ux-plan.md`. Năm việc còn lại:
+Nguồn: bước đối chiếu với `docs/archive/abot-ux-plan.md`. Năm việc còn lại:
 
 | # | Việc | Loại | Cần người dùng |
 |---|---|---|---|

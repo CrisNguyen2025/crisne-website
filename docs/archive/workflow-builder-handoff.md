@@ -1,7 +1,7 @@
 # Workflow Builder — Handoff cho M1 → M4
 
 > Tài liệu bàn giao cho agent tiếp quản. Đọc hết file này trước khi viết code.
-> Nguồn sự thật về thiết kế: [`workflow-builder-design.md`](./workflow-builder-design.md). Kế hoạch tổng: [`workflow-builder-plan.md`](./workflow-builder-plan.md).
+> Nguồn sự thật về thiết kế: [`workflow-builder-design.md`](../workflow-builder-design.md). Kế hoạch tổng: [`workflow-builder-plan.md`](./workflow-builder-plan.md).
 > Cập nhật: 2026-10-14 · Nhánh hiện tại: `feat/chat-rag-observability`.
 
 ## 0. Cách dùng tài liệu này

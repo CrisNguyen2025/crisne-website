@@ -1,6 +1,6 @@
 # Workflow Builder — Kế hoạch theo mốc
 
-> Triển khai [`workflow-builder-design.md`](./workflow-builder-design.md). Thiết kế là nguồn sự thật; file này chia việc.
+> Triển khai [`workflow-builder-design.md`](../workflow-builder-design.md). Thiết kế là nguồn sự thật; file này chia việc.
 > Cập nhật: 2026-10-14. **Mỗi mốc kết thúc bằng thứ bạn tự thử được bằng tay**, không chỉ unit test.
 
 ## Tổng quan
