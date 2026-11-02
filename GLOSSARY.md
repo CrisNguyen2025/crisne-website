@@ -11,16 +11,13 @@ Một lộ trình học theo một chủ đề, ví dụ "AI & LLM Architecture"
 _Also_: Roadmap
 _Avoid_: course, lộ trình con
 
-**Layer**:
-Một mảng kiến thức trong Topic, có short tag dạng "02-LLM".
-_Avoid_: section, module, domain
-
-**Group**:
-Nhóm Lesson có tên trong một Layer; tên là duy nhất trong Layer.
-_Avoid_: category, cluster, level, level group
+**Section**:
+Mục tuỳ chọn của một Topic, gom các Lesson cùng mảng; là chuỗi tự do, so khớp không phân biệt hoa thường. Lesson không có Section nằm ở mục chung của Topic.
+_Also_: mục
+_Avoid_: layer, group, category, module, domain, level
 
 **Lesson**:
-Một bài học trong Group, có nội dung rich text.
+Một bài học thuộc một Topic, có Section tuỳ chọn và nội dung rich text.
 _Also_: Item
 _Avoid_: knowledge node, bài viết
 
@@ -47,7 +44,7 @@ Một cuộc hội thoại với Roadmap Assistant, luôn thuộc về đúng m�
 _Avoid_: session, conversation
 
 **Change**:
-Yêu cầu tạo, sửa hoặc xoá một Topic, Layer, Group hoặc Lesson.
+Yêu cầu tạo, sửa hoặc xoá một Topic, Section hoặc Lesson.
 _Also_: CUD
 _Avoid_: write, mutation
 

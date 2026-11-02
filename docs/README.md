@@ -24,7 +24,8 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0005](adr/0005-turso-for-production-database.md) | Turso cho database production | accepted |
 | [0006](adr/0006-in-memory-vector-search.md) | Tìm kiếm vector trong bộ nhớ | accepted |
 | [0007](adr/0007-glossary-accepts-synonyms.md) | Glossary chấp nhận tên đồng nghĩa qua `_Also_` | accepted |
-| [0008](adr/0008-drop-level-group-by-name.md) | Bỏ Level, Group là nhóm Lesson có tên | accepted |
+| [0008](adr/0008-drop-level-group-by-name.md) | Bỏ Level, Group là nhóm Lesson có tên | superseded by ADR-0009 |
+| [0009](adr/0009-topic-holds-lessons-by-section.md) | Topic chứa Lesson trực tiếp, Section thay cho Layer và Group | accepted |
 
 ## Runbook: cách setup / vận hành
 
