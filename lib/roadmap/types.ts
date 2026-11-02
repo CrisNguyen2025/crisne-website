@@ -1,31 +1,18 @@
+// A topic holds its lessons directly; a lesson may name a section (mục) of the topic (ADR-0009).
+
+/** A lesson as the UI and the API see it. `section` is null for lessons outside any section. */
 export interface ChecklistItem {
   id: string;
   slug?: string;
   title: string;
   description: string;
-  layerId: string;
-  groupId: string;
+  section: string | null;
+  order: number;
   createdAt: string;
   updatedAt: string;
-  notes?: string;
   content?: string;
+  notes?: string;
   tags?: string[];
-}
-
-/** A named group of lessons inside a layer; the title is unique within the layer (ADR-0008). */
-export interface RoadmapGroup {
-  id: string;
-  title: string;
-  items: ChecklistItem[];
-}
-
-export interface RoadmapLayer {
-  id: string;
-  order: number;
-  shortTag: string; // e.g. '01-DB', '02-LLM', '03-RAG', '04-OPS'
-  title: string;
-  subtitle: string;
-  groups: RoadmapGroup[];
 }
 
 export interface RoadmapStats {
@@ -40,42 +27,36 @@ export interface RoadmapMeta {
   id: string;
   slug: string;
   title: string;
-  shortCode?: string | null;
   description?: string | null;
   icon?: string | null;
   order: number;
   isLocked?: boolean;
-  _count?: {
-    layers: number;
-  };
 }
 
-/** Response shape when listing all roadmap layers from the API */
+/** A topic with its lessons, in page order. `sections` lists the sections in the order they first appear. */
 export interface GetRoadmapResponseDto {
   roadmap: RoadmapMeta;
-  layers: RoadmapLayer[];
+  items: ChecklistItem[];
+  /** Section names in page order; null is the group of lessons outside any section. */
+  sections: (string | null)[];
 }
 
-/**
- * Payload to create a new roadmap item. The group is named by id, or by title (created when missing);
- * with neither, a layer holding exactly one group uses it, otherwise the API asks for one.
- */
+/** Payload to create a lesson. The topic is named by slug; the section is optional and reused if it exists. */
 export interface CreateItemDto {
-  layerId: string;
-  groupId?: string;
-  groupTitle?: string;
+  roadmapSlug: string;
+  section?: string | null;
   title: string;
   description?: string;
   /** Optional rich-text (HTML) body, saved in the same request */
   content?: string;
 }
 
-/** Payload to update item title and description; groupId moves the item to another group of its layer */
+/** Payload to update a lesson's title and description. `section` moves it; "" or null takes it out of its section. */
 export interface UpdateItemInfoDto {
   id: string;
   title: string;
   description: string;
-  groupId?: string;
+  section?: string | null;
 }
 
 /** Payload to update item detailed HTML content only */
@@ -84,44 +65,26 @@ export interface UpdateItemContentDto {
   content: string;
 }
 
-/** Payload to reorder items within a group */
-export interface ReorderGroupItemsDto {
-  groupId: string;
+/** Payload to reorder the lessons of a topic */
+export interface ReorderItemsDto {
   orderedItemIds: string[];
 }
 
-/** Payload to create a new layer */
-export interface CreateLayerDto {
-  title: string;
-  shortTag: string;
-  subtitle?: string;
-}
-
-/** Payload to update an existing layer */
-export interface UpdateLayerDto {
-  id: string;
-  title: string;
-  shortTag: string;
-  subtitle?: string;
+/** Payload to rename a section; every lesson in it moves to the new name */
+export interface RenameSectionDto {
+  from: string;
+  to: string;
 }
 
 /** Payload to create a new Topic / Roadmap */
 export interface CreateRoadmapDto {
   title: string;
-  shortCode: string;
   description?: string;
-  layers: {
-    title: string;
-    shortTag: string;
-    subtitle?: string;
-  }[];
 }
 
 /** Payload to update an existing Topic / Roadmap */
 export interface UpdateRoadmapDto {
   title?: string;
-  shortCode?: string;
   description?: string;
   isLocked?: boolean;
 }
-

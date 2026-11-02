@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 
-// POST /api/v1/roadmaps/items/reorder - Reorder items within group
+// POST /api/v1/roadmaps/items/reorder - Set the page order of the lessons of a topic
 export async function POST(req: NextRequest) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -16,13 +16,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'orderedItemIds array is required' }, { status: 400 });
     }
 
-    // Update order for each item in transaction
     await prisma.$transaction(
       orderedItemIds.map((id, index) =>
-        prisma.roadmapItem.update({
-          where: { id },
-          data: { order: index + 1 },
-        })
+        prisma.roadmapItem.update({ where: { id }, data: { order: index + 1 } })
       )
     );
 

@@ -2,42 +2,45 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
-import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from '@/lib/roadmap/groups';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { sectionSpelling } from '@/lib/roadmap/sections';
 
-// POST /api/v1/roadmaps/items - Create item in a group
+// POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
 
   try {
     const body = await req.json();
-    const { layerId, groupId, groupTitle, title, description, content } = body;
+    const { roadmapSlug, section, title, description, content } = body;
 
-    if (!layerId || !title) {
-      return NextResponse.json({ error: 'layerId and title are required' }, { status: 400 });
+    if (!roadmapSlug || !title) {
+      return NextResponse.json({ error: 'roadmapSlug and title are required' }, { status: 400 });
     }
 
-    // A lesson title appears once per layer, whatever its group
-    const layerItems = await prisma.roadmapItem.findMany({
-      where: { group: { layerId } },
-      select: { id: true, title: true, group: { select: { title: true } } },
+    const roadmap = await prisma.roadmap.findUnique({
+      where: { slug: roadmapSlug },
+      include: { items: { select: { id: true, title: true, section: true, order: true } } },
     });
-    const duplicate = findDuplicate(layerItems, title);
+    if (!roadmap) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
+
+    // A lesson title appears once per topic, whatever its section
+    const duplicate = findDuplicate(roadmap.items, title);
     if (duplicate) {
-      return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, groupTitle: duplicate.group.title, layerId });
+      return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, roadmapSlug: roadmap.slug });
     }
 
-    const group = await resolveGroup(prisma, layerId, { groupId, groupTitle });
-    const groupSize = await prisma.roadmapItem.count({ where: { groupId: group.id } });
+    const sectionName = sectionSpelling(roadmap.items.map((i) => i.section), section);
+    const order = roadmap.items.reduce((max, i) => Math.max(max, i.order), 0) + 1;
 
     const newItem = await prisma.roadmapItem.create({
       data: {
-        groupId: group.id,
-        title,
+        roadmapId: roadmap.id,
+        section: sectionName,
+        title: title.trim(),
         description: description || '',
         content: content || null,
-        order: groupSize + 1,
+        order,
       },
     });
 
@@ -47,15 +50,14 @@ export async function POST(req: NextRequest) {
         id: newItem.id,
         title: newItem.title,
         description: newItem.description,
-        layerId,
-        groupId: group.id,
-        groupTitle: group.title,
+        section: newItem.section,
+        order: newItem.order,
+        roadmapSlug: roadmap.slug,
         createdAt: newItem.createdAt.toISOString(),
         updatedAt: newItem.updatedAt.toISOString(),
       },
     }, { status: 201 });
   } catch (error) {
-    if (error instanceof GroupChoiceRequired) return groupChoiceResponse(error);
     console.error('[API POST /api/v1/roadmaps/items] Error:', error);
     return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
   }

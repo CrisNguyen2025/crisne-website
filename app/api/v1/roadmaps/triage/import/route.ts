@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
           assistantMsg: typeof trace.output === "string" ? maskPII(trace.output) : null,
           reason: trace.reason ?? null,
           comment: trace.comment ?? null,
-          roadmapSlug: typeof roadmapSlug === "string" ? roadmapSlug : "ai-architecture",
+          roadmapSlug: typeof roadmapSlug === "string" ? roadmapSlug : null,
           status: "PENDING",
         },
       });

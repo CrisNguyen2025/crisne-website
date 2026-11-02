@@ -29,7 +29,34 @@ function loadEnv() {
 loadEnv();
 
 import { prisma } from "../lib/prisma";
-import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
+import { INITIAL_ROADMAP_DATA, type SeedLayer } from "../lib/roadmap/data";
+import { sectionName } from "../scripts/lib/flatten-sections";
+
+/** Writes the lessons of a topic in page order, each under its section (ADR-0009). */
+async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
+  let order = 0;
+  for (const layer of layers) {
+    for (const group of layer.groups) {
+      const section = sectionName(
+        { id: layer.id, roadmapId, order: layer.order, title: layer.title },
+        group.title,
+        layer.groups.length,
+      );
+      for (const item of group.items) {
+        order += 1;
+        const data = {
+          roadmapId,
+          section,
+          title: item.title,
+          description: item.description,
+          content: item.content || null,
+          order,
+        };
+        await prisma.roadmapItem.upsert({ where: { id: item.id }, update: data, create: { id: item.id, ...data } });
+      }
+    }
+  }
+}
 
 async function main() {
   console.log("🌱 Starting seed...");
@@ -64,7 +91,6 @@ async function main() {
     where: { slug: "ai-architecture" },
     update: {
       title: "AI & LLM Architecture Roadmap",
-      shortCode: "AI",
       description: "Comprehensive blueprint for LLM applications, RAG pipelines, evaluations, and production serving.",
       icon: "Cpu",
       order: 1,
@@ -72,76 +98,13 @@ async function main() {
     create: {
       slug: "ai-architecture",
       title: "AI & LLM Architecture Roadmap",
-      shortCode: "AI",
       description: "Comprehensive blueprint for LLM applications, RAG pipelines, evaluations, and production serving.",
       icon: "Cpu",
       order: 1,
     },
   });
 
-  // Seed AI Roadmap Layers, Groups and Items
-  for (const layerData of INITIAL_ROADMAP_DATA) {
-    const layer = await prisma.roadmapLayer.upsert({
-      where: { id: layerData.id },
-      update: {
-        roadmapId: aiRoadmap.id,
-        order: layerData.order,
-        shortTag: layerData.shortTag,
-        title: layerData.title,
-        subtitle: layerData.subtitle,
-      },
-      create: {
-        id: layerData.id,
-        roadmapId: aiRoadmap.id,
-        order: layerData.order,
-        shortTag: layerData.shortTag,
-        title: layerData.title,
-        subtitle: layerData.subtitle,
-      },
-    });
-
-    for (let gIdx = 0; gIdx < layerData.groups.length; gIdx++) {
-      const groupData = layerData.groups[gIdx];
-      const groupId = groupData.id;
-
-      const group = await prisma.roadmapGroup.upsert({
-        where: { id: groupId },
-        update: {
-          layerId: layer.id,
-          title: groupData.title,
-          order: gIdx + 1,
-        },
-        create: {
-          id: groupId,
-          layerId: layer.id,
-          title: groupData.title,
-          order: gIdx + 1,
-        },
-      });
-
-      for (let iIdx = 0; iIdx < groupData.items.length; iIdx++) {
-        const itemData = groupData.items[iIdx];
-        await prisma.roadmapItem.upsert({
-          where: { id: itemData.id },
-          update: {
-            groupId: group.id,
-            title: itemData.title,
-            description: itemData.description,
-            content: itemData.content || null,
-            order: iIdx + 1,
-          },
-          create: {
-            id: itemData.id,
-            groupId: group.id,
-            title: itemData.title,
-            description: itemData.description,
-            content: itemData.content || null,
-            order: iIdx + 1,
-          },
-        });
-      }
-    }
-  }
+  await seedLayers(aiRoadmap.id, INITIAL_ROADMAP_DATA);
   console.log(`✅ Seeded AI Architecture Roadmap with ${INITIAL_ROADMAP_DATA.length} layers`);
 
   // 3. Seed Demo Roadmap 2: Backend Engineering Roadmap
@@ -149,7 +112,6 @@ async function main() {
     where: { slug: "backend-roadmap" },
     update: {
       title: "Backend Engineering Roadmap",
-      shortCode: "BE",
       description: "Core architectural foundations, APIs, caching, databases, and microservices patterns.",
       icon: "Server",
       order: 2,
@@ -157,7 +119,6 @@ async function main() {
     create: {
       slug: "backend-roadmap",
       title: "Backend Engineering Roadmap",
-      shortCode: "BE",
       description: "Core architectural foundations, APIs, caching, databases, and microservices patterns.",
       icon: "Server",
       order: 2,
@@ -233,66 +194,7 @@ async function main() {
     },
   ];
 
-  for (const layerData of beLayers) {
-    const layer = await prisma.roadmapLayer.upsert({
-      where: { id: layerData.id },
-      update: {
-        roadmapId: beRoadmap.id,
-        order: layerData.order,
-        shortTag: layerData.shortTag,
-        title: layerData.title,
-        subtitle: layerData.subtitle,
-      },
-      create: {
-        id: layerData.id,
-        roadmapId: beRoadmap.id,
-        order: layerData.order,
-        shortTag: layerData.shortTag,
-        title: layerData.title,
-        subtitle: layerData.subtitle,
-      },
-    });
-
-    for (let gIdx = 0; gIdx < layerData.groups.length; gIdx++) {
-      const groupData = layerData.groups[gIdx];
-      const groupId = groupData.id;
-
-      const group = await prisma.roadmapGroup.upsert({
-        where: { id: groupId },
-        update: {
-          layerId: layer.id,
-          title: groupData.title,
-          order: gIdx + 1,
-        },
-        create: {
-          id: groupId,
-          layerId: layer.id,
-          title: groupData.title,
-          order: gIdx + 1,
-        },
-      });
-
-      for (let iIdx = 0; iIdx < groupData.items.length; iIdx++) {
-        const itemData = groupData.items[iIdx];
-        await prisma.roadmapItem.upsert({
-          where: { id: itemData.id },
-          update: {
-            groupId: group.id,
-            title: itemData.title,
-            description: itemData.description,
-            order: iIdx + 1,
-          },
-          create: {
-            id: itemData.id,
-            groupId: group.id,
-            title: itemData.title,
-            description: itemData.description,
-            order: iIdx + 1,
-          },
-        });
-      }
-    }
-  }
+  await seedLayers(beRoadmap.id, beLayers);
   console.log(`✅ Seeded Backend Roadmap with ${beLayers.length} layers`);
 }
 

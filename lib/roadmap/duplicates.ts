@@ -13,12 +13,10 @@ export function findDuplicate<T extends { title: string }>(siblings: T[], title:
   return siblings.find((s) => normalizeTitle(s.title) === wanted);
 }
 
-export type DuplicateKind = 'topic' | 'layer' | 'group' | 'item';
+export type DuplicateKind = 'topic' | 'item';
 
 const KIND_LABEL: Record<DuplicateKind, string> = {
   topic: 'Topic',
-  layer: 'Layer',
-  group: 'Group',
   item: 'Item',
 };
 

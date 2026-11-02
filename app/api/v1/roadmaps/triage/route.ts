@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         reason: reason ? maskPII(String(reason).trim()) : null,
         comment: comment ? maskPII(String(comment).trim()) : null,
         traceId: traceId ? String(traceId).trim() : null,
-        roadmapSlug: roadmapSlug ? String(roadmapSlug).trim() : "ai-architecture",
+        roadmapSlug: roadmapSlug ? String(roadmapSlug).trim() : null,
         status: "PENDING",
       },
     });

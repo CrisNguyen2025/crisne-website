@@ -43,26 +43,15 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    // 1. Fetch available roadmaps and layers to automatically map destination
-    const roadmaps = await prisma.roadmap.findMany({
-      include: {
-        layers: {
-          orderBy: { order: "asc" },
-        },
-      },
-      orderBy: { order: "asc" },
-    });
-
-    const activeRoadmap =
-      roadmaps.find((r) => r.slug === triage.roadmapSlug) || roadmaps[0];
-    const targetLayer =
-      activeRoadmap?.layers[1] || activeRoadmap?.layers[0];
+    // 1. The topic the question was asked on; the draft keeps the section the triage already names
+    const roadmaps = await prisma.roadmap.findMany({ orderBy: { order: "asc" } });
+    const activeRoadmap = roadmaps.find((r) => r.slug === triage.roadmapSlug) || roadmaps[0];
 
     // 2. Synthesize Lesson Draft using LLM (with robust fallback)
     let draftTitle = `Thực hành: ${triage.query.replace(/\?$/, "")}`;
     let draftContent = "";
     let verifyScore = 95;
-    let verifyNote = `✓ Agent Admin xác nhận: Giải quyết đúng lỗ hổng "${triage.reason || "Kiến thức"}". Không phát hiện ảo giác. Đã gắn vào Layer ${targetLayer?.shortTag || "01-CORE"}.`;
+    let verifyNote = `✓ Agent Admin xác nhận: Giải quyết đúng lỗ hổng "${triage.reason || "Kiến thức"}". Không phát hiện ảo giác. Đã gắn vào topic ${activeRoadmap?.title || "chưa có topic"}.`;
 
     // Why the built-in draft is used instead of an LLM one; shown to the admin in verifyNote
     let builtInReason = "chưa cấu hình LLM API key";
@@ -150,9 +139,7 @@ services:
       where: { id },
       data: {
         status: "DRAFTED",
-        roadmapSlug: activeRoadmap?.slug || "ai-architecture",
-        layerId: targetLayer?.id || null,
-        layerTag: targetLayer?.shortTag || "01-CORE",
+        roadmapSlug: activeRoadmap?.slug ?? triage.roadmapSlug,
         draftTitle,
         draftContent,
         verifyScore,

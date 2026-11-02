@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { RoadmapLayer } from '@/lib/roadmap/types';
+import { ChecklistItem, GetRoadmapResponseDto } from '@/lib/roadmap/types';
 import { slugify } from '@/lib/utils';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { sectionsInOrder } from '@/lib/roadmap/sections';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -12,151 +13,80 @@ interface RouteContext {
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// GET /api/v1/roadmaps/[slug] - Fetch full hierarchy of a roadmap
+/** The topic with the given slug or title (case-insensitive), or null. */
+async function findTopic(identifier: string) {
+  const roadmap = await prisma.roadmap.findUnique({ where: { slug: identifier } });
+  if (roadmap) return roadmap;
+  const norm = identifier.trim().toLowerCase();
+  const all = await prisma.roadmap.findMany();
+  return all.find((r) => r.slug.toLowerCase() === norm) || all.find((r) => r.title.toLowerCase() === norm) || null;
+}
+
+// GET /api/v1/roadmaps/[slug] - A topic with its lessons, in page order
 export async function GET(_req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
-
-    let roadmap = await prisma.roadmap.findUnique({
-      where: { slug },
-      include: {
-        layers: {
-          orderBy: { order: 'asc' },
-          include: {
-            groups: {
-              orderBy: { order: 'asc' },
-              include: {
-                items: {
-                  orderBy: { order: 'asc' },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!roadmap) {
-      const all = await prisma.roadmap.findMany();
-      const norm = slug.trim().toLowerCase();
-      const match =
-        all.find((r) => r.slug.toLowerCase() === norm) ||
-        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
-        all.find((r) => r.title.toLowerCase() === norm);
-
-      if (match) {
-        roadmap = await prisma.roadmap.findUnique({
-          where: { id: match.id },
-          include: {
-            layers: {
-              orderBy: { order: 'asc' },
-              include: {
-                groups: {
-                  orderBy: { order: 'asc' },
-                  include: {
-                    items: {
-                      orderBy: { order: 'asc' },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        });
-      }
-    }
+    const found = await findTopic(slug);
+    const roadmap = found
+      ? await prisma.roadmap.findUnique({
+          where: { id: found.id },
+          include: { items: { orderBy: { order: 'asc' } } },
+        })
+      : null;
 
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
-    // Format into RoadmapLayer structure expected by frontend
-    const layers: RoadmapLayer[] = roadmap.layers.map((layer) => ({
-      id: layer.id,
-      order: layer.order,
-      shortTag: layer.shortTag,
-      title: layer.title,
-      subtitle: layer.subtitle || '',
-      groups: layer.groups.map((group) => ({
-        id: group.id,
-        title: group.title,
-        items: group.items.map((item) => ({
-          id: item.id,
-          slug: slugify(item.title),
-          title: item.title,
-          description: item.description || '',
-          layerId: layer.id,
-          groupId: group.id,
-          content: item.content || undefined,
-          createdAt: item.createdAt.toISOString(),
-          updatedAt: item.updatedAt.toISOString(),
-        })),
-      })),
+    const items: ChecklistItem[] = roadmap.items.map((item) => ({
+      id: item.id,
+      slug: slugify(item.title),
+      title: item.title,
+      description: item.description || '',
+      section: item.section,
+      order: item.order,
+      content: item.content || undefined,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString(),
     }));
 
-    return NextResponse.json(
-      {
-        roadmap: {
-          id: roadmap.id,
-          slug: roadmap.slug,
-          title: roadmap.title,
-          shortCode: roadmap.shortCode,
-          description: roadmap.description,
-          icon: roadmap.icon,
-          order: roadmap.order,
-          isLocked: Boolean(roadmap.isLocked),
-        },
-        layers,
+    const body: GetRoadmapResponseDto = {
+      roadmap: {
+        id: roadmap.id,
+        slug: roadmap.slug,
+        title: roadmap.title,
+        description: roadmap.description,
+        icon: roadmap.icon,
+        order: roadmap.order,
+        isLocked: Boolean(roadmap.isLocked),
       },
-      {
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      }
-    );
+      items,
+      sections: sectionsInOrder(items),
+    };
+
+    return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {
     console.error('[API /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json({ error: 'Failed to fetch roadmap data' }, { status: 500 });
   }
 }
 
-// DELETE /api/v1/roadmaps/[slug] - Delete an entire roadmap topic by slug, shortCode, or title
+// DELETE /api/v1/roadmaps/[slug] - Delete a topic and every lesson in it
 export async function DELETE(_req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(_req);
   if (denied) return denied;
 
   try {
     const { slug } = await context.params;
-
-    let roadmap = await prisma.roadmap.findUnique({
-      where: { slug },
-    });
-
-    if (!roadmap) {
-      const all = await prisma.roadmap.findMany();
-      const norm = slug.trim().toLowerCase();
-      roadmap =
-        all.find((r) => r.slug.toLowerCase() === norm) ||
-        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
-        all.find((r) => r.title.toLowerCase() === norm) ||
-        null;
-    }
-
+    const roadmap = await findTopic(slug);
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
-    await prisma.roadmap.delete({
-      where: { id: roadmap.id },
-    });
+    await prisma.roadmap.delete({ where: { id: roadmap.id } });
 
     notifyRoadmapChanged();
-    return NextResponse.json({
-      success: true,
-      deletedSlug: roadmap.slug,
-      deletedTitle: roadmap.title,
-      deletedShortCode: roadmap.shortCode,
-    });
+    return NextResponse.json({ success: true, deletedSlug: roadmap.slug, deletedTitle: roadmap.title });
   } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
@@ -166,7 +96,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   }
 }
 
-// PATCH /api/v1/roadmaps/[slug] - Update roadmap title, shortCode, description, or isLocked
+// PATCH /api/v1/roadmaps/[slug] - Update the topic's title, description or lock
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -174,41 +104,19 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
     const body = await req.json();
-    const { title, shortCode, description, isLocked } = body;
+    const { title, description, isLocked } = body;
 
-    let roadmap = await prisma.roadmap.findUnique({
-      where: { slug },
-    });
-
-    if (!roadmap) {
-      const all = await prisma.roadmap.findMany();
-      const norm = slug.trim().toLowerCase();
-      roadmap =
-        all.find((r) => r.slug.toLowerCase() === norm) ||
-        all.find((r) => r.shortCode?.toLowerCase() === norm) ||
-        all.find((r) => r.title.toLowerCase() === norm) ||
-        null;
-    }
-
+    const roadmap = await findTopic(slug);
     if (!roadmap) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
-    const updateData: {
-      title?: string;
-      shortCode?: string;
-      description?: string;
-      isLocked?: boolean;
-    } = {};
-
+    const updateData: { title?: string; description?: string; isLocked?: boolean } = {};
     if (title !== undefined) {
       if (!title.trim()) {
         return NextResponse.json({ error: 'Title cannot be empty' }, { status: 400 });
       }
       updateData.title = title.trim();
-    }
-    if (shortCode !== undefined) {
-      updateData.shortCode = shortCode.trim();
     }
     if (description !== undefined) {
       updateData.description = description.trim();
@@ -217,10 +125,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       updateData.isLocked = Boolean(isLocked);
     }
 
-    const updated = await prisma.roadmap.update({
-      where: { id: roadmap.id },
-      data: updateData,
-    });
+    const updated = await prisma.roadmap.update({ where: { id: roadmap.id }, data: updateData });
 
     notifyRoadmapChanged();
     return NextResponse.json({ roadmap: updated });
@@ -232,4 +137,3 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     );
   }
 }
-
