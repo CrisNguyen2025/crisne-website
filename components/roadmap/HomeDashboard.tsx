@@ -1,62 +1,52 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   Compass,
   ArrowRight,
-  BookOpen,
+  Layers,
   Sparkles,
   Plus,
   HardDrive,
   Trash2,
   CheckCircle2,
   Loader2,
-} from "lucide-react";
-import { RoadmapMeta, CreateRoadmapDto } from "@/lib/roadmap/types";
-import { useToast } from "@/components/ui/toast";
-import { Popconfirm } from "antd";
-import { CreateTopicModal } from "./CreateTopicModal";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { useCanWrite } from "@/hooks/use-can-write";
+} from 'lucide-react';
+import { RoadmapMeta } from '@/lib/roadmap/types';
+import { useToast } from '@/components/ui/toast';
+import { ConfirmPopover } from '@/components/ui/confirm-popover';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useCanWrite } from '@/hooks/use-can-write';
 import {
   fetchStorageScan,
   triggerCleanupUnused,
   formatBytes,
   getCachedStorageScan,
   StorageScanResult,
-} from "@/logic/storage/storageService";
+} from '@/logic/storage/storageService';
 
 interface HomeDashboardProps {
   roadmaps: RoadmapMeta[];
   isLoading?: boolean;
   onSelectRoadmap: (slug: string) => void;
-  onCreateRoadmap: (payload: CreateRoadmapDto) => Promise<void>;
-  isCreateModalOpen?: boolean;
-  onOpenCreateModal?: () => void;
-  onCloseCreateModal?: () => void;
+  onOpenCreateModal: () => void;
 }
 
 export function HomeDashboard({
   roadmaps,
   isLoading = false,
   onSelectRoadmap,
-  onCreateRoadmap,
-  isCreateModalOpen: controlledIsOpen,
-  onOpenCreateModal: controlledOnOpen,
-  onCloseCreateModal: controlledOnClose,
+  onOpenCreateModal,
 }: HomeDashboardProps) {
   const { toast } = useToast();
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
-  const [storageScan, setStorageScan] = useState<StorageScanResult | null>(() =>
-    getCachedStorageScan()
-  );
+  const [storageScan, setStorageScan] = useState<StorageScanResult | null>(() => getCachedStorageScan());
   const [isCleaning, setIsCleaning] = useState(false);
   const canWrite = useCanWrite();
 
   const loadScan = () => {
     fetchStorageScan()
       .then((data) => setStorageScan(data))
-      .catch((err) => console.error("Failed to fetch storage scan:", err));
+      .catch((err) => console.error('Failed to fetch storage scan:', err));
   };
 
   useEffect(() => {
@@ -70,34 +60,28 @@ export function HomeDashboard({
       await triggerCleanupUnused();
       const updated = await fetchStorageScan();
       setStorageScan(updated);
-      toast(`Cleaned up ${count} unused file(s) successfully`, "success");
+      toast(`Cleaned up ${count} unused file(s) successfully`, 'success');
     } catch (err) {
-      console.error("Failed to clean up unused files:", err);
-      toast("Failed to clean up unused files. Please try again.", "error");
+      console.error('Failed to clean up unused files:', err);
+      toast('Failed to clean up unused files. Please try again.', 'error');
     } finally {
       setIsCleaning(false);
     }
   };
 
-  const isModalOpen =
-    controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
-  const openModal = controlledOnOpen || (() => setInternalIsOpen(true));
-  const closeModal = controlledOnClose || (() => setInternalIsOpen(false));
-
   return (
-    <div className="flex-1 w-full h-full overflow-y-auto bg-white/55 p-6 md:p-12 space-y-10 select-none">
+    <div className="flex-1 w-full h-full overflow-y-auto bg-background p-6 md:p-12 space-y-10 select-none">
       {/* ── Top Hero Banner centered ─────────────── */}
       <div className="w-full flex flex-col items-center text-center space-y-3 pb-8 border-b border-border/50">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="size-3.5" />
           <span>Knowledge & Architecture Hub</span>
         </div>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground max-w-3xl">
+        <h1 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-foreground max-w-3xl">
           Architecture Roadmaps & Topics
         </h1>
         <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-2xl">
-          Structured system blueprints, engineering patterns, and comprehensive
-          production guides across domains.
+          Structured system blueprints, engineering patterns, and comprehensive production guides across domains.
         </p>
       </div>
 
@@ -106,102 +90,77 @@ export function HomeDashboard({
         {/* Header row: Active Roadmaps on the left, Create Topic + Storage Tracker on the right */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            <Compass className="w-4 h-4 text-primary" />
-            <span>
-              Active Roadmaps{" "}
-              {isLoading && roadmaps.length === 0
-                ? "…"
-                : `(${roadmaps.length})`}
-            </span>
+            <Compass className="size-4 text-primary" />
+            <span>Active Roadmaps {isLoading && roadmaps.length === 0 ? '…' : `(${roadmaps.length})`}</span>
           </h2>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             {/* Creating topics and the storage tracker are for the owner; the APIs check it again */}
             {canWrite && (
               <>
                 <button
                   type="button"
-                  onClick={openModal}
-                  className="h-8 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+                  onClick={onOpenCreateModal}
+                  className="h-8 px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
-                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <Plus className="size-4 stroke-[2.5]" />
                   <span>Create Topic</span>
                 </button>
 
-                {/* 1-Line Storage Usage & Upload Limit Tracker (unified h-8 & rounded-xl size) */}
+                {/* 1-Line Storage Usage & Upload Limit Tracker */}
                 {!storageScan ? (
-                  <div className="h-8 w-48 rounded-xl bg-muted/40 border border-border/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent shrink-0" />
+                  <div className="h-8 w-48 rounded-xl bg-muted/40 border border-border/40 shrink-0" />
                 ) : (
-                  <div className="h-8 inline-flex items-center gap-2 px-3 rounded-xl bg-card border border-border/60 text-xs text-muted-foreground transition-all duration-300 hover:border-border shadow-2xs animate-in fade-in shrink-0">
+                  <div className="h-8 inline-flex max-w-full items-center gap-2 px-3 rounded-xl bg-card border border-border/60 text-xs text-muted-foreground transition-colors hover:border-border shadow-2xs animate-in fade-in">
                     <div
                       className="flex items-center gap-1.5 text-foreground font-semibold cursor-help"
-                      title={`Max upload: ${formatBytes(storageScan.maxFileSizeBytes, 0)}/file • Storage: ${storageScan.isR2 ? "Cloudflare R2" : "Local"}`}
+                      title={`Max upload: ${formatBytes(storageScan.maxFileSizeBytes, 0)}/file • Storage: ${
+                        storageScan.isR2 ? 'Cloudflare R2' : 'Local'
+                      }`}
                     >
-                      <HardDrive className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <HardDrive className="size-3.5 text-primary shrink-0" />
                       <span>
-                        {formatBytes(
-                          storageScan.usedBytes + storageScan.unusedBytes
-                        )}{" "}
-                        / {formatBytes(storageScan.totalLimitBytes)}
+                        {formatBytes(storageScan.usedBytes + storageScan.unusedBytes)} /{' '}
+                        {formatBytes(storageScan.totalLimitBytes)}
                       </span>
                     </div>
 
-                    <span className="text-[10px] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
-                      {storageScan.totalFiles.length} file
-                      {storageScan.totalFiles.length === 1 ? "" : "s"}
+                    <span className="hidden sm:inline text-[0.625rem] font-medium text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-md border border-border/40">
+                      {storageScan.totalFiles.length} file{storageScan.totalFiles.length === 1 ? '' : 's'}
                     </span>
 
                     {storageScan.unusedFiles.length > 0 ? (
                       <>
                         <span className="text-border/80">•</span>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-amber-500 font-medium text-[11px]">
+                          <span className="text-amber-500 font-medium text-xs">
                             {storageScan.unusedFiles.length} unused
                           </span>
-                          <Popconfirm
+                          <ConfirmPopover
                             title="Clear unused files?"
                             description={`Permanently delete ${storageScan.unusedFiles.length} file(s) (${formatBytes(
                               storageScan.unusedBytes
                             )})?`}
+                            confirmLabel="Clear Unused"
                             onConfirm={handleCleanup}
-                            okText="Clear Unused"
-                            cancelText="Cancel"
-                            okButtonProps={{
-                              danger: true,
-                              size: "small",
-                              loading: isCleaning,
-                            }}
-                            cancelButtonProps={{
-                              size: "small",
-                              disabled: isCleaning,
-                            }}
-                            icon={
-                              <Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />
-                            }
-                            placement="bottomRight"
-                            zIndex={9999}
                           >
                             <button
                               type="button"
                               disabled={isCleaning}
-                              className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[10px] border border-rose-500/30 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                              className="h-5 inline-flex items-center gap-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 font-semibold text-[0.625rem] border border-rose-500/30 transition-colors cursor-pointer disabled:opacity-50"
                               title="Clean up orphaned files"
                             >
-                              {isCleaning ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3 h-3" />
-                              )}
+                              {isCleaning ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
                               <span>Clear</span>
                             </button>
-                          </Popconfirm>
+                          </ConfirmPopover>
                         </div>
                       </>
                     ) : (
                       <>
                         <span className="text-border/80">•</span>
-                        <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span className="inline-flex items-center gap-1 text-emerald-500 font-medium text-xs">
+                          <CheckCircle2 className="size-3.5" />
                           <span>All clean</span>
                         </span>
                       </>
@@ -221,11 +180,11 @@ export function HomeDashboard({
               {[1, 2, 3].map((idx) => (
                 <div
                   key={idx}
-                  className="p-6 rounded-2xl border border-border/60 bg-card/60 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent flex flex-col justify-between gap-4 h-[190px]"
+                  className="p-6 rounded-2xl border border-border/60 bg-card/60 flex flex-col justify-between gap-4 h-[190px]"
                 >
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="w-10 h-10 rounded-xl bg-muted/60" />
+                      <div className="size-10 rounded-xl bg-muted/60" />
                       <div className="w-20 h-3 rounded bg-muted/40" />
                     </div>
                     <div className="w-3/4 h-5 rounded-lg bg-muted/70" />
@@ -241,9 +200,8 @@ export function HomeDashboard({
             </>
           ) : (
             roadmaps.map((r) => {
-              const code = (
-                r.shortCode || r.slug.substring(0, 2)
-              ).toUpperCase();
+              const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
+              const layerCount = r._count?.layers;
 
               return (
                 <div
@@ -254,20 +212,16 @@ export function HomeDashboard({
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span
-                        className={`w-10 h-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center p-1 border border-primary/20 shrink-0 text-center truncate ${
-                          code.length <= 2
-                            ? "text-sm"
-                            : code.length === 3
-                              ? "text-xs"
-                              : "text-[10px]"
+                        className={`size-10 rounded-xl bg-primary/10 text-primary font-black flex items-center justify-center p-1 border border-primary/20 shrink-0 text-center truncate ${
+                          code.length <= 2 ? 'text-sm' : code.length === 3 ? 'text-xs' : 'text-[0.625rem]'
                         }`}
                         title={code}
                       >
                         {code}
                       </span>
-                      <span className="text-[11px] font-semibold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
+                      <span className="text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
                         Open workspace
-                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                        <ArrowRight className="size-3 group-hover:translate-x-0.5 transition-transform" />
                       </span>
                     </div>
 
@@ -275,17 +229,18 @@ export function HomeDashboard({
                       {r.title}
                     </h3>
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {r.description ||
-                        "Explore architecture patterns, core foundations, and checklist items."}
+                      {r.description || 'Explore architecture patterns, core foundations, and checklist items.'}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-border/40 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <BookOpen className="w-3 h-3 text-muted-foreground/70" />
-                      Interactive View
+                      <Layers className="size-3 text-muted-foreground/70" />
+                      {typeof layerCount === 'number'
+                        ? `${layerCount} ${layerCount === 1 ? 'layer' : 'layers'}`
+                        : 'Interactive View'}
                     </span>
-                    <span className="font-semibold text-foreground/80 uppercase tracking-wider text-[10px]">
+                    <span className="font-semibold text-foreground/80 uppercase tracking-wider text-[0.625rem]">
                       {r.slug}
                     </span>
                   </div>
@@ -295,13 +250,6 @@ export function HomeDashboard({
           )}
         </div>
       </div>
-
-      {/* ── Modal for Creating New Topic ────────────────────────────── */}
-      <CreateTopicModal
-        isOpen={isModalOpen}
-        onClose={closeModal}
-        onSubmit={onCreateRoadmap}
-      />
     </div>
   );
 }

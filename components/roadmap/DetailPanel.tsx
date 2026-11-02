@@ -1,46 +1,73 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, useRef } from 'react';
 import {
-  Edit3,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Clock,
   History,
-  Trash2,
-  ChevronRight,
   Folder,
-  ChevronUp,
   Pencil,
-} from "lucide-react";
-import { ChecklistItem, RoadmapLevel } from "@/lib/roadmap/types";
-import { formatFriendlyTime, formatExactDate } from "@/lib/roadmap/date-utils";
-import { contentToHtml } from "@/lib/roadmap/content-utils";
-import { useToast } from "@/components/ui/toast";
-import { Image as AntImage, Popconfirm } from "antd";
-import { EditItemContentDrawer } from "./EditItemContentDrawer";
-import { EditItemInfoDrawer } from "./EditItemInfoDrawer";
-import { ThemeToggle } from "@/components/theme-toggle";
+  Edit3,
+  Trash2,
+} from 'lucide-react';
+import { ChecklistItem, RoadmapGroup } from '@/lib/roadmap/types';
+import { formatFriendlyTime } from '@/lib/roadmap/date-utils';
+import { contentToHtml, readingMinutes, withHeadingIds } from '@/lib/roadmap/content-utils';
+import { useToast } from '@/components/ui/toast';
+import { ActionMenu } from '@/components/ui/action-menu';
+import { ImagePreview } from '@/components/ui/image-preview';
+import { EditItemContentDrawer } from './EditItemContentDrawer';
+import { EditItemInfoDrawer } from './EditItemInfoDrawer';
 
 interface DetailPanelProps {
-  item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
+  item:
+    | (ChecklistItem & {
+        layerTitle?: string;
+        groupTitle?: string;
+        layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
+      })
+    | null;
   isLoading?: boolean;
+  canWrite?: boolean;
+  prevLesson?: { id: string; title: string };
+  nextLesson?: { id: string; title: string };
+  onSelectPrev?: () => void;
+  onSelectNext?: () => void;
+  onBack?: () => void;
   onUpdateNote?: (id: string, text: string) => void;
-  onEditItem?: (
-    id: string,
-    title: string,
-    description: string,
-    level?: RoadmapLevel,
-    content?: string
-  ) => void;
-  onDeleteItem?: (id: string) => void;
+  onEditItem?: (id: string, title: string, description: string, groupId?: string) => void;
+  onDeleteItem?: (id: string) => Promise<void>;
 }
 
-export function DetailPanel({
+function DetailContent({
   item,
-  isLoading = false,
+  canWrite = false,
+  prevLesson,
+  nextLesson,
+  onSelectPrev,
+  onSelectNext,
+  onBack,
   onUpdateNote,
   onEditItem,
   onDeleteItem,
-}: DetailPanelProps) {
+}: {
+  item: ChecklistItem & {
+    layerTitle?: string;
+    groupTitle?: string;
+    layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
+  };
+  canWrite?: boolean;
+  prevLesson?: { id: string; title: string };
+  nextLesson?: { id: string; title: string };
+  onSelectPrev?: () => void;
+  onSelectNext?: () => void;
+  onBack?: () => void;
+  onUpdateNote?: (id: string, text: string) => void;
+  onEditItem?: (id: string, title: string, description: string, groupId?: string) => void;
+  onDeleteItem?: (id: string) => Promise<void>;
+}) {
   const { toast } = useToast();
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
@@ -48,24 +75,15 @@ export function DetailPanel({
   const [previewVisible, setPreviewVisible] = useState(false);
   const [allImages, setAllImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
-  const containerRef = React.useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (item) {
-      setIsContentModalOpen(false);
-      setIsInfoModalOpen(false);
-      setPreviewVisible(false);
-      containerRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    }
-  }, [item?.id]);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
-    const img = target.closest("img");
+    const img = target.closest('img');
     if (img && img.src) {
       e.preventDefault();
       const container = e.currentTarget;
-      const imgs = Array.from(container.querySelectorAll("img"))
+      const imgs = Array.from(container.querySelectorAll('img'))
         .map((el) => el.src)
         .filter(Boolean);
       const clickedIndex = imgs.indexOf(img.src);
@@ -84,71 +102,29 @@ export function DetailPanel({
   const scrollToTop = () => {
     containerRef.current?.scrollTo({
       top: 0,
-      behavior: "smooth",
+      behavior: 'smooth',
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 relative h-full flex flex-col overflow-hidden bg-background">
-        {/* Skeleton Toolbar */}
-        <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 shrink-0 min-h-[57px]">
-          <div className="flex items-center gap-2 w-1/3">
-            <div className="w-4 h-4 rounded bg-muted/60" />
-            <div className="h-3.5 w-24 rounded bg-muted/60" />
-            <div className="h-3.5 w-16 rounded bg-muted/40" />
-          </div>
-        </div>
-        {/* Skeleton Content */}
-        <div className="p-6 md:p-8 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
-          <div className="space-y-3">
-            <div className="h-8 w-2/3 rounded-xl bg-muted/60 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
-            <div className="h-4 w-5/6 rounded-lg bg-muted/40 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
-            <div className="h-4 w-1/2 rounded-lg bg-muted/30 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
-          </div>
-          <div className="w-full border-t border-border/40 my-4" />
-          <div className="space-y-3 pt-2">
-            <div className="h-4 w-28 rounded-md bg-muted/50" />
-            <div className="h-36 w-full rounded-2xl border border-border/40 bg-muted/20 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/5 before:to-transparent" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const itemContent = item.content;
+  const { processedHtml, headings } = useMemo(() => {
+    if (!itemContent) return { processedHtml: '', headings: [] };
+    const rawHtml = contentToHtml(itemContent);
+    const { html, headings: list } = withHeadingIds(rawHtml);
+    return { processedHtml: html, headings: list };
+  }, [itemContent]);
 
-  if (!item) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full bg-white/55 relative">
-        <div className="absolute top-3.5 right-4">
-          <ThemeToggle className="h-8 w-8 rounded-xl border border-border/60 bg-card hover:bg-muted/80 text-foreground shadow-2xs" />
-        </div>
-        <div className="w-12 h-12 rounded-2xl bg-muted/50 border border-border/40 flex items-center justify-center mb-3">
-          <Folder className="w-6 h-6 text-muted-foreground/60" />
-        </div>
-        <h3 className="font-semibold text-sm text-foreground mb-1">
-          No item selected
-        </h3>
-        <p className="text-xs max-w-xs text-muted-foreground">
-          Please select an item from the left panel to view or edit its details.
-        </p>
-      </div>
-    );
-  }
+  const mins = useMemo(() => readingMinutes(itemContent), [itemContent]);
 
-  const handleSaveInfo = async (
-    id: string,
-    title: string,
-    description: string,
-    level?: RoadmapLevel
-  ) => {
+  const handleSaveInfo = async (id: string, title: string, description: string, groupId?: string) => {
     try {
       if (onEditItem) {
-        await onEditItem(id, title, description, level);
+        await onEditItem(id, title, description, groupId);
       }
-      toast("Info updated successfully!", "success");
+      toast('Info updated successfully!', 'success');
     } catch {
-      toast("Failed to update info, please try again!", "error");
-      throw new Error("Failed to update info");
+      toast('Failed to update info, please try again!', 'error');
+      throw new Error('Failed to update info');
     }
   };
 
@@ -157,207 +133,209 @@ export function DetailPanel({
       if (onUpdateNote) {
         await onUpdateNote(id, newContent);
       }
-      toast("Content saved successfully!", "success");
+      toast('Content saved successfully!', 'success');
     } catch {
-      toast("Failed to save content, please try again!", "error");
-      throw new Error("Failed to save content");
+      toast('Failed to save content, please try again!', 'error');
+      throw new Error('Failed to save content');
     }
   };
 
   return (
-    <div className="flex-1 relative h-full flex flex-col overflow-hidden">
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="flex-1 flex flex-col h-full overflow-y-auto scrollbar-thin"
-      >
+    <div className="flex-1 relative h-full flex flex-col overflow-hidden bg-card">
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 flex flex-col h-full overflow-y-auto scrollbar-thin">
         {/* Header Toolbar */}
-        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 min-h-[57px]">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium min-w-0 flex-1 h-7 overflow-hidden">
-            <div
-              className="flex items-center gap-1.5 text-foreground/80 hover:text-foreground shrink-0 max-w-[40%] truncate"
-              title={item.layerTitle || "Architecture Layer"}
-            >
-              <Folder className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span className="truncate">
-                {item.layerTitle || "Architecture Layer"}
-              </span>
-            </div>
-
-            <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
-
-            <div
-              className="text-muted-foreground hover:text-foreground shrink-0 max-w-[25%] truncate"
-              title={
-                item.groupTitle ||
-                (item.level === "core"
-                  ? "Core"
-                  : item.level === "intermediate"
-                    ? "Intermediate"
-                    : item.level === "advanced"
-                      ? "Advanced"
-                      : item.level)
-              }
-            >
-              <span className="truncate font-medium">
-                {item.groupTitle ||
-                  (item.level === "core"
-                    ? "Core"
-                    : item.level === "intermediate"
-                      ? "Intermediate"
-                      : item.level === "advanced"
-                        ? "Advanced"
-                        : item.level)}
-              </span>
-            </div>
-
-            <ChevronRight className="w-3 h-3 text-muted-foreground/40 shrink-0" />
-
-            <span
-              className="text-foreground font-semibold truncate flex-1 min-w-0"
-              title={item.title}
-            >
-              {item.title}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsInfoModalOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-              title="Edit item title and description"
-            >
-              <Pencil className="w-3.5 h-3.5 text-primary" />
-              <span>Edit</span>
-            </button>
-
-            {onDeleteItem && (
-              <Popconfirm
-                title="Delete item?"
-                description="This action cannot be undone."
-                onConfirm={() => {
-                  const itemTitle = item.title;
-                  onDeleteItem(item.id);
-                  toast(`Deleted item "${itemTitle}" successfully`, "success");
-                }}
-                okText="Delete"
-                cancelText="Cancel"
-                okButtonProps={{ danger: true, size: "small" }}
-                cancelButtonProps={{ size: "small" }}
-                icon={<Trash2 className="w-4 h-4 text-rose-500 mr-1.5 shrink-0 inline-block" />}
-                placement="bottomRight"
-                zIndex={9999}
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border bg-card/80 backdrop-blur-md shrink-0 min-h-[57px]">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium min-w-0 flex-1 truncate">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Back"
+                className="lg:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors cursor-pointer shrink-0"
               >
-                <button
-                  type="button"
-                  className="px-2.5 py-1.5 rounded-lg border border-rose-500/20 hover:bg-rose-500/10 text-rose-500 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                  title="Delete this item"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
-              </Popconfirm>
+                <ChevronLeft className="size-4" />
+              </button>
             )}
 
-            <div className="h-4 w-px bg-border/60 mx-0.5" />
-
-            <ThemeToggle className="h-7 w-7 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs" />
+            <span className="truncate">{item.layerTitle || 'Layer'}</span>
+            <ChevronRight className="size-3 text-muted-foreground/40 shrink-0" />
+            <span className="text-foreground font-semibold truncate">{item.groupTitle || 'Group'}</span>
           </div>
+
+          {canWrite && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsInfoModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-lg border border-border/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                title="Edit lesson title and description"
+              >
+                <Pencil className="size-3.5 text-primary" />
+                <span>Edit</span>
+              </button>
+
+              <ActionMenu
+                label="Lesson actions"
+                items={[
+                  {
+                    label: item.content ? 'Edit content' : 'Add content',
+                    icon: Edit3,
+                    onSelect: () => setIsContentModalOpen(true),
+                  },
+                  ...(onDeleteItem
+                    ? [
+                        {
+                          label: 'Delete lesson',
+                          icon: Trash2,
+                          danger: true,
+                          confirm: {
+                            title: 'Delete lesson?',
+                            description: 'This action cannot be undone.',
+                            confirmLabel: 'Delete',
+                          },
+                          onSelect: async () => {
+                            const itemTitle = item.title;
+                            try {
+                              await onDeleteItem(item.id);
+                              toast(`Deleted lesson "${itemTitle}"`, 'success');
+                            } catch {
+                              toast('Failed to delete lesson, please try again!', 'error');
+                            }
+                          },
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Content Container */}
-        <div className="pb-6 pt-2 md:pb-8 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
-          <article className="space-y-4">
-            {/* Header: Title / Description (View Only) */}
-            <header className="space-y-2 select-text">
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground leading-snug">
+        {/* Reader Container */}
+        <div className="pb-10 pt-4 md:pt-6 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
+          <article className="space-y-5">
+            {/* Meta & Title */}
+            <header className="space-y-3 select-text">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {item.groupTitle || 'Lesson'}
+                </span>
+                {mins > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="size-3 text-primary/80" />
+                    {mins} min read
+                  </span>
+                )}
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <History className="size-3 text-emerald-500/80" />
+                  Updated {formatFriendlyTime(item.updatedAt)}
+                </span>
+              </div>
+
+              <h1 className="font-display text-2xl md:text-3xl font-bold tracking-tight text-foreground leading-snug">
                 {item.title}
               </h1>
 
               {item.description && (
-                <p className="text-xs md:text-sm leading-relaxed text-muted-foreground font-normal">
+                <p className="text-sm leading-relaxed text-muted-foreground font-normal">
                   {item.description}
                 </p>
               )}
-
-              <div className="flex items-center gap-3 text-[11px] text-muted-foreground/70 pt-1">
-                <span
-                  className="flex items-center gap-1 hover:text-foreground transition-colors"
-                  title={`Created: ${formatExactDate(item.createdAt)}`}
-                >
-                  <Clock className="w-3 h-3 text-primary/80" />
-                  Created {formatFriendlyTime(item.createdAt)}
-                </span>
-                <span className="text-muted-foreground/30">•</span>
-                <span
-                  className="flex items-center gap-1 hover:text-foreground transition-colors"
-                  title={`Last updated: ${formatExactDate(item.updatedAt)}`}
-                >
-                  <History className="w-3 h-3 text-emerald-500/80" />
-                  Updated {formatFriendlyTime(item.updatedAt)}
-                </span>
-              </div>
             </header>
 
-            {/* Divider */}
-            <div className="w-full border-t border-border/60 my-2" />
+            {/* Table of Contents (shown when 2 or more headings exist) */}
+            {headings.length >= 2 && (
+              <nav className="rounded-xl border border-border bg-muted/30 p-3.5 text-xs">
+                <p className="font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                  On this page
+                </p>
+                <ul className="space-y-1.5">
+                  {headings.map((h) => (
+                    <li key={h.id} className={h.level === 3 ? 'pl-3' : ''}>
+                      <a
+                        href={`#${h.id}`}
+                        className="text-muted-foreground hover:text-foreground hover:underline transition-colors block truncate"
+                      >
+                        {h.text}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            )}
 
-            {/* Content Header */}
-            <div className="grid grid-cols-3 items-center pt-1">
-              <div className="flex items-center justify-start">
-                <button
-                  type="button"
-                  onClick={() => setIsContentModalOpen(true)}
-                  className="px-2.5 py-1 rounded-lg border border-border/70 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
-                  title="Edit item detailed notes"
-                >
-                  <Edit3 className="w-3.5 h-3.5 text-primary" />
-                  <span>{item.content ? "Edit content" : "Add content"}</span>
-                </button>
-              </div>
-
-              <div className="flex items-center justify-center">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
-                  Content
-                </span>
-              </div>
-
-              <div className="flex items-center justify-end" />
-            </div>
-
-            {/* Article Content or Empty State */}
-            {item.content ? (
-              <div className="relative group">
+            {/* Content or Empty State */}
+            {processedHtml ? (
+              <div className="relative group pt-2">
                 <div
                   onClick={handleContentClick}
-                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/90 select-text leading-relaxed tracking-normal"
-                  dangerouslySetInnerHTML={{
-                    __html: contentToHtml(item.content),
-                  }}
+                  className="post-content-view prose prose-sm dark:prose-invert max-w-none text-foreground/90 select-text leading-relaxed tracking-normal [&_h2]:scroll-mt-16 [&_h3]:scroll-mt-16"
+                  dangerouslySetInnerHTML={{ __html: processedHtml }}
                 />
               </div>
             ) : (
-              <div className="py-10 rounded-xl border border-dashed border-border/70 flex flex-col items-center justify-center text-center bg-muted/10">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                  <Edit3 className="w-5 h-5 text-primary" />
+              <div className="py-12 rounded-xl border border-dashed border-border/70 flex flex-col items-center justify-center text-center bg-muted/10">
+                <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                  <Edit3 className="size-5 text-primary" />
                 </div>
                 <p className="text-sm font-semibold text-foreground mb-1">
                   No detailed notes yet
                 </p>
                 <p className="text-xs text-muted-foreground max-w-xs mb-4">
-                  Add comprehensive documentation, code examples, callouts, and
-                  links using the Notion-like rich editor.
+                  {canWrite
+                    ? 'Add comprehensive documentation, code examples, callouts, and links.'
+                    : 'Notes for this lesson have not been written yet.'}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setIsContentModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-medium flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Start writing</span>
-                </button>
+                {canWrite && (
+                  <button
+                    type="button"
+                    onClick={() => setIsContentModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-medium flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  >
+                    <Edit3 className="size-3.5" />
+                    <span>Start writing</span>
+                  </button>
+                )}
               </div>
+            )}
+
+            {/* Navigation Footer (Prev / Next) */}
+            {(prevLesson || nextLesson) && (
+              <footer className="mt-10 pt-6 border-t border-border flex items-stretch justify-between gap-4">
+                {prevLesson ? (
+                  <button
+                    type="button"
+                    onClick={onSelectPrev}
+                    className="group flex flex-1 flex-col items-start gap-1 p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                      <ChevronLeft className="size-3.5" /> Previous
+                    </span>
+                    <span className="text-sm font-medium text-foreground line-clamp-1">
+                      {prevLesson.title}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex-1" />
+                )}
+
+                {nextLesson ? (
+                  <button
+                    type="button"
+                    onClick={onSelectNext}
+                    className="group flex flex-1 flex-col items-end gap-1 p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-muted/40 transition-colors text-right cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                      Next <ChevronRight className="size-3.5" />
+                    </span>
+                    <span className="text-sm font-medium text-foreground line-clamp-1">
+                      {nextLesson.title}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex-1" />
+                )}
+              </footer>
             )}
           </article>
         </div>
@@ -371,7 +349,7 @@ export function DetailPanel({
         onSubmit={handleSaveContent}
       />
 
-      {/* Drawer: Title / Description / Level */}
+      {/* Drawer: Title / Description / Group */}
       <EditItemInfoDrawer
         isOpen={isInfoModalOpen}
         item={item}
@@ -379,24 +357,16 @@ export function DetailPanel({
         onSubmit={handleSaveInfo}
       />
 
-      {/* Ant Design Image Preview Group in View Mode */}
-      {previewVisible && (
-        <div style={{ display: "none" }}>
-          <AntImage.PreviewGroup
-            preview={{
-              visible: previewVisible,
-              current: currentImageIndex,
-              onVisibleChange: (vis) => setPreviewVisible(vis),
-              onChange: (current) => setCurrentImageIndex(current),
-            }}
-            items={allImages}
-          >
-            {allImages.map((src, idx) => (
-              <AntImage key={idx} src={src} />
-            ))}
-          </AntImage.PreviewGroup>
-        </div>
-      )}
+      {/* Image Preview Modal */}
+      <ImagePreview
+        src={allImages[currentImageIndex] || ''}
+        alt="Lesson image"
+        visible={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+        images={allImages.map((src) => ({ src, alt: 'Lesson image' }))}
+        currentIndex={currentImageIndex}
+        onIndexChange={setCurrentImageIndex}
+      />
 
       {showScrollTop && (
         <button
@@ -406,9 +376,79 @@ export function DetailPanel({
           title="Scroll to top"
           aria-label="Scroll to top"
         >
-          <ChevronUp className="w-4 h-4 stroke-[2.5]" />
+          <ChevronUp className="size-4 stroke-[2.5]" />
         </button>
       )}
     </div>
+  );
+}
+
+export function DetailPanel({
+  item,
+  isLoading = false,
+  canWrite = false,
+  prevLesson,
+  nextLesson,
+  onSelectPrev,
+  onSelectNext,
+  onBack,
+  onUpdateNote,
+  onEditItem,
+  onDeleteItem,
+}: DetailPanelProps) {
+  if (isLoading) {
+    return (
+      <div className="flex-1 relative h-full flex flex-col overflow-hidden bg-background">
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border/50 bg-background/80 shrink-0 min-h-[57px]">
+          <div className="flex items-center gap-2 w-1/3">
+            <div className="size-4 rounded bg-muted/60" />
+            <div className="h-3.5 w-24 rounded bg-muted/60" />
+            <div className="h-3.5 w-16 rounded bg-muted/40" />
+          </div>
+        </div>
+        <div className="p-6 md:p-8 space-y-6 max-w-[90%] md:max-w-[85%] w-full mx-auto">
+          <div className="space-y-3">
+            <div className="h-8 w-2/3 rounded-xl bg-muted/60" />
+            <div className="h-4 w-5/6 rounded-lg bg-muted/40" />
+            <div className="h-4 w-1/2 rounded-lg bg-muted/30" />
+          </div>
+          <div className="w-full border-t border-border/40 my-4" />
+          <div className="space-y-3 pt-2">
+            <div className="h-4 w-28 rounded-md bg-muted/50" />
+            <div className="h-36 w-full rounded-2xl border border-border/40 bg-muted/20" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-full bg-card relative">
+        <div className="size-12 rounded-2xl bg-muted/50 border border-border/40 flex items-center justify-center mb-3">
+          <Folder className="size-6 text-muted-foreground/60" />
+        </div>
+        <h3 className="font-semibold text-sm text-foreground mb-1">No lesson selected</h3>
+        <p className="text-xs max-w-xs text-muted-foreground">
+          Select a lesson from the list or map view to start reading.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <DetailContent
+      key={item.id}
+      item={item}
+      canWrite={canWrite}
+      prevLesson={prevLesson}
+      nextLesson={nextLesson}
+      onSelectPrev={onSelectPrev}
+      onSelectNext={onSelectNext}
+      onBack={onBack}
+      onUpdateNote={onUpdateNote}
+      onEditItem={onEditItem}
+      onDeleteItem={onDeleteItem}
+    />
   );
 }

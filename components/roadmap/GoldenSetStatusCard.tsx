@@ -56,7 +56,7 @@ export function GoldenSetStatusCard({ status }: { status: GoldenSetStatus }) {
           {behind && (
             <>
               {" · "}
-              <span className="text-[#C2410C]">cần chạy</span> <code className="text-[11px]">{SYNC_COMMAND}</code>
+              <span className="text-[#C2410C]">cần chạy</span> <code className="text-xs">{SYNC_COMMAND}</code>
             </>
           )}
         </p>

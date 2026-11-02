@@ -13,5 +13,11 @@ export function SiteChatbot() {
     return <FloatingChatBot />;
   }
 
-  return <RoadmapAssistantChatbot position="bottom-right" />;
+  // On phones the roadmap page has a bottom nav: lift the launcher above it
+  return (
+    <RoadmapAssistantChatbot
+      position="bottom-right"
+      className={pathname === "/" ? "max-md:!bottom-[calc(4.5rem+env(safe-area-inset-bottom))]" : ""}
+    />
+  );
 }

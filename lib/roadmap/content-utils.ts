@@ -122,3 +122,39 @@ export function sanitizeDangerousHtml(rawHtml: string): string {
 
   return safe;
 }
+
+export interface ContentHeading {
+  id: string;
+  text: string;
+  level: 2 | 3;
+}
+
+const WORDS_PER_MINUTE = 200;
+
+function plainText(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Minutes to read a lesson's content, at least 1; 0 when there is no content. */
+export function readingMinutes(content?: string | null): number {
+  if (!content) return 0;
+  const words = plainText(content).split(' ').filter(Boolean).length;
+  return words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
+}
+
+/**
+ * The h2/h3 headings of rendered content, each given an id so a table of contents can link to it.
+ * Returns the html with those ids and the headings in order.
+ */
+export function withHeadingIds(html: string): { html: string; headings: ContentHeading[] } {
+  const headings: ContentHeading[] = [];
+  const out = html.replace(/<h([23])([^>]*)>([\s\S]*?)<\/h\1>/gi, (_m, lvl: string, attrs: string, inner: string) => {
+    const text = plainText(inner);
+    if (!text) return _m;
+    const id = `h-${headings.length + 1}`;
+    headings.push({ id, text, level: Number(lvl) as 2 | 3 });
+    const cleanAttrs = attrs.replace(/\sid="[^"]*"/i, '');
+    return `<h${lvl}${cleanAttrs} id="${id}">${inner}</h${lvl}>`;
+  });
+  return { html: out, headings };
+}

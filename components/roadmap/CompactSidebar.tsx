@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import { Home, Plus, Layers, Sparkles, UserRound } from 'lucide-react';
 import { RoadmapMeta } from '@/lib/roadmap/types';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { cn } from '@/lib/utils';
 
 interface CompactSidebarProps {
   currentView: 'home' | 'roadmap';
@@ -15,6 +17,7 @@ interface CompactSidebarProps {
   onOpenCreateRoadmap?: () => void;
   onOpenTriage?: () => void;
   triageBadgeCount?: number;
+  className?: string;
 }
 
 export function CompactSidebar({
@@ -27,14 +30,20 @@ export function CompactSidebar({
   onOpenCreateRoadmap,
   onOpenTriage,
   triageBadgeCount,
+  className,
 }: CompactSidebarProps) {
   return (
-    <aside className="w-[80px] h-full shrink-0 flex flex-col items-center justify-between py-4 bg-card/60 backdrop-blur-md border-r border-border/60 select-none z-20">
+    <aside
+      className={cn(
+        'w-[80px] h-full shrink-0 flex flex-col items-center justify-between py-4 bg-card/60 backdrop-blur-md border-r border-border/60 select-none z-20',
+        className
+      )}
+    >
       {/* Top: Home & Roadmaps list */}
       <div className="flex flex-col items-center gap-3 w-full px-2">
         {/* Logo / Brand Indicator */}
         <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs mb-1">
-          <Layers className="w-5 h-5 text-primary animate-pulse" />
+          <Layers className="w-5 h-5 text-primary" />
         </div>
 
         <div className="w-8 h-[1px] bg-border/60 my-1" />
@@ -44,10 +53,10 @@ export function CompactSidebar({
           type="button"
           onClick={onSelectHome}
           title="Home Dashboard"
-          className={`group relative w-12 h-12 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-all duration-300 ease-out cursor-pointer ${
+          className={`group relative w-12 h-12 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-colors duration-200 cursor-pointer ${
             currentView === 'home'
-              ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 font-bold scale-[1.04]'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95'
+              ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 font-bold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
           }`}
         >
           {/* Left vertical border indicator (pinned to sidebar edge) */}
@@ -59,8 +68,8 @@ export function CompactSidebar({
             }`}
           />
 
-          <Home className={`w-4 h-4 transition-transform duration-200 ${currentView === 'home' ? 'scale-110' : 'group-hover:scale-105'}`} />
-          <span className="text-[10px] font-semibold tracking-tight">Home</span>
+          <Home className="w-4 h-4 transition-colors" />
+          <span className="text-[0.625rem] font-semibold tracking-tight">Home</span>
         </button>
 
         <div className="w-8 h-[1px] bg-border/40 my-1" />
@@ -78,63 +87,61 @@ export function CompactSidebar({
             </>
           ) : (
             roadmaps.map((r) => {
-            const isSelected = currentView === 'roadmap' && currentSlug === r.slug;
-            const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
+              const isSelected = currentView === 'roadmap' && currentSlug === r.slug;
+              const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
 
-            return (
-              <button
-                key={r.slug}
-                type="button"
-                onClick={() => onSelectRoadmap(r.slug)}
-                title={r.title}
-                className={`group relative w-12 h-12 rounded-2xl flex flex-col items-center justify-center gap-0.5 p-1 transition-all duration-300 ease-out cursor-pointer ${
-                  isSelected
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 font-bold scale-[1.04]'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95'
-                }`}
-              >
-                {/* Left vertical border indicator (pinned to sidebar edge) */}
-                <span
-                  className={`absolute -left-3.5 w-1 rounded-r-full bg-primary transition-all duration-300 ease-out ${
+              return (
+                <button
+                  key={r.slug}
+                  type="button"
+                  onClick={() => onSelectRoadmap(r.slug)}
+                  title={r.title}
+                  className={`group relative w-12 h-12 rounded-2xl flex flex-col items-center justify-center gap-0.5 p-1 transition-colors duration-200 cursor-pointer ${
                     isSelected
-                      ? 'h-7 opacity-100 scale-y-100 shadow-sm shadow-primary'
-                      : 'h-0 opacity-0 scale-y-0'
-                  }`}
-                />
-
-                {/* Shortcode Badge / Main Glyphs */}
-                <span
-                  className={`w-full text-center truncate font-black tracking-tight uppercase leading-none transition-transform duration-200 ${
-                    isSelected ? 'scale-105' : 'group-hover:scale-105'
-                  } ${
-                    code.length <= 2
-                      ? 'text-sm'
-                      : code.length === 3
-                      ? 'text-xs'
-                      : 'text-[10px]'
+                      ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25 font-bold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                   }`}
                 >
-                  {code}
-                </span>
-              </button>
-            );
-          })
-        )}
+                  {/* Left vertical border indicator (pinned to sidebar edge) */}
+                  <span
+                    className={`absolute -left-3.5 w-1 rounded-r-full bg-primary transition-all duration-300 ease-out ${
+                      isSelected
+                        ? 'h-7 opacity-100 scale-y-100 shadow-sm shadow-primary'
+                        : 'h-0 opacity-0 scale-y-0'
+                    }`}
+                  />
+
+                  {/* Shortcode Badge / Main Glyphs */}
+                  <span
+                    className={`w-full text-center truncate font-black tracking-tight uppercase leading-none ${
+                      code.length <= 2
+                        ? 'text-sm'
+                        : code.length === 3
+                        ? 'text-xs'
+                        : 'text-[0.625rem]'
+                    }`}
+                  >
+                    {code}
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
-      {/* Bottom: Quick Add Roadmap or Info */}
+      {/* Bottom: Triage, Portfolio, Quick Add, Theme */}
       <div className="flex flex-col items-center gap-2">
         {onOpenTriage && (
           <button
             type="button"
             onClick={onOpenTriage}
-            title="Knowledge Triage (Lỗ hổng tri thức)"
-            className="group relative w-10 h-10 rounded-xl text-muted-foreground hover:text-[#C2410C] hover:bg-[#FBEDE5] flex items-center justify-center transition-colors cursor-pointer"
+            title="Knowledge Triage"
+            className="group relative w-10 h-10 rounded-xl text-muted-foreground hover:text-[#C2410C] hover:bg-[#FBEDE5] dark:hover:bg-[#C2410C]/20 flex items-center justify-center transition-colors cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-muted-foreground group-hover:text-[#C2410C]" />
-            {typeof triageBadgeCount === "number" && triageBadgeCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#C2410C] text-[9px] font-bold text-white shadow-xs">
+            {typeof triageBadgeCount === 'number' && triageBadgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#C2410C] text-[0.5625rem] font-bold text-white shadow-xs">
                 {triageBadgeCount}
               </span>
             )}
@@ -157,6 +164,7 @@ export function CompactSidebar({
             <Plus className="w-4 h-4" />
           </button>
         )}
+        <ThemeToggle className="h-9 w-9 rounded-xl border border-border/60 bg-card hover:bg-muted text-foreground shadow-2xs" />
       </div>
     </aside>
   );

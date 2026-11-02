@@ -1,188 +1,207 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Sparkles, FileText, AlignLeft, Folder } from 'lucide-react';
-import { RoadmapLayer, RoadmapLevel } from '@/lib/roadmap/types';
+import React, { useState } from 'react';
+import { Sparkles, FileText, AlignLeft, Folder } from 'lucide-react';
+import { CreateItemDto, RoadmapLayer } from '@/lib/roadmap/types';
+import { Dialog } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
-const LEVEL_OPTIONS: RoadmapLevel[] = ['core', 'intermediate', 'advanced'];
+/** Picker value for "name a new group" instead of an existing one */
+const NEW_GROUP = '__new';
 
 interface CreateItemModalProps {
   isOpen: boolean;
   layers: RoadmapLayer[];
   targetLayerId: string;
-  /** The level of the group the user opened from; empty when none was picked, so the modal asks. */
-  targetLevel: RoadmapLevel | '';
+  /** The group the user opened from; empty when none was picked, so the modal asks. */
+  targetGroupId: string;
   onClose: () => void;
-  onSubmit: (layerId: string, level: RoadmapLevel, title: string, description: string) => void;
+  onSubmit: (
+    layerId: string,
+    group: Pick<CreateItemDto, 'groupId' | 'groupTitle'>,
+    title: string,
+    description: string
+  ) => void;
 }
 
-export function CreateItemModal({
-  isOpen,
+function CreateItemForm({
   layers,
   targetLayerId,
-  targetLevel,
+  targetGroupId,
   onClose,
   onSubmit,
-}: CreateItemModalProps) {
+}: {
+  layers: RoadmapLayer[];
+  targetLayerId: string;
+  targetGroupId: string;
+  onClose: () => void;
+  onSubmit: (
+    layerId: string,
+    group: Pick<CreateItemDto, 'groupId' | 'groupTitle'>,
+    title: string,
+    description: string
+  ) => void;
+}) {
+  const currentLayer = layers.find((l) => l.id === targetLayerId);
+  const groups = currentLayer?.groups ?? [];
+
+  const [groupId, setGroupId] = useState(
+    () => targetGroupId || (groups.length === 1 ? groups[0].id : groups.length === 0 ? NEW_GROUP : '')
+  );
+  const [newGroupTitle, setNewGroupTitle] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [level, setLevel] = useState<RoadmapLevel | ''>(targetLevel);
   const [error, setError] = useState('');
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const currentLayer = layers.find((l) => l.id === targetLayerId);
-  const currentGroup = currentLayer?.groups.find((g) => g.level === level);
-
-  React.useEffect(() => {
-    if (isOpen) {
-      setTitle('');
-      setDescription('');
-      setError('');
-      setLevel(targetLevel);
-    }
-  }, [isOpen]);
-
-  if (!isOpen || !mounted) return null;
-
-  const getGroupDisplayName = () => {
-    if (currentGroup?.title) return currentGroup.title;
-    switch (level) {
-      case 'core':
-        return '🟢 Core';
-      case 'intermediate':
-        return '🟡 Intermediate';
-      case 'advanced':
-        return '🔴 Advanced';
-      default:
-        return level || 'Chưa chọn level';
-    }
-  };
+  const currentGroup = groups.find((g) => g.id === groupId);
+  const groupDisplayName =
+    groupId === NEW_GROUP ? newGroupTitle.trim() || 'New group' : currentGroup?.title || 'No group chosen';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Please enter an item title.');
+      setError('Enter a lesson title.');
       return;
     }
     if (!description.trim()) {
-      setError('Please enter a brief description for this item.');
+      setError('Enter a brief description for this lesson.');
       return;
     }
-    if (!level) {
-      setError('Chọn level: core, intermediate hoặc advanced.');
+    if (!groupId || (groupId === NEW_GROUP && !newGroupTitle.trim())) {
+      setError('Choose a group or name a new one.');
       return;
     }
-    onSubmit(targetLayerId, level, title.trim(), description.trim());
+    onSubmit(
+      targetLayerId,
+      groupId === NEW_GROUP ? { groupTitle: newGroupTitle.trim() } : { groupId },
+      title.trim(),
+      description.trim()
+    );
     onClose();
   };
 
-  const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="fixed inset-0 -z-10" onClick={onClose} />
-      <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-xl overflow-hidden p-6 space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-border/50">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="p-2 rounded-xl bg-primary/10 text-primary shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-sm text-foreground">Add new item</h3>
-              <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
-                <Folder className="w-3 h-3 text-primary shrink-0" />
-                <span className="font-medium text-foreground truncate max-w-[9.375rem]">
-                  {currentLayer?.shortTag || currentLayer?.title || 'Layer'}
-                </span>
-                <span className="text-muted-foreground/40 shrink-0">›</span>
-                <span className="font-semibold text-primary truncate max-w-[8.75rem]">
-                  {getGroupDisplayName()}
-                </span>
-              </p>
-            </div>
-          </div>
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title="Add new lesson"
+      description={
+        <span className="flex items-center gap-1.5 mt-0.5 truncate text-xs text-muted-foreground">
+          <Folder className="size-3 text-primary shrink-0" />
+          <span className="font-medium text-foreground truncate max-w-[9.375rem]">
+            {currentLayer?.shortTag || currentLayer?.title || 'Layer'}
+          </span>
+          <span className="text-muted-foreground/40 shrink-0">›</span>
+          <span className="font-semibold text-primary truncate max-w-[8.75rem]">
+            {groupDisplayName}
+          </span>
+        </span>
+      }
+      icon={<Sparkles className="size-4" />}
+      footer={
+        <>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 cursor-pointer"
+            className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            Cancel
           </button>
-        </div>
-
+          <button
+            type="submit"
+            form="create-item-form"
+            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+          >
+            Create lesson
+          </button>
+        </>
+      }
+    >
+      <form id="create-item-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
         {error && (
           <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-          <div className="space-y-1.5">
-            <label className="font-semibold text-muted-foreground">Level *</label>
-            <div className="flex gap-2">
-              {LEVEL_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setLevel(opt)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
-                    level === opt ? 'border-primary bg-primary/10 text-primary' : 'border-border/70 text-foreground'
-                  }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
+        <div className="space-y-1.5">
+          <label className="font-semibold text-muted-foreground">Group *</label>
+          <div className="flex flex-wrap gap-2">
+            {[...groups.map((g) => ({ id: g.id, title: g.title })), { id: NEW_GROUP, title: '+ New group' }].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setGroupId(opt.id)}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer',
+                  groupId === opt.id
+                    ? 'border-primary bg-primary/10 text-primary font-semibold'
+                    : 'border-border/70 text-foreground hover:border-primary/50'
+                )}
+              >
+                {opt.title}
+              </button>
+            ))}
           </div>
-          <div className="space-y-1">
-            <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-primary" /> Item title *
-            </label>
+          {groupId === NEW_GROUP && (
             <input
               type="text"
-              autoFocus
-              placeholder="e.g. Speculative Decoding, GraphRAG..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-sm"
+              placeholder="Fundamentals"
+              value={newGroupTitle}
+              onChange={(e) => setNewGroupTitle(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-xs mt-1.5"
             />
-          </div>
+          )}
+        </div>
 
-          <div className="space-y-1">
-            <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-              <AlignLeft className="w-3.5 h-3.5 text-primary" /> Description *
-            </label>
-            <textarea
-              placeholder="Brief explanation of what this concept is and how it's used…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2.5 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground resize-none leading-relaxed text-xs font-mono"
-            />
-          </div>
+        <div className="space-y-1">
+          <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
+            <FileText className="size-3.5 text-primary" /> Lesson title *
+          </label>
+          <input
+            type="text"
+            autoFocus
+            placeholder="e.g. Speculative Decoding, GraphRAG..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-xs"
+          />
+        </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-medium transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs transition-colors cursor-pointer"
-            >
-              Create item
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="space-y-1">
+          <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
+            <AlignLeft className="size-3.5 text-primary" /> Description *
+          </label>
+          <textarea
+            placeholder="Brief explanation of what this concept is and how it's used…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground resize-none leading-relaxed text-xs"
+          />
+        </div>
+      </form>
+    </Dialog>
   );
+}
 
-  return createPortal(modalContent, document.body);
+export function CreateItemModal({
+  isOpen,
+  layers,
+  targetLayerId,
+  targetGroupId,
+  onClose,
+  onSubmit,
+}: CreateItemModalProps) {
+  if (!isOpen) return null;
+  return (
+    <CreateItemForm
+      key={`${targetLayerId}-${targetGroupId}`}
+      layers={layers}
+      targetLayerId={targetLayerId}
+      targetGroupId={targetGroupId}
+      onClose={onClose}
+      onSubmit={onSubmit}
+    />
+  );
 }

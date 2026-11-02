@@ -568,6 +568,8 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         console.error('[useRoadmap] Failed to delete item:', err);
         roadmapCache.delete(slug);
         await loadRoadmap(slug);
+        // Rolled back: the caller tells the user it failed
+        throw err;
       }
     },
     [slug, loadRoadmap]
