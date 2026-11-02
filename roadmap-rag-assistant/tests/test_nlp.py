@@ -10,7 +10,6 @@ from rag_service.nlp_cleaner import (
     extract_layer_creation_params,
     extract_topic_names,
     generate_short_code,
-    normalize_level,
 )
 
 
@@ -108,61 +107,49 @@ def test_extract_layer_creation_params(prompt, expected_titles, expected_slug):
 
 # ── GROUP TESTS (VN + EN) ────────────────────────────────────────────────
 @pytest.mark.parametrize(
-    ("prompt", "expected_titles", "expected_layer", "expected_level"),
+    ("prompt", "expected_titles", "expected_layer"),
     [
         # Vietnamese
-        ("tạo group Core trong layer aaa", ["Core"], "aaa", ""),
-        ("thêm nhóm Advanced vào layer 02-AAA", ["Advanced"], "02-AAA", ""),
-        ("tạo 2 group Core và Advanced trong layer mock 1", ["Core", "Advanced"], "mock 1", ""),
-        ("tạo 2 group mock 1 và 2 trong layer aaa", ["mock 1", "mock 2"], "aaa", ""),
-        ("thêm nhóm Cơ bản vào layer 01-GEN", ["Cơ bản"], "01-GEN", ""),
+        ("tạo group Core trong layer aaa", ["Core"], "aaa"),
+        ("thêm nhóm Advanced vào layer 02-AAA", ["Advanced"], "02-AAA"),
+        ("tạo 2 group Core và Advanced trong layer mock 1", ["Core", "Advanced"], "mock 1"),
+        ("tạo 2 group mock 1 và 2 trong layer aaa", ["mock 1", "mock 2"], "aaa"),
+        ("thêm nhóm Cơ bản vào layer 01-GEN", ["Cơ bản"], "01-GEN"),
         # English
-        ("create group Core in layer aaa", ["Core"], "aaa", ""),
-        ("add group Advanced to layer 02-AAA", ["Advanced"], "02-AAA", ""),
-        ("create 2 groups Core and Advanced in layer mock 1", ["Core", "Advanced"], "mock 1", ""),
-        ("create group Intermediate on layer 01-DB", ["Intermediate"], "01-DB", ""),
+        ("create group Core in layer aaa", ["Core"], "aaa"),
+        ("add group Advanced to layer 02-AAA", ["Advanced"], "02-AAA"),
+        ("create 2 groups Core and Advanced in layer mock 1", ["Core", "Advanced"], "mock 1"),
+        ("create group Intermediate on layer 01-DB", ["Intermediate"], "01-DB"),
     ],
 )
-def test_extract_group_creation_params(prompt, expected_titles, expected_layer, expected_level):
+def test_extract_group_creation_params(prompt, expected_titles, expected_layer):
     res = extract_group_creation_params(prompt)
     assert res is not None
-    titles, layer_id, level = res
+    titles, layer_id = res
     assert titles == expected_titles
     assert layer_id == expected_layer
-    assert level == expected_level
 
 
 # ── ITEM TESTS (VN + EN) ─────────────────────────────────────────────────
 @pytest.mark.parametrize(
-    ("prompt", "expected_titles", "expected_layer", "expected_level"),
+    ("prompt", "expected_titles", "expected_layer"),
     [
         # Vietnamese
-        ("tạo item Prompt Engineering trong layer 01-LLM level core", ["Prompt Engineering"], "01-LLM", "core"),
-        ("thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM level core", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM", "core"),
-        ("tạo 2 item mock 1 và 2 trong layer aaa level core", ["mock 1", "mock 2"], "aaa", "core"),
-        ("thêm 2 item mock 1 và 2 vào layer mock 1 level core", ["mock 1", "mock 2"], "mock 1", "core"),
-        ("thêm bài học Docker Basics vào layer devops", ["Docker Basics"], "devops", ""),
+        ("tạo item Prompt Engineering trong layer 01-LLM", ["Prompt Engineering"], "01-LLM"),
+        ("thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM"),
+        ("tạo 2 item mock 1 và 2 trong layer aaa", ["mock 1", "mock 2"], "aaa"),
+        ("thêm 2 item mock 1 và 2 vào layer mock 1", ["mock 1", "mock 2"], "mock 1"),
+        ("thêm bài học Docker Basics vào layer devops", ["Docker Basics"], "devops"),
         # English
-        ("create item Prompt Engineering in layer 01-LLM level core", ["Prompt Engineering"], "01-LLM", "core"),
-        ("add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM", "core"),
-        ("create 2 items mock 1 and 2 in layer 02-MOC level advanced", ["mock 1", "mock 2"], "02-MOC", "advanced"),
-        ("create items A, B and C in layer aaa", ["A", "B", "C"], "aaa", ""),
+        ("create item Prompt Engineering in layer 01-LLM", ["Prompt Engineering"], "01-LLM"),
+        ("add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM", ["Vector DB", "Embeddings", "RAG Pipeline"], "01-LLM"),
+        ("create 2 items mock 1 and 2 in layer 02-MOC", ["mock 1", "mock 2"], "02-MOC"),
+        ("create items A, B and C in layer aaa", ["A", "B", "C"], "aaa"),
     ],
 )
-def test_extract_item_creation_params(prompt, expected_titles, expected_layer, expected_level):
+def test_extract_item_creation_params(prompt, expected_titles, expected_layer):
     res = extract_item_creation_params(prompt)
     assert res is not None
-    titles, layer_id, level = res
+    titles, layer_id = res
     assert titles == expected_titles
     assert layer_id == expected_layer
-    assert level == expected_level
-
-
-def test_normalize_level():
-    assert normalize_level("core") == "core"
-    assert normalize_level("cơ bản") == "core"
-    assert normalize_level("basic") == "core"
-    assert normalize_level("advanced") == "advanced"
-    assert normalize_level("nâng cao") == "advanced"
-    assert normalize_level("intermediate") == "intermediate"
-    assert normalize_level("trung cấp") == "intermediate"

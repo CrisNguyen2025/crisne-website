@@ -10,7 +10,7 @@ import httpx
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.auth import require_owner
 from rag_service.write_grant import guard_writes
-from rag_service.adapters.levels import normalize_level, require_level
+from rag_service.adapters.groups import GroupChoiceRequired, clean_group_title
 
 
 @guard_writes
@@ -49,6 +49,10 @@ class HttpApiAdapter:
             if body.get("code") == "DUPLICATE":
                 existing = body.get("existing") or {}
                 raise DuplicateEntityError(body.get("kind", "entity"), existing.get("title", ""), existing)
+        if resp.status_code == 400:
+            body = resp.json() if resp.content else {}
+            if body.get("code") == "GROUP_REQUIRED":
+                raise GroupChoiceRequired(body.get("groups") or [])
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:
             return {}
@@ -176,10 +180,9 @@ class HttpApiAdapter:
         self,
         layer_id: str,
         title: str,
-        level: str = "",
     ) -> dict:
         """POST /api/v1/roadmaps/groups"""
-        payload: dict = {"layerId": layer_id, "title": title, "level": require_level(level)}
+        payload: dict = {"layerId": layer_id, "title": clean_group_title(title)}
         data = await self._request("POST", "/api/v1/roadmaps/groups", json=payload)
         return data.get("group", data)
 
@@ -205,15 +208,15 @@ class HttpApiAdapter:
     async def create_item(
         self,
         layer_id: str,
-        level: str,
+        group_title: str,
         title: str,
         description: str = "",
         content: str = "",
     ) -> dict:
-        """POST /api/v1/roadmaps/items"""
+        """POST /api/v1/roadmaps/items — raises GroupChoiceRequired when the API cannot settle the group"""
         payload = {
             "layerId": layer_id,
-            "level": require_level(level),
+            "groupTitle": clean_group_title(group_title) or None,
             "title": title,
             "description": description,
             "content": content or None,
@@ -228,8 +231,8 @@ class HttpApiAdapter:
             payload["title"] = kwargs["title"]
         if "description" in kwargs:
             payload["description"] = kwargs["description"]
-        if "level" in kwargs:
-            payload["level"] = normalize_level(kwargs["level"])
+        if "group_title" in kwargs:
+            payload["groupTitle"] = clean_group_title(kwargs["group_title"])
         data = await self._request(
             "PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload
         )

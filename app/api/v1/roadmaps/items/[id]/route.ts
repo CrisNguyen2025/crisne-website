@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
-import { findOrCreateGroup, normalizeLevel } from '@/lib/roadmap/levels';
+import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from '@/lib/roadmap/groups';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -15,19 +15,20 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const { title, description, level } = body;
+    const { title, description, groupId, groupTitle } = body;
 
     let targetGroupId: string | undefined = undefined;
 
-    if (normalizeLevel(level)) {
+    // Moving to another group stays within the item's layer; without groupId/groupTitle the group is kept
+    if (groupId || groupTitle) {
       const existingItem = await prisma.roadmapItem.findUnique({
         where: { id },
         include: { group: true },
       });
 
-      if (existingItem && normalizeLevel(existingItem.group.level) !== normalizeLevel(level)) {
-        const targetGroup = await findOrCreateGroup(prisma, existingItem.group.layerId, level);
-        targetGroupId = targetGroup.id;
+      if (existingItem) {
+        const targetGroup = await resolveGroup(prisma, existingItem.group.layerId, { groupId, groupTitle });
+        if (targetGroup.id !== existingItem.groupId) targetGroupId = targetGroup.id;
       }
     }
 
@@ -42,6 +43,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ item: updated });
   } catch (error) {
+    if (error instanceof GroupChoiceRequired) return groupChoiceResponse(error);
     console.error('[API PATCH /api/v1/roadmaps/items/[id]] Error:', error);
     return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
   }

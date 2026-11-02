@@ -49,7 +49,7 @@ def to_document(kd: KnowledgeDocument, doc_id: str = "") -> dict:
             "topic": kd.topic_slug,
             "layer": kd.layer_tag,
             "layer_title": kd.layer_title,
-            "level": kd.level,
+            "group_title": kd.group_title,
         },
     }
 

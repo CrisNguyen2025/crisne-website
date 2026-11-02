@@ -51,7 +51,7 @@ def expand_contracted_titles(titles: list[str]) -> list[str]:
       - ["mock 1", "2"] -> ["mock 1", "mock 2"]
       - ["mock 1", "2", "3"] -> ["mock 1", "mock 2", "mock 3"]
       - ["layer A", "B"] -> ["layer A", "layer B"]
-      - ["level 1", "2"] -> ["level 1", "level 2"]
+      - ["part 1", "2"] -> ["part 1", "part 2"]
       - ["mock 1", "mock 2"] -> ["mock 1", "mock 2"]
       - ["Frontend", "Backend"] -> ["Frontend", "Backend"]
     """
@@ -130,29 +130,6 @@ def generate_short_code(title: str) -> str:
 
     cleaned = re.sub(r"[^A-Za-z0-9]", "", cleaned_title)
     return cleaned[:3].upper() if cleaned else "TP"
-
-
-def normalize_level(level: str) -> str:
-    """Normalize level keywords across English and Vietnamese to standard level codes."""
-    lvl = level.strip().lower()
-    mapping = {
-        "core": "core",
-        "cơ bản": "core",
-        "co ban": "core",
-        "basic": "core",
-        "fundamentals": "core",
-        "intermediate": "intermediate",
-        "trung cấp": "intermediate",
-        "trung cap": "intermediate",
-        "medium": "intermediate",
-        "mid": "intermediate",
-        "advanced": "advanced",
-        "nâng cao": "advanced",
-        "nang cao": "advanced",
-        "pro": "advanced",
-        "expert": "advanced",
-    }
-    return mapping.get(lvl, lvl)
 
 
 # ── TOPIC EXTRACTOR ──────────────────────────────────────────────────────
@@ -307,28 +284,21 @@ def extract_layer_creation_params(content: str) -> tuple[list[str], str] | None:
 
 
 # ── GROUP EXTRACTOR ──────────────────────────────────────────────────────
-def extract_group_creation_params(content: str) -> tuple[list[str], str, str] | None:
-    """Extract list of group titles, target layer identifier, and optional level (VN + EN).
+def extract_group_creation_params(content: str) -> tuple[list[str], str] | None:
+    """Extract list of group titles and target layer identifier (VN + EN).
 
     Handles prompts like:
-      - 'tạo group Core trong layer aaa' -> (['Core'], 'aaa', '')
-      - 'create group Core in layer aaa' -> (['Core'], 'aaa', '')
-      - 'thêm nhóm Advanced vào layer 02-AAA' -> (['Advanced'], '02-AAA', '')
-      - 'add group Advanced to layer 02-AAA' -> (['Advanced'], '02-AAA', '')
-      - 'tạo 2 group Core và Advanced trong layer mock 1' -> (['Core', 'Advanced'], 'mock 1', '')
-      - 'create 2 groups Core and Advanced in layer mock 1' -> (['Core', 'Advanced'], 'mock 1', '')
+      - 'tạo group Core trong layer aaa' -> (['Core'], 'aaa')
+      - 'create group Core in layer aaa' -> (['Core'], 'aaa')
+      - 'thêm nhóm Advanced vào layer 02-AAA' -> (['Advanced'], '02-AAA')
+      - 'add group Advanced to layer 02-AAA' -> (['Advanced'], '02-AAA')
+      - 'tạo 2 group Core và Advanced trong layer mock 1' -> (['Core', 'Advanced'], 'mock 1')
+      - 'create 2 groups Core and Advanced in layer mock 1' -> (['Core', 'Advanced'], 'mock 1')
     """
     text = clean_conversational_text(content.strip().rstrip(" \t\n\r.?!"))
 
     # Extract target layer: e.g. "in layer 02-AAA", "trong layer aaa", "to layer mock 1"
-    level = ""
     remaining = text
-
-    # Extract level if present (e.g. "level core", "level advanced", "mức cơ bản")
-    level_m = re.search(r"(?:level|mức|cấp độ)\s+([a-zA-Z0-9_-]+)", text, re.IGNORECASE)
-    if level_m:
-        level = normalize_level(level_m.group(1))
-        remaining = re.sub(r"(?:level|mức|cấp độ)\s+[a-zA-Z0-9_-]+", "", remaining, flags=re.IGNORECASE).strip()
 
     layer_identifier = ""
     m = re.search(
@@ -365,35 +335,28 @@ def extract_group_creation_params(content: str) -> tuple[list[str], str, str] | 
     if not parts:
         return None
 
-    return expand_contracted_titles(parts), layer_identifier, level
+    return expand_contracted_titles(parts), layer_identifier
 
 
 # ── ITEM EXTRACTOR ───────────────────────────────────────────────────────
-def extract_item_creation_params(content: str) -> tuple[list[str], str, str] | None:
-    """Extract list of item titles, target layer identifier, and level (VN + EN).
+def extract_item_creation_params(content: str) -> tuple[list[str], str] | None:
+    """Extract list of item titles and target layer identifier (VN + EN).
 
     Handles prompts like:
-      - 'tạo item Prompt Engineering trong layer 01-LLM level core'
-      - 'create item Prompt Engineering in layer 01-LLM level core'
-      - 'thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM level core'
-      - 'add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core'
-      - 'tạo 2 item mock 1 và 2 trong layer aaa level core'
+      - 'tạo item Prompt Engineering trong layer 01-LLM'
+      - 'create item Prompt Engineering in layer 01-LLM'
+      - 'thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-LLM'
+      - 'add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM'
+      - 'tạo 2 item mock 1 và 2 trong layer aaa'
       - 'create items A, B and C in layer aaa'
       - 'thêm bài học Docker Basics vào layer devops'
     """
     text = clean_conversational_text(content.strip().rstrip(" \t\n\r.?!"))
-
-    # Extract level if present (e.g. "level core", "level advanced", "mức nâng cao"); none is never guessed
-    level = ""
-    level_m = re.search(r"(?:level|mức|cấp độ)\s+([\w\-]+)", text, re.IGNORECASE)
     remaining = text
-    if level_m:
-        level = normalize_level(level_m.group(1))
-        remaining = re.sub(r"(?:level|mức|cấp độ)\s+[^\s]+", "", remaining, flags=re.IGNORECASE).strip()
 
     layer_identifier = ""
     m = re.search(
-        r"(?:on|in|trong|vào|cho|trên|thuộc|của|ở|to|inside|at)\s+(?:layer|mảng kiến thức)\s+([a-zA-Z0-9_ -]+?)(?:\s+(?:level|mức)|$)",
+        r"(?:on|in|trong|vào|cho|trên|thuộc|của|ở|to|inside|at)\s+(?:layer|mảng kiến thức)\s+([a-zA-Z0-9_ -]+?)$",
         remaining,
         re.IGNORECASE,
     )
@@ -426,4 +389,4 @@ def extract_item_creation_params(content: str) -> tuple[list[str], str, str] | N
     if not parts:
         return None
 
-    return expand_contracted_titles(parts), layer_identifier, level
+    return expand_contracted_titles(parts), layer_identifier

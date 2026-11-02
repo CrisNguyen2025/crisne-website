@@ -20,7 +20,6 @@ import {
   updateLayer,
   updateRoadmapBySlug,
 } from '@/logic/roadmap/roadmapService';
-import { RoadmapLevel } from '@/lib/roadmap/types';
 import { getRoadmapPageContext } from '@/logic/roadmap/roadmapAssistantService';
 
 // WebMCP: navigator-level tool registry exposed as document.modelContext.
@@ -50,7 +49,6 @@ declare global {
   }
 }
 
-const LEVEL_SCHEMA = { type: 'string', enum: ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] };
 const CONFIRM_SCHEMA = {
   type: 'boolean',
   description: 'Must be true. Deletion is irreversible; confirm with the user first.',
@@ -191,18 +189,16 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'create_group',
-    description: 'Create a group (level section) inside a layer.',
+    description: 'Create a named group of lessons inside a layer. The title is unique within the layer.',
     inputSchema: {
       type: 'object',
       properties: {
         layerId: { type: 'string' },
         title: { type: 'string' },
-        level: LEVEL_SCHEMA,
       },
       required: ['layerId', 'title'],
     },
-    execute: async ({ layerId, title, level }) =>
-      notifyUpdated(await createGroup(layerId, title, level as RoadmapLevel | undefined)),
+    execute: async ({ layerId, title }) => notifyUpdated(await createGroup(layerId, title)),
   },
   {
     name: 'update_group',
@@ -216,7 +212,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'delete_group',
-    description: 'Delete a group and its items. Irreversible.',
+    description: 'Delete a group and its lessons. Irreversible.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string' }, confirm: CONFIRM_SCHEMA },
@@ -230,30 +226,33 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'create_item',
-    description: 'Create a learning item (lesson) inside a layer.',
+    description:
+      'Create a lesson inside a layer. Name the group by groupId or groupTitle (a new title creates the group); ' +
+      'with neither, a layer holding one group uses it, otherwise the call fails and lists the groups.',
     inputSchema: {
       type: 'object',
       properties: {
         layerId: { type: 'string' },
-        level: LEVEL_SCHEMA,
+        groupId: { type: 'string' },
+        groupTitle: { type: 'string' },
         title: { type: 'string' },
         description: { type: 'string' },
         content: { type: 'string', description: 'Optional body (HTML) saved in the same request' },
       },
-      required: ['layerId', 'level', 'title'],
+      required: ['layerId', 'title'],
     },
     execute: async (args) => notifyUpdated(await createItem(args as any)),
   },
   {
     name: 'update_item',
-    description: 'Update an item title, description or level.',
+    description: 'Update a lesson title and description; groupId moves it to another group of its layer.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         title: { type: 'string' },
         description: { type: 'string' },
-        level: LEVEL_SCHEMA,
+        groupId: { type: 'string' },
       },
       required: ['id', 'title', 'description'],
     },
@@ -261,7 +260,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'update_item_content',
-    description: 'Replace the body content of an item.',
+    description: 'Replace the body content of a lesson.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string' }, content: { type: 'string' } },
@@ -271,7 +270,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'delete_item',
-    description: 'Delete an item. Irreversible.',
+    description: 'Delete a lesson. Irreversible.',
     inputSchema: {
       type: 'object',
       properties: { id: { type: 'string' }, confirm: CONFIRM_SCHEMA },
@@ -285,15 +284,14 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'reorder_items',
-    description: 'Set the order of items within one group of a layer.',
+    description: 'Set the order of lessons within one group.',
     inputSchema: {
       type: 'object',
       properties: {
-        layerId: { type: 'string' },
-        level: LEVEL_SCHEMA,
+        groupId: { type: 'string' },
         orderedItemIds: { type: 'array', items: { type: 'string' } },
       },
-      required: ['layerId', 'level', 'orderedItemIds'],
+      required: ['groupId', 'orderedItemIds'],
     },
     execute: async (args) => notifyUpdated(await reorderGroupItems(args as any)),
   },

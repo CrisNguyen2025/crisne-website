@@ -15,13 +15,9 @@ _Avoid_: course, lộ trình con
 Một mảng kiến thức trong Topic, có short tag dạng "02-LLM".
 _Avoid_: section, module, domain
 
-**Level**:
-Độ khó của một Group: core, intermediate, advanced, hoặc tên tuỳ chỉnh.
-_Avoid_: tier, difficulty
-
 **Group**:
-Tập Lesson cùng một Level trong một Layer.
-_Avoid_: category, cluster
+Nhóm Lesson có tên trong một Layer; tên là duy nhất trong Layer.
+_Avoid_: category, cluster, level, level group
 
 **Lesson**:
 Một bài học trong Group, có nội dung rich text.

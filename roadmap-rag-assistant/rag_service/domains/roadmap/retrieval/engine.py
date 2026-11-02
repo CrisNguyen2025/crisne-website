@@ -41,7 +41,7 @@ def is_thin(doc: KnowledgeDocument) -> bool:
 # FTS5 columns of the roadmap index (the order is the table's column order)
 ROADMAP_TEXT_FIELDS = (
     "doc_type", "title", "topic_slug", "topic_title", "layer_tag", "layer_title",
-    "level", "description", "content_text", "searchable_text",
+    "group_title", "description", "content_text", "searchable_text",
 )
 
 
@@ -206,7 +206,7 @@ class HybridRagEngine:
                 lines.append(
                     f"\n#### 📖 Bài học: [{doc.title}]({knowledge_href(doc)})\n"
                     f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
-                    f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Cấp độ: `{doc.level}`)\n"
+                    f"- **Layer:** [{doc.layer_tag}] {doc.layer_title} (Nhóm: `{doc.group_title or '—'}`)\n"
                     f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"
                 )
                 if doc.content_text:
@@ -303,8 +303,9 @@ class HybridRagEngine:
             lines.append(f"  **Layer {i}: [{layer.get('shortTag', '')}] {layer.get('title', '')}**")
             if layer.get("subtitle"):
                 lines.append(f"  _{layer.get('subtitle')}_")
-            # Groups are created from item levels on write, so the preview lists items only
             for group in layer.get("groups", []):
+                if group.get("title"):
+                    lines.append(f"    _Nhóm {group['title']}_")
                 for item in group.get("items", []):
                     lines.append(f"    • {item.get('title', '')}: {item.get('description', '')}")
 

@@ -78,9 +78,8 @@ class BaseAdapter(Protocol):
         self,
         layer_id: str,
         title: str,
-        level: str = "",
     ) -> dict:
-        """Create a new group inside a layer. Returns the created group dict."""
+        """Create a named group inside a layer; the title is unique within the layer. Returns the group dict."""
         ...
 
     async def update_group(self, group_id: str, title: str) -> dict:
@@ -96,16 +95,20 @@ class BaseAdapter(Protocol):
     async def create_item(
         self,
         layer_id: str,
-        level: str,
+        group_title: str,
         title: str,
         description: str = "",
         content: str = "",
     ) -> dict:
-        """Create a new item in a layer/group. Returns the created item dict."""
+        """Create a new item in a group of the layer, picked by adapters.groups.pick_group.
+
+        Raises GroupChoiceRequired when no group is named and the layer does not settle it.
+        Returns the created item dict.
+        """
         ...
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
-        """Update item fields (title, description, level).
+        """Update item fields (title, description, group_title: moves it to that group of its layer).
 
         Returns the updated item dict.
         """

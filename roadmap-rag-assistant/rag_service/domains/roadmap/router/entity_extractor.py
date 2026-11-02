@@ -37,12 +37,14 @@ Nhiệm vụ của bạn là bóc tách câu lệnh CUD của người dùng th�
    - "tạo 2 layer mock 1 và 2 trong be topic" -> entities = [{{"title": "mock 1"}}, {{"title": "mock 2"}}], target_parent_identifier = "be".
    - "create mock 1 and 2 layers on be" -> entities = [{{"title": "mock 1"}}, {{"title": "mock 2"}}], target_parent_identifier = "be".
    - "thêm 3 item bài 1, 2 và 3" -> entities = [{{"title": "bài 1"}}, {{"title": "bài 2"}}, {{"title": "bài 3"}}].
-   - "tạo 2 group Core và Advanced" -> entities = [{{"title": "Core", "level": "core"}}, {{"title": "Advanced", "level": "advanced"}}].
+   - "tạo 2 group Core và Advanced" -> entities = [{{"title": "Core"}}, {{"title": "Advanced"}}].
+   - "thêm bài KV cache vào nhóm Inference của layer 02" -> entity_level = "item", entities = [{{"title": "KV cache", "group_title": "Inference"}}], target_parent_identifier = "02".
 
 3. **PHÂN BIỆT RÕ CẤP BẬC (ENTITY LEVEL)**:
    - Nếu câu chứa "layer", "mảng": entity_level = "layer" (topic đi kèm là target_parent_identifier).
-   - Nếu câu chứa "group", "nhóm": entity_level = "group" (layer đi kèm là target_parent_identifier).
-   - Nếu câu chứa "item", "bài học", "bài", "mục": entity_level = "item" (layer đi kèm là target_parent_identifier).
+   - Nếu câu chứa "group", "nhóm" (và không nói tới bài học): entity_level = "group" (layer đi kèm là target_parent_identifier).
+   - Nếu câu chứa "item", "bài học", "bài", "mục": entity_level = "item" (layer đi kèm là target_parent_identifier);
+     "vào nhóm X" / "group X" khi đó là group_title của bài, không phải một group mới.
    - Nếu chỉ chứa "topic", "chủ đề", "lộ trình" và không có layer/item: entity_level = "topic".
 
 4. **ĐẠI TỪ CHỈ ĐỊNH / NGỮ CẢNH LIÊN TIẾP**:
@@ -72,14 +74,41 @@ def _generate_clean_short_code(title: str) -> str:
     return "".join(w[0] for w in words if w).upper()[:4]
 
 
-LEVEL_CLAUSE = re.compile(r"\blevel\s+([a-zA-Z0-9_-]+)", flags=re.IGNORECASE)
+EMOJI = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+")
+
+# "… vào nhóm Inference", "group \"Production\"": the group a lesson goes into (ADR-0008), never a default.
+# Only for lessons: in "tạo nhóm X" the group is the entity itself.
+GROUP_CLAUSE = re.compile(
+    r"\s*(?:\b(?:vào|vao|trong|in|into|to)\s+)?\b(?:groups?|nhóm|nhom)\s+[\"“'`]?(?P<name>[^\"”'`,]+?)[\"”'`]?"
+    r"(?=\s+(?:của|cua|trong|thuộc|thuoc|of|in|on)\b|\s*,|\s*$)",
+    flags=re.IGNORECASE,
+)
+LESSON_WORDS = re.compile(r"\b(?:items?m*|bai(?:\s+hoc)?|muc|lessons?)\b")
 
 
-def named_level(text: str) -> str:
-    """The level the message names ("… level core"), or empty: never a default."""
-    m = LEVEL_CLAUSE.search(text or "")
-    cand = m.group(1).lower() if m else ""
-    return cand if cand in ("core", "intermediate", "advanced") else ""
+def _group_match(text: str, lesson: bool) -> Optional[re.Match]:
+    """The group clause, when the text is about a lesson (`lesson`: already known to be)."""
+    if not lesson and not LESSON_WORDS.search(fold(text or "")):
+        return None
+    return GROUP_CLAUSE.search(text or "")
+
+
+def named_group(text: str, lesson: bool = False) -> str:
+    """The group a lesson message names ("… vào nhóm Inference"), or empty: never a default."""
+    m = _group_match(text, lesson)
+    return m.group("name").strip() if m else ""
+
+
+def strip_group_clause(text: str, lesson: bool = False) -> str:
+    """The text without its group clause, so the clause is not read as a title or a layer.
+
+    "… vào nhóm X của layer 02" keeps its layer as "… trong layer 02".
+    """
+    m = _group_match(text, lesson)
+    if not m:
+        return text
+    rest = re.sub(r"^\s*(?:của|cua|thuộc|thuoc|of)\b", " trong", text[m.end():], flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", f"{text[:m.start()]} {rest}").strip()
 
 
 # Words that can follow "trong"/"topic" but are keywords or urgency switches, never a topic or layer name.
@@ -138,17 +167,20 @@ class StructuredEntityExtractor:
     ) -> StructuredRoadmapAction:
         """An action read by a model (this extractor or System 2), cleaned the same way before it runs.
 
-        Models leave `level` empty even when the message names one; the level the message names fills it.
+        Models leave `group_title` empty even when the message names one; the group the message names fills it.
         """
         res = res.model_copy(deep=True)
-        level = named_level(text)
-        # The level clause is not part of any name: models sometimes leave it on the layer ("04-ops level core")
-        if res.target_parent_identifier:
-            res.target_parent_identifier = LEVEL_CLAUSE.sub("", res.target_parent_identifier).strip() or None
+        group = named_group(text) if res.entity_level == EntityLevel.ITEM else ""
+        # The group clause is not part of any name: models sometimes leave it on the layer or the title
+        if group and res.target_parent_identifier:
+            res.target_parent_identifier = strip_group_clause(res.target_parent_identifier, lesson=True) or None
         for ent in res.entities:
-            ent.title = LEVEL_CLAUSE.sub("", ent.title).strip() or ent.title
-            if not ent.level and level:
-                ent.level = level
+            if res.entity_level != EntityLevel.ITEM:
+                ent.group_title = None
+            elif group:
+                ent.title = strip_group_clause(ent.title, lesson=True) or ent.title
+                if not ent.group_title:
+                    ent.group_title = group
             # Sanitize any accidental verb leakage
             ent.title = self._sanitize_title(ent.title)
             if not ent.short_code:
@@ -217,6 +249,9 @@ class StructuredEntityExtractor:
     ) -> StructuredRoadmapAction:
         """High-precision rule-based parser that guarantees verb-free titles."""
         text = normalize_vietnamese(prompt).strip()
+        # Emoji are not part of a name, and a trailing one ("… layer 01-NL nha 😅") would hide the filler before it
+        # and break the end-anchored clauses
+        text = re.sub(r"\s+", " ", EMOJI.sub(" ", text)).strip()
         text = clean_conversational_fillers(text)
         # "ngay"/"luôn" switch off the confirmation step in the agent; they are not part of any name
         text = re.sub(r"\s+", " ", re.sub(r"\b(?:luôn|ngay)\b", " ", text, flags=re.IGNORECASE)).strip()
@@ -226,9 +261,9 @@ class StructuredEntityExtractor:
         lower = text.lower()
 
 
-        # 2. Extract and strip 'level core/intermediate/advanced'
-        entity_item_level = named_level(text)
-        text = LEVEL_CLAUSE.sub("", text).strip()
+        # 2. Extract and strip the group a lesson goes into ('… vào nhóm X')
+        entity_group = named_group(text)
+        text = strip_group_clause(text)
 
         # 3. Determine Action
         # Action and level words are matched folded, so "xoa bai" and "xóa bài" are the same request
@@ -257,7 +292,7 @@ class StructuredEntityExtractor:
             else:
                 # Match parent topic / layer like "trong layer mock 1" or "on fe" or "to layer 01-LLM"
                 m_parent = re.search(
-                    r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=\s+level|$)",
+                    r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=$)",
                     text,
                     flags=re.IGNORECASE,
                 )
@@ -286,7 +321,9 @@ class StructuredEntityExtractor:
             if not clean_t:
                 continue
             sc = _generate_clean_short_code(clean_t)
-            entities.append(SingleEntity(title=clean_t, short_code=sc, level=entity_item_level))
+            entities.append(
+                SingleEntity(title=clean_t, short_code=sc, group_title=entity_group if level == EntityLevel.ITEM else None)
+            )
 
         if not entities:
             clean_t = self._sanitize_title(text).lstrip(": -").strip()
@@ -294,7 +331,7 @@ class StructuredEntityExtractor:
                 SingleEntity(
                     title=clean_t or "Untitled",
                     short_code=_generate_clean_short_code(clean_t or "UNT"),
-                    level=entity_item_level,
+                    group_title=entity_group if level == EntityLevel.ITEM else None,
                 )
             )
 
@@ -340,7 +377,7 @@ class StructuredEntityExtractor:
         # 2. Check for comma / and lists: "A, B và C" / "A and B"
         # First strip out parent clause
         clause = re.sub(
-            r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=\s+level|$)",
+            r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|layers?r*|lộ\s+trình)?\s*[a-zA-Z0-9_ -]+?(?=$)",
             "",
             text,
             flags=re.IGNORECASE,
@@ -351,7 +388,7 @@ class StructuredEntityExtractor:
             clause = re.sub(r"\s+topics?c*\s+[a-zA-Z0-9_-]+\s*$", "", clause.strip(), flags=re.IGNORECASE)
         clause = clean_conversational_fillers(clause)
 
-        # Strip out action verb, conversational wrapper, and level keyword
+        # Strip out action verb, conversational wrapper, and entity keyword
         clause = re.sub(
             r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:(?:a|an|new)\s+)*(?:topics?c*|layers?r*|groups?|items?m*|chủ\s+đề|chu\s+de|mục|muc|nhóm|nhom|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about|called|named)\s+)?",
             "",

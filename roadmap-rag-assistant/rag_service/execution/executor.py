@@ -9,6 +9,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from rag_service.adapters.errors import DuplicateEntityError
+from rag_service.adapters.groups import GroupChoiceRequired
 from rag_service.nlp_cleaner import generate_short_code
 from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.domains.roadmap.retrieval.engine import rag_engine
@@ -50,12 +51,15 @@ class ActionExecutor:
 
         Automatically falls back to SqliteAdapter if the HTTP API connection fails.
         Returns (success: bool, result_message: str). Pass *changes* to collect the rows written.
+        Raises GroupChoiceRequired when a lesson's group is not settled; nothing was written then.
         """
         adapter = self.adapter
         if changes is None:
             changes = ChangeSet.of(action)
         try:
             return await self._execute_inner(adapter, action, session_id, changes)
+        except GroupChoiceRequired:
+            raise
         except Exception as exc:
             err_str = str(exc)
             # If network / HTTP connection error occurred and adapter is not SQLite, fallback to SqliteAdapter
@@ -66,6 +70,8 @@ class ActionExecutor:
                     try:
                         sqlite_adapter = SqliteAdapter()
                         return await self._execute_inner(sqlite_adapter, action, session_id, changes)
+                    except GroupChoiceRequired:
+                        raise
                     except Exception as fallback_exc:
                         return False, f"❌ Lỗi khi thực thi: {fallback_exc}"
 
@@ -220,8 +226,6 @@ class ActionExecutor:
                 return False, "❌ Không tìm thấy Layer đích để tạo Group."
 
             if act_type == ActionType.CREATE:
-                if any(not ent.level for ent in action.entities):
-                    return False, "❌ Thiếu level của group (core / intermediate / advanced)."
                 created_groups = []
                 skipped = []
                 for ent in action.entities:
@@ -229,7 +233,6 @@ class ActionExecutor:
                         res = await adapter.create_group(
                             layer_id=layer_id,
                             title=ent.title,
-                            level=ent.level or "",
                         )
                     except DuplicateEntityError as dup:
                         skipped.append(dup)
@@ -265,15 +268,15 @@ class ActionExecutor:
                 return False, "❌ Không tìm thấy Layer đích để thêm bài học (Item)."
 
             if act_type == ActionType.CREATE:
-                if any(not ent.level for ent in action.entities):
-                    return False, "❌ Thiếu level của bài học (core / intermediate / advanced)."
+                # The group comes from the message or the layer (adapters.groups.pick_group). When neither settles it
+                # the adapter raises GroupChoiceRequired before anything is written; handle_cud asks back.
                 created_items = []
                 skipped = []
                 for ent in action.entities:
                     try:
                         res = await adapter.create_item(
                             layer_id=layer_id,
-                            level=ent.level or "",
+                            group_title=ent.group_title or "",
                             title=ent.title,
                             description=ent.description or "",
                         )

@@ -17,7 +17,7 @@ from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 # A previewed change or a layer choice older than this is dropped: an "ok" an hour later must not run it
 PENDING_TTL_SECONDS = 600.0
-_PENDING_FIELDS = ("pending_confirmation", "pending_layer_choice", "pending_level_choice")
+_PENDING_FIELDS = ("pending_confirmation", "pending_layer_choice", "pending_group_choice")
 
 
 def _now() -> float:
@@ -38,8 +38,9 @@ class SessionContext(BaseModel):
     pending_layer_topic: Optional[str] = None
     # Existing layers offered for that create, answerable by number or name.
     pending_layer_options: List[dict] = Field(default_factory=list)
-    # A group or item create that named no level: the message, waiting for "core" / "intermediate" / "advanced"
-    pending_level_choice: Optional[str] = None
+    # A lesson create whose group is not settled (ADR-0008), plus the layer's groups offered for it
+    pending_group_choice: Optional[StructuredRoadmapAction] = None
+    pending_group_options: List[str] = Field(default_factory=list)
     recent_created_entities: List[dict] = Field(default_factory=list)
     # When each pending field was set (time.monotonic); stamped on assignment
     pending_since: Dict[str, float] = Field(default_factory=dict)

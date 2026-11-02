@@ -153,7 +153,6 @@ services:
         roadmapSlug: activeRoadmap?.slug || "ai-architecture",
         layerId: targetLayer?.id || null,
         layerTag: targetLayer?.shortTag || "01-CORE",
-        level: triage.level || "core",
         draftTitle,
         draftContent,
         verifyScore,

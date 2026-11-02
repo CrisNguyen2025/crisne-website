@@ -136,14 +136,14 @@ model RoadmapGroup {
   id        String        @id @default(uuid(7))
   layerId   String
   layer     RoadmapLayer  @relation(fields: [layerId], references: [id], onDelete: Cascade)
-  level     String        // "core" | "intermediate" | "advanced" | custom
-  title     String
+  title     String        // unique within the layer (ADR-0008)
   order     Int           @default(0)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
   items     RoadmapItem[]
 
+  @@unique([layerId, title])
   @@index([layerId])
 }
 
@@ -331,7 +331,7 @@ model KnowledgeTriage {
   roadmapSlug  String?  // Target topic/roadmap slug
   layerId      String?  // Target layer id
   layerTag     String?  // Target layer short tag e.g. "02-LLM"
-  level        String?  @default("core") // core | intermediate | advanced
+  groupTitle   String?  // Target group by name; created on approve when missing (ADR-0008)
   draftTitle   String?
   draftContent String?  // Rich text or markdown content
   verifyScore  Int?     // 0 - 100

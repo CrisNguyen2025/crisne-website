@@ -42,8 +42,8 @@ class DryRunValidator:
             details = []
             if ent.short_code:
                 details.append(f"Mã: `{ent.short_code}`")
-            if ent.level and action.entity_level in [EntityLevel.GROUP, EntityLevel.ITEM]:
-                details.append(f"Level: `{ent.level}`")
+            if ent.group_title and action.entity_level == EntityLevel.ITEM:
+                details.append(f"Nhóm: `{ent.group_title}`")
             detail_str = f" ({', '.join(details)})" if details else ""
             lines.append(f"  {idx}. **{ent.title}**{detail_str}")
 

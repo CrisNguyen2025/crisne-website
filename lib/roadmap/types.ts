@@ -1,12 +1,10 @@
-export type RoadmapLevel = 'core' | 'intermediate' | 'advanced' | string;
-
 export interface ChecklistItem {
   id: string;
   slug?: string;
   title: string;
   description: string;
-  level: RoadmapLevel;
   layerId: string;
+  groupId: string;
   createdAt: string;
   updatedAt: string;
   notes?: string;
@@ -14,9 +12,9 @@ export interface ChecklistItem {
   tags?: string[];
 }
 
-export interface LevelGroup {
-  id?: string;
-  level: RoadmapLevel;
+/** A named group of lessons inside a layer; the title is unique within the layer (ADR-0008). */
+export interface RoadmapGroup {
+  id: string;
   title: string;
   items: ChecklistItem[];
 }
@@ -27,16 +25,11 @@ export interface RoadmapLayer {
   shortTag: string; // e.g. '01-DB', '02-LLM', '03-RAG', '04-OPS'
   title: string;
   subtitle: string;
-  groups: LevelGroup[];
+  groups: RoadmapGroup[];
 }
 
 export interface RoadmapStats {
   total: number;
-  byLevel: {
-    core: number;
-    intermediate: number;
-    advanced: number;
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,6 +45,9 @@ export interface RoadmapMeta {
   icon?: string | null;
   order: number;
   isLocked?: boolean;
+  _count?: {
+    layers: number;
+  };
 }
 
 /** Response shape when listing all roadmap layers from the API */
@@ -60,22 +56,26 @@ export interface GetRoadmapResponseDto {
   layers: RoadmapLayer[];
 }
 
-/** Payload to create a new roadmap item */
+/**
+ * Payload to create a new roadmap item. The group is named by id, or by title (created when missing);
+ * with neither, a layer holding exactly one group uses it, otherwise the API asks for one.
+ */
 export interface CreateItemDto {
   layerId: string;
-  level: RoadmapLevel;
+  groupId?: string;
+  groupTitle?: string;
   title: string;
   description?: string;
   /** Optional rich-text (HTML) body, saved in the same request */
   content?: string;
 }
 
-/** Payload to update item title, description, and level */
+/** Payload to update item title and description; groupId moves the item to another group of its layer */
 export interface UpdateItemInfoDto {
   id: string;
   title: string;
   description: string;
-  level?: RoadmapLevel;
+  groupId?: string;
 }
 
 /** Payload to update item detailed HTML content only */
@@ -86,8 +86,7 @@ export interface UpdateItemContentDto {
 
 /** Payload to reorder items within a group */
 export interface ReorderGroupItemsDto {
-  layerId: string;
-  level: RoadmapLevel;
+  groupId: string;
   orderedItemIds: string[];
 }
 

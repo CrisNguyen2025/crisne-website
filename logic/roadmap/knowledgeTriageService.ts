@@ -16,7 +16,7 @@ export interface TriageItem {
   roadmapSlug?: string | null;
   layerId?: string | null;
   layerTag?: string | null;
-  level?: string | null;
+  groupTitle?: string | null;
   draftTitle?: string | null;
   draftContent?: string | null;
   verifyScore?: number | null;
@@ -78,11 +78,12 @@ export async function generateTriageDraft(id: string): Promise<TriageItem> {
 
 /** Approve draft and publish directly into Roadmap database & live RAG sync */
 export async function approveTriageDraft(
-  id: string
+  id: string,
+  groupTitle?: string
 ): Promise<{ success: boolean; createdItem: unknown; triage: TriageItem }> {
   return apiFetch<{ success: boolean; createdItem: unknown; triage: TriageItem }>(
     `/api/v1/roadmaps/triage/${id}/approve`,
-    { method: "POST" }
+    { method: "POST", body: JSON.stringify(groupTitle ? { groupTitle } : {}) }
   );
 }
 

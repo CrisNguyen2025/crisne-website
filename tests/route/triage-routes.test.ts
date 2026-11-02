@@ -15,7 +15,7 @@ const mockTriageItem = {
   roadmapSlug: "ai-architecture",
   layerId: "layer-1",
   layerTag: "01-CORE",
-  level: "core",
+  groupTitle: "Core",
   draftTitle: null,
   draftContent: null,
   verifyScore: null,
@@ -48,6 +48,7 @@ const prismaMock = vi.hoisted(() => ({
   roadmapItem: {
     create: vi.fn(),
     findMany: vi.fn().mockResolvedValue([]),
+    count: vi.fn().mockResolvedValue(2),
   },
   // Interactive transaction: run the callback against the same mock
   $transaction: vi.fn(),
@@ -341,7 +342,7 @@ describe("Knowledge Triage API Routes", () => {
 
     beforeEach(() => {
       prismaMock.roadmapGroup.findMany.mockResolvedValueOnce([
-        { id: "group-1", layerId: "l1", level: "core", _count: { items: 2 } },
+        { id: "group-1", layerId: "l1", title: "Core" },
       ]);
       prismaMock.roadmapItem.create.mockImplementationOnce(async ({ data }) => ({ id: "item-new", ...data }));
     });

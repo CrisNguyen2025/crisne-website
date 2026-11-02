@@ -22,7 +22,7 @@ class KnowledgeDocument(BaseModel):
     topic_title: str = Field(..., description="Display title of the Roadmap topic")
     layer_tag: Optional[str] = Field(None, description="e.g. '01-DB', '02-LLM'")
     layer_title: Optional[str] = Field(None, description="Title of the parent layer")
-    level: Optional[str] = Field("core", description="core | intermediate | advanced")
+    group_title: Optional[str] = Field(None, description="Title of the parent group (items only)")
     description: Optional[str] = Field("", description="Summary description")
     content_text: Optional[str] = Field("", description="Plain text extracted from Lexical HTML")
     searchable_text: str = Field(..., description="Combined text representation for indexing")
@@ -134,7 +134,6 @@ class DatabaseIngestionWorker:
 
                 # Groups and items
                 for group in layer.get("groups", []):
-                    group_level = group.get("level", "core")
                     group_title = group.get("title", "")
                     items = group.get("items", [])
 
@@ -148,7 +147,7 @@ class DatabaseIngestionWorker:
                         # 3. Item / Lesson Document
                         item_search_text = (
                             f"Bài học Mục Item: {item_title}. "
-                            f"Lộ trình: {topic_title} ({slug}) -> Layer: [{layer_tag}] {layer_title} -> Group: {group_title} ({group_level}). "
+                            f"Lộ trình: {topic_title} ({slug}) -> Layer: [{layer_tag}] {layer_title} -> Group: {group_title}. "
                             f"Mô tả: {item_desc}. "
                             f"Nội dung chi tiết: {clean_content}"
                         ).strip()
@@ -162,7 +161,7 @@ class DatabaseIngestionWorker:
                                 topic_title=topic_title,
                                 layer_tag=layer_tag,
                                 layer_title=layer_title,
-                                level=group_level,
+                                group_title=group_title,
                                 description=item_desc,
                                 content_text=clean_content[:1500],  # truncated for retrieval context
                                 searchable_text=item_search_text,

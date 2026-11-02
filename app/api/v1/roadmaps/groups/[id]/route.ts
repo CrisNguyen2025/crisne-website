@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
+import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -18,6 +19,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    }
+
+    // The title names the group, so a rename must not take a sibling's title (ADR-0008)
+    const current = await prisma.roadmapGroup.findUnique({ where: { id }, select: { layerId: true } });
+    if (current) {
+      const siblings = await prisma.roadmapGroup.findMany({
+        where: { layerId: current.layerId, NOT: { id } },
+        select: { id: true, title: true },
+      });
+      const duplicate = findDuplicate(siblings, title);
+      if (duplicate) return duplicateResponse('group', duplicate);
     }
 
     const updated = await prisma.roadmapGroup.update({
@@ -45,11 +57,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
 
-    const existing = await prisma.roadmapGroup.findFirst({
-      where: {
-        OR: [{ id }, { level: id }],
-      },
-    });
+    const existing = await prisma.roadmapGroup.findUnique({ where: { id } });
 
     if (!existing) {
       return NextResponse.json({ success: true, message: 'Group not found or already deleted' });

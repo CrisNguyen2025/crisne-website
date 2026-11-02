@@ -313,7 +313,7 @@ class RoadmapTarget:
             if section_id in sections:
                 doc, text = sections[section_id]
                 meta = doc.get("metadata", {})
-                where = ", ".join(str(meta[key]) for key in ("topic", "layer_title", "level") if meta.get(key))
+                where = ", ".join(str(meta[key]) for key in ("topic", "layer_title", "group_title") if meta.get(key))
                 texts.append(f"{doc['title']} ({where}): {text}" if where else f"{doc['title']}: {text}")
         return texts
 

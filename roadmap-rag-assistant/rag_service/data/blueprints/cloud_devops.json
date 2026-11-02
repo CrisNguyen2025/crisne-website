@@ -11,8 +11,7 @@
       "subtitle": "Đóng gói ứng dụng và điều phối container",
       "groups": [
         {
-          "level": "core",
-          "title": "🟢 Core",
+          "title": "Core",
           "items": [
             {
               "title": "Docker & Multi-stage Builds",
@@ -32,8 +31,7 @@
       "subtitle": "Quy trình tích hợp và triển khai liên tục",
       "groups": [
         {
-          "level": "core",
-          "title": "🟢 Core",
+          "title": "Core",
           "items": [
             {
               "title": "GitHub Actions Automation",

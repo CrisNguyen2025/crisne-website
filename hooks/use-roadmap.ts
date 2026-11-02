@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dayjs from 'dayjs';
 import {
   ChecklistItem,
+  CreateItemDto,
+  RoadmapGroup,
   RoadmapLayer,
-  RoadmapLevel,
   RoadmapStats,
   RoadmapMeta,
 } from '@/lib/roadmap/types';
@@ -29,6 +30,8 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   const [selectedLayerId, setSelectedLayerId] = useState<string | 'all'>('all');
   const [isLoading, setIsLoading] = useState<boolean>(() => !roadmapCache.has(slug));
   const [isError, setIsError] = useState<boolean>(false);
+  // The topic no longer exists (404), e.g. deleted through the assistant while open
+  const [isNotFound, setIsNotFound] = useState<boolean>(false);
 
   // Keep a ref of initialActiveItemId so loadRoadmap doesn't recreate when clicking items
   const initialActiveItemIdRef = useRef(initialActiveItemId);
@@ -71,6 +74,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       }
     }
     setIsError(false);
+    setIsNotFound(false);
 
     try {
       const data = await roadmapService.fetchRoadmapBySlug(targetSlug);
@@ -105,6 +109,12 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         setActiveItemId(firstItem ? firstItem.id : '');
       }
     } catch (err) {
+      // Also on a silent refresh: the cached copy of a deleted topic must not stay on screen
+      if ((err as { status?: number }).status === 404) {
+        roadmapCache.delete(targetSlug);
+        setIsNotFound(true);
+        return;
+      }
       console.error('[useRoadmap] Failed to load roadmap:', err);
       if (!cached && !silent) {
         setIsError(true);
@@ -281,14 +291,10 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
   // 4.1 Add Group to Layer with Instant Optimistic UI
   const addGroup = useCallback(
-    async (layerId: string, title: string, level: string) => {
-      // A group is filed under a level the user picked; none is never guessed
-      if (!level) throw new Error('Chọn level cho group: core, intermediate hoặc advanced.');
+    async (layerId: string, title: string) => {
       const tempGroupId = `temp-grp-${Date.now()}`;
-      const groupLevel = level as RoadmapLevel;
-      const optimisticGroup = {
+      const optimisticGroup: RoadmapGroup = {
         id: tempGroupId,
-        level: groupLevel,
         title: title.trim(),
         items: [],
       };
@@ -306,7 +312,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
       try {
-        const { group: created } = await roadmapService.createGroup(layerId, title, level);
+        const { group: created } = await roadmapService.createGroup(layerId, title);
         if (created?.id) {
           const replaceGroupIdLayers = (prev: RoadmapLayer[]) =>
             prev.map((layer) => ({
@@ -356,7 +362,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         const updatedLayers = (prev: RoadmapLayer[]) =>
           prev.map((layer) => ({
             ...layer,
-            groups: layer.groups.filter((g) => g.id !== groupId && g.level !== groupId),
+            groups: layer.groups.filter((g) => g.id !== groupId),
           }));
         setLayers(updatedLayers);
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
@@ -364,12 +370,12 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
         setActiveItemId((currentActive) => {
           const deletedGroup = layers
             .flatMap((l) => l.groups)
-            .find((g) => g.id === groupId || g.level === groupId);
+            .find((g) => g.id === groupId);
           const wasActiveInGroup = deletedGroup?.items.some((i) => i.id === currentActive);
           if (wasActiveInGroup) {
             const remaining = layers
               .flatMap((l) => l.groups)
-              .filter((g) => g.id !== groupId && g.level !== groupId)
+              .filter((g) => g.id !== groupId)
               .flatMap((g) => g.items);
             return remaining[0]?.id || '';
           }
@@ -393,15 +399,31 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
   // 5. Add Item with Instant Optimistic UI
   const addItem = useCallback(
-    async (layerId: string, level: RoadmapLevel, title: string, description: string) => {
+    async (
+      layerId: string,
+      group: Pick<CreateItemDto, 'groupId' | 'groupTitle'>,
+      title: string,
+      description: string
+    ) => {
       const tempId = `temp-item-${Date.now()}`;
+      const layerGroups = layers.find((l) => l.id === layerId)?.groups ?? [];
+      const wantedTitle = group.groupTitle?.trim().toLowerCase();
+      // Same pick as the API (ADR-0008): named group, new title, or the layer's only group
+      const target = group.groupId
+        ? layerGroups.find((g) => g.id === group.groupId)
+        : wantedTitle
+          ? layerGroups.find((g) => g.title.trim().toLowerCase() === wantedTitle)
+          : layerGroups.length === 1
+            ? layerGroups[0]
+            : undefined;
+      const tempGroupId = `temp-group-${Date.now()}`;
       const optimisticItem: ChecklistItem = {
         id: tempId,
         slug: slugify(title),
         title: title.trim(),
         description: description.trim(),
-        level,
         layerId,
+        groupId: target?.id ?? tempGroupId,
         createdAt: dayjs().toISOString(),
         updatedAt: dayjs().toISOString(),
       };
@@ -410,33 +432,21 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       const updatedLayers = (prev: RoadmapLayer[]) =>
         prev.map((layer) => {
           if (layer.id !== layerId) return layer;
-          const groupExists = layer.groups.some((g) => g.level === level);
-          if (groupExists) {
+          if (target) {
             return {
               ...layer,
               groups: layer.groups.map((g) =>
-                g.level === level
-                  ? { ...g, items: [...g.items, optimisticItem] }
-                  : g
+                g.id === target.id ? { ...g, items: [...g.items, optimisticItem] } : g
               ),
             };
-          } else {
-            const newGroup = {
-              id: `temp-group-${Date.now()}`,
-              level,
-              title:
-                level === 'core'
-                  ? '🟢 Core'
-                  : level === 'intermediate'
-                    ? '🟡 Intermediate'
-                    : '🔴 Advanced',
-              items: [optimisticItem],
-            };
-            return {
-              ...layer,
-              groups: [...layer.groups, newGroup],
-            };
           }
+          if (!wantedTitle) return layer;
+          const newGroup: RoadmapGroup = {
+            id: tempGroupId,
+            title: group.groupTitle!.trim(),
+            items: [optimisticItem],
+          };
+          return { ...layer, groups: [...layer.groups, newGroup] };
         });
 
       setLayers(updatedLayers);
@@ -446,7 +456,8 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
       try {
         const { item: created } = await roadmapService.createItem({
           layerId,
-          level,
+          groupId: target?.id,
+          groupTitle: target ? undefined : group.groupTitle?.trim(),
           title: title.trim(),
           description: description.trim(),
         });
@@ -467,18 +478,23 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           setActiveItemId(created.id);
           syncCache(slug, (curr) => ({ ...curr, layers: replaceIdLayers(curr.layers) }));
         }
+        // A new group was created server-side: reload to get its real id
+        if (!target) {
+          roadmapCache.delete(slug);
+          await loadRoadmap(slug, true);
+        }
       } catch (err) {
         console.error('[useRoadmap] Failed to add item:', err);
         roadmapCache.delete(slug);
         await loadRoadmap(slug);
       }
     },
-    [slug, loadRoadmap]
+    [slug, loadRoadmap, layers]
   );
 
-  // 6. Edit Item (Title / Description / Level)
+  // 6. Edit Item (Title / Description / Group)
   const editItem = useCallback(
-    async (id: string, title: string, description: string, level?: RoadmapLevel) => {
+    async (id: string, title: string, description: string, groupId?: string) => {
       try {
         // Optimistic UI update
         const updatedLayers = (prev: RoadmapLayer[]) =>
@@ -492,7 +508,6 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
                       ...item,
                       title: title.trim(),
                       description: description.trim(),
-                      ...(level ? { level } : {}),
                       updatedAt: dayjs().toISOString(),
                     }
                   : item
@@ -506,11 +521,11 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
           id,
           title: title.trim(),
           description: description.trim(),
-          level,
+          groupId,
         });
 
-        // If level changed, reload hierarchy to re-place item in correct group
-        if (level) {
+        // If the group changed, reload hierarchy to re-place item in its new group
+        if (groupId) {
           roadmapCache.delete(slug);
           await loadRoadmap(slug);
         }
@@ -597,26 +612,19 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
 
   // 9. Reorder items in group
   const updateGroupItems = useCallback(
-    async (layerId: string, level: RoadmapLevel, newItems: ChecklistItem[]) => {
+    async (groupId: string, newItems: ChecklistItem[]) => {
       try {
         // Optimistic update
         const updatedLayers = (prev: RoadmapLayer[]) =>
-          prev.map((layer) => {
-            if (layer.id !== layerId) return layer;
-            return {
-              ...layer,
-              groups: layer.groups.map((g) => {
-                if (g.level !== level) return g;
-                return { ...g, items: newItems };
-              }),
-            };
-          });
+          prev.map((layer) => ({
+            ...layer,
+            groups: layer.groups.map((g) => (g.id === groupId ? { ...g, items: newItems } : g)),
+          }));
         setLayers(updatedLayers);
         syncCache(slug, (curr) => ({ ...curr, layers: updatedLayers(curr.layers) }));
 
         await roadmapService.reorderGroupItems({
-          layerId,
-          level,
+          groupId,
           orderedItemIds: newItems.map((item) => item.id),
         });
       } catch (err) {
@@ -632,26 +640,10 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
   }, []);
 
   // Compute stats
-  const stats: RoadmapStats = useMemo(() => {
-    let total = 0;
-    const byLevel = {
-      core: 0,
-      intermediate: 0,
-      advanced: 0,
-    };
-
-    layers.forEach((layer) => {
-      layer.groups.forEach((group) => {
-        const count = group.items.length;
-        total += count;
-        if (group.level === 'core') byLevel.core += count;
-        else if (group.level === 'intermediate') byLevel.intermediate += count;
-        else if (group.level === 'advanced') byLevel.advanced += count;
-      });
-    });
-
-    return { total, byLevel };
-  }, [layers]);
+  const stats: RoadmapStats = useMemo(
+    () => ({ total: layers.reduce((sum, l) => sum + l.groups.reduce((n, g) => n + g.items.length, 0), 0) }),
+    [layers]
+  );
 
   // Compute active item with layer & group metadata
   const activeItem = useMemo(() => {
@@ -664,6 +656,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
             ...found,
             layerTitle: layer.title,
             groupTitle: group.title,
+            layerGroups: layer.groups.map((g) => ({ id: g.id, title: g.title })),
           };
         }
       }
@@ -687,6 +680,7 @@ export function useRoadmap(slug: string = 'ai-architecture', initialActiveItemId
     stats,
     isLoading,
     isError,
+    isNotFound,
     setSelectedLayerId,
     addLayer,
     editLayer,

@@ -11,8 +11,7 @@
       "subtitle": "Cơ chế định tuyến và kết cấu thư mục App Router",
       "groups": [
         {
-          "level": "core",
-          "title": "🟢 Core",
+          "title": "Core",
           "items": [
             {
               "title": "Routing & Dynamic Segments",
@@ -32,8 +31,7 @@
       "subtitle": "Xử lý dữ liệu và mutation phía máy chủ",
       "groups": [
         {
-          "level": "core",
-          "title": "🟢 Core",
+          "title": "Core",
           "items": [
             {
               "title": "Server Actions & Form Handling",

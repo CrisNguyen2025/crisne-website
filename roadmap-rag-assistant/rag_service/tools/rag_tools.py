@@ -160,13 +160,13 @@ async def generate_roadmap_from_template(
             continue
 
         for group in layer.get("groups", []):
-            level = group.get("level", "core")
+            group_title = group.get("title", "")
             for item in group.get("items", []):
                 item_title = item.get("title", "")
                 item_desc = item.get("description", "")
                 created_item = await adapter.create_item(
                     layer_id=layer_id,
-                    level=level,
+                    group_title=group_title,
                     title=item_title,
                     description=item_desc,
                 )

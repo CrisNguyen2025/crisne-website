@@ -153,7 +153,6 @@ def mock_adapter():
     adapter.create_group.return_value = {
         "id": "group-id",
         "title": "New Group",
-        "level": "core",
         "order": 1,
     }
     adapter.update_group.return_value = {
@@ -165,8 +164,8 @@ def mock_adapter():
         "id": "item-id",
         "title": "New Item",
         "description": "",
-        "level": "core",
         "layerId": "layer-id",
+        "groupId": "group-id",
     }
     adapter.update_item.return_value = {
         "id": "item-id",

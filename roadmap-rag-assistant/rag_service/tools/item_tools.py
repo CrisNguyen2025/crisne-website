@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Optional
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 from rag_service.adapters.errors import DuplicateEntityError, with_skipped as _with_skipped
+from rag_service.adapters.groups import GroupChoiceRequired
 
 if TYPE_CHECKING:
     from rag_service.execution.changes import ChangeSet
@@ -27,11 +28,12 @@ class CreateItemInput(BaseModel):
     """Input for creating a new item."""
 
     layer_id: str = Field(description="ID của layer chứa item")
-    level: str = Field(
+    group_title: str = Field(
+        default="",
         description=(
-            "Level/group của item: 'core', 'intermediate', 'advanced', "
-            "hoặc custom level. Nếu group chưa tồn tại sẽ tự tạo."
-        )
+            "Tên group của item. Group chưa có sẽ được tạo. Để trống khi người dùng không nêu: "
+            "layer chỉ có một group thì dùng group đó, nếu không sẽ hỏi lại."
+        ),
     )
     title: str = Field(description="Tên item, ví dụ: 'Prompt Engineering'")
     description: str = Field(default="", description="Mô tả ngắn cho item")
@@ -42,7 +44,7 @@ class ImportItemsFromTextInput(BaseModel):
     """Input for importing many items from a pasted list."""
 
     layer_id: str = Field(description="ID của layer nhận các item")
-    level: str = Field(description="Level/group cho các item: 'core' | 'intermediate' | 'advanced'")
+    group_title: str = Field(default="", description="Tên group cho các item; để trống khi người dùng không nêu")
     text: str = Field(description="Danh sách item, mỗi dòng một item (bullet '-', '*', '•' hoặc số thứ tự)")
 
 
@@ -50,8 +52,8 @@ class CreateItemsBatchInput(BaseModel):
     """Input for batch-creating multiple items."""
 
     layer_id: str = Field(description="ID của layer chứa các items")
-    level: str = Field(
-        description="Level/group chung cho tất cả items trong batch"
+    group_title: str = Field(
+        default="", description="Tên group chung cho tất cả items trong batch; để trống khi người dùng không nêu"
     )
     items: list[dict] = Field(
         description=(
@@ -72,12 +74,9 @@ class UpdateItemInput(BaseModel):
     description: str = Field(
         default="", description="Mô tả mới (để trống nếu không đổi)"
     )
-    level: str = Field(
+    group_title: str = Field(
         default="",
-        description=(
-            "Level mới để chuyển item sang group khác "
-            "(để trống nếu không di chuyển)"
-        ),
+        description="Tên group để chuyển item sang, trong cùng layer (để trống nếu không di chuyển)",
     )
 
 
@@ -93,16 +92,16 @@ class DeleteItemInput(BaseModel):
 @tool(args_schema=CreateItemInput)
 async def create_item(
     layer_id: str,
-    level: str,
     title: str,
+    group_title: str = "",
     description: str = "",
     content: str = "",
 ) -> str:
     """Tạo một Item mới trong một Layer.
 
     Item là đơn vị kiến thức nhỏ nhất (ví dụ: 'Vector Databases', 'Prompt Engineering').
-    Tự tìm hoặc tạo Group phù hợp theo level.
-    Ví dụ: 'thêm item Prompt Engineering vào layer 01-LLM, level core'.
+    Item vào group được nêu tên (tạo group nếu chưa có).
+    Ví dụ: 'thêm item Prompt Engineering vào nhóm Fundamentals của layer 01-LLM'.
     """
     from rag_service.tools import get_adapter
     from rag_service.tools.layer_resolver import describe_unresolved, resolve_layer
@@ -113,26 +112,28 @@ async def create_item(
     real_layer_id = res.layer_id or layer_id
     adapter = get_adapter()
     try:
-        result = await adapter.create_item(real_layer_id, level, title, description, content)
+        result = await adapter.create_item(real_layer_id, group_title, title, description, content)
     except DuplicateEntityError as dup:
         return f"ℹ️ Bài học '{dup.title}' đã có trong layer '{layer_id}', không tạo thêm."
+    except GroupChoiceRequired as ask:
+        return group_choice_message(ask)
     return (
         f"✅ Đã tạo item '{result.get('title', title)}' "
-        f"(level: {level}) trong layer '{layer_id}'"
+        f"trong layer '{layer_id}'"
     )
 
 
 @tool(args_schema=CreateItemsBatchInput)
 async def create_items_batch(
     layer_id: str,
-    level: str,
     items: list[dict],
+    group_title: str = "",
     changes: Optional["ChangeSet"] = None,
 ) -> str:
     """Tạo nhiều Items cùng lúc trong một Layer.
 
     Sử dụng khi người dùng yêu cầu thêm nhiều item trong một câu.
-    Ví dụ: 'thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào layer 01-DB level core'.
+    Ví dụ: 'thêm 3 item: Vector DB, Embeddings, RAG Pipeline vào nhóm Core của layer 01-DB'.
     """
     from rag_service.tools import get_adapter
     from rag_service.tools.layer_resolver import describe_unresolved, resolve_layer
@@ -148,8 +149,11 @@ async def create_items_batch(
         item_title = item.get("title", "")
         try:
             result = await adapter.create_item(
-                real_layer_id, level, item_title, item.get("description", ""), item.get("content", "")
+                real_layer_id, group_title, item_title, item.get("description", ""), item.get("content", "")
             )
+        except GroupChoiceRequired as ask:
+            # The layer's groups are the same for every item: ask once, before anything is created
+            return group_choice_message(ask)
         except DuplicateEntityError as dup:
             skipped.append(dup.title)
             if changes is not None:
@@ -158,7 +162,16 @@ async def create_items_batch(
         created.append(result.get("title", item_title))
         if changes is not None:
             changes.created(result.get("title", item_title), result)
-    return _with_skipped(f"✅ Đã tạo {len(created)} item (level: {level}): {', '.join(created)}", skipped)
+    group_note = f" vào nhóm {group_title}" if group_title else ""
+    return _with_skipped(f"✅ Đã tạo {len(created)} item{group_note}: {', '.join(created)}", skipped)
+
+
+def group_choice_message(ask: GroupChoiceRequired) -> str:
+    """Ask for the group by listing the layer's groups (ADR-0008); nothing was created."""
+    if not ask.titles:
+        return "⚠️ Layer này chưa có nhóm nào. Gửi lại kèm tên nhóm, ví dụ: `… vào nhóm Fundamentals`."
+    listing = ", ".join(f"**{t}**" for t in ask.titles)
+    return f"⚠️ Layer này có nhiều nhóm: {listing}. Gửi lại kèm tên nhóm, ví dụ: `… vào nhóm {ask.titles[0]}`."
 
 
 _LIST_LINE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+(.+?)\s*$")
@@ -176,7 +189,7 @@ def parse_item_list(text: str) -> list[str]:
 
 @tool(args_schema=ImportItemsFromTextInput)
 async def import_items_from_text(
-    layer_id: str, level: str, text: str, changes: Optional["ChangeSet"] = None
+    layer_id: str, text: str, group_title: str = "", changes: Optional["ChangeSet"] = None
 ) -> str:
     """Nhập nhiều item từ một danh sách dán vào, mỗi dòng bắt đầu bằng '-' hoặc số thứ tự.
 
@@ -186,7 +199,7 @@ async def import_items_from_text(
     if not titles:
         return "⚠️ Không tìm thấy dòng item nào. Hãy dùng dạng '- Tên bài' hoặc '1. Tên bài' mỗi dòng."
     return await create_items_batch.coroutine(
-        layer_id=layer_id, level=level, items=[{"title": t} for t in titles], changes=changes
+        layer_id=layer_id, group_title=group_title, items=[{"title": t} for t in titles], changes=changes
     )
 
 
@@ -195,11 +208,11 @@ async def update_item(
     item_id: str,
     title: str = "",
     description: str = "",
-    level: str = "",
+    group_title: str = "",
 ) -> str:
-    """Cập nhật thông tin Item hoặc di chuyển Item sang group/level khác.
+    """Cập nhật thông tin Item hoặc di chuyển Item sang group khác trong cùng layer.
 
-    Ví dụ: 'đổi tên item xyz thành ABC', 'chuyển item xyz sang level advanced'.
+    Ví dụ: 'đổi tên item xyz thành ABC', 'chuyển item xyz sang nhóm Production'.
     """
     from rag_service.tools import get_adapter
 
@@ -209,9 +222,12 @@ async def update_item(
         kwargs["title"] = title
     if description:
         kwargs["description"] = description
-    if level:
-        kwargs["level"] = level
-    result = await adapter.update_item(item_id, **kwargs)
+    if group_title:
+        kwargs["group_title"] = group_title
+    try:
+        result = await adapter.update_item(item_id, **kwargs)
+    except GroupChoiceRequired as ask:
+        return group_choice_message(ask)
     return f"✅ Đã cập nhật item '{result.get('title', item_id)}'"
 
 

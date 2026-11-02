@@ -19,26 +19,30 @@ import aiosqlite
 import uuid_utils
 
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate
-from rag_service.adapters.levels import default_group_title, normalize_level, require_level
+from rag_service.adapters.groups import GroupChoiceRequired, clean_group_title, pick_group
 from rag_service.auth import owner_only
 from rag_service.write_grant import guard_writes
 
 
 
-async def _find_or_create_group(db, layer_id: str, level: str, now: str) -> str:
-    """The layer's group for a level, created on first use; legacy groups match after normalizing."""
-    level = normalize_level(level)
-    cursor = await db.execute("SELECT id, level FROM RoadmapGroup WHERE layerId = ?", (layer_id,))
-    for row in await cursor.fetchall():
-        if normalize_level(row["level"]) == level:
-            return row["id"]
+async def _resolve_group(db, layer_id: str, group_title: str, now: str) -> str:
+    """The group a lesson goes to (pick_group), created when the named title is new; raises GroupChoiceRequired."""
+    cursor = await db.execute(
+        'SELECT id, title FROM RoadmapGroup WHERE layerId = ? ORDER BY "order", createdAt', (layer_id,)
+    )
+    groups = [dict(r) for r in await cursor.fetchall()]
+    kind, picked = pick_group(groups, group_title=group_title)
+    if kind == "existing":
+        return picked["id"]
+    if kind == "ask":
+        raise GroupChoiceRequired(picked)
     group_id = _uuid7()
     await db.execute(
         """
-        INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, 99, ?, ?)
+        INSERT INTO RoadmapGroup (id, layerId, title, "order", createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (group_id, layer_id, level, default_group_title(level), now, now),
+        (group_id, layer_id, picked, len(groups) + 1, now, now),
     )
     return group_id
 
@@ -330,7 +334,7 @@ class SqliteAdapter:
                  title.strip(), subtitle.strip(), now, now),
             )
 
-            # No group yet: the first item of a level creates it, so empty layers stay empty
+            # No group yet: the first item names one (_resolve_group), so empty layers stay empty
 
             await db.commit()
 
@@ -385,39 +389,35 @@ class SqliteAdapter:
         self,
         layer_id: str,
         title: str,
-        level: str,
     ) -> dict:
         group_id = _uuid7()
         now = _now_iso()
-        group_level = require_level(level)
+        title = clean_group_title(title)
 
         async with self._connect() as db:
             cursor = await db.execute(
-                "SELECT id, title, level FROM RoadmapGroup WHERE layerId = ?", (layer_id,)
+                "SELECT id, title FROM RoadmapGroup WHERE layerId = ?", (layer_id,)
             )
             siblings = [dict(r) for r in await cursor.fetchall()]
-            # Items are filed by level, so two groups with one level would split them
-            dup = find_duplicate(siblings, title) or (
-                next((g for g in siblings if normalize_level(g["level"]) == group_level), None) if level else None
-            )
+            # A group is known by its title, so the title is unique within the layer (ADR-0008)
+            dup = find_duplicate(siblings, title)
             if dup:
                 raise DuplicateEntityError("group", dup["title"], dup)
             order = len(siblings) + 1
 
             await db.execute(
                 """
-                INSERT INTO RoadmapGroup (id, layerId, level, title, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO RoadmapGroup (id, layerId, title, "order", createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (group_id, layer_id, group_level, title.strip(), order, now, now),
+                (group_id, layer_id, title, order, now, now),
             )
             await db.commit()
 
         return {
             "id": group_id,
             "layerId": layer_id,
-            "level": group_level,
-            "title": title.strip(),
+            "title": title,
             "order": order,
         }
 
@@ -451,7 +451,7 @@ class SqliteAdapter:
     async def create_item(
         self,
         layer_id: str,
-        level: str,
+        group_title: str,
         title: str,
         description: str = "",
         content: str = "",
@@ -460,10 +460,10 @@ class SqliteAdapter:
         now = _now_iso()
 
         async with self._connect() as db:
-            # A lesson title appears once per layer, whatever its level
+            # A lesson title appears once per layer, whatever its group
             cursor = await db.execute(
                 """
-                SELECT i.id, i.title, g.level FROM RoadmapItem i
+                SELECT i.id, i.title, g.title AS groupTitle FROM RoadmapItem i
                 JOIN RoadmapGroup g ON g.id = i.groupId WHERE g.layerId = ?
                 """,
                 (layer_id,),
@@ -472,8 +472,7 @@ class SqliteAdapter:
             if dup:
                 raise DuplicateEntityError("item", dup["title"], {**dup, "layerId": layer_id})
 
-            level = require_level(level)
-            group_id = await _find_or_create_group(db, layer_id, level, now)
+            group_id = await _resolve_group(db, layer_id, group_title, now)
 
             # Count existing items in group for order
             cursor = await db.execute(
@@ -496,8 +495,8 @@ class SqliteAdapter:
             "id": item_id,
             "title": title.strip(),
             "description": description.strip(),
-            "level": level,
             "layerId": layer_id,
+            "groupId": group_id,
             "createdAt": now,
             "updatedAt": now,
         }
@@ -516,12 +515,11 @@ class SqliteAdapter:
                 sets.append("description = ?")
                 vals.append(str(kwargs["description"]).strip())
 
-            # Handle level change (cross-group movement)
-            if "level" in kwargs:
-                new_level = normalize_level(kwargs["level"])
+            # Moving to another group of the item's layer (cross-group movement)
+            if clean_group_title(kwargs.get("group_title")):
                 cursor = await db.execute(
                     """
-                    SELECT i.groupId, g.layerId, g.level
+                    SELECT i.groupId, g.layerId
                     FROM RoadmapItem i
                     JOIN RoadmapGroup g ON g.id = i.groupId
                     WHERE i.id = ?
@@ -529,10 +527,11 @@ class SqliteAdapter:
                     (item_id,),
                 )
                 item_row = await cursor.fetchone()
-                if item_row and normalize_level(item_row["level"]) != new_level:
-                    target_id = await _find_or_create_group(db, item_row["layerId"], new_level, now)
-                    sets.append("groupId = ?")
-                    vals.append(target_id)
+                if item_row:
+                    target_id = await _resolve_group(db, item_row["layerId"], str(kwargs["group_title"]), now)
+                    if target_id != item_row["groupId"]:
+                        sets.append("groupId = ?")
+                        vals.append(target_id)
 
             vals.append(item_id)
             await db.execute(

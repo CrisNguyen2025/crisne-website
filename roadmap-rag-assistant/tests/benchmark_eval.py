@@ -182,7 +182,7 @@ BENCHMARK_DATASET: list[BenchmarkTestCase] = [
 
     # ── 4. ITEM CREATION ──────────────────────────────────────────────────────
     BenchmarkTestCase(
-        prompt="thêm 3 item bài 1, 2 và 3 vào layer 01-LLM level core",
+        prompt="thêm 3 item bài 1, 2 và 3 vào layer 01-LLM",
         expected_action=ActionType.CREATE,
         expected_level=EntityLevel.ITEM,
         expected_titles=["bài 1", "bài 2", "bài 3"],
@@ -190,7 +190,7 @@ BENCHMARK_DATASET: list[BenchmarkTestCase] = [
         expected_parent="01-LLM",
     ),
     BenchmarkTestCase(
-        prompt="create item Prompt Engineering in layer 01-LLM level core",
+        prompt="create item Prompt Engineering in layer 01-LLM",
         expected_action=ActionType.CREATE,
         expected_level=EntityLevel.ITEM,
         expected_titles=["Prompt Engineering"],
@@ -198,7 +198,7 @@ BENCHMARK_DATASET: list[BenchmarkTestCase] = [
         expected_parent="01-LLM",
     ),
     BenchmarkTestCase(
-        prompt="add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core",
+        prompt="add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM",
         expected_action=ActionType.CREATE,
         expected_level=EntityLevel.ITEM,
         expected_titles=["Vector DB", "Embeddings", "RAG Pipeline"],

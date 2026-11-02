@@ -16,12 +16,13 @@ from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
 from rag_service.execution.changes import ChangeSet
 from rag_service.write_grant import write_granted
 from rag_service.execution.dry_run import DryRunValidator
-from rag_service.adapters.levels import LEVEL_CHOICES, normalize_level as canonical_level
+from rag_service.adapters.errors import find_duplicate
+from rag_service.adapters.groups import GroupChoiceRequired
+from rag_service.domains.roadmap.router.entity_extractor import named_group
 from rag_service.domains.roadmap.router.grounding import (
     ACTION_NOT_ASKED_REPLY,
-    BULK_LEVEL_ASK,
     NO_DEFAULT_LAYER_REPLY,
-    level_choice_reply,
+    group_choice_reply,
     BATCH_LAYER_DELETE_REPLY,
     BLOCKED_CHANGE_REPLY,
     BULK_DELETE_REPLY,
@@ -92,8 +93,9 @@ class RoadmapCommands:
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 changes = ChangeSet.of(pending_act)
-                with write_granted("confirmed preview"):
-                    ok, res_msg = await self.executor.aexecute(pending_act, session_id=session_id, changes=changes)
+                ok, res_msg = await self._execute_change(
+                    pending_act, session_id, session_ctx, changes, "confirmed preview"
+                )
                 yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -110,6 +112,41 @@ class RoadmapCommands:
                 return
             # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
             session_ctx.pending_confirmation = None
+
+        # ── 0a. Pending group choice for a lesson whose group is not settled (ADR-0008) ──
+        if session_ctx.fresh_pending("pending_group_choice"):
+            pending_lesson = session_ctx.pending_group_choice
+            options = session_ctx.pending_group_options
+            session_ctx.pending_group_choice = None
+            session_ctx.pending_group_options = []
+            if lower in ["hủy", "huỷ", "cancel", "thôi", "bỏ qua"]:
+                async for ev in self._stream_text("Đã hủy, mình không thêm gì.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            chosen = self._answered_group(content, lower, options)
+            if chosen:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    outcome["handled"] = True
+                    return
+                for ent in pending_lesson.entities:
+                    ent.group_title = chosen
+                tool_name = f"{pending_lesson.action.value}_{pending_lesson.entity_level.value}"
+                yield {"type": "tool_start", "name": tool_name, "args": {"group_title": chosen}}
+                changes = ChangeSet.of(pending_lesson)
+                ok, item_msg = await self._execute_change(
+                    pending_lesson, session_id, session_ctx, changes, "group chosen for an allowed change"
+                )
+                yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
+                if changes:
+                    yield changes.event()
+                async for ev in self._stream_text(item_msg, delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else is a new message, handled below as usual
 
         # ── 0b. Pending layer choice for an item without a target layer ──────
         if session_ctx.fresh_pending("pending_layer_choice"):
@@ -144,8 +181,9 @@ class RoadmapCommands:
                 tool_name = f"{pending_item.action.value}_{pending_item.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"parent": picked["id"]}}
                 changes = ChangeSet.of(pending_item)
-                with write_granted("layer chosen for an allowed change"):
-                    ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
+                ok, item_msg = await self._execute_change(
+                    pending_item, session_id, session_ctx, changes, "layer chosen for an allowed change"
+                )
                 yield {"type": "tool_end", "name": tool_name, "result": item_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -186,8 +224,9 @@ class RoadmapCommands:
                 pending_item.target_parent_identifier = session_store.get_or_create(session_id).active_layer_id
                 yield {"type": "tool_start", "name": "create_item", "args": {"parent": pending_item.target_parent_identifier}}
                 changes = ChangeSet.of(pending_item)
-                with write_granted("layer chosen for an allowed change"):
-                    ok, item_msg = await self.executor.aexecute(pending_item, session_id=session_id, changes=changes)
+                ok, item_msg = await self._execute_change(
+                    pending_item, session_id, session_ctx, changes, "layer chosen for an allowed change"
+                )
                 yield {"type": "tool_end", "name": "create_item", "result": item_msg, "is_error": not ok}
                 if changes:
                     yield changes.event()
@@ -264,13 +303,10 @@ class RoadmapCommands:
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
-        level_m = re.search(r"\blevel\s+([\w\-]+)", raw_content, re.IGNORECASE)
-        bulk_level = canonical_level(level_m.group(1)) if level_m else ""
-        if bulk_level not in LEVEL_CHOICES:
-            async for ev in self._stream_text(BULK_LEVEL_ASK, delay):
-                yield ev
-            return
-        tool_args = {"layer_id": layer_in_view, "level": bulk_level, "text": raw_content}
+        # The group the first line names ("… vào nhóm X"); none: the layer's only group, else the tool asks (ADR-0008)
+        first_line = raw_content.strip().splitlines()[0] if raw_content.strip() else ""
+        bulk_group = named_group(first_line, lesson=True)
+        tool_args = {"layer_id": layer_in_view, "group_title": bulk_group, "text": raw_content}
         yield {"type": "tool_start", "name": "import_items_from_text", "args": tool_args}
         changes = ChangeSet("create", "item", layer_in_view)
         with write_granted("bulk import asked on its first line"):
@@ -278,8 +314,36 @@ class RoadmapCommands:
         yield {"type": "tool_end", "name": "import_items_from_text", "result": res}
         if changes:
             yield changes.event()
-        async for ev in self._stream_text(res + f"\n\n_Các item được thêm vào level `{bulk_level}`._", delay):
+        async for ev in self._stream_text(res, delay):
             yield ev
+
+    async def _execute_change(
+        self, action: StructuredRoadmapAction, session_id: str, session_ctx, changes: ChangeSet, reason: str
+    ) -> tuple[bool, str]:
+        """Run the change; a lesson whose group is not settled is asked back and kept for the answer (ADR-0008)."""
+        try:
+            with write_granted(reason):
+                return await self.executor.aexecute(action, session_id=session_id, changes=changes)
+        except GroupChoiceRequired as ask:
+            session_ctx.pending_group_choice = action
+            session_ctx.pending_group_options = ask.titles
+            titles = ", ".join(f"**{e.title}**" for e in action.entities)
+            return False, group_choice_reply(titles, ask.titles)
+
+    def _answered_group(self, content: str, lower: str, options: list[str]) -> str:
+        """The group an answer picks: a number or a name from the options, or `nhóm X` for a new one; else empty.
+
+        Any other text is a new message, never a group name: a group is created only when the answer says so.
+        """
+        # An emoji or closing punctuation is not part of the answer ("Production 😅")
+        content = re.sub(r"^[\W_]+|[\W_]+$", "", content.strip())
+        lower = content.lower()
+        if lower.isdigit() and 1 <= int(lower) <= len(options):
+            return options[int(lower) - 1]
+        named = find_duplicate([{"title": o} for o in options], content)
+        if named:
+            return named["title"]
+        return named_group(content, lesson=True)
 
     async def _ask_confirmation(
         self, action: StructuredRoadmapAction, note, session_id: str, session_ctx, delay: float
@@ -355,19 +419,6 @@ class RoadmapCommands:
             resolved_action.target_parent_identifier = found.entity_id
             resolved_action.entities[0].title = found.title
             note = None  # the layer the anaphora resolver filled in is not where the delete goes
-
-        # A group or item is filed by level: a level the message does not name is asked for, never guessed
-        if (
-            resolved_action.action == ActionType.CREATE
-            and resolved_action.entity_level in (EntityLevel.GROUP, EntityLevel.ITEM)
-            and any(not e.level for e in resolved_action.entities)
-        ):
-            session_ctx.pending_level_choice = content
-            titles = ", ".join(f"**{e.title}**" for e in resolved_action.entities)
-            noun = "nhóm" if resolved_action.entity_level == EntityLevel.GROUP else "bài học"
-            async for ev in self._stream_text(level_choice_reply(noun, titles), delay):
-                yield ev
-            return
 
         # Layer actions need a known topic: ask back with the topic list instead of guessing.
         if resolved_action.entity_level == EntityLevel.LAYER:
@@ -456,8 +507,9 @@ class RoadmapCommands:
 
         remembered_layer = session_ctx.active_layer_id
         changes = ChangeSet.of(resolved_action)
-        with write_granted("write gate allow"):
-            ok, result_msg = await self.executor.aexecute(resolved_action, session_id=session_id, changes=changes)
+        ok, result_msg = await self._execute_change(
+            resolved_action, session_id, session_ctx, changes, "write gate allow"
+        )
         yield {"type": "tool_end", "name": tool_name, "result": result_msg, "is_error": not ok}
         if changes:
             yield changes.event()

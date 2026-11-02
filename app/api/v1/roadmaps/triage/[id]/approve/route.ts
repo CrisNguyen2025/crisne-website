@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from "@/lib/roadmap/duplicates";
 import { markdownToPlainText, markdownToSafeHtml } from "@/lib/roadmap/markdown";
-import { findOrCreateGroup, normalizeLevel } from "@/lib/roadmap/levels";
+import { GroupChoiceRequired, groupChoiceResponse, resolveGroup } from "@/lib/roadmap/groups";
 
 const DESCRIPTION_MAX_LENGTH = 200;
 
@@ -17,6 +17,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
+    // The Owner may pick the target group when approving; otherwise the draft's groupTitle is used
+    const body = await req.json().catch(() => ({}));
 
     const triage = await prisma.knowledgeTriage.findUnique({
       where: { id },
@@ -55,14 +57,6 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const level = normalizeLevel(triage.level);
-    if (!level) {
-      return NextResponse.json(
-        { error: "Chọn level cho bài này (core | intermediate | advanced) trước khi duyệt." },
-        { status: 400 }
-      );
-    }
-
     // A lesson with this title is already in the layer: keep the draft for editing, don't add a copy
     const layerItems = await prisma.roadmapItem.findMany({
       where: { group: { layerId } },
@@ -71,8 +65,12 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const duplicate = findDuplicate(layerItems, triage.draftTitle);
     if (duplicate) return duplicateResponse("item", { ...duplicate, layerId });
 
-    // 2. Find or create group under this layer
-    const targetGroup = await findOrCreateGroup(prisma, layerId, level);
+    // 2. Resolve the group under this layer, created when the named title is new (ADR-0008)
+    const targetGroup = await resolveGroup(prisma, layerId, {
+      groupId: body.groupId,
+      groupTitle: body.groupTitle ?? triage.groupTitle,
+    });
+    const groupSize = await prisma.roadmapItem.count({ where: { groupId: targetGroup.id } });
     const { draftTitle, draftContent } = triage;
 
     // 3–4. Claim the item and create the lesson in one transaction: a second approve (double
@@ -92,7 +90,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
           description: markdownToPlainText(draftContent ?? "", DESCRIPTION_MAX_LENGTH),
           // Stored as sanitized HTML (the editor's format): the page renders it as HTML
           content: draftContent ? markdownToSafeHtml(draftContent) : null,
-          order: targetGroup._count.items + 1,
+          order: groupSize + 1,
         },
       });
       const updatedTriage = await tx.knowledgeTriage.findUnique({ where: { id } });
@@ -113,6 +111,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       triage: updatedTriage,
     });
   } catch (error) {
+    if (error instanceof GroupChoiceRequired) return groupChoiceResponse(error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to approve triage item" },
       { status: 500 }

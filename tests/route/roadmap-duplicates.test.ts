@@ -80,18 +80,18 @@ describe("create routes refuse duplicates with 409", () => {
     expect(prismaMock.roadmapLayer.create).not.toHaveBeenCalled();
   });
 
-  it("group: same level already in the layer", async () => {
-    prismaMock.roadmapGroup.findMany.mockResolvedValueOnce([{ id: "g1", title: "🟢 Core", level: "core" }]);
-    const res = await createGroup(post("/api/v1/roadmaps/groups", { layerId: "l1", title: "Core basics", level: "core" }));
+  it("group: same title already in the layer", async () => {
+    prismaMock.roadmapGroup.findMany.mockResolvedValueOnce([{ id: "g1", title: "Core" }]);
+    const res = await createGroup(post("/api/v1/roadmaps/groups", { layerId: "l1", title: " core " }));
     expect(res.status).toBe(409);
     expect(prismaMock.roadmapGroup.create).not.toHaveBeenCalled();
   });
 
-  it("item: same title at another level of the layer", async () => {
-    prismaMock.roadmapItem.findMany.mockResolvedValueOnce([{ id: "i1", title: "Docker Basics", group: { level: "core" } }]);
-    const res = await createItem(post("/api/v1/roadmaps/items", { layerId: "l1", level: "advanced", title: "docker  basics" }));
+  it("item: same title in another group of the layer", async () => {
+    prismaMock.roadmapItem.findMany.mockResolvedValueOnce([{ id: "i1", title: "Docker Basics", group: { title: "Core" } }]);
+    const res = await createItem(post("/api/v1/roadmaps/items", { layerId: "l1", groupTitle: "Production", title: "docker  basics" }));
     expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ kind: "item", existing: { id: "i1", level: "core" } });
+    expect(await res.json()).toMatchObject({ kind: "item", existing: { id: "i1", groupTitle: "Core" } });
     expect(prismaMock.roadmapGroup.create).not.toHaveBeenCalled();
     expect(prismaMock.roadmapItem.create).not.toHaveBeenCalled();
   });

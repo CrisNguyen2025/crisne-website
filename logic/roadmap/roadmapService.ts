@@ -41,7 +41,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
       const text = await res.text().catch(() => '');
       if (text) errorDetail = text;
     }
-    throw new Error(errorDetail || `Request failed with status ${res.status}`);
+    // `status` lets the UI tell "no longer exists" (404) apart from other failures
+    throw Object.assign(new Error(errorDetail || `Request failed with status ${res.status}`), {
+      status: res.status,
+    });
   }
 
   return res.json() as Promise<T>;
@@ -167,10 +170,10 @@ export async function reorderGroupItems(payload: ReorderGroupItemsDto): Promise<
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Create a custom group in a layer */
-export async function createGroup(layerId: string, title: string, level?: string): Promise<{ group: any }> {
+export async function createGroup(layerId: string, title: string): Promise<{ group: any }> {
   return apiFetch<{ group: any }>('/api/v1/roadmaps/groups', {
     method: 'POST',
-    body: JSON.stringify({ layerId, title, level }),
+    body: JSON.stringify({ layerId, title }),
   });
 }
 

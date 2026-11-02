@@ -122,7 +122,7 @@ Scorer chỉ chạy khi sample có field nó cần; thiếu field thì bỏ qua 
 | `title`, `doc_type` | ✓ | tiêu đề, loại tài liệu (roadmap: `topic` \| `layer` \| `item`) |
 | `acl` | ✓ | danh sách role được đọc (roadmap: `["everyone"]`) |
 | `sections[]` | ✓ | `{section_id, heading?, text}`; `section_id` unique toàn corpus (roadmap: 1 section, id = `doc_id`) |
-| `metadata` | | tự do theo domain (roadmap: `topic`, `layer`, `layer_title`, `level`) |
+| `metadata` | | tự do theo domain (roadmap: `topic`, `layer`, `layer_title`, `group_title`) |
 
 `corpus/**/meta.json`: `owner`, `acl_tier`, `version` (`MAJOR.MINOR`), `source`, `doc_count`,
 `sha256` = `kit.corpus.content_hash(documents)` (bỏ qua `doc_id` / `source_id` / `section_id`, không phụ thuộc thứ tự).
@@ -165,7 +165,7 @@ làm baseline rẻ, cả hai cùng có trong report. Chỉ chạy khi target có
   `refusal`: câu trả lời có từ chối / báo không có tài liệu khi và chỉ khi sample kỳ vọng
   (`behavior=refuse` hoặc `contexts=[]` → phải từ chối; `behavior=answer` → không được từ chối; còn lại bỏ qua).
   Pass = mọi tiêu chí áp dụng được đều pass, điểm 1–5 pass khi ≥ 4 (`kit/judge.py` `PASS_SCORE`).
-- **Context** đưa cho judge = text các section mà câu trả lời cite (`Target.contexts`), kèm title, topic, layer, level
+- **Context** đưa cho judge = text các section mà câu trả lời cite (`Target.contexts`), kèm title, topic, layer, group
   như agent thấy. Câu trả lời không cite gì chỉ được đối chiếu với lịch sử.
 - **Model & Cross-Switching**: `judge_provider` (`google_genai` | `groq`) và `judge_model`. Để tránh **Self-Preference Bias** (mô hình tự khen chính mình), hệ thống mặc định **tự động đảo ngược provider**: nếu câu trả lời sinh bởi `google_genai`, judge sẽ dùng `groq` (`llama-3.3-70b-versatile`) và ngược lại. Người dùng vẫn có thể override bằng `--opt judge_provider=...` và `--opt judge_model=...`. Temperature 0, bật JSON mode của provider.
 - **Fallback**: Chuyển sang provider còn lại nếu primary judge gặp lỗi (thiếu API key, 429 quota/rate limit, timeout),

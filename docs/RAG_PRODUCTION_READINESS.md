@@ -108,7 +108,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 ## 8. Feedback loop (👎 → triage)
 
 - [ ] **P1**: gộp feedback trùng bằng embedding (cosine ≥ ~0.9), đếm số lần, lấy tín hiệu `no-context` từ trace, sắp xếp theo số lần × tín hiệu × độ mới. Cần migration (`count`).
-- [ ] **P2**: generate trả về `review` có cấu trúc (`isActionable`, `missingPoints`, `suggestedLayer/Level`, `notes`) cùng bản nháp trong một lần gọi; thêm coverage check thay cho `verifyScore = 95` cố định; ghi rõ "chưa kiểm chứng tính đúng kỹ thuật". Cần migration (`review` dạng JSON).
+- [ ] **P2**: generate trả về `review` có cấu trúc (`isActionable`, `missingPoints`, `suggestedLayer/Group`, `notes`) cùng bản nháp trong một lần gọi; thêm coverage check thay cho `verifyScore = 95` cố định; ghi rõ "chưa kiểm chứng tính đúng kỹ thuật". Cần migration (`review` dạng JSON).
 - [ ] **P3**: sau khi approve, đưa `query` + `missingPoints` vào Langfuse dataset rồi chạy lại eval.
 - [ ] Đưa 👎 của Cris AI vào triage ([`use-floating-chat.ts`](../hooks/use-floating-chat.ts) đang chỉ gửi `{ traceId, value }`).
 - [ ] Ẩn nút triage với visitor (cần endpoint kiểm tra quyền owner).

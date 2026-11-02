@@ -86,8 +86,8 @@ UNNAMED_CREATE = re.compile(
 _UNNAMED_EXAMPLES = {
     "topic": ("topic", "tạo topic AI Engineering"),
     "layer": ("layer", "thêm layer Basics vào topic …"),
-    "group": ("nhóm", "tạo nhóm Core trong layer … level core"),
-    "item": ("bài học", "thêm bài Kafka vào layer … level core"),
+    "group": ("nhóm", "tạo nhóm Core trong layer …"),
+    "item": ("bài học", "thêm bài Kafka vào nhóm … của layer …"),
 }
 
 
@@ -223,18 +223,18 @@ NO_TOPIC_REPLY = (
 )
 
 
-def level_choice_reply(noun: str, titles: str) -> str:
-    """Asked when a group or item names no level: the three levels, nothing chosen for the user."""
+def group_choice_reply(titles: str, groups: list[str]) -> str:
+    """Asked when a lesson names no group and its layer has none or several (ADR-0008); nothing chosen for the user."""
+    if not groups:
+        return (
+            f"Layer này chưa có nhóm nào. Bạn muốn thêm bài {titles} vào nhóm tên gì? "
+            "Trả lời dạng `nhóm Fundamentals`, hoặc gõ `hủy` nếu không thêm."
+        )
+    listing = "\n".join(f"{i}. **{g}**" for i, g in enumerate(groups, 1))
     return (
-        f"Bạn muốn thêm {noun} {titles} ở level nào? Trả lời một trong: `core`, `intermediate`, `advanced`. "
-        "Gõ `hủy` nếu không thêm."
+        f"Bạn muốn thêm bài {titles} vào nhóm nào?\n{listing}\n\n"
+        "Trả lời số thứ tự hoặc tên nhóm, `nhóm <tên mới>` để tạo nhóm mới, hoặc `hủy` nếu không thêm."
     )
-
-
-BULK_LEVEL_ASK = (
-    "Bạn muốn thêm các bài này ở level nào? Gửi lại kèm level, ví dụ: `thêm bài … vào layer … level core`. "
-    "Level là `core`, `intermediate` hoặc `advanced`."
-)
 
 NO_DEFAULT_LAYER_REPLY = (
     "Mình không tạo layer mặc định nữa. Bạn đặt tên layer giúp mình, ví dụ: `tạo layer Basics`."

@@ -164,7 +164,7 @@ async def test_import_records_new_items_and_skips_existing(mock_adapter):
     from rag_service.adapters.errors import DuplicateEntityError
     from rag_service.tools.item_tools import import_items_from_text
 
-    async def create_item(layer_id, level, title, description="", content=""):
+    async def create_item(layer_id, group_title, title, description="", content=""):
         if title == "Docker":
             raise DuplicateEntityError("item", "Docker", {"id": "i0"})
         return {"id": f"id-{title}", "title": title}
@@ -172,7 +172,7 @@ async def test_import_records_new_items_and_skips_existing(mock_adapter):
     mock_adapter.create_item.side_effect = create_item
     changes = ChangeSet("create", "item", "layer-id")
     await import_items_from_text.coroutine(
-        layer_id="layer-id", level="core", text="- Docker\n- Kubernetes\n- Helm", changes=changes
+        layer_id="layer-id", group_title="Core", text="- Docker\n- Kubernetes\n- Helm", changes=changes
     )
 
     data = changes.to_dict()

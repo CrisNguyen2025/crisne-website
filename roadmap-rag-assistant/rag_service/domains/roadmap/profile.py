@@ -31,7 +31,7 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
     if doc.doc_type != "topic":
         lines.append(f"Thuộc lộ trình: {doc.topic_title} (`{doc.topic_slug}`)")
     if doc.doc_type == "item":
-        lines.append(f"Layer: [{doc.layer_tag}] {doc.layer_title} (Cấp độ: `{doc.level}`)")
+        lines.append(f"Layer: [{doc.layer_tag}] {doc.layer_title} (Nhóm: `{doc.group_title or '—'}`)")
     if doc.doc_type == "layer" and doc.layer_tag:
         lines.append(f"Mã layer: {doc.layer_tag}")
     if doc.description:

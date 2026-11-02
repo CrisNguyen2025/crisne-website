@@ -29,7 +29,7 @@ class ActionType(str, Enum):
 class EntityLevel(str, Enum):
     TOPIC = "topic"   # Top-level Roadmap
     LAYER = "layer"   # Knowledge domain within a roadmap
-    GROUP = "group"   # Level grouping (core/intermediate/advanced)
+    GROUP = "group"   # Named group of lessons inside a layer (ADR-0008)
     ITEM = "item"     # Individual lesson or knowledge node
 
 
@@ -57,11 +57,11 @@ class SingleEntity(BaseModel):
         None,
         description="For layers: formatted as '01-TAG', '02-TAG'.",
     )
-    level: Optional[str] = Field(
+    group_title: Optional[str] = Field(
         None,
         description=(
-            "For groups and items: 'core' | 'intermediate' | 'advanced'. Fill it only when the user names a level; "
-            "never guess one. Leave it empty otherwise."
+            "For items only: the name of the group the lesson goes into, as the user names it "
+            "(\"vào nhóm Fundamentals\" -> \"Fundamentals\"). Never guess one; leave it empty otherwise."
         ),
     )
     description: Optional[str] = Field(

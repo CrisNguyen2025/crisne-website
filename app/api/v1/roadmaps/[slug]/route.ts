@@ -78,15 +78,14 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       subtitle: layer.subtitle || '',
       groups: layer.groups.map((group) => ({
         id: group.id,
-        level: group.level,
         title: group.title,
         items: group.items.map((item) => ({
           id: item.id,
           slug: slugify(item.title),
           title: item.title,
           description: item.description || '',
-          level: group.level,
           layerId: layer.id,
+          groupId: group.id,
           content: item.content || undefined,
           createdAt: item.createdAt.toISOString(),
           updatedAt: item.updatedAt.toISOString(),

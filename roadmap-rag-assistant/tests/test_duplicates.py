@@ -19,7 +19,7 @@ CREATE TABLE Roadmap (id TEXT PRIMARY KEY, slug TEXT UNIQUE, title TEXT, shortCo
   icon TEXT, "order" INT, isLocked INT, createdAt TEXT, updatedAt TEXT);
 CREATE TABLE RoadmapLayer (id TEXT PRIMARY KEY, roadmapId TEXT, "order" INT, shortTag TEXT, title TEXT,
   subtitle TEXT, createdAt TEXT, updatedAt TEXT);
-CREATE TABLE RoadmapGroup (id TEXT PRIMARY KEY, layerId TEXT, level TEXT, title TEXT, "order" INT,
+CREATE TABLE RoadmapGroup (id TEXT PRIMARY KEY, layerId TEXT, title TEXT, "order" INT,
   createdAt TEXT, updatedAt TEXT);
 CREATE TABLE RoadmapItem (id TEXT PRIMARY KEY, groupId TEXT, title TEXT, description TEXT, content TEXT,
   "order" INT, createdAt TEXT, updatedAt TEXT);
@@ -53,16 +53,16 @@ def test_sqlite_refuses_duplicates_at_every_level(adapter):
             await adapter.create_layer(topic["slug"], "MOCK  1", "03-MOC")
         assert exc.value.existing["id"] == layer["id"]
 
-        # create_layer adds no group: the first item files one under its level
+        # create_layer adds no group: the first item names one (ADR-0008)
         new_layer = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])
         assert new_layer["groups"] == []
 
         await adapter.create_item(layer["id"], "Core", "Docker Basics")
-        # The item's group is "core" (normalized), so another core group is a duplicate
+        # A group is known by its title: the same title again is a duplicate
         with pytest.raises(DuplicateEntityError):
-            await adapter.create_group(layer["id"], "Core basics", "CORE")
+            await adapter.create_group(layer["id"], " core ")
         with pytest.raises(DuplicateEntityError):
-            await adapter.create_item(layer["id"], "advanced", "docker basics")
+            await adapter.create_item(layer["id"], "Core", "docker basics")
 
     asyncio.run(run())
 
@@ -148,25 +148,24 @@ def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
 
 
 @pytest.mark.usefixtures("write_grant")
-def test_levels_normalize_and_reuse_one_group(adapter):
-    """'Core', 'cơ bản' and 'core' land in one group; a custom level gets its own title-cased group."""
-    import asyncio
-
-    from rag_service.adapters.levels import default_group_title, normalize_level
-
-    assert [normalize_level(x) for x in ("Core", " cơ bản ", "Nâng  cao", "Deep Dive", "")] == [
-        "core", "core", "advanced", "deep dive", "",
-    ]
-    assert default_group_title("deep dive") == "Deep Dive" and default_group_title("Advanced") == "🔴 Advanced"
+def test_lessons_land_in_the_named_group_or_the_only_one(adapter):
+    """A title names one group whatever its case; with no title, the layer's only group is used (ADR-0008)."""
+    from rag_service.adapters.groups import GroupChoiceRequired
 
     async def run():
-        topic = await adapter.create_topic("Levels", "LV")
-        layer = await adapter.create_layer(topic["slug"], "Levels", "02-LVL")
-        await adapter.create_item(layer["id"], "Core", "A")
-        await adapter.create_item(layer["id"], "cơ bản", "B")
-        await adapter.create_item(layer["id"], "core", "C")
+        topic = await adapter.create_topic("Groups", "GR")
+        layer = await adapter.create_layer(topic["slug"], "Groups", "02-GRP")
+        with pytest.raises(GroupChoiceRequired) as ask:
+            await adapter.create_item(layer["id"], "", "A")  # no group yet: asked, nothing written
+        assert ask.value.titles == []
+        await adapter.create_item(layer["id"], "Fundamentals", "A")
+        await adapter.create_item(layer["id"], " fundamentals ", "B")
+        await adapter.create_item(layer["id"], "", "C")  # the only group
         await adapter.create_item(layer["id"], "Deep Dive", "D")
+        with pytest.raises(GroupChoiceRequired) as ask:
+            await adapter.create_item(layer["id"], "", "E")  # two groups now: asked
+        assert ask.value.titles == ["Fundamentals", "Deep Dive"]
         groups = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])["groups"]
-        return {g["level"]: (g["title"], len(g["items"])) for g in groups}
+        return {g["title"]: len(g["items"]) for g in groups}
 
-    assert asyncio.run(run()) == {"core": ("🟢 Core", 3), "deep dive": ("Deep Dive", 1)}
+    assert asyncio.run(run()) == {"Fundamentals": 3, "Deep Dive": 1}

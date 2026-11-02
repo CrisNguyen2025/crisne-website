@@ -102,20 +102,18 @@ async function main() {
 
     for (let gIdx = 0; gIdx < layerData.groups.length; gIdx++) {
       const groupData = layerData.groups[gIdx];
-      const groupId = `${layer.id}-${groupData.level}`;
+      const groupId = groupData.id;
 
       const group = await prisma.roadmapGroup.upsert({
         where: { id: groupId },
         update: {
           layerId: layer.id,
-          level: groupData.level,
           title: groupData.title,
           order: gIdx + 1,
         },
         create: {
           id: groupId,
           layerId: layer.id,
-          level: groupData.level,
           title: groupData.title,
           order: gIdx + 1,
         },
@@ -175,8 +173,8 @@ async function main() {
       subtitle: "Relational, NoSQL, indexing strategies, migrations, and ORMs",
       groups: [
         {
-          level: "core",
-          title: "🟢 Core",
+          id: "be-layer-01-core",
+          title: "Core",
           items: [
             {
               id: "be-item-01",
@@ -196,8 +194,8 @@ async function main() {
           ],
         },
         {
-          level: "intermediate",
-          title: "🟡 Intermediate",
+          id: "be-layer-01-intermediate",
+          title: "Intermediate",
           items: [
             {
               id: "be-item-04",
@@ -216,8 +214,8 @@ async function main() {
       subtitle: "RESTful, GraphQL, gRPC, and asynchronous message broker patterns",
       groups: [
         {
-          level: "core",
-          title: "🟢 Core",
+          id: "be-layer-02-core",
+          title: "Core",
           items: [
             {
               id: "be-item-05",
@@ -257,20 +255,18 @@ async function main() {
 
     for (let gIdx = 0; gIdx < layerData.groups.length; gIdx++) {
       const groupData = layerData.groups[gIdx];
-      const groupId = `${layer.id}-${groupData.level}`;
+      const groupId = groupData.id;
 
       const group = await prisma.roadmapGroup.upsert({
         where: { id: groupId },
         update: {
           layerId: layer.id,
-          level: groupData.level,
           title: groupData.title,
           order: gIdx + 1,
         },
         create: {
           id: groupId,
           layerId: layer.id,
-          level: groupData.level,
           title: groupData.title,
           order: gIdx + 1,
         },

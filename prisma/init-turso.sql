@@ -106,7 +106,6 @@ CREATE TABLE IF NOT EXISTS "RoadmapLayer" (
 CREATE TABLE IF NOT EXISTS "RoadmapGroup" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "layerId" TEXT NOT NULL,
-    "level" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "order" INTEGER NOT NULL DEFAULT 0,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -159,6 +158,9 @@ CREATE INDEX IF NOT EXISTS "RoadmapLayer_roadmapId_idx" ON "RoadmapLayer"("roadm
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "RoadmapGroup_layerId_idx" ON "RoadmapGroup"("layerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapGroup_layerId_title_key" ON "RoadmapGroup"("layerId", "title");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "RoadmapItem_groupId_idx" ON "RoadmapItem"("groupId");
@@ -338,7 +340,7 @@ CREATE TABLE IF NOT EXISTS "KnowledgeTriage" (
     "roadmapSlug" TEXT,
     "layerId" TEXT,
     "layerTag" TEXT,
-    "level" TEXT DEFAULT 'core',
+    "groupTitle" TEXT,
     "draftTitle" TEXT,
     "draftContent" TEXT,
     "verifyScore" INTEGER,

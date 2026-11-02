@@ -81,7 +81,7 @@ async def test_fallback_layer_creation_en(fallback_agent, mock_adapter, catalog_
 
 @pytest.mark.asyncio
 async def test_fallback_group_creation_vn(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "tạo group Core trong layer aaa level core", "fb-4")
+    res = await send_confirmed(fallback_agent, "tạo group Core trong layer aaa", "fb-4")
     msgs = res.get("messages", [])
     assert any(m.type == "tool" and m.name == "create_group" for m in msgs)
     assert "Core" in msgs[-1].content
@@ -89,7 +89,7 @@ async def test_fallback_group_creation_vn(fallback_agent, mock_adapter):
 
 @pytest.mark.asyncio
 async def test_fallback_group_creation_en(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "create 2 groups Core and Advanced in layer mock 1 level core", "fb-5")
+    res = await send_confirmed(fallback_agent, "create 2 groups Core and Advanced in layer mock 1", "fb-5")
     msgs = res.get("messages", [])
     assert any(m.type == "tool" and m.name == "create_group" for m in msgs)
     assert "Core" in msgs[-1].content
@@ -98,7 +98,7 @@ async def test_fallback_group_creation_en(fallback_agent, mock_adapter):
 
 @pytest.mark.asyncio
 async def test_fallback_item_creation_vn(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "tạo item Prompt Engineering trong layer 01-LLM level core", "fb-6")
+    res = await send_confirmed(fallback_agent, "tạo item Prompt Engineering trong layer 01-LLM", "fb-6")
     msgs = res.get("messages", [])
     assert any(m.type == "tool" and m.name == "create_item" for m in msgs)
     assert "Prompt Engineering" in msgs[-1].content
@@ -106,7 +106,7 @@ async def test_fallback_item_creation_vn(fallback_agent, mock_adapter):
 
 @pytest.mark.asyncio
 async def test_fallback_item_creation_en(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM level core", "fb-7")
+    res = await send_confirmed(fallback_agent, "add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM", "fb-7")
     msgs = res.get("messages", [])
     # a confirmed batch reports the tool by its singular name
     assert any(m.type == "tool" and m.name in ("create_items_batch", "create_item") for m in msgs)
