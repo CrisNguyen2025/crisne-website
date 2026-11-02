@@ -1,21 +1,19 @@
 /**
  * Roadmap API Service
  *
- * Handles all HTTP calls for multi-roadmap architecture.
+ * Handles all HTTP calls for the roadmap: topics, their lessons, and sections (ADR-0009).
  * UI components and hooks must NOT call fetch() directly — use this module.
  */
-
 import {
   ChecklistItem,
   CreateItemDto,
-  CreateLayerDto,
   CreateRoadmapDto,
   GetRoadmapResponseDto,
-  ReorderGroupItemsDto,
+  ReorderItemsDto,
+  RenameSectionDto,
   RoadmapMeta,
   UpdateItemContentDto,
   UpdateItemInfoDto,
-  UpdateLayerDto,
   UpdateRoadmapDto,
 } from '@/lib/roadmap/types';
 
@@ -51,80 +49,58 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Roadmaps List & Overview
+// Topics
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Fetch all roadmaps list */
-export async function fetchAllRoadmaps(): Promise<{ roadmaps: (RoadmapMeta & { _count: { layers: number } })[] }> {
-  return apiFetch<{ roadmaps: (RoadmapMeta & { _count: { layers: number } })[] }>('/api/v1/roadmaps');
+/** Fetch all topics, with their lesson counts */
+export async function fetchAllRoadmaps(): Promise<{ roadmaps: (RoadmapMeta & { _count: { items: number } })[] }> {
+  return apiFetch<{ roadmaps: (RoadmapMeta & { _count: { items: number } })[] }>('/api/v1/roadmaps');
 }
 
-/** Export all roadmaps with full layer, group and item data */
+/** Export every topic with its lessons (the Roadmap Assistant's ingestion format) */
 export async function exportAllRoadmaps(): Promise<unknown> {
   return apiFetch<unknown>('/api/v1/roadmaps/full-export');
 }
 
-/** Fetch full roadmap with nested layers, groups, and items by slug */
+/** Fetch a topic with its lessons and sections, by slug */
 export async function fetchRoadmapBySlug(slug: string): Promise<GetRoadmapResponseDto> {
   return apiFetch<GetRoadmapResponseDto>(`/api/v1/roadmaps/${slug}`);
 }
 
-/** Create a new Topic / Roadmap with initial layers */
-export async function createRoadmap(payload: CreateRoadmapDto): Promise<{ roadmap: any }> {
-  return apiFetch<{ roadmap: any }>('/api/v1/roadmaps', {
+/** Create a topic. Lessons are added afterwards. */
+export async function createRoadmap(payload: CreateRoadmapDto): Promise<{ roadmap: RoadmapMeta }> {
+  return apiFetch<{ roadmap: RoadmapMeta }>('/api/v1/roadmaps', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-/** Delete an entire Topic / Roadmap by slug */
+/** Delete a topic and every lesson in it */
 export async function deleteRoadmapBySlug(slug: string): Promise<void> {
-  return apiFetch<void>(`/api/v1/roadmaps/${slug}`, {
-    method: 'DELETE',
-  });
+  return apiFetch<void>(`/api/v1/roadmaps/${slug}`, { method: 'DELETE' });
 }
 
-/** Update an existing Topic / Roadmap by slug */
-export async function updateRoadmapBySlug(
-  slug: string,
-  payload: UpdateRoadmapDto
-): Promise<{ roadmap: RoadmapMeta }> {
+/** Update a topic's title, description or lock */
+export async function updateRoadmapBySlug(slug: string, payload: UpdateRoadmapDto): Promise<{ roadmap: RoadmapMeta }> {
   return apiFetch<{ roadmap: RoadmapMeta }>(`/api/v1/roadmaps/${slug}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Roadmap — Layers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Create a new layer in a roadmap */
-export async function createLayer(slug: string, payload: CreateLayerDto): Promise<{ layer: any }> {
-  return apiFetch<{ layer: any }>(`/api/v1/roadmaps/${slug}/layers`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-/** Update an existing layer's metadata */
-export async function updateLayer(payload: UpdateLayerDto): Promise<void> {
-  return apiFetch<void>(`/api/v1/roadmaps/layers/${payload.id}`, {
+/** Rename a section; every lesson in it moves to the new name */
+export async function renameSection(slug: string, payload: RenameSectionDto): Promise<{ renamed: number; section: string | null }> {
+  return apiFetch<{ renamed: number; section: string | null }>(`/api/v1/roadmaps/${slug}/sections`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
 }
 
-/** Delete a layer by ID */
-export async function deleteLayer(layerId: string): Promise<void> {
-  return apiFetch<void>(`/api/v1/roadmaps/layers/${layerId}`, { method: 'DELETE' });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Roadmap — Items
+// Lessons
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Create a new item inside a layer group */
+/** Add a lesson to a topic, optionally into a section */
 export async function createItem(payload: CreateItemDto): Promise<{ item: ChecklistItem }> {
   return apiFetch<{ item: ChecklistItem }>('/api/v1/roadmaps/items', {
     method: 'POST',
@@ -132,7 +108,7 @@ export async function createItem(payload: CreateItemDto): Promise<{ item: Checkl
   });
 }
 
-/** Update item title and description */
+/** Update a lesson's title, description and section */
 export async function updateItemInfo(payload: UpdateItemInfoDto): Promise<void> {
   return apiFetch<void>(`/api/v1/roadmaps/items/${payload.id}`, {
     method: 'PATCH',
@@ -140,7 +116,7 @@ export async function updateItemInfo(payload: UpdateItemInfoDto): Promise<void> 
   });
 }
 
-/** Update item rich HTML content */
+/** Update a lesson's rich HTML content */
 export async function updateItemContent(payload: UpdateItemContentDto): Promise<void> {
   return apiFetch<void>(`/api/v1/roadmaps/items/${payload.id}/content`, {
     method: 'PATCH',
@@ -148,47 +124,15 @@ export async function updateItemContent(payload: UpdateItemContentDto): Promise<
   });
 }
 
-/** Delete an item by ID */
+/** Delete a lesson by ID */
 export async function deleteItem(itemId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/roadmaps/items/${itemId}`, { method: 'DELETE' });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Roadmap — Ordering
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Persist reordered item IDs in group */
-export async function reorderGroupItems(payload: ReorderGroupItemsDto): Promise<void> {
+/** Persist the page order of a topic's lessons */
+export async function reorderItems(payload: ReorderItemsDto): Promise<void> {
   return apiFetch<void>('/api/v1/roadmaps/items/reorder', {
     method: 'POST',
     body: JSON.stringify({ orderedItemIds: payload.orderedItemIds }),
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Groups
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Create a custom group in a layer */
-export async function createGroup(layerId: string, title: string): Promise<{ group: any }> {
-  return apiFetch<{ group: any }>('/api/v1/roadmaps/groups', {
-    method: 'POST',
-    body: JSON.stringify({ layerId, title }),
-  });
-}
-
-/** Update an existing group's title */
-export async function updateGroup(groupId: string, title: string): Promise<{ group: any }> {
-  return apiFetch<{ group: any }>(`/api/v1/roadmaps/groups/${groupId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ title }),
-  });
-}
-
-/** Delete a group by ID */
-export async function deleteGroup(groupId: string): Promise<void> {
-  return apiFetch<void>(`/api/v1/roadmaps/groups/${groupId}`, {
-    method: 'DELETE',
-  });
-}
-

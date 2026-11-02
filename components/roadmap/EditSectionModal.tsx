@@ -1,56 +1,47 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FolderPlus } from 'lucide-react';
-import { RoadmapLayer } from '@/lib/roadmap/types';
+import { Pencil } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 
-interface CreateGroupModalProps {
+interface EditSectionModalProps {
   isOpen: boolean;
-  layer: RoadmapLayer | null;
+  /** The section's current name; null for the lessons outside any section (nothing to rename) */
+  section: string | null;
   onClose: () => void;
-  onSubmit: (layerId: string, title: string) => void;
+  /** Renaming onto a name the topic already uses merges the two sections */
+  onSubmit: (from: string, to: string) => void;
 }
 
-export function CreateGroupModal({
-  isOpen,
-  layer,
+function EditSectionForm({
+  section,
   onClose,
   onSubmit,
-}: CreateGroupModalProps) {
-  const [title, setTitle] = useState('');
+}: {
+  section: string;
+  onClose: () => void;
+  onSubmit: (from: string, to: string) => void;
+}) {
+  const [title, setTitle] = useState(section);
   const [error, setError] = useState('');
-
-  if (!layer) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Enter a group title.');
+      setError('Nhập tên mục.');
       return;
     }
-    if (layer.groups.some((g) => g.title.trim().toLowerCase() === title.trim().toLowerCase())) {
-      setError(`Group "${title.trim()}" already exists in this layer.`);
-      return;
-    }
-    onSubmit(layer.id, title.trim());
-    setTitle('');
-    setError('');
+    onSubmit(section, title.trim());
     onClose();
   };
 
   return (
     <Dialog
-      open={isOpen}
+      open
       onClose={onClose}
-      title="Create group"
-      description={
-        <span>
-          Adds a named group of lessons to layer{' '}
-          <span className="font-semibold text-foreground">{layer.shortTag}</span>
-        </span>
-      }
-      icon={<FolderPlus className="size-4 text-emerald-600 dark:text-emerald-400" />}
+      title="Đổi tên mục"
+      description="Mọi bài trong mục sẽ chuyển sang tên mới"
+      icon={<Pencil className="size-4 text-amber-600 dark:text-amber-400" />}
       footer={
         <>
           <button
@@ -58,33 +49,29 @@ export function CreateGroupModal({
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
           >
-            Cancel
+            Hủy
           </button>
           <button
             type="submit"
-            form="create-group-form"
+            form="edit-section-form"
             className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-colors cursor-pointer"
           >
-            Create group
+            Lưu
           </button>
         </>
       }
     >
-      <form id="create-group-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
+      <form id="edit-section-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
         {error && (
-          <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
-            {error}
-          </div>
+          <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">{error}</div>
         )}
-
         <div className="space-y-1.5">
           <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-            <FolderPlus className="size-3.5 text-primary" /> Group title *
+            <Pencil className="size-3.5 text-primary" /> Tên mục *
           </label>
           <input
             type="text"
             autoFocus
-            placeholder="Fundamentals"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-xs"
@@ -93,4 +80,9 @@ export function CreateGroupModal({
       </form>
     </Dialog>
   );
+}
+
+export function EditSectionModal({ isOpen, section, onClose, onSubmit }: EditSectionModalProps) {
+  if (!isOpen || section === null) return null;
+  return <EditSectionForm key={section} section={section} onClose={onClose} onSubmit={onSubmit} />;
 }

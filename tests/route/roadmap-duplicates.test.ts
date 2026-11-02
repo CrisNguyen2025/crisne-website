@@ -6,15 +6,11 @@ vi.mock("@/auth", () => ({ auth: authMock }));
 
 const prismaMock = vi.hoisted(() => ({
   roadmap: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
-  roadmapLayer: { findMany: vi.fn(), create: vi.fn() },
-  roadmapGroup: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
   roadmapItem: { findMany: vi.fn(), create: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import { POST as createTopic } from "@/app/api/v1/roadmaps/route";
-import { POST as createLayer } from "@/app/api/v1/roadmaps/[slug]/layers/route";
-import { POST as createGroup } from "@/app/api/v1/roadmaps/groups/route";
 import { POST as createItem } from "@/app/api/v1/roadmaps/items/route";
 import { normalizeTitle } from "@/lib/roadmap/duplicates";
 
@@ -42,75 +38,61 @@ describe("create routes refuse duplicates with 409", () => {
 
   it("topic: same title in another case", async () => {
     prismaMock.roadmap.findMany.mockResolvedValueOnce([{ id: "t1", slug: "backend", title: "Backend" }]);
-    const res = await createTopic(post("/api/v1/roadmaps", { title: "backend ", shortCode: "BE", layers: [{ title: "General", shortTag: "01-GEN" }] }));
+    const res = await createTopic(post("/api/v1/roadmaps", { title: "backend " }));
     expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ code: "DUPLICATE", kind: "topic", existing: { slug: "backend" } });
+    expect(await res.json()).toMatchObject({ kind: "topic", existing: { id: "t1" } });
     expect(prismaMock.roadmap.create).not.toHaveBeenCalled();
   });
 
-  it("topic: a new title is created once, repeated initial layers collapse", async () => {
+  it("topic: a new title is created once, with no lessons yet", async () => {
     prismaMock.roadmap.findMany.mockResolvedValueOnce([]);
     prismaMock.roadmap.create.mockImplementationOnce(async ({ data }) => ({ id: "t2", ...data }));
-    const res = await createTopic(
-      post("/api/v1/roadmaps", {
-        title: "AI Engineering",
-        shortCode: "AI",
-        layers: [
-          { title: "Core", shortTag: "01-COR" },
-          { title: "core", shortTag: "02-COR" },
-        ],
-      })
-    );
+    const res = await createTopic(post("/api/v1/roadmaps", { title: "AI Engineering" }));
     expect(res.status).toBe(201);
     const data = prismaMock.roadmap.create.mock.calls[0][0].data;
     expect(data.slug).toBe("ai-engineering");
-    expect(data.layers.create).toHaveLength(1);
+    expect(data).not.toHaveProperty("shortCode");
   });
 
-  it("topic: created without layers, as the Roadmap Assistant and WebMCP send it", async () => {
-    for (const body of [{ layers: [] }, {}]) {
-      prismaMock.roadmap.findMany.mockResolvedValueOnce([]);
-      prismaMock.roadmap.create.mockImplementationOnce(async ({ data }) => ({ id: "t3", ...data }));
-      const res = await createTopic(post("/api/v1/roadmaps", { title: "Backend", shortCode: "BE", ...body }));
-      expect(res.status).toBe(201);
-    }
-    expect(prismaMock.roadmap.create.mock.calls[0][0].data.layers.create).toEqual([]);
-  });
-
-  it("topic: a layer without a title or shortTag is refused", async () => {
-    for (const layers of [[{ title: "Core" }], [{ title: " ", shortTag: "01-X" }], "Core"]) {
-      const res = await createTopic(post("/api/v1/roadmaps", { title: "Backend", shortCode: "BE", layers }));
-      expect(res.status).toBe(400);
-    }
+  it("topic: a blank title is refused", async () => {
+    const res = await createTopic(post("/api/v1/roadmaps", { title: "   " }));
+    expect(res.status).toBe(400);
     expect(prismaMock.roadmap.create).not.toHaveBeenCalled();
   });
 
-  it("layer: same title already in the topic", async () => {
-    prismaMock.roadmap.findUnique
-      .mockResolvedValueOnce({ id: "t1" })
-      .mockResolvedValueOnce({ id: "t1", _count: { layers: 1 } });
-    prismaMock.roadmapLayer.findMany.mockResolvedValueOnce([{ id: "l1", title: "Mock 1", shortTag: "01-MOC" }]);
-    const res = await createLayer(post("/api/v1/roadmaps/backend/layers", { title: "mock 1", shortTag: "02-MOC" }), {
-      params: Promise.resolve({ slug: "backend" }),
+  it("item: same title elsewhere in the topic, whatever its section", async () => {
+    prismaMock.roadmap.findUnique.mockResolvedValueOnce({
+      id: "t1",
+      slug: "ai",
+      items: [{ id: "i1", title: "Docker Basics", section: "Core", order: 1 }],
     });
+    const res = await createItem(post("/api/v1/roadmaps/items", { roadmapSlug: "ai", section: "Production", title: "docker  basics" }));
     expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ kind: "layer", existing: { id: "l1" } });
-    expect(prismaMock.roadmapLayer.create).not.toHaveBeenCalled();
-  });
-
-  it("group: same title already in the layer", async () => {
-    prismaMock.roadmapGroup.findMany.mockResolvedValueOnce([{ id: "g1", title: "Core" }]);
-    const res = await createGroup(post("/api/v1/roadmaps/groups", { layerId: "l1", title: " core " }));
-    expect(res.status).toBe(409);
-    expect(prismaMock.roadmapGroup.create).not.toHaveBeenCalled();
-  });
-
-  it("item: same title in another group of the layer", async () => {
-    prismaMock.roadmapItem.findMany.mockResolvedValueOnce([{ id: "i1", title: "Docker Basics", group: { title: "Core" } }]);
-    const res = await createItem(post("/api/v1/roadmaps/items", { layerId: "l1", groupTitle: "Production", title: "docker  basics" }));
-    expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ kind: "item", existing: { id: "i1", groupTitle: "Core" } });
-    expect(prismaMock.roadmapGroup.create).not.toHaveBeenCalled();
+    expect(await res.json()).toMatchObject({ kind: "item", existing: { id: "i1" } });
     expect(prismaMock.roadmapItem.create).not.toHaveBeenCalled();
+  });
+
+  it("item: a new lesson without a section is created at the end of the topic", async () => {
+    prismaMock.roadmap.findUnique.mockResolvedValueOnce({
+      id: "t1",
+      slug: "ai",
+      items: [{ id: "i1", title: "A", section: "RAG", order: 3 }],
+    });
+    prismaMock.roadmapItem.create.mockImplementationOnce(async ({ data }) => ({ id: "i2", createdAt: new Date(), updatedAt: new Date(), ...data }));
+    const res = await createItem(post("/api/v1/roadmaps/items", { roadmapSlug: "ai", title: "Kafka" }));
+    expect(res.status).toBe(201);
+    const data = prismaMock.roadmapItem.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ roadmapId: "t1", section: null, order: 4, title: "Kafka" });
+  });
+
+  it("item: a section named with another case reuses the topic's spelling", async () => {
+    prismaMock.roadmap.findUnique.mockResolvedValueOnce({
+      id: "t1",
+      slug: "ai",
+      items: [{ id: "i1", title: "A", section: "RAG", order: 1 }],
+    });
+    prismaMock.roadmapItem.create.mockImplementationOnce(async ({ data }) => ({ id: "i2", createdAt: new Date(), updatedAt: new Date(), ...data }));
+    await createItem(post("/api/v1/roadmaps/items", { roadmapSlug: "ai", section: "rag ", title: "Kafka" }));
+    expect(prismaMock.roadmapItem.create.mock.calls[0][0].data.section).toBe("RAG");
   });
 });

@@ -12,7 +12,7 @@ import {
   Edit3,
   Trash2,
 } from 'lucide-react';
-import { ChecklistItem, RoadmapGroup } from '@/lib/roadmap/types';
+import { ChecklistItem } from '@/lib/roadmap/types';
 import { formatFriendlyTime } from '@/lib/roadmap/date-utils';
 import { contentToHtml, readingMinutes, withHeadingIds } from '@/lib/roadmap/content-utils';
 import { useToast } from '@/components/ui/toast';
@@ -22,13 +22,9 @@ import { EditItemContentDrawer } from './EditItemContentDrawer';
 import { EditItemInfoDrawer } from './EditItemInfoDrawer';
 
 interface DetailPanelProps {
-  item:
-    | (ChecklistItem & {
-        layerTitle?: string;
-        groupTitle?: string;
-        layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
-      })
-    | null;
+  item: ChecklistItem | null;
+  /** The topic's sections, offered when a lesson moves */
+  sections?: string[];
   isLoading?: boolean;
   canWrite?: boolean;
   prevLesson?: { id: string; title: string };
@@ -37,12 +33,13 @@ interface DetailPanelProps {
   onSelectNext?: () => void;
   onBack?: () => void;
   onUpdateNote?: (id: string, text: string) => void;
-  onEditItem?: (id: string, title: string, description: string, groupId?: string) => void;
+  onEditItem?: (id: string, title: string, description: string, section?: string | null) => void;
   onDeleteItem?: (id: string) => Promise<void>;
 }
 
 function DetailContent({
   item,
+  sections = [],
   canWrite = false,
   prevLesson,
   nextLesson,
@@ -53,11 +50,8 @@ function DetailContent({
   onEditItem,
   onDeleteItem,
 }: {
-  item: ChecklistItem & {
-    layerTitle?: string;
-    groupTitle?: string;
-    layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
-  };
+  item: ChecklistItem;
+  sections?: string[];
   canWrite?: boolean;
   prevLesson?: { id: string; title: string };
   nextLesson?: { id: string; title: string };
@@ -65,7 +59,7 @@ function DetailContent({
   onSelectNext?: () => void;
   onBack?: () => void;
   onUpdateNote?: (id: string, text: string) => void;
-  onEditItem?: (id: string, title: string, description: string, groupId?: string) => void;
+  onEditItem?: (id: string, title: string, description: string, section?: string | null) => void;
   onDeleteItem?: (id: string) => Promise<void>;
 }) {
   const { toast } = useToast();
@@ -116,10 +110,10 @@ function DetailContent({
 
   const mins = useMemo(() => readingMinutes(itemContent), [itemContent]);
 
-  const handleSaveInfo = async (id: string, title: string, description: string, groupId?: string) => {
+  const handleSaveInfo = async (id: string, title: string, description: string, section?: string | null) => {
     try {
       if (onEditItem) {
-        await onEditItem(id, title, description, groupId);
+        await onEditItem(id, title, description, section);
       }
       toast('Info updated successfully!', 'success');
     } catch {
@@ -158,9 +152,7 @@ function DetailContent({
               </button>
             )}
 
-            <span className="truncate">{item.layerTitle || 'Layer'}</span>
-            <ChevronRight className="size-3 text-muted-foreground/40 shrink-0" />
-            <span className="text-foreground font-semibold truncate">{item.groupTitle || 'Group'}</span>
+            <span className="truncate">{item.section || 'Chung'}</span>
           </div>
 
           {canWrite && (
@@ -219,7 +211,7 @@ function DetailContent({
             <header className="space-y-3 select-text">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                  {item.groupTitle || 'Lesson'}
+                  {item.section || 'Bài học'}
                 </span>
                 {mins > 0 && (
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -354,6 +346,7 @@ function DetailContent({
       <EditItemInfoDrawer
         isOpen={isInfoModalOpen}
         item={item}
+        sections={sections}
         onClose={() => setIsInfoModalOpen(false)}
         onSubmit={handleSaveInfo}
       />
@@ -386,6 +379,7 @@ function DetailContent({
 
 export function DetailPanel({
   item,
+  sections = [],
   isLoading = false,
   canWrite = false,
   prevLesson,
@@ -441,6 +435,7 @@ export function DetailPanel({
     <DetailContent
       key={item.id}
       item={item}
+      sections={sections}
       canWrite={canWrite}
       prevLesson={prevLesson}
       nextLesson={nextLesson}

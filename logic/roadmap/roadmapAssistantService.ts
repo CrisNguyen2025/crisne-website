@@ -82,7 +82,7 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 }
 
 /**
- * Page the user is viewing, read from the URL (?topic=<slug>&layer=<id>&item=<id>).
+ * Page the user is viewing, read from the URL (?topic=<slug>&section=<name>&item=<id>).
  * Returns undefined on the server so SSR never reads window.
  */
 export function getRoadmapPageContext(): PageContext | undefined {
@@ -90,7 +90,7 @@ export function getRoadmapPageContext(): PageContext | undefined {
   const params = new URLSearchParams(window.location.search);
   const roadmapSlug = params.get('topic') || undefined;
   const itemId = params.get('item') || undefined;
-  const layerId = params.get('layer') || undefined;
-  if (!roadmapSlug && !itemId && !layerId) return undefined;
-  return { roadmapSlug, itemId, layerId };
+  const section = params.get('section') || undefined;
+  if (!roadmapSlug && !itemId && !section) return undefined;
+  return { roadmapSlug, itemId, section };
 }

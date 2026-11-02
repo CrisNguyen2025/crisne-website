@@ -27,7 +27,7 @@ const Editor = dynamic(() => import('@/components/ui/editor/Editor'), {
 
 interface EditItemContentDrawerProps {
   isOpen: boolean;
-  item: (ChecklistItem & { layerTitle?: string; groupTitle?: string }) | null;
+  item: ChecklistItem | null;
   onClose: () => void;
   onSubmit: (id: string, content: string) => Promise<void> | void;
 }
@@ -37,7 +37,7 @@ function EditItemContentForm({
   onClose,
   onSubmit,
 }: {
-  item: ChecklistItem & { layerTitle?: string; groupTitle?: string };
+  item: ChecklistItem;
   onClose: () => void;
   onSubmit: (id: string, content: string) => Promise<void> | void;
 }) {

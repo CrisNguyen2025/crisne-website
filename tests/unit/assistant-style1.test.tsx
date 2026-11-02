@@ -135,9 +135,9 @@ describe("Style 1 Assistant (Capsule/Mascot + Floating Popup)", () => {
     window.removeEventListener("project:open-modal", projectEventSpy);
   });
 
-  it("dispatches roadmap:select-layer and closes popup on roadmap chip click", async () => {
+  it("dispatches roadmap:select-section and closes popup on roadmap chip click", async () => {
     const roadmapEventSpy = vi.fn();
-    window.addEventListener("roadmap:select-layer", roadmapEventSpy);
+    window.addEventListener("roadmap:select-section", roadmapEventSpy);
 
     const onClose = vi.fn();
     const mockChat = {
@@ -145,7 +145,7 @@ describe("Style 1 Assistant (Capsule/Mascot + Floating Popup)", () => {
         {
           id: "bot-2",
           role: "assistant" as const,
-          content: "Tham khảo lộ trình [[action:roadmap|layer-02|Layer 02]]",
+          content: "Tham khảo mục [[action:roadmap|RAG|RAG]]",
           createdAt: new Date(),
         },
       ],
@@ -163,16 +163,16 @@ describe("Style 1 Assistant (Capsule/Mascot + Floating Popup)", () => {
 
     render(<FloatingChatPopup isOpen={true} onClose={onClose} chat={mockChat} />);
 
-    const chip = screen.getByText("Layer 02");
+    const chip = screen.getByText("RAG");
     expect(chip).toBeTruthy();
 
     fireEvent.click(chip);
 
     expect(roadmapEventSpy).toHaveBeenCalledTimes(1);
-    expect(roadmapEventSpy.mock.calls[0][0].detail.layerId).toBe("layer-02");
+    expect(roadmapEventSpy.mock.calls[0][0].detail.section).toBe("RAG");
     expect(onClose).toHaveBeenCalled();
 
-    window.removeEventListener("roadmap:select-layer", roadmapEventSpy);
+    window.removeEventListener("roadmap:select-section", roadmapEventSpy);
   });
 });
 

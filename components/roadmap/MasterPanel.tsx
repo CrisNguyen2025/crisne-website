@@ -2,16 +2,15 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, FolderPlus, Layers, Lock, Pencil, Search, Trash2, Unlock, X } from 'lucide-react';
-import { RoadmapLayer, RoadmapGroup, ChecklistItem, RoadmapStats, RoadmapMeta } from '@/lib/roadmap/types';
+import { ChecklistItem, RoadmapStats, RoadmapMeta } from '@/lib/roadmap/types';
+import type { SectionGroup } from '@/hooks/use-roadmap';
 import { useToast } from '@/components/ui/toast';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { LayerSection } from './LayerSection';
+import { SectionList } from './SectionList';
 import { RoadmapView, ViewToggle } from './ViewToggle';
-import { EditLayerModal } from './EditLayerModal';
-import { CreateGroupModal } from './CreateGroupModal';
-import { EditGroupModal } from './EditGroupModal';
+import { EditSectionModal } from './EditSectionModal';
 import { EditTopicModal } from './EditTopicModal';
 
 function ListSkeleton() {
@@ -20,7 +19,6 @@ function ListSkeleton() {
       {[0, 1].map((i) => (
         <div key={i} className="space-y-2">
           <Skeleton className="h-5 w-2/3" />
-          <Skeleton className="h-1 w-full" />
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-5/6" />
@@ -30,39 +28,37 @@ function ListSkeleton() {
   );
 }
 
+/** Stable key for a section, null included */
+const keyOf = (section: string | null) => section ?? '__none__';
+
 interface MasterPanelProps {
-  layers: RoadmapLayer[];
-  allLayers: RoadmapLayer[];
+  sectionGroups: SectionGroup[];
   activeItemId: string;
-  selectedLayerId: string | 'all';
+  selectedSection: string | null | 'all';
+  onSelectSection: (section: string | null | 'all') => void;
   stats: RoadmapStats;
   currentRoadmap?: RoadmapMeta | null;
   /** The Owner sees the write controls; every write is still checked on the server */
   canWrite: boolean;
   view: RoadmapView;
   onViewChange: (view: RoadmapView) => void;
-  onEditRoadmap?: (title: string, shortCode: string, description?: string) => Promise<void>;
+  onEditRoadmap?: (title: string, description?: string) => Promise<void>;
   onDeleteRoadmap?: (slug: string) => void;
-  onToggleLock?: (locked?: boolean) => void;
+  onToggleLock?: () => void;
   isLoading?: boolean;
   isError?: boolean;
-  onLayerChange: (layerId: string | 'all') => void;
   onSelectItem: (id: string) => void;
-  onReorderGroupItems: (groupId: string, newItems: ChecklistItem[]) => void;
-  onOpenCreateLayer: () => void;
-  onOpenCreateItem: (layerId: string, groupId?: string) => void;
-  onAddGroup?: (layerId: string, title: string) => void;
-  onEditGroup?: (groupId: string, title: string) => void;
-  onDeleteGroup?: (groupId: string) => void;
-  onEditLayer?: (layerId: string, title: string, shortTag: string, subtitle?: string) => void;
-  onDeleteLayer: (layerId: string) => void;
+  /** The whole topic in its new order */
+  onReorderItems: (items: ChecklistItem[]) => void;
+  onOpenCreateItem: (section: string | null) => void;
+  onRenameSection: (from: string, to: string) => void;
 }
 
 export function MasterPanel({
-  layers,
-  allLayers,
+  sectionGroups,
   activeItemId,
-  selectedLayerId,
+  selectedSection,
+  onSelectSection,
   stats,
   currentRoadmap,
   canWrite,
@@ -73,58 +69,44 @@ export function MasterPanel({
   onToggleLock,
   isLoading = false,
   isError = false,
-  onLayerChange,
   onSelectItem,
-  onReorderGroupItems,
-  onOpenCreateLayer,
+  onReorderItems,
   onOpenCreateItem,
-  onAddGroup,
-  onEditGroup,
-  onDeleteGroup,
-  onEditLayer,
-  onDeleteLayer,
+  onRenameSection,
 }: MasterPanelProps) {
   const { toast } = useToast();
-  const [collapsedLayers, setCollapsedLayers] = useState<Record<string, boolean>>({});
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
-  const [editingLayer, setEditingLayer] = useState<RoadmapLayer | null>(null);
-  const [editingGroup, setEditingGroup] = useState<RoadmapGroup | null>(null);
-  const [targetGroupLayer, setTargetGroupLayer] = useState<RoadmapLayer | null>(null);
+  const [renamingSection, setRenamingSection] = useState<string | null>(null);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isLocked = Boolean(currentRoadmap?.isLocked);
+  const sectionNames = useMemo(
+    () => sectionGroups.map((g) => g.section).filter((s): s is string => s !== null),
+    [sectionGroups]
+  );
 
-  // Search keeps the layers and groups that hold a matching lesson
-  const displayLayers = useMemo(() => {
+  // The sections to show: only the chosen one, and search keeps the sections that hold a match
+  const displayGroups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return layers;
-    return layers
-      .map((layer) => ({
-        ...layer,
-        groups: layer.groups
-          .map((group) => ({
-            ...group,
-            items: group.items.filter(
-              (item) => item.title.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q)
-            ),
-          }))
-          .filter((group) => group.items.length > 0),
+    return sectionGroups
+      .filter((g) => selectedSection === 'all' || g.section === selectedSection)
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (item) =>
+            !q || item.title.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q)
+        ),
       }))
-      .filter((layer) => layer.groups.length > 0);
-  }, [layers, searchQuery]);
+      .filter((g) => g.items.length > 0 || (!q && selectedSection !== 'all'));
+  }, [sectionGroups, searchQuery, selectedSection]);
 
   const visibleItems = useMemo(
-    () =>
-      displayLayers.flatMap((l) =>
-        collapsedLayers[l.id] ? [] : l.groups.flatMap((g) => (collapsedGroups[g.id] ? [] : g.items))
-      ),
-    [displayLayers, collapsedLayers, collapsedGroups]
+    () => displayGroups.flatMap((g) => (collapsed[keyOf(g.section)] ? [] : g.items)),
+    [displayGroups, collapsed]
   );
-  const matchCount = searchQuery.trim()
-    ? displayLayers.reduce((n, l) => n + l.groups.reduce((m, g) => m + g.items.length, 0), 0)
-    : 0;
+  const matchCount = searchQuery.trim() ? displayGroups.reduce((n, g) => n + g.items.length, 0) : 0;
 
   // Ctrl+F / ⌘F focuses the lesson search
   useEffect(() => {
@@ -155,13 +137,10 @@ export function MasterPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [visibleItems, activeItemId, onSelectItem]);
 
-  const handleDeleteGroup = async (group: RoadmapGroup) => {
-    try {
-      await onDeleteGroup?.(group.id);
-      toast(`Deleted group "${group.title}"`, 'success');
-    } catch (err) {
-      toast(err instanceof Error ? err.message : `Failed to delete group "${group.title}"`, 'error');
-    }
+  /** The whole topic in order: each section's new order, sections in their page order */
+  const reorderSection = (section: string | null, reordered: ChecklistItem[]) => {
+    const next = sectionGroups.flatMap((g) => (g.section === section ? reordered : g.items));
+    onReorderItems(next);
   };
 
   return (
@@ -174,7 +153,7 @@ export function MasterPanel({
               {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {isLoading ? 'Loading…' : `${stats.total} lessons · ${allLayers.length} layers`}
+              {isLoading ? 'Loading…' : `${stats.total} bài · ${sectionNames.length} mục`}
             </p>
           </div>
           <ViewToggle value={view} onChange={onViewChange} />
@@ -182,8 +161,8 @@ export function MasterPanel({
             <>
               <button
                 type="button"
-                onClick={() => onToggleLock?.(!isLocked)}
-                title={isLocked ? 'Unlock lesson reordering' : 'Lock lesson reordering'}
+                onClick={() => onToggleLock?.()}
+                title={isLocked ? 'Mở khoá sắp xếp bài' : 'Khoá sắp xếp bài'}
                 aria-label={isLocked ? 'Unlock lessons' : 'Lock lessons'}
                 className={cn(
                   'flex size-7 items-center justify-center rounded-lg transition-colors',
@@ -197,23 +176,23 @@ export function MasterPanel({
               <ActionMenu
                 label="Topic actions"
                 items={[
-                  { label: 'Add layer', icon: FolderPlus, onSelect: onOpenCreateLayer },
+                  { label: 'Thêm bài', icon: FolderPlus, onSelect: () => onOpenCreateItem(null) },
                   ...(onEditRoadmap && currentRoadmap
-                    ? [{ label: 'Edit topic', icon: Pencil, onSelect: () => setIsEditTopicOpen(true) }]
+                    ? [{ label: 'Sửa topic', icon: Pencil, onSelect: () => setIsEditTopicOpen(true) }]
                     : []),
                   ...(onDeleteRoadmap && currentRoadmap
                     ? [
                         {
-                          label: 'Delete topic',
+                          label: 'Xoá topic',
                           icon: Trash2,
                           danger: true,
                           confirm: {
-                            title: `Delete "${currentRoadmap.title}"?`,
-                            description: 'All its layers and lessons are deleted too.',
+                            title: `Xoá "${currentRoadmap.title}"?`,
+                            description: 'Mọi bài trong topic cũng bị xoá.',
                           },
                           onSelect: () => {
                             onDeleteRoadmap(currentRoadmap.slug);
-                            toast(`Deleted topic "${currentRoadmap.title}"`, 'success');
+                            toast(`Đã xoá topic "${currentRoadmap.title}"`, 'success');
                           },
                         },
                       ]
@@ -232,7 +211,7 @@ export function MasterPanel({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
-            placeholder="Search lessons"
+            placeholder="Tìm bài"
             aria-label="Search lessons"
             className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-16 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
           />
@@ -255,23 +234,22 @@ export function MasterPanel({
           </div>
         </div>
 
-        {/* Layer filter: a horizontally scrolling row of chips */}
+        {/* Section filter: a horizontally scrolling row of chips */}
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
           {isLoading ? (
             <>
               <Skeleton className="h-7 w-14 shrink-0 rounded-full" />
               <Skeleton className="h-7 w-16 shrink-0 rounded-full" />
-              <Skeleton className="h-7 w-16 shrink-0 rounded-full" />
             </>
           ) : (
-            [{ id: 'all', label: 'All' }, ...allLayers.map((l) => ({ id: l.id, label: l.shortTag }))].map((chip) => (
+            [{ id: 'all' as const, label: 'Tất cả' }, ...sectionNames.map((s) => ({ id: s, label: s }))].map((chip) => (
               <button
                 key={chip.id}
                 type="button"
-                onClick={() => onLayerChange(chip.id)}
+                onClick={() => onSelectSection(chip.id)}
                 className={cn(
                   'shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                  selectedLayerId === chip.id
+                  selectedSection === chip.id
                     ? 'border-transparent bg-foreground text-background'
                     : 'border-border text-muted-foreground hover:text-foreground'
                 )}
@@ -290,12 +268,12 @@ export function MasterPanel({
         {!isLoading && isError && (
           <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
             <AlertTriangle className="size-5 text-destructive" />
-            <p className="text-sm font-medium text-foreground">Couldn&apos;t load this topic</p>
-            <p className="text-xs text-muted-foreground">Check your connection and try again.</p>
+            <p className="text-sm font-medium text-foreground">Không tải được topic này</p>
+            <p className="text-xs text-muted-foreground">Kiểm tra kết nối rồi thử lại.</p>
           </div>
         )}
 
-        {!isLoading && !isError && displayLayers.length === 0 && (
+        {!isLoading && !isError && displayGroups.length === 0 && (
           <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
             {searchQuery ? (
               <Search className="size-5 text-muted-foreground" />
@@ -303,20 +281,20 @@ export function MasterPanel({
               <Layers className="size-5 text-muted-foreground" />
             )}
             <p className="text-sm font-medium text-foreground">
-              {searchQuery ? `No lessons match "${searchQuery}"` : 'Start your first layer'}
+              {searchQuery ? `Không có bài nào khớp "${searchQuery}"` : 'Chưa có bài nào'}
             </p>
             {searchQuery ? (
               <button type="button" onClick={() => setSearchQuery('')} className="text-xs font-medium text-primary hover:underline">
-                Clear search
+                Xoá tìm kiếm
               </button>
             ) : (
               canWrite && (
                 <button
                   type="button"
-                  onClick={onOpenCreateLayer}
+                  onClick={() => onOpenCreateItem(selectedSection === 'all' ? null : selectedSection)}
                   className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                  Add layer
+                  Thêm bài
                 </button>
               )
             )}
@@ -324,68 +302,42 @@ export function MasterPanel({
         )}
 
         {!isLoading && !isError && (
-          <div key={selectedLayerId} className="px-2 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] animate-in fade-in duration-150 lg:pb-6">
-            {displayLayers.map((layer) => (
-              <LayerSection
-                key={layer.id}
-                layer={layer}
+          <div key={selectedSection === 'all' ? 'all' : keyOf(selectedSection)} className="px-2 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] animate-in fade-in duration-150 lg:pb-6">
+            {displayGroups.map((group) => (
+              <SectionList
+                key={keyOf(group.section)}
+                section={group.section}
+                items={group.items}
                 activeItemId={activeItemId}
                 canWrite={canWrite}
                 isLocked={isLocked}
-                isCollapsed={Boolean(collapsedLayers[layer.id])}
-                collapsedGroups={collapsedGroups}
-                onToggleCollapse={() => setCollapsedLayers((prev) => ({ ...prev, [layer.id]: !prev[layer.id] }))}
-                onToggleGroup={(groupId) => setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))}
+                isCollapsed={Boolean(collapsed[keyOf(group.section)])}
+                onToggleCollapse={() =>
+                  setCollapsed((prev) => ({ ...prev, [keyOf(group.section)]: !prev[keyOf(group.section)] }))
+                }
                 onSelectItem={onSelectItem}
-                onReorderGroupItems={onReorderGroupItems}
+                onReorder={(reordered) => reorderSection(group.section, reordered)}
                 onOpenCreateItem={onOpenCreateItem}
-                onOpenCreateGroup={setTargetGroupLayer}
-                onEditLayer={setEditingLayer}
-                onDeleteLayer={(l) => {
-                  onDeleteLayer(l.id);
-                  toast(`Deleted layer "${l.title}"`, 'success');
-                }}
-                onEditGroup={setEditingGroup}
-                onDeleteGroup={handleDeleteGroup}
+                onRenameSection={setRenamingSection}
               />
             ))}
           </div>
         )}
       </div>
 
-      <EditLayerModal
-        isOpen={Boolean(editingLayer)}
-        layer={editingLayer}
-        onClose={() => setEditingLayer(null)}
-        onSubmit={(layerId, title, shortTag, subtitle) => {
-          onEditLayer?.(layerId, title, shortTag, subtitle);
-          setEditingLayer(null);
-        }}
-      />
-
-      <CreateGroupModal
-        isOpen={Boolean(targetGroupLayer)}
-        layer={targetGroupLayer}
-        onClose={() => setTargetGroupLayer(null)}
-        onSubmit={(layerId, title) => onAddGroup?.(layerId, title)}
-      />
-
-      <EditGroupModal
-        isOpen={Boolean(editingGroup)}
-        group={editingGroup}
-        onClose={() => setEditingGroup(null)}
-        onSubmit={(groupId, title) => {
-          onEditGroup?.(groupId, title);
-          setEditingGroup(null);
-        }}
+      <EditSectionModal
+        isOpen={renamingSection !== null}
+        section={renamingSection}
+        onClose={() => setRenamingSection(null)}
+        onSubmit={(from, to) => onRenameSection(from, to)}
       />
 
       <EditTopicModal
         isOpen={isEditTopicOpen}
         topic={currentRoadmap || null}
         onClose={() => setIsEditTopicOpen(false)}
-        onSubmit={async (title, shortCode, description) => {
-          if (onEditRoadmap) await onEditRoadmap(title, shortCode, description);
+        onSubmit={async (title, description) => {
+          if (onEditRoadmap) await onEditRoadmap(title, description);
         }}
       />
     </div>

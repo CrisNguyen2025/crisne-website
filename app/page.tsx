@@ -10,10 +10,8 @@ import { MasterPanel } from "@/components/roadmap/MasterPanel";
 import { DetailPanel } from "@/components/roadmap/DetailPanel";
 import { RoadmapMap } from "@/components/roadmap/RoadmapMap";
 import { RoadmapView } from "@/components/roadmap/ViewToggle";
-import { CreateLayerModal } from "@/components/roadmap/CreateLayerModal";
 import { CreateItemModal } from "@/components/roadmap/CreateItemModal";
 import { CreateTopicModal } from "@/components/roadmap/CreateTopicModal";
-import { CompactSidebar } from "@/components/roadmap/CompactSidebar";
 import { HomeDashboard } from "@/components/roadmap/HomeDashboard";
 import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
 import { KnowledgeTriageDrawer } from "@/components/roadmap/KnowledgeTriageDrawer";
@@ -52,7 +50,8 @@ function RoadmapWorkspace() {
   // nuqs query state for ?topic and ?item (clean URL: ?topic=ai-architecture&item=...)
   // If topic is null/empty -> Home view. If topic exists -> Topic Roadmap view.
   const [topic, setTopic] = useQueryState("topic", parseAsString);
-  const [layerParam, setLayerParam] = useQueryState("layer", parseAsString);
+  // The section (mục) open in the list; mirrored in the URL so the assistant knows which section is in view
+  const [sectionParam, setSectionParam] = useQueryState("section", parseAsString);
   const [item, setItem] = useQueryState(
     "item",
     parseAsString.withOptions({
@@ -61,7 +60,7 @@ function RoadmapWorkspace() {
     })
   );
 
-  const [availableRoadmaps, setAvailableRoadmaps] = useState<RoadmapMeta[]>([]);
+  const [availableRoadmaps, setAvailableRoadmaps] = useState<(RoadmapMeta & { _count?: { items: number } })[]>([]);
   const [isRoadmapsLoading, setIsRoadmapsLoading] = useState<boolean>(true);
 
   // List or map, remembered per browser. The server renders "list"; the saved view is applied after hydration
@@ -128,30 +127,26 @@ function RoadmapWorkspace() {
 
   const {
     roadmapMeta,
-    layers,
-    filteredLayers,
+    items,
+    sections,
+    sectionGroups,
     activeItemId,
     activeItem,
-    selectedLayerId,
+    selectedSection,
     stats,
     isLoading,
     isError,
     isNotFound,
-    setSelectedLayerId,
-    addLayer,
-    editLayer,
-    deleteLayer,
+    setSelectedSection,
     editRoadmap,
     toggleRoadmapLock,
-    addGroup,
-    editGroup,
-    deleteGroup,
     addItem,
     editItem,
     deleteItem,
+    renameSection,
     updateNote,
+    reorderItems,
     selectActiveItem,
-    updateGroupItems,
   } = useRoadmap(activeSlug, item || undefined);
 
   // A topic deleted through the assistant (or an old link) is gone, not a connection error: back to Home
@@ -162,20 +157,19 @@ function RoadmapWorkspace() {
     setItem(null);
   }, [topic, isNotFound, toast, setTopic, setItem]);
 
-  // Mirror the selected layer into ?layer= so the assistant knows which layer is open
+  // Mirror the selected section into ?section= so the assistant knows which section is open
   useEffect(() => {
-    const next = selectedLayerId === "all" ? null : selectedLayerId;
-    if (next !== layerParam) setLayerParam(next);
-  }, [selectedLayerId, layerParam, setLayerParam]);
+    const next = selectedSection === "all" || selectedSection === null ? null : selectedSection;
+    if (next !== sectionParam) setSectionParam(next);
+  }, [selectedSection, sectionParam, setSectionParam]);
 
   // Modal states
   const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);
-  const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
   const [isTriageDrawerOpen, setIsTriageDrawerOpen] = useState(false);
   const [triageBadgeCount, setTriageBadgeCount] = useState<number>(0);
-  const [targetLayerId, setTargetLayerId] = useState<string>("");
-  const [targetGroupId, setTargetGroupId] = useState<string>("");
+  // The section a new lesson opens in; null is the group of lessons outside any section
+  const [targetSection, setTargetSection] = useState<string | null>(null);
 
   const refreshTriageBadge = useCallback(() => {
     fetchTriageItems()
@@ -195,14 +189,13 @@ function RoadmapWorkspace() {
     return () => window.removeEventListener("roadmap:triage-updated", handleTriageUpdate);
   }, [refreshTriageBadge]);
 
-  const handleOpenCreateItem = (layerId: string, groupId?: string) => {
-    setTargetLayerId(layerId);
-    setTargetGroupId(groupId ?? "");
+  const handleOpenCreateItem = (section: string | null) => {
+    setTargetSection(section);
     setIsCreateItemOpen(true);
   };
 
   const handleSelectRoadmap = (slug: string) => {
-    setSelectedLayerId("all");
+    setSelectedSection("all");
     setTopic(slug);
     setItem(null);
     setIsReaderOpen(false);
@@ -217,23 +210,15 @@ function RoadmapWorkspace() {
   const handleSelectItem = (id: string) => {
     selectActiveItem(id);
     setIsReaderOpen(true);
-    for (const layer of layers) {
-      for (const group of layer.groups) {
-        const found = group.items.find((i) => i.id === id);
-        if (found) {
-          setItem(found.slug || slugify(found.title));
-          return;
-        }
-      }
-    }
-    setItem(id);
+    const found = items.find((i) => i.id === id);
+    setItem(found ? found.slug || slugify(found.title) : id);
   };
 
   const handleCreateRoadmap = async (payload: CreateRoadmapDto) => {
     const { roadmap: created } = await roadmapService.createRoadmap(payload);
     refreshRoadmaps();
     if (created?.slug) {
-      setSelectedLayerId("all");
+      setSelectedSection("all");
       setTopic(created.slug);
       setItem(null);
       setIsReaderOpen(false);
@@ -248,7 +233,7 @@ function RoadmapWorkspace() {
       );
       setAvailableRoadmaps(remaining);
       if (remaining.length > 0) {
-        setSelectedLayerId("all");
+        setSelectedSection("all");
         setTopic(remaining[0].slug);
         setItem(null);
       } else {
@@ -262,18 +247,8 @@ function RoadmapWorkspace() {
     }
   };
 
-  // Compute flattened lessons list to provide prev and next
-  const flatLessons = useMemo(() => {
-    const list: Array<{ id: string; title: string }> = [];
-    for (const layer of layers) {
-      for (const group of layer.groups) {
-        for (const it of group.items) {
-          list.push({ id: it.id, title: it.title });
-        }
-      }
-    }
-    return list;
-  }, [layers]);
+  // The topic's lessons in page order, for prev and next
+  const flatLessons = useMemo(() => items.map((it) => ({ id: it.id, title: it.title })), [items]);
 
   const currentLessonIndex = flatLessons.findIndex((l) => l.id === activeItemId);
   const prevLesson = currentLessonIndex > 0 ? flatLessons[currentLessonIndex - 1] : undefined;
@@ -287,22 +262,74 @@ function RoadmapWorkspace() {
       {/* Global loading overlay */}
       <GlobalPageLoader />
 
-      {/* Desktop 80px Compact Sidebar on the Left */}
-      <CompactSidebar
-        className="hidden md:flex"
-        currentView={currentView}
-        currentSlug={activeSlug}
-        roadmaps={availableRoadmaps}
-        isLoading={isRoadmapsLoading}
-        onSelectHome={handleSelectHome}
-        onSelectRoadmap={handleSelectRoadmap}
-        onOpenCreateRoadmap={canWrite ? () => setIsCreateTopicOpen(true) : undefined}
-        onOpenTriage={canWrite ? () => setIsTriageDrawerOpen(true) : undefined}
-        triageBadgeCount={triageBadgeCount}
-      />
-
       {/* Main Content Area */}
       <div className="flex-1 h-full overflow-hidden flex flex-col">
+        {/* Desktop top bar: Home, topic switch, and the Owner's actions (replaces the left sidebar, ADR-0009) */}
+        <header className="hidden md:flex shrink-0 items-center gap-3 border-b border-border bg-card/80 px-4 py-2.5 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={handleSelectHome}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer",
+              currentView === "home" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <HomeIcon className="size-4" />
+            <span>Trang chủ</span>
+          </button>
+
+          <select
+            aria-label="Chọn topic"
+            value={currentView === "roadmap" ? activeSlug : ""}
+            onChange={(e) => e.target.value && handleSelectRoadmap(e.target.value)}
+            disabled={isRoadmapsLoading}
+            className="max-w-[16rem] rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-primary"
+          >
+            <option value="" disabled>
+              {isRoadmapsLoading ? "Đang tải…" : "Chọn topic"}
+            </option>
+            {availableRoadmaps.map((r) => (
+              <option key={r.slug} value={r.slug}>
+                {r.title}
+              </option>
+            ))}
+          </select>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            {canWrite && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTopicOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <Plus className="size-4" />
+                  <span>Tạo topic</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsTriageDrawerOpen(true)}
+                  className="relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-[#C2410C] cursor-pointer"
+                >
+                  <Sparkles className="size-4" />
+                  <span>Triage</span>
+                  {triageBadgeCount > 0 && (
+                    <span className="flex size-4 items-center justify-center rounded-full bg-[#C2410C] text-[0.5625rem] font-bold text-white">
+                      {triageBadgeCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+            <Link
+              href="/portfolio"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <UserRound className="size-4" />
+              <span>Portfolio</span>
+            </Link>
+          </div>
+        </header>
         {currentView === "home" ? (
           <div
             key="view-home"
@@ -318,7 +345,7 @@ function RoadmapWorkspace() {
         ) : view === "map" ? (
           <div className="flex-1 w-full h-full overflow-hidden">
             <RoadmapMap
-              layers={filteredLayers}
+              sectionGroups={sectionGroups}
               currentRoadmap={roadmapMeta}
               stats={stats}
               activeItemId={activeItemId}
@@ -342,41 +369,31 @@ function RoadmapWorkspace() {
               )}
             >
               <MasterPanel
-                layers={filteredLayers}
-                allLayers={layers}
+                sectionGroups={sectionGroups}
                 activeItemId={activeItemId}
-                selectedLayerId={selectedLayerId}
+                selectedSection={selectedSection}
+                onSelectSection={setSelectedSection}
                 stats={stats}
                 currentRoadmap={roadmapMeta}
                 canWrite={canWrite}
                 view={view}
                 onViewChange={handleViewChange}
-                onEditRoadmap={async (title, shortCode, description) => {
-                  await editRoadmap(title, shortCode, description);
+                onEditRoadmap={async (title, description) => {
+                  await editRoadmap(title, description);
                   setAvailableRoadmaps((prev) =>
-                    prev.map((r) =>
-                      r.slug === activeSlug
-                        ? { ...r, title, shortCode, description }
-                        : r
-                    )
+                    prev.map((r) => (r.slug === activeSlug ? { ...r, title, description } : r))
                   );
                 }}
                 onDeleteRoadmap={handleDeleteRoadmap}
                 isLoading={isLoading}
                 isError={isError}
-                onLayerChange={setSelectedLayerId}
                 onSelectItem={(id) => {
                   handleSelectItem(id);
                   setIsReaderOpen(true);
                 }}
-                onReorderGroupItems={updateGroupItems}
-                onOpenCreateLayer={() => setIsCreateLayerOpen(true)}
+                onReorderItems={reorderItems}
                 onOpenCreateItem={handleOpenCreateItem}
-                onAddGroup={addGroup}
-                onEditGroup={editGroup}
-                onDeleteGroup={deleteGroup}
-                onEditLayer={editLayer}
-                onDeleteLayer={deleteLayer}
+                onRenameSection={renameSection}
                 onToggleLock={toggleRoadmapLock}
               />
             </div>
@@ -390,6 +407,7 @@ function RoadmapWorkspace() {
             >
               <DetailPanel
                 item={activeItem}
+                sections={sections.filter((s): s is string => s !== null)}
                 isLoading={isLoading}
                 canWrite={canWrite}
                 prevLesson={prevLesson}
@@ -515,7 +533,7 @@ function RoadmapWorkspace() {
                   )}
                 </div>
                 <span className="text-xs font-mono font-semibold uppercase text-muted-foreground">
-                  {r.shortCode || r.slug.slice(0, 2)}
+                  {r._count?.items ?? 0} bài
                 </span>
               </button>
             );
@@ -543,19 +561,12 @@ function RoadmapWorkspace() {
         onSubmit={handleCreateRoadmap}
       />
 
-      <CreateLayerModal
-        isOpen={isCreateLayerOpen}
-        onClose={() => setIsCreateLayerOpen(false)}
-        onSubmit={addLayer}
-      />
-
       <CreateItemModal
         isOpen={isCreateItemOpen}
-        layers={layers}
-        targetLayerId={targetLayerId}
-        targetGroupId={targetGroupId}
+        sections={sections.filter((s): s is string => s !== null)}
+        targetSection={targetSection}
         onClose={() => setIsCreateItemOpen(false)}
-        onSubmit={addItem}
+        onSubmit={(section, title, description) => addItem(section, title, description)}
       />
 
       {/* Knowledge Triage Drawer */}

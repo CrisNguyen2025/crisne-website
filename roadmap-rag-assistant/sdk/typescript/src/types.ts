@@ -22,7 +22,8 @@ export interface ChatRequest {
 /** Page the user is viewing; lets the assistant resolve "này" / "đây" references. */
 export interface PageContext {
   roadmapSlug?: string;
-  layerId?: string;
+  /** The section (mục) open in the list, by name (ADR-0009) */
+  section?: string;
   itemId?: string;
 }
 
@@ -61,7 +62,7 @@ export interface ChangeReview {
   id: string;
   action: 'create' | 'delete' | (string & {});
   level: string;
-  /** Where the entries were created (topic slug or layer id). */
+  /** Where the entries were created (topic slug). */
   parent?: string;
   /** Rows written / deleted, children included. */
   added: number;

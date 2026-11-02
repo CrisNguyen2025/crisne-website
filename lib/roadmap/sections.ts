@@ -1,4 +1,4 @@
-import { normalizeTitle } from './duplicates';
+import { normalizeTitle } from './titles';
 
 /**
  * The spelling a section already has in its topic, so "rag" and "RAG " are one section (ADR-0009).

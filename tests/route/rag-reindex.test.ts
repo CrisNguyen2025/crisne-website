@@ -105,7 +105,8 @@ const handlers = routeFiles(ROADMAPS_DIR)
 
 describe("roadmap write routes report their changes to the assistant", () => {
   it("discovers the write handlers", () => {
-    expect(handlers.length).toBeGreaterThanOrEqual(15);
+    // Topic, lesson, lesson-content, reorder, section rename and triage approve (ADR-0009)
+    expect(handlers.length).toBeGreaterThanOrEqual(10);
   });
 
   it.each(handlers.map((h) => [`${h.method} ${h.rel}`, h] as const))("%s calls notifyRoadmapChanged", (_, h) => {

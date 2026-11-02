@@ -128,8 +128,8 @@ export function FloatingChatDrawer({
       );
     } else if (chip.type === "roadmap") {
       window.dispatchEvent(
-        new CustomEvent("roadmap:select-layer", {
-          detail: { layerId: chip.id },
+        new CustomEvent("roadmap:select-section", {
+          detail: { section: chip.id },
         })
       );
     }

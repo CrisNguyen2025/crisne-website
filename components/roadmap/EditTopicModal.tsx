@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Layers, Tag, AlignLeft, Sparkles } from 'lucide-react';
+import { Layers, AlignLeft, Sparkles } from 'lucide-react';
 import { RoadmapMeta } from '@/lib/roadmap/types';
 import { Dialog } from '@/components/ui/dialog';
 
@@ -9,7 +9,7 @@ interface EditTopicModalProps {
   isOpen: boolean;
   topic: RoadmapMeta | null;
   onClose: () => void;
-  onSubmit: (title: string, shortCode: string, description?: string) => Promise<void>;
+  onSubmit: (title: string, description?: string) => Promise<void>;
 }
 
 function EditTopicForm({
@@ -19,10 +19,9 @@ function EditTopicForm({
 }: {
   topic: RoadmapMeta;
   onClose: () => void;
-  onSubmit: (title: string, shortCode: string, description?: string) => Promise<void>;
+  onSubmit: (title: string, description?: string) => Promise<void>;
 }) {
   const [title, setTitle] = useState(topic.title);
-  const [shortCode, setShortCode] = useState(topic.shortCode || '');
   const [description, setDescription] = useState(topic.description || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -33,15 +32,11 @@ function EditTopicForm({
       setError('Please enter a topic title.');
       return;
     }
-    if (!shortCode.trim()) {
-      setError('Please enter a short code (e.g. AI, BE, FE).');
-      return;
-    }
 
     try {
       setIsSubmitting(true);
       setError('');
-      await onSubmit(title.trim(), shortCode.trim().toUpperCase(), description.trim());
+      await onSubmit(title.trim(), description.trim());
       onClose();
     } catch (err: unknown) {
       console.error('Failed to update topic:', err);
@@ -57,7 +52,7 @@ function EditTopicForm({
       open
       onClose={onClose}
       title="Edit Topic"
-      description="Update topic name, sidebar code, and description"
+      description="Tên và mô tả của topic"
       icon={<Layers className="size-4 text-primary" />}
       footer={
         <>
@@ -99,24 +94,6 @@ function EditTopicForm({
             className="w-full px-3 py-2 text-xs bg-muted/40 border border-border/60 rounded-xl focus:outline-none focus:border-primary focus:bg-background transition-colors text-foreground"
             autoFocus
           />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <Tag className="size-3.5 text-primary" />
-            <span>Sidebar Short Code *</span>
-          </label>
-          <input
-            type="text"
-            value={shortCode}
-            onChange={(e) => setShortCode(e.target.value)}
-            placeholder="e.g. AI, BE, FE, DEV"
-            maxLength={6}
-            className="w-full px-3 py-2 text-xs font-mono uppercase bg-muted/40 border border-border/60 rounded-xl focus:outline-none focus:border-primary focus:bg-background transition-colors text-foreground"
-          />
-          <p className="text-[0.625rem] text-muted-foreground">
-            Displayed on the compact left sidebar (max 6 characters).
-          </p>
         </div>
 
         <div className="space-y-1.5">

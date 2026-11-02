@@ -13,9 +13,7 @@ const mockTriageItem = {
   comment: "Thiếu hướng dẫn Cohere / BGE reranker",
   status: "PENDING",
   roadmapSlug: "ai-architecture",
-  layerId: "layer-1",
-  layerTag: "01-CORE",
-  groupTitle: "Core",
+  section: "Core",
   draftTitle: null,
   draftContent: null,
   verifyScore: null,
@@ -36,14 +34,6 @@ const prismaMock = vi.hoisted(() => ({
   roadmap: {
     findMany: vi.fn(),
     findFirst: vi.fn(),
-  },
-  roadmapLayer: {
-    findFirst: vi.fn(),
-  },
-  roadmapGroup: {
-    findFirst: vi.fn(),
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn(),
   },
   roadmapItem: {
     create: vi.fn(),
@@ -170,7 +160,7 @@ describe("Knowledge Triage API Routes", () => {
     prismaMock.roadmap.findMany.mockResolvedValueOnce([
       {
         slug: "ai-architecture",
-        layers: [{ id: "l1", shortTag: "01-CORE", order: 1 }],
+        items: [],
       },
     ]);
     prismaMock.knowledgeTriage.update.mockResolvedValueOnce({
@@ -216,7 +206,7 @@ describe("Knowledge Triage API Routes", () => {
       setLlmProvider(llm);
       prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce(mockTriageItem);
       prismaMock.roadmap.findMany.mockResolvedValueOnce([
-        { slug: "ai-architecture", layers: [{ id: "l1", shortTag: "01-CORE", order: 1 }] },
+        { slug: "ai-architecture", items: [] },
       ]);
       prismaMock.knowledgeTriage.update.mockImplementationOnce(async ({ data }) => ({ ...mockTriageItem, ...data }));
     });
@@ -341,9 +331,12 @@ describe("Knowledge Triage API Routes", () => {
     });
 
     beforeEach(() => {
-      prismaMock.roadmapGroup.findMany.mockResolvedValueOnce([
-        { id: "group-1", layerId: "l1", title: "Core" },
-      ]);
+      // The topic the draft is for, with one lesson already in it
+      prismaMock.roadmap.findFirst.mockResolvedValue({
+        id: "t1",
+        slug: "ai-architecture",
+        items: [{ id: "item-1", title: "Sẵn có", section: "Core", order: 2 }],
+      });
       prismaMock.roadmapItem.create.mockImplementationOnce(async ({ data }) => ({ id: "item-new", ...data }));
     });
 
@@ -364,14 +357,20 @@ describe("Knowledge Triage API Routes", () => {
         where: { id: "triage-123", status: "DRAFTED" },
         data: { status: "APPROVED" },
       });
-      expect(prismaMock.roadmapItem.create.mock.calls[0][0].data).toMatchObject({ groupId: "group-1", order: 3 });
+      expect(prismaMock.roadmapItem.create.mock.calls[0][0].data).toMatchObject({
+        roadmapId: "t1",
+        section: "Core",
+        order: 3,
+      });
     });
 
-    it("returns 409 and keeps the draft when the layer already has a lesson with that title", async () => {
+    it("returns 409 and keeps the draft when the topic already has a lesson with that title", async () => {
       prismaMock.knowledgeTriage.findUnique.mockResolvedValueOnce(draftedItem("Nội dung"));
-      prismaMock.roadmapItem.findMany.mockResolvedValueOnce([
-        { id: "item-old", title: "  tối ưu hóa pipeline RAG với reranker " },
-      ]);
+      prismaMock.roadmap.findFirst.mockResolvedValue({
+        id: "t1",
+        slug: "ai-architecture",
+        items: [{ id: "item-old", title: "  tối ưu hóa pipeline RAG với reranker ", section: "RAG", order: 1 }],
+      });
 
       const res = await approveRequest();
 

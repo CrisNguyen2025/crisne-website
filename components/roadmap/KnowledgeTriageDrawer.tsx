@@ -55,8 +55,8 @@ export function KnowledgeTriageDrawer({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // Target group typed per draft; falls back to the draft's own groupTitle (ADR-0008)
-  const [groupTitles, setGroupTitles] = useState<Record<string, string>>({});
+  // Target section typed per draft; falls back to the draft's own section (ADR-0009)
+  const [sectionTitles, setSectionTitles] = useState<Record<string, string>>({});
   const [goldenSet, setGoldenSet] = useState<GoldenSetStatus | null>(null);
 
   const loadData = useCallback(async () => {
@@ -126,8 +126,8 @@ export function KnowledgeTriageDrawer({
     setError(null);
     try {
       const draft = items.find((i) => i.id === id);
-      const groupTitle = (groupTitles[id] ?? draft?.groupTitle ?? '').trim();
-      const { triage } = await approveTriageDraft(id, groupTitle || undefined);
+      const section = (sectionTitles[id] ?? draft?.section ?? '').trim();
+      const { triage } = await approveTriageDraft(id, section || undefined);
       setItems((prev) => prev.map((item) => (item.id === id ? triage : item)));
       if (onRoadmapUpdated) {
         onRoadmapUpdated();
@@ -382,15 +382,15 @@ export function KnowledgeTriageDrawer({
                           {item.draftTitle}
                         </span>
                         <span className="text-[0.625rem] text-muted-foreground font-mono">
-                          Layer {item.layerTag || '01-CORE'}
+                          Mục {item.section || 'Chung'}
                         </span>
                       </div>
                       <input
                         type="text"
-                        value={groupTitles[item.id] ?? item.groupTitle ?? ''}
-                        onChange={(e) => setGroupTitles((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                        placeholder="Group (bỏ trống nếu layer chỉ có 1 group)"
-                        aria-label="Target group"
+                        value={sectionTitles[item.id] ?? item.section ?? ''}
+                        onChange={(e) => setSectionTitles((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        placeholder="Mục (bỏ trống nếu không thuộc mục nào)"
+                        aria-label="Target section"
                         className="mt-1.5 w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-[#C2410C]"
                       />
                       <button

@@ -2,42 +2,37 @@
 
 import React, { useState } from 'react';
 import { X, Check, Edit3, AlignLeft } from 'lucide-react';
-import { ChecklistItem, RoadmapGroup } from '@/lib/roadmap/types';
+import { ChecklistItem } from '@/lib/roadmap/types';
+import { SectionField } from './SectionField';
 import { Sheet } from '@/components/ui/sheet';
 import { useMediaQuery, MOBILE_VIEWPORT_QUERY } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
 
 interface EditItemInfoDrawerProps {
   isOpen: boolean;
-  item:
-    | (ChecklistItem & {
-        layerTitle?: string;
-        groupTitle?: string;
-        layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
-      })
-    | null;
+  item: ChecklistItem | null;
+  /** The topic's sections, to pick from */
+  sections: string[];
   onClose: () => void;
-  /** groupId is set only when the lesson moves to another group of its layer */
-  onSubmit: (id: string, title: string, description: string, groupId?: string) => void;
+  /** section is sent only when it changed; "" takes the lesson out of its section */
+  onSubmit: (id: string, title: string, description: string, section?: string | null) => void;
 }
 
 function EditItemInfoForm({
   item,
+  sections,
   onClose,
   onSubmit,
 }: {
-  item: ChecklistItem & {
-    layerTitle?: string;
-    groupTitle?: string;
-    layerGroups?: Pick<RoadmapGroup, 'id' | 'title'>[];
-  };
+  item: ChecklistItem;
+  sections: string[];
   onClose: () => void;
-  onSubmit: (id: string, title: string, description: string, groupId?: string) => void;
+  onSubmit: (id: string, title: string, description: string, section?: string | null) => void;
 }) {
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
-  const [groupId, setGroupId] = useState(item.groupId);
+  const [section, setSection] = useState(item.section ?? '');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -47,7 +42,9 @@ function EditItemInfoForm({
       return;
     }
 
-    onSubmit(item.id, title.trim(), description.trim(), groupId !== item.groupId ? groupId : undefined);
+    const nextSection = section.trim() || null;
+    const sectionChanged = nextSection !== (item.section ?? null);
+    onSubmit(item.id, title.trim(), description.trim(), sectionChanged ? nextSection : undefined);
     onClose();
   };
 
@@ -94,30 +91,7 @@ function EditItemInfoForm({
           </div>
         )}
 
-        {(item.layerGroups?.length ?? 0) > 1 && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Group
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {item.layerGroups!.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setGroupId(g.id)}
-                  className={cn(
-                    'py-1.5 px-3 rounded-xl border text-xs font-medium transition-colors cursor-pointer',
-                    groupId === g.id
-                      ? 'bg-primary/10 border-primary/40 text-primary font-bold shadow-xs'
-                      : 'bg-background border-border/60 text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {g.title}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <SectionField value={section} onChange={setSection} sections={sections} />
 
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -172,9 +146,10 @@ function EditItemInfoForm({
 export function EditItemInfoDrawer({
   isOpen,
   item,
+  sections,
   onClose,
   onSubmit,
 }: EditItemInfoDrawerProps) {
   if (!isOpen || !item) return null;
-  return <EditItemInfoForm key={item.id} item={item} onClose={onClose} onSubmit={onSubmit} />;
+  return <EditItemInfoForm key={item.id} item={item} sections={sections} onClose={onClose} onSubmit={onSubmit} />;
 }

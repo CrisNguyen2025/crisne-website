@@ -2,22 +2,17 @@
 
 import { useEffect } from 'react';
 import {
-  createGroup,
   createItem,
-  createLayer,
   createRoadmap,
-  deleteGroup,
   deleteItem,
-  deleteLayer,
   deleteRoadmapBySlug,
   exportAllRoadmaps,
   fetchAllRoadmaps,
   fetchRoadmapBySlug,
-  reorderGroupItems,
-  updateGroup,
+  renameSection,
+  reorderItems,
   updateItemContent,
   updateItemInfo,
-  updateLayer,
   updateRoadmapBySlug,
 } from '@/logic/roadmap/roadmapService';
 import { getRoadmapPageContext } from '@/logic/roadmap/roadmapAssistantService';
@@ -71,19 +66,19 @@ function requireConfirm(args: Record<string, any>) {
 const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   {
     name: 'get_current_context',
-    description: 'Get the roadmap and item the user is currently viewing, so "this" or "here" can be resolved.',
+    description: 'Get the topic, section and lesson the user is currently viewing, so "this" or "here" can be resolved.',
     inputSchema: { type: 'object', properties: {} },
     execute: async () => getRoadmapPageContext() ?? {},
   },
   {
     name: 'list_roadmaps',
-    description: 'List all roadmap topics with their layer counts.',
+    description: 'List all topics with their lesson counts.',
     inputSchema: { type: 'object', properties: {} },
     execute: () => fetchAllRoadmaps(),
   },
   {
     name: 'get_roadmap',
-    description: 'Get one roadmap with its layers, groups and items. Accepts slug, shortCode or title.',
+    description: 'Get one topic with its lessons in page order and its sections. Accepts slug or title.',
     inputSchema: {
       type: 'object',
       properties: { slug: { type: 'string' } },
@@ -93,44 +88,41 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'export_roadmaps',
-    description: 'Export all roadmaps with full layer, group and item data.',
+    description: 'Export all topics with their lessons, each lesson naming its section.',
     inputSchema: { type: 'object', properties: {} },
     execute: () => exportAllRoadmaps(),
   },
   {
     name: 'create_roadmap',
-    description: 'Create a new roadmap topic.',
+    description: 'Create a new topic. Lessons are added afterwards.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string' },
-        shortCode: { type: 'string' },
         description: { type: 'string' },
       },
-      required: ['title', 'shortCode'],
+      required: ['title'],
     },
-    execute: async (args) => notifyUpdated(await createRoadmap({ ...args, layers: [] } as any)),
+    execute: async (args) => notifyUpdated(await createRoadmap(args as any)),
   },
   {
     name: 'update_roadmap',
-    description: 'Update a roadmap title, shortCode, description or lock state.',
+    description: 'Update a topic title, description or lock state.',
     inputSchema: {
       type: 'object',
       properties: {
         slug: { type: 'string' },
         title: { type: 'string' },
-        shortCode: { type: 'string' },
         description: { type: 'string' },
         isLocked: { type: 'boolean' },
       },
       required: ['slug'],
     },
-    execute: async ({ slug, ...payload }) =>
-      notifyUpdated(await updateRoadmapBySlug(slug, payload)),
+    execute: async ({ slug, ...payload }) => notifyUpdated(await updateRoadmapBySlug(slug, payload)),
   },
   {
     name: 'delete_roadmap',
-    description: 'Delete a roadmap topic and all its content. Irreversible.',
+    description: 'Delete a topic and all its lessons. Irreversible.',
     inputSchema: {
       type: 'object',
       properties: { slug: { type: 'string' }, confirm: CONFIRM_SCHEMA },
@@ -143,120 +135,50 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
     },
   },
   {
-    name: 'create_layer',
-    description: 'Create a layer inside a roadmap.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        slug: { type: 'string' },
-        title: { type: 'string' },
-        shortTag: { type: 'string' },
-        subtitle: { type: 'string' },
-      },
-      required: ['slug', 'title', 'shortTag'],
-    },
-    execute: async ({ slug, ...payload }) =>
-      notifyUpdated(await createLayer(slug, payload as any)),
-  },
-  {
-    name: 'update_layer',
-    description: 'Update a layer title, shortTag or subtitle.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        title: { type: 'string' },
-        shortTag: { type: 'string' },
-        subtitle: { type: 'string' },
-      },
-      required: ['id', 'title', 'shortTag'],
-    },
-    execute: async (args) => notifyUpdated(await updateLayer(args as any)),
-  },
-  {
-    name: 'delete_layer',
-    description: 'Delete a layer and its groups and items. Irreversible.',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, confirm: CONFIRM_SCHEMA },
-      required: ['id', 'confirm'],
-    },
-    execute: async ({ id, ...args }) => {
-      requireConfirm(args);
-      await deleteLayer(id);
-      return notifyUpdated({ success: true, deletedId: id });
-    },
-  },
-  {
-    name: 'create_group',
-    description: 'Create a named group of lessons inside a layer. The title is unique within the layer.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        layerId: { type: 'string' },
-        title: { type: 'string' },
-      },
-      required: ['layerId', 'title'],
-    },
-    execute: async ({ layerId, title }) => notifyUpdated(await createGroup(layerId, title)),
-  },
-  {
-    name: 'update_group',
-    description: 'Rename a group.',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, title: { type: 'string' } },
-      required: ['id', 'title'],
-    },
-    execute: async ({ id, title }) => notifyUpdated(await updateGroup(id, title)),
-  },
-  {
-    name: 'delete_group',
-    description: 'Delete a group and its lessons. Irreversible.',
-    inputSchema: {
-      type: 'object',
-      properties: { id: { type: 'string' }, confirm: CONFIRM_SCHEMA },
-      required: ['id', 'confirm'],
-    },
-    execute: async ({ id, ...args }) => {
-      requireConfirm(args);
-      await deleteGroup(id);
-      return notifyUpdated({ success: true, deletedId: id });
-    },
-  },
-  {
     name: 'create_item',
     description:
-      'Create a lesson inside a layer. Name the group by groupId or groupTitle (a new title creates the group); ' +
-      'with neither, a layer holding one group uses it, otherwise the call fails and lists the groups.',
+      'Add a lesson to a topic. section is optional: it names a section of the topic (reused if it exists, created if not); leave it out for a lesson outside any section.',
     inputSchema: {
       type: 'object',
       properties: {
-        layerId: { type: 'string' },
-        groupId: { type: 'string' },
-        groupTitle: { type: 'string' },
+        roadmapSlug: { type: 'string' },
+        section: { type: 'string' },
         title: { type: 'string' },
         description: { type: 'string' },
         content: { type: 'string', description: 'Optional body (HTML) saved in the same request' },
       },
-      required: ['layerId', 'title'],
+      required: ['roadmapSlug', 'title'],
     },
     execute: async (args) => notifyUpdated(await createItem(args as any)),
   },
   {
     name: 'update_item',
-    description: 'Update a lesson title and description; groupId moves it to another group of its layer.',
+    description: 'Update a lesson title and description. section moves it to another section ("" takes it out of its section).',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         title: { type: 'string' },
         description: { type: 'string' },
-        groupId: { type: 'string' },
+        section: { type: 'string' },
       },
       required: ['id', 'title', 'description'],
     },
     execute: async (args) => notifyUpdated(await updateItemInfo(args as any)),
+  },
+  {
+    name: 'rename_section',
+    description: 'Rename a section of a topic; every lesson in it moves to the new name. Renaming onto an existing section merges them.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slug: { type: 'string' },
+        from: { type: 'string' },
+        to: { type: 'string' },
+      },
+      required: ['slug', 'from', 'to'],
+    },
+    execute: async ({ slug, from, to }) => notifyUpdated(await renameSection(slug, { from, to })),
   },
   {
     name: 'update_item_content',
@@ -284,16 +206,15 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
   },
   {
     name: 'reorder_items',
-    description: 'Set the order of lessons within one group.',
+    description: 'Set the page order of the lessons of a topic.',
     inputSchema: {
       type: 'object',
       properties: {
-        groupId: { type: 'string' },
         orderedItemIds: { type: 'array', items: { type: 'string' } },
       },
-      required: ['groupId', 'orderedItemIds'],
+      required: ['orderedItemIds'],
     },
-    execute: async (args) => notifyUpdated(await reorderGroupItems(args as any)),
+    execute: async (args) => notifyUpdated(await reorderItems(args as any)),
   },
 ];
 

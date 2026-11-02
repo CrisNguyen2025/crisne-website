@@ -26,7 +26,7 @@ import {
 } from '@/logic/storage/storageService';
 
 interface HomeDashboardProps {
-  roadmaps: RoadmapMeta[];
+  roadmaps: (RoadmapMeta & { _count?: { items: number } })[];
   isLoading?: boolean;
   onSelectRoadmap: (slug: string) => void;
   onOpenCreateModal: () => void;
@@ -200,8 +200,14 @@ export function HomeDashboard({
             </>
           ) : (
             roadmaps.map((r) => {
-              const code = (r.shortCode || r.slug.substring(0, 2)).toUpperCase();
-              const layerCount = r._count?.layers;
+              // Topics have no short code (ADR-0009): the mark is the first letters of the title
+              const code = r.title
+                .split(/\s+/)
+                .map((w) => w[0] ?? '')
+                .join('')
+                .slice(0, 3)
+                .toUpperCase();
+              const lessonCount = r._count?.items;
 
               return (
                 <div
@@ -236,8 +242,8 @@ export function HomeDashboard({
                   <div className="pt-3 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5">
                       <Layers className="size-3 text-muted-foreground/70" />
-                      {typeof layerCount === 'number'
-                        ? `${layerCount} ${layerCount === 1 ? 'layer' : 'layers'}`
+                      {typeof lessonCount === 'number'
+                        ? `${lessonCount} bài`
                         : 'Interactive View'}
                     </span>
                     <span className="font-semibold text-foreground/80 uppercase tracking-wider text-[0.625rem]">

@@ -8,7 +8,7 @@ vi.mock("@/logic/roadmap/roadmapService", () => ({ fetchRoadmapBySlug }));
 import { useRoadmap } from "@/hooks/use-roadmap";
 
 const notFound = () => Object.assign(new Error("Roadmap not found"), { status: 404 });
-const topic = (slug: string) => ({ roadmap: { id: slug, slug, title: slug }, layers: [] });
+const topic = (slug: string) => ({ roadmap: { id: slug, slug, title: slug, order: 1 }, items: [], sections: [] });
 
 /** A request the test resolves or rejects when it chooses, to put responses out of order. */
 function deferred<T>() {
