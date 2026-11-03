@@ -72,8 +72,7 @@ def test_create_with_every_entity_existing_changes_nothing(adapter):
 @pytest.mark.usefixtures("write_grant")
 def test_delete_topic_lists_the_rows_removed_with_it(adapter):
     topic = asyncio.run(adapter.create_topic("Backend", "BE"))
-    layer = asyncio.run(adapter.create_layer(topic["slug"], "Docker", "01-DOC"))
-    asyncio.run(adapter.create_item(layer["id"], "core", "Docker Basics"))
+    asyncio.run(adapter.create_item(topic["slug"], "Core", "Docker Basics"))
 
     ok, changes = _run(adapter, _action(ActionType.DELETE, EntityLevel.TOPIC, topic["slug"], topic["slug"]))
 
@@ -81,20 +80,19 @@ def test_delete_topic_lists_the_rows_removed_with_it(adapter):
     assert ok
     [entry] = data["entries"]
     assert entry["op"] == "delete" and entry["title"] == "Backend"
-    assert [c["level"] for c in entry["children"]] == ["layer", "group", "item"]
-    assert entry["children"][-1]["title"] == "Docker Basics"
-    assert data["removed"] == 4
+    assert entry["children"] == [{"level": "item", "title": "Docker Basics"}]
+    assert data["removed"] == 2
 
 
 @pytest.mark.usefixtures("write_grant")
-def test_delete_layer_snapshots_it_by_id(adapter):
+def test_delete_lesson_snapshots_it_by_id(adapter):
     topic = asyncio.run(adapter.create_topic("Backend", "BE"))
-    layer = asyncio.run(adapter.create_layer(topic["slug"], "Docker", "01-DOC"))
+    lesson = asyncio.run(adapter.create_item(topic["slug"], "Core", "Docker"))
 
-    ok, changes = _run(adapter, _action(ActionType.DELETE, EntityLevel.LAYER, layer["id"], "Docker"))
+    ok, changes = _run(adapter, _action(ActionType.DELETE, EntityLevel.ITEM, lesson["id"], "Docker"))
 
     [entry] = changes.to_dict()["entries"]
-    assert ok and entry["title"] == "Docker" and entry["id"] == layer["id"]
+    assert ok and entry["title"] == "Docker" and entry["id"] == lesson["id"]
 
 
 def test_delete_that_finds_nothing_changes_nothing(adapter):
@@ -104,8 +102,8 @@ def test_delete_that_finds_nothing_changes_nothing(adapter):
 
 
 def test_children_are_cut_at_the_limit():
-    changes = ChangeSet("delete", "group")
-    changes.deleted("g1", {"id": "g1", "title": "Core", "items": [{"title": f"i{n}"} for n in range(MAX_CHILDREN + 5)]})
+    changes = ChangeSet("delete", "topic")
+    changes.deleted("t1", {"id": "t1", "title": "Core", "items": [{"title": f"i{n}"} for n in range(MAX_CHILDREN + 5)]})
 
     data = changes.to_dict()
     assert len(data["entries"][0]["children"]) == MAX_CHILDREN
@@ -153,7 +151,7 @@ async def test_confirm_returns_the_changes(mock_adapter, owner_headers):
     assert data["success"] is True
     [entry] = data["changes"]["entries"]
     assert entry["op"] == "delete" and entry["title"] == "Test Topic"
-    assert [c["title"] for c in entry["children"]] == ["New Layer"]
+    assert [c["title"] for c in entry["children"]] == ["Existing Lesson"]
 
 
 # ── Writes outside the executor: bulk import ────────────────────────────────
@@ -164,15 +162,15 @@ async def test_import_records_new_items_and_skips_existing(mock_adapter):
     from rag_service.adapters.errors import DuplicateEntityError
     from rag_service.tools.item_tools import import_items_from_text
 
-    async def create_item(layer_id, group_title, title, description="", content=""):
+    async def create_item(topic_slug, section, title, description="", content=""):
         if title == "Docker":
             raise DuplicateEntityError("item", "Docker", {"id": "i0"})
         return {"id": f"id-{title}", "title": title}
 
     mock_adapter.create_item.side_effect = create_item
-    changes = ChangeSet("create", "item", "layer-id")
+    changes = ChangeSet("create", "item", "test-topic")
     await import_items_from_text.coroutine(
-        layer_id="layer-id", group_title="Core", text="- Docker\n- Kubernetes\n- Helm", changes=changes
+        topic="test-topic", section="Core", text="- Docker\n- Kubernetes\n- Helm", changes=changes
     )
 
     data = changes.to_dict()

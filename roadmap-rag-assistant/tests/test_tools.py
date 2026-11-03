@@ -10,12 +10,11 @@ from rag_service.tools.topic_tools import (
     delete_topic,
     list_topics,
 )
-from rag_service.tools.layer_tools import create_layer, delete_layer, update_layer
-from rag_service.tools.group_tools import create_group, delete_group, update_group
 from rag_service.tools.item_tools import (
     create_item,
     create_items_batch,
     delete_item,
+    rename_section,
     update_item,
 )
 
@@ -26,7 +25,7 @@ from rag_service.tools.item_tools import (
 @pytest.mark.asyncio
 async def test_create_topic(mock_adapter):
     result = await create_topic.ainvoke(
-        {"title": "AI Engineering", "short_code": "AI"}
+        {"title": "AI Engineering"}
     )
     assert "✅" in result
     assert "New Topic" in result
@@ -38,9 +37,9 @@ async def test_create_topics_batch(mock_adapter):
     result = await create_topics_batch.ainvoke(
         {
             "topics": [
-                {"title": "A", "short_code": "A"},
-                {"title": "B", "short_code": "B"},
-                {"title": "C", "short_code": "C"},
+                {"title": "A"},
+                {"title": "B"},
+                {"title": "C"},
             ]
         }
     )
@@ -77,63 +76,6 @@ async def test_delete_topic_not_found(mock_adapter):
     assert "❌" in result
 
 
-# ── Layer Tools ──────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_create_layer(mock_adapter):
-    result = await create_layer.ainvoke(
-        {
-            "topic_slug": "ai-engineering",
-            "title": "Database",
-            "short_tag": "01-DB",
-        }
-    )
-    assert "✅" in result
-    mock_adapter.create_layer.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_update_layer(mock_adapter):
-    result = await update_layer.ainvoke(
-        {"layer_id": "layer-1", "title": "Updated DB"}
-    )
-    assert "✅" in result
-    mock_adapter.update_layer.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_delete_layer(mock_adapter):
-    result = await delete_layer.ainvoke({"layer_id": "layer-1"})
-    assert "🗑️" in result
-
-
-# ── Group Tools ──────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_create_group(mock_adapter):
-    result = await create_group.ainvoke(
-        {"layer_id": "layer-id", "title": "Core", "level": "core"}
-    )
-    assert "✅" in result
-    mock_adapter.create_group.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_update_group(mock_adapter):
-    result = await update_group.ainvoke(
-        {"group_id": "group-1", "title": "Fundamentals"}
-    )
-    assert "✅" in result
-
-
-@pytest.mark.asyncio
-async def test_delete_group(mock_adapter):
-    result = await delete_group.ainvoke({"group_id": "group-1"})
-    assert "🗑️" in result
-
-
 # ── Item Tools ───────────────────────────────────────────────────────────
 
 
@@ -141,8 +83,8 @@ async def test_delete_group(mock_adapter):
 async def test_create_item(mock_adapter):
     result = await create_item.ainvoke(
         {
-            "layer_id": "layer-id",
-            "level": "core",
+            "topic": "test-topic",
+            "section": "Core",
             "title": "Prompt Engineering",
         }
     )
@@ -154,8 +96,8 @@ async def test_create_item(mock_adapter):
 async def test_create_items_batch(mock_adapter):
     result = await create_items_batch.ainvoke(
         {
-            "layer_id": "layer-id",
-            "level": "core",
+            "topic": "test-topic",
+            "section": "Core",
             "items": [
                 {"title": "Vector DB"},
                 {"title": "Embeddings"},
@@ -166,6 +108,14 @@ async def test_create_items_batch(mock_adapter):
     assert "✅" in result
     assert "3" in result
     assert mock_adapter.create_item.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_rename_section(mock_adapter):
+    mock_adapter.update_section.return_value = {"section": "Retrieval", "renamed": 2}
+    result = await rename_section.ainvoke({"topic": "test-topic", "from_name": "RAG", "to_name": "Retrieval"})
+    assert "✅" in result and "Retrieval" in result
+    mock_adapter.update_section.assert_called_once_with("test-topic", "RAG", "Retrieval")
 
 
 @pytest.mark.asyncio

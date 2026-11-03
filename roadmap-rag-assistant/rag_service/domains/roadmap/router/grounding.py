@@ -6,6 +6,7 @@
 - EMPTY_MESSAGE_REPLY, TOO_LONG_REPLY, RETRIEVAL_ERROR_REPLY: fixed replies for bad input and retrieval failure.
 - UNCLEAR_REPLY: shown instead of the greeting when the intent is a low-confidence guess.
 - MIXED_INTENT_REPLY, BULK_DELETE / BULK_DELETE_REPLY: ask back on several requests at once, refuse "delete all".
+- legacy_level_reply(): ask back with the topic/section syntax when a message names a layer or group (ADR-0009).
 - is_sensitive_request() / SENSITIVE_REPLY: refuse requests for secrets, config or the system prompt,
   and prompt-injection attempts, before any routing or LLM call.
 - no_match_reply(): answer when a knowledge query finds nothing; never echoes the user's text.
@@ -15,7 +16,7 @@ from __future__ import annotations
 
 import random
 import re
-from typing import Optional
+from typing import Callable, Optional
 
 from rag_service.core.guards import MAX_MESSAGE_CHARS, TOO_LONG_REPLY, is_sensitive_request  # noqa: F401
 from rag_service.domains.roadmap.retrieval.relevance import content_words, fold
@@ -158,6 +159,38 @@ def unnamed_create_reply(text: str) -> Optional[str]:
     kind = "item" if noun.startswith("bai") or noun in ("item", "lesson", "muc") else "topic"
     name, example = _UNNAMED_EXAMPLES[kind]
     return f"Được, mình tạo {name} được. Bạn gửi tên {name} giúp mình, ví dụ:\n\n" + example_blocks(example)
+
+
+# "xóa layer mock 1", "tạo group Core trong layer aaa": levels removed by ADR-0009. Matched folded, only where
+# layer/group is the noun a verb or preposition points at, so a title such as "Tầng RAG + Agent Layer" never matches.
+# "nhóm" and "tầng" stay out: "tạo nhóm Zalo" is another system, not a removed level.
+LEGACY_LEVEL = re.compile(
+    r"\b(?:tao|them|xoa|sua|doi\s+ten|liet\s+ke|vao|trong|cua|create|add|delete|remove|rename|list|in|to|on)"
+    r"\s+(?:(?:cac|nhung|all|the)\s+)?(?:\d+\s+)?(?:layers?|groups?)\b"
+)
+# The roadmap evidence the guard also needs: "thêm layer dropout vào model Keras" names none and is left to the router.
+ROADMAP_NOUN = re.compile(r"\b(?:topics?|chu\s+de|lo\s+trinh|roadmaps?|bai(?:\s+hoc)?|lessons?|items?|muc)\b")
+
+
+def legacy_level_reply(text: str, known_place: Optional[Callable[[str], bool]] = None) -> Optional[str]:
+    """Asked back when a message names a layer or group and the roadmap: suggests the topic/lesson/section syntax.
+
+    The roadmap is a roadmap noun or, with `known_place`, the name of a topic that exists. None otherwise.
+    """
+    flat = fold(normalize_vietnamese(text).lower())
+    if LEGACY_LEVEL.search(flat) is None:
+        return None
+    words = re.findall(r"[\w-]+", flat)
+    named = known_place is not None and any(
+        known_place(" ".join(words[i:j])) for i in range(len(words)) for j in range(i + 1, min(i + 5, len(words)) + 1)
+    )
+    if ROADMAP_NOUN.search(flat) is None and not named:
+        return None
+    return (
+        "Roadmap không còn layer hay group. Mỗi topic chứa trực tiếp các bài học, và bài học được chia theo mục. "
+        "Mình chưa làm gì cả. Bạn gửi lại theo cú pháp mới, ví dụ:\n\n"
+        + example_blocks("thêm bài Docker vào topic AI Engineering mục Core", "xóa bài Docker", "tạo topic AI Engineering")
+    )
 
 
 # The executor runs create and delete only: an update is answered here, never previewed

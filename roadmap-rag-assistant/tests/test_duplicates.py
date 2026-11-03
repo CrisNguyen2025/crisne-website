@@ -15,14 +15,10 @@ from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, 
 from rag_service.state.session_store import session_store
 
 SCHEMA = """
-CREATE TABLE Roadmap (id TEXT PRIMARY KEY, slug TEXT UNIQUE, title TEXT, shortCode TEXT, description TEXT,
+CREATE TABLE Roadmap (id TEXT PRIMARY KEY, slug TEXT UNIQUE, title TEXT, description TEXT,
   icon TEXT, "order" INT, isLocked INT, createdAt TEXT, updatedAt TEXT);
-CREATE TABLE RoadmapLayer (id TEXT PRIMARY KEY, roadmapId TEXT, "order" INT, shortTag TEXT, title TEXT,
-  subtitle TEXT, createdAt TEXT, updatedAt TEXT);
-CREATE TABLE RoadmapGroup (id TEXT PRIMARY KEY, layerId TEXT, title TEXT, "order" INT,
-  createdAt TEXT, updatedAt TEXT);
-CREATE TABLE RoadmapItem (id TEXT PRIMARY KEY, groupId TEXT, title TEXT, description TEXT, content TEXT,
-  "order" INT, createdAt TEXT, updatedAt TEXT);
+CREATE TABLE RoadmapItem (id TEXT PRIMARY KEY, roadmapId TEXT, section TEXT, title TEXT, description TEXT,
+  content TEXT, "order" INT, createdAt TEXT, updatedAt TEXT);
 """
 
 
@@ -43,58 +39,46 @@ def test_normalize_title_ignores_case_and_spacing_not_diacritics():
 @pytest.mark.usefixtures("write_grant")
 def test_sqlite_refuses_duplicates_at_every_level(adapter):
     async def run():
-        topic = await adapter.create_topic("Backend", "BE")
+        topic = await adapter.create_topic("Backend")
         with pytest.raises(DuplicateEntityError) as exc:
-            await adapter.create_topic("backend", "BE")
+            await adapter.create_topic("backend")
         assert exc.value.kind == "topic" and exc.value.existing["slug"] == topic["slug"]
 
-        layer = await adapter.create_layer(topic["slug"], "Mock 1", "02-MOC")
+        lesson = await adapter.create_item(topic["slug"], "Core", "Docker Basics")
+        # A lesson is known by its title in its topic, whatever section it is asked for
         with pytest.raises(DuplicateEntityError) as exc:
-            await adapter.create_layer(topic["slug"], "MOCK  1", "03-MOC")
-        assert exc.value.existing["id"] == layer["id"]
-
-        # create_layer adds no group: the first item names one (ADR-0008)
-        new_layer = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])
-        assert new_layer["groups"] == []
-
-        await adapter.create_item(layer["id"], "Core", "Docker Basics")
-        # A group is known by its title: the same title again is a duplicate
-        with pytest.raises(DuplicateEntityError):
-            await adapter.create_group(layer["id"], " core ")
-        with pytest.raises(DuplicateEntityError):
-            await adapter.create_item(layer["id"], "Core", "docker basics")
+            await adapter.create_item(topic["slug"], "Advanced", "docker basics")
+        assert exc.value.existing["id"] == lesson["id"]
 
     asyncio.run(run())
 
 
-class _DupLayerAdapter:
-    """Topic 'be' already has layer 'Mock 1'; any other title is created."""
+class _DupItemAdapter:
+    """Topic 'be' already has lesson 'Mock 1'; any other title is created."""
 
-    async def get_topic(self, slug):
-        return {"slug": slug, "layers": [{"id": "l1", "title": "Mock 1"}]}
-
-    async def create_layer(self, topic_slug, title, short_tag, subtitle=""):
+    async def create_item(self, topic_slug, section, title, description="", content=""):
         if normalize_title(title) == "mock 1":
-            raise DuplicateEntityError("layer", "Mock 1", {"id": "l1", "title": "Mock 1"})
-        return {"id": "l2", "title": title, "shortTag": short_tag}
+            raise DuplicateEntityError("item", "Mock 1", {"id": "i1", "title": "Mock 1"})
+        return {"id": "i2", "title": title, "section": section, "roadmapSlug": topic_slug}
 
 
-def test_executor_skips_existing_layer_and_reuses_it(monkeypatch):
+def _create_lessons(*titles: str) -> StructuredRoadmapAction:
+    return StructuredRoadmapAction(
+        action=ActionType.CREATE,
+        entity_level=EntityLevel.ITEM,
+        target_parent_identifier="be",
+        entities=[SingleEntity(title=t) for t in titles],
+    )
+
+
+def test_executor_skips_existing_lesson(monkeypatch):
     async def no_sync():
         return None
 
     monkeypatch.setattr("rag_service.execution.executor.rag_engine.sync_live_database", no_sync)
-    action = StructuredRoadmapAction(
-        action=ActionType.CREATE,
-        entity_level=EntityLevel.LAYER,
-        target_parent_identifier="be",
-        entities=[SingleEntity(title="mock 1")],
-    )
-    ok, msg = asyncio.run(ActionExecutor(_DupLayerAdapter()).aexecute(action, session_id="dup-test"))
+    ok, msg = asyncio.run(ActionExecutor(_DupItemAdapter()).aexecute(_create_lessons("mock 1"), session_id="dup-test"))
 
-    assert ok and "không tạo thêm" in msg and "Đã tạo" not in msg
-    # A follow-up "add items" lands in the existing layer
-    assert session_store.get_or_create("dup-test").active_layer_id == "l1"
+    assert ok and "không tạo thêm" in msg and "Đã thêm" not in msg
 
 
 def test_executor_creates_new_and_reports_skipped(monkeypatch):
@@ -102,19 +86,13 @@ def test_executor_creates_new_and_reports_skipped(monkeypatch):
         return None
 
     monkeypatch.setattr("rag_service.execution.executor.rag_engine.sync_live_database", no_sync)
-    action = StructuredRoadmapAction(
-        action=ActionType.CREATE,
-        entity_level=EntityLevel.LAYER,
-        target_parent_identifier="be",
-        entities=[SingleEntity(title="Mock 1"), SingleEntity(title="Mock 2")],
+    ok, msg = asyncio.run(
+        ActionExecutor(_DupItemAdapter()).aexecute(_create_lessons("Mock 1", "Mock 2"), session_id="dup-test-2")
     )
-    ok, msg = asyncio.run(ActionExecutor(_DupLayerAdapter()).aexecute(action, session_id="dup-test-2"))
 
     assert ok
-    assert "Đã tạo 1 layer" in msg and "Mock 2" in msg
-    assert "Đã có sẵn layer **Mock 1**" in msg
-    # The new layer takes the next number, not one past the skipped title
-    assert "`02-" in msg
+    assert "Đã thêm thành công 1 bài học" in msg and "Mock 2" in msg
+    assert "Đã có sẵn bài học **Mock 1**" in msg
 
 
 class _GreetingAdapter:
@@ -128,13 +106,13 @@ class _GreetingAdapter:
         return next((t for t in self._topics if t["slug"] == slug), None)
 
 
-def test_greeting_examples_name_real_topic_and_layer(monkeypatch):
+def test_greeting_examples_name_real_topic_and_section(monkeypatch):
     from rag_service.agent import NextGenRoadmapAgent
 
-    adapter = _GreetingAdapter([{"slug": "ai-architecture", "layers": [{"title": "Database"}]}])
+    adapter = _GreetingAdapter([{"slug": "ai-architecture", "sections": ["Database"]}])
     monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: adapter)
     reply = asyncio.run(NextGenRoadmapAgent._greeting_reply(None))
-    assert "trong topic ai-architecture" in reply and "vào layer Database" in reply
+    assert "vào topic ai-architecture mục Database" in reply
 
 
 def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
@@ -142,30 +120,22 @@ def test_greeting_examples_fall_back_to_placeholders_without_data(monkeypatch):
 
     monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: _GreetingAdapter([]))
     reply = asyncio.run(NextGenRoadmapAgent._greeting_reply(None))
-    assert "trong topic <slug topic>" in reply and "vào layer <tên layer>" in reply
+    assert "vào topic <slug topic> mục <tên mục>" in reply
     # No invented names like "be", "fe" or "aaa"
     assert " be`" not in reply and " fe`" not in reply and "aaa" not in reply
 
 
 @pytest.mark.usefixtures("write_grant")
-def test_lessons_land_in_the_named_group_or_the_only_one(adapter):
-    """A title names one group whatever its case; with no title, the layer's only group is used (ADR-0008)."""
-    from rag_service.adapters.groups import GroupChoiceRequired
+def test_lessons_land_in_the_named_section_or_none(adapter):
+    """A section is known by its name whatever its case or spacing; with no name, the lesson has none (ADR-0009)."""
 
     async def run():
-        topic = await adapter.create_topic("Groups", "GR")
-        layer = await adapter.create_layer(topic["slug"], "Groups", "02-GRP")
-        with pytest.raises(GroupChoiceRequired) as ask:
-            await adapter.create_item(layer["id"], "", "A")  # no group yet: asked, nothing written
-        assert ask.value.titles == []
-        await adapter.create_item(layer["id"], "Fundamentals", "A")
-        await adapter.create_item(layer["id"], " fundamentals ", "B")
-        await adapter.create_item(layer["id"], "", "C")  # the only group
-        await adapter.create_item(layer["id"], "Deep Dive", "D")
-        with pytest.raises(GroupChoiceRequired) as ask:
-            await adapter.create_item(layer["id"], "", "E")  # two groups now: asked
-        assert ask.value.titles == ["Fundamentals", "Deep Dive"]
-        groups = next(l for l in (await adapter.get_topic(topic["slug"]))["layers"] if l["id"] == layer["id"])["groups"]
-        return {g["title"]: len(g["items"]) for g in groups}
+        topic = await adapter.create_topic("Sections")
+        await adapter.create_item(topic["slug"], "Fundamentals", "A")
+        await adapter.create_item(topic["slug"], " fundamentals ", "B")
+        await adapter.create_item(topic["slug"], "", "C")
+        await adapter.create_item(topic["slug"], "Deep Dive", "D")
+        items = (await adapter.get_topic(topic["slug"]))["items"]
+        return {i["title"]: i["section"] for i in items}
 
-    assert asyncio.run(run()) == {"Fundamentals": 3, "Deep Dive": 1}
+    assert asyncio.run(run()) == {"A": "Fundamentals", "B": "Fundamentals", "C": None, "D": "Deep Dive"}

@@ -89,7 +89,7 @@ def test_introduction_routes_to_chitchat(text):
     assert res is not None and res.intent == IntentType.CHITCHAT
 
 
-@pytest.mark.parametrize("text", ["tôi là topic AI Engineering", "tôi là layer Docker đúng không"])
+@pytest.mark.parametrize("text", ["tôi là topic AI Engineering", "tôi là mục Docker đúng không"])
 def test_introduction_with_roadmap_word_is_not_chitchat(text):
     res = IntentRouter().classify_heuristics(text)
     assert res is None or res.intent != IntentType.CHITCHAT
@@ -148,8 +148,8 @@ def test_identity_question_with_question_mark_is_chitchat(text):
 @pytest.mark.parametrize(
     "text",
     [
-        "Tạo bài post mới trong layer General của topic Machine Learning",
-        "Tạo bài post mới trong layer General của topic Machine Learning. Tiêu đề: Giới thiệu. Nội dung: Machine Learning là một nhánh của AI",
+        "Tạo bài post mới trong mục General của topic Machine Learning",
+        "Tạo bài post mới trong mục General của topic Machine Learning. Tiêu đề: Giới thiệu. Nội dung: Machine Learning là một nhánh của AI",
         "tạo bài mới tên X, nội dung: abc",
         "xóa bài Docker nội dung cũ",
     ],

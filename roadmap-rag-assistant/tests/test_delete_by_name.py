@@ -1,4 +1,4 @@
-"""A lesson or group is deleted by its name, and a change the executor cannot run is never previewed.
+"""A lesson is deleted by its name, and a change the executor cannot run is never previewed.
 
 2026-10-28, live: "xóa bài QA Abot Test" was confirmed and failed with "Không tìm thấy bài học `layer-04`" (the
 executor sent the layer or the name where the API takes the item id), and "đổi tên bài …" was previewed, then
@@ -19,24 +19,11 @@ from rag_service.state import session_store
 TOPIC = {
     "slug": "test-topic",
     "title": "Test Topic",
-    "layers": [
-        {
-            "id": "layer-ops",
-            "shortTag": "04-OPS",
-            "title": "Ops",
-            "groups": [
-                {
-                    "id": "group-core",
-                    "title": "Core Ops",
-                    "level": "core",
-                    "items": [
-                        {"id": "item-sc", "title": "Semantic Caching", "layerId": "layer-ops"},
-                        {"id": "item-qa", "title": "QA Abot Test", "layerId": "layer-ops"},
-                    ],
-                }
-            ],
-        }
+    "items": [
+        {"id": "item-sc", "title": "Semantic Caching", "section": "Core Ops"},
+        {"id": "item-qa", "title": "QA Abot Test", "section": "Core Ops"},
     ],
+    "sections": ["Core Ops"],
 }
 
 
@@ -78,13 +65,6 @@ def test_delete_preview_names_the_lesson_not_its_id(mock_adapter):
     assert "QA Abot Test" in text and "item-qa" not in text
 
 
-def test_group_is_deleted_by_its_id_when_named(mock_adapter):
-    mock_adapter.get_topic.return_value = TOPIC
-    set_actor("owner")
-    _confirmed(NextGenRoadmapAgent(llm_model=None), "xóa nhóm Core Ops")
-    mock_adapter.delete_group.assert_awaited_once_with(group_id="group-core")
-
-
 def test_unknown_lesson_is_asked_back_and_nothing_is_deleted(mock_adapter):
     mock_adapter.get_topic.return_value = TOPIC
     set_actor("owner")
@@ -113,7 +93,6 @@ def test_update_is_answered_before_any_preview(mock_adapter):
     ("tôi có thể tạo topic mới không?", "tạo topic"),
     ("tạo topic mới", "tạo topic"),
     ("bạn có thể thêm bài mới không?", "thêm bài"),
-    ("toi co the tao layer moi khong", "layer"),
 ])
 def test_unnamed_create_is_asked_for_a_name_and_nothing_is_previewed(mock_adapter, text, example):
     set_actor("owner")

@@ -66,6 +66,7 @@ from rag_service.domains.roadmap.router.grounding import (
     NO_TOPIC_REPLY,
     content_unclear_reply,
     unnamed_create_reply,
+    legacy_level_reply,
     domain_gap_reply,
     empty_message_reply,
     empty_roadmap_reply,
@@ -253,6 +254,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         # ── 0d. A create that names nothing ("tôi có thể tạo topic mới không?"): ask for the name ──
         if (unnamed := unnamed_create_reply(content)) is not None:
             async for ev in self._stream_text(unnamed if is_owner() else OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+
+        # ── 0e. Names a layer or group (removed, ADR-0009): suggest the topic/section syntax, change nothing ──
+        if (legacy := legacy_level_reply(content, self.router.known_place)) is not None:
+            if (trace := current_trace()) is not None:
+                trace.flags["guard"] = "legacy_level"
+            async for ev in self._stream_text(legacy, delay):
                 yield ev
             return
 

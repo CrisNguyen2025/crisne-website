@@ -84,11 +84,11 @@
     "expected": "roadmap_cud"
   },
   {
-    "message": "thêm bài học Docker vào layer này",
+    "message": "thêm bài học Docker vào mục này",
     "expected": "roadmap_cud"
   },
   {
-    "message": "xóa layer mock 1",
+    "message": "xóa bài mock 1",
     "expected": "roadmap_cud"
   },
   {
@@ -184,7 +184,7 @@
     "expected": "roadmap_cud"
   },
   {
-    "message": "tạo group Kiến thức nền trong layer Python",
+    "message": "thêm bài Kiến thức nền vào topic Python",
     "expected": "roadmap_cud"
   },
   {

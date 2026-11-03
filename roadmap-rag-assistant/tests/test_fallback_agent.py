@@ -1,4 +1,4 @@
-"""End-to-end tests for FallbackAgent multilingual CUD handling across all 4 entity levels."""
+"""End-to-end tests for FallbackAgent multilingual CUD handling of topics and lessons (ADR-0009)."""
 
 from __future__ import annotations
 
@@ -9,17 +9,6 @@ from rag_service.tools import ALL_TOOLS
 
 @pytest.fixture
 def fallback_agent(mock_adapter):
-    # Layers the prompts below refer to; unknown layers are covered in test_target_clarification.py
-    mock_adapter.get_topic.return_value = {
-        "id": "test-id-1",
-        "slug": "test-topic",
-        "title": "Test Topic",
-        "layers": [
-            {"id": "layer-aaa", "shortTag": "02-AAA", "title": "aaa"},
-            {"id": "layer-mock-1", "shortTag": "03-MO1", "title": "mock 1"},
-            {"id": "layer-llm", "shortTag": "01-LLM", "title": "LLM Application"},
-        ],
-    }
     return FallbackAgent(tools=ALL_TOOLS)
 
 
@@ -55,50 +44,29 @@ async def test_fallback_topic_creation_en(fallback_agent, mock_adapter):
 
 
 @pytest.mark.asyncio
-async def test_fallback_layer_creation_vn(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "tạo 2 layer mock 1 và 2 trong be topic", "fb-3")
+@pytest.mark.parametrize("text", ["tạo 2 layer mock 1 và 2 trong be topic", "tạo group Core trong layer aaa của topic be", "add group Advanced to layer 02-AAA in topic be"])
+async def test_fallback_layer_or_group_is_asked_back_and_writes_nothing(fallback_agent, mock_adapter, text):
+    from rag_service.domains.roadmap.router.grounding import legacy_level_reply
+
+    res = await send_confirmed(fallback_agent, text, f"legacy-{text}")
     msgs = res.get("messages", [])
-    # a confirmed batch reports the tool by its singular name
-    assert any(m.type == "tool" and m.name in ("create_layers_batch", "create_layer") for m in msgs)
-    assert mock_adapter.create_layer.call_count == 2
-    assert "mock 1" in msgs[-1].content
-    assert "mock 2" in msgs[-1].content
+    assert not any(m.type == "tool" for m in msgs)
+    assert msgs[-1].content == legacy_level_reply(text)
+    mock_adapter.create_item.assert_not_called()
+    mock_adapter.create_topic.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_fallback_layer_creation_en(fallback_agent, mock_adapter, catalog_topics):
-    catalog_topics("fe")
-    # "aaa" is lowercase: nothing in the message says it is a name, so the change is previewed first
-    config = {"configurable": {"thread_id": "layer-en"}}
-    res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "create aaa layer on fe"}]}, config=config)
-    msgs = res.get("messages", [])
-    assert not any(m.type == "tool" and m.name == "create_layer" for m in msgs)
-    mock_adapter.create_layer.assert_not_called()
-    res = await fallback_agent.ainvoke({"messages": [{"role": "user", "content": "ok"}]}, config=config)
-    mock_adapter.create_layer.assert_called_once()
-    assert "aaa" in res.get("messages", [])[-1].content
-
-
-@pytest.mark.asyncio
-async def test_fallback_group_creation_vn(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "tạo group Core trong layer aaa", "fb-4")
-    msgs = res.get("messages", [])
-    assert any(m.type == "tool" and m.name == "create_group" for m in msgs)
-    assert "Core" in msgs[-1].content
-
-
-@pytest.mark.asyncio
-async def test_fallback_group_creation_en(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "create 2 groups Core and Advanced in layer mock 1", "fb-5")
-    msgs = res.get("messages", [])
-    assert any(m.type == "tool" and m.name == "create_group" for m in msgs)
-    assert "Core" in msgs[-1].content
-    assert "Advanced" in msgs[-1].content
+async def test_fallback_layer_after_its_name_writes_nothing(fallback_agent, mock_adapter):
+    # "layer" after the name is not read as the removed level (a title may end in "Layer"); still never a write
+    res = await send_confirmed(fallback_agent, "create aaa layer on fe", "legacy-suffix")
+    assert not any(m.type == "tool" for m in res.get("messages", []))
+    mock_adapter.create_item.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_fallback_item_creation_vn(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "tạo item Prompt Engineering trong layer 01-LLM", "fb-6")
+    res = await send_confirmed(fallback_agent, "tạo item Prompt Engineering trong topic test-topic", "fb-6")
     msgs = res.get("messages", [])
     assert any(m.type == "tool" and m.name == "create_item" for m in msgs)
     assert "Prompt Engineering" in msgs[-1].content
@@ -106,7 +74,7 @@ async def test_fallback_item_creation_vn(fallback_agent, mock_adapter):
 
 @pytest.mark.asyncio
 async def test_fallback_item_creation_en(fallback_agent, mock_adapter):
-    res = await send_confirmed(fallback_agent, "add 3 items: Vector DB, Embeddings, RAG Pipeline to layer 01-LLM", "fb-7")
+    res = await send_confirmed(fallback_agent, "add 3 items: Vector DB, Embeddings, RAG Pipeline to topic test-topic", "fb-7")
     msgs = res.get("messages", [])
     # a confirmed batch reports the tool by its singular name
     assert any(m.type == "tool" and m.name in ("create_items_batch", "create_item") for m in msgs)

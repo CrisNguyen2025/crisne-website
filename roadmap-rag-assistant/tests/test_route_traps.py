@@ -31,9 +31,9 @@ FALSE_FRIENDS = [
 # Real changes still carry their own evidence
 REAL_CHANGES = [
     "tạo topic Kafka",
-    "thêm item trong mảng kiến thức RAG",
+    "thêm item trong mục RAG",
     "xóa bài Semantic Caching",
-    "thêm bài toán tối ưu vào layer 1",
+    "thêm bài toán tối ưu vào topic AI",
     "bỏ bớt cái topic docker swarm ra đi",
 ]
 
@@ -248,8 +248,8 @@ def test_noun_in_code_or_another_place_is_not_a_roadmap_object(text):
 
 
 @pytest.mark.parametrize("text", [
-    "thêm bài Kafka Streams vào layer 03-RAG",
-    "xóa bài Docker khỏi layer 1",
+    "thêm bài Kafka Streams vào mục RAG",
+    "xóa bài Docker khỏi topic DevOps",
     "tạo topic Data Engineering cho mình",          # "cho" is "for", not a place
     "please rename the topic AI Architecture to AI Systems",  # "to" is not a place
     "sua lai ten bai so 4 thanh Asynchronous Programming in JS",  # the new name is not read for places
@@ -263,9 +263,9 @@ def test_roadmap_noun_with_a_roadmap_place_stays_roadmap(text):
 
 def test_place_named_without_its_noun_is_read_from_the_catalog():
     catalog = Catalog(topics={"fe"})
-    assert names_another_place("xóa tất cả layer trong fe")
-    assert not names_another_place("xóa tất cả layer trong fe", catalog.has_place)
-    assert names_another_place("tạo layer mask trong figma", catalog.has_place)
+    assert names_another_place("xóa tất cả bài trong fe")
+    assert not names_another_place("xóa tất cả bài trong fe", catalog.has_place)
+    assert names_another_place("tạo bài mask trong figma", catalog.has_place)
 
 
 # ── P1 act: questions without a final question word, plan requests, verbs in code ──
@@ -329,7 +329,7 @@ def _owner_reply(message: str, thread_id: str, active_topic: str | None) -> tupl
 def test_topic_just_created_with_no_open_topic_asks_which_one():
     from rag_service.domains.roadmap.router.grounding import NO_TOPIC_REPLY
 
-    text, events = _owner_reply("thêm layer Basics cho topic vừa tạo", "ctx-no-topic", active_topic=None)
+    text, events = _owner_reply("thêm bài Basics cho topic vừa tạo", "ctx-no-topic", active_topic=None)
     assert text == NO_TOPIC_REPLY
     assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
 
@@ -339,7 +339,7 @@ def test_vague_content_is_asked_back_with_the_open_topic_named():
 
     text, events = _owner_reply("tạo thông tin cho topic vừa tạo", "ctx-vague", active_topic="data-engineering")
     assert text == content_unclear_reply("Data Engineering")
-    assert "layer" in text and "bài học" in text and "nhóm" in text
+    assert "Data Engineering" in text and "bài" in text and "mục" in text
     assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
 
 

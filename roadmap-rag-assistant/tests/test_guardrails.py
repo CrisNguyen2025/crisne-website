@@ -5,7 +5,6 @@ import asyncio
 from rag_service.agent import NextGenRoadmapAgent
 from rag_service.api.schemas import ChatRequest
 from rag_service.domains.roadmap.router.grounding import (
-    BATCH_LAYER_DELETE_REPLY,
     BULK_DELETE_REPLY,
     EMPTY_MESSAGE_REPLY,
     MAX_MESSAGE_CHARS,
@@ -16,6 +15,7 @@ from rag_service.domains.roadmap.router.grounding import (
     UNCLEAR_REPLY,
     build_grounding,
     is_sensitive_request,
+    legacy_level_reply,
     no_match_reply,
     out_of_scope_reply,
     with_grounding,
@@ -65,18 +65,18 @@ def test_agent_refuses_out_of_scope_without_tools():
 def test_build_grounding_empty_and_filled():
     assert build_grounding(None) == ""
     assert build_grounding({"roadmapSlug": "  "}) == ""
-    hint = build_grounding({"roadmapSlug": "fe", "layerId": "L1"})
-    assert "roadmap='fe'" in hint and "layerId='L1'" in hint
+    hint = build_grounding({"roadmapSlug": "fe", "section": "Core"})
+    assert "roadmap='fe'" in hint and "section='Core'" in hint
 
 
 def test_with_grounding_keeps_message_when_no_context():
     assert with_grounding("thêm item", None) == "thêm item"
-    assert with_grounding("thêm item", {"layerId": "L1"}).endswith("\nthêm item")
+    assert with_grounding("thêm item", {"section": "Core"}).endswith("\nthêm item")
 
 
 def test_chat_request_accepts_context():
-    req = ChatRequest(message="thêm item", thread_id="t1", context={"roadmapSlug": "fe", "layerId": "L1"})
-    assert req.context["layerId"] == "L1"
+    req = ChatRequest(message="thêm item", thread_id="t1", context={"roadmapSlug": "fe", "section": "Core"})
+    assert req.context["section"] == "Core"
     assert ChatRequest(message="hi", thread_id="t1").context is None
 
 
@@ -201,25 +201,31 @@ def test_mixed_intents_ask_back_without_tools():
 def test_delete_all_is_refused(catalog_topics):
     catalog_topics("fe")
     set_actor("owner")
-    for message in ["xóa hết topic luôn", "xóa tất cả layer trong fe ngay"]:
+    for message in ["xóa hết topic luôn", "xóa tất cả bài trong fe ngay"]:
         text, events = _reply(message, f"bulk-{message}")
         assert text == BULK_DELETE_REPLY, message
         assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
 
 
-def test_batch_layer_delete_is_refused(monkeypatch):
-    class _Topics:
-        async def list_topics(self):
-            return [{"slug": "ai", "title": "AI"}]
-
-        async def get_topic(self, slug):
-            return {"slug": slug}
-
-    monkeypatch.setattr("rag_service.domains.roadmap.agent_actions.get_adapter", lambda: _Topics())
+def test_layer_or_group_is_asked_back_with_the_section_syntax():
     set_actor("owner")
-    text, events = _reply("xóa layer mock 1 và mock 2 trong topic ai ngay", "batch-delete")
-    assert text == BATCH_LAYER_DELETE_REPLY
-    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+    for message in ["xóa layer mock 1 và mock 2 trong topic ai ngay", "tạo group Core trong layer aaa của topic ai", "thêm bài Docker vào layer này"]:
+        text, events = _reply(message, f"legacy-{message}")
+        assert text == legacy_level_reply(message) and "mục" in text, message
+        assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+def test_a_title_ending_in_layer_is_not_a_legacy_level():
+    assert legacy_level_reply("thêm bài Docker vào topic AI mục 03. Tầng RAG + Agent Layer") is None
+    assert legacy_level_reply("tìm bài Application Layer") is None
+
+
+def test_layer_without_the_roadmap_is_left_to_the_router():
+    # Another system's layer or group, or no roadmap word at all: the guard does not claim it
+    for message in ["thêm layer dropout vào model Keras", "tạo layer mới trong Photoshop", "xóa layer mock 1"]:
+        assert legacy_level_reply(message) is None, message
+    # A topic that exists is enough
+    assert legacy_level_reply("tạo group Core trong layer AI Engineering", lambda name: name == "ai engineering")
 
 
 def test_business_records_are_out_of_scope():
