@@ -11,13 +11,13 @@
 {"cat":"cud-verb-in-tech-question","text":"xóa bản ghi trùng lặp trong vector database","write":"no","want":"K|U|T","phases":{"P1_act":"command|statement","P3_target":"none"}}
 {"cat":"cud-verb-in-tech-question","text":"chuyển dữ liệu từ Pinecone sang pgvector","write":"no","want":"K|O|U|T","phases":{"P1_act":"command|statement","P3_target":"none|off_topic"}}
 {"cat":"entity-other-sense","text":"thêm bài hát vào playlist Spotify","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
-{"cat":"entity-other-sense","text":"tạo mục Zalo cho lớp học","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
+{"cat":"entity-other-sense","text":"tạo nhóm Zalo cho lớp học","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"xóa mục đã lưu trong Notion","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"sửa bài kiểm tra cho học sinh lớp 10","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
-{"cat":"entity-other-sense","text":"tạo topic mask trong Figma","write":"no","want":"O|U|T|K","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
+{"cat":"entity-other-sense","text":"tạo layer mask trong Figma","write":"no","want":"O|U|T|K","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"thêm mục policy trong Windows","write":"no","want":"O|U|T|K","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"tạo topic SNS trên AWS","write":"no","want":"O|U|T|K","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
-{"cat":"entity-other-sense","text":"đổi tên mục Facebook","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
+{"cat":"entity-other-sense","text":"đổi tên nhóm Facebook","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"chuyển mục chi tiêu sang tháng sau","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"entity-other-sense","text":"thêm item mới vào menu nhà hàng","write":"no","want":"O|U|T","phases":{"P1_act":"command|statement","P3_target":"off_topic|none"}}
 {"cat":"code-in-message","text":"giải thích câu lệnh `DELETE FROM topics WHERE id = 1`","write":"no","want":"K|O","phases":{"P1_act":"question|statement","P3_target":"none"}}

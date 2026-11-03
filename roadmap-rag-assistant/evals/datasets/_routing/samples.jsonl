@@ -178,9 +178,9 @@
 {"id": "routing-178", "input": "Kafka topic là gì", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend"]}}
 {"id": "routing-179", "input": "giải bài toán tối ưu bằng gradient descent", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["false-friend"]}}
 {"id": "routing-180", "input": "mạng nơ-ron tích chập dùng để làm gì", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend"]}}
-{"id": "routing-181", "input": "topic normalization khác batch normalization thế nào", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend", "comparison"]}}
+{"id": "routing-181", "input": "layer normalization khác batch normalization thế nào", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend", "comparison"]}}
 {"id": "routing-182", "input": "mục đích của chunking là gì", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend"]}}
-{"id": "routing-183", "input": "mục by trong SQL dùng thế nào", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend", "how-to"]}}
+{"id": "routing-183", "input": "group by trong SQL dùng thế nào", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["false-friend", "how-to"]}}
 {"id": "routing-184", "input": "xoa muc tieu cu di", "expected": {"behavior": "answer", "route": []}, "metadata": {"status": "active", "tags": ["false-friend", "no-diacritics"]}}
 {"id": "routing-185", "input": "tạo topic Kafka", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["false-friend"]}}
 {"id": "routing-186", "input": "thêm item trong mục RAG", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": ["false-friend"]}}

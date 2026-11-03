@@ -22,7 +22,7 @@
 {"id": "scope-022", "input": "giá vàng hôm nay bao nhiêu", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
 {"id": "scope-023", "input": "cách dùng Photoshop để xóa phông", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
 {"id": "scope-024", "input": "hàm VLOOKUP trong Excel dùng thế nào", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
-{"id": "scope-025", "input": "tạo mục Zalo cho lớp học", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "command"}}
+{"id": "scope-025", "input": "tạo nhóm Zalo cho lớp học", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "command"}}
 {"id": "scope-026", "input": "kết quả bóng đá tối qua", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
 {"id": "scope-027", "input": "công thức nấu phở bò", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
 {"id": "scope-028", "input": "mua iPhone 17 ở đâu rẻ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-tune"], "act": "question"}}
@@ -57,7 +57,7 @@
 {"id": "scope-057", "input": "tỷ giá đô hôm nay", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
 {"id": "scope-058", "input": "cách cài driver máy in Canon", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
 {"id": "scope-059", "input": "Google Sheets có hàm nào đếm ô trống", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}
-{"id": "scope-060", "input": "tạo mục Messenger cho gia đình", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "command"}}
+{"id": "scope-060", "input": "tạo nhóm Messenger cho gia đình", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "command"}}
 {"id": "scope-061", "input": "viết thơ tặng mẹ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "command"}}
 {"id": "scope-062", "input": "mình muốn mua xe máy cũ", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "statement"}}
 {"id": "scope-063", "input": "how to edit videos in CapCut", "expected": {"target": "external"}, "metadata": {"status": "active", "tags": ["scope-external", "split-holdout"], "act": "question"}}

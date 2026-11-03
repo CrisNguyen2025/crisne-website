@@ -1,9 +1,9 @@
 {
   "owner": "roadmap-rag-assistant",
   "acl_tier": "public",
-  "version": "1.0",
+  "version": "1.1",
   "source": "prisma/dev.db",
-  "doc_count": 115,
-  "sha256": "01f804ef2cea91ddc00f7b8458bc1e574d267861ae33fbb70f6a4f9bd91f494e",
-  "exported_at": "2026-10-19T07:30:01+00:00"
+  "doc_count": 117,
+  "sha256": "ee3059bae4895b5853c5916c505278377c4c6d7dc7c922aba318a3a8a336e59a",
+  "exported_at": "2026-11-03T02:34:07+00:00"
 }
