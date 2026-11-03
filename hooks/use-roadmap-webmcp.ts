@@ -103,7 +103,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['title'],
     },
-    execute: async (args) => notifyUpdated(await createRoadmap(args as any)),
+    execute: async (args) => notifyUpdated(await createRoadmap(args as Parameters<typeof createRoadmap>[0])),
   },
   {
     name: 'update_roadmap',
@@ -214,7 +214,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['orderedItemIds'],
     },
-    execute: async (args) => notifyUpdated(await reorderItems(args as any)),
+    execute: async (args) => notifyUpdated(await reorderItems(args as Parameters<typeof reorderItems>[0])),
   },
 ];
 
