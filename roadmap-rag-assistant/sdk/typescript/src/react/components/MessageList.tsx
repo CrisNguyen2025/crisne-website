@@ -29,6 +29,8 @@ export interface MessageListProps {
   expandedTools: Record<string, boolean>;
   feedback: Record<string, 1 | 0 | null>;
   copiedId: string | null;
+  /** Owner only: each traced reply gets a button that copies its Langfuse trace id */
+  canWrite?: boolean;
   sendMessage: (textToSend?: string) => void;
   retry: (errorMessageId: string) => void;
   copyMessage: (id: string, text: string) => void;
@@ -107,7 +109,7 @@ type MessageHandlers = Pick<
 interface MessageItemProps
   extends Pick<
     MessageListProps,
-    "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId"
+    "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId" | "canWrite"
   > {
   msg: ChatMessage;
   isLast: boolean;
@@ -127,6 +129,7 @@ const MessageItem = React.memo(function MessageItem({
   expandedTools,
   feedback,
   copiedId,
+  canWrite,
   handlers,
 }: MessageItemProps) {
   const { sendMessage, retry, copyMessage, handleFeedback, handleRunCode, toggleToolExpand } =
@@ -337,6 +340,22 @@ const MessageItem = React.memo(function MessageItem({
               greeting, stopped or failed replies, and every reply when tracing is off */}
           {msg.traceId && (
             <>
+              {/* The trace holds the query, page context, routing steps and reply: paste the id in Langfuse */}
+              {canWrite && (
+                <button
+                  type="button"
+                  onClick={() => copyMessage(`${msg.id}:trace`, msg.traceId ?? "")}
+                  title={`Sao chép trace ID: ${msg.traceId}`}
+                  aria-label="Sao chép trace ID của câu trả lời"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-[10px] font-semibold leading-none transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+                >
+                  {copiedId === `${msg.id}:trace` ? (
+                    <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
+                  ) : (
+                    "ID"
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleFeedback(msg.id, 1)}
@@ -385,6 +404,7 @@ export function MessageList({
   expandedTools,
   feedback,
   copiedId,
+  canWrite = false,
   sendMessage,
   retry,
   copyMessage,
@@ -444,6 +464,7 @@ export function MessageList({
             expandedTools={expandedTools}
             feedback={feedback}
             copiedId={copiedId}
+            canWrite={canWrite}
             handlers={handlers}
           />
         ))}

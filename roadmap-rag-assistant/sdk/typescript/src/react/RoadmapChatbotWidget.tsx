@@ -382,6 +382,7 @@ export function RoadmapChatbotWidget({
             expandedTools={expandedTools}
             feedback={feedback}
             copiedId={copiedId}
+            canWrite={canWrite}
             sendMessage={sendMessage}
             retry={retry}
             copyMessage={copyMessage}
