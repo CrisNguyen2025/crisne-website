@@ -958,7 +958,7 @@ export function ChatMarkdown({
       trailing={idx === blocks.length - 1 && caretInline ? tail : undefined}
     />
   ));
-  // With citations the answer is the root the source chips highlight in; without, nothing is wrapped
+  // With citations the answer is the root the source chips highlight in
   const scoped = marked.claims.length > 0 || uniqueSources.length > 0;
 
   return (
@@ -966,11 +966,9 @@ export function ChatMarkdown({
       data-citation-root={scoped ? "" : undefined}
       className={`min-w-0 max-w-full space-y-3 break-words text-sm leading-relaxed text-foreground ${className}`}
     >
-      {scoped ? (
-        <CitationContext.Provider value={marked.claims}>{blockViews}</CitationContext.Provider>
-      ) : (
-        blockViews
-      )}
+      {/* Always wrapped: citations arrive when the stream ends, and adding the wrapper only then
+          would change the tree shape and remount every block (a visible flash) */}
+      <CitationContext.Provider value={marked.claims}>{blockViews}</CitationContext.Provider>
       {!caretInline && tail}
     </div>
   );

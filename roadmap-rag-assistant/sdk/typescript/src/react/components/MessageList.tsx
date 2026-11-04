@@ -94,6 +94,289 @@ function ScrollBottomButton({
   );
 }
 
+type MessageHandlers = Pick<
+  MessageListProps,
+  | "sendMessage"
+  | "retry"
+  | "copyMessage"
+  | "handleFeedback"
+  | "handleRunCode"
+  | "toggleToolExpand"
+>;
+
+interface MessageItemProps
+  extends Pick<
+    MessageListProps,
+    "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId"
+  > {
+  msg: ChatMessage;
+  isLast: boolean;
+  handlers: MessageHandlers;
+}
+
+/**
+ * One message. Memoized: while a reply streams only the live message changes, so the others
+ * skip re-rendering (and re-parsing their markdown) on every streamed frame.
+ */
+const MessageItem = React.memo(function MessageItem({
+  msg,
+  isLast,
+  isLoading,
+  isStreaming,
+  runningCode,
+  expandedTools,
+  feedback,
+  copiedId,
+  handlers,
+}: MessageItemProps) {
+  const { sendMessage, retry, copyMessage, handleFeedback, handleRunCode, toggleToolExpand } =
+    handlers;
+
+  const isUser = msg.role === "user";
+  const timeStr = formatTime(msg.timestamp);
+  const isLive = !isUser && isStreaming && isLast;
+  const toolCalls = msg.toolCalls ?? [];
+
+  if (isUser) {
+    return (
+      <div key={msg.id} className="group flex flex-col items-end gap-1">
+        <div className="relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-[#F4F3F0] px-3.5 py-2.5 text-sm leading-relaxed text-[#1F1E1C]">
+          {msg.content}
+        </div>
+        <div className="flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]">
+          {timeStr && (
+            <span className="select-none text-[11px]">{timeStr}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => copyMessage(msg.id, msg.content)}
+            title="Sao chép câu hỏi"
+            aria-label="Sao chép câu hỏi"
+            className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+          >
+            {copiedId === msg.id ? (
+              <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
+            ) : (
+              <CopyIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const awaitingConfirm =
+    !isStreaming &&
+    isLast &&
+    (msg.content.includes("Xác nhận thực hiện") ||
+      msg.content.includes("DRY-RUN PREVIEW"));
+
+  const awaitingLayerChoice =
+    !isStreaming &&
+    isLast &&
+    msg.content.includes("Chọn layer cho bài học");
+
+  // Step events from the server when it sends them; tool calls for older servers.
+  const stepItems: StepItem[] = msg.steps?.length
+    ? toStepItems(msg.id, msg.steps, isLive)
+    : toolCalls.map((tc, idx) => ({
+        id: `${msg.id}-${idx}`,
+        label: formatToolDisplayName(tc.name),
+        startedAt: tc.startedAt,
+        endedAt: tc.endedAt,
+        running: isLive && tc.endedAt === undefined,
+        detail: tc.result,
+      }));
+
+  const stepsDigest = msg.steps?.length
+    ? formatStepsDigest(msg.steps)
+    : [...new Set(toolCalls.map((tc) => formatToolDisplayName(tc.name)))].join(", ") || undefined;
+
+  // Waiting for the model, or a streamed answer; a static greeting has no thinking to show.
+  // Gaps between steps are not rows: the header shows "Đang suy nghĩ…" on its own.
+  const showSteps = stepItems.length > 0 || (isLive && !msg.content) || !!msg.firstTokenAt;
+
+  return (
+    <div key={msg.id} className="group flex flex-col gap-2">
+      {/* Step summary (Thinking & Tools), placed at top of response like Claude */}
+      {showSteps && (
+        <div className="-mx-1">
+          <CollapsibleStepsSummary
+            steps={stepItems}
+            expandedTools={expandedTools}
+            onToggleTool={toggleToolExpand}
+            isLive={isLive}
+            startedAt={new Date(msg.timestamp).getTime()}
+            firstTokenAt={msg.firstTokenAt}
+            digest={stepsDigest}
+          />
+        </div>
+      )}
+
+      {/* Main answer content rendered directly on canvas */}
+      {msg.content && (
+        <div className="text-sm leading-relaxed text-[#1F1E1C]">
+          {/* Last block's bottom margin is dropped so the action bar sits close, like the user's */}
+          <ChatMarkdown
+            content={msg.content}
+            streaming={isLive}
+            onRun={handleRunCode}
+            runningCode={isLoading ? runningCode : null}
+            citations={isLive ? undefined : msg.citations}
+            sources={isLive ? undefined : msg.sources}
+            className="[&>:last-child]:!mb-0"
+          />
+        </div>
+      )}
+
+      {/* Data the reply's actions wrote: summary, expands to the rows created and deleted */}
+      {!!msg.changes?.length && <ChangeReviewCard changes={msg.changes} />}
+
+      {/* Suggested follow-ups as chips; the full prompt is sent on tap */}
+      {!!msg.suggestions?.length && !isLive && (
+        <div className="flex flex-wrap gap-2 pt-0.5">
+          {msg.suggestions.map((s) => (
+            <button
+              key={s.prompt}
+              type="button"
+              onClick={() => sendMessage(s.prompt)}
+              disabled={isLoading}
+              title={s.prompt}
+              className="rounded-full border border-[#E6E4DF] bg-white px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer"
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* A failed reply can be sent again: the question is re-asked as it was */}
+      {msg.status === "error" && !isLive && (
+        <div className="pt-0.5">
+          <button
+            type="button"
+            onClick={() => retry(msg.id)}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
+      {/* Finished with no text (empty reply or stopped before the first token) */}
+      {!msg.content && !isLive && (
+        <p className="py-0.5 text-sm italic text-[#6B6862]">
+          Mình chưa có câu trả lời cho câu này. Bạn nói rõ hơn giúp mình
+          nhé.
+        </p>
+      )}
+
+      {/* Shown after the user pressed stop, so a partial reply doesn't look finished */}
+      {msg.stopped && (
+        <p className="text-xs italic text-[#6B6862]">Đã dừng</p>
+      )}
+
+      {/* Confirmation for destructive actions (dry-run preview) */}
+      {awaitingConfirm && (
+        <div className="flex flex-col gap-2 pt-1">
+          <p className="text-xs text-[#6B6862]">
+            Đang chờ bạn xác nhận
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => sendMessage("ok")}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+            >
+              <CheckCircleIcon className="h-3.5 w-3.5" />
+              <span>Xác nhận thực hiện</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => sendMessage("hủy")}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
+            >
+              <CloseIcon className="h-3.5 w-3.5" />
+              <span>Hủy bỏ</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {awaitingLayerChoice && (
+        <LayerChoicePicker onSend={sendMessage} disabled={isLoading} />
+      )}
+
+      {/* Actions bar (Time and action buttons grouped on the right) */}
+      {msg.content && (
+        <div
+          className={`-mt-1 flex items-center justify-end gap-1 text-xs text-[#6B6862] transition-opacity duration-200 ${isLive ? "invisible opacity-0" : "opacity-100"}`}
+        >
+          {timeStr && (
+            <span className="select-none text-[11px] pr-1">
+              {timeStr}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => copyMessage(msg.id, msg.content)}
+            title="Sao chép"
+            aria-label="Sao chép câu trả lời"
+            className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+          >
+            {copiedId === msg.id ? (
+              <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
+            ) : (
+              <CopyIcon className="h-3.5 w-3.5" />
+            )}
+          </button>
+          {/* Only a traced reply can be rated: the vote is a score on its trace. Leaves out the
+              greeting, stopped or failed replies, and every reply when tracing is off */}
+          {msg.traceId && (
+            <>
+              <button
+                type="button"
+                onClick={() => handleFeedback(msg.id, 1)}
+                title="Hữu ích"
+                aria-label="Câu trả lời hữu ích"
+                aria-pressed={feedback[msg.id] === 1}
+                className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
+                  feedback[msg.id] === 1
+                    ? "text-[#3F7D58] bg-[#E6F1EA]"
+                    : "text-[#6B6862] hover:text-[#1F1E1C]"
+                }`}
+              >
+                <ThumbsUpIcon
+                  className={`h-3.5 w-3.5 transition-[fill] duration-200 ease-out ${feedback[msg.id] === 1 ? "fill-current" : "fill-transparent"}`}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFeedback(msg.id, 0)}
+                title="Chưa tốt"
+                aria-label="Câu trả lời chưa tốt"
+                aria-pressed={feedback[msg.id] === 0}
+                className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
+                  feedback[msg.id] === 0
+                    ? "text-[#B42318] bg-[#FBEDE5]"
+                    : "text-[#6B6862] hover:text-[#1F1E1C]"
+                }`}
+              >
+                <ThumbsDownIcon
+                  className={`h-3.5 w-3.5 transition-[fill] duration-200 ease-out ${feedback[msg.id] === 0 ? "fill-current" : "fill-transparent"}`}
+                />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export function MessageList({
   messages,
   isLoading,
@@ -112,258 +395,58 @@ export function MessageList({
   bottomSentinelRef,
   scrollToBottom,
 }: MessageListProps) {
+  // The host recreates these on every render (`retry` changes with each streamed frame), which
+  // would defeat MessageItem's memo. Stable wrappers call the latest ones instead.
+  const latestHandlers = React.useRef<MessageHandlers>({
+    sendMessage,
+    retry,
+    copyMessage,
+    handleFeedback,
+    handleRunCode,
+    toggleToolExpand,
+  });
+  React.useLayoutEffect(() => {
+    latestHandlers.current = {
+      sendMessage,
+      retry,
+      copyMessage,
+      handleFeedback,
+      handleRunCode,
+      toggleToolExpand,
+    };
+  });
+  const handlers = React.useMemo<MessageHandlers>(
+    () => ({
+      sendMessage: (text) => latestHandlers.current.sendMessage(text),
+      retry: (id) => latestHandlers.current.retry(id),
+      copyMessage: (id, text) => latestHandlers.current.copyMessage(id, text),
+      handleFeedback: (id, val) => latestHandlers.current.handleFeedback(id, val),
+      handleRunCode: (code) => latestHandlers.current.handleRunCode(code),
+      toggleToolExpand: (id) => latestHandlers.current.toggleToolExpand(id),
+    }),
+    []
+  );
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
         className="flex-1 space-y-6 overflow-y-auto px-4 py-5 overscroll-contain touch-pan-y [scrollbar-color:#E6E4DF_transparent] [scrollbar-width:thin]"
       >
-        {messages.map((msg) => {
-          const isUser = msg.role === "user";
-          const timeStr = formatTime(msg.timestamp);
-          const isLast = msg.id === messages[messages.length - 1]?.id;
-          const isLive = !isUser && isStreaming && isLast;
-          const toolCalls = msg.toolCalls ?? [];
-
-          if (isUser) {
-            return (
-              <div key={msg.id} className="group flex flex-col items-end gap-1">
-                <div className="relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-[#F4F3F0] px-3.5 py-2.5 text-sm leading-relaxed text-[#1F1E1C]">
-                  {msg.content}
-                </div>
-                <div className="flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]">
-                  {timeStr && (
-                    <span className="select-none text-[11px]">{timeStr}</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => copyMessage(msg.id, msg.content)}
-                    title="Sao chép câu hỏi"
-                    aria-label="Sao chép câu hỏi"
-                    className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
-                  >
-                    {copiedId === msg.id ? (
-                      <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
-                    ) : (
-                      <CopyIcon className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          const awaitingConfirm =
-            !isStreaming &&
-            isLast &&
-            (msg.content.includes("Xác nhận thực hiện") ||
-              msg.content.includes("DRY-RUN PREVIEW"));
-
-          const awaitingLayerChoice =
-            !isStreaming &&
-            isLast &&
-            msg.content.includes("Chọn layer cho bài học");
-
-          // Step events from the server when it sends them; tool calls for older servers.
-          const stepItems: StepItem[] = msg.steps?.length
-            ? toStepItems(msg.id, msg.steps, isLive)
-            : toolCalls.map((tc, idx) => ({
-                id: `${msg.id}-${idx}`,
-                label: formatToolDisplayName(tc.name),
-                startedAt: tc.startedAt,
-                endedAt: tc.endedAt,
-                running: isLive && tc.endedAt === undefined,
-                detail: tc.result,
-              }));
-
-          const stepsDigest = msg.steps?.length
-            ? formatStepsDigest(msg.steps)
-            : [...new Set(toolCalls.map((tc) => formatToolDisplayName(tc.name)))].join(", ") || undefined;
-
-          // Waiting for the model, or a streamed answer; a static greeting has no thinking to show.
-          // Gaps between steps are not rows: the header shows "Đang suy nghĩ…" on its own.
-          const showSteps = stepItems.length > 0 || (isLive && !msg.content) || !!msg.firstTokenAt;
-
-          return (
-            <div key={msg.id} className="group flex flex-col gap-2">
-              {/* Step summary (Thinking & Tools), placed at top of response like Claude */}
-              {showSteps && (
-                <div className="-mx-1">
-                  <CollapsibleStepsSummary
-                    steps={stepItems}
-                    expandedTools={expandedTools}
-                    onToggleTool={toggleToolExpand}
-                    isLive={isLive}
-                    startedAt={new Date(msg.timestamp).getTime()}
-                    firstTokenAt={msg.firstTokenAt}
-                    digest={stepsDigest}
-                  />
-                </div>
-              )}
-
-              {/* Main answer content rendered directly on canvas */}
-              {msg.content && (
-                <div className="text-sm leading-relaxed text-[#1F1E1C]">
-                  {/* Last block's bottom margin is dropped so the action bar sits close, like the user's */}
-                  <ChatMarkdown
-                    content={msg.content}
-                    streaming={isLive}
-                    onRun={handleRunCode}
-                    runningCode={isLoading ? runningCode : null}
-                    citations={isLive ? undefined : msg.citations}
-                    sources={isLive ? undefined : msg.sources}
-                    className="[&>:last-child]:!mb-0"
-                  />
-                </div>
-              )}
-
-              {/* Data the reply's actions wrote: summary, expands to the rows created and deleted */}
-              {!!msg.changes?.length && <ChangeReviewCard changes={msg.changes} />}
-
-              {/* Suggested follow-ups as chips; the full prompt is sent on tap */}
-              {!!msg.suggestions?.length && !isLive && (
-                <div className="flex flex-wrap gap-2 pt-0.5">
-                  {msg.suggestions.map((s) => (
-                    <button
-                      key={s.prompt}
-                      type="button"
-                      onClick={() => sendMessage(s.prompt)}
-                      disabled={isLoading}
-                      title={s.prompt}
-                      className="rounded-full border border-[#E6E4DF] bg-white px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer"
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* A failed reply can be sent again: the question is re-asked as it was */}
-              {msg.status === "error" && !isLive && (
-                <div className="pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => retry(msg.id)}
-                    disabled={isLoading}
-                    className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
-                  >
-                    Thử lại
-                  </button>
-                </div>
-              )}
-
-              {/* Finished with no text (empty reply or stopped before the first token) */}
-              {!msg.content && !isLive && (
-                <p className="py-0.5 text-sm italic text-[#6B6862]">
-                  Mình chưa có câu trả lời cho câu này. Bạn nói rõ hơn giúp mình
-                  nhé.
-                </p>
-              )}
-
-              {/* Shown after the user pressed stop, so a partial reply doesn't look finished */}
-              {msg.stopped && (
-                <p className="text-xs italic text-[#6B6862]">Đã dừng</p>
-              )}
-
-              {/* Confirmation for destructive actions (dry-run preview) */}
-              {awaitingConfirm && (
-                <div className="flex flex-col gap-2 pt-1">
-                  <p className="text-xs text-[#6B6862]">
-                    Đang chờ bạn xác nhận
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => sendMessage("ok")}
-                      disabled={isLoading}
-                      className="flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                    >
-                      <CheckCircleIcon className="h-3.5 w-3.5" />
-                      <span>Xác nhận thực hiện</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => sendMessage("hủy")}
-                      disabled={isLoading}
-                      className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
-                    >
-                      <CloseIcon className="h-3.5 w-3.5" />
-                      <span>Hủy bỏ</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {awaitingLayerChoice && (
-                <LayerChoicePicker onSend={sendMessage} disabled={isLoading} />
-              )}
-
-              {/* Actions bar (Time and action buttons grouped on the right) */}
-              {msg.content && (
-                <div
-                  className={`-mt-1 flex items-center justify-end gap-1 text-xs text-[#6B6862] transition-opacity duration-200 ${isLive ? "invisible opacity-0" : "opacity-100"}`}
-                >
-                  {timeStr && (
-                    <span className="select-none text-[11px] pr-1">
-                      {timeStr}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => copyMessage(msg.id, msg.content)}
-                    title="Sao chép"
-                    aria-label="Sao chép câu trả lời"
-                    className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
-                  >
-                    {copiedId === msg.id ? (
-                      <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
-                    ) : (
-                      <CopyIcon className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                  {/* Only a traced reply can be rated: the vote is a score on its trace. Leaves out the
-                      greeting, stopped or failed replies, and every reply when tracing is off */}
-                  {msg.traceId && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleFeedback(msg.id, 1)}
-                        title="Hữu ích"
-                        aria-label="Câu trả lời hữu ích"
-                        aria-pressed={feedback[msg.id] === 1}
-                        className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
-                          feedback[msg.id] === 1
-                            ? "text-[#3F7D58] bg-[#E6F1EA]"
-                            : "text-[#6B6862] hover:text-[#1F1E1C]"
-                        }`}
-                      >
-                        <ThumbsUpIcon
-                          className={`h-3.5 w-3.5 transition-[fill] duration-200 ease-out ${feedback[msg.id] === 1 ? "fill-current" : "fill-transparent"}`}
-                        />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleFeedback(msg.id, 0)}
-                        title="Chưa tốt"
-                        aria-label="Câu trả lời chưa tốt"
-                        aria-pressed={feedback[msg.id] === 0}
-                        className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
-                          feedback[msg.id] === 0
-                            ? "text-[#B42318] bg-[#FBEDE5]"
-                            : "text-[#6B6862] hover:text-[#1F1E1C]"
-                        }`}
-                      >
-                        <ThumbsDownIcon
-                          className={`h-3.5 w-3.5 transition-[fill] duration-200 ease-out ${feedback[msg.id] === 0 ? "fill-current" : "fill-transparent"}`}
-                        />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {messages.map((msg, idx) => (
+          <MessageItem
+            key={msg.id}
+            msg={msg}
+            isLast={idx === messages.length - 1}
+            isLoading={isLoading}
+            isStreaming={isStreaming}
+            runningCode={runningCode}
+            expandedTools={expandedTools}
+            feedback={feedback}
+            copiedId={copiedId}
+            handlers={handlers}
+          />
+        ))}
         <div
           ref={bottomSentinelRef}
           aria-hidden="true"

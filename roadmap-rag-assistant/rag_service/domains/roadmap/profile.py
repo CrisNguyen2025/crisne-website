@@ -36,6 +36,9 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
         lines.append(f"Mô tả: {doc.description}")
     if doc.doc_type == "item" and doc.content_text:
         lines.append(f"Nội dung tóm tắt: {doc.content_text[:300]}...")
+    if doc.doc_type == "item" and not doc.description and not doc.content_text:
+        # Without this, a lesson created by title only reads as missing ("chưa có nội dung") instead of existing
+        lines.append("Trạng thái: bài này đã có trong lộ trình nhưng chưa có mô tả hay nội dung.")
     return ContextDocument(id=doc.id, title=doc.title, body="\n".join(lines), score=score, href=href)
 
 
@@ -57,6 +60,9 @@ PROFILE = DomainProfile(
         "Nếu không bài nào nói trực tiếp về chủ đề đó, hãy nói rõ hệ thống chưa có bài về chủ đề này, "
         "chỉ giới thiệu các bài liên quan như gợi ý đọc thêm, và không tự giải thích chủ đề như thể có trong hệ thống. "
         "Bài gợi ý đọc thêm không phải nguồn của câu trả lời: không ghi [[id]] sau câu gợi ý, và ghi <sources></sources>.\n"
+        "Một <document> có dòng \"Trạng thái: … chưa có mô tả hay nội dung\" là bài đã tồn tại trong lộ trình. "
+        "Nếu bài đó đúng chủ đề được hỏi, nói rõ bài đã có trong lộ trình (nêu tên lộ trình) nhưng chưa có nội dung; "
+        "không nói hệ thống chưa có bài, và không tự giải thích chủ đề thay cho nội dung còn thiếu.\n"
         "Gọi tên lộ trình, layer và bài học đúng nguyên văn như trong dữ liệu (lộ trình tên `fe` thì viết `fe`), "
         "không dịch, không đoán tên đầy đủ, không nhắc tên nào không có trong dữ liệu. "
         "Không hứa hẹn hay nói về kế hoạch của hệ thống (như \"sẽ cập nhật\", \"sắp có\").\n"

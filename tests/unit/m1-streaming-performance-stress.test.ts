@@ -131,7 +131,9 @@ describe("Challenger M1-2: Streaming, Performance & Memoization Stress Suite", (
     // Extract areBlocksEqual comparator from MemoizedBlockView
     const sampleMarkup = ChatMarkdown({ content: "Hello world", streaming: true });
     const rootChildren = (sampleMarkup as any).props.children;
-    const blockElements = Array.isArray(rootChildren[0]) ? rootChildren[0] : [rootChildren[0]];
+    // Blocks sit inside the always-present CitationContext.Provider
+    const blockChildren = rootChildren[0].props.children;
+    const blockElements = Array.isArray(blockChildren) ? blockChildren : [blockChildren];
     const memoComponent = blockElements[0]?.type;
     const areBlocksEqual = (memoComponent as { compare?: (prev: any, next: any) => boolean })?.compare;
 
