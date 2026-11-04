@@ -36,6 +36,11 @@
       "sourceType": "github",
       "skillPath": "skills/no-ai-slop/SKILL.md",
       "computedHash": "77d287e3c8e09874e144ee35f6fb0ee1adcf609012c7c3273e9c8fe2054ce5af"
+    },
+    "ui-taste": {
+      "source": "uizze.sh",
+      "sourceType": "well-known",
+      "computedHash": "b02e990f4919225b190307c68c62622a42ee9dc50c77b269ab0f6450b6e990b8"
     }
   }
 }

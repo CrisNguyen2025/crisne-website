@@ -85,3 +85,6 @@ flatten-backup-*.json
 
 # Runtime logs appended by the RAG service during load tests
 tests/load/results/*.log
+
+# Playwright MCP runtime logs and snapshots
+.playwright-mcp/
