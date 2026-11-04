@@ -52,8 +52,17 @@ export function ThemeToggle({
       return;
     }
 
+    // Tắt CSS transition trong lúc đổi theme để màu không bị animate chồng lên
+    // snapshot của View Transition (nguyên nhân nháy trên roadmap).
+    const root = document.documentElement;
+    root.classList.add("theme-switching");
+
     const transition = document.startViewTransition(() => {
       flushSync(applyTheme);
+    });
+
+    transition?.finished.finally(() => {
+      root.classList.remove("theme-switching");
     });
 
     const ready = transition?.ready;

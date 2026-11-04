@@ -196,6 +196,14 @@ input[type="search"]::-webkit-search-cancel-button {
   mix-blend-mode: normal;
 }
 
+/* Khi đổi theme sáng/tối: không animate màu của từng element để tránh nháy */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
 .deferred-section {
   content-visibility: auto;
   contain-intrinsic-block-size: auto 48rem;
