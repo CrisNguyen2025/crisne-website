@@ -12,6 +12,11 @@ Global Codex rules and skills are vendored in this repository so they can be use
 - Use project-specific skills from `.agents/skills/` first. Global Codex skills are available in `.codex/skills/`.
 - Preserve the local copies when updating or sharing the repository; do not replace project-specific skills with global versions.
 
+## 🧪 Manual Test Results
+
+- Trước khi test thủ công hay chạy Playwright cho một tính năng: đọc `tests/manual/README.md` và kịch bản liên quan. Case `Pass` mà code liên quan chưa đổi kể từ commit của lần chạy thì không chạy lại.
+- Sau mỗi lần chạy: ghi kết quả vào kịch bản (ngày, commit, môi trường), theo quy ước trong `tests/manual/README.md`.
+
 ## 🛡️ GLOBAL SAFETY RULES
 
 - **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.
