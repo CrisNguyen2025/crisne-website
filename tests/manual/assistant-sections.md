@@ -138,3 +138,17 @@ Bản sửa nằm ở `handle_cud` và `handle_pending` trong `roadmap-rag-assis
 | Topic không có | Pass | `thêm bài Kafka vào topic Kafka Streams`: liệt kê các topic và hỏi lại, không tạo gì. |
 | D3 | Pass | "Đã có sẵn bài học Vector DB, không tạo thêm bản trùng." |
 | D5 | Pass | `ok` gõ sau khi preview đã bị huỷ được trả lời "Không có thao tác nào đang chờ xác nhận…". Bài vẫn còn. |
+
+### Chạy lại sau plan mục 1–4 (2026-11-05)
+
+Bản sửa: `domains/roadmap/sections.py` (liệt kê và đổi tên mục), `commands.py` (`names_section`, `pending_section_rename`, nhập danh sách), `sdk/.../ChatComposer.tsx` (textarea). Test: `roadmap-rag-assistant/tests/test_sections_chat.py`. Playwright, DB Turso, topic test đã xoá.
+
+| Case | Kết quả | Ghi chú |
+|---|---|---|
+| F1 | Pass | "Topic QA Sandbox có 2 mục, và 1 bài chưa vào mục nào (nhóm Chung)" kèm từng mục và số bài. Cũng đúng với "topic này …" khi đang mở trang. |
+| C1 | Pass | Preview `Tools → Tooling (1 bài)`, gõ `ok` thì `rename_section` chạy. |
+| C3 | Pass | "không có mục Không Có… Các mục hiện có: RAG, Tooling", không có preview. |
+| A7 | Pass | Đang mở topic, "thêm bài Function Schema mục Tooling" vào đúng `qa-sandbox` mục `Tooling`. |
+| B2 | Pass | Dán `thêm:` + 2 dòng: `import_items_from_text` tạo 2 bài. |
+| B3 | Pass | Không mở topic nào: "Tôi thấy 2 dòng bài nhưng chưa biết thêm vào topic nào…". |
+| Ô nhập | Pass | Shift+Enter xuống dòng, Enter gửi. |
