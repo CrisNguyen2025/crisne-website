@@ -21,13 +21,25 @@ export function useVisualViewportBox(enabled: boolean): React.CSSProperties | un
       setBox(undefined);
       return;
     }
-    const update = () => setBox({ height: vv.height, top: vv.offsetTop });
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+    // Closing the keyboard (Back) fires resize and scroll many times a frame. Coalesce them into one
+    // read per frame, and set state only when the box really changed, so the panel does not re-render
+    // and jump on every event.
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      const next = { height: vv.height, top: vv.offsetTop };
+      setBox((prev) => (prev && prev.height === next.height && prev.top === next.top ? prev : next));
+    };
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(apply);
+    };
+    apply();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
+      if (frame) window.cancelAnimationFrame(frame);
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
     };
   }, [enabled]);
 

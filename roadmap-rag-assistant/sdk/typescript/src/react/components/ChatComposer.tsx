@@ -45,6 +45,14 @@ export function ChatComposer({
           ref={inputRef}
           rows={1}
           value={input}
+          // A chat message is not a form: no autofill, password-manager or card strip above the keyboard
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="sentences"
+          spellCheck={false}
+          data-lpignore="true"
+          data-1p-ignore="true"
+          enterKeyHint="send"
           maxLength={MAX_INPUT_LENGTH}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
