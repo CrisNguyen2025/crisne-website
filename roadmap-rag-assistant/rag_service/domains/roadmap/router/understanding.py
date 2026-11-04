@@ -33,6 +33,7 @@ from rag_service.domains.roadmap.router.policy import (  # cues and their vocabu
     PLAN_REQUEST,
     ABOUT_ASSISTANT,
     CAPABILITY_QUESTION,
+    HELP_REQUEST,
     CONDITIONAL_REQUEST,
     CONVERSATION_RECALL,
     CREATE_ROADMAP,
@@ -224,7 +225,9 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
         and (not imperative or end_question.search(cue_head) is not None)
     )
     syntax = (SYNTAX_QUESTION.search(lower) if accented else SYNTAX_QUESTION_FOLDED.search(flat)) is not None
-    asks_usage = capability or usage_how_to or syntax
+    # "tôi cần hỗ trợ học tập": asks for help and names nothing to search, so it gets the command list
+    help_request = not has_verb and HELP_REQUEST.search(flat) is not None
+    asks_usage = capability or usage_how_to or syntax or help_request
     # P2: is the named change asked for? (polarity.py)
     polarity = polarity_of(lower).value if has_verb else NO_POLARITY
     write_blocker = BLOCKER_OF.get(polarity)

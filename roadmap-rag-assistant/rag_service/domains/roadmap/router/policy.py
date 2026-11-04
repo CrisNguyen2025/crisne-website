@@ -106,6 +106,16 @@ CAPABILITY_QUESTION = re.compile(
     r"|\b(?:thao\s+tac|chuc\s+nang|tinh\s+nang)\b"
 )
 
+# A request for help that names no subject: the whole message is the request ("tôi cần hỗ trợ học tập",
+# "giúp mình với", "hướng dẫn tôi"). Matched on folded text. "tôi cần hỗ trợ về RAG" names one and stays a search.
+# 2026-11-04, live: "tôi cần hỗ trợ học tập" was read as a missing topic and offered as a lesson title.
+HELP_REQUEST = re.compile(
+    r"^\s*(?:(?:toi|minh|em|tui|to)\s+)?(?:(?:can|muon|xin|dang\s+can)\s+)?(?:duoc\s+)?"
+    r"(?:ho\s+tro|giup\s+do|giup|tro\s+giup|huong\s+dan|tu\s+van)"
+    r"(?:\s+(?:toi|minh|em|tui|voi))?(?:\s+(?:hoc\s+tap|viec\s+hoc|hoc|on\s+tap))?"
+    r"(?:\s+(?:voi|nhe|nha|a|di|duoc\s+khong|khong))*\s*[.!?…]*\s*$"
+)
+
 # What visitors call a Topic: "topic", "lộ trình", "roadmap" (GLOSSARY: Topic is a lộ trình, _Also_ Roadmap)
 TOPIC_NOUN = r"(?:topics?|lộ\s+trình|roadmaps?)"
 # "liệt kê topic", "danh sách các lộ trình", "list all topics", "xem danh sách topic",

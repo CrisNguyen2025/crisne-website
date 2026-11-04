@@ -270,8 +270,29 @@ def empty_roadmap_reply(owner: bool) -> str:
     return reply
 
 
+# A focus that speaks as the user ("tôi cần hỗ trợ học tập") is a sentence, not the name of a lesson.
+# Matched with accents: folded, "can" would also catch "Cân bằng tải" and "to" the English word.
+_SENTENCE_WORDS = re.compile(
+    r"(?<!\w)(?:tôi|mình|tui|tớ|cần|muốn|xin|giúp|hỗ\s+trợ|hướng\s+dẫn|làm\s+sao|thế\s+nào)(?!\w)"
+)
+MAX_TITLE_WORDS = 6
+
+
+def looks_like_title(topic: Optional[str]) -> bool:
+    """True when the focus could be a lesson's name: a short phrase that is not a request in the user's voice."""
+    if not topic:
+        return False
+    text = normalize_vietnamese(topic).lower()
+    return len(text.split()) <= MAX_TITLE_WORDS and _SENTENCE_WORDS.search(text) is None
+
+
 def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
-    """The topic belongs to the roadmap's field but no lesson covers it yet; owners may add one."""
+    """The topic belongs to the roadmap's field but no lesson covers it yet; owners may add one.
+
+    The focus is named, and offered as a lesson title, only when it reads like one (looks_like_title).
+    """
+    if not looks_like_title(topic):
+        topic = None
     name = f"**{topic}**" if topic else "chủ đề này"
     reply = f"Roadmap chưa có bài học về {name}. Chủ đề này thuộc lĩnh vực của lộ trình nhưng chưa được bổ sung."
     if owner and topic:
