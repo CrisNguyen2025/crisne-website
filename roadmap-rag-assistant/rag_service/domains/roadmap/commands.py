@@ -8,7 +8,9 @@ when the topic is not known the user is asked for it, never guessed.
 from __future__ import annotations
 
 import re
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
+
+from rag_service.domains.roadmap.retrieval.relevance import fold
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.agent_actions import ANAPHORA_TARGETS
@@ -40,12 +42,13 @@ from rag_service.domains.roadmap.router.write_gate import (
 from rag_service.execution.changes import ChangeSet
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.state import AnaphoraResolver, session_store
-from rag_service.tools.item_tools import import_items_from_text, parse_item_list
+from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section
 from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
 from rag_service.write_grant import write_granted
 
 
 CONFIRM_WORDS = ("ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn")
+CANCEL_WORDS = ("hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi")
 
 # A confirmation with no preview waiting: answered here, so the LLM never replies as if a change had run
 NOTHING_PENDING_REPLY = (
@@ -54,27 +57,68 @@ NOTHING_PENDING_REPLY = (
 )
 
 
+_ADD_VERB = re.compile(r"^\s*(?:hay\s+|vui\s+long\s+)?(?:them|tao|nhap|bo\s+sung|add|create|import)\b")
+
+
+def names_section(text: str, name: Optional[str]) -> bool:
+    """True when `name` comes right after "mục" / "section" in the message ("… mục Tools")."""
+    if not name:
+        return False
+    flat, wanted = fold(normalize_vietnamese(text).lower()), fold(normalize_vietnamese(name).lower()).strip()
+    return re.search(rf"\b(?:muc|section)\s+{re.escape(wanted)}\b", flat) is not None
+
+
 class RoadmapCommands:
     def bulk_import_applies(self, raw_content: str, lower: str, page_context) -> bool:
         """A pasted list of two or more lessons asked to be added: the same evidence as any other change.
 
-        The first line must ask for it: a change verb with a roadmap object ("thêm các bài sau:"), or, while a
-        topic is open, a change verb alone ("thêm:"). A list by itself is not a request.
+        The first line must ask for it: an add verb with a roadmap object ("thêm các bài sau:"), or the verb
+        alone ("thêm:"). A list by itself is not a request, and neither is "xóa:" over one.
         """
         titles = parse_item_list(raw_content)
         if len(titles) < 2:
             return False
         first = normalize_vietnamese(raw_content.strip().splitlines()[0])
         u = understand(first)
-        if not u.has_change_verb:
+        # Only an add: the import creates lessons, so "xóa:" over a list must never reach it
+        if not u.has_change_verb or _ADD_VERB.search(fold(first.lower())) is None:
             return False
-        topic_in_view = (page_context or {}).get("roadmapSlug")
-        return u.has_object or (bool(topic_in_view) and len(first.split()) <= 2)
+        # A bare verb line ("thêm:") asks for it too; with no topic open, handle_bulk_import asks which topic
+        # (2026-11-05, live: it went to the router and was answered as a missing topic)
+        return u.has_object or len(first.split()) <= 2
 
     async def handle_pending(
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
+        # A previewed section rename (sections.py): same words, its own pending field
+        if rename := session_ctx.fresh_pending("pending_section_rename"):
+            session_ctx.pending_section_rename = None
+            if lower in CONFIRM_WORDS:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                else:
+                    args = {"topic": rename["topic"], "from_name": rename["from"], "to_name": rename["to"]}
+                    yield {"type": "tool_start", "name": "rename_section", "args": {**args, "confirmed": True}}
+                    try:
+                        with write_granted("confirmed section rename"):
+                            res_msg = await rename_section.coroutine(**args)
+                        ok = res_msg.startswith("✅")
+                    except Exception as exc:
+                        ok, res_msg = False, f"❌ Lỗi khi đổi tên mục: {exc}"
+                    yield {"type": "tool_end", "name": "rename_section", "result": res_msg, "is_error": not ok}
+                    async for ev in self._stream_text(res_msg, delay):
+                        yield ev
+                outcome["handled"] = True
+                return
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else drops the preview, like a pending create or delete below
+            return
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
             if lower in CONFIRM_WORDS:
@@ -98,7 +142,7 @@ class RoadmapCommands:
                     yield ev
                 outcome["handled"] = True
                 return
-            elif lower in ["hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi"]:
+            elif lower in CANCEL_WORDS:
                 session_ctx.pending_confirmation = None
                 cancel_msg = "Đã hủy bỏ thao tác theo yêu cầu của bạn."
                 async for ev in self._stream_text(cancel_msg, delay):
@@ -265,6 +309,21 @@ class RoadmapCommands:
             # The extracted topic is often its title ("QA Sandbox") and the API takes the slug: resolve it.
             # A name that matches no topic, or several, is asked back; an unavailable list leaves it to the check below.
             found_topic = await resolve_topic(topic_ref) if topic_ref else None
+            # "thêm bài X mục Tools": the extractor may take the section for the topic. A name that is no topic
+            # and follows "mục" in the message is the section; the topic then comes from the message, page or session.
+            if found_topic is not None and found_topic.status == "not_found" and names_section(content, topic_ref):
+                for ent in resolved_action.entities:
+                    ent.section = ent.section or topic_ref
+                topic_ref = (
+                    await topic_named_in_message(content)
+                    or (page_context or {}).get("roadmapSlug")
+                    or session_ctx.active_topic_slug
+                )
+                found_topic = await resolve_topic(topic_ref) if topic_ref else None
+                if found_topic is None:
+                    async for ev in self._ask_topic_choice(resolved_action, None, delay):
+                        yield ev
+                    return
             if found_topic is not None and found_topic.status == "found" and found_topic.slug:
                 topic_ref = found_topic.slug
             elif found_topic is not None and found_topic.status in ("not_found", "ambiguous"):

@@ -27,6 +27,7 @@ from rag_service.core.orchestration.llm_answer import answer_with_llm
 from rag_service.core.orchestration.sources import SourceDeps, answer_from_sources, llm_fallback_reason, stream_words
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
+from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.observability import (
@@ -108,7 +109,7 @@ async def _plan_queries(llm, query: str, session_id: str):
     return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm)
 
 
-class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
+class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
     def __init__(
@@ -268,6 +269,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands):
         # ── 1. Topic listing (roadmap domain: commands.py) ──
         outcome = {"handled": False}
         async for ev in self.handle_listing(content=content, lower=lower, delay=delay, outcome=outcome):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        # ── 1b. A topic's sections: list them, or preview a rename (roadmap domain: sections.py) ──
+        async for ev in self.handle_sections(
+            content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        ):
             yield ev
         if outcome["handled"]:
             return
