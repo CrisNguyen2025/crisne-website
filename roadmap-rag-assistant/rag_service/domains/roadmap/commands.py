@@ -21,6 +21,7 @@ from rag_service.domains.roadmap.router.grounding import (
     UPDATE_NOT_SUPPORTED_REPLY,
     batch_entity_delete_reply,
     build_grounding,
+    example_blocks,
     unresolved_entity_reply,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
@@ -42,6 +43,15 @@ from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list
 from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
 from rag_service.write_grant import write_granted
+
+
+CONFIRM_WORDS = ("ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn")
+
+# A confirmation with no preview waiting: answered here, so the LLM never replies as if a change had run
+NOTHING_PENDING_REPLY = (
+    "Không có thao tác nào đang chờ xác nhận nên mình chưa thay đổi gì. "
+    "Nếu bạn muốn thay đổi, hãy gửi lại lệnh, ví dụ:\n\n" + example_blocks("thêm bài … vào topic …", "xóa bài …")
+)
 
 
 class RoadmapCommands:
@@ -67,7 +77,7 @@ class RoadmapCommands:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
-            if lower in ["ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn"]:
+            if lower in CONFIRM_WORDS:
                 pending_act = session_ctx.pending_confirmation
                 session_ctx.pending_confirmation = None
                 if not is_owner():
@@ -97,6 +107,12 @@ class RoadmapCommands:
                 return
             # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
             session_ctx.pending_confirmation = None
+        elif lower in CONFIRM_WORDS:
+            # 2026-11-04, live: an "ok" after the preview was dropped went to chitchat, which answered
+            # "Đã xóa bài học Reranking" from the history while nothing was deleted.
+            async for ev in self._stream_text(NOTHING_PENDING_REPLY, delay):
+                yield ev
+            outcome["handled"] = True
 
     async def handle_listing(
         self, *, content: str, lower: str, delay: float, outcome: dict
@@ -246,6 +262,15 @@ class RoadmapCommands:
                     or (page_context or {}).get("roadmapSlug")
                     or session_ctx.active_topic_slug
                 )
+            # The extracted topic is often its title ("QA Sandbox") and the API takes the slug: resolve it.
+            # A name that matches no topic, or several, is asked back; an unavailable list leaves it to the check below.
+            found_topic = await resolve_topic(topic_ref) if topic_ref else None
+            if found_topic is not None and found_topic.status == "found" and found_topic.slug:
+                topic_ref = found_topic.slug
+            elif found_topic is not None and found_topic.status in ("not_found", "ambiguous"):
+                async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
+                    yield ev
+                return
             if not topic_ref or not await self._topic_known(topic_ref):
                 async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
                     yield ev
