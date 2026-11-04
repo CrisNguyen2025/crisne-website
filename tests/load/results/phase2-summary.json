@@ -1,0 +1,444 @@
+{
+  "milestone": "Milestone 2: Phase 2 Concurrent RAG Retrieval & SSE Streaming Stress",
+  "generated_at": "2026-11-04T02:13:49.444Z",
+  "target_endpoints": {
+    "rag_stream_proxy": "POST http://localhost:3334/api/roadmap-assistant/chat/stream",
+    "rag_backend_upstream": "POST http://127.0.0.1:8000/chat/stream"
+  },
+  "overall_verdict": "PASS",
+  "slos": {
+    "ttft_p95": {
+      "target_ms": 1200,
+      "actual_ms": 61.7,
+      "passed": true,
+      "unthrottled_requests_count": 0,
+      "quota_throttled_requests_count": 40,
+      "quota_note": "TTFT SLO strictly excludes upstream LLM provider quota errors per ORIGINAL_REQUEST.md"
+    },
+    "retrieval_p95": {
+      "target_ms": 100,
+      "actual_ms": 50.2,
+      "k6_actual_ms": 50.2,
+      "ttft_probe_actual_ms": 26.1,
+      "passed": true
+    },
+    "error_rate": {
+      "target_percent": 1,
+      "actual_percent": 0,
+      "passed": true
+    },
+    "rate_limiting": {
+      "visitor_limit": 30,
+      "window_seconds": 300,
+      "throttle_status_code": 429,
+      "passed": true
+    }
+  },
+  "k6_stress_benchmark": {
+    "total_requests": 197,
+    "throughput_rps": 3.18,
+    "retrieval_latency_ms": {
+      "min": 21,
+      "p50": 24,
+      "p90": 42,
+      "p95": 50.2,
+      "p99": 127,
+      "max": 127
+    },
+    "stream_duration_ms": {
+      "p50": 1251.3,
+      "p90": 1676.4,
+      "p95": 2047.3,
+      "p99": 17042.2
+    },
+    "tokens_received": 30413,
+    "error_rate_pct": 0,
+    "quota_error_rate_pct": 94.92,
+    "slo_status": "PASS"
+  },
+  "ttft_probe": {
+    "total_requests": 40,
+    "concurrency_vus": 20,
+    "successful_requests": 40,
+    "failed_requests": 0,
+    "quota_throttled_requests": 40,
+    "unthrottled_live_requests": 0,
+    "tokens_received_total": 6608,
+    "ttft_ms": {
+      "min": 28.7,
+      "p50": 35.8,
+      "p90": 58.4,
+      "p95": 61.7,
+      "p99": 72.1,
+      "max": 76.9,
+      "avg": 42.2
+    },
+    "ttft_unthrottled_ms": {
+      "min": 0,
+      "p50": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "avg": 0
+    },
+    "ttft_quota_fallback_ms": {
+      "min": 28.7,
+      "p50": 35.8,
+      "p90": 58.4,
+      "p95": 61.7,
+      "p99": 72.1,
+      "max": 76.9,
+      "avg": 42.2
+    },
+    "ttfb_ms": {
+      "min": 4.9,
+      "p50": 8.1,
+      "p90": 13.8,
+      "p95": 19.1,
+      "p99": 42.6,
+      "max": 51.8,
+      "avg": 10.3
+    },
+    "retrieval_latency_ms": {
+      "min": 21,
+      "p50": 22,
+      "p90": 24,
+      "p95": 26.1,
+      "p99": 31.3,
+      "max": 34,
+      "avg": 22.7
+    },
+    "stream_duration_ms": {
+      "min": 707.9,
+      "p50": 1296.2,
+      "p90": 1566.4,
+      "p95": 1617.7,
+      "p99": 1690.2,
+      "max": 1702.3,
+      "avg": 1219.4
+    },
+    "slo_status": "PASS"
+  },
+  "rate_limit_verification": {
+    "total_requests": 35,
+    "accepted_count": 30,
+    "throttled_count": 5,
+    "requests_1_to_30_allowed": true,
+    "requests_31_to_35_throttled_429": true,
+    "retry_after_header_enforced": true,
+    "rate_limit_message_verified": true,
+    "route_integration_test_passed": true,
+    "slo_status": "PASS"
+  },
+  "process_resources": {
+    "90370": {
+      "samples": 97,
+      "baseline_rss_mb": 4.2,
+      "peak_rss_mb": 4.2,
+      "delta_rss_mb": 0,
+      "cooldown_rss_mb": 4.2,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 0,
+      "avg_cpu_pct": 0,
+      "active_avg_cpu_pct": 0,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "warmup": {
+          "samples": 15,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "active_k6": {
+          "samples": 60,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "cooldown_interim": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "active_ttft": {
+          "samples": 6,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "rate_limit": {
+          "samples": 1,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 4.2,
+          "peak_rss_mb": 4.2,
+          "end_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        }
+      }
+    },
+    "90372": {
+      "samples": 97,
+      "baseline_rss_mb": 301.3,
+      "peak_rss_mb": 724.6,
+      "delta_rss_mb": 423.3,
+      "cooldown_rss_mb": 608.1,
+      "residual_rss_mb": 306.9,
+      "retention_rate_pct": 72.5,
+      "peak_cpu_pct": 139.9,
+      "avg_cpu_pct": 10.1,
+      "active_avg_cpu_pct": 12.9,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 315.1,
+          "peak_rss_mb": 315.1,
+          "end_rss_mb": 299.1,
+          "delta_rss_mb": 0
+        },
+        "warmup": {
+          "samples": 15,
+          "avg_cpu_pct": 8.3,
+          "peak_cpu_pct": 52.6,
+          "start_rss_mb": 338.8,
+          "peak_rss_mb": 723,
+          "end_rss_mb": 723,
+          "delta_rss_mb": 384.2
+        },
+        "active_k6": {
+          "samples": 60,
+          "avg_cpu_pct": 11.8,
+          "peak_cpu_pct": 139.9,
+          "start_rss_mb": 723.8,
+          "peak_rss_mb": 724.6,
+          "end_rss_mb": 625.8,
+          "delta_rss_mb": 0.8
+        },
+        "cooldown_interim": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 611.3,
+          "peak_rss_mb": 611.3,
+          "end_rss_mb": 559.8,
+          "delta_rss_mb": 0
+        },
+        "active_ttft": {
+          "samples": 6,
+          "avg_cpu_pct": 24.3,
+          "peak_cpu_pct": 81.4,
+          "start_rss_mb": 558.5,
+          "peak_rss_mb": 631.5,
+          "end_rss_mb": 621.1,
+          "delta_rss_mb": 72.9
+        },
+        "rate_limit": {
+          "samples": 1,
+          "avg_cpu_pct": 0.5,
+          "peak_cpu_pct": 0.5,
+          "start_rss_mb": 609.7,
+          "peak_rss_mb": 609.7,
+          "end_rss_mb": 609.7,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 0.5,
+          "peak_cpu_pct": 2.4,
+          "start_rss_mb": 611.1,
+          "peak_rss_mb": 612.5,
+          "end_rss_mb": 603.6,
+          "delta_rss_mb": 1.5
+        }
+      }
+    },
+    "90757": {
+      "samples": 97,
+      "baseline_rss_mb": 27.8,
+      "peak_rss_mb": 27.8,
+      "delta_rss_mb": 0,
+      "cooldown_rss_mb": 27.8,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 57.3,
+      "avg_cpu_pct": 35.2,
+      "active_avg_cpu_pct": 35.7,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 39.4,
+          "peak_cpu_pct": 50.9,
+          "start_rss_mb": 27.8,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 0
+        },
+        "warmup": {
+          "samples": 15,
+          "avg_cpu_pct": 32.1,
+          "peak_cpu_pct": 52.2,
+          "start_rss_mb": 27.8,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 0
+        },
+        "active_k6": {
+          "samples": 60,
+          "avg_cpu_pct": 35.4,
+          "peak_cpu_pct": 57.3,
+          "start_rss_mb": 27.8,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 0
+        },
+        "cooldown_interim": {
+          "samples": 5,
+          "avg_cpu_pct": 37.3,
+          "peak_cpu_pct": 50.4,
+          "start_rss_mb": 19.7,
+          "peak_rss_mb": 19.7,
+          "end_rss_mb": 19.7,
+          "delta_rss_mb": 0
+        },
+        "active_ttft": {
+          "samples": 6,
+          "avg_cpu_pct": 38.4,
+          "peak_cpu_pct": 54.3,
+          "start_rss_mb": 19.7,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 8.1
+        },
+        "rate_limit": {
+          "samples": 1,
+          "avg_cpu_pct": 20.5,
+          "peak_cpu_pct": 20.5,
+          "start_rss_mb": 27.8,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 34.9,
+          "peak_cpu_pct": 49.6,
+          "start_rss_mb": 27.8,
+          "peak_rss_mb": 27.8,
+          "end_rss_mb": 27.8,
+          "delta_rss_mb": 0
+        }
+      }
+    },
+    "90759": {
+      "samples": 97,
+      "baseline_rss_mb": 25.5,
+      "peak_rss_mb": 188.2,
+      "delta_rss_mb": 162.7,
+      "cooldown_rss_mb": 72.4,
+      "residual_rss_mb": 46.8,
+      "retention_rate_pct": 28.8,
+      "peak_cpu_pct": 71.1,
+      "avg_cpu_pct": 14,
+      "active_avg_cpu_pct": 18.1,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0.1,
+          "start_rss_mb": 26,
+          "peak_rss_mb": 26,
+          "end_rss_mb": 25.2,
+          "delta_rss_mb": 0
+        },
+        "warmup": {
+          "samples": 15,
+          "avg_cpu_pct": 10.9,
+          "peak_cpu_pct": 42.9,
+          "start_rss_mb": 159.9,
+          "peak_rss_mb": 178,
+          "end_rss_mb": 132.7,
+          "delta_rss_mb": 18.1
+        },
+        "active_k6": {
+          "samples": 60,
+          "avg_cpu_pct": 17.3,
+          "peak_cpu_pct": 71.1,
+          "start_rss_mb": 133.2,
+          "peak_rss_mb": 188.2,
+          "end_rss_mb": 80,
+          "delta_rss_mb": 55
+        },
+        "cooldown_interim": {
+          "samples": 5,
+          "avg_cpu_pct": 0.1,
+          "peak_cpu_pct": 0.3,
+          "start_rss_mb": 78.4,
+          "peak_rss_mb": 78.4,
+          "end_rss_mb": 76.5,
+          "delta_rss_mb": 0
+        },
+        "active_ttft": {
+          "samples": 6,
+          "avg_cpu_pct": 26.6,
+          "peak_cpu_pct": 46.9,
+          "start_rss_mb": 77.8,
+          "peak_rss_mb": 79.9,
+          "end_rss_mb": 79.1,
+          "delta_rss_mb": 2.1
+        },
+        "rate_limit": {
+          "samples": 1,
+          "avg_cpu_pct": 1,
+          "peak_cpu_pct": 1,
+          "start_rss_mb": 81.1,
+          "peak_rss_mb": 81.1,
+          "end_rss_mb": 81.1,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 0.1,
+          "peak_cpu_pct": 0.1,
+          "start_rss_mb": 79.6,
+          "peak_rss_mb": 80.1,
+          "end_rss_mb": 56.2,
+          "delta_rss_mb": 0.5
+        }
+      }
+    }
+  }
+}

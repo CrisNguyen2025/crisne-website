@@ -1,0 +1,173 @@
+{
+  "milestone": "Milestone 1: Phase 1 Read Throughput & Cache Stress",
+  "generated_at": "2026-11-03T09:27:13.743Z",
+  "overall_verdict": "PASS",
+  "endpoints": {
+    "ai-architecture": {
+      "endpoint": "GET /api/v1/roadmaps/ai-architecture",
+      "slo_requirement": "P95 < 150ms @ 100 VUs, 0% error rate",
+      "total_requests": 2608,
+      "throughput_rps": 36.95,
+      "p50_latency_ms": 6.87,
+      "p90_latency_ms": 15.67,
+      "p95_latency_ms": 25.64,
+      "p99_latency_ms": 197.57,
+      "avg_latency_ms": 13.73,
+      "min_latency_ms": 3.97,
+      "max_latency_ms": 404.71,
+      "error_rate_pct": 0,
+      "checks_pass_rate_pct": 100,
+      "slo_p95_target_ms": 150,
+      "slo_max_vus": 100,
+      "slo_status": "PASS"
+    },
+    "full-export": {
+      "endpoint": "GET /api/v1/roadmaps/full-export",
+      "slo_requirement": "P95 < 350ms @ 30 VUs, 0% error rate",
+      "total_requests": 13904,
+      "throughput_rps": 231.74,
+      "p50_latency_ms": 43.15,
+      "p90_latency_ms": 87.18,
+      "p95_latency_ms": 107.32,
+      "p99_latency_ms": 132.83,
+      "avg_latency_ms": 45.76,
+      "min_latency_ms": 2.9,
+      "max_latency_ms": 189.76,
+      "error_rate_pct": 0,
+      "checks_pass_rate_pct": 100,
+      "slo_p95_target_ms": 350,
+      "slo_max_vus": 30,
+      "slo_status": "PASS"
+    }
+  },
+  "process_resources": {
+    "90370": {
+      "samples": 144,
+      "baseline_rss_mb": 9.3,
+      "peak_rss_mb": 9.3,
+      "delta_rss_mb": 0,
+      "cooldown_rss_mb": 9.3,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 0,
+      "avg_cpu_pct": 0,
+      "active_avg_cpu_pct": 0,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 9.3,
+          "peak_rss_mb": 9.3,
+          "end_rss_mb": 9.3,
+          "delta_rss_mb": 0
+        },
+        "ai-architecture": {
+          "samples": 68,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 9.3,
+          "peak_rss_mb": 9.3,
+          "end_rss_mb": 9.3,
+          "delta_rss_mb": 0
+        },
+        "cooldown_1": {
+          "samples": 9,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 9.3,
+          "peak_rss_mb": 9.3,
+          "end_rss_mb": 9.3,
+          "delta_rss_mb": 0
+        },
+        "full-export": {
+          "samples": 57,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 9.3,
+          "peak_rss_mb": 9.3,
+          "end_rss_mb": 9.3,
+          "delta_rss_mb": 0
+        },
+        "cooldown_2": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "start_rss_mb": 9.3,
+          "peak_rss_mb": 9.3,
+          "end_rss_mb": 9.3,
+          "delta_rss_mb": 0
+        }
+      }
+    },
+    "90372": {
+      "samples": 144,
+      "baseline_rss_mb": 432.4,
+      "peak_rss_mb": 1417.1,
+      "delta_rss_mb": 984.8,
+      "cooldown_rss_mb": 694.2,
+      "residual_rss_mb": 261.8,
+      "retention_rate_pct": 26.6,
+      "peak_cpu_pct": 207.7,
+      "avg_cpu_pct": 66.2,
+      "active_avg_cpu_pct": 73.9,
+      "phases": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 51.6,
+          "peak_cpu_pct": 132.3,
+          "start_rss_mb": 396.1,
+          "peak_rss_mb": 515.9,
+          "end_rss_mb": 515.9,
+          "delta_rss_mb": 119.8
+        },
+        "ai-architecture": {
+          "samples": 68,
+          "avg_cpu_pct": 26.1,
+          "peak_cpu_pct": 207.7,
+          "start_rss_mb": 554.1,
+          "peak_rss_mb": 1417.1,
+          "end_rss_mb": 1378.4,
+          "delta_rss_mb": 863
+        },
+        "cooldown_1": {
+          "samples": 9,
+          "avg_cpu_pct": 4.6,
+          "peak_cpu_pct": 34.3,
+          "start_rss_mb": 1380.1,
+          "peak_rss_mb": 1381.8,
+          "end_rss_mb": 749.4,
+          "delta_rss_mb": 1.7
+        },
+        "full-export": {
+          "samples": 57,
+          "avg_cpu_pct": 130.8,
+          "peak_cpu_pct": 198.8,
+          "start_rss_mb": 761.8,
+          "peak_rss_mb": 827.5,
+          "end_rss_mb": 704.3,
+          "delta_rss_mb": 65.7
+        },
+        "cooldown_2": {
+          "samples": 5,
+          "avg_cpu_pct": 0.2,
+          "peak_cpu_pct": 0.9,
+          "start_rss_mb": 702.7,
+          "peak_rss_mb": 703.4,
+          "end_rss_mb": 665.2,
+          "delta_rss_mb": 0.7
+        }
+      }
+    }
+  },
+  "sqlite_status": {
+    "journal_mode": "wal",
+    "busy_timeout": 0,
+    "database_file": "prisma/dev.db",
+    "database_size_bytes": 1282048,
+    "wal_file": "prisma/dev.db-wal",
+    "wal_size_bytes": 0,
+    "wal_lock_contention": false,
+    "disk_io_bottleneck": false
+  }
+}

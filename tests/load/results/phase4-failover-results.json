@@ -1,0 +1,73 @@
+{
+  "test_timestamp": "2026-11-04T03:39:34.841Z",
+  "targets": {
+    "fastapi_pids": [
+      51218,
+      90757
+    ],
+    "next_pid": 90372
+  },
+  "pre_flight": {
+    "direct_health_status": 200,
+    "proxy_health_status": 200,
+    "initial_sync_state": {
+      "change_generation": 396,
+      "indexed_generation": 396,
+      "is_synced": true,
+      "is_current": true,
+      "sync_task_active": false,
+      "sync_executions_count": 58,
+      "synced_at": 1118729.026945958
+    }
+  },
+  "outage_isolation": {
+    "failover_signal": "SIGSTOP",
+    "http_status": 502,
+    "response_body": "{\"error\":\"Roadmap Assistant is unavailable.\"}",
+    "error_message": "Roadmap Assistant is unavailable.",
+    "graceful_502_returned": true,
+    "duration_ms": 5107,
+    "next_alive_during_outage": true,
+    "next_web_http_status": 200,
+    "passed": true
+  },
+  "process_integrity": {
+    "nextjs_pid": 90372,
+    "nextjs_survived": true,
+    "nextjs_state": "S+",
+    "baseline_rss_kb": 282464,
+    "post_rss_kb": 437136,
+    "rss_delta_kb": 154672
+  },
+  "recovery_metrics": {
+    "ttr_health_direct_ms": 2.9,
+    "ttr_health_proxy_ms": 9.9,
+    "ttr_health_direct_passed": true,
+    "ttr_health_proxy_passed": true,
+    "passed": true
+  },
+  "streaming_resumption": {
+    "status_code": 200,
+    "ttfb_ms": 10.3,
+    "ttft_ms": 1498,
+    "stream_duration_ms": 1498.4,
+    "events": {
+      "trace": true,
+      "step": true,
+      "token": true,
+      "done": true
+    },
+    "stale_socket_errors": 0,
+    "passed": true
+  },
+  "freshness_verification": {
+    "index_intact_post_recovery": true,
+    "reindex_http_status": 202,
+    "reindex_converged": true,
+    "reindex_duration_ms": 421.2,
+    "baseline_generation": 396,
+    "final_generation": 397,
+    "passed": true
+  },
+  "verdict": "PASS"
+}

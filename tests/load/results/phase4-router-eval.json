@@ -1,0 +1,68 @@
+{
+  "timestamp": "2026-11-04T03:39:36Z",
+  "execution_time_ms": 1410.65,
+  "overall_passed": true,
+  "verdict": "PASS",
+  "slos": {
+    "write_now_invariant": {
+      "target": "write_now_violation = 0 across 498 confuse samples",
+      "actual_violations": 0,
+      "total_confuse_samples": 498,
+      "passed": true,
+      "status": "PASS"
+    },
+    "router_eval_ratchet": {
+      "target": "Zero metric regressions on 791 check samples and 498 confuse samples",
+      "check_passed": true,
+      "confuse_passed": true,
+      "check_regressions": [],
+      "confuse_regressions": [],
+      "passed": true,
+      "status": "PASS"
+    }
+  },
+  "check_eval": {
+    "total_samples": 791,
+    "metrics": {
+      "heldout.intent_cases.correct": 64,
+      "heldout.routing.correct": 223,
+      "stress.dropped": 0,
+      "stress.misroute": 0,
+      "stress.ok": 410,
+      "stress.undecided": 94,
+      "stress.wrong_write": 0
+    },
+    "baseline": {
+      "heldout.intent_cases.correct": 64,
+      "heldout.routing.correct": 223,
+      "stress.dropped": 0,
+      "stress.misroute": 0,
+      "stress.ok": 410,
+      "stress.undecided": 94,
+      "stress.wrong_write": 0
+    },
+    "regressions": [],
+    "passed": true
+  },
+  "confuse_eval": {
+    "total_samples": 498,
+    "metrics": {
+      "n": 498,
+      "write_now_violation": 0,
+      "preview_violation": 23,
+      "missed_write": 3,
+      "wrong_branch": 91
+    },
+    "baseline": {
+      "n": 498,
+      "write_now_violation": 0,
+      "missed_write": 3,
+      "wrong_branch": 103,
+      "preview_violation": 35
+    },
+    "regressions": [],
+    "passed": true,
+    "by_category": {},
+    "by_noise": {}
+  }
+}

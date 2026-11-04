@@ -1,0 +1,472 @@
+{
+  "milestone": "Milestone 3: Phase 3 Burst Mutation & Reindex Debounce Throttling",
+  "generated_at": "2026-11-04T03:28:02.164Z",
+  "target_endpoints": {
+    "nextjs_base_url": "http://localhost:3334",
+    "fastapi_base_url": "http://127.0.0.1:8000",
+    "mutation_routes": [
+      "POST /api/v1/roadmaps",
+      "POST /api/v1/roadmaps/items",
+      "PATCH /api/v1/roadmaps/items/[id]",
+      "PATCH /api/v1/roadmaps/items/[id]/content",
+      "PATCH /api/v1/roadmaps/[slug]/sections",
+      "POST /api/v1/roadmaps/items/reorder",
+      "DELETE /api/v1/roadmaps/items/[id]",
+      "DELETE /api/v1/roadmaps/[slug]"
+    ],
+    "reindex_route": "POST http://127.0.0.1:8000/internal/reindex"
+  },
+  "overall_verdict": "PASS",
+  "slos": {
+    "mutation_success_rate": {
+      "target": "100% success rate (20/20)",
+      "actual": "20/20",
+      "passed": true,
+      "status": "PASS"
+    },
+    "sqlite_wal_busy_errors": {
+      "target": "0 SQLITE_BUSY errors",
+      "actual": 0,
+      "passed": true,
+      "status": "PASS"
+    },
+    "mutation_p95_latency": {
+      "target": "< 200 ms",
+      "actual_ms": 16.05,
+      "passed": true,
+      "status": "PASS"
+    },
+    "generation_lock_coalescing": {
+      "target": "20 rapid requests debounced into <= 2 sync tasks on FastAPI (_sync_lock)",
+      "actual": "20/20 accepted -> 2 sync task(s) executed (90% debounced)",
+      "actual_sync_tasks": 2,
+      "coalescing_ratio_pct": 90,
+      "verification_source": "fastapi_sync_state",
+      "generation_delta": 20,
+      "passed": true,
+      "status": "PASS"
+    },
+    "embedding_cache_reuse": {
+      "target": "100% cache hit (0 duplicate Gemini API calls)",
+      "actual": "100% hit rate, 0 duplicate calls",
+      "cached_vectors_reused": 117,
+      "passed": true,
+      "status": "PASS"
+    },
+    "clean_teardown_zero_drift": {
+      "target": "0 orphaned rows in SQLite database",
+      "actual": "0 orphaned rows",
+      "sandbox_topic_deleted": true,
+      "baseline_roadmaps": 2,
+      "final_roadmaps": 2,
+      "baseline_items": 115,
+      "final_items": 115,
+      "passed": true,
+      "status": "PASS"
+    }
+  },
+  "mutation_latency_stats": {
+    "min_ms": 4.44,
+    "max_ms": 16.07,
+    "avg_ms": 9.32,
+    "p50_ms": 8.49,
+    "p90_ms": 15.92,
+    "p95_ms": 16.05,
+    "p99_ms": 16.07
+  },
+  "coalescing_details": {
+    "burst_reindex_requests": 20,
+    "accepted_reindex_requests": 20,
+    "baseline_generation": 376,
+    "final_generation": 396,
+    "generation_delta": 20,
+    "baseline_sync_executions": 56,
+    "final_sync_executions": 58,
+    "actual_sync_tasks": 2,
+    "expected_sync_tasks": 1,
+    "reindex_coalesced": true,
+    "coalescing_ratio_pct": 90,
+    "verification_source": "fastapi_sync_state",
+    "converged_cleanly": true,
+    "reindex_latency_stats": {
+      "min_ms": 5.55,
+      "max_ms": 31.28,
+      "avg_ms": 27.77,
+      "p50_ms": 29.78,
+      "p95_ms": 31.26
+    }
+  },
+  "embedding_cache_details": {
+    "baseline_cache_count": 537,
+    "post_cache_count": 546,
+    "cache_entries_delta": 9,
+    "total_active_documents": 117,
+    "matched_cached_documents": 117,
+    "missing_documents": 0,
+    "cached_items_reused": 117,
+    "duplicate_gemini_calls": 0,
+    "cache_hit_rate_pct": 100,
+    "reindex_elapsed_sec": 0.99,
+    "min_theoretical_uncached_duration_sec": 78.39,
+    "max_time_bounded_uncached_calls": 1,
+    "mathematically_proven_zero_calls": true
+  },
+  "teardown_details": {
+    "baseline_roadmaps_count": 2,
+    "final_roadmaps_count": 2,
+    "baseline_items_count": 115,
+    "final_items_count": 115,
+    "orphaned_rows": 0
+  },
+  "process_resources": {
+    "51218": {
+      "samples": 25,
+      "baseline_rss_mb": 214,
+      "peak_rss_mb": 290.5,
+      "delta_rss_mb": 76.4,
+      "cooldown_rss_mb": 265.3,
+      "residual_rss_mb": 51.2,
+      "retention_rate_pct": 67,
+      "peak_cpu_pct": 86.3,
+      "avg_cpu_pct": 8.5,
+      "active_load_avg_cpu_pct": 15.5,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0.1,
+          "peak_cpu_pct": 0.1,
+          "peak_rss_mb": 214,
+          "delta_rss_mb": 0
+        },
+        "preflight": {
+          "samples": 2,
+          "avg_cpu_pct": 0.7,
+          "peak_cpu_pct": 1.2,
+          "peak_rss_mb": 214.1,
+          "delta_rss_mb": 0
+        },
+        "burst_mutation": {
+          "samples": 1,
+          "avg_cpu_pct": 5.3,
+          "peak_cpu_pct": 5.3,
+          "peak_rss_mb": 222.2,
+          "delta_rss_mb": 8.2
+        },
+        "reindex_debounce": {
+          "samples": 12,
+          "avg_cpu_pct": 16.4,
+          "peak_cpu_pct": 86.3,
+          "peak_rss_mb": 290.5,
+          "delta_rss_mb": 76.4
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 1.7,
+          "peak_cpu_pct": 8.5,
+          "peak_rss_mb": 265.9,
+          "delta_rss_mb": 51.9
+        }
+      }
+    },
+    "90370": {
+      "samples": 25,
+      "baseline_rss_mb": 4.2,
+      "peak_rss_mb": 4.4,
+      "delta_rss_mb": 0.2,
+      "cooldown_rss_mb": 4.3,
+      "residual_rss_mb": 0.1,
+      "retention_rate_pct": 40,
+      "peak_cpu_pct": 0,
+      "avg_cpu_pct": 0,
+      "active_load_avg_cpu_pct": 0,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "preflight": {
+          "samples": 2,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "burst_mutation": {
+          "samples": 1,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "reindex_debounce": {
+          "samples": 12,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.4,
+          "delta_rss_mb": 0.2
+        }
+      }
+    },
+    "90372": {
+      "samples": 25,
+      "baseline_rss_mb": 457.3,
+      "peak_rss_mb": 488.6,
+      "delta_rss_mb": 31.3,
+      "cooldown_rss_mb": 389.2,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 15.9,
+      "avg_cpu_pct": 1.7,
+      "active_load_avg_cpu_pct": 2.6,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 5,
+          "avg_cpu_pct": 0.6,
+          "peak_cpu_pct": 2.8,
+          "peak_rss_mb": 459.4,
+          "delta_rss_mb": 2
+        },
+        "preflight": {
+          "samples": 2,
+          "avg_cpu_pct": 2.8,
+          "peak_cpu_pct": 5.5,
+          "peak_rss_mb": 461,
+          "delta_rss_mb": 3.7
+        },
+        "burst_mutation": {
+          "samples": 1,
+          "avg_cpu_pct": 11.2,
+          "peak_cpu_pct": 11.2,
+          "peak_rss_mb": 444,
+          "delta_rss_mb": 0
+        },
+        "reindex_debounce": {
+          "samples": 12,
+          "avg_cpu_pct": 1.9,
+          "peak_cpu_pct": 15.9,
+          "peak_rss_mb": 488.6,
+          "delta_rss_mb": 31.3
+        },
+        "cooldown": {
+          "samples": 5,
+          "avg_cpu_pct": 0.1,
+          "peak_cpu_pct": 0.5,
+          "peak_rss_mb": 390.2,
+          "delta_rss_mb": 0
+        }
+      }
+    }
+  },
+  "mutation_breakdown": [
+    {
+      "step": 1,
+      "op": "CREATE_TOPIC",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 16.05,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 2,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 16.07,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 3,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 9.13,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 4,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 7.04,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 5,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 7.18,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 6,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 4.57,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 7,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 5.04,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 8,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 4.44,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 9,
+      "op": "CREATE_ITEM",
+      "method": "POST",
+      "status": 201,
+      "latency_ms": 6.96,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 10,
+      "op": "UPDATE_ITEM_METADATA",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 9.76,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 11,
+      "op": "UPDATE_ITEM_METADATA",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 9.22,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 12,
+      "op": "UPDATE_ITEM_METADATA",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 14.53,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 13,
+      "op": "UPDATE_ITEM_METADATA",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 15.92,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 14,
+      "op": "UPDATE_ITEM_CONTENT",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 11.84,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 15,
+      "op": "RENAME_SECTION",
+      "method": "PATCH",
+      "status": 200,
+      "latency_ms": 8.49,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 16,
+      "op": "REORDER_ITEMS",
+      "method": "POST",
+      "status": 200,
+      "latency_ms": 10.06,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 17,
+      "op": "DELETE_ITEM",
+      "method": "DELETE",
+      "status": 200,
+      "latency_ms": 8.44,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 18,
+      "op": "DELETE_ITEM",
+      "method": "DELETE",
+      "status": 200,
+      "latency_ms": 7.01,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 19,
+      "op": "DELETE_ITEM",
+      "method": "DELETE",
+      "status": 200,
+      "latency_ms": 5.6,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    },
+    {
+      "step": 20,
+      "op": "DELETE_TOPIC",
+      "method": "DELETE",
+      "status": 200,
+      "latency_ms": 9.07,
+      "success": true,
+      "sqlite_busy": false,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,259 @@
+{
+    "metrics": {
+        "http_req_connecting": {
+            "med": 0,
+            "p(50)": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0.40664999999999984,
+            "max": 6.22,
+            "avg": 0.017423312883435578,
+            "min": 0
+        },
+        "vus": {
+            "min": 1,
+            "max": 99,
+            "value": 4
+        },
+        "data_received": {
+            "count": 113953952,
+            "rate": 1614557.1986393586
+        },
+        "roadmap_read_success": {
+            "fails": 0,
+            "passes": 2608,
+            "thresholds": {
+                "rate==1.0": false
+            },
+            "value": 1
+        },
+        "iterations": {
+            "count": 2608,
+            "rate": 36.95146241221583
+        },
+        "http_req_duration": {
+            "p(95)": 25.63889999999995,
+            "p(99)": 197.56776999999997,
+            "max": 404.71,
+            "avg": 13.730240414110439,
+            "min": 3.974,
+            "med": 6.8715,
+            "p(50)": 6.8715,
+            "p(90)": 15.670000000000002
+        },
+        "http_req_failed{endpoint:ai-architecture}": {
+            "passes": 0,
+            "fails": 2608,
+            "thresholds": {
+                "rate==0": false
+            },
+            "value": 0
+        },
+        "iteration_duration": {
+            "p(99)": 1327.4710005,
+            "max": 1647.273625,
+            "avg": 1011.3292807956299,
+            "min": 708.080584,
+            "med": 1011.2773745,
+            "p(50)": 1011.2773745,
+            "p(90)": 1250.1228292,
+            "p(95)": 1283.30615405
+        },
+        "http_req_waiting": {
+            "med": 6.7245,
+            "p(50)": 6.7245,
+            "p(90)": 15.461500000000001,
+            "p(95)": 25.459199999999935,
+            "p(99)": 197.36856999999998,
+            "max": 404.606,
+            "avg": 13.581312883435585,
+            "min": 3.927
+        },
+        "http_req_sending": {
+            "avg": 0.012791027607362034,
+            "min": 0.002,
+            "med": 0.01,
+            "p(50)": 0.01,
+            "p(90)": 0.018,
+            "p(95)": 0.023,
+            "p(99)": 0.047,
+            "max": 0.609
+        },
+        "http_req_receiving": {
+            "p(99)": 0.392,
+            "max": 7.305,
+            "avg": 0.13613650306748473,
+            "min": 0.022,
+            "med": 0.121,
+            "p(50)": 0.121,
+            "p(90)": 0.213,
+            "p(95)": 0.25829999999999975
+        },
+        "http_req_duration{endpoint:ai-architecture}": {
+            "max": 404.71,
+            "avg": 13.730240414110439,
+            "min": 3.974,
+            "med": 6.8715,
+            "p(50)": 6.8715,
+            "p(90)": 15.670000000000002,
+            "p(95)": 25.63889999999995,
+            "p(99)": 197.56776999999997,
+            "thresholds": {
+                "p(95)<150": false
+            }
+        },
+        "http_req_failed": {
+            "passes": 0,
+            "fails": 2608,
+            "value": 0
+        },
+        "items_validated_count": {
+            "rate": 4027.709402931526,
+            "count": 284272
+        },
+        "http_req_blocked": {
+            "med": 0.003,
+            "p(50)": 0.003,
+            "p(90)": 0.006,
+            "p(95)": 0.015,
+            "p(99)": 0.45086,
+            "max": 6.268,
+            "avg": 0.023294095092024777,
+            "min": 0.001
+        },
+        "http_req_tls_handshaking": {
+            "p(99)": 0,
+            "max": 0,
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "p(50)": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "data_sent": {
+            "count": 341648,
+            "rate": 4840.641576000274
+        },
+        "roadmap_read_duration": {
+            "p(95)": 25.63889999999995,
+            "p(99)": 197.56776999999997,
+            "max": 404.71,
+            "avg": 13.730240414110439,
+            "min": 3.974,
+            "med": 6.8715,
+            "p(50)": 6.8715,
+            "p(90)": 15.670000000000002
+        },
+        "vus_max": {
+            "value": 100,
+            "min": 100,
+            "max": 100
+        },
+        "checks{endpoint:ai-architecture}": {
+            "passes": 26080,
+            "fails": 0,
+            "thresholds": {
+                "rate==1.0": false
+            },
+            "value": 1
+        },
+        "checks": {
+            "passes": 26080,
+            "fails": 0,
+            "value": 1
+        },
+        "http_reqs": {
+            "count": 2608,
+            "rate": 36.95146241221583
+        },
+        "http_req_duration{expected_response:true}": {
+            "p(90)": 15.670000000000002,
+            "p(95)": 25.63889999999995,
+            "p(99)": 197.56776999999997,
+            "max": 404.71,
+            "avg": 13.730240414110439,
+            "min": 3.974,
+            "med": 6.8715,
+            "p(50)": 6.8715
+        }
+    },
+    "root_group": {
+        "checks": {
+            "status is 200": {
+                "fails": 0,
+                "name": "status is 200",
+                "path": "::status is 200",
+                "id": "6210a8cd14cd70477eba5c5e4cb3fb5f",
+                "passes": 2608
+            },
+            "content-type is json": {
+                "passes": 2608,
+                "fails": 0,
+                "name": "content-type is json",
+                "path": "::content-type is json",
+                "id": "c544ce8ea75d5205f66e0fea6489a1fb"
+            },
+            "cache-control is no-store": {
+                "id": "c1e76860204ada0aa291791fda27f84d",
+                "passes": 2608,
+                "fails": 0,
+                "name": "cache-control is no-store",
+                "path": "::cache-control is no-store"
+            },
+            "has ai-architecture slug": {
+                "name": "has ai-architecture slug",
+                "path": "::has ai-architecture slug",
+                "id": "2efcdaa6b4deea30ade26f71aeb6eb80",
+                "passes": 2608,
+                "fails": 0
+            },
+            "has roadmap id": {
+                "passes": 2608,
+                "fails": 0,
+                "name": "has roadmap id",
+                "path": "::has roadmap id",
+                "id": "362139c27f1b4acfe737d2ee70501d15"
+            },
+            "size > 35000 chars": {
+                "name": "size > 35000 chars",
+                "path": "::size > 35000 chars",
+                "id": "94322730474e6bb3afeee8c6020bce40",
+                "passes": 2608,
+                "fails": 0
+            },
+            "payload parsed successfully": {
+                "name": "payload parsed successfully",
+                "path": "::payload parsed successfully",
+                "id": "d18b818526a368ef3dd23bc2452dcf35",
+                "passes": 2608,
+                "fails": 0
+            },
+            "has 109 items": {
+                "name": "has 109 items",
+                "path": "::has 109 items",
+                "id": "d0d922c54ff9ba3df179e0c113dfb0d3",
+                "passes": 2608,
+                "fails": 0
+            },
+            "has 15 sections": {
+                "id": "765225f82e578359c05095a3a55e6f67",
+                "passes": 2608,
+                "fails": 0,
+                "name": "has 15 sections",
+                "path": "::has 15 sections"
+            },
+            "payload fully valid": {
+                "path": "::payload fully valid",
+                "id": "63bc0f4df2339a48b5cceb9e0867c13e",
+                "passes": 2608,
+                "fails": 0,
+                "name": "payload fully valid"
+            }
+        },
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {}
+    }
+}

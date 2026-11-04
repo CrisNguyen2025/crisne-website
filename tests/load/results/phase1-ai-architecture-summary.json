@@ -1,0 +1,44 @@
+{
+  "phase": "Phase 1: Topic Read Stress",
+  "endpoint": "GET /api/v1/roadmaps/ai-architecture",
+  "target": "http://localhost:3334/api/v1/roadmaps/ai-architecture",
+  "timestamp": "2026-11-03T09:25:57.840Z",
+  "concurrency_vus": 100,
+  "duration_seconds": 70,
+  "slo": {
+    "p95_target_ms": 150,
+    "p95_actual_ms": 25.63889999999995,
+    "p95_passed": true,
+    "error_rate_target_percent": 0,
+    "error_rate_actual_percent": 0,
+    "error_rate_passed": true,
+    "checks_pass_rate_percent": 100,
+    "checks_passed": true,
+    "verdict": "PASS"
+  },
+  "metrics": {
+    "total_requests": 2608,
+    "throughput_rps": 36.95146241221583,
+    "items_validated": 284272,
+    "latency_ms": {
+      "min": 3.974,
+      "p50": 6.8715,
+      "avg": 13.730240414110439,
+      "med": 6.8715,
+      "p90": 15.670000000000002,
+      "p95": 25.63889999999995,
+      "p99": 197.56776999999997,
+      "max": 404.71
+    },
+    "checks": {
+      "total": 26080,
+      "succeeded": 26080,
+      "failed": 0,
+      "pass_rate": 1
+    },
+    "network": {
+      "data_received_bytes": 113953952,
+      "data_received_mb": 108.67495727539062
+    }
+  }
+}

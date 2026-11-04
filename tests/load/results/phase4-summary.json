@@ -1,0 +1,458 @@
+{
+  "milestone": "Milestone 4: Phase 4 Robustness & LLM Circuit Breaker",
+  "generated_at": "2026-11-04T03:39:39.523Z",
+  "target_endpoints": {
+    "nextjs_base_url": "http://localhost:3334",
+    "fastapi_base_url": "http://127.0.0.1:8000",
+    "proxy_chat_stream": "POST http://localhost:3334/api/roadmap-assistant/chat/stream",
+    "proxy_health": "GET http://localhost:3334/api/roadmap-assistant/health",
+    "direct_health": "GET http://127.0.0.1:8000/health",
+    "direct_reindex": "POST http://127.0.0.1:8000/internal/reindex"
+  },
+  "overall_verdict": "PASS",
+  "slos": {
+    "rag_outage_graceful_502": {
+      "target": "Next.js returns HTTP 502 with user-friendly error without process crash during RAG outage",
+      "actual": "HTTP 502 {\"error\":\"Roadmap Assistant is unavailable.\"}, Next.js PID survived (Alive: true)",
+      "duration_ms": 5107,
+      "nextjs_web_status": 200,
+      "passed": true,
+      "status": "PASS"
+    },
+    "backend_recovery_ttr": {
+      "target": "TTR < 30ms direct health, < 100ms proxy health upon SIGCONT (concurrent probes, no shell overhead)",
+      "actual_direct_ms": 2.9,
+      "actual_proxy_ms": 9.9,
+      "passed": true,
+      "status": "PASS"
+    },
+    "streaming_resumption": {
+      "target": "First post-recovery chat request returns HTTP 200 SSE events with 0 stale socket errors",
+      "actual": "HTTP 200, TTFT: 1498ms, events: [trace, step, token, done], stale_sockets: 0",
+      "passed": true,
+      "status": "PASS"
+    },
+    "index_freshness_and_convergence": {
+      "target": "Index intact post-recovery and reindex converges in < 1000ms (~300ms)",
+      "actual": "Intact: true, Reindex HTTP 202, converged in 421.2ms",
+      "initial_generation": 396,
+      "final_generation": 397,
+      "passed": true,
+      "status": "PASS"
+    },
+    "router_write_now_invariant": {
+      "target": "write_now_violation = 0 across 498 confusing samples in evals.router.confuse",
+      "actual_violations": 0,
+      "total_samples": 498,
+      "passed": true,
+      "status": "PASS"
+    },
+    "router_eval_ratchet": {
+      "target": "Zero regressions against baselines on 791 check samples and 498 confuse samples",
+      "actual": "Check: Zero regressions, Confuse: Zero regressions (wrong_branch: 91, preview_violation: 23)",
+      "passed": true,
+      "status": "PASS"
+    },
+    "resource_stability": {
+      "target": "Stable memory and CPU profiles without runaway leakage during failover and recovery",
+      "actual": "Monitored 4 process(es)",
+      "passed": true,
+      "status": "PASS"
+    }
+  },
+  "failover_details": {
+    "test_timestamp": "2026-11-04T03:39:34.841Z",
+    "targets": {
+      "fastapi_pids": [
+        51218,
+        90757
+      ],
+      "next_pid": 90372
+    },
+    "pre_flight": {
+      "direct_health_status": 200,
+      "proxy_health_status": 200,
+      "initial_sync_state": {
+        "change_generation": 396,
+        "indexed_generation": 396,
+        "is_synced": true,
+        "is_current": true,
+        "sync_task_active": false,
+        "sync_executions_count": 58,
+        "synced_at": 1118729.026945958
+      }
+    },
+    "outage_isolation": {
+      "failover_signal": "SIGSTOP",
+      "http_status": 502,
+      "response_body": "{\"error\":\"Roadmap Assistant is unavailable.\"}",
+      "error_message": "Roadmap Assistant is unavailable.",
+      "graceful_502_returned": true,
+      "duration_ms": 5107,
+      "next_alive_during_outage": true,
+      "next_web_http_status": 200,
+      "passed": true
+    },
+    "process_integrity": {
+      "nextjs_pid": 90372,
+      "nextjs_survived": true,
+      "nextjs_state": "S+",
+      "baseline_rss_kb": 282464,
+      "post_rss_kb": 437136,
+      "rss_delta_kb": 154672
+    },
+    "recovery_metrics": {
+      "ttr_health_direct_ms": 2.9,
+      "ttr_health_proxy_ms": 9.9,
+      "ttr_health_direct_passed": true,
+      "ttr_health_proxy_passed": true,
+      "passed": true
+    },
+    "streaming_resumption": {
+      "status_code": 200,
+      "ttfb_ms": 10.3,
+      "ttft_ms": 1498,
+      "stream_duration_ms": 1498.4,
+      "events": {
+        "trace": true,
+        "step": true,
+        "token": true,
+        "done": true
+      },
+      "stale_socket_errors": 0,
+      "passed": true
+    },
+    "freshness_verification": {
+      "index_intact_post_recovery": true,
+      "reindex_http_status": 202,
+      "reindex_converged": true,
+      "reindex_duration_ms": 421.2,
+      "baseline_generation": 396,
+      "final_generation": 397,
+      "passed": true
+    },
+    "verdict": "PASS"
+  },
+  "router_eval_details": {
+    "timestamp": "2026-11-04T03:39:36Z",
+    "execution_time_ms": 1410.65,
+    "overall_passed": true,
+    "verdict": "PASS",
+    "slos": {
+      "write_now_invariant": {
+        "target": "write_now_violation = 0 across 498 confuse samples",
+        "actual_violations": 0,
+        "total_confuse_samples": 498,
+        "passed": true,
+        "status": "PASS"
+      },
+      "router_eval_ratchet": {
+        "target": "Zero metric regressions on 791 check samples and 498 confuse samples",
+        "check_passed": true,
+        "confuse_passed": true,
+        "check_regressions": [],
+        "confuse_regressions": [],
+        "passed": true,
+        "status": "PASS"
+      }
+    },
+    "check_eval": {
+      "total_samples": 791,
+      "metrics": {
+        "heldout.intent_cases.correct": 64,
+        "heldout.routing.correct": 223,
+        "stress.dropped": 0,
+        "stress.misroute": 0,
+        "stress.ok": 410,
+        "stress.undecided": 94,
+        "stress.wrong_write": 0
+      },
+      "baseline": {
+        "heldout.intent_cases.correct": 64,
+        "heldout.routing.correct": 223,
+        "stress.dropped": 0,
+        "stress.misroute": 0,
+        "stress.ok": 410,
+        "stress.undecided": 94,
+        "stress.wrong_write": 0
+      },
+      "regressions": [],
+      "passed": true
+    },
+    "confuse_eval": {
+      "total_samples": 498,
+      "metrics": {
+        "n": 498,
+        "write_now_violation": 0,
+        "preview_violation": 23,
+        "missed_write": 3,
+        "wrong_branch": 91
+      },
+      "baseline": {
+        "n": 498,
+        "write_now_violation": 0,
+        "missed_write": 3,
+        "wrong_branch": 103,
+        "preview_violation": 35
+      },
+      "regressions": [],
+      "passed": true,
+      "by_category": {},
+      "by_noise": {}
+    }
+  },
+  "process_resources": {
+    "51218": {
+      "samples": 16,
+      "baseline_rss_mb": 21.3,
+      "peak_rss_mb": 203.4,
+      "delta_rss_mb": 182,
+      "cooldown_rss_mb": 176.3,
+      "residual_rss_mb": 155,
+      "retention_rate_pct": 85.1,
+      "peak_cpu_pct": 55.9,
+      "avg_cpu_pct": 5.6,
+      "active_load_avg_cpu_pct": 9.6,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 3,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 21.3,
+          "delta_rss_mb": 0
+        },
+        "preflight": {
+          "samples": 1,
+          "avg_cpu_pct": 1.3,
+          "peak_cpu_pct": 1.3,
+          "peak_rss_mb": 38.3,
+          "delta_rss_mb": 17
+        },
+        "failover_recovery": {
+          "samples": 1,
+          "avg_cpu_pct": 0.1,
+          "peak_cpu_pct": 0.1,
+          "peak_rss_mb": 38.3,
+          "delta_rss_mb": 17
+        },
+        "stage2_outage": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 39,
+          "delta_rss_mb": 17.6
+        },
+        "stage4_stream_resumption": {
+          "samples": 1,
+          "avg_cpu_pct": 29.2,
+          "peak_cpu_pct": 29.2,
+          "peak_rss_mb": 203.4,
+          "delta_rss_mb": 182
+        },
+        "router_eval": {
+          "samples": 2,
+          "avg_cpu_pct": 28.6,
+          "peak_cpu_pct": 55.9,
+          "peak_rss_mb": 195.9,
+          "delta_rss_mb": 174.6
+        },
+        "cooldown": {
+          "samples": 3,
+          "avg_cpu_pct": 0.4,
+          "peak_cpu_pct": 0.9,
+          "peak_rss_mb": 195.9,
+          "delta_rss_mb": 174.6
+        }
+      }
+    },
+    "90370": {
+      "samples": 16,
+      "baseline_rss_mb": 4.2,
+      "peak_rss_mb": 4.2,
+      "delta_rss_mb": 0,
+      "cooldown_rss_mb": 4.2,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 0,
+      "avg_cpu_pct": 0,
+      "active_load_avg_cpu_pct": 0,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 3,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "preflight": {
+          "samples": 1,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "failover_recovery": {
+          "samples": 1,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "stage2_outage": {
+          "samples": 5,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "stage4_stream_resumption": {
+          "samples": 1,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "router_eval": {
+          "samples": 2,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 3,
+          "avg_cpu_pct": 0,
+          "peak_cpu_pct": 0,
+          "peak_rss_mb": 4.2,
+          "delta_rss_mb": 0
+        }
+      }
+    },
+    "90372": {
+      "samples": 16,
+      "baseline_rss_mb": 177.4,
+      "peak_rss_mb": 431.9,
+      "delta_rss_mb": 254.5,
+      "cooldown_rss_mb": 431.6,
+      "residual_rss_mb": 254.2,
+      "retention_rate_pct": 99.9,
+      "peak_cpu_pct": 12,
+      "avg_cpu_pct": 1.3,
+      "active_load_avg_cpu_pct": 0.7,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 3,
+          "avg_cpu_pct": 0.6,
+          "peak_cpu_pct": 1.8,
+          "peak_rss_mb": 178.3,
+          "delta_rss_mb": 0.8
+        },
+        "preflight": {
+          "samples": 1,
+          "avg_cpu_pct": 12,
+          "peak_cpu_pct": 12,
+          "peak_rss_mb": 272.6,
+          "delta_rss_mb": 95.2
+        },
+        "failover_recovery": {
+          "samples": 1,
+          "avg_cpu_pct": 1.4,
+          "peak_cpu_pct": 1.4,
+          "peak_rss_mb": 275.8,
+          "delta_rss_mb": 98.4
+        },
+        "stage2_outage": {
+          "samples": 5,
+          "avg_cpu_pct": 0.2,
+          "peak_cpu_pct": 0.7,
+          "peak_rss_mb": 324.6,
+          "delta_rss_mb": 147.2
+        },
+        "stage4_stream_resumption": {
+          "samples": 1,
+          "avg_cpu_pct": 1.5,
+          "peak_cpu_pct": 1.5,
+          "peak_rss_mb": 396.5,
+          "delta_rss_mb": 219.1
+        },
+        "router_eval": {
+          "samples": 2,
+          "avg_cpu_pct": 1.5,
+          "peak_cpu_pct": 2.9,
+          "peak_rss_mb": 429.4,
+          "delta_rss_mb": 252
+        },
+        "cooldown": {
+          "samples": 3,
+          "avg_cpu_pct": 0.2,
+          "peak_cpu_pct": 0.5,
+          "peak_rss_mb": 431.9,
+          "delta_rss_mb": 254.5
+        }
+      }
+    },
+    "90757": {
+      "samples": 16,
+      "baseline_rss_mb": 28.2,
+      "peak_rss_mb": 28.2,
+      "delta_rss_mb": 0,
+      "cooldown_rss_mb": 28.2,
+      "residual_rss_mb": 0,
+      "retention_rate_pct": 0,
+      "peak_cpu_pct": 54.6,
+      "avg_cpu_pct": 25.9,
+      "active_load_avg_cpu_pct": 16.8,
+      "phase_breakdown": {
+        "baseline": {
+          "samples": 3,
+          "avg_cpu_pct": 38.5,
+          "peak_cpu_pct": 54.6,
+          "peak_rss_mb": 28.2,
+          "delta_rss_mb": 0
+        },
+        "preflight": {
+          "samples": 1,
+          "avg_cpu_pct": 21.1,
+          "peak_cpu_pct": 21.1,
+          "peak_rss_mb": 20,
+          "delta_rss_mb": 0
+        },
+        "failover_recovery": {
+          "samples": 1,
+          "avg_cpu_pct": 28.1,
+          "peak_cpu_pct": 28.1,
+          "peak_rss_mb": 20,
+          "delta_rss_mb": 0
+        },
+        "stage2_outage": {
+          "samples": 5,
+          "avg_cpu_pct": 0.3,
+          "peak_cpu_pct": 1.7,
+          "peak_rss_mb": 20,
+          "delta_rss_mb": 0
+        },
+        "stage4_stream_resumption": {
+          "samples": 1,
+          "avg_cpu_pct": 54.3,
+          "peak_cpu_pct": 54.3,
+          "peak_rss_mb": 28.1,
+          "delta_rss_mb": 0
+        },
+        "router_eval": {
+          "samples": 2,
+          "avg_cpu_pct": 33.7,
+          "peak_cpu_pct": 40,
+          "peak_rss_mb": 28.1,
+          "delta_rss_mb": 0
+        },
+        "cooldown": {
+          "samples": 3,
+          "avg_cpu_pct": 42.2,
+          "peak_cpu_pct": 52.4,
+          "peak_rss_mb": 28.2,
+          "delta_rss_mb": 0
+        }
+      }
+    }
+  }
+}

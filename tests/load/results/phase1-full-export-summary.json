@@ -1,0 +1,43 @@
+{
+  "phase": "Phase 1: Full Export Stress",
+  "endpoint": "GET /api/v1/roadmaps/full-export",
+  "target": "http://localhost:3334/api/v1/roadmaps/full-export",
+  "timestamp": "2026-11-03T09:27:08.292Z",
+  "concurrency_vus": 30,
+  "duration_seconds": 60,
+  "slo": {
+    "p95_target_ms": 350,
+    "p95_actual_ms": 107.32129999999995,
+    "p95_passed": true,
+    "error_rate_target_percent": 0,
+    "error_rate_actual_percent": 0,
+    "error_rate_passed": true,
+    "checks_pass_rate_percent": 100,
+    "checks_passed": true,
+    "verdict": "PASS"
+  },
+  "metrics": {
+    "total_requests": 13904,
+    "throughput_rps": 231.7389221036714,
+    "latency_ms": {
+      "min": 2.902,
+      "p50": 43.1545,
+      "avg": 45.75937111622537,
+      "med": 43.1545,
+      "p90": 87.179,
+      "p95": 107.32129999999995,
+      "p99": 132.83462,
+      "max": 189.762
+    },
+    "checks": {
+      "total": 111232,
+      "succeeded": 111232,
+      "failed": 0,
+      "pass_rate": 1
+    },
+    "network": {
+      "data_received_bytes": 683173040,
+      "data_received_mb": 651.5245819091797
+    }
+  }
+}
