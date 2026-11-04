@@ -21,6 +21,11 @@ Một bài học thuộc một Topic, có Section tuỳ chọn và nội dung ri
 _Also_: Item
 _Avoid_: knowledge node, bài viết
 
+**Lesson Status**:
+Owner đang ở đâu với một Lesson: **target** (muốn học), **learning** (đang học) hoặc **known** (đã nắm). Nói về tiến trình của Owner, không nói về độ khó của bài.
+_Also_: trạng thái bài; mục tiêu, đang học, đã nắm
+_Avoid_: level, progress, mastery
+
 ## Roadmap Assistant
 
 **Roadmap Assistant**:

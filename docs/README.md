@@ -26,6 +26,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0007](adr/0007-glossary-accepts-synonyms.md) | Glossary chấp nhận tên đồng nghĩa qua `_Also_` | accepted |
 | [0008](adr/0008-drop-level-group-by-name.md) | Bỏ Level, Group là nhóm Lesson có tên | superseded by ADR-0009 |
 | [0009](adr/0009-topic-holds-lessons-by-section.md) | Topic chứa Lesson trực tiếp, Section thay cho Layer và Group | accepted |
+| [0010](adr/0010-lesson-status-known-learning-target.md) | Lesson có trạng thái: target, learning, known | accepted |
 
 ## Runbook: cách setup / vận hành
 
