@@ -82,3 +82,6 @@ roadmap-rag-assistant/evals/.cache/
 
 # Backups written by scripts/flatten-to-sections.ts (contain the roadmap as it was)
 flatten-backup-*.json
+
+# Runtime logs appended by the RAG service during load tests
+tests/load/results/*.log
