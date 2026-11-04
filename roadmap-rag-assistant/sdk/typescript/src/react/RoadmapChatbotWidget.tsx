@@ -166,7 +166,7 @@ export function RoadmapChatbotWidget({
   const keyboardBox = useVisualViewportBox(isOpen);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isSendingRef = useRef(false);
 
@@ -322,7 +322,7 @@ export function RoadmapChatbotWidget({
     });
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) {
       return;
     }
@@ -383,6 +383,7 @@ export function RoadmapChatbotWidget({
             feedback={feedback}
             copiedId={copiedId}
             canWrite={canWrite}
+            showFeedback={Boolean(onFeedback)}
             sendMessage={sendMessage}
             retry={retry}
             copyMessage={copyMessage}

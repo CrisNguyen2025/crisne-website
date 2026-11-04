@@ -14,6 +14,10 @@ import type {
   FeedbackDetail,
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
+// 👍/👎 hidden for now: no rule decides yet how a vote becomes Triage work. The handler stays,
+// so turning this back on is this one flag.
+const FEEDBACK_ENABLED = false;
+
 export interface RoadmapAssistantChatbotProps {
   /**
    * Corner placement on screen.
@@ -135,7 +139,7 @@ export function RoadmapAssistantChatbot({
       canWrite={canWrite}
       className={className}
       onToolExecuted={handleToolExecuted}
-      onFeedback={handleFeedback}
+      onFeedback={FEEDBACK_ENABLED ? handleFeedback : undefined}
       getContext={getRoadmapPageContext}
       onWebMcpMessage={runWebMcpCommand}
     />

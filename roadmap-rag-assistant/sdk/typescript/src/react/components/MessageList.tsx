@@ -31,6 +31,8 @@ export interface MessageListProps {
   copiedId: string | null;
   /** Owner only: each traced reply gets a button that copies its Langfuse trace id */
   canWrite?: boolean;
+  /** The 👍/👎 votes; off when the host takes no feedback */
+  showFeedback?: boolean;
   sendMessage: (textToSend?: string) => void;
   retry: (errorMessageId: string) => void;
   copyMessage: (id: string, text: string) => void;
@@ -109,7 +111,7 @@ type MessageHandlers = Pick<
 interface MessageItemProps
   extends Pick<
     MessageListProps,
-    "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId" | "canWrite"
+    "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId" | "canWrite" | "showFeedback"
   > {
   msg: ChatMessage;
   isLast: boolean;
@@ -130,6 +132,7 @@ const MessageItem = React.memo(function MessageItem({
   feedback,
   copiedId,
   canWrite,
+  showFeedback,
   handlers,
 }: MessageItemProps) {
   const { sendMessage, retry, copyMessage, handleFeedback, handleRunCode, toggleToolExpand } =
@@ -356,6 +359,8 @@ const MessageItem = React.memo(function MessageItem({
                   )}
                 </button>
               )}
+              {showFeedback && (
+              <>
               <button
                 type="button"
                 onClick={() => handleFeedback(msg.id, 1)}
@@ -388,6 +393,8 @@ const MessageItem = React.memo(function MessageItem({
                   className={`h-3.5 w-3.5 transition-[fill] duration-200 ease-out ${feedback[msg.id] === 0 ? "fill-current" : "fill-transparent"}`}
                 />
               </button>
+              </>
+              )}
             </>
           )}
         </div>
@@ -405,6 +412,7 @@ export function MessageList({
   feedback,
   copiedId,
   canWrite = false,
+  showFeedback = true,
   sendMessage,
   retry,
   copyMessage,
@@ -465,6 +473,7 @@ export function MessageList({
             feedback={feedback}
             copiedId={copiedId}
             canWrite={canWrite}
+            showFeedback={showFeedback}
             handlers={handlers}
           />
         ))}

@@ -5,16 +5,18 @@ import { ArrowUpIcon, StopIcon } from "../icons";
 export const MAX_INPUT_LENGTH = 2000;
 /** Show the counter once the question is close to the limit. */
 const COUNTER_THRESHOLD = 1800;
+/** The box grows with its text up to this height (about six lines), then scrolls. */
+const MAX_TEXTAREA_HEIGHT = 132;
 
 export interface ChatComposerProps {
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   input: string;
   setInput: (value: string) => void;
   isLoading: boolean;
   showStop: boolean;
   stopStreaming: () => void;
   handleSend: (textToSend?: string) => void;
-  handleKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
 export function ChatComposer({
@@ -27,12 +29,21 @@ export function ChatComposer({
   handleSend,
   handleKeyDown,
 }: ChatComposerProps) {
+  // Multi-line, so a pasted list of lessons keeps its lines (Enter sends, Shift+Enter adds a line).
+  // Height follows the text: reset, then fit to scrollHeight, capped at MAX_TEXTAREA_HEIGHT.
+  React.useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [input, inputRef]);
+
   return (
     <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-[#E6E4DF] bg-[#FFFFFF] shrink-0">
-      <div className="flex items-center gap-2 rounded-2xl border border-[#E6E4DF] bg-[#F4F3F0]/80 py-1.5 pl-4 pr-1.5 transition-all focus-within:bg-[#FFFFFF] focus-within:border-[#C2410C]/60">
-        <input
+      <div className="flex items-end gap-2 rounded-2xl border border-[#E6E4DF] bg-[#F4F3F0]/80 py-1.5 pl-4 pr-1.5 transition-all focus-within:bg-[#FFFFFF] focus-within:border-[#C2410C]/60">
+        <textarea
           ref={inputRef}
-          type="text"
+          rows={1}
           value={input}
           maxLength={MAX_INPUT_LENGTH}
           onChange={(e) => setInput(e.target.value)}
@@ -42,7 +53,7 @@ export function ChatComposer({
               ? "Abot đang trả lời…"
               : "Hỏi Abot…"
           }
-          className="min-w-0 flex-1 bg-transparent py-1 text-[16px] md:text-sm font-normal tracking-[-0.01em] leading-normal text-[#1F1E1C] outline-none placeholder:text-[#6B6862]/70 placeholder:font-normal placeholder:text-sm disabled:opacity-50"
+          className="min-w-0 flex-1 resize-none self-center overflow-y-auto bg-transparent py-1 text-[16px] md:text-sm font-normal tracking-[-0.01em] leading-normal text-[#1F1E1C] outline-none [scrollbar-width:thin] placeholder:text-[#6B6862]/70 placeholder:font-normal placeholder:text-sm disabled:opacity-50"
         />
         {input.length >= COUNTER_THRESHOLD && (
           <span
