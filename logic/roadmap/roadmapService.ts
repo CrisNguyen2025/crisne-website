@@ -16,6 +16,7 @@ import {
   UpdateItemInfoDto,
   UpdateRoadmapDto,
 } from '@/lib/roadmap/types';
+import type { LessonStatus } from '@/lib/roadmap/status';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
@@ -120,6 +121,14 @@ export async function updateItemInfo(payload: UpdateItemInfoDto): Promise<void> 
   return apiFetch<void>(`/api/v1/roadmaps/items/${payload.id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+/** Set a lesson's Lesson Status (ADR-0010); the Owner only */
+export async function updateItemStatus(id: string, status: LessonStatus): Promise<void> {
+  return apiFetch<void>(`/api/v1/roadmaps/items/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
   });
 }
 

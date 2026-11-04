@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { ChecklistItem, GetRoadmapResponseDto, RoadmapMeta } from '@/lib/roadmap/types';
 import * as roadmapService from '@/logic/roadmap/roadmapService';
 import { sectionSpelling } from '@/lib/roadmap/sections';
+import type { LessonStatus } from '@/lib/roadmap/status';
 
 /** One topic as the page holds it: lessons in page order, and their sections (ADR-0009). */
 interface TopicState {
@@ -239,6 +240,26 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     [slug, loadRoadmap]
   );
 
+  // 4b. Set a lesson's Lesson Status (ADR-0010): shown at once, reloaded from the server if the write fails
+  const changeItemStatus = useCallback(
+    async (id: string, status: LessonStatus) => {
+      const patch = (prev: ChecklistItem[]) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status, statusUpdatedAt: dayjs().toISOString() } : item
+        );
+      setItems(patch);
+      syncCache(slug, (curr) => ({ ...curr, items: patch(curr.items) }));
+      try {
+        await roadmapService.updateItemStatus(id, status);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to update lesson status:', err);
+        topicCache.delete(slug);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap]
+  );
+
   // 5. Delete a lesson
   const deleteItem = useCallback(
     async (itemId: string) => {
@@ -366,6 +387,7 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     toggleRoadmapLock,
     addItem,
     editItem,
+    changeItemStatus,
     deleteItem,
     renameSection,
     dissolveSection,

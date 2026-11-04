@@ -4,6 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionSpelling } from '@/lib/roadmap/sections';
+import { DEFAULT_LESSON_STATUS, LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
 
 // POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
@@ -12,10 +13,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { roadmapSlug, section, title, description, content } = body;
+    const { roadmapSlug, section, title, description, content, status } = body;
 
     if (!roadmapSlug || !title) {
       return NextResponse.json({ error: 'roadmapSlug and title are required' }, { status: 400 });
+    }
+    if (status !== undefined && !isLessonStatus(status)) {
+      return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
     }
 
     const roadmap = await prisma.roadmap.findUnique({
@@ -41,6 +45,8 @@ export async function POST(req: NextRequest) {
         description: description || '',
         content: content || null,
         order,
+        // A lesson added without a status is known (ADR-0010)
+        status: status ?? DEFAULT_LESSON_STATUS,
       },
     });
 

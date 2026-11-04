@@ -6,6 +6,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChecklistItem } from '@/lib/roadmap/types';
 import { cn } from '@/lib/utils';
+import { LessonStatusBadge } from './LessonStatus';
 
 interface ChecklistItemRowProps {
   item: ChecklistItem;
@@ -47,6 +48,9 @@ export function ChecklistItemRow({ item, isActive, isDraggable = false, onSelect
       )}
 
       <span className={cn('min-w-0 flex-1 truncate', isActive && 'font-medium')}>{item.title}</span>
+
+      {/* Only the Owner receives a status; "known" is the default, so the row marks the other two */}
+      {item.status && item.status !== 'known' && <LessonStatusBadge status={item.status} />}
 
       {item.content && (
         <FileText aria-label="Has content" className="size-3.5 shrink-0 text-muted-foreground/70" />

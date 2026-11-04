@@ -4,12 +4,13 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate, normalizeTitle } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionSpelling } from '@/lib/roadmap/sections';
+import { LESSON_STATUSES, isLessonStatus, type LessonStatus } from '@/lib/roadmap/status';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-// PATCH /api/v1/roadmaps/items/[id] - Update title, description and section
+// PATCH /api/v1/roadmaps/items/[id] - Update title, description, section and Lesson Status
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -17,12 +18,22 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const { title, description, section } = body;
+    const { title, description, section, status } = body;
+
+    if (status !== undefined && !isLessonStatus(status)) {
+      return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
+    }
 
     const current = await prisma.roadmapItem.findUnique({ where: { id } });
     if (!current) return NextResponse.json({ error: 'Item not found' }, { status: 404 });
 
-    const data: { title?: string; description?: string; section?: string | null } = {};
+    const data: {
+      title?: string;
+      description?: string;
+      section?: string | null;
+      status?: LessonStatus;
+      statusUpdatedAt?: Date;
+    } = {};
 
     if (title !== undefined && title.trim() && normalizeTitle(title) !== normalizeTitle(current.title)) {
       const siblings = await prisma.roadmapItem.findMany({
@@ -42,6 +53,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         select: { section: true },
       });
       data.section = sectionSpelling(others.map((o) => o.section), section);
+    }
+    // Lesson Status (ADR-0010): the time it changes is kept, so a same-status write keeps the old time
+    if (status !== undefined && status !== current.status) {
+      data.status = status;
+      data.statusUpdatedAt = new Date();
     }
 
     const updated = await prisma.roadmapItem.update({ where: { id }, data });

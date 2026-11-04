@@ -1,4 +1,5 @@
 // A topic holds its lessons directly; a lesson may name a section (mục) of the topic (ADR-0009).
+import type { LessonStatus } from './status';
 
 /** A lesson as the UI and the API see it. `section` is null for lessons outside any section. */
 export interface ChecklistItem {
@@ -13,6 +14,9 @@ export interface ChecklistItem {
   content?: string;
   notes?: string;
   tags?: string[];
+  /** Lesson Status (ADR-0010); present only for the Owner */
+  status?: LessonStatus;
+  statusUpdatedAt?: string | null;
 }
 
 export interface RoadmapStats {

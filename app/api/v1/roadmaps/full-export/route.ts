@@ -12,10 +12,15 @@ export const revalidate = 0;
  */
 export async function GET(_req: NextRequest) {
   try {
-    const roadmaps = await prisma.roadmap.findMany({
+    const found = await prisma.roadmap.findMany({
       orderBy: { order: 'asc' },
       include: { items: { orderBy: { order: 'asc' } } },
     });
+    // Public, and the Roadmap Assistant indexes it for every reader: Lesson Status never goes out (ADR-0010)
+    const roadmaps = found.map((roadmap) => ({
+      ...roadmap,
+      items: roadmap.items.map(({ status: _status, statusUpdatedAt: _statusUpdatedAt, ...item }) => item),
+    }));
 
     return NextResponse.json(
       { total_roadmaps: roadmaps.length, roadmaps },

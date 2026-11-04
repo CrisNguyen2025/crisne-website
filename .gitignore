@@ -88,3 +88,5 @@ tests/load/results/*.log
 
 # Playwright MCP runtime logs and snapshots
 .playwright-mcp/
+
+lesson-status-backup-*.json
