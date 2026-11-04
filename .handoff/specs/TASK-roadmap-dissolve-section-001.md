@@ -125,7 +125,7 @@ verification_gate:
 ## 5. Execution Audit Log
 
 - **Commit 1 (feature)**: `6d16c6f` — `feat(roadmap): dissolve a section into the topic's general group (TASK-roadmap-dissolve-section-001)`
-- **Commit 2 (handoff docs)**: `f5ad44a` — `docs(handoff): agent handoff RFC, template and TASK-roadmap-dissolve-section-001`
+- **Commit 2 (handoff docs)**: `3f36cde` — `docs(handoff): agent handoff RFC, template and TASK-roadmap-dissolve-section-001`
 - **Rework 1 executed by**: antigravity (2026-11-04T11:00Z)
 - **Modified Files (Commit 1)**:
   - `app/api/v1/roadmaps/[slug]/sections/route.ts`
