@@ -52,9 +52,12 @@ async function main() {
   const layers = (await client.execute('SELECT id, roadmapId, "order", title FROM RoadmapLayer')).rows as unknown as LayerRow[];
   const groups = (await client.execute('SELECT id, layerId, "order", title FROM RoadmapGroup')).rows as unknown as GroupRow[];
   const items = (await client.execute('SELECT id, groupId, "order", title FROM RoadmapItem')).rows as unknown as ItemRow[];
-  const triageHasLayer = (await columns(client, "KnowledgeTriage")).includes("layerId");
+  // Turso never got ADR-0008, so groupTitle may be missing and the old level column may still be there
+  const triageColumns = await columns(client, "KnowledgeTriage");
+  const triageHasLayer = triageColumns.includes("layerId");
+  const groupTitleSql = triageColumns.includes("groupTitle") ? "groupTitle" : "NULL AS groupTitle";
   const triage = triageHasLayer
-    ? ((await client.execute('SELECT id, layerId, groupTitle FROM KnowledgeTriage')).rows as unknown as TriageRow[])
+    ? ((await client.execute(`SELECT id, layerId, ${groupTitleSql} FROM KnowledgeTriage`)).rows as unknown as TriageRow[])
     : [];
 
   const plan = planFlatten({
@@ -130,7 +133,7 @@ async function main() {
     for (const t of triage) {
       statements.push({ sql: `UPDATE "KnowledgeTriage" SET "section" = ? WHERE id = ?`, args: [sectionFor.get(t.id) ?? null, t.id] });
     }
-    for (const col of ["layerId", "layerTag", "groupTitle"]) {
+    for (const col of ["layerId", "layerTag", "groupTitle", "level"].filter((c) => triageColumns.includes(c))) {
       statements.push(`ALTER TABLE "KnowledgeTriage" DROP COLUMN "${col}"`);
     }
   }
