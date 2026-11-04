@@ -144,6 +144,7 @@ function RoadmapWorkspace() {
     editItem,
     deleteItem,
     renameSection,
+    dissolveSection,
     updateNote,
     reorderItems,
     selectActiveItem,
@@ -394,6 +395,7 @@ function RoadmapWorkspace() {
                 onReorderItems={reorderItems}
                 onOpenCreateItem={handleOpenCreateItem}
                 onRenameSection={renameSection}
+                onDissolveSection={dissolveSection}
                 onToggleLock={toggleRoadmapLock}
               />
             </div>

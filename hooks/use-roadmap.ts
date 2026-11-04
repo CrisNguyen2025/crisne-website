@@ -274,6 +274,25 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     [slug, loadRoadmap]
   );
 
+  // 6b. Dissolve a section: its lessons move to the general group
+  const dissolveSection = useCallback(
+    async (section: string) => {
+      try {
+        await roadmapService.dissolveSection(slug, section);
+        if (selectedSection === section) {
+          setSelectedSection('all');
+        }
+        topicCache.delete(slug);
+        await loadRoadmap(slug, true);
+      } catch (err) {
+        console.error('[useRoadmap] Failed to dissolve section:', err);
+        topicCache.delete(slug);
+        await loadRoadmap(slug);
+      }
+    },
+    [slug, loadRoadmap, selectedSection, setSelectedSection]
+  );
+
   // 7. Update a lesson's rich-text content (editor). Rolled back when the server refuses.
   const updateNote = useCallback(
     async (itemId: string, content: string) => {
@@ -349,6 +368,7 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     editItem,
     deleteItem,
     renameSection,
+    dissolveSection,
     updateNote,
     reorderItems,
     selectActiveItem,

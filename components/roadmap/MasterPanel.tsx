@@ -52,6 +52,7 @@ interface MasterPanelProps {
   onReorderItems: (items: ChecklistItem[]) => void;
   onOpenCreateItem: (section: string | null) => void;
   onRenameSection: (from: string, to: string) => void;
+  onDissolveSection: (section: string) => void;
 }
 
 export function MasterPanel({
@@ -73,6 +74,7 @@ export function MasterPanel({
   onReorderItems,
   onOpenCreateItem,
   onRenameSection,
+  onDissolveSection,
 }: MasterPanelProps) {
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -319,6 +321,7 @@ export function MasterPanel({
                 onReorder={(reordered) => reorderSection(group.section, reordered)}
                 onOpenCreateItem={onOpenCreateItem}
                 onRenameSection={setRenamingSection}
+                onDissolveSection={onDissolveSection}
               />
             ))}
           </div>

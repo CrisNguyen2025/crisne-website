@@ -96,6 +96,13 @@ export async function renameSection(slug: string, payload: RenameSectionDto): Pr
   });
 }
 
+/** Dissolve a section; every lesson in it moves to the topic's general group */
+export async function dissolveSection(slug: string, section: string): Promise<{ dissolved: number }> {
+  return apiFetch<{ dissolved: number }>(`/api/v1/roadmaps/${slug}/sections?section=${encodeURIComponent(section)}`, {
+    method: 'DELETE',
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Lessons
 // ─────────────────────────────────────────────────────────────────────────────

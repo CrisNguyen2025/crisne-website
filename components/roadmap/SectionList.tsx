@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ChevronRight, Pencil, Plus } from 'lucide-react';
+import { ChevronRight, Pencil, Plus, Ungroup } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -31,6 +31,7 @@ interface SectionListProps {
   onReorder: (reordered: ChecklistItem[]) => void;
   onOpenCreateItem: (section: string | null) => void;
   onRenameSection: (section: string) => void;
+  onDissolveSection: (section: string) => void;
 }
 
 /** A section of a topic and its lessons, which can be reordered within the section (ADR-0009). */
@@ -46,6 +47,7 @@ export function SectionList({
   onReorder,
   onOpenCreateItem,
   onRenameSection,
+  onDissolveSection,
 }: SectionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -80,7 +82,19 @@ export function SectionList({
             items={[
               { label: 'Thêm bài vào mục', icon: Plus, onSelect: () => onOpenCreateItem(section) },
               ...(section !== null
-                ? [{ label: 'Đổi tên mục', icon: Pencil, onSelect: () => onRenameSection(section) }]
+                ? [
+                    { label: 'Đổi tên mục', icon: Pencil, onSelect: () => onRenameSection(section) },
+                    {
+                      label: 'Bỏ mục (về Chung)',
+                      icon: Ungroup,
+                      onSelect: () => onDissolveSection(section),
+                      confirm: {
+                        title: `Bỏ mục "${section}"?`,
+                        description: `${items.length} bài chuyển về Chung. Bài học không bị xoá.`,
+                        confirmLabel: 'Bỏ mục',
+                      },
+                    },
+                  ]
                 : []),
             ]}
           />
