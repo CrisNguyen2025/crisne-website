@@ -93,13 +93,13 @@ Vì lỗi 1 bên dưới, các bài nền được tạo qua `POST /api/v1/roadm
 ### Lỗi tìm thấy
 
 1. **Chặn mọi lệnh thêm bài khi nêu tên topic.** `handle_cud` (`domains/roadmap/commands.py`) gán tên topic ("QA Sandbox") vào `target_parent_identifier`, không đổi sang slug. Executor gửi tên đó làm `roadmapSlug`, nên API trả 404. `_topic_known` không chặn được vì khi tra cứu lỗi nó trả True.
-2. **Tên topic chứa chữ "Section"** ("QA Section Test") bị cắt: phần "Section Test" bị hiểu là tên mục, ví dụ ra `Mục: Test mục rag`.
+2. **Tên topic chứa chữ "Section"** ("QA Section Test") bị cắt: phần "Section Test" bị hiểu là tên mục, ví dụ ra `Mục: Test mục rag`. Đã sửa ở `TASK-abot-bugs-001`, test: `tests/test_entity_extractor.py::test_topic_with_section_in_name_is_not_read_as_section` và `tests/test_sections_chat.py::test_topic_with_section_in_title_extracts_correct_section_and_topic`.
 3. **Mục bị hiểu thành topic.** "thêm bài X mục Tools" được hiểu là topic `Tools`, kể cả khi đang mở trang topic (A7).
 4. **Abot báo đã xoá nhưng không xoá gì (D5).** Sau `xóa bài Reranking`, người dùng hỏi một câu tra cứu rồi gõ `ok`. Preview đã được huỷ đúng, nhưng `ok` lúc này không còn preview nào để xác nhận nên rơi xuống nhánh `chitchat` (log: `rule=greeting_opener tools=[]`), và LLM bịa ra câu "Đã xóa bài học Reranking". Bài vẫn còn trong DB. Cách sửa: khi gặp `ok`/`hủy` mà không có preview đang chờ, trả một câu cố định.
 5. **Đổi tên mục qua chat không làm được (C1).** Lệnh trả `UPDATE_NOT_SUPPORTED_REPLY`, trong khi prompt lại có ví dụ `rename_section`.
 6. **Ô nhập chat chỉ có một dòng** (`<input type=text>`): danh sách dán vào bị gộp thành một dòng, nên không nhập được nhiều bài một lần (B2, B3).
 7. **Không liệt kê được mục của topic (F1):** "Hệ thống hiện chưa có thông tin chi tiết về các mục".
-8. Nhỏ: preview xoá bài không hiện dòng `Mục:`, và vẫn có cảnh báo "xoá toàn bộ dữ liệu con" dù bài không có dữ liệu con.
+8. Nhỏ: preview xoá bài không hiện dòng `Mục:`, và vẫn có cảnh báo "xoá toàn bộ dữ liệu con" dù bài không có dữ liệu con. Đã sửa ở `TASK-abot-bugs-001`, test: `tests/test_delete_by_name.py::test_delete_lesson_preview_shows_section_and_no_child_warning` và `tests/test_delete_by_name.py::test_delete_lesson_with_content_shows_content_warning`.
 
 ### Bảng kết quả
 

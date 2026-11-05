@@ -104,6 +104,44 @@ def test_unnamed_create_is_asked_for_a_name_and_nothing_is_previewed(mock_adapte
     mock_adapter.create_topic.assert_not_awaited()
 
 
+def test_delete_lesson_preview_shows_section_and_no_child_warning(mock_adapter):
+    mock_adapter.list_topics.return_value = [TOPIC]
+    mock_adapter.get_topic.return_value = TOPIC
+    mock_adapter.export_full_hierarchy.return_value = [TOPIC]
+    set_actor("owner")
+    text, _ = _turn(NextGenRoadmapAgent(llm_model=None), "xóa bài QA Abot Test", f"del-sec-{uuid.uuid4()}")
+    assert "Mục: `Core Ops`" in text
+    assert "dữ liệu con" not in text
+
+
+def test_delete_lesson_with_content_shows_content_warning(mock_adapter):
+    topic_with_content = {
+        "slug": "test-topic",
+        "title": "Test Topic",
+        "items": [
+            {"id": "item-with-content", "title": "Lesson With Content", "section": "Core Ops", "content": "<h2>Body</h2>"},
+        ],
+        "sections": ["Core Ops"],
+    }
+    mock_adapter.list_topics.return_value = [topic_with_content]
+    mock_adapter.get_topic.return_value = topic_with_content
+    mock_adapter.export_full_hierarchy.return_value = [topic_with_content]
+    set_actor("owner")
+    text, _ = _turn(NextGenRoadmapAgent(llm_model=None), "xóa bài Lesson With Content", f"del-content-{uuid.uuid4()}")
+    assert "Mục: `Core Ops`" in text
+    assert "dữ liệu con" not in text
+    assert "Bài có nội dung sẽ bị xóa theo" in text
+
+
+def test_delete_topic_preview_still_has_child_warning(mock_adapter):
+    mock_adapter.list_topics.return_value = [TOPIC]
+    mock_adapter.get_topic.return_value = TOPIC
+    set_actor("owner")
+    text, _ = _turn(NextGenRoadmapAgent(llm_model=None), "xóa topic Test Topic", f"del-topic-{uuid.uuid4()}")
+    assert "dữ liệu con" in text
+
+
+
 def test_named_create_is_still_a_create(mock_adapter):
     set_actor("owner")
     reply, _ = _turn(NextGenRoadmapAgent(llm_model=None), "tạo topic AI Engineering", f"named-{uuid.uuid4()}")

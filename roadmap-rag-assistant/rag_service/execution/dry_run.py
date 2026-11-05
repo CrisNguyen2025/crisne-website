@@ -14,7 +14,11 @@ class DryRunValidator:
     """Validates actions and formats user-facing preview diff cards."""
 
     @staticmethod
-    def format_preview_card(action: StructuredRoadmapAction, note: Optional[str] = None) -> str:
+    def format_preview_card(
+        action: StructuredRoadmapAction,
+        note: Optional[str] = None,
+        snapshot: Optional[dict] = None,
+    ) -> str:
         """Render a clean Telegram-style Action Card for user review."""
         action_verbs = {
             ActionType.CREATE: ("➕ TẠO MỚI", "Sẽ tạo mới"),
@@ -45,6 +49,11 @@ class DryRunValidator:
             lines.append(f"  {idx}. **{ent.title}**{detail_str}")
 
         if action.action == ActionType.DELETE:
-            lines.append("\n⚠️ **CẢNH BÁO NGUY HIỂM:** Thao tác xóa sẽ loại bỏ toàn bộ dữ liệu con bên trong (nếu có)!")
+            if action.entity_level == EntityLevel.TOPIC:
+                lines.append("\n⚠️ **CẢNH BÁO NGUY HIỂM:** Thao tác xóa sẽ loại bỏ toàn bộ dữ liệu con bên trong (nếu có)!")
+            elif action.entity_level == EntityLevel.ITEM:
+                has_content = bool(snapshot and (snapshot.get("content") or "").strip())
+                if has_content:
+                    lines.append("\n⚠️ **CẢNH BÁO:** Bài có nội dung sẽ bị xóa theo.")
 
         return "\n".join(lines)

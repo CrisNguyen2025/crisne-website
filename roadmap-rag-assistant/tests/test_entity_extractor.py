@@ -58,3 +58,27 @@ async def test_fallback_drops_about_word_from_lesson_title():
     extractor = StructuredEntityExtractor(llm_model=None)
     res = await extractor.aextract(normalize_vietnamese("tạo giúp tôi 1 bài về xây dựng ai cơ bản trong ai topic"))
     assert [e.title for e in res.entities] == ["xây dựng ai cơ bản"]
+
+
+@pytest.mark.asyncio
+async def test_topic_with_section_in_name_is_not_read_as_section():
+    extractor = StructuredEntityExtractor(llm_model=None)
+
+    # Case 1: "vào mục Core của topic QA Section Test"
+    res1 = await extractor.aextract("thêm bài RAG vào mục Core của topic QA Section Test")
+    assert res1.target_parent_identifier == "QA Section Test"
+    assert [e.title for e in res1.entities] == ["RAG"]
+    assert res1.entities[0].section == "Core"
+
+    # Case 2: "vào topic QA Section Test mục RAG"
+    res2 = await extractor.aextract("thêm bài Vector DB vào topic QA Section Test mục RAG")
+    assert res2.target_parent_identifier == "QA Section Test"
+    assert [e.title for e in res2.entities] == ["Vector DB"]
+    assert res2.entities[0].section == "RAG"
+
+    # Case 3: "vào topic QA Section Test" (no section clause)
+    res3 = await extractor.aextract("thêm bài Prompt Basics vào topic QA Section Test")
+    assert res3.target_parent_identifier == "QA Section Test"
+    assert [e.title for e in res3.entities] == ["Prompt Basics"]
+    assert res3.entities[0].section is None
+

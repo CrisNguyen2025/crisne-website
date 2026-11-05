@@ -60,22 +60,90 @@ SECTION_CLAUSE = re.compile(
 LESSON_WORDS = re.compile(r"\b(?:items?m*|bai(?:\s+hoc)?|lessons?)\b")
 
 
-def _section_match(text: str, lesson: bool) -> Optional[re.Match]:
+def _known_topic_names() -> set[str]:
+    topics: set[str] = set()
+    try:
+        from rag_service.domains.roadmap.retrieval.engine import rag_engine
+        if getattr(rag_engine, "_vector_store", None) and getattr(rag_engine._vector_store, "_docs_map", None):
+            for doc in rag_engine._vector_store._docs_map.values():
+                if getattr(doc, "doc_type", None) == "topic":
+                    if getattr(doc, "title", None):
+                        topics.add(doc.title.strip())
+                    if getattr(doc, "topic_slug", None):
+                        topics.add(doc.topic_slug.strip())
+        if getattr(rag_engine, "_catalog", None) and getattr(rag_engine._catalog, "topics", None):
+            topics |= rag_engine._catalog.topics
+    except Exception:
+        pass
+    return topics
+
+
+def _is_inside_topic(text: str, match: re.Match, known_topics: Optional[Iterable[str]] = None) -> bool:
+    """True if the section match falls inside a topic name in text."""
+    m_start, m_end = match.start(), match.end()
+
+    # 1. Known topics from catalog or caller
+    all_known = set(known_topics or []) | _known_topic_names()
+    for topic in all_known:
+        if not topic:
+            continue
+        pattern = rf"(?<!\w){re.escape(topic)}(?!\w)"
+        for tm in re.finditer(pattern, text, flags=re.IGNORECASE):
+            if tm.start() <= m_start < tm.end() or tm.start() < m_end <= tm.end():
+                return True
+
+    # 2. Topic explicitly mentioned in text: e.g. "topic QA Section Test", "của topic QA Section Test"
+    topic_kw = re.search(
+        r"(?:\b(?:của|cua|trong|thuộc|thuoc|ở|o|on|in|of|vào|vao|to|into)\s+)?\b(?:topics?c*|chủ\s+đề|chu\s+de|lộ\s+trình|lo\s+trinh|roadmaps?)\s+",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if topic_kw:
+        t_start = topic_kw.start()
+        post = text[topic_kw.end():]
+        m_sec = re.search(r"\b(?:vào|trong|in|to)?\s*(?:mục|muc)\s+", post, flags=re.IGNORECASE)
+        if m_sec:
+            t_end = topic_kw.end() + m_sec.start()
+        else:
+            m_end_clause = re.search(r"[,;:\n]|$", post)
+            t_end = topic_kw.end() + (m_end_clause.start() if m_end_clause else len(post))
+
+        if t_start <= m_start < t_end:
+            return True
+
+    # 3. If the entire text being matched is itself a topic name or matches a known topic
+    cleaned = text.strip()
+    if cleaned and any(cleaned.lower() == t.lower() for t in all_known):
+        return True
+
+    return False
+
+
+def _section_match(text: str, lesson: bool, known_topics: Optional[Iterable[str]] = None) -> Optional[re.Match]:
     """The section clause, when the text is about a lesson (`lesson`: already known to be)."""
     if not lesson and not LESSON_WORDS.search(fold(text or "")):
         return None
-    return SECTION_CLAUSE.search(text or "")
+    t = text or ""
+    pos = 0
+    while pos < len(t):
+        m = SECTION_CLAUSE.search(t, pos)
+        if not m:
+            break
+        if not _is_inside_topic(t, m, known_topics):
+            return m
+        pos = m.start() + 1
+    return None
 
 
-def named_section(text: str, lesson: bool = False) -> str:
+def named_section(text: str, lesson: bool = False, known_topics: Optional[Iterable[str]] = None) -> str:
     """The section a lesson message names ("… vào mục RAG"), or empty: never a default."""
-    m = _section_match(text, lesson)
+    m = _section_match(text, lesson, known_topics=known_topics)
     return m.group("name").strip() if m else ""
 
 
-def strip_section_clause(text: str, lesson: bool = False) -> str:
+def strip_section_clause(text: str, lesson: bool = False, known_topics: Optional[Iterable[str]] = None) -> str:
     """The text without its section clause, so the clause is not read as a title or a topic."""
-    m = _section_match(text, lesson)
+    m = _section_match(text, lesson, known_topics=known_topics)
     if not m:
         return text
     rest = re.sub(r"^\s*(?:của|cua|thuộc|thuoc|of)\b", " trong", text[m.end():], flags=re.IGNORECASE)
