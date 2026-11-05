@@ -142,6 +142,7 @@ function RoadmapWorkspace() {
     toggleRoadmapLock,
     addItem,
     editItem,
+    changeItemStatus,
     deleteItem,
     renameSection,
     dissolveSection,
@@ -422,6 +423,7 @@ function RoadmapWorkspace() {
                 }}
                 onUpdateNote={updateNote}
                 onEditItem={editItem}
+                onChangeStatus={changeItemStatus}
                 onDeleteItem={deleteItem}
               />
             </div>

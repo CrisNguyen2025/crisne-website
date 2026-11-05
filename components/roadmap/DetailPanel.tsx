@@ -20,6 +20,8 @@ import { ActionMenu } from '@/components/ui/action-menu';
 import { ImagePreview } from '@/components/ui/image-preview';
 import { EditItemContentDrawer } from './EditItemContentDrawer';
 import { EditItemInfoDrawer } from './EditItemInfoDrawer';
+import { LessonStatusPicker } from './LessonStatus';
+import type { LessonStatus } from '@/lib/roadmap/status';
 
 interface DetailPanelProps {
   item: ChecklistItem | null;
@@ -35,6 +37,7 @@ interface DetailPanelProps {
   onUpdateNote?: (id: string, text: string) => void;
   onEditItem?: (id: string, title: string, description: string, section?: string | null) => void;
   onDeleteItem?: (id: string) => Promise<void>;
+  onChangeStatus?: (id: string, status: LessonStatus) => void;
 }
 
 function DetailContent({
@@ -49,6 +52,7 @@ function DetailContent({
   onUpdateNote,
   onEditItem,
   onDeleteItem,
+  onChangeStatus,
 }: {
   item: ChecklistItem;
   sections?: string[];
@@ -61,6 +65,7 @@ function DetailContent({
   onUpdateNote?: (id: string, text: string) => void;
   onEditItem?: (id: string, title: string, description: string, section?: string | null) => void;
   onDeleteItem?: (id: string) => Promise<void>;
+  onChangeStatus?: (id: string, status: LessonStatus) => void;
 }) {
   const { toast } = useToast();
   const [isContentModalOpen, setIsContentModalOpen] = useState(false);
@@ -236,6 +241,13 @@ function DetailContent({
               )}
             </header>
 
+            {canWrite && item.status && onChangeStatus && (
+              <LessonStatusPicker
+                value={item.status}
+                onChange={(status) => onChangeStatus(item.id, status)}
+              />
+            )}
+
             {/* Table of Contents (shown when 2 or more headings exist) */}
             {headings.length >= 2 && (
               <nav className="rounded-xl border border-border bg-muted/30 p-3.5 text-xs">
@@ -390,6 +402,7 @@ export function DetailPanel({
   onUpdateNote,
   onEditItem,
   onDeleteItem,
+  onChangeStatus,
 }: DetailPanelProps) {
   if (isLoading) {
     return (
@@ -445,6 +458,7 @@ export function DetailPanel({
       onUpdateNote={onUpdateNote}
       onEditItem={onEditItem}
       onDeleteItem={onDeleteItem}
+      onChangeStatus={onChangeStatus}
     />
   );
 }
