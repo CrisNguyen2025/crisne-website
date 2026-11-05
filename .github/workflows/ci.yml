@@ -87,6 +87,9 @@ jobs:
       - name: Unit & route contract tests
         run: yarn test
 
+      - name: Schema SQL fixture is up to date
+        run: yarn test:schema-sql --check
+
       - name: Knowledge vector index is up to date
         run: yarn check:knowledge-index
 
