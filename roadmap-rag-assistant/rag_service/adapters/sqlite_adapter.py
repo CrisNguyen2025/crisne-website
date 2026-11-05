@@ -20,7 +20,7 @@ import uuid_utils
 
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate, normalize_title
 from rag_service.adapters.sections import resolve_section, sections_in_order
-from rag_service.auth import owner_only
+from rag_service.auth import is_owner, owner_only
 from rag_service.write_grant import guard_writes
 
 
@@ -82,7 +82,7 @@ class SqliteAdapter:
         )
         return [dict(r) for r in await cursor.fetchall()]
 
-    # ── Topics ───────────────────────────────────────────────────────────
+    # ── Topics ────────────────────────────────────────────────────────────
 
     async def list_topics(self) -> list[dict]:
         async with self._connect() as db:
@@ -127,6 +127,8 @@ class SqliteAdapter:
                 return None
             topic = dict(row)
             items = await self._items_of(db, topic["id"])
+            if not is_owner():
+                items = [{k: v for k, v in item.items() if k not in ("status", "statusUpdatedAt")} for item in items]
             topic["items"] = items
             topic["sections"] = sections_in_order(items)
             return topic

@@ -28,6 +28,7 @@ from rag_service.core.orchestration.sources import SourceDeps, answer_from_sourc
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
 from rag_service.domains.roadmap.lesson_content import LessonContentCommands
+from rag_service.domains.roadmap.lesson_status import LessonStatusCommands
 from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
@@ -111,7 +112,9 @@ async def _plan_queries(llm, query: str, session_id: str):
     return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm)
 
 
-class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonContentCommands):
+class NextGenRoadmapAgent(
+    RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonContentCommands, LessonStatusCommands
+):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
     def __init__(
@@ -294,6 +297,19 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands,
         # ── 1c. A drafted body for a lesson: preview, "ok" adds it (roadmap domain: lesson_content.py) ──
         async for ev in self.handle_lesson_content(
             content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        # ── 1d. Lesson status queries & previewed changes (lesson_status.py, ADR-0010) ──
+        async for ev in self.handle_lesson_status(
+            content=content,
+            raw_content=raw_content,
+            page_context=page_context,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
         ):
             yield ev
         if outcome["handled"]:
