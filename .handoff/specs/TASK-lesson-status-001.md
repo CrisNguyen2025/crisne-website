@@ -3,7 +3,7 @@ task_id: "TASK-lesson-status-001"
 branch: "feat/lesson-status"
 version: "2.0.0"
 priority: "P1"
-status: "IN_PROGRESS"
+status: "DONE"
 assigned_executor: "unassigned"
 max_attempts: 3
 current_attempt: 1
@@ -37,6 +37,8 @@ verification_gate:
 
 # TASK: Lesson Status — Bước 2 (schema, API, UI)
 
+> Đã merge vào `main` ngày 2026-11-05. Step 6 và mục 6 (việc mở) là việc tiếp theo, chưa làm.
+
 ## 1. Context & Architectural Intent
 - **Goal**: Mỗi Lesson có trạng thái `target` / `learning` / `known` (ADR-0010). Owner thấy và đổi được trên trang roadmap. Visitor không thấy.
 - **Why**: Roadmap thành "second brain" của Owner: vừa là kiến thức đã có, vừa là danh sách muốn học, cập nhật theo thời gian. Roadmap Assistant sẽ dựa vào trạng thái để cá nhân hoá (Bước 3, chưa làm).
@@ -59,7 +61,7 @@ verification_gate:
 - [x] **Step 4b (UI list)**: `components/roadmap/LessonStatus.tsx` (`LessonStatusBadge`, `LessonStatusPicker`); `ChecklistItemRow` hiện badge cho `target` và `learning` (`known` là mặc định nên không gắn nhãn).
 - [x] **Step 4c (UI detail)**: `DetailPanel` thêm prop `onChangeStatus?: (id: string, status: LessonStatus) => void`, truyền qua `DetailContent`, render `LessonStatusPicker` ngay dưới `<header>` khi `canWrite && item.status`. `app/page.tsx` truyền `onChangeStatus={changeItemStatus}` (lấy từ `useRoadmap`, cạnh `editItem`). Xong ở commit `188422f`. Cùng commit đó, `full-export` chuyển sang `select` liệt kê từng trường của bài (an toàn hơn so với destructure để bỏ trường, và hết cảnh báo lint).
 - [x] **Step 5 (Verify, xong ngày 2026-11-05)**: typecheck, lint, test. Trên app: Owner thấy badge và đổi được trạng thái, F5 vẫn giữ. Visitor: `GET /api/v1/roadmaps/<slug>` không có `status`. Lưu ý `.env.local` có `DEV_OWNER_BYPASS=true`, local luôn là Owner; muốn thử Visitor thì tắt tạm cờ này. `GET /api/v1/roadmaps/full-export` không có `status`.
-- [ ] **Step 6 (Bước 3, task sau)**: Roadmap Assistant đọc trạng thái (chỉ khi Actor là Owner) để trả lời "tôi đang biết gì về X", "nên học gì tiếp", "bài nào cần ôn lại", và đổi trạng thái qua chat có Preview.
+- [ ] **Step 6 (Bước 3, task sau, chưa làm)**: Roadmap Assistant đọc trạng thái (chỉ khi Actor là Owner) để trả lời "tôi đang biết gì về X", "nên học gì tiếp", "bài nào cần ôn lại", và đổi trạng thái qua chat có Preview.
 
 ## 4. Verification Gate Results (2026-11-05, commit `188422f`)
 - [x] `TypeCheck`: PASS khi đã generate client theo schema của branch. Lỗi còn lại chỉ nằm ở `.next/types/validator.ts`: file cũ trỏ tới các route đã xoá, có từ trước, không liên quan.
