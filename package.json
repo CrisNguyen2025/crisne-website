@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "rag:dev": "cd roadmap-rag-assistant && .venv/bin/uvicorn rag_service.api.server:app --reload --port 8000",
+    "db:lesson-status": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-lesson-status.ts",
     "db:flatten-sections": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/flatten-to-sections.ts",
     "db:dedupe-triage": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/dedupe-knowledge-triage.ts",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",

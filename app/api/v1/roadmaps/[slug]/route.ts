@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ChecklistItem, GetRoadmapResponseDto } from '@/lib/roadmap/types';
 import { slugify } from '@/lib/utils';
-import { requireWriteAccess } from "@/lib/auth/write-access";
+import { hasWriteAccess, requireWriteAccess } from "@/lib/auth/write-access";
+import { DEFAULT_LESSON_STATUS, isLessonStatus } from '@/lib/roadmap/status';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionsInOrder } from '@/lib/roadmap/sections';
 
@@ -22,10 +23,12 @@ async function findTopic(identifier: string) {
   return all.find((r) => r.slug.toLowerCase() === norm) || all.find((r) => r.title.toLowerCase() === norm) || null;
 }
 
-// GET /api/v1/roadmaps/[slug] - A topic with its lessons, in page order
-export async function GET(_req: NextRequest, context: RouteContext) {
+// GET /api/v1/roadmaps/[slug] - A topic with its lessons, in page order.
+// Lesson Status is the Owner's personal progress (ADR-0010): only a caller with write access gets it.
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
+    const ownerView = await hasWriteAccess(req);
     const found = await findTopic(slug);
     const roadmap = found
       ? await prisma.roadmap.findUnique({
@@ -48,6 +51,12 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       content: item.content || undefined,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
+      ...(ownerView
+        ? {
+            status: isLessonStatus(item.status) ? item.status : DEFAULT_LESSON_STATUS,
+            statusUpdatedAt: item.statusUpdatedAt ? item.statusUpdatedAt.toISOString() : null,
+          }
+        : {}),
     }));
 
     const body: GetRoadmapResponseDto = {

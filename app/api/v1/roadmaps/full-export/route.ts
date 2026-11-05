@@ -12,9 +12,26 @@ export const revalidate = 0;
  */
 export async function GET(_req: NextRequest) {
   try {
+    // Public, and the Roadmap Assistant indexes it for every reader: lesson fields are listed, so Lesson Status
+    // (ADR-0010) and any later private field never go out
     const roadmaps = await prisma.roadmap.findMany({
       orderBy: { order: 'asc' },
-      include: { items: { orderBy: { order: 'asc' } } },
+      include: {
+        items: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            roadmapId: true,
+            section: true,
+            title: true,
+            description: true,
+            content: true,
+            order: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json(

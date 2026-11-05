@@ -124,6 +124,9 @@ model RoadmapItem {
   description String?
   content     String?      // Rich-text HTML content from Lexical editor
   order       Int          @default(0)
+  // Lesson Status (ADR-0010): target | learning | known. The Owner's progress, shown to the Owner only
+  status          String    @default("known")
+  statusUpdatedAt DateTime? // When the status last changed; null = never changed since it was created
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
