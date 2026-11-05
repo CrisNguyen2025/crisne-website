@@ -52,20 +52,24 @@ verification_gate:
 ## 3. Step-by-Step Implementation Checklist
 - [x] **Step 0 (Docs, đã lên `main`)**: GLOSSARY thêm Lesson Status; ADR-0010; `docs/README.md`.
 - [x] **Step 1 (Schema/Type)**: `RoadmapItem.status String @default("known")`, `statusUpdatedAt DateTime?`; `lib/roadmap/status.ts`; `ChecklistItem.status?`, `statusUpdatedAt?`.
-- [x] **Step 2a (Migration script)**: `scripts/add-lesson-status.ts`, `yarn db:lesson-status`. Dry-run trên Turso ngày 2026-11-05: 0 bài, 2 cột sẽ được thêm.
+- [x] **Step 2a (Migration script)**: `scripts/add-lesson-status.ts`, `yarn db:lesson-status`. Dry-run trên Turso ngày 2026-11-05 (hai lần): 2 topic, 0 bài, 2 cột sẽ được thêm. Turso từ đầu đã không có bài nào, nên không có dữ liệu cần chuyển.
 - [ ] **Step 2b (Owner chạy)**: `yarn db:lesson-status --apply` trên Turso, rồi `yarn db:lesson-status` phải báo "Nothing to do". Sau đó `npx prisma generate` và khởi động lại `yarn dev`.
 - [x] **Step 3 (API)**: `GET /api/v1/roadmaps/[slug]` chỉ thêm `status`/`statusUpdatedAt` khi `hasWriteAccess`; `full-export` bỏ hai trường; `POST /items` nhận `status` (validate, mặc định `known`); `PATCH /items/[id]` nhận `status`, đặt `statusUpdatedAt` khi đổi.
 - [x] **Step 4a (Service/Hook)**: `roadmapService.updateItemStatus`; `useRoadmap().changeItemStatus` (cập nhật ngay, tải lại khi lỗi).
 - [x] **Step 4b (UI list)**: `components/roadmap/LessonStatus.tsx` (`LessonStatusBadge`, `LessonStatusPicker`); `ChecklistItemRow` hiện badge cho `target` và `learning` (`known` là mặc định nên không gắn nhãn).
-- [ ] **Step 4c (UI detail)**: `DetailPanel` thêm prop `onChangeStatus?: (id: string, status: LessonStatus) => void`, truyền qua `DetailContent`, render `LessonStatusPicker` ngay dưới `<header>` khi `canWrite && item.status`. `app/page.tsx` truyền `onChangeStatus={changeItemStatus}` (lấy từ `useRoadmap`, cạnh `editItem`).
-- [ ] **Step 5 (Verify)**: typecheck, lint, test. Trên app: Owner thấy badge và đổi được trạng thái, F5 vẫn giữ. Visitor: `GET /api/v1/roadmaps/<slug>` không có `status`. Lưu ý `.env.local` có `DEV_OWNER_BYPASS=true`, local luôn là Owner; muốn thử Visitor thì tắt tạm cờ này. `GET /api/v1/roadmaps/full-export` không có `status`.
+- [x] **Step 4c (UI detail)**: `DetailPanel` thêm prop `onChangeStatus?: (id: string, status: LessonStatus) => void`, truyền qua `DetailContent`, render `LessonStatusPicker` ngay dưới `<header>` khi `canWrite && item.status`. `app/page.tsx` truyền `onChangeStatus={changeItemStatus}` (lấy từ `useRoadmap`, cạnh `editItem`). Xong ở commit `188422f`. Cùng commit đó, `full-export` chuyển sang `select` liệt kê từng trường của bài (an toàn hơn so với destructure để bỏ trường, và hết cảnh báo lint).
+- [ ] **Step 5 (Verify, xong một phần ngày 2026-11-05)**: typecheck, lint, test. Trên app: Owner thấy badge và đổi được trạng thái, F5 vẫn giữ. Visitor: `GET /api/v1/roadmaps/<slug>` không có `status`. Lưu ý `.env.local` có `DEV_OWNER_BYPASS=true`, local luôn là Owner; muốn thử Visitor thì tắt tạm cờ này. `GET /api/v1/roadmaps/full-export` không có `status`.
 - [ ] **Step 6 (Bước 3, task sau)**: Roadmap Assistant đọc trạng thái (chỉ khi Actor là Owner) để trả lời "tôi đang biết gì về X", "nên học gì tiếp", "bài nào cần ôn lại", và đổi trạng thái qua chat có Preview.
 
-## 4. Verification Gate Results
-- [ ] `TypeCheck`: PENDING (cần `prisma generate` sau Step 2b; trước đó Prisma type chưa có `status`)
-- [ ] `Lint`: PENDING
-- [ ] `Test`: PENDING
-- [ ] `Boundary Check`: PENDING
+## 4. Verification Gate Results (2026-11-05, commit `188422f`)
+- [x] `TypeCheck`: PASS khi đã generate client theo schema của branch. Lỗi còn lại chỉ nằm ở `.next/types/validator.ts`: file cũ trỏ tới các route đã xoá, có từ trước, không liên quan.
+- [x] `Lint`: không có lỗi mới. Lỗi `react-hooks/set-state-in-effect` ở `hooks/use-roadmap.ts:127` có sẵn trên `main`, cảnh báo `_req` trong `full-export` cũng vậy. Toàn repo đang có 168 lỗi lint có từ trước.
+- [x] `Test`: PASS, `yarn test` 981 pass, 8 skip.
+- [x] `Boundary Check`: chỉ có `prisma/dev.db` bị sửa, không commit.
+- [x] **UI (Playwright, API giả lập)**: thay phản hồi `GET /api/v1/roadmaps/ai-engineering` bằng 3 bài known / learning / target. Kết quả: danh sách hiện badge cho learning và target, không hiện cho known. Panel chi tiết hiện picker 3 nút, nút đang chọn có `aria-pressed`. Bấm "Mục tiêu" gửi `PATCH /items/l2` với body `{"status":"target"}`. Bấm "Đã nắm" thì badge ở danh sách biến mất.
+- [ ] **End-to-end trên DB thật**: chưa làm, chờ Step 2b. Sau khi migrate, kiểm: đổi trạng thái rồi F5 vẫn giữ; Visitor gọi `GET /api/v1/roadmaps/<slug>` không có `status` (tắt tạm `DEV_OWNER_BYPASS`); `full-export` không có `status`.
+
+**Lưu ý Prisma client local:** dev server đang chạy trên Turso, mà Turso chưa có cột mới. Vì vậy client trong `node_modules` đã được generate lại theo schema của `main`. Code của branch vẫn chạy được với client này, chỉ là `status` là `undefined` nên picker chưa hiện. Chỉ chạy `npx prisma generate` (theo schema của branch) **sau** Step 2b.
 
 ## 5. Execution Audit Log
 - **Git Commit Hash**: xem `git log feat/lesson-status`
