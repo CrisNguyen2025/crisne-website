@@ -29,12 +29,14 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | File | Phạm vi | Lần chạy gần nhất | Kết quả |
 |---|---|---|---|
 | [assistant-sections.md](assistant-sections.md) | Section (mục) qua Abot, ADR-0009 | 2026-11-04 @ `0734cc0` | 7 lỗi, xem file |
+| [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case ghi chưa chạy |
 
 ## Cách chạy (đã kiểm chứng)
 
 - **Server:** `yarn dev` (3334) và `yarn rag:dev` (8000). Owner nhờ `DEV_OWNER_BYPASS=true` trong `.env.local` (chỉ có tác dụng với `next dev`), không cần đăng nhập Google.
 - **DB:** đang là **Turso thật**. Chỉ dùng topic test riêng và xoá chúng sau khi chạy. Tên topic test **không** được chứa chữ "Section" hay "mục", vì Abot hiểu nhầm (lỗi 2 của assistant-sections). Nên dùng `QA Sandbox`.
 - **Chat:** bấm nút "Mở Abot". Ô nhập có placeholder `Hỏi Abot…` và chỉ có một dòng, nên không gửi được nội dung nhiều dòng.
+- **Preview:** câu xác nhận hiện là "Xác nhận thực hiện" (helper cũ còn dò "Đang chờ bạn xác nhận").
 - **Chờ trả lời:** dùng [helpers/abot-send.js](helpers/abot-send.js), helper này đợi đến khi chữ trên trang ngừng thay đổi. Đừng chờ `response.finished()` của `/chat/stream`, vì nó không bao giờ kết thúc và làm Playwright treo.
 - **Thêm bài nền nhanh:** gọi thẳng API, không qua chat:
   `curl -X POST localhost:3334/api/v1/roadmaps/items -H 'Content-Type: application/json' -d '{"roadmapSlug":"qa-sandbox","title":"X","section":"RAG"}'`

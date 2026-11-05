@@ -31,7 +31,7 @@ async (page) => {
   // Sends a message and confirms with "ok" when a preview asks for it
   const run = async (msg) => {
     let reply = await send(msg);
-    if (/Đang chờ bạn xác nhận/.test(reply)) reply += '  ==> OK: ' + (await send('ok'));
+    if (/Xác nhận thực hiện|Đang chờ bạn xác nhận/.test(reply)) reply += '  ==> OK: ' + (await send('ok'));
     return reply;
   };
 
