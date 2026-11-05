@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+import sqlite3
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,6 +15,55 @@ from rag_service.llm_breaker import llm_breaker
 from rag_service.tools import init_adapter
 
 TEST_INTERNAL_KEY = "test-internal-key"
+SCHEMA_SQL_PATH = Path(__file__).resolve().parent / "fixtures" / "schema.sql"
+
+
+@pytest.fixture(scope="session")
+def session_test_db(tmp_path_factory) -> Path:
+    """Session-scoped SQLite database initialized from schema.sql with small sample fixture data."""
+    db_file = tmp_path_factory.mktemp("db") / "test.db"
+    with sqlite3.connect(db_file) as conn:
+        conn.executescript(SCHEMA_SQL_PATH.read_text(encoding="utf-8"))
+        conn.execute(
+            """INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("topic-ai-1", "ai-architecture", "AI & LLM Architecture", "Comprehensive blueprint for LLM applications", "Layers", 1, 0),
+        )
+        conn.execute(
+            """INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("topic-fe-1", "frontend", "Frontend Architecture", "Modern frontend engineering", "Layers", 2, 0),
+        )
+        conn.execute(
+            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("item-1", "topic-ai-1", "Core", "Transformer Architecture", "Attention is all you need", "Transformer details", 1, "known"),
+        )
+        conn.execute(
+            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("item-2", "topic-ai-1", "Core", "RAG Systems", "Retrieval augmented generation", "RAG details", 2, "learning"),
+        )
+        conn.execute(
+            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("item-3", "topic-ai-1", "Advanced", "Semantic Caching", "Cache LLM responses", "Cache details", 3, "target"),
+        )
+        conn.execute(
+            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
+            ("item-4", "topic-fe-1", "Components", "React Server Components", "Server components in Next.js", "RSC details", 1, "known"),
+        )
+        conn.commit()
+    return db_file
+
+
+@pytest.fixture(autouse=True)
+def isolated_test_db(session_test_db, monkeypatch):
+    """Ensure all tests and adapters use the temporary test DB instead of prisma/dev.db."""
+    monkeypatch.setattr(settings, "sqlite_db_path", str(session_test_db))
+    monkeypatch.setattr("evals.corpus_export.DEV_DB", session_test_db)
+    monkeypatch.setattr("evals.target.DEV_DB", session_test_db)
 
 
 @pytest.fixture(autouse=True)
