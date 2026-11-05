@@ -58,7 +58,7 @@ verification_gate:
 - [x] **Step 4a (Service/Hook)**: `roadmapService.updateItemStatus`; `useRoadmap().changeItemStatus` (cập nhật ngay, tải lại khi lỗi).
 - [x] **Step 4b (UI list)**: `components/roadmap/LessonStatus.tsx` (`LessonStatusBadge`, `LessonStatusPicker`); `ChecklistItemRow` hiện badge cho `target` và `learning` (`known` là mặc định nên không gắn nhãn).
 - [x] **Step 4c (UI detail)**: `DetailPanel` thêm prop `onChangeStatus?: (id: string, status: LessonStatus) => void`, truyền qua `DetailContent`, render `LessonStatusPicker` ngay dưới `<header>` khi `canWrite && item.status`. `app/page.tsx` truyền `onChangeStatus={changeItemStatus}` (lấy từ `useRoadmap`, cạnh `editItem`). Xong ở commit `188422f`. Cùng commit đó, `full-export` chuyển sang `select` liệt kê từng trường của bài (an toàn hơn so với destructure để bỏ trường, và hết cảnh báo lint).
-- [ ] **Step 5 (Verify, xong một phần ngày 2026-11-05)**: typecheck, lint, test. Trên app: Owner thấy badge và đổi được trạng thái, F5 vẫn giữ. Visitor: `GET /api/v1/roadmaps/<slug>` không có `status`. Lưu ý `.env.local` có `DEV_OWNER_BYPASS=true`, local luôn là Owner; muốn thử Visitor thì tắt tạm cờ này. `GET /api/v1/roadmaps/full-export` không có `status`.
+- [x] **Step 5 (Verify, xong ngày 2026-11-05)**: typecheck, lint, test. Trên app: Owner thấy badge và đổi được trạng thái, F5 vẫn giữ. Visitor: `GET /api/v1/roadmaps/<slug>` không có `status`. Lưu ý `.env.local` có `DEV_OWNER_BYPASS=true`, local luôn là Owner; muốn thử Visitor thì tắt tạm cờ này. `GET /api/v1/roadmaps/full-export` không có `status`.
 - [ ] **Step 6 (Bước 3, task sau)**: Roadmap Assistant đọc trạng thái (chỉ khi Actor là Owner) để trả lời "tôi đang biết gì về X", "nên học gì tiếp", "bài nào cần ôn lại", và đổi trạng thái qua chat có Preview.
 
 ## 4. Verification Gate Results (2026-11-05, commit `188422f`)
@@ -67,7 +67,10 @@ verification_gate:
 - [x] `Test`: PASS, `yarn test` 981 pass, 8 skip.
 - [x] `Boundary Check`: chỉ có `prisma/dev.db` bị sửa, không commit.
 - [x] **UI (Playwright, API giả lập)**: thay phản hồi `GET /api/v1/roadmaps/ai-engineering` bằng 3 bài known / learning / target. Kết quả: danh sách hiện badge cho learning và target, không hiện cho known. Panel chi tiết hiện picker 3 nút, nút đang chọn có `aria-pressed`. Bấm "Mục tiêu" gửi `PATCH /items/l2` với body `{"status":"target"}`. Bấm "Đã nắm" thì badge ở danh sách biến mất.
-- [ ] **End-to-end trên DB thật**: chưa làm. Turso có 0 bài, và agent bị chặn tạo dữ liệu test trên Turso (classifier: Modify Shared Resources). Owner tự tạo một bài trên UI để thử, hoặc cho phép agent tạo topic test rồi xoá. Sau khi migrate, kiểm: đổi trạng thái rồi F5 vẫn giữ; Visitor gọi `GET /api/v1/roadmaps/<slug>` không có `status` (tắt tạm `DEV_OWNER_BYPASS`); `full-export` không có `status`.
+- [x] **End-to-end trên Turso (Playwright headless, topic test `zz-status-test`, đã xoá sau khi thử)**:
+  - API: bài tạo không nêu trạng thái là `known`, `statusUpdatedAt` null. Tạo với `target` được 201. Tạo với `mastered` bị 400. PATCH `learning` được 200 và đặt `statusUpdatedAt`; PATCH `xx` bị 400. PATCH lại đúng trạng thái đang có thì `statusUpdatedAt` giữ nguyên. `full-export` chỉ có các trường id, roadmapId, section, title, description, content, order, createdAt, updatedAt.
+  - UI: danh sách hiện badge "Đang học" và "Mục tiêu". Picker đổi từ "Mục tiêu" sang "Đã nắm", F5 vẫn giữ "Đã nắm", DB ghi `known` cùng thời điểm đổi.
+  - Visitor: kiểm bằng `tests/route/lesson-status-visibility.test.ts` (mock `hasWriteAccess`). Owner nhận `status` và `statusUpdatedAt`; Visitor không nhận trường nào. Không thử trên server thật, vì ở dev `DEV_OWNER_BYPASS` khiến mọi request đều là Owner.
 
 **Prisma client local:** đã generate theo schema của branch sau Step 2b. Nếu checkout về `main` trước khi merge thì generate lại.
 
