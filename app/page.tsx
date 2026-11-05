@@ -330,6 +330,7 @@ function RoadmapWorkspace() {
               <UserRound className="size-4" />
               <span>Portfolio</span>
             </Link>
+            <ThemeToggle className="size-8 rounded-lg border border-border/60 bg-card hover:bg-muted text-foreground" />
           </div>
         </header>
         {currentView === "home" ? (
@@ -341,7 +342,6 @@ function RoadmapWorkspace() {
               roadmaps={availableRoadmaps}
               isLoading={isRoadmapsLoading}
               onSelectRoadmap={handleSelectRoadmap}
-              onOpenCreateModal={() => setIsCreateTopicOpen(true)}
             />
           </div>
         ) : view === "map" ? (
