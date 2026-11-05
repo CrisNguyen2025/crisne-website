@@ -129,6 +129,8 @@ class RoadmapTarget:
             if self.mode == "fts":
                 store._get_embedder = lambda: None  # type: ignore[method-assign]
             store.index_documents(self._load()[0])
+            if self.mode in ("vector", "hybrid"):
+                store.embed_missing_documents()
             self._store = store
         return self._store
 

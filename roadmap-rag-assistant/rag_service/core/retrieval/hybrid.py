@@ -323,8 +323,6 @@ class HybridVectorStore:
 
         return embedded_count
 
-    embed_pending = embed_missing_documents
-
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """Search via SQLite FTS5 BM25 ranking."""
         all_tokens = re.findall(r"\w+", query.lower())
