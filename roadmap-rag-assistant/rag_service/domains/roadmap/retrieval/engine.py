@@ -64,9 +64,14 @@ class HybridRagEngine:
         self._indexed_generation = 0
         self._sync_lock = asyncio.Lock()
         self._sync_task: Optional[asyncio.Task] = None
+        self._embed_lock = asyncio.Lock()
+        self._embed_task: Optional[asyncio.Task] = None
 
     async def sync_live_database(self) -> int:
         """Sync and re-index all live Roadmaps, Layers, Groups, and Items.
+
+        Phase 1: Ingests documents and swaps FTS5 index and cached vectors immediately.
+        Phase 2: Missing embeddings run in the background.
 
         An empty roadmap empties the index. A source that cannot be read keeps the previous index:
         dropping it would make the assistant deny lessons that still exist.
@@ -75,7 +80,6 @@ class HybridRagEngine:
             generation = self._change_generation
             try:
                 docs = await self._ingestion_worker.ingest_all()
-                # Embedding new docs is paced with time.sleep: keep it off the event loop
                 await asyncio.to_thread(self._vector_store.index_documents, docs)
             except Exception as exc:
                 self._last_error = type(exc).__name__
@@ -86,7 +90,42 @@ class HybridRagEngine:
             self._indexed_generation = generation
             self._last_error = None
             print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
+            self._start_background_embedding()
             return len(docs)
+
+    def _start_background_embedding(self) -> None:
+        if self._vector_store.vectors_pending == 0:
+            return
+        if self._embed_task is None or self._embed_task.done():
+            self._embed_task = asyncio.create_task(self._run_embed_worker())
+
+    async def _run_embed_worker(self) -> None:
+        async with self._embed_lock:
+            while True:
+                current_gen = self._vector_store.generation
+                if self._vector_store.vectors_pending == 0:
+                    break
+                try:
+                    await asyncio.to_thread(self._vector_store.embed_missing_documents, current_gen)
+                    if self._last_error and self._last_error.startswith("embedding:"):
+                        self._last_error = None
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self._last_error = f"embedding:{type(exc).__name__}"
+                    print(f"[HybridRagEngine] Background embedding warning ({exc}). Partial vectors kept; rest uses FTS5.")
+                    break
+
+                if self._vector_store.generation == current_gen or self._vector_store.vectors_pending == 0:
+                    break
+
+    async def wait_for_embedding(self, timeout: Optional[float] = None) -> None:
+        task = self._embed_task
+        if task and not task.done():
+            if timeout is not None:
+                await asyncio.wait({task}, timeout=timeout)
+            else:
+                await task
 
     def request_reindex(self) -> None:
         """The source changed: rebuild now, and let the next turn wait briefly for the new index."""
@@ -108,6 +147,7 @@ class HybridRagEngine:
                 else None
             ),
             "last_error": self._last_error,
+            "vectors_pending": getattr(self._vector_store, "vectors_pending", 0),
         }
 
     def is_empty(self) -> bool:

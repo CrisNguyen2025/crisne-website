@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
+from rag_service.core.retrieval import hybrid as hybrid_module
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
 
@@ -29,6 +30,9 @@ QUERIES = {
 class _FakeEmbedder:
     def embed_query(self, query: str) -> list[float]:
         return QUERIES[query]
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0, 0.0] for _ in texts]
 
 
 def _store(with_vectors: bool = True, missing: tuple[str, ...] = ()) -> HybridVectorStore:
@@ -90,3 +94,21 @@ def test_reindex_replaces_the_previous_index():
     store.index_documents(DOCS[:1])
     assert store.conn is not old_conn
     assert [d.title for d, _ in store.search_fts("cache")] == []
+
+
+def test_standalone_store_embeds_missing_documents(monkeypatch, tmp_path):
+    monkeypatch.setattr(hybrid_module, "EMBEDDING_REQUEST_INTERVAL", 0.0)
+    monkeypatch.setattr(hybrid_module, "EMBEDDING_CACHE_PATH", tmp_path / "cache.json")
+    store = roadmap_store()
+    fake = _FakeEmbedder()
+    store._get_embedder = lambda: fake
+    store.index_documents(DOCS)
+    assert len(store._vectors) == 0
+    assert store.vectors_pending == len(DOCS)
+    embedded = store.embed_missing_documents()
+    assert embedded == len(DOCS)
+    assert len(store._vectors) == len(DOCS)
+    assert store.vectors_pending == 0
+    for doc in DOCS:
+        assert doc.id in store._vectors
+

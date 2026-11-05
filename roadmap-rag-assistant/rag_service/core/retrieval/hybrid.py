@@ -193,7 +193,18 @@ class HybridVectorStore:
         self._embedder = None
         self._docs_map: dict[str, Any] = {}
         self._vectors: dict[str, List[float]] = {}
+        self._generation: int = 0
         self.conn = self._connect()
+
+    @property
+    def generation(self) -> int:
+        return self._generation
+
+    @property
+    def vectors_pending(self) -> int:
+        if self._get_embedder() is None:
+            return 0
+        return sum(1 for doc_id in self._docs_map if doc_id not in self._vectors)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, check_same_thread=False)
@@ -229,12 +240,8 @@ class HybridVectorStore:
                 print(f"[VectorStore] Embeddings init warning: {exc}")
         return self._embedder
 
-    def index_documents(self, docs: List[Any]) -> None:
-        """Index a batch of Anys into FTS5 and vector store.
-
-        Builds a fresh index and swaps it in at the end, so searches running while a
-        background re-sync is in progress keep using the previous, complete index.
-        """
+    def index_documents(self, docs: List[Any]) -> int:
+        """Phase 1: Build FTS5 and _docs_map, and swap them immediately."""
         conn = self._connect() if self._db_path == ":memory:" else self.conn
         docs_map: dict[str, Any] = {}
         vectors: dict[str, List[float]] = {}
@@ -249,29 +256,72 @@ class HybridVectorStore:
                     (d.id, *(getattr(d, f) or "" for f in self._fields)),
                 )
 
+        cache = _load_embedding_cache()
+        for d in docs:
+            key = _embedding_key(d.searchable_text)
+            if key in cache:
+                vectors[d.id] = cache[key]
+
+        self._generation += 1
+        self.conn, self._docs_map, self._vectors = conn, docs_map, vectors
+        return self._generation
+
+    def embed_missing_documents(self, generation: Optional[int] = None) -> int:
+        """Phase 2: Embed documents whose vectors are missing from cache."""
         embedder = self._get_embedder()
-        if embedder is not None:
-            cache = _load_embedding_cache()
-            keys = [_embedding_key(d.searchable_text) for d in docs]
-            missing = [i for i, k in enumerate(keys) if k not in cache]
-            try:
-                # Only embed texts not yet cached. Free tier allows ~100 embed requests/min,
-                # so pace requests and save progress; the next start continues where this stopped.
-                for n, i in enumerate(missing, start=1):
-                    vec = _embed_with_quota_retry(embedder, docs[i].searchable_text[:1000])
-                    cache[keys[i]] = vec
+        if embedder is None:
+            return 0
+
+        if generation is not None and self._generation != generation:
+            return 0
+
+        cache = _load_embedding_cache()
+
+        for doc_id, doc in list(self._docs_map.items()):
+            if doc_id not in self._vectors:
+                key = _embedding_key(doc.searchable_text)
+                if key in cache:
+                    if generation is None or self._generation == generation:
+                        cur_doc = self._docs_map.get(doc_id)
+                        if cur_doc is not None and _embedding_key(cur_doc.searchable_text) == key:
+                            self._vectors[doc_id] = cache[key]
+
+        missing: list[tuple[str, str, str]] = []
+        for doc_id, doc in list(self._docs_map.items()):
+            if doc_id not in self._vectors:
+                key = _embedding_key(doc.searchable_text)
+                missing.append((doc_id, key, doc.searchable_text[:1000]))
+
+        if not missing:
+            return 0
+
+        embedded_count = 0
+        try:
+            for n, (doc_id, key, text) in enumerate(missing, start=1):
+                if generation is not None and self._generation != generation:
+                    break
+
+                if key in cache:
+                    vec = cache[key]
+                else:
+                    vec = _embed_with_quota_retry(embedder, text)
+                    cache[key] = vec
                     if n % 20 == 0:
                         _save_embedding_cache(cache)
-                    time.sleep(EMBEDDING_REQUEST_INTERVAL)
-                _save_embedding_cache(cache)
-            except Exception as exc:
-                _save_embedding_cache(cache)
-                print(f"[VectorStore] Vector embedding generation warning ({exc}). Partial vectors kept; rest uses FTS5.")
-            for d, k in zip(docs, keys):
-                if k in cache:
-                    vectors[d.id] = cache[k]
+                    if n < len(missing):
+                        time.sleep(EMBEDDING_REQUEST_INTERVAL)
 
-        self.conn, self._docs_map, self._vectors = conn, docs_map, vectors
+                if generation is None or self._generation == generation:
+                    cur_doc = self._docs_map.get(doc_id)
+                    if cur_doc is not None and _embedding_key(cur_doc.searchable_text) == key:
+                        self._vectors[doc_id] = vec
+                        embedded_count += 1
+            _save_embedding_cache(cache)
+        except Exception:
+            _save_embedding_cache(cache)
+            raise
+
+        return embedded_count
 
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """Search via SQLite FTS5 BM25 ranking."""

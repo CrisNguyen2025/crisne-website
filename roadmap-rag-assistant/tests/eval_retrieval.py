@@ -67,6 +67,8 @@ async def build_store(fts_only: bool) -> HybridVectorStore:
     if fts_only:
         store._get_embedder = lambda: None  # type: ignore[method-assign]
     store.index_documents(docs)
+    if not fts_only:
+        store.embed_missing_documents()
     print(f"Indexed {len(docs)} docs from {DEV_DB.name} ({len(store._vectors)} with vectors)")
     return store
 
