@@ -247,11 +247,14 @@ async def plan(req: PlanRequest):
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Health check endpoint."""
+    from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
     return HealthResponse(
         status="ok",
         adapter_mode=settings.rag_adapter_mode,
         llm_model=settings.llm_model,
         tools_count=len(ALL_TOOLS),
+        index=rag_engine.index_status(),
     )
 
 
