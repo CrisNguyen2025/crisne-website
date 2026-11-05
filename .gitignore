@@ -90,3 +90,4 @@ tests/load/results/*.log
 .playwright-mcp/
 
 lesson-status-backup-*.json
+seed-import-backup-*.json
