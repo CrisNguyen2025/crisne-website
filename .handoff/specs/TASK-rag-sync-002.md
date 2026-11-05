@@ -6,7 +6,7 @@ priority: "P1"
 status: "COMPLETED"
 assigned_executor: "antigravity"
 max_attempts: 3
-current_attempt: 1
+current_attempt: 2
 
 boundaries:
   allowed_to_modify:
@@ -19,6 +19,9 @@ boundaries:
     - "roadmap-rag-assistant/tests/test_engine_sync_wait.py"
     - "roadmap-rag-assistant/tests/test_index_freshness.py"
     - "tests/manual/rag-index-sync.md"
+    - "roadmap-rag-assistant/evals/target.py"
+    - "roadmap-rag-assistant/tests/eval_retrieval.py"
+    - "roadmap-rag-assistant/tests/test_vector_store.py"
     - ".handoff/specs/TASK-rag-sync-002.md"
   read_only_references:
     - ".handoff/specs/TASK-rag-sync-001.md"
@@ -69,11 +72,11 @@ verification_gate:
 - [x] **Step 4 (Manual)**: thêm vào `tests/manual/rag-index-sync.md` một case: khởi động lại RAG service với cache trống, gọi `/health` ngay (thấy `documents` > 0, `vectors_pending` > 0), hỏi Abot một câu có từ khoá trong tên bài (phải trả lời được), rồi chờ đến khi `vectors_pending` = 0.
 
 ## 4. Verification Gate Results
-- [x] `Test` (pytest): PASS 972 passed, 3 failed in 10.34s. 3 tests fail từ trước do môi trường `prisma/dev.db` (thiếu cột `i.roadmapId`), không có regression. Toàn bộ 23 unit tests về sync/health/freshness/fts-first đều PASS (5 tests mới trong `test_index_fts_first.py`).
+- [x] `Test` (pytest): PASS 973 passed, 3 failed in 10.09s. 3 tests fail từ trước do môi trường `prisma/dev.db` (thiếu cột `i.roadmapId`), không có regression. Toàn bộ 24 unit tests về sync/health/freshness/fts-first/standalone-store đều PASS (5 tests trong `test_index_fts_first.py`, 8 tests trong `test_vector_store.py`).
 - [x] `Boundary Check`: PASS, chỉ sửa và tạo các file nằm trong `allowed_to_modify`.
 
 ## 5. Execution Audit Log
-- **Git Commit Hash**: `e7dc4b60528838a1d75972054b9cf47b39f783f2`
+- **Git Commit Hash**: `b6947bfa01d8abb3c29334e6b43004f37784039d` (review fixes) / `e7dc4b60528838a1d75972054b9cf47b39f783f2` (initial implementation)
 - **Modified Files**:
   - `roadmap-rag-assistant/rag_service/api/schemas.py`
   - `roadmap-rag-assistant/rag_service/core/retrieval/hybrid.py`
@@ -81,4 +84,19 @@ verification_gate:
   - `roadmap-rag-assistant/tests/test_health_index.py`
   - `roadmap-rag-assistant/tests/test_index_fts_first.py`
   - `tests/manual/rag-index-sync.md`
+  - `roadmap-rag-assistant/evals/target.py`
+  - `roadmap-rag-assistant/tests/eval_retrieval.py`
+  - `roadmap-rag-assistant/tests/test_vector_store.py`
   - `.handoff/specs/TASK-rag-sync-002.md`
+
+## 6. Review notes (Claude, 2026-11-05, commit `e7dc4b6`) — CHANGES REQUESTED
+Đạt: pha 1 thay FTS, `_docs_map` và vector có sẵn trong cache cùng lúc. Vector chỉ được ghi khi **cả** generation **lẫn** `_embedding_key` của tài liệu hiện tại khớp, nên an toàn cả khi chạy song song giữa các thread. Một tiến trình embed tại một thời điểm, có vòng lặp khi generation đổi. `vectors_pending` có trong `/health`. Boundary đúng. pytest 972 pass, 3 fail là ba test đã biết phụ thuộc `dev.db`.
+
+Cần sửa (2 việc):
+1. **Những nơi khác gọi `index_documents` giờ không còn vector.** Trước đây `index_documents` embed luôn. Hai chỗ dưới đây dùng store độc lập (không qua engine), nên nay chỉ có FTS. Eval vì thế đo sai mà **không báo lỗi gì**, nhất là trên CI, nơi cache trống:
+   - `evals/target.py:131` (`_get_store`, chế độ `vector` / `hybrid`, chạy bởi `yarn eval:rag` trên CI)
+   - `tests/eval_retrieval.py:69`
+   **Sửa:** sau `index_documents(...)`, ở hai chỗ này gọi `store.embed_missing_documents()` khi chế độ cần vector. Kiểm cả `tests/test_vector_store.py` (đang gọi `index_documents`): nếu test nào ở đó cần vector thì cũng gọi `embed_missing_documents()`. Thêm một test: store độc lập có embedder giả, sau `index_documents` rồi `embed_missing_documents`, thì mọi tài liệu đều có vector.
+2. **Bỏ alias `embed_pending = embed_missing_documents`** trong `hybrid.py`: không ai dùng, chỉ tạo hai tên cho cùng một việc.
+
+Chạy lại gate, commit `fix: embed vectors for standalone stores after FTS-first indexing (TASK-rag-sync-002)`, điền mục 4 và 5, đặt `status: COMPLETED`, `current_attempt: 2`.
