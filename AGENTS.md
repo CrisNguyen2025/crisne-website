@@ -68,7 +68,9 @@ Global Codex rules and skills are vendored in this repository so they can be use
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **crisne-website** (13626 symbols, 21653 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **crisne-website** (12,095 nodes, 26,035 edges, 591 execution flows at `bc7e5c9`). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> **Setup (máy Owner, 2026-11-05):** `gitnexus@1.6.12` cài global dưới Node 22 của nvm (gói cần Node ≥ 22.18; dự án vẫn chạy Node 20). MCP `gitnexus` đăng ký ở scope local của Claude Code, chạy bằng binary Node 22, có hiệu lực từ phiên mới. CLI: `PATH=~/.nvm/versions/node/v22.22.2/bin:$PATH gitnexus <lệnh>`. Index nằm ở `.gitnexus/` (đã gitignore); chạy lại `gitnexus analyze --skip-agents-md` khi index cũ (cờ này để GitNexus không ghi đè CLAUDE.md và đoạn này). Giấy phép của GitNexus là PolyForm Noncommercial.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -100,12 +102,12 @@ This project is indexed by GitNexus as **crisne-website** (13626 symbols, 21653 
 
 | Task | Read this skill file |
 |------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Understand architecture / "How does X work?" | `.agents/skills/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.agents/skills/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.agents/skills/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.agents/skills/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.agents/skills/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.agents/skills/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
 
