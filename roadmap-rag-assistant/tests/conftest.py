@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 import sqlite3
+import time
 from unittest.mock import AsyncMock
 
 import pytest
@@ -16,44 +18,49 @@ from rag_service.tools import init_adapter
 
 TEST_INTERNAL_KEY = "test-internal-key"
 SCHEMA_SQL_PATH = Path(__file__).resolve().parent / "fixtures" / "schema.sql"
+DOCUMENTS_JSONL_PATH = Path(__file__).resolve().parent.parent / "evals" / "corpus" / "public" / "roadmap" / "documents.jsonl"
 
 
 @pytest.fixture(scope="session")
 def session_test_db(tmp_path_factory) -> Path:
-    """Session-scoped SQLite database initialized from schema.sql with small sample fixture data."""
+    """Session-scoped SQLite database initialized from schema.sql and populated from documents.jsonl."""
     db_file = tmp_path_factory.mktemp("db") / "test.db"
+    now_ms = int(time.time() * 1000)
     with sqlite3.connect(db_file) as conn:
         conn.executescript(SCHEMA_SQL_PATH.read_text(encoding="utf-8"))
-        conn.execute(
-            """INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("topic-ai-1", "ai-architecture", "AI & LLM Architecture", "Comprehensive blueprint for LLM applications", "Layers", 1, 0),
-        )
-        conn.execute(
-            """INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("topic-fe-1", "frontend", "Frontend Architecture", "Modern frontend engineering", "Layers", 2, 0),
-        )
-        conn.execute(
-            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("item-1", "topic-ai-1", "Core", "Transformer Architecture", "Attention is all you need", "Transformer details", 1, "known"),
-        )
-        conn.execute(
-            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("item-2", "topic-ai-1", "Core", "RAG Systems", "Retrieval augmented generation", "RAG details", 2, "learning"),
-        )
-        conn.execute(
-            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("item-3", "topic-ai-1", "Advanced", "Semantic Caching", "Cache LLM responses", "Cache details", 3, "target"),
-        )
-        conn.execute(
-            """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)""",
-            ("item-4", "topic-fe-1", "Components", "React Server Components", "Server components in Next.js", "RSC details", 1, "known"),
-        )
+        if DOCUMENTS_JSONL_PATH.exists():
+            docs = [json.loads(line) for line in DOCUMENTS_JSONL_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+            topic_map: dict[str, str] = {}
+            topic_order = 1
+            for doc in docs:
+                if doc.get("doc_type") == "topic":
+                    topic_id = doc.get("source_id") or doc["doc_id"]
+                    slug = doc.get("metadata", {}).get("topic") or doc["doc_id"]
+                    title = doc["title"]
+                    desc = doc["sections"][0]["text"] if doc.get("sections") else ""
+                    conn.execute(
+                        """INSERT INTO Roadmap (id, slug, title, description, icon, "order", isLocked, createdAt, updatedAt)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (topic_id, slug, title, desc, "Layers", topic_order, 0, now_ms, now_ms),
+                    )
+                    topic_map[slug] = topic_id
+                    topic_order += 1
+
+            item_order = 1
+            for doc in docs:
+                if doc.get("doc_type") == "item":
+                    item_id = doc.get("source_id") or doc["doc_id"]
+                    topic_slug = doc.get("metadata", {}).get("topic", "")
+                    topic_id = topic_map.get(topic_slug)
+                    section = doc.get("metadata", {}).get("section")
+                    title = doc["title"]
+                    text = doc["sections"][0]["text"] if doc.get("sections") else ""
+                    conn.execute(
+                        """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (item_id, topic_id, section, title, text, text, item_order, "known", now_ms, now_ms, now_ms),
+                    )
+                    item_order += 1
         conn.commit()
     return db_file
 
@@ -64,6 +71,13 @@ def isolated_test_db(session_test_db, monkeypatch):
     monkeypatch.setattr(settings, "sqlite_db_path", str(session_test_db))
     monkeypatch.setattr("evals.corpus_export.DEV_DB", session_test_db)
     monkeypatch.setattr("evals.target.DEV_DB", session_test_db)
+    try:
+        import evals.router.holdout as holdout
+
+        monkeypatch.setattr(holdout, "_CATALOG", None)
+        monkeypatch.setattr(holdout, "_SCOPE", None)
+    except (ImportError, AttributeError):
+        pass
 
 
 @pytest.fixture(autouse=True)

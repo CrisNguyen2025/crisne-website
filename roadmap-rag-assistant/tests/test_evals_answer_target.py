@@ -61,10 +61,10 @@ def test_behavior_mapping(reply, steps, expected):
 
 
 def test_citations_map_every_listed_source_to_corpus_section_ids():
-    from evals.corpus_export import CORPUS_DIR, DEV_DB
+    from evals.corpus_export import DEV_DB
 
-    if not (CORPUS_DIR / "documents.jsonl").exists() and not DEV_DB.exists():
-        pytest.skip("Corpus source is not available: documents.jsonl or dev.db required")
+    if not DEV_DB.exists():
+        pytest.skip("prisma/dev.db is missing: the corpus source is not available (restore it from backup)")
     target = RoadmapTarget(mode="fts")
     documents = target._load()[1]
     doc = documents[0]

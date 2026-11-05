@@ -115,29 +115,11 @@ class RoadmapTarget:
 
     def _load(self) -> tuple[list[KnowledgeDocument], list[dict]]:
         if self._knowledge is None:
-            existing, meta = read_existing()
-            if existing:
-                self._documents = existing
-                self._knowledge = [
-                    KnowledgeDocument(
-                        id=d.get("source_id") or d["doc_id"],
-                        doc_type=d.get("doc_type", "item"),
-                        title=d.get("title", ""),
-                        topic_slug=d.get("metadata", {}).get("topic", ""),
-                        topic_title=d.get("title", "") if d.get("doc_type") == "topic" else "",
-                        section=d.get("metadata", {}).get("section"),
-                        description=d["sections"][0]["text"] if d.get("sections") else "",
-                        content_text=d["sections"][0]["text"] if d.get("sections") else "",
-                        searchable_text=f"{d.get('title', '')}\n{d['sections'][0]['text'] if d.get('sections') else ''}",
-                    )
-                    for d in existing
-                ]
-            elif DEV_DB.exists():
-                self._knowledge = load_knowledge()
-                # Same conversion as the export, reusing its doc_ids, so hits and fingerprint match the corpus
-                self._documents = build_documents(self._knowledge, read_existing()[0])
-            else:
-                raise RuntimeError(f"{DEV_DB} is missing and no static corpus found: restore the corpus source before running evals")
+            if not DEV_DB.exists():
+                raise RuntimeError(f"{DEV_DB} is missing: restore the corpus source (see the backup) before running evals")
+            self._knowledge = load_knowledge()
+            # Same conversion as the export, reusing its doc_ids, so hits and fingerprint match the corpus
+            self._documents = build_documents(self._knowledge, read_existing()[0])
         return self._knowledge, self._documents
 
     def _get_store(self) -> HybridVectorStore:
@@ -217,14 +199,11 @@ class RoadmapTarget:
             from rag_service.agent import build_agent
             from rag_service.tools import init_adapter
 
-            from rag_service.config import settings
-
             # Same knowledge as the corpus, and no Next.js needed. Never create the file: sqlite would
             # otherwise make an empty database that looks like real data.
-            db_path = DEV_DB if DEV_DB.exists() else Path(settings.sqlite_db_path)
-            if not db_path.exists():
-                raise RuntimeError(f"{db_path} is missing: restore the corpus source before running answer evals")
-            init_adapter(SqliteAdapter(str(db_path)))
+            if not DEV_DB.exists():
+                raise RuntimeError(f"{DEV_DB} is missing: restore the corpus source before running answer evals")
+            init_adapter(SqliteAdapter(str(DEV_DB)))
             agent = build_agent()
             if agent.llm is None:
                 raise RuntimeError("answer=llm needs LLM_PROVIDER and its API key in roadmap-rag-assistant/.env")
