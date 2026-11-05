@@ -46,6 +46,16 @@ class ChatResponse(BaseModel):
     )
 
 
+class IndexHealthInfo(BaseModel):
+    """Index freshness and state in GET /health."""
+
+    synced: bool
+    current: bool
+    documents: int
+    age_seconds: Optional[float] = None
+    last_error: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     """GET /health response body."""
 
@@ -53,6 +63,7 @@ class HealthResponse(BaseModel):
     adapter_mode: str
     llm_model: str
     tools_count: int
+    index: IndexHealthInfo
 
 
 class ActionConfirmRequest(BaseModel):

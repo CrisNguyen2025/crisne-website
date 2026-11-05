@@ -58,6 +58,7 @@ class HybridRagEngine:
         self._vector_store = roadmap_store()
         self._is_synced = False
         self._synced_at = 0.0
+        self._last_error: Optional[str] = None
         # Bumped by request_reindex; the index is current once _indexed_generation catches up
         self._change_generation = 0
         self._indexed_generation = 0
@@ -77,11 +78,13 @@ class HybridRagEngine:
                 # Embedding new docs is paced with time.sleep: keep it off the event loop
                 await asyncio.to_thread(self._vector_store.index_documents, docs)
             except Exception as exc:
+                self._last_error = type(exc).__name__
                 print(f"[HybridRagEngine] Error syncing live database, keeping the previous index: {exc}")
                 return 0
             self._is_synced = True
             self._synced_at = time.monotonic()
             self._indexed_generation = generation
+            self._last_error = None
             print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
             return len(docs)
 
@@ -92,6 +95,20 @@ class HybridRagEngine:
 
     def is_current(self) -> bool:
         return self._is_synced and self._indexed_generation >= self._change_generation
+
+    def index_status(self) -> dict:
+        """Freshness and metrics for GET /health."""
+        return {
+            "synced": self._is_synced,
+            "current": self.is_current(),
+            "documents": len(getattr(self._vector_store, "_docs_map", {})),
+            "age_seconds": (
+                round(max(0.0, time.monotonic() - self._synced_at), 2)
+                if self._is_synced and self._synced_at > 0
+                else None
+            ),
+            "last_error": self._last_error,
+        }
 
     def is_empty(self) -> bool:
         """The roadmap was read and holds nothing. False while the first index is still unknown."""

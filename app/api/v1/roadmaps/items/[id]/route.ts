@@ -62,7 +62,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const updated = await prisma.roadmapItem.update({ where: { id }, data });
 
-    notifyRoadmapChanged();
+    const hasIndexedChanges =
+      data.title !== undefined ||
+      data.description !== undefined ||
+      data.section !== undefined;
+
+    if (hasIndexedChanges) {
+      notifyRoadmapChanged();
+    }
     return NextResponse.json({ item: updated });
   } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/items/[id]] Error:', error);
