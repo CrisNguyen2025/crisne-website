@@ -79,7 +79,7 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 ## 6. Sửa bài qua chat
 
-Bắt đầu với "chuyển bài X sang mục Y" và "đổi tên bài X thành Y". Dùng chung cách của mục 1: handler theo mẫu câu, `resolve_lesson` để lấy id, preview rồi chờ `ok`, sau đó gọi `update_item()` có sẵn. Sửa nội dung bài vẫn để làm trên trang.
+Bắt đầu với "chuyển bài X sang mục Y" và "đổi tên bài X thành Y". Dùng chung cách của mục 1: handler theo mẫu câu, `resolve_lesson` để lấy id, preview rồi chờ `ok`, sau đó gọi `update_item()` có sẵn. Sửa nội dung bài vẫn để làm trên trang. (Cập nhật 2026-11-05: Owner chọn để Abot viết nháp nội dung cho một bài có sẵn, xem trước rồi "ok" mới nối vào cuối bài: `rag_service/domains/roadmap/lesson_content.py`.)
 
 ## 7. Ghi memory vào trace
 

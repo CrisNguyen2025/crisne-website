@@ -42,7 +42,7 @@ from rag_service.domains.roadmap.router.write_gate import (
 from rag_service.execution.changes import ChangeSet
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.state import AnaphoraResolver, session_store
-from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section
+from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section, update_item_content
 from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
 from rag_service.write_grant import write_granted
 
@@ -91,6 +91,35 @@ class RoadmapCommands:
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
+        # A previewed lesson body (lesson_content.py): "ok" adds it to the end of the lesson
+        if draft := session_ctx.fresh_pending("pending_content_draft"):
+            session_ctx.pending_content_draft = None
+            if lower in CONFIRM_WORDS:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                else:
+                    args = {"topic": draft["topic"], "item_id": draft["item_id"], "html": draft["html"]}
+                    yield {"type": "tool_start", "name": "update_item_content",
+                           "args": {"topic": draft["topic"], "item_id": draft["item_id"], "confirmed": True}}
+                    try:
+                        with write_granted("confirmed lesson content draft"):
+                            res_msg = await update_item_content.coroutine(**args)
+                        ok = res_msg.startswith("✅")
+                    except Exception as exc:
+                        ok, res_msg = False, f"❌ Lỗi khi ghi nội dung bài: {exc}"
+                    yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
+                    async for ev in self._stream_text(res_msg, delay):
+                        yield ev
+                outcome["handled"] = True
+                return
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã bỏ bản nháp, bài học không thay đổi.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else drops the draft
+            return
         # A previewed section rename (sections.py): same words, its own pending field
         if rename := session_ctx.fresh_pending("pending_section_rename"):
             session_ctx.pending_section_rename = None

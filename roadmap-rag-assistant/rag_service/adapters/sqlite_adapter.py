@@ -257,6 +257,18 @@ class SqliteAdapter:
             return dict(await cursor.fetchone())
 
     @owner_only
+    async def update_item_content(self, item_id: str, content: str) -> dict:
+        async with self._connect() as db:
+            cursor = await db.execute(
+                "UPDATE RoadmapItem SET content = ?, updatedAt = ? WHERE id = ?", (content, _now_iso(), item_id)
+            )
+            if cursor.rowcount == 0:
+                raise ValueError(f"Lesson '{item_id}' not found")
+            await db.commit()
+            cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
+            return dict(await cursor.fetchone())
+
+    @owner_only
     async def delete_item(self, item_id: str) -> bool:
         async with self._connect() as db:
             cursor = await db.execute("DELETE FROM RoadmapItem WHERE id = ?", (item_id,))

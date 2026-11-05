@@ -56,6 +56,10 @@ class BaseAdapter(Protocol):
         """Update title, description or section. A section moves the lesson; blank takes it out."""
         ...
 
+    async def update_item_content(self, item_id: str, content: str) -> dict:
+        """Replace a lesson's rich-text body (HTML)."""
+        ...
+
     async def delete_item(self, item_id: str) -> bool:
         """Delete a lesson by ID. True on success."""
         ...

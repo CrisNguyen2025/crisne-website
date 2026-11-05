@@ -27,6 +27,8 @@ from rag_service.core.orchestration.llm_answer import answer_with_llm
 from rag_service.core.orchestration.sources import SourceDeps, answer_from_sources, llm_fallback_reason, stream_words
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
+from rag_service.domains.roadmap.lesson_content import LessonContentCommands
+from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
@@ -109,7 +111,7 @@ async def _plan_queries(llm, query: str, session_id: str):
     return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm)
 
 
-class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands):
+class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonContentCommands):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
     def __init__(
@@ -126,6 +128,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands)
 
     def _llm_fallback_reason(self, failed: bool | str) -> Optional[str]:
         return llm_fallback_reason(self.llm, failed)
+
+    async def _page_topic_title(self, page_context) -> str:
+        """The title of the topic the open page shows, or "" when there is none or it cannot be read."""
+        slug = ((page_context or {}).get("roadmapSlug") or "").strip()
+        if not slug:
+            return ""
+        found = await resolve_topic(slug)
+        return (found.title or "") if found.status == "found" else ""
 
     async def _stream_text(self, text: str, delay: float) -> AsyncGenerator[dict, None]:
         async for ev in stream_words(text, delay):
@@ -281,6 +291,14 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands)
         if outcome["handled"]:
             return
 
+        # ── 1c. A drafted body for a lesson: preview, "ok" adds it (roadmap domain: lesson_content.py) ──
+        async for ev in self.handle_lesson_content(
+            content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
         # ── 2b. Bulk import of a pasted list (roadmap domain: rag_service/domains/roadmap/commands.py) ──
         if self.bulk_import_applies(raw_content, lower, page_context):
             async for ev in self.handle_bulk_import(raw_content=raw_content, lower=lower, page_context=page_context, delay=delay):
@@ -368,7 +386,8 @@ class NextGenRoadmapAgent(RoadmapAgentActions, RoadmapCommands, SectionCommands)
             if (trace := current_trace()) is not None and route_gate.denied:
                 trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
             if route_gate.reason == CONTENT_UNCLEAR:
-                reply = content_unclear_reply(session_ctx.active_topic_title or "")
+                # The page the user is on names the topic before the thread's last one (trace 860725dc…)
+                reply = content_unclear_reply(await self._page_topic_title(page_context) or session_ctx.active_topic_title or "")
             elif route_gate.reason == DESCRIPTION_UNSUPPORTED:
                 reply = DESCRIPTION_UNSUPPORTED_REPLY
             else:

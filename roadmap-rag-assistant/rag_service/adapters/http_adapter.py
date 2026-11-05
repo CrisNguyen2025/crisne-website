@@ -116,6 +116,11 @@ class HttpApiAdapter:
         data = await self._request("PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload)
         return data.get("item", data)
 
+    async def update_item_content(self, item_id: str, content: str) -> dict:
+        """PATCH /api/v1/roadmaps/items/{id}/content"""
+        data = await self._request("PATCH", f"/api/v1/roadmaps/items/{item_id}/content", json={"content": content})
+        return data.get("item", data)
+
     async def delete_item(self, item_id: str) -> bool:
         """DELETE /api/v1/roadmaps/items/{id}"""
         await self._request("DELETE", f"/api/v1/roadmaps/items/{item_id}")

@@ -19,6 +19,7 @@ export function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()
+    .replace(/đ/g, "d") // NFD does not split "đ", so the accent strip below dropped it ("mặc định" → "mac-inh")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // remove accents
     .replace(/[^\w\s-]/g, "") // remove invalid chars

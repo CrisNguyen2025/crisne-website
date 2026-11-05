@@ -25,6 +25,7 @@ from rag_service.tools.item_tools import (
     import_items_from_text,
     rename_section,
     update_item,
+    update_item_content,
 )
 
 ALL_TOOLS = [
@@ -38,6 +39,7 @@ ALL_TOOLS = [
     create_items_batch,
     import_items_from_text,
     update_item,
+    update_item_content,
     rename_section,
     delete_item,
 ]

@@ -5,6 +5,7 @@ A lesson belongs to a topic and may name a section (mục) of it. Tools:
   - create_items_batch : Add several lessons at once
   - import_items_from_text: Add the lessons of a pasted list
   - update_item        : Change a lesson's title, description or section
+  - update_item_content: Add a drafted body to the end of a lesson's content
   - rename_section     : Rename a section of a topic
   - delete_item        : Delete a lesson by ID
 """
@@ -81,6 +82,14 @@ class RenameSectionInput(BaseModel):
     topic: str = Field(description="Topic có mục cần đổi tên: slug hoặc tên topic")
     from_name: str = Field(description="Tên mục hiện tại")
     to_name: str = Field(description="Tên mục mới; trùng mục có sẵn thì hai mục được gộp")
+
+
+class UpdateItemContentInput(BaseModel):
+    """Input for adding a body to a lesson."""
+
+    topic: str = Field(description="Slug của topic chứa bài")
+    item_id: str = Field(description="ID của bài")
+    html: str = Field(description="Nội dung (HTML) thêm vào cuối bài")
 
 
 class DeleteItemInput(BaseModel):
@@ -239,6 +248,25 @@ async def rename_section(topic: str, from_name: str, to_name: str) -> str:
     except ValueError as exc:
         return f"⚠️ {exc}"
     return f"✅ Đã đổi tên mục '{from_name}' thành '{result.get('section') or to_name}' ({result.get('renamed', 0)} bài)"
+
+
+@tool(args_schema=UpdateItemContentInput)
+async def update_item_content(topic: str, item_id: str, html: str) -> str:
+    """Thêm nội dung vào cuối một bài học; nội dung đang có được giữ nguyên.
+
+    Chỉ chạy sau khi Owner xác nhận bản nháp (lesson_content.py).
+    """
+    from rag_service.tools import get_adapter
+
+    adapter = get_adapter()
+    detail = await adapter.get_topic(topic) or {}
+    lesson = next((i for i in detail.get("items") or [] if i.get("id") == item_id), None)
+    if lesson is None:
+        return f"❌ Không tìm thấy bài này trong topic '{topic}' nên mình chưa ghi gì."
+    # Read at confirm time, so an edit made on the page while the preview waited is kept
+    existing = (lesson.get("content") or "").strip()
+    await adapter.update_item_content(item_id, f"{existing}\n{html}" if existing else html)
+    return f"✅ Đã thêm nội dung vào bài '{lesson.get('title') or item_id}'"
 
 
 @tool(args_schema=DeleteItemInput)
