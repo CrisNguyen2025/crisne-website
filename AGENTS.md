@@ -17,6 +17,13 @@ Global Codex rules and skills are vendored in this repository so they can be use
 - Trước khi test thủ công hay chạy Playwright cho một tính năng: đọc `tests/manual/README.md` và kịch bản liên quan. Case `Pass` mà code liên quan chưa đổi kể từ commit của lần chạy thì không chạy lại.
 - Sau mỗi lần chạy: ghi kết quả vào kịch bản (ngày, commit, môi trường), theo quy ước trong `tests/manual/README.md`.
 
+## 🚧 Work in progress (đọc trước khi bắt đầu)
+
+- **Lesson Status (ADR-0010)** đang làm dở trên branch `feat/lesson-status`, chưa merge. Tiếp tục trên branch đó, theo checklist trong `.handoff/specs/TASK-lesson-status-001.md`.
+- **Không merge `feat/lesson-status` vào `main`** trước khi Turso có cột `status` và `statusUpdatedAt`. Owner phải tự chạy `yarn db:lesson-status --apply`; agent bị chặn ghi DB production. Merge sớm thì Prisma client mới sẽ truy vấn cột chưa có và production lỗi.
+- Việc mở ngoài task (test Android thật, vote ở portfolio chat, gợi ý cập nhật bài, quyền xem status): mục 6 của file handoff trên. Hỏi Owner trước khi làm.
+- Xong task thì xoá mục này khỏi AGENTS.md.
+
 ## 🛡️ GLOBAL SAFETY RULES
 
 - **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.

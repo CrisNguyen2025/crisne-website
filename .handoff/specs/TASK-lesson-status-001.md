@@ -75,3 +75,12 @@ verification_gate:
   - `app/api/v1/roadmaps/[slug]/route.ts`, `app/api/v1/roadmaps/full-export/route.ts`, `app/api/v1/roadmaps/items/route.ts`, `app/api/v1/roadmaps/items/[id]/route.ts`
   - `logic/roadmap/roadmapService.ts`, `hooks/use-roadmap.ts`
   - `components/roadmap/LessonStatus.tsx`, `components/roadmap/ChecklistItemRow.tsx`
+
+## 6. Việc mở ngoài task này (chỉ có trong hội thoại 2026-11-05, ghi lại để không mất)
+Không thuộc boundary của task này. Hỏi Owner trước khi làm.
+1. **Composer chat trên mobile chưa thử trên Android thật.** Commit `9520924` (trên `main`) tắt autofill strip (`autoComplete="off"`, `data-lpignore`, `data-1p-ignore`, ...) và chống nháy khi bấm Back (`useVisualViewportBox` gộp update bằng rAF). Chỉ mới kiểm bằng Playwright giả lập mobile. Cần Owner thử trên máy thật và báo trình duyệt, phiên bản Android.
+2. **Nút 👍/👎 ở chat portfolio (`FloatingChat*`) vẫn hiện.** Chat roadmap đã ẩn bằng `FEEDBACK_ENABLED = false` trong `components/roadmap/RoadmapAssistantChatbot.tsx`, vì chưa có rule Triage cho vote. Owner chưa chốt có ẩn luôn ở portfolio không.
+3. **Gợi ý cập nhật nội dung bài (bước 4 của lộ trình second brain) còn hai câu hỏi mở:** bao lâu không cập nhật thì coi là cũ; có được tìm nguồn trên web để gợi ý không. Chưa làm gì, chưa có ADR.
+4. **"Visitor không thấy Lesson Status"** là mặc định agent tự chọn khi viết ADR-0010, Owner chưa xác nhận rõ. Nếu Owner muốn công khai thì cần ADR mới (không sửa ADR-0010).
+
+Còn tồn đọng khác, đã ghi ở chỗ riêng: lỗi 2 và lỗi 8 trong `tests/manual/assistant-sections.md`; mục 5–9 trong `docs/abot-next-actions-plan.md`; hai test fail có từ trước (router stress baseline: wrong_branch 107 > 103; `test_evals_answer_target` phụ thuộc `dev.db`).
