@@ -148,6 +148,46 @@ class RoadmapCommands:
                 return
             # Anything else drops the preview, like a pending create or delete below
             return
+        # A previewed lesson status change (lesson_status.py): "ok" applies it via adapter.update_item
+        if status_change := session_ctx.fresh_pending("pending_status_change"):
+            session_ctx.pending_status_change = None
+            if lower in CONFIRM_WORDS:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                else:
+                    item_id = status_change["item_id"]
+                    item_title = status_change["item_title"]
+                    new_status = status_change["new_status"]
+                    yield {
+                        "type": "tool_start",
+                        "name": "update_item",
+                        "args": {"item_id": item_id, "status": new_status, "confirmed": True},
+                    }
+                    try:
+                        from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
+                        from rag_service.tools import get_adapter
+
+                        with write_granted("confirmed lesson status change"):
+                            res = await get_adapter().update_item(item_id, status=new_status)
+                        label = LESSON_STATUS_LABEL.get(new_status, new_status)
+                        title = res.get("title", item_title) if isinstance(res, dict) else item_title
+                        res_msg = f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
+                        ok = True
+                    except Exception as exc:
+                        ok, res_msg = False, f"❌ Lỗi khi đổi trạng thái bài: {exc}"
+                    yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
+                    async for ev in self._stream_text(res_msg, delay):
+                        yield ev
+                outcome["handled"] = True
+                return
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác đổi trạng thái theo yêu cầu của bạn.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else drops the preview, like other pending actions
+            return
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
             if lower in CONFIRM_WORDS:

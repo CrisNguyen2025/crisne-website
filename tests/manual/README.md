@@ -32,6 +32,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case chat pass; 1 lỗi nhỏ (lỗi 9) |
 | [rag-index-sync.md](rag-index-sync.md) | Đồng bộ dữ liệu roadmap ↔ index RAG, kiểm tra /health, thêm/xoá bài và Lesson Status | 2026-11-05 | Chưa chạy |
 | [seed-import.md](seed-import.md) | Nhập bài seed vào topic AI Architecture (`target`) | 2026-11-05 (local & Turso dry-run) | Local pass; dry-run Turso pass; chờ Owner apply |
+| [lesson-status.md](lesson-status.md) | Đọc và đổi Lesson Status (ADR-0010, Step 6) | Chưa chạy | Kịch bản mới |
 
 ## Cách chạy (đã kiểm chứng)
 

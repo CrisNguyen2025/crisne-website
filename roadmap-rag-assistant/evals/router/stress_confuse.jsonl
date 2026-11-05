@@ -81,3 +81,4 @@
 {"cat":"question-frame-heavy","text":"mình đang muốn tìm hiểu thêm về reranking","write":"no","want":"K","phases":{"P1_act":"statement|question","P3_target":"none|roadmap"}}
 {"cat":"question-frame-heavy","text":"tóm tắt giúp mình về chunking với","write":"no","want":"K","phases":{"P1_act":"statement|request|question","P3_target":"none|roadmap"}}
 {"cat":"question-frame-heavy","text":"cho hỏi prompt injection nghĩa là sao","write":"no","want":"K","phases":{"P1_act":"question","P3_target":"none|roadmap"}}
+{"cat":"cud-verb-in-tech-question","text":"tôi đang học RAG, giải thích chunking","write":"no","want":"K","phases":{"P1_act":"question","P3_target":"none|roadmap"}}

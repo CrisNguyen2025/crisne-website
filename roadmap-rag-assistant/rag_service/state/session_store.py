@@ -17,7 +17,12 @@ from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 # A previewed change older than this is dropped: an "ok" an hour later must not run it
 PENDING_TTL_SECONDS = 600.0
-_PENDING_FIELDS = ("pending_confirmation", "pending_section_rename", "pending_content_draft")
+_PENDING_FIELDS = (
+    "pending_confirmation",
+    "pending_section_rename",
+    "pending_content_draft",
+    "pending_status_change",
+)
 
 
 def _now() -> float:
@@ -35,6 +40,8 @@ class SessionContext(BaseModel):
     pending_section_rename: Optional[Dict[str, Any]] = None
     # A drafted lesson body waiting for "ok" (lesson_content.py)
     pending_content_draft: Optional[Dict[str, Any]] = None
+    # A previewed lesson status change waiting for "ok" (domains/roadmap/lesson_status.py)
+    pending_status_change: Optional[Dict[str, Any]] = None
     recent_created_entities: List[dict] = Field(default_factory=list)
     # When each pending field was set (time.monotonic); stamped on assignment
     pending_since: Dict[str, float] = Field(default_factory=dict)

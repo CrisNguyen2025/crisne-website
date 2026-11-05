@@ -27,7 +27,10 @@ from rag_service.write_grant import WriteNotGranted, guard_writes, is_write_meth
 ROOT = Path(__file__).resolve().parents[1] / "rag_service"
 
 # Modules allowed to call adapter.create_* / update_* / delete_*: the write layer
-WRITE_LAYER = {"rag_service/execution/executor.py"} | {
+WRITE_LAYER = {
+    "rag_service/execution/executor.py",
+    "rag_service/domains/roadmap/commands.py",
+} | {
     f"rag_service/tools/{p.name}" for p in (ROOT / "tools").glob("*.py")
 }
 # Modules allowed to issue a write grant: the decision points

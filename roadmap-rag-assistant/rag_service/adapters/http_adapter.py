@@ -8,7 +8,7 @@ from __future__ import annotations
 import httpx
 
 from rag_service.adapters.errors import DuplicateEntityError
-from rag_service.auth import require_owner
+from rag_service.auth import is_owner, require_owner
 from rag_service.write_grant import guard_writes
 
 
@@ -60,6 +60,17 @@ class HttpApiAdapter:
         roadmaps = data.get("roadmaps")
         if not isinstance(roadmaps, list):
             raise ValueError("full-export response has no 'roadmaps' list")
+        if not is_owner():
+            clean = []
+            for r in roadmaps:
+                rc = dict(r)
+                if "items" in rc and isinstance(rc["items"], list):
+                    rc["items"] = [
+                        {k: v for k, v in item.items() if k not in ("status", "statusUpdatedAt")}
+                        for item in rc["items"]
+                    ]
+                clean.append(rc)
+            return clean
         return roadmaps
 
     async def get_topic(self, slug: str) -> dict | None:
@@ -70,7 +81,10 @@ class HttpApiAdapter:
             if exc.response.status_code == 404:
                 return None
             raise
-        return {**data.get("roadmap", {}), "items": data.get("items", []), "sections": data.get("sections", [])}
+        items = data.get("items", [])
+        if not is_owner():
+            items = [{k: v for k, v in item.items() if k not in ("status", "statusUpdatedAt")} for item in items]
+        return {**data.get("roadmap", {}), "items": items, "sections": data.get("sections", [])}
 
     async def create_topic(self, title: str, description: str = "") -> dict:
         """POST /api/v1/roadmaps"""
@@ -112,7 +126,7 @@ class HttpApiAdapter:
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         """PATCH /api/v1/roadmaps/items/{id}"""
-        payload = {k: v for k, v in kwargs.items() if k in ("title", "description", "section")}
+        payload = {k: v for k, v in kwargs.items() if k in ("title", "description", "section", "status")}
         data = await self._request("PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload)
         return data.get("item", data)
 
