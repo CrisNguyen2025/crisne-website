@@ -29,7 +29,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | File | Phạm vi | Lần chạy gần nhất | Kết quả |
 |---|---|---|---|
 | [assistant-sections.md](assistant-sections.md) | Section (mục) qua Abot, ADR-0009 | 2026-11-04 @ `0734cc0` | 7 lỗi, xem file |
-| [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case ghi chưa chạy |
+| [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case chat pass; 1 lỗi nhỏ (lỗi 9) |
 
 ## Cách chạy (đã kiểm chứng)
 

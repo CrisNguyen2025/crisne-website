@@ -80,3 +80,30 @@ Classifier của môi trường chặn tạo topic test trên Turso trong lần 
 | G5 (biến thể) | Pass | "bài viết mặc định nằm ở topic nào?" → Frontend. Câu trả lời không có link `/?topic=` nào. |
 | G8 | Pass (unit test) | Xem bảng case. |
 | T1, T3, T4, T5, T7, T8, G1, G2, G3, G6, G7 | Chưa chạy | Cần Owner cho phép tạo topic test `QA Sandbox` trên Turso. |
+
+### Lần chạy bổ sung, 2026-11-05 (Turso, topic `qa-sandbox`)
+
+Owner cho phép tạo topic test trên Turso. Topic được tạo qua API (T1 không đi qua chat), các case còn lại chạy qua chat, và topic đã được xoá ở T8 (API trả 404).
+
+| Case | Kết quả | Bằng chứng |
+|---|---|---|
+| T1 | Pass (qua API, không qua chat) | `POST /api/v1/roadmaps` trả 201, slug `qa-sandbox`. |
+| T2 | Pass | 4 topic, khớp API. |
+| T3 | Pass | Preview 2 bài, `ok`, API có "Eval Set", "Golden Answers". |
+| T4 | Pass | Preview nháp, `ok`: content 8064 ký tự, có `<h2>`. Lần chạy đầu sai do lệnh sau (T5) huỷ bản nháp đang chờ, đúng thiết kế. |
+| T5 | Pass | Preview xoá, `ok`: "Golden Answers" biến mất khỏi API. |
+| T6 | Pass | Câu cố định "Không có thao tác nào đang chờ xác nhận". |
+| T7 | Pass | Bài trùng: "Đã có sẵn bài học Eval Set, không tạo thêm bản trùng", API vẫn một bài. |
+| T8 | Pass | Preview xoá topic, `ok`: "Đã xóa topic qa-sandbox và toàn bộ bài học bên trong". API 404. |
+| G1 | Pass, có một lỗi nhỏ | Mở `?topic=qa-sandbox`, gõ "thêm bài Tool Calling": bài vào đúng topic, nhưng ghi ngay không có preview, và câu trả lời có dòng "💡 Chưa có topic nào được chọn" mâu thuẫn với kết quả. Lỗi 9 (dưới). |
+| G2 | Pass, ghi ngay không preview | "thêm bài Vector DB vào topic qa-sandbox" vào đúng topic. Cùng kiểu với G1. |
+| G3 | Pass | "Không tìm thấy topic Không Tồn Tại", liệt kê topic thật, không tạo gì. |
+| G4 | Pass một phần | Như lần trước: vế thread nhớ topic khác chỉ có unit test. |
+| G5 | Pass | (lần trước) |
+| G6 | Pass | "Tôi chỉ hỗ trợ lộ trình học tập", không tạo topic nào. |
+| G7 | Pass | Nháp trên trang "Tool Calling", `hủy`: "Đã bỏ bản nháp", content vẫn 0 ký tự. |
+| G8 | Pass (unit test) | `tests/test_lesson_content.py::test_visitor_cannot_draft`. |
+
+**Lỗi 9 (mới, nhỏ):** khi đang mở topic, thêm bài vẫn có dòng "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic." trong câu trả lời dù topic đã được lấy từ trang. Ghi nhận, chưa sửa. Sửa ở `domains/roadmap/commands.py` (chỗ sinh câu này), kèm test.
+
+**Lưu ý thiết kế (G1, G2):** với một bài đơn khi đã mở topic, Abot ghi luôn, không hiện preview. Kịch bản mong đợi preview; cần chốt xem đây là hành vi mong muốn hay phải đưa về preview như các lệnh khác.
