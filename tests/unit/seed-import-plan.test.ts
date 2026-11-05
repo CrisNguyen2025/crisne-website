@@ -201,4 +201,39 @@ describe("planSeedImport", () => {
     expect(plan.toAdd[0].order).toBe(1);
     expect(plan.toAdd[108].order).toBe(109);
   });
+
+  it("stores createdAt and updatedAt as integer epoch milliseconds", () => {
+    const fixedNow = 1793892932729;
+    const planWithFixedNow = planSeedImport({
+      existingLessons: [],
+      seedLayers: sampleLayers,
+      roadmapId: "topic-1",
+      now: fixedNow,
+    });
+
+    expect(planWithFixedNow.toAdd.length).toBeGreaterThan(0);
+    for (const item of planWithFixedNow.toAdd) {
+      expect(typeof item.createdAt).toBe("number");
+      expect(typeof item.updatedAt).toBe("number");
+      expect(Number.isInteger(item.createdAt)).toBe(true);
+      expect(Number.isInteger(item.updatedAt)).toBe(true);
+      expect(item.createdAt).toBe(fixedNow);
+      expect(item.updatedAt).toBe(fixedNow);
+    }
+
+    const planDefaultNow = planSeedImport({
+      existingLessons: [],
+      seedLayers: sampleLayers,
+      roadmapId: "topic-1",
+    });
+
+    for (const item of planDefaultNow.toAdd) {
+      expect(typeof item.createdAt).toBe("number");
+      expect(typeof item.updatedAt).toBe("number");
+      expect(Number.isInteger(item.createdAt)).toBe(true);
+      expect(Number.isInteger(item.updatedAt)).toBe(true);
+      expect(item.createdAt).toBeGreaterThan(0);
+      expect(item.updatedAt).toBe(item.createdAt);
+    }
+  });
 });

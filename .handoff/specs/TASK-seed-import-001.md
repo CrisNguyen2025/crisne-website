@@ -6,7 +6,7 @@ priority: "P1"
 status: "COMPLETED"
 assigned_executor: "antigravity"
 max_attempts: 3
-current_attempt: 1
+current_attempt: 2
 
 boundaries:
   allowed_to_modify:
@@ -78,7 +78,7 @@ verification_gate:
 ## 4. Verification Gate Results
 - [x] `TypeCheck`: [PASS] `npx tsc --noEmit -p tsconfig.json` không có lỗi.
 - [x] `Lint` (file mới): [PASS] `npx eslint scripts/import-seed-lessons.ts scripts/lib/seed-import-plan.ts tests/unit/seed-import-plan.test.ts` không có warning/error.
-- [x] `Test` (vitest): [PASS] `yarn test` 82 test files passed, 989 passed, 8 skipped.
+- [x] `Test` (vitest): [PASS] `yarn test` 82 test files passed, 990 passed, 8 skipped (17/17 test mới, bao gồm test kiểm tra `createdAt` và `updatedAt` là số nguyên epoch ms).
 - [x] `Dry-run local` / `Apply local` / chạy lại: [PASS]
   - Dry-run:
     ```
@@ -138,8 +138,9 @@ verification_gate:
 - [x] `Boundary Check`: [PASS] `git status --porcelain` chỉ chứa các file được phép trong `allowed_to_modify`.
 
 ## 5. Execution Audit Log
-- **Git Commit Hash**: `45e6a72`
+- **Git Commit Hash**: `570fbfc`
 - **Cách sinh id**: Dùng UUID v7 từ package `uuid` (`v7 as uuidv7`), khớp chính xác đặc tả `@default(uuid(7))` của schema.
+- **Định dạng ngày (Attempt 2 Fix)**: `createdAt` và `updatedAt` lưu dạng số nguyên epoch milliseconds (`Date.now()`), kiểm tra bằng `Number.isInteger` trước khi ghi, và có unit test xác nhận trong `tests/unit/seed-import-plan.test.ts`.
 - **Modified Files**:
   - `scripts/import-seed-lessons.ts`
   - `scripts/lib/seed-import-plan.ts`
@@ -149,3 +150,11 @@ verification_gate:
   - `package.json`
   - `.gitignore`
   - `.handoff/specs/TASK-seed-import-001.md`
+
+## 6. Review notes (Claude, 2026-11-05, commit `ebc990a`) — CHANGES REQUESTED
+Đạt: boundary đúng; dùng lại `sectionName` + `normalizeTitle` (giống `lib/roadmap/titles.ts`); topic thiếu thì dừng; dry-run mặc định; backup; `client.batch(..., "write")` là một transaction; reindex không làm fail; unit test 16/16 pass; tsc sạch; dry-run Turso: 109 bài, 15 section, 0 bỏ qua.
+
+Cần sửa (1 việc):
+1. **Định dạng ngày.** Script ghi `createdAt` / `updatedAt` là chuỗi ISO (`new Date().toISOString()`). Mọi dòng do Prisma tạo trên SQLite/libsql lưu **số mili giây** (`typeof(createdAt) = 'integer'`, ví dụ `1790415636745`). Prisma vẫn đọc được cả hai dạng (Claude đã thử), nhưng trộn hai dạng trong cùng một cột làm `ORDER BY` / so sánh ngày trong SQL sai: SQLite xếp mọi số trước mọi chuỗi. Giai đoạn 1–2 sẽ so ngày để tìm bài cũ. **Sửa:** ghi `Date.now()` (số mili giây) cho `createdAt` và `updatedAt`. Thêm một unit test hoặc một kiểm tra trong script khoá lại việc giá trị ngày là số nguyên.
+
+Sau khi sửa: chạy lại gate (tsc, eslint file mới, vitest), dry-run Turso lại, commit `fix: store seed lesson dates as epoch ms (TASK-seed-import-001)`, điền commit vào mục 5, đặt `status: COMPLETED`, `current_attempt: 2`.

@@ -17,6 +17,8 @@ export interface PlannedLesson {
   order: number;
   status: "target";
   statusUpdatedAt: null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface SkippedLesson {
@@ -30,6 +32,7 @@ export interface SeedImportPlanInput {
   seedLayers: SeedLayer[];
   roadmapId?: string;
   generateId?: () => string;
+  now?: number;
 }
 
 export interface SeedImportPlan {
@@ -53,6 +56,7 @@ export function planSeedImport(input: SeedImportPlanInput): SeedImportPlan {
   const skipped: SkippedLesson[] = [];
   const bySection: Record<string, number> = {};
   const generateId = input.generateId ?? uuidv7;
+  const now = input.now ?? Date.now();
 
   for (const layer of input.seedLayers) {
     for (const group of layer.groups) {
@@ -86,6 +90,8 @@ export function planSeedImport(input: SeedImportPlanInput): SeedImportPlan {
           order: currentOrder,
           status: "target",
           statusUpdatedAt: null,
+          createdAt: now,
+          updatedAt: now,
         };
 
         toAdd.push(planned);

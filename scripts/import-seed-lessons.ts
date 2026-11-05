@@ -142,25 +142,31 @@ async function main(): Promise<void> {
     );
     console.log(`\nbackup: ${backupFile}`);
 
-    const now = new Date().toISOString();
-    const statements: InStatement[] = plan.toAdd.map((item) => ({
-      sql: `INSERT INTO "RoadmapItem" (
+    const statements: InStatement[] = plan.toAdd.map((item) => {
+      if (!Number.isInteger(item.createdAt) || !Number.isInteger(item.updatedAt)) {
+        throw new Error(
+          `Lesson dates must be integer epoch milliseconds. Got createdAt=${item.createdAt}, updatedAt=${item.updatedAt}`
+        );
+      }
+      return {
+        sql: `INSERT INTO "RoadmapItem" (
         "id", "roadmapId", "section", "title", "description", "content", "order", "status", "statusUpdatedAt", "createdAt", "updatedAt"
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        item.id,
-        roadmapId,
-        item.section,
-        item.title,
-        item.description,
-        item.content,
-        item.order,
-        item.status,
-        null,
-        now,
-        now,
-      ],
-    }));
+        args: [
+          item.id,
+          roadmapId,
+          item.section,
+          item.title,
+          item.description,
+          item.content,
+          item.order,
+          item.status,
+          null,
+          item.createdAt,
+          item.updatedAt,
+        ],
+      };
+    });
 
     await client.batch(statements, "write");
     console.log(`\nApplied: ${plan.toAdd.length} lessons added to ${String(topic.slug)}.`);
