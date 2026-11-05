@@ -54,6 +54,7 @@ class IndexHealthInfo(BaseModel):
     documents: int
     age_seconds: Optional[float] = None
     last_error: Optional[str] = None
+    vectors_pending: int = 0
 
 
 class HealthResponse(BaseModel):

@@ -19,10 +19,11 @@ Phạm vi: Kiểm tra cơ chế đồng bộ dữ liệu roadmap giữa Next.js 
 
 | # | Thao tác | Kết quả mong đợi | Cách kiểm tra | Trạng thái |
 |---|---|---|---|---|
-| 1 | Gọi GET `/health` của RAG service | Trả về 200 OK. Khối `index` có đầy đủ: `synced: true`, `current: true`, `documents: <int>`, `age_seconds: <float>`, `last_error: null`. | `curl -s http://localhost:8000/health \| jq .index` | Chưa chạy |
+| 1 | Gọi GET `/health` của RAG service | Trả về 200 OK. Khối `index` có đầy đủ: `synced: true`, `current: true`, `documents: <int>`, `age_seconds: <float>`, `last_error: null`, `vectors_pending: <int>`. | `curl -s http://localhost:8000/health \| jq .index` | Chưa chạy |
 | 2 | Thêm bài mới "Hybrid Search Basics" vào topic `QA Sandbox` qua UI. Mở Abot hỏi ngay: "Trong topic QA Sandbox có bài gì về Hybrid Search không?" | Abot trả lời ngay về bài "Hybrid Search Basics", trích dẫn đúng đường dẫn. Không cần chờ quá TTL 30s vì `notifyRoadmapChanged` đã trigger reindex. | Xem câu trả lời của Abot và log `[HybridRagEngine] Successfully indexed...` | Chưa chạy |
 | 3 | Xoá bài "Hybrid Search Basics" vừa tạo khỏi topic `QA Sandbox`. Mở Abot hỏi: "Trong topic QA Sandbox còn bài Hybrid Search Basics không?" | Abot trả lời bài không còn trong hệ thống, không khẳng định bài vẫn tồn tại. | Xem câu trả lời của Abot | Chưa chạy |
 | 4 | Đổi trạng thái bài học (Lesson Status: target / learning / known) trên một bài bất kỳ. Ngay sau đó gọi `/health`. | `age_seconds` trong khối `index` tiếp tục tăng đều, KHÔNG bị reset về 0 (vì PATCH chỉ đổi status thì không gọi `notifyRoadmapChanged()`). | So sánh `age_seconds` trước và sau khi PATCH status | Chưa chạy |
+| 5 | Khởi động lại RAG service với cache trống (`rm -f roadmap-rag-assistant/data/embedding_cache.json`). Gọi GET `/health` ngay, rồi hỏi Abot một câu có từ khoá trong tên bài, sau đó theo dõi đến khi `vectors_pending` về 0. | Ngay sau khi khởi động, `/health` trả về `documents` > 0 và `vectors_pending` > 0. Abot trả lời được ngay dựa trên FTS (không bị treo hay timeout). `vectors_pending` giảm dần về 0 khi tiến trình embed nền hoàn tất. | `curl -s http://localhost:8000/health \| jq .index`; chat với Abot qua UI | Chưa chạy |
 
 ---
 

@@ -61,6 +61,7 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["documents"] == 0
     assert idx["age_seconds"] is None
     assert idx["last_error"] is None
+    assert idx["vectors_pending"] == 0
 
     # 2. After sync: synced=True, current=True, documents=1, age_seconds is float >= 0, last_error=None
     await engine.sync_live_database()
@@ -74,6 +75,7 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert isinstance(idx["age_seconds"], (int, float))
     assert idx["age_seconds"] >= 0
     assert idx["last_error"] is None
+    assert idx["vectors_pending"] == 0
 
     # 3. Source fails: previous index kept, last_error holds exception type name (safe, no URLs/secrets)
     source.fail_with = httpx.ConnectError("https://user:secret@internal-db.local unreachable")
@@ -87,6 +89,7 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["current"] is False  # not current because change was requested
     assert idx["documents"] == 1
     assert idx["last_error"] == "ConnectError"
+    assert idx["vectors_pending"] == 0
     # Never leaks secrets or internal URLs
     assert "secret" not in (idx["last_error"] or "")
     assert "http" not in (idx["last_error"] or "")
