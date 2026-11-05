@@ -20,7 +20,7 @@ import uuid_utils
 
 from rag_service.adapters.errors import DuplicateEntityError, find_duplicate, normalize_title
 from rag_service.adapters.sections import resolve_section, sections_in_order
-from rag_service.auth import owner_only
+from rag_service.auth import is_owner, owner_only
 from rag_service.write_grant import guard_writes
 
 
@@ -82,7 +82,7 @@ class SqliteAdapter:
         )
         return [dict(r) for r in await cursor.fetchall()]
 
-    # ── Topics ───────────────────────────────────────────────────────────
+    # ── Topics ────────────────────────────────────────────────────────────
 
     async def list_topics(self) -> list[dict]:
         async with self._connect() as db:
@@ -127,6 +127,8 @@ class SqliteAdapter:
                 return None
             topic = dict(row)
             items = await self._items_of(db, topic["id"])
+            if not is_owner():
+                items = [{k: v for k, v in item.items() if k not in ("status", "statusUpdatedAt")} for item in items]
             topic["items"] = items
             topic["sections"] = sections_in_order(items)
             return topic
@@ -251,6 +253,13 @@ class SqliteAdapter:
                 others = [s.get("section") for s in siblings if s["id"] != item_id]
                 sets.append("section = ?")
                 args.append(resolve_section(others, kwargs["section"]))  # type: ignore[arg-type]
+            if "status" in kwargs:
+                st = str(kwargs["status"]).strip().lower()
+                if st in ("known", "learning", "target"):
+                    sets.append("status = ?")
+                    args.append(st)
+                    sets.append("statusUpdatedAt = ?")
+                    args.append(_now_iso())
             await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))
             await db.commit()
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))

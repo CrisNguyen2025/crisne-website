@@ -102,6 +102,12 @@ def owner_headers() -> dict[str, str]:
 
 
 @pytest.fixture
+def visitor_headers(owner_headers) -> dict[str, str]:
+    """Headers the Next.js proxy sends for an anonymous visitor."""
+    return {**owner_headers, "x-actor": "visitor"}
+
+
+@pytest.fixture
 def mock_adapter():
     """Create a mock adapter with all methods as AsyncMock."""
     adapter = AsyncMock()
