@@ -192,3 +192,21 @@ def test_pasted_list_under_a_delete_verb_creates_nothing(mock_adapter):
         context={"roadmapSlug": "test-topic"},
     )
     mock_adapter.create_item.assert_not_awaited()
+
+
+def test_topic_with_section_in_title_extracts_correct_section_and_topic(mock_adapter):
+    mock_adapter.list_topics.return_value = [
+        {"id": "t-sec", "slug": "qa-section-test", "title": "QA Section Test", "_count": {"items": 0}}
+    ]
+    set_actor("owner")
+    agent = NextGenRoadmapAgent(llm_model=None)
+    thread = f"sec-title-{uuid.uuid4()}"
+    preview, _ = _turn(agent, "thêm bài RAG vào mục Core của topic QA Section Test", thread)
+    assert "Core" in preview
+    reply = _turn(agent, "ok", thread)[0]
+    mock_adapter.create_item.assert_awaited_once()
+    kwargs = mock_adapter.create_item.await_args.kwargs
+    assert kwargs["topic_slug"] == "qa-section-test"
+    assert kwargs["section"] == "Core"
+    assert kwargs["title"] == "RAG"
+

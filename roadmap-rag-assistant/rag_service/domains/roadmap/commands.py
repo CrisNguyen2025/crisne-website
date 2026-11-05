@@ -39,9 +39,10 @@ from rag_service.domains.roadmap.router.write_gate import (
     WriteGate,
     gate_action,
 )
-from rag_service.execution.changes import ChangeSet
+from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.state import AnaphoraResolver, session_store
+from rag_service.tools import get_adapter
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section, update_item_content
 from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
 from rag_service.write_grant import write_granted
@@ -278,11 +279,12 @@ class RoadmapCommands:
             return await self.executor.aexecute(action, session_id=session_id, changes=changes)
 
     async def _ask_confirmation(
-        self, action: StructuredRoadmapAction, note, session_id: str, session_ctx, delay: float
+        self, action: StructuredRoadmapAction, note, session_id: str, session_ctx, delay: float,
+        snapshot: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Preview card for an action that runs only after "ok"; handle_pending executes it."""
         session_ctx.pending_confirmation = action
-        preview_text = DryRunValidator.format_preview_card(action, note=note)
+        preview_text = DryRunValidator.format_preview_card(action, note=note, snapshot=snapshot)
         preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
         yield {
             "type": "action_preview",
@@ -312,7 +314,9 @@ class RoadmapCommands:
             action: StructuredRoadmapAction = self.extractor.from_verified(verified, text=content)
         else:
             action = await self.extractor.aextract(content, page_context=build_grounding(page_context))
-        resolved_action, note = AnaphoraResolver.resolve_action(action, session_id=session_id)
+        resolved_action, note = AnaphoraResolver.resolve_action(
+            action, session_id=session_id, page_context=page_context
+        )
 
         # One write decision for this change (write_gate.py): denied changes stop here with the reason as reply
         gate = gate_action(gate, resolved_action, content, lower)
@@ -335,13 +339,15 @@ class RoadmapCommands:
             return
 
         # A lesson to delete is named, but the API takes its id: resolve it before the preview names it
+        item_snapshot = None
         if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.ITEM:
             if resolved_action.is_batch or len(resolved_action.entities) != 1:
                 async for ev in self._stream_text(batch_entity_delete_reply("bài học"), delay):
                     yield ev
                 return
             name = resolved_action.entities[0].title
-            found = await resolve_lesson(name, topic_slug=(page_context or {}).get("roadmapSlug"))
+            page_slug = (page_context or {}).get("roadmapSlug")
+            found = await resolve_lesson(name, topic_slug=page_slug)
             if found.status != "found":
                 async for ev in self._stream_text(unresolved_entity_reply("bài học", name, found.candidates), delay):
                     yield ev
@@ -349,6 +355,9 @@ class RoadmapCommands:
             resolved_action.target_parent_identifier = found.lesson_id
             resolved_action.entities[0].title = found.title
             note = None  # the topic the anaphora resolver filled in is not where the delete goes
+            item_snapshot = await snapshot_before_delete(get_adapter(), "item", found.lesson_id, topic_slug=page_slug)
+            if item_snapshot:
+                resolved_action.entities[0].section = item_snapshot.get("section")
 
         # A topic delete names the topic: resolve it so the preview names the right one
         if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.TOPIC:
@@ -361,7 +370,9 @@ class RoadmapCommands:
 
         # A delete to confirm is previewed once its target is resolved (the preview names it)
         if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
-            async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
+            async for ev in self._ask_confirmation(
+                resolved_action, note, session_id, session_ctx, delay, snapshot=item_snapshot
+            ):
                 yield ev
             return
 
@@ -395,6 +406,10 @@ class RoadmapCommands:
                     return
             if found_topic is not None and found_topic.status == "found" and found_topic.slug:
                 topic_ref = found_topic.slug
+                if note == "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic.":
+                    note = None
+                elif note and note.startswith("Tự động gắn vào topic:") and found_topic.title:
+                    note = f"Tự động gắn vào topic: **{found_topic.title}**"
             elif found_topic is not None and found_topic.status in ("not_found", "ambiguous"):
                 async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
                     yield ev

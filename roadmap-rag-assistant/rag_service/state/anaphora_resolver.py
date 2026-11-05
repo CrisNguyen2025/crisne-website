@@ -20,8 +20,9 @@ class AnaphoraResolver:
     def resolve_action(
         action: StructuredRoadmapAction,
         session_id: str,
+        page_context: Optional[dict] = None,
     ) -> Tuple[StructuredRoadmapAction, Optional[str]]:
-        """Resolve pronouns in action against session context.
+        """Resolve pronouns in action against session context and page context.
 
         Returns (resolved_action, resolution_note).
         """
@@ -33,10 +34,15 @@ class AnaphoraResolver:
 
         # A lesson belongs to a topic (ADR-0009): an anaphoric or missing topic is the open one
         if action.entity_level == EntityLevel.ITEM and (is_anaphora or not target):
-            if ctx.active_topic_slug:
-                action.target_parent_identifier = ctx.active_topic_slug
-                topic_name = ctx.active_topic_title or ctx.active_topic_slug
-                note = f"Tự động gán vào topic: **{topic_name}**"
+            page_slug = ((page_context or {}).get("roadmapSlug") or "").strip() if page_context else ""
+            active_slug = page_slug or ctx.active_topic_slug
+            if active_slug:
+                action.target_parent_identifier = active_slug
+                if page_slug:
+                    topic_name = (page_context.get("roadmapTitle") or "").strip() or page_slug
+                else:
+                    topic_name = ctx.active_topic_title or ctx.active_topic_slug
+                note = f"Tự động gắn vào topic: **{topic_name}**"
             else:
                 note = "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic."
 

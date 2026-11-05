@@ -104,6 +104,6 @@ Owner cho phép tạo topic test trên Turso. Topic được tạo qua API (T1 k
 | G7 | Pass | Nháp trên trang "Tool Calling", `hủy`: "Đã bỏ bản nháp", content vẫn 0 ký tự. |
 | G8 | Pass (unit test) | `tests/test_lesson_content.py::test_visitor_cannot_draft`. |
 
-**Lỗi 9 (mới, nhỏ):** khi đang mở topic, thêm bài vẫn có dòng "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic." trong câu trả lời dù topic đã được lấy từ trang. Ghi nhận, chưa sửa. Sửa ở `domains/roadmap/commands.py` (chỗ sinh câu này), kèm test.
+**Lỗi 9 (mới, nhỏ):** khi đang mở topic, thêm bài vẫn có dòng "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic." trong câu trả lời dù topic đã được lấy từ trang. Đã sửa ở `TASK-abot-bugs-001`, test: `tests/test_lesson_topic_slug.py::test_lesson_added_with_page_context_does_not_warn_no_topic`.
 
 **Lưu ý thiết kế (G1, G2):** với một bài đơn khi đã mở topic, Abot ghi luôn, không hiện preview. Kịch bản mong đợi preview; cần chốt xem đây là hành vi mong muốn hay phải đưa về preview như các lệnh khác.

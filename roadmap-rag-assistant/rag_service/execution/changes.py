@@ -33,7 +33,9 @@ def _children(level: str, node: dict) -> list[dict]:
     return [{"level": "item", "title": i.get("title") or ""} for i in node.get("items") or []]
 
 
-async def snapshot_before_delete(adapter: Any, level: str, ident: str) -> Optional[dict]:
+async def snapshot_before_delete(
+    adapter: Any, level: str, ident: str, topic_slug: Optional[str] = None
+) -> Optional[dict]:
     """The row (and its lessons) a delete is about to remove, or None when it cannot be read.
 
     Best effort: the review falls back to the identifier when the read fails.
@@ -41,6 +43,12 @@ async def snapshot_before_delete(adapter: Any, level: str, ident: str) -> Option
     try:
         if level == "topic":
             return await adapter.get_topic(ident)
+        if topic_slug:
+            topic = await adapter.get_topic(topic_slug)
+            if topic:
+                for item in topic.get("items") or []:
+                    if ident in (item.get("id"), item.get("title")):
+                        return item
         for topic in await adapter.export_full_hierarchy():
             for item in topic.get("items") or []:
                 if ident in (item.get("id"), item.get("title")):

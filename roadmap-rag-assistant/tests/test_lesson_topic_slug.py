@@ -22,11 +22,14 @@ TOPICS = [
 ]
 
 
-def _turn(agent: NextGenRoadmapAgent, text: str, thread_id: str) -> tuple[str, list[dict]]:
+def _turn(agent: NextGenRoadmapAgent, text: str, thread_id: str, context: dict | None = None) -> tuple[str, list[dict]]:
     async def run():
         out = []
+        payload = {"messages": [{"role": "user", "content": text}], "fast": True}
+        if context:
+            payload["context"] = context
         async for ev in agent.astream_events(
-            {"messages": [{"role": "user", "content": text}], "fast": True},
+            payload,
             config={"configurable": {"thread_id": thread_id}},
         ):
             out.append(ev)
@@ -36,11 +39,11 @@ def _turn(agent: NextGenRoadmapAgent, text: str, thread_id: str) -> tuple[str, l
     return "".join(e.get("delta", "") for e in events if e.get("type") == "token"), events
 
 
-def _confirmed(agent: NextGenRoadmapAgent, text: str, thread: str) -> str:
-    first, _ = _turn(agent, text, thread)
+def _confirmed(agent: NextGenRoadmapAgent, text: str, thread: str, context: dict | None = None) -> str:
+    first, _ = _turn(agent, text, thread, context=context)
     if not session_store.get_or_create(thread).pending_confirmation:
         return first
-    reply, _ = _turn(agent, "ok", thread)
+    reply, _ = _turn(agent, "ok", thread, context=context)
     return reply
 
 
@@ -72,3 +75,33 @@ def test_ok_with_nothing_pending_changes_nothing(mock_adapter):
     assert not [e for e in events if e.get("type") == "tool_start"]
     mock_adapter.delete_item.assert_not_awaited()
     mock_adapter.create_item.assert_not_awaited()
+
+
+def test_lesson_added_with_page_context_does_not_warn_no_topic(mock_adapter):
+    mock_adapter.list_topics.return_value = TOPICS
+    set_actor("owner")
+    thread = f"page-ctx-{uuid.uuid4()}"
+    agent = NextGenRoadmapAgent(llm_model=None)
+    preview, _ = _turn(
+        agent,
+        "thêm bài Tool Calling",
+        thread,
+        context={"roadmapSlug": "qa-sandbox"},
+    )
+    assert "Chưa có topic nào được chọn" not in preview
+    reply = _turn(agent, "ok", thread, context={"roadmapSlug": "qa-sandbox"})[0]
+    assert "Chưa có topic nào được chọn" not in reply
+    mock_adapter.create_item.assert_awaited_once()
+    assert mock_adapter.create_item.await_args.kwargs["topic_slug"] == "qa-sandbox"
+
+
+def test_lesson_added_without_any_topic_asks_for_topic(mock_adapter):
+    mock_adapter.list_topics.return_value = TOPICS
+    set_actor("owner")
+    thread = f"no-topic-{uuid.uuid4()}"
+    agent = NextGenRoadmapAgent(llm_model=None)
+    text, _ = _turn(agent, "thêm bài Tool Calling", thread)
+    assert "qa-sandbox" in text
+    mock_adapter.create_item.assert_not_awaited()
+
+
