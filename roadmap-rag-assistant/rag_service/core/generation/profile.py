@@ -64,6 +64,8 @@ class DomainProfile:
     # ── S5: conversation memory ──
     history_turns: int = 10  # user+assistant pairs fed back into S1
     history_max_chars: int = 1000  # per message, so one long paste cannot flood the prompt
+    # All history messages together, after the per-message clip; the oldest are dropped first.
+    history_total_chars: int = 8000
 
     # ── Observability: Langfuse step name per mode ──
     trace_names: dict[str, str] = field(
