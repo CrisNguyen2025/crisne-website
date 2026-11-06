@@ -22,6 +22,7 @@
     "db:dedupe-triage": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/dedupe-knowledge-triage.ts",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",
     "index:knowledge": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/index-knowledge.ts",
+    "intel": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts",
     "eval:rag": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/eval-retrieval.ts",
     "check:knowledge-index": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-knowledge-index.ts",
     "sync:langfuse-dataset": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/sync-langfuse-dataset.ts",
