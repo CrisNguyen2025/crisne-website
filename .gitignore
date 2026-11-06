@@ -64,8 +64,17 @@ AGENT.md
 # Roadmap RAG: cached embedding vectors (regenerated on demand)
 roadmap-rag-assistant/rag_service/data/embedding_cache.json
 
-# Local dev launch config
-.claude/
+# Claude Code: per-machine files (skills symlinks and settings.json are shared)
+.claude/launch.json
+.claude/settings.local.json
+.claude/worktrees/
+# Written by `gitnexus analyze`; the shared copy lives in .agents/skills/gitnexus-*
+.claude/skills/gitnexus/
+# Personal skills, move to the personal agent-config repo in Phase B
+.claude/skills/think/
+.claude/skills/prompt-master/
+.claude/skills/query-optimizer/
+CLAUDE.local.md
 
 # Workflow KB local storage
 .data/workflow-kb/
