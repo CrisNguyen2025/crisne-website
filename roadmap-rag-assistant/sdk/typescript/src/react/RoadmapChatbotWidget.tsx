@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import type { ChatbotConfig } from "./types";
 import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
 import {
@@ -15,7 +21,11 @@ import {
   NewChatIcon,
   ArrowDownIcon,
 } from "./icons";
-import { formatTime, formatToolDisplayName, toStepItems } from "./utils/formatters";
+import {
+  formatTime,
+  formatToolDisplayName,
+  toStepItems,
+} from "./utils/formatters";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { LayerChoicePicker } from "./LayerChoicePicker";
 import { WELCOME_MESSAGE_ID } from "./welcome";
@@ -24,6 +34,7 @@ import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { useVisualViewportBox } from "./utils/useVisualViewportBox";
+import { copyText } from "./utils/clipboard";
 import { MessageList } from "./components/MessageList";
 import { useFeedback, type VoteDetail } from "./useFeedback";
 import { feedbackKey } from "./storage";
@@ -73,7 +84,7 @@ export function RoadmapChatbotWidget({
   offsetY = 24,
   zIndex = 9999,
   title = "Abot",
-  subtitle = "Trợ lý kiến thức & lộ trình",
+  subtitle = "Trợ lý kiến thức cá nhân",
   baseUrl = "http://localhost:8000",
   initialOpen = false,
   initialMessages,
@@ -102,7 +113,9 @@ export function RoadmapChatbotWidget({
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
-  const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(null);
+  const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(
+    null
+  );
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // What the open reason sheet holds so far
@@ -115,13 +128,18 @@ export function RoadmapChatbotWidget({
   }, [feedbackNotice]);
 
   // Votes show at once; the host only gets the last one (see useFeedback)
-  const { votes: feedback, vote, commit } = useFeedback({
+  const {
+    votes: feedback,
+    vote,
+    commit,
+  } = useFeedback({
     storageKey: feedbackKey(baseUrl),
     send: async (msgId, value, detail) => {
       const traceId = messages.find((m) => m.id === msgId)?.traceId;
       await onFeedback?.(msgId, value, { traceId, ...detail });
     },
-    onFailed: () => setFeedbackNotice("Chưa gửi được đánh giá, vui lòng thử lại."),
+    onFailed: () =>
+      setFeedbackNotice("Chưa gửi được đánh giá, vui lòng thử lại."),
   });
 
   const handleFeedback = (msgId: string, val: 1 | 0) => {
@@ -133,7 +151,8 @@ export function RoadmapChatbotWidget({
     }
     // 👎 is sent once the reason sheet closes, with the reason if one was given.
     // Another reply's open sheet is closed first: its 👎 is sent with what was picked or typed so far.
-    if (activeFeedbackMsgId && activeFeedbackMsgId !== msgId) void commit(activeFeedbackMsgId, sheetDraft);
+    if (activeFeedbackMsgId && activeFeedbackMsgId !== msgId)
+      void commit(activeFeedbackMsgId, sheetDraft);
     setSheetDraft({});
     vote(msgId, 0, { defer: true });
     setActiveFeedbackMsgId(msgId);
@@ -189,10 +208,18 @@ export function RoadmapChatbotWidget({
     if (!isOpen && !isOptionsOpen) return;
     const handleClick = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
-      if (isOpen && containerRef.current && !containerRef.current.contains(target)) {
+      if (
+        isOpen &&
+        containerRef.current &&
+        !containerRef.current.contains(target)
+      ) {
         setIsOpen(false);
         setIsOptionsOpen(false);
-      } else if (isOptionsOpen && optionsRef.current && !optionsRef.current.contains(target)) {
+      } else if (
+        isOptionsOpen &&
+        optionsRef.current &&
+        !optionsRef.current.contains(target)
+      ) {
         setIsOptionsOpen(false);
       }
     };
@@ -215,16 +242,14 @@ export function RoadmapChatbotWidget({
   const handleCopyConversationId = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!conversationId) return;
-    navigator.clipboard?.writeText(conversationId).then(
-      () => {
-        setCopiedConvId(true);
-        setTimeout(() => {
-          setCopiedConvId(false);
-          setIsOptionsOpen(false);
-        }, 1200);
-      },
-      () => {}
-    );
+    void copyText(conversationId).then((ok) => {
+      if (!ok) return;
+      setCopiedConvId(true);
+      setTimeout(() => {
+        setCopiedConvId(false);
+        setIsOptionsOpen(false);
+      }, 1200);
+    });
   };
 
   const isAtBottomRef = useRef(true);
@@ -236,10 +261,19 @@ export function RoadmapChatbotWidget({
   useEffect(() => {
     const root = scrollRef.current;
     const sentinel = bottomSentinelRef.current;
-    if (!isOpen || !root || !sentinel || typeof IntersectionObserver === "undefined") return;
+    if (
+      !isOpen ||
+      !root ||
+      !sentinel ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    // Only ever turns follow on here. Content growing below pushes the sentinel out of view for a
+    // frame; turning follow off on that would stop the lerp for good. Follow is turned off only by
+    // the user scrolling up (wheel/touch handlers below).
     const followObserver = new IntersectionObserver(
       ([entry]) => {
-        isAtBottomRef.current = entry.isIntersecting;
+        if (entry.isIntersecting) isAtBottomRef.current = true;
       },
       { root, rootMargin: "0px 0px 80px 0px" }
     );
@@ -247,20 +281,131 @@ export function RoadmapChatbotWidget({
     return () => followObserver.disconnect();
   }, [isOpen]);
 
+  const rafIdRef = useRef<number | null>(null);
+
+  // Jump straight to the end on open
+  useEffect(() => {
+    if (isOpen && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      isAtBottomRef.current = true;
+    }
+  }, [isOpen]);
+
+  // Cancel lerp when user manually scrolls up
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!isOpen || !el) return;
+
+    let touchStartY = 0;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        isAtBottomRef.current = false;
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+      }
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const deltaY = e.touches[0].clientY - touchStartY;
+      if (deltaY > 10) {
+        // Dragging down scrolls content up
+        isAtBottomRef.current = false;
+        if (rafIdRef.current !== null) {
+          cancelAnimationFrame(rafIdRef.current);
+          rafIdRef.current = null;
+        }
+      }
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
+
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, [isOpen]);
+
   const scrollToBottom = () => {
     // Jump straight to the end, like Claude Code: no animated glide. The observer hides the
     // button once the sentinel is in view.
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+      isAtBottomRef.current = true;
+    }
   };
 
-  // Follow new content while the reader is at the end. Layout effect: the jump happens before
-  // paint, so the sentinel never leaves view mid-stream and the button doesn't flash.
-  useLayoutEffect(() => {
-    if (isOpen && scrollRef.current && isAtBottomRef.current) {
-      const el = scrollRef.current;
-      el.scrollTop = el.scrollHeight;
+  // Follow new content while the reader is at the end. Lerp over ~150-180ms so new elements
+  // (like 50px snippet cards) slide into view smoothly instead of snapping in a single frame.
+  useEffect(() => {
+    if (!isOpen || !scrollRef.current || !isAtBottomRef.current) return;
+
+    const el = scrollRef.current;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll <= el.scrollTop) return;
+
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      el.scrollTop = maxScroll;
+      return;
     }
+
+    if (rafIdRef.current !== null) return;
+
+    let lastTime = performance.now();
+    const tick = (now: number) => {
+      const container = scrollRef.current;
+      if (!container || !isAtBottomRef.current) {
+        rafIdRef.current = null;
+        return;
+      }
+      const target = container.scrollHeight - container.clientHeight;
+      const curr = container.scrollTop;
+      const dist = target - curr;
+
+      if (dist <= 0.5) {
+        container.scrollTop = target;
+        rafIdRef.current = null;
+        return;
+      }
+
+      const dt = Math.min(now - lastTime, 100);
+      lastTime = now;
+
+      // Exponential damping towards target (settles ~95% in ~160ms, tau = 55ms)
+      const factor = 1 - Math.exp(-dt / 55);
+      const step = Math.max(1, dist * factor);
+      container.scrollTop = Math.min(target, curr + step);
+
+      if (container.scrollTop < target && isAtBottomRef.current) {
+        rafIdRef.current = requestAnimationFrame(tick);
+      } else {
+        rafIdRef.current = null;
+      }
+    };
+
+    rafIdRef.current = requestAnimationFrame(tick);
   }, [messages, isOpen, isStreaming, activeTool]);
 
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
@@ -314,6 +459,9 @@ export function RoadmapChatbotWidget({
 
     // 3. Send message
     isAtBottomRef.current = true;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
     sendMessage(val);
 
     // 4. Re-ensure focus on next animation frame
@@ -333,10 +481,9 @@ export function RoadmapChatbotWidget({
   };
 
   const copyMessage = (id: string, text: string) => {
-    navigator.clipboard?.writeText(text).then(
-      () => setCopiedId(id),
-      () => {}
-    );
+    void copyText(text).then((ok) => {
+      if (ok) setCopiedId(id);
+    });
   };
 
   const status = activeTool
@@ -414,6 +561,11 @@ export function RoadmapChatbotWidget({
             stopStreaming={stopStreaming}
             handleSend={handleSend}
             handleKeyDown={handleKeyDown}
+            isKeyboardOpen={
+              typeof keyboardBox?.height === "number" &&
+              typeof window !== "undefined" &&
+              window.innerHeight - keyboardBox.height > 100
+            }
           />
 
           {/* ── Feedback Reason Bottom Sheet ── */}
@@ -422,8 +574,12 @@ export function RoadmapChatbotWidget({
               // A fresh sheet per reply: one reply's draft never shows up on another
               key={activeFeedbackMsgId}
               messageId={activeFeedbackMsgId}
-              onDraftChange={(reason, comment) => setSheetDraft({ reason, comment })}
-              onSubmit={(reason, comment) => void commit(activeFeedbackMsgId, { reason, comment })}
+              onDraftChange={(reason, comment) =>
+                setSheetDraft({ reason, comment })
+              }
+              onSubmit={(reason, comment) =>
+                void commit(activeFeedbackMsgId, { reason, comment })
+              }
               onClose={() => {
                 // Closed without a reason (or after sending one): sends the 👎 if it is still waiting
                 void commit(activeFeedbackMsgId);

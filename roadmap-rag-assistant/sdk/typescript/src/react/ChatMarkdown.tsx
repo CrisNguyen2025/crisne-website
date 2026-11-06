@@ -45,7 +45,8 @@ export type Block =
   | { kind: "heading"; level: number; text: string }
   | { kind: "paragraph"; lines: string[] }
   | { kind: "list"; ordered: boolean; items: ListItem[] }
-  | { kind: "code"; lang: string; code: string }
+  // `open`: the closing fence has not streamed yet
+  | { kind: "code"; lang: string; code: string; open?: boolean }
   | { kind: "quote"; lines: string[] }
   | {
       kind: "alert";
@@ -117,8 +118,9 @@ export function parseBlocks(content: string): Block[] {
       while (i < lines.length && !FENCE.test(lines[i])) {
         body.push(lines[i++]);
       }
+      const open = i >= lines.length;
       i++;
-      blocks.push({ kind: "code", lang: fence[1], code: body.join("\n") });
+      blocks.push({ kind: "code", lang: fence[1], code: body.join("\n"), open });
       continue;
     }
 
@@ -712,6 +714,7 @@ function BlockView({
         <CodeBlock
           lang={block.lang}
           code={block.code}
+          open={block.open}
           onRun={onRun}
           runningCode={runningCode}
           showLineNumbers={true}
@@ -816,7 +819,7 @@ function areBlocksEqual(
     }
     case "code": {
       const c2 = b2 as typeof b1;
-      return b1.lang === c2.lang && b1.code === c2.code;
+      return b1.lang === c2.lang && b1.code === c2.code && !!b1.open === !!c2.open;
     }
     case "quote": {
       const q2 = b2 as typeof b1;
@@ -869,6 +872,16 @@ function areBlocksEqual(
 }
 
 const MemoizedBlockView = React.memo(BlockView, areBlocksEqual);
+
+/**
+ * Whether code within a code block qualifies as a compact one-line suggestion snippet.
+ * Trailing whitespace or newlines (common while streaming before the closing fence) are ignored.
+ */
+export function isOneLineSnippet(code: string, lang?: string): boolean {
+  const normalizedLang = (lang || "").trim().toLowerCase();
+  if (normalizedLang && normalizedLang !== "text") return false;
+  return !code.replace(/\s+$/, "").includes("\n");
+}
 
 /** Caret shown at the end of a streaming answer. */
 export function StreamingCaret() {
@@ -949,15 +962,17 @@ export function ChatMarkdown({
       {sourceChips}
     </>
   ) : undefined;
-  const blockViews = blocks.map((block, idx) => (
-    <MemoizedBlockView
-      key={idx}
-      block={block}
-      onRun={onRun}
-      runningCode={runningCode}
-      trailing={idx === blocks.length - 1 && caretInline ? tail : undefined}
-    />
-  ));
+  const blockViews = blocks.map((block, idx) => {
+    return (
+      <MemoizedBlockView
+        key={idx}
+        block={block}
+        onRun={onRun}
+        runningCode={runningCode}
+        trailing={idx === blocks.length - 1 && caretInline ? tail : undefined}
+      />
+    );
+  });
   // With citations the answer is the root the source chips highlight in
   const scoped = marked.claims.length > 0 || uniqueSources.length > 0;
 
@@ -969,7 +984,9 @@ export function ChatMarkdown({
       {/* Always wrapped: citations arrive when the stream ends, and adding the wrapper only then
           would change the tree shape and remount every block (a visible flash) */}
       <CitationContext.Provider value={marked.claims}>{blockViews}</CitationContext.Provider>
-      {!caretInline && tail}
+      {/* After a code card the caret would take a line of its own that comes and goes with each
+          card (a 30px jump); the card or its placeholder already shows progress */}
+      {!caretInline && sourceChips}
     </div>
   );
 }

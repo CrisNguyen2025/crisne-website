@@ -3,10 +3,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { CheckIcon, CopyIcon, PlayIcon } from "../icons";
 import { isRunnableSnippet } from "../utils/snippets";
+import { copyText } from "../utils/clipboard";
 
 export interface CodeBlockProps {
   lang?: string;
   code: string;
+  /** Whether the code fence is still streaming (open) */
+  open?: boolean;
   showLineNumbers?: boolean;
   /** Sends a one-line snippet as a message; not offered for one with a blank to fill in or a delete */
   onRun?: (code: string) => void;
@@ -188,6 +191,7 @@ function highlightCodeLine(line: string, lineIndex: number): React.ReactNode {
 export function CodeBlock({
   lang = "",
   code,
+  open = false,
   showLineNumbers = true,
   onRun,
   runningCode = null,
@@ -201,16 +205,14 @@ export function CodeBlock({
   }, [copied]);
 
   const copy = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(code).then(
-        () => setCopied(true),
-        () => {}
-      );
-    }
+    void copyText(code).then((ok) => {
+      if (ok) setCopied(true);
+    });
   };
 
+  const cleanCode = code.replace(/\s+$/, "");
+  const isMultiLine = cleanCode.includes("\n");
   const lines = useMemo(() => code.split("\n"), [code]);
-  const isMultiLine = lines.length > 1;
   const normalizedLang = lang.trim().toLowerCase();
   const displayBadge =
     LANGUAGE_LABELS[normalizedLang] ||
@@ -221,42 +223,62 @@ export function CodeBlock({
     const snippet = code.trim();
     const isRunning = runningCode !== null && runningCode === snippet;
     const isBusy = runningCode !== null;
+    const isRunnable = onRun && isRunnableSnippet(snippet);
     return (
-      <div className="my-2 flex min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs">
-        {/* Text is read-only; only the play and copy buttons act on it */}
+      // Fades and slides in on mount: while streaming text flows in with a caret,
+      // and action buttons smoothly reveal once the closing fence arrives.
+      <div className="my-2 flex min-h-[50px] min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
+        {/* Text streams directly inside; caret indicates live generation without layout jumps */}
         <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-[13px] text-foreground">
           {code}
+          {open && (
+            <span
+              aria-hidden="true"
+              className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-foreground align-text-bottom motion-reduce:animate-none"
+            />
+          )}
         </code>
-        {onRun && isRunnableSnippet(snippet) && (
+        {/* Space for actions is preserved so text does not wrap/jump when streaming completes */}
+        <div
+          className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${
+            open ? "pointer-events-none opacity-0" : "opacity-100"
+          }`}
+          aria-hidden={open}
+        >
+          {isRunnable && (
+            <button
+              type="button"
+              onClick={() => onRun(snippet)}
+              disabled={isBusy || open}
+              tabIndex={open ? -1 : 0}
+              aria-label={isRunning ? "Đang gửi" : "Gửi"}
+              aria-busy={isRunning}
+              title={isRunning ? "Đang gửi" : "Gửi"}
+              className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+            >
+              {isRunning ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <PlayIcon className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onRun(snippet)}
-            disabled={isBusy}
-            aria-label={isRunning ? "Đang gửi" : "Gửi"}
-            aria-busy={isRunning}
-            title={isRunning ? "Đang gửi" : "Gửi"}
-            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+            onClick={copy}
+            disabled={open}
+            tabIndex={open ? -1 : 0}
+            aria-label={copied ? "Đã sao chép" : "Sao chép"}
+            title={copied ? "Đã chép" : "Chép"}
+            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:opacity-0"
           >
-            {isRunning ? (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            {copied ? (
+              <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
             ) : (
-              <PlayIcon className="h-3.5 w-3.5" />
+              <CopyIcon className="h-3.5 w-3.5" />
             )}
           </button>
-        )}
-        <button
-          type="button"
-          onClick={copy}
-          aria-label={copied ? "Đã sao chép" : "Sao chép"}
-          title={copied ? "Đã chép" : "Chép"}
-          className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
-        >
-          {copied ? (
-            <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
-          ) : (
-            <CopyIcon className="h-3.5 w-3.5" />
-          )}
-        </button>
+        </div>
       </div>
     );
   }

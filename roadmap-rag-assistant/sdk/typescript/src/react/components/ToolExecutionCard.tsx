@@ -8,6 +8,7 @@ import {
 } from '../icons';
 import { formatElapsed, type StepSource, type StepTone } from '../ToolStepRow';
 import { formatToolDisplayName } from '../utils/formatters';
+import { copyText } from '../utils/clipboard';
 
 export interface ToolExecutionCardProps {
   id?: string;
@@ -109,11 +110,11 @@ export function ToolExecutionCard({
   };
 
   const handleCopy = (text: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
+    void copyText(text).then((ok) => {
+      if (!ok) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    }
+    });
   };
 
   const displayTitle = label || (name ? formatToolDisplayName(name) : 'Thực thi công cụ');

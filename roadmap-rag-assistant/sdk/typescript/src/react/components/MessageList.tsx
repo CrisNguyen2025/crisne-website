@@ -66,11 +66,12 @@ function ScrollBottomButton({
     const root = scrollRef.current;
     const sentinel = bottomSentinelRef.current;
     if (!root || !sentinel || typeof IntersectionObserver === "undefined") return;
-    // The sentinel sits above the list's bottom padding (py-5, 20px), so a -20px bottom margin
-    // makes "visible" mean "scrolled to the very end": the button hides on arrival.
+    // The sentinel sits above the list's bottom padding (pb-2, 8px). The root is trimmed by 4px,
+    // so the sentinel stays clearly inside it at the very end (edge-touching is unreliable on
+    // Android, which left the arrow showing) and the button hides on arrival.
     const observer = new IntersectionObserver(
       ([entry]) => setVisible(!entry.isIntersecting),
-      { root, rootMargin: "0px 0px -20px 0px" }
+      { root, rootMargin: "0px 0px -4px 0px" }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
@@ -85,7 +86,7 @@ function ScrollBottomButton({
       aria-label={
         isLoading ? "Đang trả lời — cuộn xuống để xem" : "Cuộn xuống cuối"
       }
-      className={`absolute bottom-3 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_2px_8px_rgb(0_0_0_/_0.08)] transition-[opacity,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#F4F3F0] active:scale-95 ${
+      className={`absolute bottom-2 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_2px_8px_rgb(0_0_0_/_0.08)] transition-[opacity,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#F4F3F0] active:scale-95 ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
@@ -459,7 +460,7 @@ export function MessageList({
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
-        className="flex-1 space-y-6 overflow-y-auto px-4 py-5 overscroll-contain touch-pan-y [scrollbar-color:#E6E4DF_transparent] [scrollbar-width:thin]"
+        className="flex-1 space-y-6 overflow-y-auto px-4 pt-5 pb-2 overscroll-contain touch-pan-y [scrollbar-color:#E6E4DF_transparent] [scrollbar-width:thin]"
       >
         {messages.map((msg, idx) => (
           <MessageItem

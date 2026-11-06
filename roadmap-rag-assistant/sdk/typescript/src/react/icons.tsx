@@ -38,6 +38,15 @@ export function SparklesIcon({ className }: IconProps) {
   );
 }
 
+export function PlusIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Icon>
+  );
+}
+
 export function PlayIcon({ className }: IconProps) {
   return (
     <Icon className={className}>
