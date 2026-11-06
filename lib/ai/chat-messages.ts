@@ -31,14 +31,3 @@ export function toAlternatingTurns(messages: ChatMessage[]): LlmMessage[] {
   }
   return turns;
 }
-
-/** Plain text of every message, for previews and logs. */
-export function contentsToText(contents: LlmGenerateParams["contents"]): string {
-  if (typeof contents === "string") return contents;
-  if (isChatMessages(contents)) {
-    return contents
-      .map((m) => m.content.map((p) => (p.type === "text" ? p.text : "")).join(" "))
-      .join(" ");
-  }
-  return contents.map((m) => m.parts.map((p) => p.text).join(" ")).join(" ");
-}

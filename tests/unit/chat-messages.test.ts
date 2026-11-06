@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentsToText, isChatMessages, toAlternatingTurns } from "@/lib/ai/chat-messages";
+import { isChatMessages, toAlternatingTurns } from "@/lib/ai/chat-messages";
 import type { ChatMessage } from "@/lib/ai/llm-provider";
 
 const text = (role: ChatMessage["role"], value: string): ChatMessage => ({
@@ -59,13 +59,5 @@ describe("toAlternatingTurns", () => {
         },
       ])
     ).toEqual([{ role: "user", parts: [{ text: "Tra cứu" }] }]);
-  });
-});
-
-describe("contentsToText", () => {
-  it("joins the text of strings, legacy turns and neutral messages", () => {
-    expect(contentsToText("hi")).toBe("hi");
-    expect(contentsToText([{ role: "user", parts: [{ text: "a" }, { text: "b" }] }])).toBe("a b");
-    expect(contentsToText([text("user", "a"), text("assistant", "b")])).toBe("a b");
   });
 });

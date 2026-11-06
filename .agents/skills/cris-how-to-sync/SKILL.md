@@ -93,7 +93,7 @@ Cuối báo cáo, luôn đính kèm **Data Spec** để cập nhật dataset c�
 # 🛡️ CRIS TARGET ASSESSMENT: [Tên Target]
 
 - **Phân loại**: [FEATURE | DEPENDENCY_LIB | MODEL_SCHEMA | API_ROUTE | PATTERN | VOCABULARY]
-- **Domain Tiếp Nhận**: [roadmap-learning | roadmap-assistant-abot | notes-editor | workflow-builder | ...]
+- **Domain Tiếp Nhận**: [roadmap-learning | roadmap-assistant-abot | notes-editor | storage-media | auth-security | triage-observability]
 - **KẾT LUẬN CUỐI CÙNG**: [🟢 NÊN / 🔴 KHÔNG NÊN / 🟡 CẢI THIỆN]
 
 ---

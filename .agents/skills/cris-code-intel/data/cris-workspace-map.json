@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-06T09:29:12.139Z",
-  "headCommit": "a2828a57170aff884a383cbd252ad8cce855b30b",
+  "generatedAt": "2026-11-06T09:54:11.000Z",
+  "headCommit": "2aa4670b2f50e064a37ab4b43a9286cd5a9ba3ce",
   "repository": "crisne-website",
   "architecture": {
     "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
@@ -230,7 +230,7 @@
       "domainId": "roadmap-learning",
       "summary": "Trang chủ hiển thị danh sách Topic roadmap, timeline, hero section và floating bot",
       "handler": "app/page.tsx",
-      "triggersFlow": "FLOW_ROADMAP_VIEW"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_UI_NOTES",
@@ -241,7 +241,7 @@
       "domainId": "notes-editor",
       "summary": "Trang tổng hợp ghi chú cá nhân",
       "handler": "app/notes/page.tsx",
-      "triggersFlow": "FLOW_NOTE_VIEW"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_UI_NOTE_SLUG",
@@ -252,7 +252,7 @@
       "domainId": "notes-editor",
       "summary": "Trang soạn thảo và xem chi tiết một ghi chú",
       "handler": "app/notes/[slug]/page.tsx",
-      "triggersFlow": "FLOW_NOTE_VIEW"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_API_ROADMAP_LIST",
@@ -263,7 +263,7 @@
       "domainId": "roadmap-learning",
       "summary": "Lấy danh sách tất cả các topic kèm số lượng bài học",
       "handler": "app/api/v1/roadmaps/route.ts#GET",
-      "triggersFlow": "FLOW_ROADMAP_VIEW"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_API_ROADMAP_CREATE",
@@ -274,7 +274,7 @@
       "domainId": "roadmap-learning",
       "summary": "Tạo một Topic mới",
       "handler": "app/api/v1/roadmaps/route.ts#POST",
-      "triggersFlow": "FLOW_TOPIC_CREATE"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_API_ROADMAP_SLUG_GET",
@@ -285,7 +285,7 @@
       "domainId": "roadmap-learning",
       "summary": "Lấy chi tiết topic cùng danh sách section và lesson",
       "handler": "app/api/v1/roadmaps/[slug]/route.ts#GET",
-      "triggersFlow": "FLOW_ROADMAP_VIEW"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_API_ROADMAP_ITEM_CREATE",
@@ -296,7 +296,7 @@
       "domainId": "roadmap-learning",
       "summary": "Tạo một bài học mới trong Topic",
       "handler": "app/api/v1/roadmaps/items/route.ts#POST",
-      "triggersFlow": "FLOW_LESSON_CREATE"
+      "triggersFlow": "N/A"
     },
     {
       "id": "EP_API_ROADMAP_ITEM_PATCH",

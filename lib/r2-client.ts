@@ -66,31 +66,6 @@ export async function uploadToStorage(
 }
 
 /**
- * Delete file from Storage (R2 or local)
- * @param url Public URL of file to delete
- */
-export async function deleteFromStorage(url: string): Promise<void> {
-  if (isR2Configured && r2Client && url.startsWith(R2_PUBLIC_URL)) {
-    const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-    const key = url.replace(`${R2_PUBLIC_URL}/`, '');
-    await r2Client.send(
-      new DeleteObjectCommand({
-        Bucket: R2_BUCKET_NAME!,
-        Key: key,
-      })
-    );
-    return;
-  }
-
-  // If local file
-  if (url.startsWith('/uploads/')) {
-    const localFilename = path.basename(url);
-    const filePath = path.join(process.cwd(), 'public', 'uploads', localFilename);
-    await fs.unlink(filePath).catch(() => {});
-  }
-}
-
-/**
  * Generate unique filename
  * @param originalName Original filename
  * @returns Sanitized unique filename
