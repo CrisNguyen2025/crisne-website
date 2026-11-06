@@ -53,6 +53,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  // Android Chrome: the keyboard shrinks the page itself instead of sliding over it and
+  // scrolling the focused field into view, so full-height panels (Abot) don't bounce on focus.
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f8f9fa" },
     { media: "(prefers-color-scheme: dark)", color: "#0d0f12" },

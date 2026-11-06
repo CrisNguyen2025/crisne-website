@@ -38,10 +38,10 @@ function StepSpinner() {
       className="grid h-3 w-3 shrink-0 grid-cols-2 gap-0.5"
       aria-hidden="true"
     >
-      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#6B6862)] [animation-duration:800ms] [animation-delay:0ms]" />
-      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#6B6862)] [animation-duration:800ms] [animation-delay:200ms]" />
-      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#6B6862)] [animation-duration:800ms] [animation-delay:600ms]" />
-      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#6B6862)] [animation-duration:800ms] [animation-delay:400ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#5E5B55)] [animation-duration:800ms] [animation-delay:0ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#5E5B55)] [animation-duration:800ms] [animation-delay:200ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#5E5B55)] [animation-duration:800ms] [animation-delay:600ms]" />
+      <span className="animate-pulse motion-reduce:animate-none rounded-full bg-[color:var(--chat-text-muted,#5E5B55)] [animation-duration:800ms] [animation-delay:400ms]" />
     </span>
   );
 }
@@ -102,7 +102,7 @@ export function ToolStepRow({
         className={`group/row flex w-full select-none items-center gap-2 rounded px-2 py-1 text-left transition-colors ${
           canExpand
             ? "cursor-pointer hover:bg-[color:var(--chat-surface,#F4F3F0)] text-[color:var(--chat-text-secondary,#4D4B46)]"
-            : "cursor-default text-[color:var(--chat-text-muted,#6B6862)]"
+            : "cursor-default text-[color:var(--chat-text-muted,#5E5B55)]"
         }`}
       >
         <StepStatusIcon running={running} tone={tone} />
@@ -119,7 +119,7 @@ export function ToolStepRow({
                   ? "text-[color:var(--chat-danger,#B42318)]"
                   : tone === "warning"
                     ? "text-[color:var(--chat-warning,#B54708)]"
-                    : "text-[color:var(--chat-text-subtle,#8C8983)]"
+                    : "text-[color:var(--chat-text-subtle,#75716A)]"
               }
             >
               {" · "}
@@ -127,7 +127,7 @@ export function ToolStepRow({
             </span>
           )}
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] text-[color:var(--chat-text-subtle,#8C8983)]">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-[color:var(--chat-text-subtle,#75716A)]">
           {startedAt !== undefined && (running || endedAt !== undefined) && (
             <ElapsedTimer
               startedAt={startedAt}
@@ -136,7 +136,7 @@ export function ToolStepRow({
           )}
           {canExpand && (
             <ChevronDownIcon
-              className={`h-3 w-3 transition-transform duration-200 text-[color:var(--chat-text-subtle,#8C8983)] group-hover/row:text-[color:var(--chat-text,#1F1E1C)] ${
+              className={`h-3 w-3 transition-transform duration-200 text-[color:var(--chat-text-subtle,#75716A)] group-hover/row:text-[color:var(--chat-text,#1F1E1C)] ${
                 expanded ? "" : "-rotate-90"
               }`}
             />
@@ -151,7 +151,7 @@ export function ToolStepRow({
             <ul className="space-y-0.5">
               {items.map((it, idx) => (
                 <li key={`${it.href ?? it.title}-${idx}`} className="flex min-w-0 items-baseline gap-1.5">
-                  <span aria-hidden="true" className="text-[color:var(--chat-text-subtle,#8C8983)]">•</span>
+                  <span aria-hidden="true" className="text-[color:var(--chat-text-subtle,#75716A)]">•</span>
                   {it.href ? (
                     <a
                       href={it.href}
@@ -162,7 +162,7 @@ export function ToolStepRow({
                   ) : (
                     <span className="truncate">{it.title}</span>
                   )}
-                  {it.topic && <span className="shrink-0 text-[color:var(--chat-text-subtle,#8C8983)]">{it.topic}</span>}
+                  {it.topic && <span className="shrink-0 text-[color:var(--chat-text-subtle,#75716A)]">{it.topic}</span>}
                 </li>
               ))}
             </ul>
@@ -261,7 +261,7 @@ export function CollapsibleStepsSummary({
         onClick={canExpand ? () => setIsOpen((prev) => !prev) : undefined}
         disabled={!canExpand}
         aria-expanded={canExpand ? isOpen : undefined}
-        className={`group/btn flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-[color:var(--chat-text-muted,#6B6862)] transition-colors select-none font-medium ${
+        className={`group/btn flex max-w-full min-w-0 items-center gap-1.5 py-0.5 text-left text-[color:var(--chat-text-muted,#5E5B55)] transition-colors select-none font-medium ${
           canExpand ? "hover:text-[color:var(--chat-text,#1F1E1C)] cursor-pointer" : "cursor-default"
         }`}
       >
@@ -291,20 +291,20 @@ export function CollapsibleStepsSummary({
         </span>
 
         {showDigest && (
-          <span className={`min-w-0 truncate font-normal text-[color:var(--chat-text-subtle,#8C8983)] ${ENTER_CLASS}`}>
+          <span className={`min-w-0 truncate font-normal text-[color:var(--chat-text-subtle,#75716A)] ${ENTER_CLASS}`}>
             · {digest}
           </span>
         )}
 
         {isTicking && (
-          <span className="shrink-0 text-[11px] text-[color:var(--chat-text-subtle,#8C8983)]">
+          <span className="shrink-0 text-xs text-[color:var(--chat-text-subtle,#75716A)]">
             <ElapsedTimer startedAt={turnStartedAt} />
           </span>
         )}
 
         {canExpand && (
           <ChevronDownIcon
-            className={`h-3 w-3 shrink-0 text-[color:var(--chat-text-subtle,#8C8983)] transition-transform duration-200 group-hover/btn:text-[color:var(--chat-text,#1F1E1C)] ${
+            className={`h-3 w-3 shrink-0 text-[color:var(--chat-text-subtle,#75716A)] transition-transform duration-200 group-hover/btn:text-[color:var(--chat-text,#1F1E1C)] ${
               isOpen ? "" : "-rotate-90"
             }`}
           />

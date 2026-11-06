@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // Lets a phone on the same Wi-Fi load dev assets (HMR, JS chunks) from the LAN IP; any host on 192.168.1.x,
   // since the Mac's DHCP address changes
   allowedDevOrigins: ["192.168.1.*"],
+  // No dev "N" badge in the corner: it covers the chat composer on phones. Build errors still show.
+  devIndicators: false,
   turbopack: {
     root: path.resolve(__dirname),
   },
