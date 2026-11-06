@@ -24,41 +24,7 @@ export interface TriageItem {
   updatedAt: string;
 }
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-
-// Owner routes authenticate with the session cookie; never ship an admin key to the browser
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const defaultHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  const res = await fetch(`${BASE_URL}${path}`, {
-    cache: "no-store",
-    headers: { ...defaultHeaders, ...options?.headers },
-    ...options,
-  });
-
-  if (!res.ok) {
-    let errorDetail = res.statusText;
-    try {
-      const errorJson = await res.json();
-      errorDetail = errorJson.error || JSON.stringify(errorJson);
-    } catch {
-      const text = await res.text().catch(() => "");
-      if (text) errorDetail = text;
-    }
-    // `status` lets the UI tell "not signed in" (401) apart from other failures
-    throw Object.assign(new Error(errorDetail || `Request failed with status ${res.status}`), {
-      status: res.status,
-    });
-  }
-
-  if (res.status === 204) {
-    return {} as T;
-  }
-
-  return res.json() as Promise<T>;
-}
+import { apiFetch } from "@/logic/api-fetch";
 
 /** Fetch all active triage items */
 export async function fetchTriageItems(): Promise<TriageItem[]> {
@@ -100,24 +66,6 @@ export async function deleteTriageItem(id: string): Promise<void> {
   await apiFetch<{ success: boolean; id: string }>(`/api/v1/roadmaps/triage/${id}`, {
     method: "DELETE",
   });
-}
-
-export interface CreateTriagePayload {
-  query: string;
-  assistantMsg?: string | null;
-  reason?: string | null;
-  comment?: string | null;
-  traceId?: string | null;
-  roadmapSlug?: string | null;
-}
-
-/** Create a new knowledge triage record from negative feedback */
-export async function createTriageItem(payload: CreateTriagePayload): Promise<TriageItem> {
-  const res = await apiFetch<{ item: TriageItem }>("/api/v1/roadmaps/triage", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  return res.item;
 }
 
 /** Records a vote as a Langfuse score on the reply's trace (null takes the vote back) */

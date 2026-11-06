@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ChecklistItem, GetRoadmapResponseDto } from '@/lib/roadmap/types';
-import { slugify } from '@/lib/utils';
+import { findTopic } from '@/lib/roadmap/resolveRoadmap';
 import { hasWriteAccess, requireWriteAccess } from "@/lib/auth/write-access";
 import { DEFAULT_LESSON_STATUS, isLessonStatus } from '@/lib/roadmap/status';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
@@ -13,15 +13,6 @@ interface RouteContext {
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-/** The topic with the given slug or title (case-insensitive), or null. */
-async function findTopic(identifier: string) {
-  const roadmap = await prisma.roadmap.findUnique({ where: { slug: identifier } });
-  if (roadmap) return roadmap;
-  const norm = identifier.trim().toLowerCase();
-  const all = await prisma.roadmap.findMany();
-  return all.find((r) => r.slug.toLowerCase() === norm) || all.find((r) => r.title.toLowerCase() === norm) || null;
-}
 
 // GET /api/v1/roadmaps/[slug] - A topic with its lessons, in page order.
 // Lesson Status is the Owner's personal progress (ADR-0010): only a caller with write access gets it.
@@ -43,7 +34,6 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const items: ChecklistItem[] = roadmap.items.map((item) => ({
       id: item.id,
-      slug: slugify(item.title),
       title: item.title,
       description: item.description || '',
       section: item.section,

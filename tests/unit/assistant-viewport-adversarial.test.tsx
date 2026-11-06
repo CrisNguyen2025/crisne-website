@@ -5,7 +5,6 @@ import React from "react";
 import { useAssistantViewport } from "@/hooks/use-assistant-viewport";
 import { FloatingQuickBar } from "@/components/floating-bot/FloatingQuickBar";
 import { FloatingChatDrawer } from "@/components/floating-bot/FloatingChatDrawer";
-import { FloatingChatPopup } from "@/components/floating-bot/FloatingChatPopup";
 import type { UseFloatingChatReturn } from "@/hooks/use-floating-chat";
 
 // Mock scrollIntoView for jsdom
@@ -286,29 +285,17 @@ describe("Adversarial Stress Suite: Mobile Viewport, Keyboard & Dismiss Ergonomi
       expect(textarea.className).toMatch(/md:text-sm/);
     });
 
-    it("FloatingChatPopup input has >= 16px font size on mobile (text-[16px])", () => {
-      const chat = createMockChat();
-      render(<FloatingChatPopup isOpen={true} onClose={vi.fn()} chat={chat} />);
-
-      const input = screen.getByPlaceholderText("Nhập câu hỏi của bạn...");
-      expect(input).toBeTruthy();
-      expect(input.tagName).toBe("INPUT");
-      expect(input.className).toMatch(/text-\[16px\]/);
-      expect(input.className).toMatch(/md:text-sm/);
-    });
-
-    it("confirms NO input or textarea element across all 3 components lacks text-[16px]", () => {
+    it("confirms NO input or textarea element across components lacks text-[16px]", () => {
       const chat = createMockChat();
       const { container } = render(
         <>
           <FloatingQuickBar input="" onInputChange={vi.fn()} onSubmit={vi.fn()} />
           <FloatingChatDrawer isOpen={true} onClose={vi.fn()} chat={chat} />
-          <FloatingChatPopup isOpen={true} onClose={vi.fn()} chat={chat} />
         </>
       );
 
       const formControls = container.querySelectorAll("input, textarea");
-      expect(formControls.length).toBeGreaterThanOrEqual(3);
+      expect(formControls.length).toBeGreaterThanOrEqual(2);
 
       formControls.forEach((control) => {
         expect(control.className).toContain("text-[16px]");

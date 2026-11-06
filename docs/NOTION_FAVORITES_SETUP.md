@@ -122,49 +122,9 @@ curl -X POST 'https://crisne.blog/api/favorites' \
 # Expected: {"success":true}
 ```
 
-## Migration từ SQLite sang Notion
-
-Nếu bạn đã có favorites trong SQLite local, hãy migrate:
-
-```bash
-# 1. Export từ SQLite
-sqlite3 prisma/dev.db "SELECT userId, tagId FROM Favorite;" > favorites.csv
-
-# 2. Import vào Notion
-# - Mở Favorites database trong Notion
-# - Click "..." → Import → CSV
-# - Upload favorites.csv
-# - Map columns: userId → UserId, tagId → TagId
-```
-
-## Code Changes
-
-### `/lib/notion.ts` - Added:
+### `/app/api/favorites/route.ts`:
 
 ```typescript
-export const FAVORITES_DB_ID = process.env.NOTION_FAVORITES_DB_ID!;
-
-export interface NotionFavorite {
-  id: string;
-  userId: string;
-  tagId: string;
-  createdAt: string;
-}
-
-export async function getFavorites(userId: string): Promise<string[]>
-export async function addFavorite(userId: string, tagId: string): Promise<NotionFavorite>
-export async function removeFavorite(userId: string, tagId: string): Promise<void>
-```
-
-### `/app/api/favorites/route.ts` - Changed:
-
-```typescript
-// Before: Prisma
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
-await prisma.favorite.findMany({ where: { userId } });
-
-// After: Notion
 import { getFavorites, addFavorite, removeFavorite } from "@/lib/notion";
 await getFavorites(userId);
 ```

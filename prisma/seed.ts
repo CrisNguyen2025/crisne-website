@@ -61,32 +61,7 @@ async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
 async function main() {
   console.log("🌱 Starting seed...");
 
-  // 1. Seed Tags (existing logic)
-  const tags = await Promise.all([
-    prisma.tag.upsert({
-      where: { name: "Frontend" },
-      update: {},
-      create: { name: "Frontend", color: "#6b9ac4" },
-    }),
-    prisma.tag.upsert({
-      where: { name: "Backend" },
-      update: {},
-      create: { name: "Backend", color: "#7c9e6e" },
-    }),
-    prisma.tag.upsert({
-      where: { name: "Tools" },
-      update: {},
-      create: { name: "Tools", color: "#c4a96b" },
-    }),
-    prisma.tag.upsert({
-      where: { name: "Reading" },
-      update: {},
-      create: { name: "Reading", color: "#9b6bc4" },
-    }),
-  ]);
-  console.log(`✅ Seeded ${tags.length} tags`);
-
-  // 2. Seed Roadmap: AI & LLM Architecture
+  // 1. Seed Roadmap: AI & LLM Architecture
   const aiRoadmap = await prisma.roadmap.upsert({
     where: { slug: "ai-architecture" },
     update: {
@@ -107,7 +82,7 @@ async function main() {
   await seedLayers(aiRoadmap.id, INITIAL_ROADMAP_DATA);
   console.log(`✅ Seeded AI Architecture Roadmap with ${INITIAL_ROADMAP_DATA.length} layers`);
 
-  // 3. Seed Demo Roadmap 2: Backend Engineering Roadmap
+  // 2. Seed Demo Roadmap 2: Backend Engineering Roadmap
   const beRoadmap = await prisma.roadmap.upsert({
     where: { slug: "backend-roadmap" },
     update: {

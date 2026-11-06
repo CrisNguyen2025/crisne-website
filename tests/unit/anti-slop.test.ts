@@ -35,7 +35,7 @@ function createMockStringStream(chunks: string[]): ReadableStream<string> {
   });
 }
 
-async function readStream(stream: ReadableStream<any>): Promise<string> {
+async function readStream(stream: ReadableStream<string | Uint8Array>): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let result = "";
@@ -88,7 +88,7 @@ describe("lib/ai/anti-slop — Text Helpers", () => {
     expect(isDirectAnswerCompliant("", 20)).toBe(false);
 
     const answerWithTagPunctuation =
-      "Cris có 5 năm kinh nghiệm chuyên sâu về Next.js và hệ thống AI [[action:roadmap|layer-03|Tầng 03 RAG]].";
+      "Cris có 5 năm kinh nghiệm chuyên sâu về Next.js và hệ thống AI [[action:project|kamala-commerce-tour|Kamala]].";
     expect(isDirectAnswerCompliant(answerWithTagPunctuation, 20)).toBe(true);
   });
 });

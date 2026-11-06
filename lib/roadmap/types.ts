@@ -4,7 +4,6 @@ import type { LessonStatus } from './status';
 /** A lesson as the UI and the API see it. `section` is null for lessons outside any section. */
 export interface ChecklistItem {
   id: string;
-  slug?: string;
   title: string;
   description: string;
   section: string | null;
@@ -12,8 +11,6 @@ export interface ChecklistItem {
   createdAt: string;
   updatedAt: string;
   content?: string;
-  notes?: string;
-  tags?: string[];
   /** Lesson Status (ADR-0010); present only for the Owner */
   status?: LessonStatus;
   statusUpdatedAt?: string | null;

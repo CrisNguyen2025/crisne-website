@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { findTopic } from '@/lib/roadmap/resolveRoadmap';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { normalizeTitle } from '@/lib/roadmap/duplicates';
@@ -11,8 +12,6 @@ interface RouteContext {
 
 export const dynamic = 'force-dynamic';
 
-// PATCH /api/v1/roadmaps/[slug]/sections - Rename a section: every lesson in it moves to the new name.
-// Renaming onto a name the topic already uses merges the two sections.
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -27,13 +26,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'to is required' }, { status: 400 });
     }
 
-    const roadmap = await prisma.roadmap.findUnique({ where: { slug }, include: { items: true } });
-    if (!roadmap) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
+    const topic = await findTopic(slug);
+    if (!topic) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
 
+    const items = await prisma.roadmapItem.findMany({ where: { roadmapId: topic.id } });
     const fromKey = normalizeTitle(from);
-    const others = roadmap.items.map((i) => i.section).filter((s): s is string => Boolean(s));
+    const others = items.map((i) => i.section).filter((s): s is string => Boolean(s));
     const target = sectionSpelling(others, to);
-    const moving = roadmap.items.filter((i) => i.section && normalizeTitle(i.section) === fromKey);
+    const moving = items.filter((i) => i.section && normalizeTitle(i.section) === fromKey);
     if (moving.length === 0) {
       return NextResponse.json({ error: `No section "${from}" in this topic` }, { status: 404 });
     }
@@ -51,7 +51,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 }
 
-// DELETE /api/v1/roadmaps/[slug]/sections?section=... - Dissolve a section: every lesson in it moves to the topic's general group.
 export async function DELETE(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -63,10 +62,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'section is required' }, { status: 400 });
     }
 
-    const roadmap = await prisma.roadmap.findUnique({ where: { slug }, include: { items: true } });
-    if (!roadmap) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
+    const topic = await findTopic(slug);
+    if (!topic) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
 
-    const moving = roadmap.items.filter((i) => i.section && normalizeTitle(i.section) === normalizeTitle(section));
+    const items = await prisma.roadmapItem.findMany({ where: { roadmapId: topic.id } });
+    const moving = items.filter((i) => i.section && normalizeTitle(i.section) === normalizeTitle(section));
     if (moving.length === 0) {
       return NextResponse.json({ error: `No section "${section}" in this topic` }, { status: 404 });
     }

@@ -13,7 +13,6 @@ import {
   scanEntityMentions,
   appendEntityActionChips,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   AUTHORITATIVE_CONTACTS,
   type ChatActionChip,
 } from "@/lib/ai/action-chips";
@@ -174,20 +173,12 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       }
     });
 
-    it("validates exact roadmap layers 01 through 05 with sequence and codes", () => {
-      expect(AUTHORITATIVE_LAYERS).toHaveLength(5);
-      const expectedIds = ["layer-01", "layer-02", "layer-03", "layer-04", "layer-05"];
-      const expectedCodes = ["01-DB", "02-LLM", "03-RAG", "04-OPS", "05-PROD"];
-
-      expect(AUTHORITATIVE_LAYERS.map((l) => l.id)).toEqual(expectedIds);
-      expect(AUTHORITATIVE_LAYERS.map((l) => l.code)).toEqual(expectedCodes);
-
-      for (const layer of AUTHORITATIVE_LAYERS) {
-        expect(layer.triggers.length).toBeGreaterThanOrEqual(4);
-        for (const trigger of layer.triggers) {
-          expect(trigger).toBe(trigger.toLowerCase());
-        }
-      }
+    it("validates authoritative catalogs do not contain layer-0 identifiers", () => {
+      const allIds = [
+        ...AUTHORITATIVE_PROJECTS.map((p) => p.id),
+        ...AUTHORITATIVE_CONTACTS.map((c) => c.id),
+      ];
+      expect(allIds.some((id) => id.includes("layer-0"))).toBe(false);
     });
 
     it("validates exact contact channels: zalo, github, cv, contact", () => {
@@ -204,7 +195,6 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
     it("ensures all trigger sets across categories are collision-free", () => {
       const allTriggers = [
         ...AUTHORITATIVE_PROJECTS.flatMap((p) => p.triggers),
-        ...AUTHORITATIVE_LAYERS.flatMap((l) => l.triggers),
         ...AUTHORITATIVE_CONTACTS.flatMap((c) => c.triggers),
       ];
       const uniqueTriggers = new Set(allTriggers);
@@ -220,9 +210,6 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       expect(formatActionChip("project", "kamala-commerce-tour", "Khám phá Kamala")).toBe(
         "[[action:project|kamala-commerce-tour|Khám phá Kamala]]"
       );
-      expect(formatActionChip("roadmap", "layer-01", "Tầng 01: Knowledge Base")).toBe(
-        "[[action:roadmap|layer-01|Tầng 01: Knowledge Base]]"
-      );
       expect(formatActionChip("contact", "cv", "Tải CV Cris Nguyen")).toBe(
         "[[action:contact|cv|Tải CV Cris Nguyen]]"
       );
@@ -231,7 +218,7 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       );
     });
 
-    it("parses single and multiple action tags across all 4 supported types", () => {
+    it("parses single and multiple action tags across supported types", () => {
       const input =
         "Xem dự án [[action:project|kamala-commerce-tour|Kamala Tour]], xem lộ trình [[action:roadmap|layer-04|LLMOps]], liên hệ qua [[action:contact|github|GitHub]] hoặc vào [[action:link|https://crisne.io|Website]].";
       const { cleanContent, actionChips } = parseMessageContentAndActions(input);
@@ -239,23 +226,18 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
       expect(cleanContent).toBe(
         "Xem dự án , xem lộ trình , liên hệ qua  hoặc vào ."
       );
-      expect(actionChips).toHaveLength(4);
+      expect(actionChips).toHaveLength(3);
       expect(actionChips[0]).toEqual({
         type: "project",
         id: "kamala-commerce-tour",
         label: "Kamala Tour",
       });
       expect(actionChips[1]).toEqual({
-        type: "roadmap",
-        id: "layer-04",
-        label: "LLMOps",
-      });
-      expect(actionChips[2]).toEqual({
         type: "contact",
         id: "github",
         label: "GitHub",
       });
-      expect(actionChips[3]).toEqual({
+      expect(actionChips[2]).toEqual({
         type: "link",
         id: "https://crisne.io",
         label: "Website",
@@ -305,13 +287,12 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
 
     it("scanEntityMentions detects untagged mentions case-insensitively with diacritics", () => {
       const text =
-        "Cris từng xây dựng KAMALA JEWELRY và ZELENE HEAD SPA cùng với TẦNG 01 và nhắn zalo.";
+        "Cris từng xây dựng KAMALA JEWELRY và ZELENE HEAD SPA cùng với nhắn zalo.";
       const chips = scanEntityMentions(text);
 
       const ids = chips.map((c) => c.id);
       expect(ids).toContain("kamala-commerce-tour");
       expect(ids).toContain("zelene-spa-booking");
-      expect(ids).toContain("layer-01");
       expect(ids).toContain("zalo");
     });
 
@@ -326,11 +307,11 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
     });
 
     it("appendEntityActionChips formats and appends missing entity tags cleanly", () => {
-      const text = "Cris phát triển JAVIS 3D và phụ trách tầng 05.";
+      const text = "Cris phát triển JAVIS 3D và liên hệ Zalo.";
       const enriched = appendEntityActionChips(text);
 
       expect(enriched).toContain("[[action:project|javis-3d-tile-simulation|Xem JAVIS 3D]]");
-      expect(enriched).toContain("[[action:roadmap|layer-05|Tầng 05: Production Deployment]]");
+      expect(enriched).toContain("[[action:contact|zalo|Kết nối Zalo]]");
     });
   });
 
@@ -435,7 +416,7 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
     it("verifies isDirectAnswerCompliant word counting logic with action tags", () => {
       // 14 words + 1 action tag
       const text =
-        "Cris Nguyen có hơn 5 năm kinh nghiệm chuyên sâu về Next.js và hệ thống AI [[action:roadmap|layer-03|Tầng 03 RAG]].";
+        "Cris Nguyen có hơn 5 năm kinh nghiệm chuyên sâu về Next.js và hệ thống AI [[action:project|kamala-commerce-tour|Khám phá Kamala]].";
       expect(isDirectAnswerCompliant(text, 20)).toBe(true);
 
       // 22 words -> non-compliant
@@ -446,7 +427,7 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
 
     it("verifies isDirectAnswerCompliant does not count trailing punctuation after action tag as word", () => {
       const text =
-        "Cris Nguyen có 5 năm kinh nghiệm về Next.js và AI [[action:roadmap|layer-03|Tầng 03 RAG]].";
+        "Cris Nguyen có 5 năm kinh nghiệm về Next.js và AI [[action:project|kamala-commerce-tour|Khám phá Kamala]].";
       expect(isDirectAnswerCompliant(text, 20)).toBe(true);
     });
 
@@ -492,19 +473,15 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
   // SECTION 4: Chat Route System Prompt & Fallbacks
   // =========================================================================
   describe("Section 4: Chat Route Prompt & Fallbacks", () => {
-    it("ANTI_SLOP_SYSTEM_PROMPT contains all 4 projects, 5 layers, and 4 contacts specifications", () => {
+    it("ANTI_SLOP_SYSTEM_PROMPT contains all 4 projects, 4 contacts specifications, and no layer-0", () => {
       // Projects
       expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("kamala-commerce-tour");
       expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("zelene-spa-booking");
       expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("smartbit-saas-platform");
       expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("javis-3d-tile-simulation");
 
-      // Layers
-      expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("layer-01");
-      expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("layer-02");
-      expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("layer-03");
-      expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("layer-04");
-      expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("layer-05");
+      // No layers
+      expect(ANTI_SLOP_SYSTEM_PROMPT).not.toContain("layer-0");
 
       // Contacts
       expect(ANTI_SLOP_SYSTEM_PROMPT).toContain("zalo");
@@ -582,19 +559,19 @@ describe("Empirical Challenge Suite — Milestone 2", () => {
     it("properly caches sanitized response including action tags on repeated query", async () => {
       mockLlmWithChunks([
         "Xin chào! ",
-        "Cris chuyên về Tầng 02 LLM Application [[action:roadmap|layer-02|Tầng 02: LLM Application]].",
+        "Cris chuyên về dự án Kamala [[action:project|kamala-commerce-tour|Khám phá Kamala]].",
       ]);
 
-      const req1 = createChatRequest({ message: "Tầng 2 trong lộ trình là gì?" });
+      const req1 = createChatRequest({ message: "Dự án Kamala là gì?" });
       const res1 = await POST(req1);
       const text1 = await res1.text();
 
       expect(text1).toBe(
-        "Cris chuyên về Tầng 02 LLM Application [[action:roadmap|layer-02|Tầng 02: LLM Application]]."
+        "Cris chuyên về dự án Kamala [[action:project|kamala-commerce-tour|Khám phá Kamala]]."
       );
 
       // Second identical request served from cache
-      const req2 = createChatRequest({ message: "Tầng 2 trong lộ trình là gì?" });
+      const req2 = createChatRequest({ message: "Dự án Kamala là gì?" });
       const res2 = await POST(req2);
       const text2 = await res2.text();
 

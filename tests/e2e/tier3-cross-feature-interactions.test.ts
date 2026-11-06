@@ -4,7 +4,6 @@ import {
   createMockStream,
   readStreamToString,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   ChatActionChip,
 } from "./test-helpers";
 
@@ -157,29 +156,6 @@ describe("Tier 3 — Cross-Feature Interactions", () => {
       expect(modalOpenedProjectId).toBe("kamala-commerce-tour");
       const matched = AUTHORITATIVE_PROJECTS.find(p => p.id === modalOpenedProjectId);
       expect(matched?.title).toBe("Kamala Jewelry & Tour Platform");
-    });
-
-    it("clicking roadmap chip triggers roadmap:select-layer and matches authoritative layer", () => {
-      let selectedLayerId = "";
-      const listener = (event: Event) => {
-        const custom = event as CustomEvent<{ layerId: string }>;
-        selectedLayerId = custom.detail.layerId;
-      };
-
-      globalThis.addEventListener("roadmap:select-layer", listener);
-
-      const targetLayer = AUTHORITATIVE_LAYERS[2]; // Layer 03 RAG
-      globalThis.dispatchEvent(
-        new CustomEvent("roadmap:select-layer", {
-          detail: { layerId: targetLayer.id },
-        })
-      );
-
-      globalThis.removeEventListener("roadmap:select-layer", listener);
-
-      expect(selectedLayerId).toBe("layer-03");
-      const matched = AUTHORITATIVE_LAYERS.find(l => l.id === selectedLayerId);
-      expect(matched?.code).toBe("03-RAG");
     });
   });
 

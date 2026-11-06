@@ -7,7 +7,6 @@ import {
   countWords,
   getFirstSentence,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   AUTHORITATIVE_CONTACTS,
 } from "./test-helpers";
 
@@ -117,12 +116,6 @@ describe("Tier 1 — R2: Anti-Slop AI Behavior & Structured Response Engine", ()
       expect(ids).toContain("javis-3d-tile-simulation");
     });
 
-    it("authoritative roadmap catalog contains 5 defined layers", () => {
-      expect(AUTHORITATIVE_LAYERS).toHaveLength(5);
-      const layerIds = AUTHORITATIVE_LAYERS.map(l => l.id);
-      expect(layerIds).toEqual(["layer-01", "layer-02", "layer-03", "layer-04", "layer-05"]);
-    });
-
     it("authoritative contact catalog contains 4 channels", () => {
       expect(AUTHORITATIVE_CONTACTS).toHaveLength(4);
       const contactIds = AUTHORITATIVE_CONTACTS.map(c => c.id);
@@ -134,7 +127,7 @@ describe("Tier 1 — R2: Anti-Slop AI Behavior & Structured Response Engine", ()
 
     it("validates action tag syntax specification: [[action:type|id|label]]", () => {
       const validTag = "[[action:project|kamala-commerce-tour|Khám phá Kamala]]";
-      const regex = /\[\[action:(project|roadmap|contact|link)\|([^|]+)\|([^\]]+)\]\]/g;
+      const regex = /\[\[action:(project|contact|link)\|([^|]+)\|([^\]]+)\]\]/g;
       const match = regex.exec(validTag);
       expect(match).not.toBeNull();
       expect(match?.[1]).toBe("project");

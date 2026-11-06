@@ -7,12 +7,6 @@
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
       "computedHash": "b3eb40152b81f0c98fd2095a023c019452dbdce56f7540cc67fece2972db8369"
     },
-    "fireworks-tech-graph": {
-      "source": "yizhiyanhua-ai/fireworks-tech-graph",
-      "sourceType": "github",
-      "skillPath": "SKILL.md",
-      "computedHash": "224ec0ce865dc17d882aefd18ec968ca0bbe43643f9cff6a916017465e807358"
-    },
     "grill-with-docs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -24,12 +18,6 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
       "computedHash": "e40cc1d348f6d935e28f1e24474302d7368f0a400429271a43b35fe154891dc5"
-    },
-    "next-dev-loop": {
-      "source": "vercel/next.js",
-      "sourceType": "github",
-      "skillPath": "skills/next-dev-loop/SKILL.md",
-      "computedHash": "aad97b32ba6efd31e92d063ec77120a694fe0d4a9401daf9af4c205cd5e21b07"
     },
     "no-ai-slop": {
       "source": "petergyang/no-ai-slop",

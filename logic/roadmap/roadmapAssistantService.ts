@@ -17,31 +17,6 @@ export const roadmapChatClient = new RoadmapChatClient({
   baseUrl: ROADMAP_ASSISTANT_BASE_URL,
 });
 
-/**
- * Send natural language prompt to the Roadmap RAG Assistant.
- *
- * Example:
- *   await sendRoadmapAssistantMessage("tạo cho tôi 3 topic A, B và C");
- */
-export async function sendRoadmapAssistantMessage(
-  message: string,
-  threadId: string = 'web-session'
-): Promise<ChatResponse> {
-  return roadmapChatClient.chat(message, threadId);
-}
-
-/**
- * Check if the Python RAG Assistant service is reachable.
- */
-export async function checkRoadmapAssistantHealth(): Promise<boolean> {
-  try {
-    const health = await roadmapChatClient.health();
-    return health.status === 'ok';
-  } catch {
-    return false;
-  }
-}
-
 export type { ChatResponse, ToolCallResult };
 
 /**
