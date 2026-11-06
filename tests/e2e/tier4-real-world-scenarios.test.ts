@@ -4,7 +4,6 @@ import {
   countWords,
   getFirstSentence,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   ChatActionChip,
 } from "./test-helpers";
 
@@ -78,35 +77,34 @@ describe("Tier 4 — Real-World Workload Scenarios", () => {
     });
   });
 
-  describe("Scenario 3: Roadmap Explorer Deep-Dive Flow", () => {
-    it("handles technical query on LLMOps layer and guides user with layer jump chip", () => {
-      const developerQuestion = "Tầng Ops & Đánh giá (LLMOps) trong roadmap gồm những nội dung gì?";
+  describe("Scenario 3: Portfolio Project Deep-Dive Flow", () => {
+    it("handles technical query on project and guides user with project chip", () => {
+      const developerQuestion = "Cris có dự án nào về mô phỏng 3D không?";
 
       const assistantResponse =
-        "Tầng 04 LLMOps bao gồm Langfuse tracing, circuit breakers, semantic caching, và đánh giá RAG tự động. [[action:roadmap|layer-04|Xem Tầng 04 LLMOps]]";
+        "Cris phát triển JAVIS 3D mô phỏng mẫu gạch trên mô hình Unity. [[action:project|javis-3d-tile-simulation|Xem JAVIS 3D]]";
 
       expect(countWords(getFirstSentence(assistantResponse))).toBeLessThanOrEqual(20);
-      expect(assistantResponse).toContain("layer-04");
+      expect(assistantResponse).toContain("javis-3d-tile-simulation");
 
-      // Verify layer-04 exists in authoritative catalog
-      const matchedLayer = AUTHORITATIVE_LAYERS.find(l => l.id === "layer-04");
-      expect(matchedLayer).toBeDefined();
-      expect(matchedLayer?.code).toBe("04-OPS");
+      // Verify javis-3d exists in authoritative catalog
+      const matchedProject = AUTHORITATIVE_PROJECTS.find(p => p.id === "javis-3d-tile-simulation");
+      expect(matchedProject).toBeDefined();
 
-      // Simulate roadmap layer selection event
-      let selectedLayer = "";
+      // Simulate project open modal event
+      let selectedProject = "";
       const handler = (e: Event) => {
-        selectedLayer = (e as CustomEvent).detail.layerId;
+        selectedProject = (e as CustomEvent).detail.projectId;
       };
-      globalThis.addEventListener("roadmap:select-layer", handler);
+      globalThis.addEventListener("project:open-modal", handler);
       globalThis.dispatchEvent(
-        new CustomEvent("roadmap:select-layer", {
-          detail: { layerId: "layer-04" },
+        new CustomEvent("project:open-modal", {
+          detail: { projectId: "javis-3d-tile-simulation" },
         })
       );
-      globalThis.removeEventListener("roadmap:select-layer", handler);
+      globalThis.removeEventListener("project:open-modal", handler);
 
-      expect(selectedLayer).toBe("layer-04");
+      expect(selectedProject).toBe("javis-3d-tile-simulation");
     });
   });
 

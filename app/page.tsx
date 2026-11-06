@@ -213,7 +213,7 @@ function RoadmapWorkspace() {
     selectActiveItem(id);
     setIsReaderOpen(true);
     const found = items.find((i) => i.id === id);
-    setItem(found ? found.slug || slugify(found.title) : id);
+    setItem(found ? slugify(found.title) : id);
   };
 
   const handleCreateRoadmap = async (payload: CreateRoadmapDto) => {

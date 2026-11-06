@@ -9,7 +9,7 @@
 
 Dự án `crisne-website` hoạt động theo mô hình lai (Hybrid Full-Stack) gồm hai dịch vụ chính tương tác chặt chẽ:
 
-1. **Next.js 15+ App Router (TypeScript)**: Đóng vai trò Web UI, API Gateway, và Service Layer cho Roadmap, Notes, Workflows, Storage.
+1. **Next.js 15+ App Router (TypeScript)**: Đóng vai trò Web UI, API Gateway, và Service Layer cho Roadmap, Notes, Storage.
 2. **Python FastAPI Microservice (`roadmap-rag-assistant`)**: Đảm nhiệm AI Reasoning, Intent Routing P0-P8, Hybrid Vector Store (Gemini 768d + BM25 FTS) và sinh thẻ Preview CUD.
 
 ```mermaid
@@ -17,7 +17,6 @@ graph TB
     subgraph Browser_Client ["Trình duyệt (Browser / Client)"]
         UI_Roadmap["Roadmap UI (Topics / Lessons)"]
         UI_Lexical["Lexical Notes Editor"]
-        UI_WorkflowCanvas["Workflow Canvas (DAG Visual Graph)"]
         UI_FloatingBot["Floating Chatbot (Abot)"]
     end
 
@@ -26,14 +25,11 @@ graph TB
             AuthCheck["NextAuth / write-access.ts<br/>(Owner vs Visitor)"]
             Proxy_Route["Same-Origin Proxy Route<br/>/api/roadmap-assistant/[...path]"]
             API_Roadmap["/api/v1/roadmaps/*"]
-            API_Workflows["/api/workflows/*"]
-            API_Notes["/api/notes/*"]
             API_Triage["/api/v1/roadmaps/triage/*"]
         end
 
         subgraph Service_Layer ["Domain Logic & Services"]
             RoadmapService["roadmapService.ts"]
-            WorkflowRunService["run-service.ts & dag-executor.ts"]
             TriageService["knowledgeTriageService.ts"]
             ReindexHook["rag-reindex.ts (after request)"]
         end
@@ -61,13 +57,10 @@ graph TB
 
     %% Client calls
     UI_Roadmap --> API_Roadmap
-    UI_Lexical --> API_Notes
-    UI_WorkflowCanvas --> API_Workflows
     UI_FloatingBot --> Proxy_Route
 
     %% Gateway & Routing
     API_Roadmap --> RoadmapService --> PrismaORM
-    API_Workflows --> WorkflowRunService --> PrismaORM
     API_Triage --> TriageService --> PrismaORM
     PrismaORM --> SQLiteTurso
 
@@ -87,17 +80,15 @@ graph TB
 
 ---
 
-## 2. 8 DOMAINS TRỌNG YẾU (COMMUNITIES)
+## 2. 6 DOMAINS TRỌNG YẾU (COMMUNITIES)
 
 | ID Domain                | Tên Domain               | ADRs Quy định                                    | Trọng tâm Logic                                                                                            | Key Files                                                                                                                 |
 | ------------------------ | ------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `roadmap-learning`       | Roadmap & Learning       | ADR-0008, ADR-0009, ADR-0010                     | Quản lý Topic, Section (chuỗi tự do), Lesson, Lesson Status (`target`, `learning`, `known`)                | `lib/roadmap/*`, `logic/roadmap/roadmapService.ts`, `components/roadmap/*`, `app/api/v1/roadmaps/*`                       |
 | `roadmap-assistant-abot` | Roadmap Assistant (Abot) | ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0006 | Trợ lý RAG AI trên Topic, proxy cùng domain, router P0-P8, in-memory vector store Gemini 768d, CUD Preview | `app/api/roadmap-assistant/*`, `roadmap-rag-assistant/rag_service/*`, `logic/roadmap/roadmapAssistantService.ts`          |
-| `notes-editor`           | Notes & Lexical CMS      | N/A                                              | Lexical Editor, autosave debounce, tag taxonomy, markdown serialize                                        | `app/notes/*`, `app/api/notes/*`, `app/api/tags/*`, `lib/notion.ts`                                                       |
-| `workflow-builder`       | Workflow Builder & DAG   | N/A                                              | Canvas trực quan, AST validator, DAG executor thuần túy, KB chunking, Gemini quota                         | `components/workflow-canvas/*`, `lib/workflow/*`, `app/api/workflows/*`                                                   |
-| `storage-media`          | Storage & Media          | N/A                                              | S3/R2 client, image upload, cleanup & quota stats                                                          | `app/api/upload-image/*`, `lib/r2-client.ts`, `logic/storage/*`                                                           |
+| `notes-editor`           | Notes & Lexical CMS      | N/A                                              | Lexical Editor, autosave debounce, tag taxonomy, markdown serialize                                        | `app/notes/*`, `app/api/tags/*`, `lib/notion.ts`                                                                          |
+| `storage-media`          | Storage & Media          | N/A                                              | S3/R2 client, image upload                                                                                 | `app/api/upload-image/*`, `lib/r2-client.ts`                                                                               |
 | `auth-security`          | Auth & Actor Model       | ADR-0002                                         | NextAuth, Actor `Owner` vs `Visitor`, `requireWriteAccess`, internal Bearer token                          | `auth.ts`, `lib/auth/*`, `hooks/use-can-write.ts`, `rag_service/auth.py`                                                  |
-| `docs-openapi`           | API Docs & OpenAPI       | N/A                                              | Khám phá API nội bộ theo vai trò, OpenAPI 3.0 dynamic generator                                            | `app/api/docs/*`, `app/api/v1/openapi/*`, `lib/knowledge/openapi.ts`                                                      |
 | `triage-observability`   | Triage & Active Learning | ADR-0003                                         | Missing Knowledge Triage queue, Langfuse 👎 vote sync, Golden set evals                                    | `app/api/v1/roadmaps/triage/*`, `logic/roadmap/knowledgeTriageService.ts`, `components/roadmap/KnowledgeTriageDrawer.tsx` |
 
 ---
@@ -204,44 +195,6 @@ sequenceDiagram
 
 ---
 
-### Luồng 4: Khởi chạy Luồng Workflow DAG (`FLOW_WORKFLOW_RUN_DAG`)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Owner as Owner
-    participant Canvas as RunPanel.tsx
-    participant API as /api/workflows/[id]/runs
-    participant Service as run-service.ts
-    participant Validator as dsl-validator.ts
-    participant DAG as dag-executor.ts
-    participant Quota as quota.ts
-    participant Gemini as Gemini API
-    participant Prisma as Prisma (WorkflowRun & NodeExecution)
-
-    Owner->>Canvas: Nhấn nút "Chạy luồng" (Run)
-    Canvas->>API: POST /api/workflows/[id]/runs { input: {...} }
-    API->>Service: runWorkflowById()
-    Service->>Validator: validateWorkflowGraph(graph)
-    Validator-->>Service: Valid (Acyclic, Ports match)
-    Service->>Prisma: Tạo WorkflowRun (status: RUNNING)
-    Service->>DAG: executeWorkflow(graph, inputs)
-
-    loop Duyệt từng Node theo Topological Order
-        DAG->>Quota: withQuota(model)
-        Quota-->>DAG: Quota OK
-        DAG->>Gemini: Gọi Handler (LLM / RAG / Condition / Merge)
-        Gemini-->>DAG: Output & Token usage
-        DAG->>Prisma: Lưu NodeExecution (status: SUCCEEDED)
-    end
-
-    DAG-->>Service: WorkflowRunResult
-    Service->>Prisma: Cập nhật WorkflowRun (status: SUCCEEDED, output)
-    Service-->>Canvas: Trả về kết quả hoàn tất
-```
-
----
-
 ## 4. MA TRẬN API ROUTE TO HANDLER (ROUTE MAP)
 
 | Method   | Path                                            | Quyền (Auth)        | Domain                   | Controller / Handler File                                        | Triggered Flow            |
@@ -264,8 +217,6 @@ sequenceDiagram
 | `GET`    | `/api/v1/roadmaps/full-export`                  | None                | `roadmap-learning`       | `app/api/v1/roadmaps/full-export/route.ts#GET`                   | RAG Export Corpus         |
 | `POST`   | `/api/roadmap-assistant/[...path]`              | None (Actor Header) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts#POST`              | Proxy to Python Service   |
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
-| `POST`   | `/api/workflows/[id]/runs`                      | Owner Only          | `workflow-builder`       | `app/api/workflows/[id]/runs/route.ts#POST`                      | Run Workflow DAG          |
-| `POST`   | `/api/workflows/projects/[projectId]/documents` | Owner Only          | `workflow-builder`       | `app/api/workflows/projects/[projectId]/documents/route.ts#POST` | Ingest KB Document        |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
 | `POST`   | `/api/v1/roadmaps/triage`                       | Owner Only          | `triage-observability`   | `app/api/v1/roadmaps/triage/route.ts#POST`                       | Create Triage Item        |
 | `POST`   | `/api/v1/roadmaps/triage/[id]/approve`          | Owner Only          | `triage-observability`   | `app/api/v1/roadmaps/triage/[id]/approve/route.ts#POST`          | Approve Triage to Lesson  |

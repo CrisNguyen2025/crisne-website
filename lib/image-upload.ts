@@ -72,13 +72,6 @@ export async function uploadBase64Image(base64: string): Promise<UploadResult> {
 }
 
 /**
- * Check if content contains base64 images
- */
-export function hasBase64Images(html: string): boolean {
-  return html.includes('data:image/');
-}
-
-/**
  * Extract all base64 images from HTML
  */
 export function extractBase64Images(html: string): string[] {

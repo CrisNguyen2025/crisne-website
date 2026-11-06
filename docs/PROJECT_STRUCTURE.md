@@ -32,11 +32,6 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 │   │   ├── scroll-tracker.tsx   # Scroll tracking
 │   │   └── page-timer.tsx       # Page timing
 │   │
-│   ├── unlock-gate/             # Unlock gate feature
-│   │   ├── UnlockGate.tsx
-│   │   ├── UnlockModal.tsx
-│   │   └── MemoryGame.tsx
-│   │
 │   ├── error-boundary.tsx       # Error boundary component
 │   ├── skip-link.tsx           # Accessibility skip link
 │   ├── web-vitals.tsx          # Core Web Vitals monitoring
@@ -57,13 +52,11 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 ├── hooks/                        # Custom React hooks
 │   ├── use-reduced-motion.ts    # Detect prefers-reduced-motion
 │   ├── use-scroll-spy.ts
-│   ├── use-track-section.ts
-│   └── use-unlock.ts
+│   └── use-track-section.ts
 │
 ├── lib/                          # Utility functions
 │   ├── utils.ts                # cn() and helpers
-│   ├── analytics.ts            # Analytics utilities
-│   └── gtag.ts                 # Google Analytics
+│   └── analytics.ts            # Analytics utilities
 │
 ├── public/                       # Static assets
 │   ├── cris-nguyen-cv.pdf
@@ -158,7 +151,6 @@ Page sections with specific purposes:
 
 Complex interactive features:
 
-- `unlock-gate/`: Memory game unlock system
 - `analytics/`: Tracking components
 
 ## Styling Architecture

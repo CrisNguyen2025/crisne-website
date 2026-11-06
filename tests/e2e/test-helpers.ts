@@ -31,14 +31,6 @@ export const AUTHORITATIVE_PROJECTS = [
   { id: "javis-3d-tile-simulation", title: "JAVIS 3D Tile Pattern Simulation" },
 ];
 
-export const AUTHORITATIVE_LAYERS = [
-  { id: "layer-01", code: "01-DB", title: "Tầng Dữ liệu & Tri thức" },
-  { id: "layer-02", code: "02-LLM", title: "Tầng LLM Application Layer" },
-  { id: "layer-03", code: "03-RAG", title: "Tầng RAG + Agent Layer" },
-  { id: "layer-04", code: "04-OPS", title: "Tầng Ops & Đánh giá (LLMOps)" },
-  { id: "layer-05", code: "05-PROD", title: "Tầng Sản phẩm Production" },
-];
-
 export const AUTHORITATIVE_CONTACTS = [
   { id: "zalo", label: "Zalo" },
   { id: "github", label: "GitHub" },

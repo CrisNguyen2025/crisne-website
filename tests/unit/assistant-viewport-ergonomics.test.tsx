@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAssistantViewport } from "@/hooks/use-assistant-viewport";
 import { FloatingQuickBar } from "@/components/floating-bot/FloatingQuickBar";
 import { FloatingChatDrawer } from "@/components/floating-bot/FloatingChatDrawer";
-import { FloatingChatPopup } from "@/components/floating-bot/FloatingChatPopup";
 import type { UseFloatingChatReturn } from "@/hooks/use-floating-chat";
 
 // Mock scrollIntoView for jsdom
@@ -148,15 +147,6 @@ describe("Mobile Viewport Ergonomics & Auto-Zoom Prevention", () => {
       const textarea = screen.getByPlaceholderText(/Hỏi Cris AI.../i);
       expect(textarea.className).toContain("text-[16px]");
       expect(textarea.className).toContain("md:text-sm");
-    });
-
-    it("Style 1 Popup composer input specifies text-[16px] for mobile viewports", () => {
-      const chat = createDummyChat();
-      render(<FloatingChatPopup isOpen={true} onClose={vi.fn()} chat={chat} />);
-
-      const input = screen.getByPlaceholderText("Nhập câu hỏi của bạn...");
-      expect(input.className).toContain("text-[16px]");
-      expect(input.className).toContain("md:text-sm");
     });
   });
 });

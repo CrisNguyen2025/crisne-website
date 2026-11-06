@@ -17,37 +17,7 @@ import {
   UpdateRoadmapDto,
 } from '@/lib/roadmap/types';
 import type { LessonStatus } from '@/lib/roadmap/status';
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  });
-
-  if (!res.ok) {
-    let errorDetail = res.statusText;
-    try {
-      const errorJson = await res.json();
-      errorDetail = errorJson.error || JSON.stringify(errorJson);
-    } catch {
-      const text = await res.text().catch(() => '');
-      if (text) errorDetail = text;
-    }
-    // `status` lets the UI tell "no longer exists" (404) apart from other failures
-    throw Object.assign(new Error(errorDetail || `Request failed with status ${res.status}`), {
-      status: res.status,
-    });
-  }
-
-  return res.json() as Promise<T>;
-}
+import { apiFetch } from '@/logic/api-fetch';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Topics

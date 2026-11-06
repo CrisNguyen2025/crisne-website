@@ -11,7 +11,7 @@ function ChatbotInner() {
   const isReaderOpen = Boolean(searchParams?.get("item"));
 
   if (pathname?.startsWith("/portfolio")) {
-    return <FloatingChatBot uiStyle="style2-drawer" />;
+    return <FloatingChatBot />;
   }
 
   // On phones: when reading a lesson (?item=), bottom nav is hidden, so anchor lower.

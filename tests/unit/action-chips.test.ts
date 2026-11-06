@@ -5,9 +5,7 @@ import {
   scanEntityMentions,
   appendEntityActionChips,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   AUTHORITATIVE_CONTACTS,
-  ACTION_TAG_REGEX,
   ChatActionChip,
 } from "@/lib/ai/action-chips";
 
@@ -27,15 +25,6 @@ describe("lib/ai/action-chips — Authoritative Catalogs", () => {
     }
   });
 
-  it("defines exactly the 5 roadmap layers from layer-01 to layer-05", () => {
-    expect(AUTHORITATIVE_LAYERS).toHaveLength(5);
-    const layerIds = AUTHORITATIVE_LAYERS.map((l) => l.id);
-    expect(layerIds).toEqual(["layer-01", "layer-02", "layer-03", "layer-04", "layer-05"]);
-
-    const codes = AUTHORITATIVE_LAYERS.map((l) => l.code);
-    expect(codes).toEqual(["01-DB", "02-LLM", "03-RAG", "04-OPS", "05-PROD"]);
-  });
-
   it("defines exactly the 4 contact channels", () => {
     expect(AUTHORITATIVE_CONTACTS).toHaveLength(4);
     const contactIds = AUTHORITATIVE_CONTACTS.map((c) => c.id);
@@ -50,9 +39,6 @@ describe("lib/ai/action-chips — formatActionChip", () => {
   it("formats standard action chip syntax [[action:type|id|label]]", () => {
     expect(formatActionChip("project", "kamala-commerce-tour", "Khám phá Kamala")).toBe(
       "[[action:project|kamala-commerce-tour|Khám phá Kamala]]"
-    );
-    expect(formatActionChip("roadmap", "layer-02", "Tầng 02: LLM Application")).toBe(
-      "[[action:roadmap|layer-02|Tầng 02: LLM Application]]"
     );
     expect(formatActionChip("contact", "cv", "Tải CV (PDF)")).toBe(
       "[[action:contact|cv|Tải CV (PDF)]]"
@@ -78,15 +64,22 @@ describe("lib/ai/action-chips — parseMessageContentAndActions", () => {
 
   it("extracts multiple chips across multiple categories in one message", () => {
     const raw =
-      "Xem dự án [[action:project|zelene-spa-booking|Zelene Spa]] và học lộ trình [[action:roadmap|layer-03|Tầng 03 RAG]]. Hoặc liên hệ [[action:contact|zalo|Nhắn Zalo]].";
+      "Xem dự án [[action:project|zelene-spa-booking|Zelene Spa]] và liên kết [[action:link|https://example.com|Website]]. Hoặc liên hệ [[action:contact|zalo|Nhắn Zalo]].";
     const result = parseMessageContentAndActions(raw);
     expect(result.actionChips).toHaveLength(3);
     expect(result.actionChips[0].type).toBe("project");
     expect(result.actionChips[0].id).toBe("zelene-spa-booking");
-    expect(result.actionChips[1].type).toBe("roadmap");
-    expect(result.actionChips[1].id).toBe("layer-03");
+    expect(result.actionChips[1].type).toBe("link");
+    expect(result.actionChips[1].id).toBe("https://example.com");
     expect(result.actionChips[2].type).toBe("contact");
     expect(result.actionChips[2].id).toBe("zalo");
+  });
+
+  it("strips unsupported [[action:roadmap|layer-01|X]] tags from cleanContent without generating chips", () => {
+    const raw = "Tham khảo lộ trình [[action:roadmap|layer-01|Tầng 01: Knowledge Base]] tại website.";
+    const result = parseMessageContentAndActions(raw);
+    expect(result.cleanContent).toBe("Tham khảo lộ trình  tại website.");
+    expect(result.actionChips).toEqual([]);
   });
 
   it("returns clean content with empty chip array when text has no tags", () => {
@@ -105,14 +98,14 @@ describe("lib/ai/action-chips — parseMessageContentAndActions", () => {
 });
 
 describe("lib/ai/action-chips — scanEntityMentions & appendEntityActionChips", () => {
-  it("scans and recognizes un-tagged project and layer mentions", () => {
-    const text = "Cris phát triển dự án Kamala và giải pháp Zelene Spa kết hợp với tầng 03 RAG.";
+  it("scans and recognizes un-tagged project and contact mentions", () => {
+    const text = "Cris phát triển dự án Kamala và giải pháp Zelene Spa kết nối qua Zalo.";
     const chips = scanEntityMentions(text);
 
     const ids = chips.map((c) => c.id);
     expect(ids).toContain("kamala-commerce-tour");
     expect(ids).toContain("zelene-spa-booking");
-    expect(ids).toContain("layer-03");
+    expect(ids).toContain("zalo");
   });
 
   it("does not duplicate chips if already tagged or present in existingChips", () => {

@@ -20,16 +20,8 @@ const notionMock = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/notion", () => notionMock);
 
-const storageMock = vi.hoisted(() => ({
-  findUnusedStorageFiles: vi.fn(async () => ({ unusedFiles: [] })),
-  cleanupUnusedStorageFiles: vi.fn(async () => ({ deletedCount: 0 })),
-}));
-vi.mock("@/lib/r2-client", () => storageMock);
-
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { POST as createRoadmap } from "@/app/api/v1/roadmaps/route";
-import { POST as cleanupStorage } from "@/app/api/storage/cleanup/route";
-import { POST as clip } from "@/app/api/v1/clipper/route";
 import { POST as addFavorite } from "@/app/api/favorites/route";
 import { POST as chat } from "@/app/api/chat/route";
 import { POST as sendChatFeedback } from "@/app/api/chat/feedback/route";
@@ -91,34 +83,10 @@ describe("guarded write routes", () => {
     expect(res.status).toBe(401);
   });
 
-  it("POST /api/storage/cleanup never deletes files for anonymous callers", async () => {
-    const res = await cleanupStorage(request("/api/storage/cleanup"));
-    expect(res.status).toBe(401);
-    expect(storageMock.cleanupUnusedStorageFiles).not.toHaveBeenCalled();
-  });
-
-  it("POST /api/storage/cleanup runs for the signed-in owner", async () => {
+  it("POST /api/v1/roadmaps allows signed-in owner past the write gate", async () => {
     authMock.mockResolvedValue({ user: { email: OWNER } });
-    const res = await cleanupStorage(request("/api/storage/cleanup"));
+    const res = await createRoadmap(request("/api/v1/roadmaps", { body: {} }));
     expect(res.status).not.toBe(401);
-    expect(storageMock.cleanupUnusedStorageFiles).toHaveBeenCalled();
-  });
-});
-
-describe("clipper (Chrome extension, admin key only)", () => {
-  it("rejects requests without ADMIN_API_KEY configured, even with a header (fail-closed)", async () => {
-    vi.stubEnv("ADMIN_API_KEY", "");
-    const res = await clip(request("/api/v1/clipper", { headers: { "x-admin-key": "" }, body: { title: "t" } }));
-    expect(res.status).toBe(401);
-    expect(notionMock.createPost).not.toHaveBeenCalled();
-  });
-
-  it("accepts the configured key and keeps CORS headers on errors", async () => {
-    const res = await clip(request("/api/v1/clipper", { headers: { "x-admin-key": "machine-key" }, body: {} }));
-    expect(res.status).toBe(400); // passed auth, failed validation (missing title)
-    const unauthorized = await clip(request("/api/v1/clipper", { headers: { "x-admin-key": "wrong" }, body: {} }));
-    expect(unauthorized.status).toBe(401);
-    expect(unauthorized.headers.get("Access-Control-Allow-Origin")).toBeTruthy();
   });
 });
 

@@ -221,7 +221,7 @@ describe("Adversarial Stress Test: Assistant UI Dual-Concept Upgrade", () => {
     });
 
     it("is completely inactive when Drawer is open (does not hijack typing in Drawer)", () => {
-      render(<FloatingChatBot uiStyle="style2-drawer" initialOpen={true} />);
+      render(<FloatingChatBot initialOpen={true} />);
 
       // Quick bar should have translate-y-16 opacity-0
       const quickBar = screen.getByLabelText("Cris AI Quick Bar");
@@ -356,7 +356,7 @@ describe("Adversarial Stress Test: Assistant UI Dual-Concept Upgrade", () => {
     it("FloatingQuickBar UI mitigates rapid double-clicks by immediately resetting input state", async () => {
       fetchMock.mockReturnValue(new Promise(() => {}));
 
-      render(<FloatingChatBot uiStyle="style2-drawer" />);
+      render(<FloatingChatBot />);
       const quickBarInput = screen.getByPlaceholderText("Hỏi Cris AI...");
       fireEvent.change(quickBarInput, { target: { value: "Trùng lặp tin nhắn?" } });
       const sendBtn = screen.getByRole("button", { name: "Gửi câu hỏi" });
@@ -589,7 +589,7 @@ describe("Adversarial Stress Test: Assistant UI Dual-Concept Upgrade", () => {
         createStreamResponse(["Cris có hơn 5 năm kinh nghiệm về Next.js và kiến trúc micro-frontend."])
       );
 
-      render(<FloatingChatBot uiStyle="style2-drawer" />);
+      render(<FloatingChatBot />);
 
       // Quick bar is visible initially, drawer is closed
       expect(screen.queryByLabelText("Cris AI Assistant Drawer")).toBeNull();

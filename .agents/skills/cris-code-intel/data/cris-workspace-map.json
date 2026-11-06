@@ -1,13 +1,19 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-06T13:24:00Z",
-  "headCommit": "52a3596b18b4abba0107196a6e7936b86a8ae9fd",
+  "generatedAt": "2026-11-06T09:29:12.139Z",
+  "headCommit": "a2828a57170aff884a383cbd252ad8cce855b30b",
   "repository": "crisne-website",
   "architecture": {
     "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
-    "languages": ["TypeScript 5", "Python 3.13"],
+    "languages": [
+      "TypeScript 5",
+      "Python 3.13"
+    ],
     "database": "SQLite (dev) / Turso libSQL (prod) via Prisma ORM; Cloudflare R2 / AWS S3 for object storage",
-    "ai_providers": ["Google Gemini (gemini-2.5-flash / text-embedding-004 768d)", "Groq Llama 3 (fallback)"],
+    "ai_providers": [
+      "Google Gemini (gemini-2.5-flash / text-embedding-004 768d)",
+      "Groq Llama 3 (fallback)"
+    ],
     "observability": "Langfuse v5 OTEL SDK for spans, generations, and user feedback triage",
     "layers": [
       {
@@ -23,7 +29,7 @@
       {
         "id": "Domain_Logic",
         "name": "Business Logic & Services",
-        "description": "TypeScript services in `logic/`, `lib/roadmap/`, `lib/workflow/`, `lib/auth/`, enforcing domain invariants"
+        "description": "TypeScript services in `logic/`, `lib/roadmap/`, `lib/auth/`, enforcing domain invariants"
       },
       {
         "id": "AI_Orchestration",
@@ -48,8 +54,17 @@
       "name": "Roadmap & Learning Progression",
       "summary": "Quản lý các Topic (lộ trình), Section (mục tự do gom bài theo ADR-0009), Lesson (RoadmapItem) và trạng thái học tập cá nhân của Owner (Lesson Status: target/learning/known theo ADR-0010).",
       "cohesionScore": 0.94,
-      "adrs": ["ADR-0008", "ADR-0009", "ADR-0010"],
-      "glossary": ["Topic", "Section", "Lesson", "Lesson Status"],
+      "adrs": [
+        "ADR-0008",
+        "ADR-0009",
+        "ADR-0010"
+      ],
+      "glossary": [
+        "Topic",
+        "Section",
+        "Lesson",
+        "Lesson Status"
+      ],
       "keyFiles": [
         "lib/roadmap/types.ts",
         "lib/roadmap/status.ts",
@@ -72,15 +87,33 @@
         "app/api/v1/roadmaps/items/reorder/route.ts",
         "app/api/v1/roadmaps/full-export/route.ts"
       ],
-      "dataModels": ["Roadmap", "RoadmapItem"]
+      "dataModels": [
+        "Roadmap",
+        "RoadmapItem"
+      ]
     },
     {
       "id": "roadmap-assistant-abot",
       "name": "Roadmap Assistant (Abot AI RAG & CUD)",
       "summary": "Trợ lý AI chuyên biệt cho Roadmap. Tách biệt thành Python FastAPI microservice (ADR-0001) được truy cập qua Same-origin proxy (ADR-0002). Thực hiện Intent Router 9 chặng (P0-P8), Hybrid RAG (FTS + In-memory Gemini vector store theo ADR-0004/0006), và sinh thẻ Preview xác nhận CUD cho Owner.",
       "cohesionScore": 0.96,
-      "adrs": ["ADR-0001", "ADR-0002", "ADR-0003", "ADR-0004", "ADR-0006"],
-      "glossary": ["Roadmap Assistant", "Actor", "Owner", "Visitor", "Thread", "Change", "Preview", "Pending Action"],
+      "adrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0006"
+      ],
+      "glossary": [
+        "Roadmap Assistant",
+        "Actor",
+        "Owner",
+        "Visitor",
+        "Thread",
+        "Change",
+        "Preview",
+        "Pending Action"
+      ],
       "keyFiles": [
         "app/api/roadmap-assistant/[...path]/route.ts",
         "logic/roadmap/roadmapAssistantService.ts",
@@ -99,7 +132,10 @@
         "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
         "roadmap-rag-assistant/rag_service/observability.py"
       ],
-      "dataModels": ["In-memory Topic/Section/Lesson Embeddings", "PendingAction Store"]
+      "dataModels": [
+        "In-memory Topic/Section/Lesson Embeddings",
+        "PendingAction Store"
+      ]
     },
     {
       "id": "notes-editor",
@@ -111,68 +147,40 @@
       "keyFiles": [
         "app/notes/page.tsx",
         "app/notes/[slug]/page.tsx",
-        "app/api/notes/route.ts",
-        "app/api/notes/[id]/route.ts",
         "app/api/tags/route.ts",
         "app/api/tags/[id]/route.ts",
         "app/api/backup-notes/route.ts",
         "lib/notion.ts"
       ],
-      "dataModels": ["Note", "Tag"]
-    },
-    {
-      "id": "workflow-builder",
-      "name": "Workflow Builder & DAG Engine",
-      "summary": "Công cụ lập trình luồng tự động hóa thị giác dựa trên đồ thị DAG. Hỗ trợ canvas kéo thả (@dnd-kit), DSL AST validator, engine thực thi topologically sorted, Knowledge Base chunker/retrieval cho workflow, và theo dõi quota Gemini.",
-      "cohesionScore": 0.95,
-      "adrs": [],
-      "glossary": [],
-      "keyFiles": [
-        "components/workflow-canvas/WorkflowEditor.tsx",
-        "components/workflow-canvas/Canvas.tsx",
-        "components/workflow-canvas/RunPanel.tsx",
-        "components/workflow-canvas/DocumentsPanel.tsx",
-        "app/api/workflows/route.ts",
-        "app/api/workflows/[id]/route.ts",
-        "app/api/workflows/[id]/runs/route.ts",
-        "app/api/workflows/[id]/versions/route.ts",
-        "app/api/workflows/projects/route.ts",
-        "app/api/workflows/projects/[projectId]/documents/route.ts",
-        "lib/workflow/dag-executor.ts",
-        "lib/workflow/run-service.ts",
-        "lib/workflow/dsl-validator.ts",
-        "lib/workflow/node-registry.ts",
-        "lib/workflow/quota.ts",
-        "lib/workflow/kb/chunker.ts",
-        "lib/workflow/kb/retrieval.ts",
-        "lib/workflow/kb/storage.ts"
-      ],
-      "dataModels": ["WorkflowProject", "ProjectDocument", "ProjectChunk", "Workflow", "WorkflowVersion", "WorkflowRun", "NodeExecution", "WorkflowQuotaUsage"]
+      "dataModels": []
     },
     {
       "id": "storage-media",
       "name": "Storage & Media Assets",
-      "summary": "Dịch vụ lưu trữ tệp đính kèm và ảnh cho rich-text editor và workflow documents qua Cloudflare R2 / AWS S3 S3Client tương thích.",
-      "cohesionScore": 0.90,
+      "summary": "Dịch vụ lưu trữ tệp đính kèm và ảnh cho rich-text editor qua Cloudflare R2 / AWS S3 S3Client tương thích.",
+      "cohesionScore": 0.9,
       "adrs": [],
       "glossary": [],
       "keyFiles": [
         "app/api/upload-image/route.ts",
-        "app/api/storage/stats/route.ts",
-        "app/api/storage/cleanup/route.ts",
-        "logic/storage/storageService.ts",
         "lib/r2-client.ts",
         "lib/image-upload.ts"
       ],
-      "dataModels": ["ProjectDocument"]
+      "dataModels": []
     },
     {
       "id": "auth-security",
       "name": "Auth, RBAC & Actor Model",
       "summary": "Mô hình xác thực và phân quyền. Định nghĩa ranh giới Actor: Owner (có quyền ghi dữ liệu qua Google OAuth hoặc ADMIN_KEY) và Visitor (chỉ đọc và hỏi đáp). Cung cấp các route guard bảo vệ API và proxy.",
       "cohesionScore": 0.92,
-      "adrs": ["ADR-0002"],
-      "glossary": ["Actor", "Owner", "Visitor"],
+      "adrs": [
+        "ADR-0002"
+      ],
+      "glossary": [
+        "Actor",
+        "Owner",
+        "Visitor"
+      ],
       "keyFiles": [
         "auth.ts",
         "app/api/auth/[...nextauth]/route.ts",
@@ -181,32 +189,20 @@
         "hooks/use-can-write.ts",
         "roadmap-rag-assistant/rag_service/auth.py"
       ],
-      "dataModels": ["Role", "ApiEndpoint", "Feature", "RoleApiAccess"]
-    },
-    {
-      "id": "docs-openapi",
-      "name": "API Docs & OpenAPI Explorer",
-      "summary": "Tài liệu và công cụ tra cứu API nội bộ theo vai trò lập trình viên, tích hợp bộ sinh OpenAPI 3.0 dynamic specs và tìm kiếm tương tác.",
-      "cohesionScore": 0.89,
-      "adrs": [],
-      "glossary": [],
-      "keyFiles": [
-        "app/api/docs/apis/route.ts",
-        "app/api/docs/features/route.ts",
-        "app/api/docs/roles/route.ts",
-        "app/api/docs/access/route.ts",
-        "app/api/v1/openapi/route.ts",
-        "lib/knowledge/openapi.ts"
-      ],
-      "dataModels": ["Role", "ApiEndpoint", "Feature", "RoleApiAccess"]
+      "dataModels": []
     },
     {
       "id": "triage-observability",
       "name": "Triage & Active Learning",
       "summary": "Vòng lặp học tập tích cực (Active Learning Loop). Thu thập các câu hỏi chưa được giải đáp tốt hoặc bị vote 👎 từ Langfuse traces vào hàng đợi KnowledgeTriage để Owner duyệt, tạo bản nháp bài học và bổ sung vào Roadmap.",
       "cohesionScore": 0.93,
-      "adrs": ["ADR-0003"],
-      "glossary": ["Missing Knowledge Triage", "Golden Set"],
+      "adrs": [
+        "ADR-0003"
+      ],
+      "glossary": [
+        "Missing Knowledge Triage",
+        "Golden Set"
+      ],
       "keyFiles": [
         "app/api/v1/roadmaps/triage/route.ts",
         "app/api/v1/roadmaps/triage/[id]/route.ts",
@@ -219,7 +215,9 @@
         "components/roadmap/GoldenSetStatusCard.tsx",
         "roadmap-rag-assistant/evals/sync_dataset.py"
       ],
-      "dataModels": ["KnowledgeTriage"]
+      "dataModels": [
+        "KnowledgeTriage"
+      ]
     }
   ],
   "entryPoints": [
@@ -254,7 +252,7 @@
       "domainId": "notes-editor",
       "summary": "Trang soạn thảo và xem chi tiết một ghi chú",
       "handler": "app/notes/[slug]/page.tsx",
-      "triggersFlow": "FLOW_NOTE_AUTOSAVE"
+      "triggersFlow": "FLOW_NOTE_VIEW"
     },
     {
       "id": "EP_API_ROADMAP_LIST",
@@ -354,28 +352,6 @@
       "summary": "Python FastAPI SSE endpoint xử lý turn chat của Roadmap Assistant",
       "handler": "roadmap-rag-assistant/rag_service/api/routes.py#chat_stream",
       "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
-    },
-    {
-      "id": "EP_API_WORKFLOW_RUNS_CREATE",
-      "type": "api_route",
-      "path": "/api/workflows/[id]/runs",
-      "method": "POST",
-      "authRequirement": "owner_only",
-      "domainId": "workflow-builder",
-      "summary": "Khởi chạy một luồng workflow DAG",
-      "handler": "app/api/workflows/[id]/runs/route.ts#POST",
-      "triggersFlow": "FLOW_WORKFLOW_RUN_DAG"
-    },
-    {
-      "id": "EP_API_WORKFLOW_DOC_UPLOAD",
-      "type": "api_route",
-      "path": "/api/workflows/projects/[projectId]/documents",
-      "method": "POST",
-      "authRequirement": "owner_only",
-      "domainId": "workflow-builder",
-      "summary": "Tải tài liệu vào Knowledge Base của workflow project và sinh chunk embeddings",
-      "handler": "app/api/workflows/projects/[projectId]/documents/route.ts#POST",
-      "triggersFlow": "FLOW_WORKFLOW_KB_INGEST"
     },
     {
       "id": "EP_API_UPLOAD_IMAGE",
@@ -498,7 +474,13 @@
         "Rate limit Visitor vượt quá 30 req / 5 phút (429 Too Many Requests)",
         "Gemini API quá tải hoặc hết quota (tự động chuyển fallback Groq hoặc trả lời từ sources)"
       ],
-      "relatedAdrs": ["ADR-0001", "ADR-0002", "ADR-0003", "ADR-0004", "ADR-0006"]
+      "relatedAdrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0006"
+      ]
     },
     {
       "id": "FLOW_ABOT_CUD_PREVIEW_CONFIRM",
@@ -574,7 +556,11 @@
         "Owner chờ quá lâu làm PendingAction hết hạn trong memory store (Action expired)",
         "Tên bài học bị trùng trong cùng Topic (Prisma @@unique([roadmapId, title]) vi phạm)"
       ],
-      "relatedAdrs": ["ADR-0001", "ADR-0002", "ADR-0007"]
+      "relatedAdrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0007"
+      ]
     },
     {
       "id": "FLOW_LESSON_STATUS_UPDATE",
@@ -625,7 +611,9 @@
         "Visitor cố gửi request PATCH bằng cURL (nhận 401 Unauthorized)",
         "Status string không hợp lệ (ví dụ 'mastered' hay 'in_progress' nhận 400 Bad Request)"
       ],
-      "relatedAdrs": ["ADR-0010"]
+      "relatedAdrs": [
+        "ADR-0010"
+      ]
     },
     {
       "id": "FLOW_LESSON_CONTENT_EDIT",
@@ -683,7 +671,10 @@
         "Kích thước nội dung vượt quá giới hạn payload (413 Payload Too Large)",
         "Mất kết nối mạng khi đang gõ (Lexical editor giữ draft trong local state)"
       ],
-      "relatedAdrs": ["ADR-0004", "ADR-0006"]
+      "relatedAdrs": [
+        "ADR-0004",
+        "ADR-0006"
+      ]
     },
     {
       "id": "FLOW_TOPIC_SECTION_REORGANIZE",
@@ -731,181 +722,10 @@
       "failureModes": [
         "Section mới trùng tên với một section khác đã có trong Topic (tự động gộp bài)"
       ],
-      "relatedAdrs": ["ADR-0008", "ADR-0009"]
-    },
-    {
-      "id": "FLOW_WORKFLOW_RUN_DAG",
-      "name": "Khởi chạy và Thực thi Luồng Workflow (DAG Engine)",
-      "domainId": "workflow-builder",
-      "actor": "Owner",
-      "trigger": "Owner nhấn nút 'Chạy luồng' (Run) trên RunPanel của WorkflowEditor",
-      "preconditions": [
-        "Quyền ghi Owner",
-        "Đồ thị hợp lệ (hợp lệ qua AST DSL validator: không có vòng lặp cyclic, các node kết nối đúng port type)"
-      ],
-      "steps": [
-        {
-          "order": 1,
-          "layer": "Presentation_UI",
-          "component": "components/workflow-canvas/RunPanel.tsx",
-          "functionOrMethod": "handleExecuteRun",
-          "action": "Thu thập input params từ form, gọi POST /api/workflows/${workflowId}/runs",
-          "callsNext": "app/api/workflows/[id]/runs/route.ts#POST",
-          "dataPassed": "{ input: { query: '...' }, dryRun: false }"
-        },
-        {
-          "order": 2,
-          "layer": "Routing_Gateway",
-          "component": "app/api/workflows/[id]/runs/route.ts",
-          "functionOrMethod": "POST",
-          "action": "Kiểm tra quyền Owner, gọi `runWorkflowById()` trong `run-service.ts`",
-          "callsNext": "lib/workflow/run-service.ts#runWorkflowById",
-          "dataPassed": "{ workflowId, input, ownerId }"
-        },
-        {
-          "order": 3,
-          "layer": "Domain_Logic",
-          "component": "lib/workflow/run-service.ts",
-          "functionOrMethod": "runWorkflowById",
-          "action": "Validate đồ thị bằng `validateWorkflowGraph()`. Tạo bản ghi WorkflowRun (status: RUNNING) trong DB. Khởi tạo Langfuse trace.",
-          "callsNext": "lib/workflow/dag-executor.ts#executeWorkflow",
-          "dataPassed": "WorkflowGraph, nodeInputs, signal"
-        },
-        {
-          "order": 4,
-          "layer": "Domain_Logic",
-          "component": "lib/workflow/dag-executor.ts",
-          "functionOrMethod": "executeWorkflow",
-          "action": "Sắp xếp thứ tự topo (Topological Sort). Duyệt lần lượt từng node. Với mỗi node, gọi handler tương ứng (llm, rag, condition, merge, rewrite, template). Xử lý phân nhánh và skipping cho condition.",
-          "callsNext": "lib/workflow/nodes/index.ts",
-          "dataPassed": "Resolved node input values"
-        },
-        {
-          "order": 5,
-          "layer": "Domain_Logic",
-          "component": "lib/workflow/quota.ts",
-          "functionOrMethod": "withQuota",
-          "action": "Kiểm tra và ghi nhận số lượt gọi mô hình Gemini trong ngày (WorkflowQuotaUsage) để bảo vệ quota free-tier",
-          "callsNext": "lib/ai/gemini.ts#callGemini",
-          "dataPassed": "{ model: 'gemini-2.5-flash', tokens }"
-        },
-        {
-          "order": 6,
-          "layer": "Persistence",
-          "component": "prisma/schema.prisma#WorkflowRun",
-          "functionOrMethod": "prisma.workflowRun.update",
-          "action": "Lưu kết quả chi tiết từng NodeExecution, cập nhật status của WorkflowRun thành SUCCEEDED hoặc FAILED kèm output JSON và kết thúc Langfuse trace",
-          "callsNext": null,
-          "dataPassed": "WorkflowRun with NodeExecutions"
-        }
-      ],
-      "invariants": [
-        "DAG Engine là mã thuần (pure TS), không phụ thuộc Next.js hay DB trong core executor (dễ unit test)",
-        "Đồ thị phải là acyclic (không có chu trình lặp vô hạn)",
-        "Mỗi lượt chạy đều được phân định hạn mức quota tránh cạn kiệt API key"
-      ],
-      "failureModes": [
-        "Node LLM trả về lỗi hoặc timeout (Node chuyển FAILED, Run kết thúc FAILED)",
-        "Hết hạn mức Quota trong ngày (chặn ngay từ trước khi gọi LLM)"
-      ],
-      "relatedAdrs": []
-    },
-    {
-      "id": "FLOW_WORKFLOW_KB_INGEST",
-      "name": "Nạp tài liệu vào Knowledge Base của Workflow (Chunking & Embedding)",
-      "domainId": "workflow-builder",
-      "actor": "Owner",
-      "trigger": "Owner tải tệp Markdown/Text lên DocumentsPanel của Workflow Canvas",
-      "preconditions": [
-        "Quyền ghi Owner",
-        "Định dạng tệp text/markdown/pdf hợp lệ"
-      ],
-      "steps": [
-        {
-          "order": 1,
-          "layer": "Presentation_UI",
-          "component": "components/workflow-canvas/DocumentsPanel.tsx",
-          "functionOrMethod": "handleFileUpload",
-          "action": "Gửi multipart file tới POST /api/workflows/projects/${projectId}/documents",
-          "callsNext": "app/api/workflows/projects/[projectId]/documents/route.ts#POST",
-          "dataPassed": "FormData with file"
-        },
-        {
-          "order": 2,
-          "layer": "Domain_Logic",
-          "component": "lib/workflow/kb/chunker.ts",
-          "functionOrMethod": "chunkMarkdownDocument",
-          "action": "Băm nhỏ nội dung văn bản theo tiêu đề markdown (headings) và kích thước token tối ưu",
-          "callsNext": "lib/ai/gemini.ts#generateEmbeddings",
-          "dataPassed": "Array of text chunks"
-        },
-        {
-          "order": 3,
-          "layer": "Persistence",
-          "component": "lib/workflow/kb/storage.ts",
-          "functionOrMethod": "storeProjectDocumentAndChunks",
-          "action": "Lưu file vào object storage, tính sha256 hash để tránh re-embed tệp trùng lặp. Lưu ProjectDocument và ProjectChunk (kèm Float32Array 768 dims embedding bytes) vào Prisma DB.",
-          "callsNext": null,
-          "dataPassed": "ProjectDocument & ProjectChunk records"
-        }
-      ],
-      "invariants": [
-        "Re-upload cùng một file (cùng sha256) sẽ tự động tái sử dụng embeddings cũ mà không tốn token (ADR-0004)",
-        "Embeddings vector luôn có kích thước 768 dimensions"
-      ],
-      "failureModes": [
-        "File kích thước quá lớn (> 10MB)",
-        "Gemini Embedding API gặp lỗi mạng"
-      ],
-      "relatedAdrs": ["ADR-0004"]
-    },
-    {
-      "id": "FLOW_NOTE_AUTOSAVE",
-      "name": "Tự động lưu nội dung Ghi chú (Notes Autosave)",
-      "domainId": "notes-editor",
-      "actor": "Owner",
-      "trigger": "Owner gõ nội dung trong Lexical Editor tại trang /notes/[slug]",
-      "preconditions": [
-        "Quyền ghi Owner",
-        "Ghi chú đã được khởi tạo"
-      ],
-      "steps": [
-        {
-          "order": 1,
-          "layer": "Presentation_UI",
-          "component": "app/notes/[slug]/page.tsx",
-          "functionOrMethod": "onEditorChange",
-          "action": "Lexical onChange kích hoạt hàm debounce (1000ms), gửi PUT /api/notes/${id}",
-          "callsNext": "app/api/notes/[id]/route.ts#PUT",
-          "dataPassed": "{ title, description, tagId }"
-        },
-        {
-          "order": 2,
-          "layer": "Routing_Gateway",
-          "component": "app/api/notes/[id]/route.ts",
-          "functionOrMethod": "PUT",
-          "action": "Kiểm tra quyền Owner, gọi `prisma.note.update`",
-          "callsNext": "lib/prisma.ts",
-          "dataPassed": "{ title, description, tagId }"
-        },
-        {
-          "order": 3,
-          "layer": "Persistence",
-          "component": "prisma/schema.prisma#Note",
-          "functionOrMethod": "prisma.note.update",
-          "action": "Ghi nhận thay đổi vào database SQLite / Turso",
-          "callsNext": null,
-          "dataPassed": "Updated Note"
-        }
-      ],
-      "invariants": [
-        "Autosave được debounce để không làm nghẽn DB",
-        "Chỉ Owner mới có quyền chỉnh sửa ghi chú"
-      ],
-      "failureModes": [
-        "Mất kết nối mạng tạm thời (UI hiển thị trạng thái 'Lưu thất bại' và cho phép thử lại)"
-      ],
-      "relatedAdrs": []
+      "relatedAdrs": [
+        "ADR-0008",
+        "ADR-0009"
+      ]
     },
     {
       "id": "FLOW_IMAGE_UPLOAD_S3",
@@ -934,14 +754,14 @@
           "component": "app/api/upload-image/route.ts",
           "functionOrMethod": "POST",
           "action": "Kiểm tra quyền Owner, validate dung lượng và magic number mime type",
-          "callsNext": "lib/r2-client.ts#uploadToR2",
+          "callsNext": "lib/r2-client.ts#uploadToStorage",
           "dataPassed": "File buffer and unique key"
         },
         {
           "order": 3,
           "layer": "Persistence",
           "component": "lib/r2-client.ts",
-          "functionOrMethod": "uploadToR2",
+          "functionOrMethod": "uploadToStorage",
           "action": "Gửi PutObjectCommand tới bucket Cloudflare R2 / AWS S3, trả về public CDN URL",
           "callsNext": null,
           "dataPassed": "{ url: 'https://cdn.crisne.me/uploads/...' }"
@@ -1011,7 +831,10 @@
       "failureModes": [
         "Triage item đã bị DISMISSED trước đó"
       ],
-      "relatedAdrs": ["ADR-0003", "ADR-0009"]
+      "relatedAdrs": [
+        "ADR-0003",
+        "ADR-0009"
+      ]
     },
     {
       "id": "FLOW_ABOT_ACCESS_GUARD",
@@ -1058,7 +881,9 @@
       "failureModes": [
         "Visitor giả mạo header trên client (Proxy Next.js tự xác thực qua session cookie và ghi đè header `x-actor` trước khi gửi đi)"
       ],
-      "relatedAdrs": ["ADR-0002"]
+      "relatedAdrs": [
+        "ADR-0002"
+      ]
     },
     {
       "id": "FLOW_EVALS_RUN_PROBE",
@@ -1096,7 +921,9 @@
       "failureModes": [
         "Độ lệch điểm precision thấp hơn ngưỡng ratchet cho phép (báo test failed)"
       ],
-      "relatedAdrs": ["ADR-0003"]
+      "relatedAdrs": [
+        "ADR-0003"
+      ]
     }
   ],
   "dataModels": [
@@ -1106,9 +933,24 @@
       "source": "prisma",
       "table": "Roadmap",
       "domainId": "roadmap-learning",
-      "fields": ["id", "slug", "title", "description", "icon", "order", "isLocked", "createdAt", "updatedAt"],
-      "relations": ["items -> RoadmapItem[]"],
-      "invariants": ["slug là duy nhất trên toàn hệ thống", "Đại diện cho một Topic theo GLOSSARY.md"]
+      "fields": [
+        "id",
+        "slug",
+        "title",
+        "description",
+        "icon",
+        "order",
+        "isLocked",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [
+        "items -> RoadmapItem[]"
+      ],
+      "invariants": [
+        "slug là duy nhất trên toàn hệ thống",
+        "Đại diện cho một Topic theo GLOSSARY.md"
+      ]
     },
     {
       "id": "MODEL_ROADMAP_ITEM",
@@ -1116,8 +958,22 @@
       "source": "prisma",
       "table": "RoadmapItem",
       "domainId": "roadmap-learning",
-      "fields": ["id", "roadmapId", "section", "title", "description", "content", "order", "status", "statusUpdatedAt", "createdAt", "updatedAt"],
-      "relations": ["roadmap -> Roadmap"],
+      "fields": [
+        "id",
+        "roadmapId",
+        "section",
+        "title",
+        "description",
+        "content",
+        "order",
+        "status",
+        "statusUpdatedAt",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [
+        "roadmap -> Roadmap"
+      ],
       "invariants": [
         "@@unique([roadmapId, title]): Tiêu đề bài học là duy nhất trong cùng một Topic",
         "status nhận 1 trong 3 giá trị: 'target', 'learning', 'known' (ADR-0010)",
@@ -1130,92 +986,28 @@
       "source": "prisma",
       "table": "KnowledgeTriage",
       "domainId": "triage-observability",
-      "fields": ["id", "traceId", "query", "assistantMsg", "reason", "comment", "status", "roadmapSlug", "section", "draftTitle", "draftContent", "verifyScore", "verifyNote", "createdAt", "updatedAt"],
+      "fields": [
+        "id",
+        "traceId",
+        "query",
+        "assistantMsg",
+        "reason",
+        "comment",
+        "status",
+        "roadmapSlug",
+        "section",
+        "draftTitle",
+        "draftContent",
+        "verifyScore",
+        "verifyNote",
+        "createdAt",
+        "updatedAt"
+      ],
       "relations": [],
       "invariants": [
         "status: PENDING | DRAFTED | APPROVED | DISMISSED",
         "query và nội dung người dùng phải được mask PII trước khi lưu"
       ]
-    },
-    {
-      "id": "MODEL_WORKFLOW_PROJECT",
-      "name": "WorkflowProject",
-      "source": "prisma",
-      "table": "WorkflowProject",
-      "domainId": "workflow-builder",
-      "fields": ["id", "ownerId", "name", "description", "createdAt", "updatedAt"],
-      "relations": ["documents -> ProjectDocument[]", "chunks -> ProjectChunk[]", "workflows -> Workflow[]", "runs -> WorkflowRun[]"],
-      "invariants": ["ownerId là email của owner"]
-    },
-    {
-      "id": "MODEL_PROJECT_DOCUMENT",
-      "name": "ProjectDocument",
-      "source": "prisma",
-      "table": "ProjectDocument",
-      "domainId": "workflow-builder",
-      "fields": ["id", "projectId", "ownerId", "filename", "mimeType", "sizeBytes", "storageKey", "contentHash", "status", "error", "createdAt", "updatedAt"],
-      "relations": ["project -> WorkflowProject", "chunks -> ProjectChunk[]"],
-      "invariants": ["contentHash là sha256 của file raw, dùng để nhận diện trùng lặp"]
-    },
-    {
-      "id": "MODEL_PROJECT_CHUNK",
-      "name": "ProjectChunk",
-      "source": "prisma",
-      "table": "ProjectChunk",
-      "domainId": "workflow-builder",
-      "fields": ["id", "projectId", "documentId", "ordinal", "heading", "content", "contentHash", "embedding", "embeddingModel", "createdAt"],
-      "relations": ["project -> WorkflowProject", "document -> ProjectDocument"],
-      "invariants": ["embedding lưu trữ Float32Array 768 dims (Gemini) dưới dạng Bytes"]
-    },
-    {
-      "id": "MODEL_WORKFLOW",
-      "name": "Workflow",
-      "source": "prisma",
-      "table": "Workflow",
-      "domainId": "workflow-builder",
-      "fields": ["id", "projectId", "ownerId", "name", "description", "draftGraph", "draftUi", "draftGraphHash", "createdAt", "updatedAt"],
-      "relations": ["project -> WorkflowProject", "versions -> WorkflowVersion[]", "runs -> WorkflowRun[]"],
-      "invariants": ["draftGraph là chuỗi JSON chứa đồ thị runtime semantics", "draftGraphHash = sha256(canonical(draftGraph))"]
-    },
-    {
-      "id": "MODEL_WORKFLOW_RUN",
-      "name": "WorkflowRun",
-      "source": "prisma",
-      "table": "WorkflowRun",
-      "domainId": "workflow-builder",
-      "fields": ["id", "projectId", "ownerId", "workflowId", "workflowVersionId", "graphSnapshot", "graphHash", "status", "trigger", "dryRun", "input", "output", "error", "traceId", "startedAt", "finishedAt", "createdAt"],
-      "relations": ["workflow -> Workflow", "project -> WorkflowProject", "nodeExecutions -> NodeExecution[]"],
-      "invariants": ["status: PENDING | RUNNING | SUCCEEDED | FAILED | CANCELLED"]
-    },
-    {
-      "id": "MODEL_NODE_EXECUTION",
-      "name": "NodeExecution",
-      "source": "prisma",
-      "table": "NodeExecution",
-      "domainId": "workflow-builder",
-      "fields": ["id", "runId", "nodeId", "nodeType", "status", "input", "output", "error", "model", "inputTokens", "outputTokens", "startedAt", "finishedAt", "durationMs"],
-      "relations": ["run -> WorkflowRun"],
-      "invariants": ["@@unique([runId, nodeId]): Mỗi node trong 1 lần run có tối đa 1 kết quả thực thi"]
-    },
-    {
-      "id": "MODEL_NOTE",
-      "name": "Note",
-      "source": "prisma",
-      "table": "Note",
-      "domainId": "notes-editor",
-      "fields": ["id", "title", "link", "description", "tagId", "createdAt", "updatedAt"],
-      "relations": ["tag -> Tag"],
-      "invariants": []
-    },
-    {
-      "id": "MODEL_TAG",
-      "name": "Tag",
-      "source": "prisma",
-      "table": "Tag",
-      "domainId": "notes-editor",
-      "fields": ["id", "name", "color", "prompt", "createdAt"],
-      "relations": ["notes -> Note[]"],
-      "invariants": ["name là duy nhất"]
     }
   ],
   "symbols": [
@@ -1225,17 +1017,13 @@
       "filePath": "logic/roadmap/roadmapService.ts",
       "domainId": "roadmap-learning",
       "description": "Gọi PATCH /api/v1/roadmaps/items/[id] để cập nhật trạng thái học (target/learning/known) của bài học.",
-      "callers": ["components/roadmap/LessonStatus.tsx", "components/roadmap/ChecklistItemRow.tsx"],
-      "callees": ["apiFetch"]
-    },
-    {
-      "name": "sendRoadmapAssistantMessage",
-      "type": "function",
-      "filePath": "logic/roadmap/roadmapAssistantService.ts",
-      "domainId": "roadmap-assistant-abot",
-      "description": "Gửi tin nhắn tự nhiên từ UI tới Same-origin proxy của Roadmap Assistant.",
-      "callers": ["components/floating-bot/FloatingChatDrawer.tsx", "components/roadmap/RoadmapAssistantChatbot.tsx"],
-      "callees": ["roadmapChatClient.chat"]
+      "callers": [
+        "components/roadmap/LessonStatus.tsx",
+        "components/roadmap/ChecklistItemRow.tsx"
+      ],
+      "callees": [
+        "apiFetch"
+      ]
     },
     {
       "name": "requireWriteAccess",
@@ -1243,17 +1031,13 @@
       "filePath": "lib/auth/write-access.ts",
       "domainId": "auth-security",
       "description": "Guard kiểm tra request có quyền ghi Owner hay không, trả về 401 nếu từ chối.",
-      "callers": ["app/api/v1/roadmaps/items/[id]/route.ts", "app/api/v1/roadmaps/triage/route.ts", "app/api/workflows/route.ts"],
-      "callees": ["hasWriteAccess"]
-    },
-    {
-      "name": "executeWorkflow",
-      "type": "function",
-      "filePath": "lib/workflow/dag-executor.ts",
-      "domainId": "workflow-builder",
-      "description": "Hàm thuần thực thi đồ thị DAG theo thứ tự topo và phân phối đầu vào/ra cho các node.",
-      "callers": ["lib/workflow/run-service.ts#runWorkflowById"],
-      "callees": ["topologicalSort", "executeNode"]
+      "callers": [
+        "app/api/v1/roadmaps/items/[id]/route.ts",
+        "app/api/v1/roadmaps/triage/route.ts"
+      ],
+      "callees": [
+        "hasWriteAccess"
+      ]
     },
     {
       "name": "decide_route",
@@ -1261,8 +1045,14 @@
       "filePath": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
       "domainId": "roadmap-assistant-abot",
       "description": "Bộ định tuyến ý định Intent Router phân loại tin nhắn người dùng qua các phases P0-P8.",
-      "callers": ["roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#run_turn"],
-      "callees": ["understand", "classify_heuristics", "write_gate"]
+      "callers": [
+        "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#run_turn"
+      ],
+      "callees": [
+        "understand",
+        "classify_heuristics",
+        "write_gate"
+      ]
     },
     {
       "name": "notifyRoadmapChanged",
@@ -1270,8 +1060,14 @@
       "filePath": "lib/roadmap/rag-reindex.ts",
       "domainId": "roadmap-learning",
       "description": "Kích hoạt hook sau request để gửi lệnh re-index sang Python RAG service khi có thay đổi dữ liệu roadmap.",
-      "callers": ["app/api/v1/roadmaps/items/[id]/route.ts", "app/api/v1/roadmaps/items/route.ts"],
-      "callees": ["after", "requestRagReindex"]
+      "callers": [
+        "app/api/v1/roadmaps/items/[id]/route.ts",
+        "app/api/v1/roadmaps/items/route.ts"
+      ],
+      "callees": [
+        "after",
+        "requestRagReindex"
+      ]
     }
   ],
   "invariantsAndRules": [

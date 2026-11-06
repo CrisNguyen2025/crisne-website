@@ -14,7 +14,6 @@ import {
   scanEntityMentions,
   appendEntityActionChips,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   AUTHORITATIVE_CONTACTS,
 } from "@/lib/ai/action-chips";
 
@@ -222,11 +221,11 @@ describe("Adversarial Stress Test: Action Chips Engine", () => {
     expect(kamalaChips).toHaveLength(1);
   });
 
-  it("scans all 4 projects, 5 layers, and 4 contacts accurately", () => {
+  it("scans all 4 projects and 4 contacts accurately", () => {
     const text =
-      "Kamala, Zelene Spa, Smartbit, JAVIS, Layer-01, Layer-02, Layer-03, Layer-04, Layer-05, Zalo, GitHub, tải CV, mục liên hệ";
+      "Kamala, Zelene Spa, Smartbit, JAVIS, Zalo, GitHub, tải CV, mục liên hệ";
     const chips = scanEntityMentions(text);
-    expect(chips.length).toBe(13); // 4 + 5 + 4
+    expect(chips.length).toBe(8);
   });
 });
 

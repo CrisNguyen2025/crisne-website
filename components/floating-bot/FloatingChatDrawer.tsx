@@ -7,6 +7,7 @@ import type { UseFloatingChatReturn } from "@/hooks/use-floating-chat";
 import { cn } from "@/lib/utils";
 import {
   parseMessageContentAndActions,
+  chipHref,
   type ChatActionChip,
 } from "@/lib/ai/action-chips";
 import { ChatMarkdown } from "@/roadmap-rag-assistant/sdk/typescript/src/react/ChatMarkdown";
@@ -20,8 +21,17 @@ import {
   ThumbsUpIcon,
   ThumbsDownIcon,
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/icons";
-import { chipHref, QUICK_PROMPTS, ICON_BUTTON } from "./FloatingChatPopup";
 import { useAssistantViewport } from "@/hooks/use-assistant-viewport";
+
+const ICON_BUTTON =
+  "flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer";
+
+const QUICK_PROMPTS = [
+  "Cris có kinh nghiệm gì về Next.js & React?",
+  "Dự án nổi bật nhất của Cris gần đây?",
+  "Cris có nhận làm Freelance / Remote không?",
+  "Làm thế nào để liên hệ Zalo hoặc tải CV?",
+];
 
 export interface FloatingChatDrawerProps {
   isOpen: boolean;
@@ -124,12 +134,6 @@ export function FloatingChatDrawer({
       window.dispatchEvent(
         new CustomEvent("project:open-modal", {
           detail: { projectId: chip.id },
-        })
-      );
-    } else if (chip.type === "roadmap") {
-      window.dispatchEvent(
-        new CustomEvent("roadmap:select-section", {
-          detail: { section: chip.id },
         })
       );
     }

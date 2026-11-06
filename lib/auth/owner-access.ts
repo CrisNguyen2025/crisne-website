@@ -17,7 +17,7 @@ export function isOwnerEmail(email: string | null | undefined): boolean {
 }
 
 /**
- * Machine-to-machine access (Chrome clipper extension, scripts) via the `x-admin-key` header.
+ * Machine-to-machine access (script gọi máy) via the `x-admin-key` header.
  * Fail-closed: when `ADMIN_API_KEY` is not configured, no key is ever accepted.
  */
 export function hasValidAdminKey(req: Request): boolean {

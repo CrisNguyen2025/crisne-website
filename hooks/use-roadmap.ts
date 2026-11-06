@@ -6,6 +6,7 @@ import { ChecklistItem, GetRoadmapResponseDto, RoadmapMeta } from '@/lib/roadmap
 import * as roadmapService from '@/logic/roadmap/roadmapService';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import type { LessonStatus } from '@/lib/roadmap/status';
+import { slugify } from '@/lib/utils';
 
 /** One topic as the page holds it: lessons in page order, and their sections (ADR-0009). */
 interface TopicState {
@@ -69,7 +70,7 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
   const pickActive = useCallback((list: ChecklistItem[]) => {
     const wanted = initialActiveItemIdRef.current;
     const match = wanted
-      ? list.find((i) => i.id === wanted || i.slug === wanted || i.title === wanted)
+      ? list.find((i) => i.id === wanted || slugify(i.title) === wanted || i.title === wanted)
       : undefined;
     return match?.id ?? list[0]?.id ?? '';
   }, []);

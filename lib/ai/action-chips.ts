@@ -1,4 +1,4 @@
-export type ActionChipType = "project" | "roadmap" | "contact" | "link";
+export type ActionChipType = "project" | "contact" | "link";
 
 export interface ChatActionChip {
   type: ActionChipType;
@@ -17,14 +17,6 @@ export interface AuthoritativeProject {
   title: string;
   defaultLabel: string;
   url?: string;
-  triggers: string[];
-}
-
-export interface AuthoritativeLayer {
-  id: "layer-01" | "layer-02" | "layer-03" | "layer-04" | "layer-05";
-  code: string;
-  title: string;
-  defaultLabel: string;
   triggers: string[];
 }
 
@@ -66,44 +58,6 @@ export const AUTHORITATIVE_PROJECTS: AuthoritativeProject[] = [
   },
 ];
 
-export const AUTHORITATIVE_LAYERS: AuthoritativeLayer[] = [
-  {
-    id: "layer-01",
-    code: "01-DB",
-    title: "Tầng Dữ liệu & Tri thức",
-    defaultLabel: "Tầng 01: Knowledge Base",
-    triggers: ["layer-01", "layer 01", "layer 1", "tầng 01", "tầng 1", "knowledge base"],
-  },
-  {
-    id: "layer-02",
-    code: "02-LLM",
-    title: "Tầng LLM Application Layer",
-    defaultLabel: "Tầng 02: LLM Application",
-    triggers: ["layer-02", "layer 02", "layer 2", "tầng 02", "tầng 2", "llm application"],
-  },
-  {
-    id: "layer-03",
-    code: "03-RAG",
-    title: "Tầng RAG + Agent Layer",
-    defaultLabel: "Tầng 03: RAG + Agent",
-    triggers: ["layer-03", "layer 03", "layer 3", "tầng 03", "tầng 3", "rag + agent", "rag agent"],
-  },
-  {
-    id: "layer-04",
-    code: "04-OPS",
-    title: "Tầng Ops & Đánh giá (LLMOps)",
-    defaultLabel: "Tầng 04: LLMOps",
-    triggers: ["layer-04", "layer 04", "layer 4", "tầng 04", "tầng 4", "llmops"],
-  },
-  {
-    id: "layer-05",
-    code: "05-PROD",
-    title: "Tầng Sản phẩm Production",
-    defaultLabel: "Tầng 05: Production Deployment",
-    triggers: ["layer-05", "layer 05", "layer 5", "tầng 05", "tầng 5", "production deployment"],
-  },
-];
-
 export const AUTHORITATIVE_CONTACTS: AuthoritativeContact[] = [
   {
     id: "zalo",
@@ -135,11 +89,13 @@ export const AUTHORITATIVE_CONTACTS: AuthoritativeContact[] = [
   },
 ];
 
-export const ACTION_TAG_REGEX = /\[\[action:(project|roadmap|contact|link)\|([^|]+)\|([^\]]+)\]\]/g;
+export const ACTION_TAG_REGEX = /\[\[action:([a-z]+)\|([^|]+)\|([^\]]+)\]\]/g;
 
 export function formatActionChip(type: ActionChipType, id: string, label: string): string {
   return `[[action:${type}|${id}|${label}]]`;
 }
+
+const VALID_ACTION_CHIP_TYPES = new Set<string>(["project", "contact", "link"]);
 
 export function parseMessageContentAndActions(
   rawText: string,
@@ -147,13 +103,15 @@ export function parseMessageContentAndActions(
 ): ParsedMessageResult {
   const chips: ChatActionChip[] = [];
   const cleanContent = rawText.replace(
-    /\[\[action:(project|roadmap|contact|link)\|([^|]+)\|([^\]]+)\]\]/g,
+    ACTION_TAG_REGEX,
     (_, type, id, label) => {
-      chips.push({
-        type: type as ActionChipType,
-        id,
-        label,
-      });
+      if (VALID_ACTION_CHIP_TYPES.has(type)) {
+        chips.push({
+          type: type as ActionChipType,
+          id,
+          label,
+        });
+      }
       return "";
     }
   );
@@ -185,20 +143,6 @@ export function scanEntityMentions(text: string, existingChips: ChatActionChip[]
     }
   }
 
-  for (const layer of AUTHORITATIVE_LAYERS) {
-    if (!existingIds.has(layer.id)) {
-      const matched = layer.triggers.some((trigger) => lowerText.includes(trigger));
-      if (matched) {
-        detectedChips.push({
-          type: "roadmap",
-          id: layer.id,
-          label: layer.defaultLabel,
-        });
-        existingIds.add(layer.id);
-      }
-    }
-  }
-
   for (const contact of AUTHORITATIVE_CONTACTS) {
     if (!existingIds.has(contact.id)) {
       const matched = contact.triggers.some((trigger) => lowerText.includes(trigger));
@@ -226,4 +170,20 @@ export function appendEntityActionChips(rawText: string): string {
 
   const tags = extraChips.map((chip) => formatActionChip(chip.type, chip.id, chip.label)).join(" ");
   return `${rawText.trimEnd()} ${tags}`.trim();
+}
+
+export function chipHref(
+  chip: ChatActionChip
+): { href: string; external: boolean } | null {
+  let href: string | undefined;
+  if (chip.type === "project") {
+    href =
+      AUTHORITATIVE_PROJECTS.find((p) => p.id === chip.id)?.url ?? "#projects";
+  } else if (chip.type === "contact") {
+    const contact = AUTHORITATIVE_CONTACTS.find((c) => c.id === chip.id);
+    href = contact?.href ?? contact?.path;
+  } else if (/^(https?:\/\/|\/)/.test(chip.id)) {
+    href = chip.id;
+  }
+  return href ? { href, external: /^https?:\/\//.test(href) } : null;
 }

@@ -42,14 +42,12 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 Có thể đã cũ. Chỉ đọc khi cần lịch sử; quyết định còn hiệu lực sẽ được chuyển dần thành ADR.
 
 - Backlog: [`RAG_PRODUCTION_READINESS.md`](RAG_PRODUCTION_READINESS.md)
-- Workflow Builder: [`workflow-builder-design.md`](workflow-builder-design.md) (code tham chiếu), [`workflow-builder-context-v3.md`](workflow-builder-context-v3.md) (ADR-0006 tham chiếu)
-- Backup: `backup*.md`, `backup6.json`
 
 ## Archive: đã xong, chỉ giữ làm lịch sử
 
 [`archive/`](archive/):
 
 - Roadmap Assistant: `abot-ux-plan.md`, `abot-followup-plan.md`
-- Workflow Builder: `workflow-builder-plan.md`, `workflow-builder-handoff.md`, `workflow-builder-context.md`, `workflow-builder-context-v2.md`
+- Workflow Builder: `workflow-builder-plan.md`, `workflow-builder-handoff.md`, `workflow-builder-context.md`, `workflow-builder-context-v2.md`, `workflow-builder-design.md`, `workflow-builder-context-v3.md`
 - Fix log: `CACHE_BUSTING_FIX.md`, `FAVORITES_*.md`, `IMPLEMENTATION_SUMMARY.md`
 - Checklist deploy auth giai đoạn 0: `Misc-context.md` (ENV đã chuyển sang [`DEPLOY_ENV.md`](DEPLOY_ENV.md))

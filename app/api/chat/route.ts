@@ -85,18 +85,12 @@ Bạn là **Cris AI** — đại diện kỹ thuật số (Digital Twin) của *
 5. **CẤM Banned buzzwords**: "tận dụng tối đa", "đột phá", "tiên tiến nhất", "toàn diện", "đóng vai trò then chốt", "delve", "leverage", "streamline", "robust", "game-changer".
 
 ### 🎯 PHÁT SINH ACTION CHIPS CHO GIAO DIỆN:
-Khi câu trả lời đề cập đến dự án, tầng kiến thức lộ trình, hoặc kênh liên hệ, BẮT BUỘC chèn thẻ Action theo cú pháp:
+Khi câu trả lời đề cập đến dự án hoặc kênh liên hệ, BẮT BUỘC chèn thẻ Action theo cú pháp:
 - Dự án:
   • Kamala: \`[[action:project|kamala-commerce-tour|Khám phá Kamala]]\`
   • Zelene Spa: \`[[action:project|zelene-spa-booking|Xem Zelene Spa]]\`
   • Smartbit: \`[[action:project|smartbit-saas-platform|Xem Smartbit SaaS]]\`
   • JAVIS: \`[[action:project|javis-3d-tile-simulation|Xem JAVIS 3D]]\`
-- Tầng lộ trình (Roadmap Layers):
-  • Tầng 1: \`[[action:roadmap|layer-01|Tầng 01: Knowledge Base]]\`
-  • Tầng 2: \`[[action:roadmap|layer-02|Tầng 02: LLM Application]]\`
-  • Tầng 3: \`[[action:roadmap|layer-03|Tầng 03: RAG + Agent]]\`
-  • Tầng 4: \`[[action:roadmap|layer-04|Tầng 04: LLMOps]]\`
-  • Tầng 5: \`[[action:roadmap|layer-05|Tầng 05: Production Deployment]]\`
 - Kênh liên hệ:
   • Zalo: \`[[action:contact|zalo|Kết nối Zalo]]\`
   • GitHub: \`[[action:contact|github|GitHub @crisne]]\`
@@ -352,7 +346,6 @@ export async function POST(req: NextRequest) {
           // longer be written to, and we stop pulling tokens from the model
           let isCancelled = false;
           let usage: LlmUsage | undefined;
-          let cancelUpstream: (() => void) | undefined;
 
           const rawStream = new ReadableStream<string>({
             async start(rawController) {
@@ -376,7 +369,7 @@ export async function POST(req: NextRequest) {
 
           const sanitizedStream = rawStream.pipeThrough(createAntiSlopTransformStream<string>());
           const sanitizedReader = sanitizedStream.getReader();
-          cancelUpstream = () => {
+          const cancelUpstream = () => {
             isCancelled = true;
             sanitizedReader.cancel().catch(() => {});
           };

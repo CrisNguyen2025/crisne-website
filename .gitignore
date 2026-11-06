@@ -76,9 +76,6 @@ roadmap-rag-assistant/rag_service/data/embedding_cache.json
 .claude/skills/query-optimizer/
 CLAUDE.local.md
 
-# Workflow KB local storage
-.data/workflow-kb/
-
 # Python bytecode
 __pycache__/
 *.pyc
@@ -100,3 +97,10 @@ tests/load/results/*.log
 
 lesson-status-backup-*.json
 seed-import-backup-*.json
+
+# Output của /api/backup-notes
+docs/backup*.md
+docs/backup*.json
+
+roadmap-rag-assistant/sdk/typescript/dist/
+

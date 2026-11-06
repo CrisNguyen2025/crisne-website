@@ -12,7 +12,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 
 | Commit | Nội dung |
 |---|---|
-| `6118ffe` | Middleware (`wrapProvider`, `quotaMiddleware`), `ModelRef` + bảng `PROVIDERS`, circuit breaker key theo `provider:model`, `ChatMessage` trung lập (`toAlternatingTurns`), `streamParts()`, `generateJson` / `generateJsonWithFallback`, triage có fallback |
+| `6118ffe` | Middleware (`wrapProvider`, `quotaMiddleware`), `ModelRef` + bảng `PROVIDERS`, circuit breaker key theo `provider:model`, `ChatMessage` trung lập (`toAlternatingTurns`), `generateJson` / `generateJsonWithFallback`, triage có fallback |
 | `6bce2f2` | Mask PII khi lưu triage, `GET /triage` bắt buộc xác thực và bỏ seed, gỡ `NEXT_PUBLIC_ADMIN_KEY`, approve/generate idempotent (409), bài học lưu dạng HTML đã sanitize (`marked` + `sanitize-html`), `description` lấy từ bản nháp, drawer hiển thị lỗi |
 
 ---
@@ -57,7 +57,6 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 | Trạng thái trong bộ nhớ: rate limit, circuit, response cache, `session_store` (Python) | ❌ | Trên Vercel mỗi instance giữ một bản riêng, mất khi cold start. Chuyển sang Redis/Upstash |
 | Timeout, xử lý khi client huỷ, phản hồi dự phòng khi lỗi | ✅ | — |
 | Service Python ngủ trên Render free | ❌ | Gói trả phí hoặc health check; đặt SLO cho Roadmap Assistant |
-| `streamParts` không đi qua middleware | 🟡 | Middleware cần chuyển tiếp `streamParts` khi có adapter tự cài |
 
 ## 3. Chất lượng câu trả lời
 
@@ -99,7 +98,7 @@ Ký hiệu: ✅ đã có · 🟡 có một phần · ❌ chưa có
 | Hạng mục | Trạng thái | Việc cần làm |
 |---|---|---|
 | CI: tsc, test, kiểm tra index, build, eval | ✅ | — |
-| Test ghi vào `prisma/dev.db` | ✅ (chưa commit) | Test dùng `prisma/test.db` (`tests/setup/test-db.ts` + `vitest.config.mts`). Nguyên nhân gốc: `scripts/seed-sample-workflow.ts` tự chạy `seed()` khi bị import; giờ chỉ seed khi chạy trực tiếp |
+| Test ghi vào `prisma/dev.db` | ✅ (chưa commit) | Test dùng `prisma/test.db` (`tests/setup/test-db.ts` + `vitest.config.mts`) |
 | Migration Prisma trên Turso | 🟡 | Đưa bước migrate vào quy trình deploy |
 | Đánh version cho prompt/model, feature flag, rollback | ❌ | Version cho prompt; tách lưu lượng một phần để thử model mới |
 | `prisma/dev.db-shm` / `-wal` | ✅ (chưa commit) | Đã thêm vào `.gitignore` cùng `prisma/test.db*` |

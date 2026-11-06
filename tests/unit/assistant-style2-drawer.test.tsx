@@ -234,11 +234,9 @@ describe("Style 2 Phase 2 — FloatingChatDrawer", () => {
   });
 
   describe("Action Chips in Drawer", () => {
-    it("renders chips and dispatches project:open-modal and roadmap:select-section", () => {
+    it("renders chips and dispatches project:open-modal", () => {
       const projectEventSpy = vi.fn();
-      const roadmapEventSpy = vi.fn();
       window.addEventListener("project:open-modal", projectEventSpy);
-      window.addEventListener("roadmap:select-section", roadmapEventSpy);
 
       const onClose = vi.fn();
       const chat = createMockChat({
@@ -246,7 +244,7 @@ describe("Style 2 Phase 2 — FloatingChatDrawer", () => {
           {
             id: "bot-1",
             role: "assistant",
-            content: "Xem dự án [[action:project|smartbit-saas-platform|Smartbit SaaS]] và mục [[action:roadmap|RAG|RAG]]",
+            content: "Xem dự án [[action:project|smartbit-saas-platform|Smartbit SaaS]]",
             createdAt: new Date(),
           },
         ],
@@ -261,15 +259,7 @@ describe("Style 2 Phase 2 — FloatingChatDrawer", () => {
       expect(projectEventSpy).toHaveBeenCalledTimes(1);
       expect(projectEventSpy.mock.calls[0][0].detail.projectId).toBe("smartbit-saas-platform");
 
-      const roadmapChip = screen.getByText("RAG");
-      expect(roadmapChip).toBeTruthy();
-      fireEvent.click(roadmapChip);
-
-      expect(roadmapEventSpy).toHaveBeenCalledTimes(1);
-      expect(roadmapEventSpy.mock.calls[0][0].detail.section).toBe("RAG");
-
       window.removeEventListener("project:open-modal", projectEventSpy);
-      window.removeEventListener("roadmap:select-section", roadmapEventSpy);
     });
   });
 });

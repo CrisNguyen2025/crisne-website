@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProjectCard, type ProjectData } from "@/components/project-card";
 import { ProjectDetailModal } from "@/components/project-detail-modal";
 
@@ -158,6 +158,23 @@ export function ProjectsSection() {
     setSelectedProject(project);
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    const handleProjectOpen = (event: Event) => {
+      const customEvent = event as CustomEvent<{ projectId?: string }>;
+      const projectId = customEvent.detail?.projectId;
+      if (!projectId) return;
+      const project = projects.find((p) => p.id === projectId);
+      if (project) {
+        handleViewDetail(project);
+      }
+    };
+
+    window.addEventListener("project:open-modal", handleProjectOpen);
+    return () => {
+      window.removeEventListener("project:open-modal", handleProjectOpen);
+    };
+  }, []);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);

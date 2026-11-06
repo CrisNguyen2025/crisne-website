@@ -3,7 +3,6 @@ import {
   fileExistsInProject,
   readProjectFile,
   AUTHORITATIVE_PROJECTS,
-  AUTHORITATIVE_LAYERS,
   AUTHORITATIVE_CONTACTS,
 } from "./test-helpers";
 
