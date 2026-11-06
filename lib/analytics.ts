@@ -81,25 +81,6 @@ export function initializeStoredConsent() {
   }
 }
 
-// Page view tracking with enhanced parameters
-export function trackPageView(
-  page_path?: string,
-  page_title?: string,
-  page_location?: string,
-) {
-  if (typeof window === "undefined") return;
-
-  const gtag = window.gtag;
-  if (!gtag) return;
-
-  gtag("event", "page_view", {
-    page_path: page_path || window.location.pathname,
-    page_title: page_title || document.title,
-    page_location: page_location || window.location.href,
-    send_to: GA_ID,
-  });
-}
-
 // Custom event tracking
 export function trackEvent(
   action: string,
@@ -163,36 +144,6 @@ export function trackCTAClick(ctaType: string, destination?: string) {
   });
 }
 
-// Project interaction tracking
-export function trackProjectView(projectName: string) {
-  trackEvent("project_view", {
-    project_name: projectName,
-    event_category: "portfolio",
-    event_label: projectName,
-  });
-}
-
-export function trackProjectClick(
-  projectName: string,
-  linkType: "demo" | "github" | "details",
-) {
-  trackEvent("project_click", {
-    project_name: projectName,
-    link_type: linkType,
-    event_category: "portfolio",
-    event_label: `${projectName}_${linkType}`,
-  });
-}
-
-// Skill/technology interest tracking
-export function trackSkillInterest(skillName: string) {
-  trackEvent("skill_interest", {
-    skill_name: skillName,
-    event_category: "portfolio",
-    event_label: skillName,
-  });
-}
-
 // Time on page tracking
 let pageStartTime: number | null = null;
 
@@ -237,30 +188,4 @@ export function trackScrollDepth() {
       });
     }
   }
-}
-
-// Error tracking
-export function trackError(error: Error, context?: string) {
-  trackEvent("exception", {
-    description: error.message,
-    fatal: false,
-    context: context || "",
-    stack: error.stack || "",
-  });
-}
-
-// Performance tracking
-export function trackPerformance(
-  metricName: string,
-  value: number,
-  rating: "good" | "needs-improvement" | "poor",
-) {
-  trackEvent("web_vitals", {
-    metric_name: metricName,
-    value: Math.round(value),
-    rating,
-    event_category: "performance",
-    event_label: `${metricName}_${rating}`,
-    non_interaction: true,
-  });
 }

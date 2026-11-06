@@ -99,10 +99,8 @@ npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-
 | `roadmap-learning`       | Roadmap & Learning Progression  | ADR-0008, 0009, 0010             | Topic, Section (chuỗi tự do gom bài), Lesson, Lesson Status (`target`, `learning`, `known`)                                |
 | `roadmap-assistant-abot` | Roadmap Assistant (Abot AI RAG) | ADR-0001, 0002, 0003, 0004, 0006 | Python microservice, proxy `/api/roadmap-assistant`, router P0-P8, in-memory vector store Gemini 768d, CUD Preview/Confirm |
 | `notes-editor`           | Notes & Lexical CMS             | N/A                              | Lexical Editor, autosave debounce, tag taxonomy, markdown serialize                                                        |
-| `workflow-builder`       | Workflow Builder & DAG Engine   | N/A                              | Visual DAG Canvas, Node registry, pure topological executor, KB chunking, Gemini quota                                     |
-| `storage-media`          | Storage & Media Assets          | N/A                              | S3/R2 client, image upload, cleanup & quota stats                                                                          |
+| `storage-media`          | Storage & Media Assets          | N/A                              | S3/R2 client, image upload                                                                                                 |
 | `auth-security`          | Auth & Actor Model              | ADR-0002                         | NextAuth, Actor `Owner` vs `Visitor`, `requireWriteAccess`, internal Bearer token                                          |
-| `docs-openapi`           | API Docs & OpenAPI Explorer     | N/A                              | Role-based API reference, dynamic OpenAPI v3 generator                                                                     |
 | `triage-observability`   | Triage & Active Learning        | ADR-0003                         | Missing Knowledge Triage queue, Langfuse 👎 vote sync, Golden set evals                                                    |
 
 ---
@@ -111,7 +109,7 @@ npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-
 
 1. **Ranh giới Actor (Owner vs Visitor)**:
    - Visitor chỉ được phép đọc và hỏi đáp (RAG). Mọi lệnh CUD đều bị chặn ở cả tầng Gateway (Next.js proxy) và tầng Intent Router (Python backend).
-   - Chỉ duy nhất Owner mới có quyền thay đổi dữ liệu roadmap, ghi chú và workflows.
+   - Chỉ duy nhất Owner mới có quyền thay đổi dữ liệu roadmap và ghi chú.
 2. **Quy trình CUD qua Abot (Human-in-the-loop)**:
    - Không một thao tác tạo, sửa, xóa nào của Abot được ghi trực tiếp vào DB mà không thông qua thẻ Preview (`PendingAction`) và được Owner nhấn nút "Xác nhận".
 3. **Quy chuẩn Lesson Status (ADR-0010)**:
