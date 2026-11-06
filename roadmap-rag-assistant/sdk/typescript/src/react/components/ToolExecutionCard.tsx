@@ -3,7 +3,6 @@ import {
   CheckIcon,
   CloseIcon,
   ChevronDownIcon,
-  AlertTriangleIcon,
   CopyIcon,
 } from '../icons';
 import { formatElapsed, type StepSource, type StepTone } from '../ToolStepRow';
@@ -168,14 +167,14 @@ export function ToolExecutionCard({
                 {displayTitle}
               </span>
               {name && name !== displayTitle && (
-                <span className="shrink-0 rounded bg-muted/60 px-1 py-0.2 font-mono text-[10px] text-muted-foreground">
+                <span className="shrink-0 rounded bg-muted/60 px-1 py-0.5 font-mono text-[11px] text-muted-foreground">
                   {name}
                 </span>
               )}
             </div>
             {summary && (
               <p
-                className={`truncate text-[11px] ${
+                className={`truncate text-xs ${
                   effectiveStatus === 'failed'
                     ? 'text-[#B42318]'
                     : 'text-muted-foreground'
@@ -190,23 +189,23 @@ export function ToolExecutionCard({
         <div className="flex shrink-0 items-center gap-2">
           {/* Status Badge */}
           {effectiveStatus === 'running' && (
-            <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+            <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
               Đang thực thi...
             </span>
           )}
           {effectiveStatus === 'success' && (
-            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
               Hoàn thành
             </span>
           )}
           {effectiveStatus === 'failed' && (
-            <span className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-700 dark:text-rose-300">
+            <span className="inline-flex items-center rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-700 dark:text-rose-300">
               Thất bại
             </span>
           )}
 
           {effectiveDuration !== undefined && (
-            <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">
               {formatElapsed(effectiveDuration)}
             </span>
           )}
@@ -226,10 +225,10 @@ export function ToolExecutionCard({
         <div className="border-t border-border/40 px-3 py-2.5 space-y-2.5 bg-black/[0.01] dark:bg-white/[0.01]">
           {hasArgs && (
             <div>
-              <div className="text-[11px] font-semibold text-muted-foreground tracking-tight">
+              <div className="text-xs font-semibold text-muted-foreground tracking-tight">
                 Tham số (Parameters)
               </div>
-              <pre className="mt-1 max-h-48 overflow-x-auto rounded border border-border/40 bg-muted/40 p-2 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
+              <pre className="mt-1 max-h-48 overflow-x-auto rounded border border-border/40 bg-muted/40 p-2 font-mono text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
                 {formatToolPayload(args)}
               </pre>
             </div>
@@ -237,19 +236,19 @@ export function ToolExecutionCard({
 
           {hasResult && (
             <div>
-              <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground tracking-tight">
+              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground tracking-tight">
                 <span>Kết quả (Output)</span>
                 <button
                   type="button"
                   onClick={() => handleCopy(effectiveResult)}
-                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <CopyIcon className="h-3 w-3" />
                   <span>{copied ? 'Đã chép' : 'Sao chép'}</span>
                 </button>
               </div>
               <pre
-                className={`mt-1 max-h-60 overflow-x-auto rounded border p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words ${
+                className={`mt-1 max-h-60 overflow-x-auto rounded border p-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words ${
                   effectiveStatus === 'failed'
                     ? 'border-rose-200 bg-rose-50/40 text-rose-900 dark:border-rose-900/30 dark:bg-rose-950/20 dark:text-rose-200'
                     : 'border-border/40 bg-muted/40 text-foreground'
@@ -262,14 +261,14 @@ export function ToolExecutionCard({
 
           {hasSources && (
             <div>
-              <div className="text-[11px] font-semibold text-muted-foreground tracking-tight mb-1">
+              <div className="text-xs font-semibold text-muted-foreground tracking-tight mb-1">
                 Tài liệu tham khảo ({items.length})
               </div>
               <ul className="space-y-1">
                 {items.map((it, idx) => (
                   <li
                     key={`${it.href ?? it.title}-${idx}`}
-                    className="flex min-w-0 items-baseline gap-1.5 text-[11px]"
+                    className="flex min-w-0 items-baseline gap-1.5 text-xs"
                   >
                     <span aria-hidden="true" className="text-muted-foreground">•</span>
                     {it.href ? (
@@ -285,7 +284,7 @@ export function ToolExecutionCard({
                       <span className="truncate text-foreground">{it.title}</span>
                     )}
                     {it.topic && (
-                      <span className="shrink-0 text-muted-foreground text-[10px]">
+                      <span className="shrink-0 text-muted-foreground text-[11px]">
                         ({it.topic})
                       </span>
                     )}

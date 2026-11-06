@@ -72,10 +72,10 @@ describe("Tier 1 — Typography, Theming & Streaming UX (F9 - F10)", () => {
       expect(meetsWcagAAA("#1F1E1C", "#FFFFFF")).toBe(true);
     });
 
-    it("muted text #6B6862 on white #FFFFFF satisfies WCAG AA (>4.5:1)", () => {
-      const ratio = getContrastRatio("#6B6862", "#FFFFFF");
+    it("muted text #5E5B55 on white #FFFFFF satisfies WCAG AA (>4.5:1)", () => {
+      const ratio = getContrastRatio("#5E5B55", "#FFFFFF");
       expect(ratio).toBeGreaterThanOrEqual(4.5);
-      expect(meetsWcagAA("#6B6862", "#FFFFFF")).toBe(true);
+      expect(meetsWcagAA("#5E5B55", "#FFFFFF")).toBe(true);
     });
 
     it("accent button #C2410C with white text #FFFFFF satisfies WCAG AA (>4.5:1)", () => {

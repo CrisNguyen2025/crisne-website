@@ -147,12 +147,12 @@ const MessageItem = React.memo(function MessageItem({
   if (isUser) {
     return (
       <div key={msg.id} className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-[#F4F3F0] px-3.5 py-2.5 text-sm leading-relaxed text-[#1F1E1C]">
+        <div className="relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-[#F4F3F0] px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C]">
           {msg.content}
         </div>
-        <div className="flex items-center gap-1.5 pr-1 text-xs text-[#6B6862]">
+        <div className="flex items-center gap-1.5 pr-1 text-xs text-[#5E5B55]">
           {timeStr && (
-            <span className="select-none text-[11px]">{timeStr}</span>
+            <span className="select-none text-xs">{timeStr}</span>
           )}
           <button
             type="button"
@@ -222,7 +222,7 @@ const MessageItem = React.memo(function MessageItem({
 
       {/* Main answer content rendered directly on canvas */}
       {msg.content && (
-        <div className="text-sm leading-relaxed text-[#1F1E1C]">
+        <div className="text-base md:text-sm leading-relaxed text-[#1F1E1C]">
           {/* Last block's bottom margin is dropped so the action bar sits close, like the user's */}
           <ChatMarkdown
             content={msg.content}
@@ -273,7 +273,7 @@ const MessageItem = React.memo(function MessageItem({
 
       {/* Finished with no text (empty reply or stopped before the first token) */}
       {!msg.content && !isLive && (
-        <p className="py-0.5 text-sm italic text-[#6B6862]">
+        <p className="py-0.5 text-sm italic text-[#5E5B55]">
           Mình chưa có câu trả lời cho câu này. Bạn nói rõ hơn giúp mình
           nhé.
         </p>
@@ -281,13 +281,13 @@ const MessageItem = React.memo(function MessageItem({
 
       {/* Shown after the user pressed stop, so a partial reply doesn't look finished */}
       {msg.stopped && (
-        <p className="text-xs italic text-[#6B6862]">Đã dừng</p>
+        <p className="text-xs italic text-[#5E5B55]">Đã dừng</p>
       )}
 
       {/* Confirmation for destructive actions (dry-run preview) */}
       {awaitingConfirm && (
         <div className="flex flex-col gap-2 pt-1">
-          <p className="text-xs text-[#6B6862]">
+          <p className="text-xs text-[#5E5B55]">
             Đang chờ bạn xác nhận
           </p>
           <div className="flex items-center gap-2">
@@ -320,10 +320,10 @@ const MessageItem = React.memo(function MessageItem({
       {/* Actions bar (Time and action buttons grouped on the right) */}
       {msg.content && (
         <div
-          className={`-mt-1 flex items-center justify-end gap-1 text-xs text-[#6B6862] transition-opacity duration-200 ${isLive ? "invisible opacity-0" : "opacity-100"}`}
+          className={`-mt-1 flex items-center justify-end gap-1 text-xs text-[#5E5B55] transition-opacity duration-200 ${isLive ? "invisible opacity-0" : "opacity-100"}`}
         >
           {timeStr && (
-            <span className="select-none text-[11px] pr-1">
+            <span className="select-none text-xs pr-1">
               {timeStr}
             </span>
           )}
@@ -351,7 +351,7 @@ const MessageItem = React.memo(function MessageItem({
                   onClick={() => copyMessage(`${msg.id}:trace`, msg.traceId ?? "")}
                   title={`Sao chép trace ID: ${msg.traceId}`}
                   aria-label="Sao chép trace ID của câu trả lời"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-[10px] font-semibold leading-none transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md font-mono text-[11px] font-semibold leading-none transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
                 >
                   {copiedId === `${msg.id}:trace` ? (
                     <CheckIcon className="h-3.5 w-3.5 text-[#3F7D58]" />
@@ -371,7 +371,7 @@ const MessageItem = React.memo(function MessageItem({
                 className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
                   feedback[msg.id] === 1
                     ? "text-[#3F7D58] bg-[#E6F1EA]"
-                    : "text-[#6B6862] hover:text-[#1F1E1C]"
+                    : "text-[#5E5B55] hover:text-[#1F1E1C]"
                 }`}
               >
                 <ThumbsUpIcon
@@ -387,7 +387,7 @@ const MessageItem = React.memo(function MessageItem({
                 className={`flex h-7 w-7 items-center justify-center rounded-md transition-[color,background-color] duration-200 ease-out hover:bg-[#F4F3F0] cursor-pointer ${
                   feedback[msg.id] === 0
                     ? "text-[#B42318] bg-[#FBEDE5]"
-                    : "text-[#6B6862] hover:text-[#1F1E1C]"
+                    : "text-[#5E5B55] hover:text-[#1F1E1C]"
                 }`}
               >
                 <ThumbsDownIcon

@@ -46,7 +46,7 @@ export function ChangeReviewCard({ changes }: ChangeReviewCardProps) {
         <span className="font-mono text-[#3F7D58]">+{added}</span>
         <span className="font-mono text-[#B42318]">−{removed}</span>
         <ChevronDownIcon
-          className={`h-3.5 w-3.5 text-[#6B6862] transition-transform duration-200 ${expanded ? "rotate-0" : "-rotate-90"}`}
+          className={`h-3.5 w-3.5 text-[#5E5B55] transition-transform duration-200 ${expanded ? "rotate-0" : "-rotate-90"}`}
         />
         <span className="ml-auto rounded-md border border-[#E6E4DF] bg-[#F4F3F0] px-2 py-0.5 font-medium text-[#4D4B46]">
           Xem lại
@@ -64,7 +64,7 @@ export function ChangeReviewCard({ changes }: ChangeReviewCardProps) {
                 >
                   <span aria-hidden="true">{isCreate ? "+" : "−"}</span>
                   <span className="sr-only">{isCreate ? "Đã tạo" : "Đã xóa"}</span>
-                  <span className="shrink-0 text-[#6B6862]">{levelLabel(e.level)}</span>
+                  <span className="shrink-0 text-[#5E5B55]">{levelLabel(e.level)}</span>
                   <span className="min-w-0 break-words font-sans font-medium text-[#1F1E1C]">{e.title}</span>
                   {e.code && <span className="shrink-0 text-[#8C8983]">{e.code}</span>}
                 </div>
@@ -73,7 +73,7 @@ export function ChangeReviewCard({ changes }: ChangeReviewCardProps) {
                     {e.children.map((child, i) => (
                       <li key={`${e.key}-${i}`} className="flex items-baseline gap-2 py-0.5 pl-7 pr-3">
                         <span aria-hidden="true">−</span>
-                        <span className="shrink-0 text-[#6B6862]">{levelLabel(child.level)}</span>
+                        <span className="shrink-0 text-[#5E5B55]">{levelLabel(child.level)}</span>
                         <span className="min-w-0 break-words font-sans text-[#4D4B46]">{child.title}</span>
                       </li>
                     ))}
@@ -83,10 +83,10 @@ export function ChangeReviewCard({ changes }: ChangeReviewCardProps) {
             );
           })}
           {truncated && (
-            <li className="px-3 py-1 font-sans italic text-[#6B6862]">Danh sách mục con đã được rút gọn.</li>
+            <li className="px-3 py-1 font-sans italic text-[#5E5B55]">Danh sách mục con đã được rút gọn.</li>
           )}
           {skipped.length > 0 && (
-            <li className="px-3 py-1 font-sans text-[#6B6862]">Đã có sẵn, không tạo lại: {skipped.join(", ")}</li>
+            <li className="px-3 py-1 font-sans text-[#5E5B55]">Đã có sẵn, không tạo lại: {skipped.join(", ")}</li>
           )}
         </ul>
       )}

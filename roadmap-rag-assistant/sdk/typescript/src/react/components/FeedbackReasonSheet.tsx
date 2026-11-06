@@ -54,7 +54,7 @@ export function FeedbackReasonSheet({
           onClick={onClose}
           title="Đóng"
           aria-label="Đóng bảng góp ý"
-          className="flex h-8 w-8 min-h-[44px] min-w-[44px] md:h-5 md:w-5 md:min-h-0 md:min-w-0 items-center justify-center rounded text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+          className="flex h-8 w-8 min-h-[44px] min-w-[44px] md:h-5 md:w-5 md:min-h-0 md:min-w-0 items-center justify-center rounded text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
         >
           <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
         </button>
@@ -93,14 +93,14 @@ export function FeedbackReasonSheet({
             placeholder="AI cần cải thiện điểm nào? (tùy chọn)..."
             rows={2}
             maxLength={300}
-            className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] p-2.5 text-[16px] md:text-xs text-[#1F1E1C] outline-none placeholder:text-[#6B6862] focus:border-[#C2410C] focus:bg-[#FFFFFF]"
+            className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] p-2.5 text-[16px] md:text-xs text-[#1F1E1C] outline-none placeholder:text-[#5E5B55] focus:border-[#C2410C] focus:bg-[#FFFFFF]"
           />
 
           <div className="flex items-center justify-end gap-2 pt-0.5">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-2 min-h-[44px] md:min-h-0 flex items-center justify-center text-xs text-[#6B6862] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+              className="rounded-md px-3 py-2 min-h-[44px] md:min-h-0 flex items-center justify-center text-xs text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
             >
               Bỏ qua
             </button>

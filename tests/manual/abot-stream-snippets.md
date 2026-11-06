@@ -7,6 +7,8 @@ Phạm vi: Kiểm thử các chức năng stream thẻ gợi ý và cuộn bám 
 - Cuộn bám đáy nội suy theo rAF (lerp ~150-180ms), loại bỏ hoàn toàn giật nấc 58px mỗi thẻ (S4)
 - Huỷ cuộn bám đáy ngay khi người dùng chủ động cuộn lên (wheel/touch) (S5)
 - Thẻ kết thúc bằng `\n` trước fence đóng không bị inflate thành khối code nhiều dòng (S6)
+- Triệt tiêu bước âm −6px/−7px/−21px (bảo toàn `\n` và bỏ double caret ngoài) (S7)
+- Settle bám sát đáy 100% khi stream xong, loại bỏ hoàn toàn kẹt cách đáy 118px (S8)
 
 ## Chuẩn bị
 
@@ -24,6 +26,8 @@ Phạm vi: Kiểm thử các chức năng stream thẻ gợi ý và cuộn bám 
 | S4 | Cuộn bám đáy lerp mượt mà | Quan sát khung chat khi danh sách 10–16 thẻ gợi ý xuất hiện | Khung chat trượt lên êm ái theo rAF (150–180ms), không còn giật nấc 58px | `Pass` |
 | S5 | Huỷ cuộn khi người dùng cuộn lên | Lướt ngón tay hoặc lăn chuột lên trên khi Abot đang stream | Cuộn tự động dừng ngay lập tức, không kéo giật màn hình xuống đáy | `Pass` |
 | S6 | Ổn định chiều cao thẻ | Stream thẻ có dấu xuống dòng `\n` trước fence đóng | Thẻ giữ nguyên kích thước compact `min-h-[50px]`, không phình to thành multiline code block (+76px) rồi co lại | `Pass` |
+| S7 | Triệt tiêu bước âm | Quan sát khi thẻ code mở và đóng | Chiều cao không bị co thụt −6px/−7px/−21px | `Pass` |
+| S8 | Settle sát đáy khi hoàn tất | Đợi câu trả lời hoàn tất stream | Khung chat trôi êm ái đến sát đáy 100%, action toolbar và citations nằm ngay trên composer, không kẹt 118px | `Pass` |
 
 ## Ghi kết quả
 
@@ -36,4 +40,6 @@ Phạm vi: Kiểm thử các chức năng stream thẻ gợi ý và cuộn bám 
     - **S4**: Thuật toán exponential smoothing `1 - Math.exp(-dt / 55)` đưa scroll về đáy sau ~160ms không giật -> `Pass`.
     - **S5**: Wheel event (deltaY < 0) và touch drag đều ngắt rAF và giải phóng `isAtBottomRef` -> `Pass`.
     - **S6**: `cleanCode = code.replace(/\s+$/, "")` ngăn chặn hoàn toàn việc nhận diện nhầm thành multiline block -> `Pass` (khoá bởi `tests/unit/stream-snippets.test.tsx`).
-  - Tổng kết: 6/6 Pass.
+    - **S7**: Regex `replace(/(\n[ \t]*)`{1,2}$/, "$1")` bảo toàn `\n` và bỏ double caret ngoài -> `Pass` (khoá bởi `tests/unit/abot-ui-ux-smooth-stream.test.tsx`).
+    - **S8**: Settle rAF effect kích hoạt ngay sau khi reply hoàn tất, đưa `scrollTop = scrollHeight - clientHeight` sát đáy 100% -> `Pass`.
+  - Tổng kết: 8/8 Pass.

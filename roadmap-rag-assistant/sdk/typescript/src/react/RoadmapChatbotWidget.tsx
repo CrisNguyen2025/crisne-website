@@ -7,76 +7,18 @@ import React, {
 } from "react";
 import type { ChatbotConfig } from "./types";
 import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
-import {
-  SparklesIcon,
-  ArrowUpIcon,
-  StopIcon,
-  CloseIcon,
-  CopyIcon,
-  CheckIcon,
-  CheckCircleIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
-  MoreVerticalIcon,
-  NewChatIcon,
-  ArrowDownIcon,
-} from "./icons";
-import {
-  formatTime,
-  formatToolDisplayName,
-  toStepItems,
-} from "./utils/formatters";
-import { ChatMarkdown } from "./ChatMarkdown";
-import { LayerChoicePicker } from "./LayerChoicePicker";
-import { WELCOME_MESSAGE_ID } from "./welcome";
-import { PulsatingDots } from "./components/PulsatingDots";
+import { SparklesIcon } from "./icons";
+import { formatTime } from "./utils/formatters";
 import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { useVisualViewportBox } from "./utils/useVisualViewportBox";
 import { copyText } from "./utils/clipboard";
+import { useDrawerMotion } from "./utils/useDrawerMotion";
 import { MessageList } from "./components/MessageList";
 import { useFeedback, type VoteDetail } from "./useFeedback";
 import { feedbackKey } from "./storage";
-
-import { CollapsibleStepsSummary, StepItem } from "./ToolStepRow";
-
-const WIDGET_THEME_VARS: React.CSSProperties = {
-  colorScheme: "light",
-  ...({
-    "--bg": "#FFFFFF",
-    "--surface": "#F4F3F0",
-    "--border": "#E6E4DF",
-    "--text": "#1F1E1C",
-    "--text-muted": "#6B6862",
-    "--accent": "#C2410C",
-    "--accent-soft": "#FBEDE5",
-    "--success": "#3F7D58",
-    "--danger": "#B42318",
-    "--background": "#FFFFFF",
-    "--foreground": "#1F1E1C",
-    "--muted-foreground": "#6B6862",
-    "--card": "#F4F3F0",
-    "--card-foreground": "#1F1E1C",
-    "--popover": "#FFFFFF",
-    "--popover-foreground": "#1F1E1C",
-    "--input": "#F4F3F0",
-    "--muted": "#F4F3F0",
-    "--primary": "#C2410C",
-    "--primary-foreground": "#FFFFFF",
-    // Step rows (ToolStepRow). Namespaced: the host app has its own --border and --accent.
-    "--chat-text": "#1F1E1C",
-    "--chat-text-secondary": "#4D4B46",
-    "--chat-text-muted": "#6B6862",
-    "--chat-text-subtle": "#8C8983",
-    "--chat-surface": "#F4F3F0",
-    "--chat-border": "#E6E4DF",
-    "--chat-accent": "#C2410C",
-    "--chat-success": "#3F7D58",
-    "--chat-warning": "#B54708",
-    "--chat-danger": "#B42318",
-  } as React.CSSProperties),
-};
+import { WIDGET_THEME_VARS } from "./tokens";
 
 export function RoadmapChatbotWidget({
   position = "bottom-right",
@@ -101,15 +43,6 @@ export function RoadmapChatbotWidget({
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  const handleLauncherMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-  };
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
@@ -187,12 +120,33 @@ export function RoadmapChatbotWidget({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+
+  // Phones: the panel slides in from the right and closes by swiping right. A feedback sheet
+  // open at the bottom keeps the gesture off, so a swipe can't dismiss a half-written reason.
+  const dismiss = useCallback(() => {
+    setIsOpen(false);
+    setIsOptionsOpen(false);
+  }, []);
+  const { close: animateClose } = useDrawerMotion(
+    containerRef,
+    scrimRef,
+    isOpen && !activeFeedbackMsgId,
+    dismiss
+  );
+  const closeDrawer = useCallback(
+    () => animateClose(dismiss),
+    [animateClose, dismiss]
+  );
   const isSendingRef = useRef(false);
 
   // Snippet tapped to run; only that snippet's run button spins while the reply is loading
   const [runningCode, setRunningCode] = useState<string | null>(null);
   useEffect(() => {
-    if (!isLoading) setRunningCode(null);
+    if (!isLoading) {
+      const timer = setTimeout(() => setRunningCode(null), 0);
+      return () => clearTimeout(timer);
+    }
   }, [isLoading]);
   const handleRunCode = useCallback(
     (code: string) => {
@@ -208,13 +162,14 @@ export function RoadmapChatbotWidget({
     if (!isOpen && !isOptionsOpen) return;
     const handleClick = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
+      // The scrim has its own click handler, which closes with the slide-out animation
+      if (scrimRef.current?.contains(target)) return;
       if (
         isOpen &&
         containerRef.current &&
         !containerRef.current.contains(target)
       ) {
-        setIsOpen(false);
-        setIsOptionsOpen(false);
+        closeDrawer();
       } else if (
         isOptionsOpen &&
         optionsRef.current &&
@@ -225,8 +180,7 @@ export function RoadmapChatbotWidget({
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setIsOpen(false);
-        setIsOptionsOpen(false);
+        closeDrawer();
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -237,7 +191,7 @@ export function RoadmapChatbotWidget({
       document.removeEventListener("touchstart", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [isOpen, isOptionsOpen]);
+  }, [isOpen, isOptionsOpen, closeDrawer]);
 
   const handleCopyConversationId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -408,6 +362,60 @@ export function RoadmapChatbotWidget({
     rafIdRef.current = requestAnimationFrame(tick);
   }, [messages, isOpen, isStreaming, activeTool]);
 
+  // When reply finishes streaming, guarantee the message list cleanly glides
+  // all the way to the true bottom so late-mounted elements (action toolbar, citations)
+  // never leave the view stranded ~118px above the end.
+  useEffect(() => {
+    if (!isOpen || isStreaming || !isAtBottomRef.current) return;
+
+    const frame = requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      if (!container || !isAtBottomRef.current) return;
+
+      const max = container.scrollHeight - container.clientHeight;
+      if (max <= container.scrollTop) return;
+
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
+      let lastTime = performance.now();
+      const settleTick = (now: number) => {
+        const el = scrollRef.current;
+        if (!el || !isAtBottomRef.current) {
+          rafIdRef.current = null;
+          return;
+        }
+        const target = el.scrollHeight - el.clientHeight;
+        const curr = el.scrollTop;
+        const dist = target - curr;
+
+        if (dist <= 0.5) {
+          el.scrollTop = target;
+          rafIdRef.current = null;
+          return;
+        }
+
+        const dt = Math.min(now - lastTime, 100);
+        lastTime = now;
+        const factor = 1 - Math.exp(-dt / 55);
+        const step = Math.max(1, dist * factor);
+        el.scrollTop = Math.min(target, curr + step);
+
+        if (el.scrollTop < target && isAtBottomRef.current) {
+          rafIdRef.current = requestAnimationFrame(settleTick);
+        } else {
+          rafIdRef.current = null;
+        }
+      };
+
+      rafIdRef.current = requestAnimationFrame(settleTick);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [isStreaming, isOpen, messages]);
+
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
     if (isOpen && typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -486,11 +494,9 @@ export function RoadmapChatbotWidget({
     });
   };
 
-  const status = activeTool
-    ? formatToolDisplayName(activeTool)
-    : isStreaming
-      ? "Đang trả lời…"
-      : subtitle;
+  // The header line stays the fixed subtitle while answering; the streaming state shows in the
+  // message itself, not in the header.
+  const status = subtitle;
   const showStop = isStreaming && !input.trim();
 
   return (
@@ -502,9 +508,17 @@ export function RoadmapChatbotWidget({
     >
       {isOpen && (
         <div
+          ref={scrimRef}
+          aria-hidden="true"
+          onClick={closeDrawer}
+          className="pointer-events-auto fixed inset-0 z-40 bg-black/40 opacity-100 animate-in fade-in duration-300 motion-reduce:animate-none md:hidden"
+        />
+      )}
+      {isOpen && (
+        <div
           ref={containerRef}
           style={{ ...WIDGET_THEME_VARS, ...keyboardBox }}
-          className="pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] animate-in fade-in duration-200 rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[720px] md:max-h-[calc(100vh-3rem)] md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95"
+          className="pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[720px] md:max-h-[calc(100vh-3rem)] md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95"
         >
           {/* ── Header ── */}
           <ChatHeader
@@ -514,7 +528,7 @@ export function RoadmapChatbotWidget({
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
             optionsRef={optionsRef}
-            setIsOpen={setIsOpen}
+            setIsOpen={closeDrawer}
             setIsOptionsOpen={setIsOptionsOpen}
             status={status}
             title={title}
@@ -600,22 +614,16 @@ export function RoadmapChatbotWidget({
         >
           {/* Minimal 4-point star icon sáng rõ */}
           <span className="flex items-center justify-center text-white/80 transition-colors group-hover:text-white">
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" />
-            </svg>
+            <SparklesIcon className="h-4 w-4" />
           </span>
 
           <span className="text-white/95 transition-colors group-hover:text-white">
-            Ask AI
+            Abot
           </span>
         </button>
       )}
     </div>
   );
 }
+
+export { formatTime };

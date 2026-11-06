@@ -225,59 +225,67 @@ export function CodeBlock({
     const isBusy = runningCode !== null;
     const isRunnable = onRun && isRunnableSnippet(snippet);
     return (
-      // Fades and slides in on mount: while streaming text flows in with a caret,
-      // and action buttons smoothly reveal once the closing fence arrives.
-      <div className="my-2 flex min-h-[50px] min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-200 ease-out motion-reduce:animate-none">
-        {/* Text streams directly inside; caret indicates live generation without layout jumps */}
-        <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-[13px] text-foreground">
-          {code}
-          {open && (
-            <span
-              aria-hidden="true"
-              className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-foreground align-text-bottom motion-reduce:animate-none"
-            />
-          )}
-        </code>
-        {/* Space for actions is preserved so text does not wrap/jump when streaming completes */}
-        <div
-          className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${
-            open ? "pointer-events-none opacity-0" : "opacity-100"
-          }`}
-          aria-hidden={open}
-        >
-          {isRunnable && (
-            <button
-              type="button"
-              onClick={() => onRun(snippet)}
-              disabled={isBusy || open}
-              tabIndex={open ? -1 : 0}
-              aria-label={isRunning ? "Đang gửi" : "Gửi"}
-              aria-busy={isRunning}
-              title={isRunning ? "Đang gửi" : "Gửi"}
-              className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-            >
-              {isRunning ? (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <PlayIcon className="h-3.5 w-3.5" />
+      // Smooth height growth on stream mount: expands 0fr -> 1fr so the +58px jump is eliminated,
+      // while streaming text flows in with a caret and buttons reveal once the fence closes.
+      <div
+        className={`grid transition-[grid-template-rows,margin,opacity] duration-200 ease-out motion-reduce:transition-none ${
+          !open ? "grid-rows-[1fr] my-2 opacity-100" : "grid-rows-[1fr] my-2 opacity-100 animate-in fade-in duration-200"
+        }`}
+      >
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <div className="flex min-h-[50px] min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs">
+            {/* Text streams directly inside; caret indicates live generation without layout jumps */}
+            <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-sm md:text-[13px] text-foreground">
+              {code}
+              {open && (
+                <span
+                  aria-hidden="true"
+                  className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-foreground align-text-bottom motion-reduce:animate-none"
+                />
               )}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={copy}
-            disabled={open}
-            tabIndex={open ? -1 : 0}
-            aria-label={copied ? "Đã sao chép" : "Sao chép"}
-            title={copied ? "Đã chép" : "Chép"}
-            className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:opacity-0"
-          >
-            {copied ? (
-              <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
-            ) : (
-              <CopyIcon className="h-3.5 w-3.5" />
-            )}
-          </button>
+            </code>
+            {/* Space for actions is preserved so text does not wrap/jump when streaming completes */}
+            <div
+              className={`flex shrink-0 items-center gap-1 transition-opacity duration-200 ${
+                open ? "pointer-events-none opacity-0" : "opacity-100"
+              }`}
+              aria-hidden={open}
+            >
+              {isRunnable && (
+                <button
+                  type="button"
+                  onClick={() => onRun(snippet)}
+                  disabled={isBusy || open}
+                  tabIndex={open ? -1 : 0}
+                  aria-label={isRunning ? "Đang gửi" : "Gửi"}
+                  aria-busy={isRunning}
+                  title={isRunning ? "Đang gửi" : "Gửi"}
+                  className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                >
+                  {isRunning ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <PlayIcon className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={copy}
+                disabled={open}
+                tabIndex={open ? -1 : 0}
+                aria-label={copied ? "Đã sao chép" : "Sao chép"}
+                title={copied ? "Đã chép" : "Chép"}
+                className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:opacity-0"
+              >
+                {copied ? (
+                  <CheckIcon className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <CopyIcon className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

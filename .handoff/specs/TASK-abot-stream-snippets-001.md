@@ -40,7 +40,7 @@ verification_gate:
 
 - **Goal**: Khi Abot stream một câu trả lời chứa nhiều thẻ gợi ý (khối code một dòng, không ngôn ngữ), nội dung phải lớn lên êm. Không nhảy, không co lại, không nháy. Tham chiếu cảm giác: app Claude trên mobile.
 - **Why**: User thử trên Android Chrome và thấy rất giật. Câu trả lời "trợ giúp / lệnh mẫu" có khoảng 10–16 thẻ, nên lỗi lặp lại rất rõ.
-- **Cách tái hiện**: mở `http://localhost:3334` ở viewport 375×812 (hoặc điện thoại qua LAN), bấm "Ask AI" và hỏi `Bạn giúp được gì? Liệt kê lệnh mẫu`. Cần `yarn dev` và `yarn rag:dev` chạy cùng lúc.
+- **Cách tái hiện**: mở `http://localhost:3334` ở viewport 375×812 (hoặc điện thoại qua LAN), bấm "Abot" và hỏi `Bạn giúp được gì? Liệt kê lệnh mẫu`. Cần `yarn dev` và `yarn rag:dev` chạy cùng lúc.
 
 ### Luồng dữ liệu
 
