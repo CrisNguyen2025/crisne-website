@@ -47,7 +47,7 @@ const fraunces = Fraunces({
 
 const SITE_URL = "https://crisne.blog";
 
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme")||"dark";var r=t==="system"?window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":t;document.documentElement.classList.add(r);document.documentElement.style.colorScheme=r}catch(e){document.documentElement.classList.add("dark");document.documentElement.style.colorScheme="dark"}})()`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("theme")||"light";var r=t==="system"?window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light":t;document.documentElement.classList.add(r);document.documentElement.style.colorScheme=r}catch(e){document.documentElement.classList.add("light");document.documentElement.style.colorScheme="light"}})()`;
 
 export const viewport: Viewport = {
   width: "device-width",

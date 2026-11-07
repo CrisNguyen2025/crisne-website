@@ -13,7 +13,7 @@ interface ThemeContextValue {
 
 const STORAGE_KEY = "theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
-const DEFAULT_THEME: Theme = "dark";
+const DEFAULT_THEME: Theme = "light";
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
@@ -43,9 +43,9 @@ function applyTheme(resolved: ResolvedTheme) {
 
 let listeners: Array<() => void> = [];
 let currentTheme: Theme = DEFAULT_THEME;
-let currentResolved: ResolvedTheme = "dark";
+let currentResolved: ResolvedTheme = "light";
 let cachedSnapshot: { theme: Theme; resolved: ResolvedTheme } = { theme: currentTheme, resolved: currentResolved };
-const serverSnapshot = { theme: DEFAULT_THEME, resolved: "dark" as ResolvedTheme };
+const serverSnapshot = { theme: DEFAULT_THEME, resolved: "light" as ResolvedTheme };
 
 function subscribe(listener: () => void) {
   listeners = [...listeners, listener];
@@ -128,7 +128,7 @@ export function useTheme() {
   if (!ctx) {
     return {
       theme: DEFAULT_THEME,
-      resolvedTheme: "dark" as ResolvedTheme,
+      resolvedTheme: "light" as ResolvedTheme,
       setTheme: () => {},
     };
   }
