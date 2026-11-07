@@ -1,5 +1,6 @@
 'use client';
 
+import { SECTIONS_ENABLED } from './sectionsEnabled';
 import React, { useState, useMemo, useRef } from 'react';
 import {
   ChevronLeft,
@@ -157,7 +158,7 @@ function DetailContent({
               </button>
             )}
 
-            <span className="truncate">{item.section || 'Chung'}</span>
+            {SECTIONS_ENABLED && <span className="truncate">{item.section || 'Chung'}</span>}
           </div>
 
           {canWrite && (

@@ -32,6 +32,8 @@ interface SectionListProps {
   onOpenCreateItem: (section: string | null) => void;
   onRenameSection: (section: string) => void;
   onDissolveSection: (section: string) => void;
+  /** One flat list: no section header, no section menu */
+  flat?: boolean;
 }
 
 /** A section of a topic and its lessons, which can be reordered within the section (ADR-0009). */
@@ -48,6 +50,7 @@ export function SectionList({
   onOpenCreateItem,
   onRenameSection,
   onDissolveSection,
+  flat = false,
 }: SectionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -68,6 +71,7 @@ export function SectionList({
 
   return (
     <section>
+      {!flat && (
       <div
         onClick={onToggleCollapse}
         className="group/gh flex cursor-pointer select-none items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -100,8 +104,9 @@ export function SectionList({
           />
         )}
       </div>
+      )}
 
-      {!isCollapsed && (
+      {(flat || !isCollapsed) && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-0.5 pb-1">

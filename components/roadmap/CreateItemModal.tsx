@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Sparkles, FileText, AlignLeft } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { SectionField } from './SectionField';
+import { SECTIONS_ENABLED } from './sectionsEnabled';
 
 interface CreateItemModalProps {
   isOpen: boolean;
@@ -41,7 +42,7 @@ function CreateItemForm({
       setError('Nhập mô tả ngắn cho bài này.');
       return;
     }
-    onSubmit(section.trim() || null, title.trim(), description.trim());
+    onSubmit(SECTIONS_ENABLED ? section.trim() || null : null, title.trim(), description.trim());
     onClose();
   };
 
@@ -51,9 +52,11 @@ function CreateItemForm({
       onClose={onClose}
       title="Thêm bài"
       description={
-        <span className="mt-0.5 truncate text-xs text-muted-foreground">
-          Mục: <span className="font-semibold text-primary">{section.trim() || 'Chung'}</span>
-        </span>
+        SECTIONS_ENABLED ? (
+          <span className="mt-0.5 truncate text-xs text-muted-foreground">
+            Mục: <span className="font-semibold text-primary">{section.trim() || 'Chung'}</span>
+          </span>
+        ) : undefined
       }
       icon={<Sparkles className="size-4" />}
       footer={
@@ -80,7 +83,7 @@ function CreateItemForm({
           <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">{error}</div>
         )}
 
-        <SectionField value={section} onChange={setSection} sections={sections} />
+        {SECTIONS_ENABLED && <SectionField value={section} onChange={setSection} sections={sections} />}
 
         <div className="space-y-1">
           <label className="font-semibold text-muted-foreground flex items-center gap-1.5">

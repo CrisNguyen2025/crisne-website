@@ -1,5 +1,6 @@
 'use client';
 
+import { SECTIONS_ENABLED } from './sectionsEnabled';
 import React from 'react';
 import { RoadmapMeta, RoadmapStats } from '@/lib/roadmap/types';
 import type { SectionGroup } from '@/hooks/use-roadmap';
@@ -40,6 +41,10 @@ export function RoadmapMap({
   const covered = sectionGroups.reduce((n, g) => n + coverage(g.items).withContent, 0);
   const percent = stats.total ? Math.round((covered / stats.total) * 100) : 0;
   const sectionCount = sectionGroups.filter((g) => g.section !== null).length;
+  // Sections are off for now: one station holds every lesson (see sectionsEnabled.ts)
+  const stations = SECTIONS_ENABLED
+    ? sectionGroups
+    : [{ section: null, items: sectionGroups.flatMap((g) => g.items) }];
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -49,7 +54,9 @@ export function RoadmapMap({
             {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
           </h1>
           <p className="text-xs text-muted-foreground">
-            {isLoading ? 'Loading…' : `${stats.total} bài · ${sectionCount} mục · ${percent}% có nội dung`}
+            {isLoading ? 'Loading…' : SECTIONS_ENABLED
+                ? `${stats.total} bài · ${sectionCount} mục · ${percent}% có nội dung`
+                : `${stats.total} bài · ${percent}% có nội dung`}
           </p>
         </div>
         <ViewToggle value={view} onChange={onViewChange} />
@@ -64,7 +71,7 @@ export function RoadmapMap({
           </div>
         ) : (
           <ol className="relative flex flex-col gap-6 p-4 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] md:min-h-full md:flex-row md:items-start md:gap-4 md:p-6">
-            {sectionGroups.map((group) => {
+            {stations.map((group) => {
               const { total, withContent } = coverage(group.items);
               const isDone = total > 0 && withContent === total;
               return (
@@ -80,9 +87,11 @@ export function RoadmapMap({
 
                   <div className="md:rounded-xl md:border md:border-border md:bg-card md:p-3">
                     <div className="flex items-center gap-2">
-                      <h2 className="truncate text-sm font-medium leading-snug text-foreground">
-                        {group.section ?? 'Chung'}
-                      </h2>
+                      {SECTIONS_ENABLED && (
+                        <h2 className="truncate text-sm font-medium leading-snug text-foreground">
+                          {group.section ?? 'Chung'}
+                        </h2>
+                      )}
                       <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                         {withContent}/{total}
                       </span>

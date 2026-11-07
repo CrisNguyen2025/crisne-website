@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, FolderPlus, Layers, Lock, Pencil, Search, Trash2, Unlock, X } from 'lucide-react';
+import { SECTIONS_ENABLED } from './sectionsEnabled';
+import { AlertTriangle, FolderPlus, Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { ChecklistItem, RoadmapStats, RoadmapMeta } from '@/lib/roadmap/types';
 import type { SectionGroup } from '@/hooks/use-roadmap';
 import { useToast } from '@/components/ui/toast';
@@ -44,7 +45,6 @@ interface MasterPanelProps {
   onViewChange: (view: RoadmapView) => void;
   onEditRoadmap?: (title: string, description?: string) => Promise<void>;
   onDeleteRoadmap?: (slug: string) => void;
-  onToggleLock?: () => void;
   isLoading?: boolean;
   isError?: boolean;
   onSelectItem: (id: string) => void;
@@ -67,7 +67,6 @@ export function MasterPanel({
   onViewChange,
   onEditRoadmap,
   onDeleteRoadmap,
-  onToggleLock,
   isLoading = false,
   isError = false,
   onSelectItem,
@@ -92,8 +91,11 @@ export function MasterPanel({
   // The sections to show: only the chosen one, and search keeps the sections that hold a match
   const displayGroups = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return sectionGroups
-      .filter((g) => selectedSection === 'all' || g.section === selectedSection)
+    const groups = SECTIONS_ENABLED
+      ? sectionGroups
+      : [{ section: null, items: sectionGroups.flatMap((g) => g.items) }];
+    return groups
+      .filter((g) => !SECTIONS_ENABLED || selectedSection === 'all' || g.section === selectedSection)
       .map((g) => ({
         ...g,
         items: g.items.filter(
@@ -108,7 +110,6 @@ export function MasterPanel({
     () => displayGroups.flatMap((g) => (collapsed[keyOf(g.section)] ? [] : g.items)),
     [displayGroups, collapsed]
   );
-  const matchCount = searchQuery.trim() ? displayGroups.reduce((n, g) => n + g.items.length, 0) : 0;
 
   // Ctrl+F / ⌘F focuses the lesson search
   useEffect(() => {
@@ -141,6 +142,7 @@ export function MasterPanel({
 
   /** The whole topic in order: each section's new order, sections in their page order */
   const reorderSection = (section: string | null, reordered: ChecklistItem[]) => {
+    if (!SECTIONS_ENABLED) return onReorderItems(reordered);
     const next = sectionGroups.flatMap((g) => (g.section === section ? reordered : g.items));
     onReorderItems(next);
   };
@@ -155,26 +157,12 @@ export function MasterPanel({
               {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {isLoading ? 'Loading…' : `${stats.total} bài · ${sectionNames.length} mục`}
+              {isLoading ? 'Loading…' : SECTIONS_ENABLED ? `${stats.total} bài · ${sectionNames.length} mục` : `${stats.total} bài`}
             </p>
           </div>
           <ViewToggle value={view} onChange={onViewChange} />
           {canWrite && (
             <>
-              <button
-                type="button"
-                onClick={() => onToggleLock?.()}
-                title={isLocked ? 'Mở khoá sắp xếp bài' : 'Khoá sắp xếp bài'}
-                aria-label={isLocked ? 'Unlock lessons' : 'Lock lessons'}
-                className={cn(
-                  'flex size-7 items-center justify-center rounded-lg transition-colors',
-                  isLocked
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-              >
-                {isLocked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
-              </button>
               <ActionMenu
                 label="Topic actions"
                 items={[
@@ -205,38 +193,8 @@ export function MasterPanel({
           )}
         </div>
 
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            ref={searchInputRef}
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setSearchQuery('')}
-            placeholder="Tìm bài"
-            aria-label="Search lessons"
-            className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-16 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-          />
-          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-            {searchQuery ? (
-              <>
-                <span className="text-xs tabular-nums text-muted-foreground">{matchCount}</span>
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="Clear search"
-                  className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </>
-            ) : (
-              <kbd className="hidden rounded border border-border px-1 text-xs text-muted-foreground lg:inline">⌘F</kbd>
-            )}
-          </div>
-        </div>
-
         {/* Section filter: a horizontally scrolling row of chips */}
+        {SECTIONS_ENABLED && (
         <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
           {isLoading ? (
             <>
@@ -261,6 +219,7 @@ export function MasterPanel({
             ))
           )}
         </div>
+        )}
       </div>
 
       {/* ── Lessons ─────────────────────────────────────────────────── */}
@@ -322,6 +281,7 @@ export function MasterPanel({
                 onOpenCreateItem={onOpenCreateItem}
                 onRenameSection={setRenamingSection}
                 onDissolveSection={onDissolveSection}
+                flat={!SECTIONS_ENABLED}
               />
             ))}
           </div>

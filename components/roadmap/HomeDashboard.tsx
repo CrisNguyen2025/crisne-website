@@ -21,30 +21,18 @@ export function HomeDashboard({ roadmaps, isLoading = false, onSelectRoadmap }: 
                 <div className="h-3 w-full rounded bg-muted/40" />
               </div>
             ))
-          : roadmaps.map((r) => {
-              const lessonCount = r._count?.items;
-
-              return (
-                <button
-                  key={r.slug}
-                  type="button"
-                  onClick={() => onSelectRoadmap(r.slug)}
-                  className="group flex cursor-pointer flex-col gap-1.5 rounded-2xl border border-border/70 bg-card p-5 text-left transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.99]"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h3 className="min-w-0 text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
-                      {r.title}
-                    </h3>
-                    {typeof lessonCount === 'number' && (
-                      <span className="shrink-0 text-xs text-muted-foreground">{lessonCount} bài</span>
-                    )}
-                  </div>
-                  {r.description && (
-                    <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{r.description}</p>
-                  )}
-                </button>
-              );
-            })}
+          : roadmaps.map((r) => (
+              <button
+                key={r.slug}
+                type="button"
+                onClick={() => onSelectRoadmap(r.slug)}
+                className="group flex cursor-pointer items-center rounded-2xl border border-border/70 bg-card p-5 text-left transition-all duration-200 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 active:scale-[0.99]"
+              >
+                <h3 className="min-w-0 text-base font-bold tracking-tight text-foreground transition-colors group-hover:text-primary">
+                  {r.title}
+                </h3>
+              </button>
+            ))}
       </div>
     </div>
   );

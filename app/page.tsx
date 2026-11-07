@@ -139,7 +139,6 @@ function RoadmapWorkspace() {
     isNotFound,
     setSelectedSection,
     editRoadmap,
-    toggleRoadmapLock,
     addItem,
     editItem,
     changeItemStatus,
@@ -397,7 +396,6 @@ function RoadmapWorkspace() {
                 onOpenCreateItem={handleOpenCreateItem}
                 onRenameSection={renameSection}
                 onDissolveSection={dissolveSection}
-                onToggleLock={toggleRoadmapLock}
               />
             </div>
 
@@ -431,63 +429,6 @@ function RoadmapWorkspace() {
         )}
       </div>
 
-      {/* Mobile Bottom Navigation (Hidden when reading lesson to maximize viewport) */}
-      <nav
-        className={cn(
-          "shrink-0 flex items-center justify-around border-t border-border bg-card/90 backdrop-blur-md px-2 py-2 md:hidden z-20 pb-[max(0.5rem,env(safe-area-inset-bottom))] transition-all duration-200",
-          isReaderOpen && "hidden"
-        )}
-      >
-        <button
-          type="button"
-          onClick={handleSelectHome}
-          className={cn(
-            "flex flex-col items-center gap-1 px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
-            currentView === "home" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <HomeIcon className="size-4" />
-          <span>Home</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setIsTopicsSheetOpen(true)}
-          className={cn(
-            "flex flex-col items-center gap-1 px-3 py-1 text-xs font-medium transition-colors cursor-pointer",
-            currentView === "roadmap" ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <Layers className="size-4" />
-          <span>Topics</span>
-        </button>
-
-        {canWrite && (
-          <button
-            type="button"
-            onClick={() => setIsTriageDrawerOpen(true)}
-            className="relative flex flex-col items-center gap-1 px-3 py-1 text-xs font-medium text-muted-foreground hover:text-[#C2410C] transition-colors cursor-pointer"
-          >
-            <div className="relative">
-              <Sparkles className="size-4" />
-              {triageBadgeCount > 0 && (
-                <span className="absolute -top-1 -right-2 flex size-3.5 items-center justify-center rounded-full bg-[#C2410C] text-[0.5625rem] font-bold text-white">
-                  {triageBadgeCount}
-                </span>
-              )}
-            </div>
-            <span>Triage</span>
-          </button>
-        )}
-
-        <Link
-          href="/portfolio"
-          className="flex flex-col items-center gap-1 px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <UserRound className="size-4" />
-          <span>Portfolio</span>
-        </Link>
-      </nav>
 
       {/* Mobile Topics Sheet */}
       <Sheet
