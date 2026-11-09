@@ -82,7 +82,7 @@ _Avoid_: outline, template
 Lệnh của Owner để Roadmap Assistant tạo trọn một Topic từ một mục tiêu học.
 _Avoid_: auto-generate
 
-## Cris AI & Knowledge Triage
+## Cris AI & Feedback
 
 **Cris AI**:
 Chatbot trên trang portfolio, trả lời về Cris từ Portfolio Knowledge.
@@ -103,14 +103,6 @@ _Avoid_: rating, vote, score
 **Golden Set**:
 Tập câu hỏi kèm đáp án chuẩn dùng để đánh giá chất lượng trả lời.
 _Avoid_: test set, benchmark
-
-**Knowledge Triage**:
-Hàng đợi các câu trả lời bị 👎 của Roadmap Assistant mà Owner import về, để soạn thành Lesson mới hoặc bỏ qua.
-_Avoid_: feedback queue, review queue
-
-**Triage Status**:
-Trạng thái một mục Knowledge Triage: pending, drafted, approved, dismissed.
-_Avoid_: review state
 
 ## Workflow Builder
 

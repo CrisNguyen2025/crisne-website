@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0011
 ---
 
 # Langfuse là nơi duy nhất giữ Feedback và Golden Set

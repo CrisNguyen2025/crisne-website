@@ -20,7 +20,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | ------------------------------------------------------------- | ------------------------------------------------------------ | ---------------------- |
 | [0001](adr/0001-roadmap-assistant-separate-python-service.md) | Roadmap Assistant là service Python riêng                    | accepted               |
 | [0002](adr/0002-roadmap-assistant-access-via-proxy.md)        | Chỉ nhận request qua proxy Next.js, quyền ghi theo Actor     | accepted               |
-| [0003](adr/0003-langfuse-owns-feedback.md)                    | Langfuse là nơi duy nhất giữ Feedback và Golden Set          | accepted               |
+| [0003](adr/0003-langfuse-owns-feedback.md)                    | Langfuse là nơi duy nhất giữ Feedback và Golden Set          | superseded by ADR-0011 |
 | [0004](adr/0004-embeddings-always-gemini.md)                  | Embeddings luôn dùng Gemini                                  | accepted               |
 | [0005](adr/0005-turso-for-production-database.md)             | Turso cho database production                                | accepted               |
 | [0006](adr/0006-in-memory-vector-search.md)                   | Tìm kiếm vector trong bộ nhớ                                 | accepted               |
@@ -28,6 +28,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0008](adr/0008-drop-level-group-by-name.md)                  | Bỏ Level, Group là nhóm Lesson có tên                        | superseded by ADR-0009 |
 | [0009](adr/0009-topic-holds-lessons-by-section.md)            | Topic chứa Lesson trực tiếp, Section thay cho Layer và Group | accepted               |
 | [0010](adr/0010-lesson-status-known-learning-target.md)       | Lesson có trạng thái: target, learning, known                | accepted               |
+| [0011](adr/0011-drop-knowledge-triage.md)                     | Bỏ Knowledge Triage, Langfuse vẫn giữ Feedback và Golden Set | accepted               |
 
 ## Runbook: cách setup / vận hành
 

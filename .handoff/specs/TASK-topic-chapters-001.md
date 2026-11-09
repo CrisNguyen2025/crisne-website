@@ -59,7 +59,7 @@ Owner muốn chia các Lesson của một Topic thành **chương rõ ràng, có
 | Q5 | Xoá chương | Mặc định: Lesson chuyển về "Chưa xếp chương", không xoá bài. |
 | Q6 | Visitor có thấy chương rỗng không? | Không; chỉ Owner thấy chương rỗng. |
 
-ADR mới (ví dụ ADR-0011 "Section thành bảng riêng có thứ tự") phải được viết trong buổi `/grill-with-docs` trước khi chuyển task sang READY. ADR-0009 đã dự liệu bước này: *"nếu sau này cần mô tả hay thứ tự riêng thì tách bảng khi đó"*. ADR-0009 được đánh dấu `superseded by ADR-0011` (hoặc giữ nguyên nếu ADR mới chỉ mở rộng).
+ADR mới (ví dụ ADR-0012 "Section thành bảng riêng có thứ tự") phải được viết trong buổi `/grill-with-docs` trước khi chuyển task sang READY. ADR-0009 đã dự liệu bước này: *"nếu sau này cần mô tả hay thứ tự riêng thì tách bảng khi đó"*. ADR-0009 được đánh dấu `superseded by ADR-0012` (hoặc giữ nguyên nếu ADR mới chỉ mở rộng).
 
 ## 1. Context & Architectural Intent
 
