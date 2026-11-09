@@ -120,6 +120,9 @@ export class RoadmapChatClient {
         let accumulatedMessage = '';
         let accumulatedThinking = '';
         let inThinkTag = false;
+        // Set by `done` or `error`. A body that ends without either was cut off (e.g. the proxy's
+        // time limit), and the caller must still hear about it or it waits forever.
+        let isTerminated = false;
 
         const processTokenChunk = (chunk: string) => {
           if (!chunk) return;
@@ -248,8 +251,10 @@ export class RoadmapChatClient {
                     changes: Array.isArray(data.changes) ? data.changes : undefined,
                     traceId: typeof data.trace_id === 'string' ? data.trace_id : undefined,
                   };
+                  isTerminated = true;
                   callbacks.onDone?.(finalResp);
                 } else if (currentEvent === 'error') {
+                  isTerminated = true;
                   callbacks.onError?.(new Error(data.error || 'Stream error'));
                 }
               } catch (e) {
@@ -257,6 +262,10 @@ export class RoadmapChatClient {
               }
             }
           }
+        }
+
+        if (!isTerminated) {
+          throw new Error('Stream closed before the reply finished');
         }
       } catch (err: unknown) {
         if (timedOut) {

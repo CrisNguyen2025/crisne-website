@@ -94,6 +94,38 @@ describe("streamChat timeouts", () => {
     expect(onError.mock.calls[0][0]).toBeInstanceOf(StreamTimeoutError);
   });
 
+  it("reports a stream that closes before done or error", async () => {
+    const stream = controlledStream();
+    vi.stubGlobal("fetch", fakeFetch(stream));
+    const onError = vi.fn();
+    const onDone = vi.fn();
+    const client = new RoadmapChatClient({ idleTimeout: 30_000 });
+
+    client.streamChat("xin chào", { onError, onDone });
+    stream.push(sse("token", { delta: "Xin" }));
+    stream.close();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).not.toBeInstanceOf(StreamTimeoutError);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing extra when the stream closes after done or error", async () => {
+    for (const last of [sse("done", { message: "Xin chào" }), sse("error", { error: "boom" })]) {
+      const stream = controlledStream();
+      vi.stubGlobal("fetch", fakeFetch(stream));
+      const onError = vi.fn();
+      const onDone = vi.fn();
+      const client = new RoadmapChatClient({ idleTimeout: 30_000 });
+
+      client.streamChat("xin chào", { onError, onDone });
+      stream.push(last);
+      stream.close();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onDone.mock.calls.length + onError.mock.calls.length).toBe(1);
+    }
+  });
+
   it("does not report an error when the user stops the stream", async () => {
     const stream = controlledStream();
     vi.stubGlobal("fetch", fakeFetch(stream));
