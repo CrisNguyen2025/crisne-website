@@ -18,6 +18,11 @@ Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ l�
 - **`cris-code-intel`:** dùng khi cần nắm kiến trúc, trace luồng thực thi (UI → API → Service → AI/DB), xem bản đồ API route hoặc đánh giá blast radius. CLI: `yarn intel <lệnh>`. Bản đồ chi tiết: `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
 - **`cris-how-to-sync`:** bắt buộc dùng trước khi lập plan, review thiết kế hoặc đưa target mới (feature, thư viện, model/migration, API route, pattern, thuật ngữ) vào repo. CLI: `yarn intel how-to-sync "<mô tả target>"`.
 - **`abot-trace-report`:** dùng khi phân tích trace Langfuse của Abot.
+- **`design-doc-mermaid`:** dùng khi cần sơ đồ Mermaid để commit trong một file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
+  - Sơ đồ chỉ để xem trong chat, không commit: không dùng skill này. Claude Code dùng `generative-ui`; agent khác trả fence `mermaid` ngay trong câu trả lời.
+  - Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
+  - Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
+  - Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
 
 ## 🧪 Manual Test Results
 
