@@ -1,48 +1,31 @@
 ---
 name: agent-handoff
-description: Tiêu chuẩn tiếp nhận, thực thi và bàn giao task giữa Claude Code (Architect) và Antigravity/Codex (Executor).
+description: Giao task giữa Claude Code (Architect) và Antigravity/Codex (Executor) qua spec `.handoff/specs/TASK-*.md`. Dùng khi được dán prompt "vai Executor" kèm task_id, khi Claude Code cần giao một plan đã duyệt cho agent khác thực thi, hoặc khi cần verify kết quả Executor đã báo (`result.json`).
 ---
 
-# Agent Handoff Protocol (Executor Guide)
+# Agent Handoff v3
 
-## Vai trò: Executor (Người thực thi kỹ thuật)
-Bạn tiếp nhận chỉ đạo kỹ thuật từ **Claude Code (Lead Architect)** thông qua task file trong `.handoff/specs/TASK-*.md`.
+Dev dán prompt cho Executor, Executor làm xong ghi `result.json`, Claude Code được báo lại, verify độc lập rồi báo cáo và đề xuất bước tiếp theo.
 
----
+| Bạn là | Đọc | Việc |
+|---|---|---|
+| **Executor** (Antigravity, Codex) | `references/executor.md` | Preflight → làm theo spec → gate → ghi `result.json` |
+| **Architect** (Claude Code) | `references/architect.md` | Viết spec → baseline → in prompt → chờ chạy nền → verify → report |
 
-## Quy trình thực thi bắt buộc (SOP):
+## Bất biến (cả hai vai)
 
-### Bước 1: Pre-flight Check & Khởi động
-1. Đọc file task chỉ định trong `.handoff/specs/`.
-2. Kiểm tra nhánh git hiện tại (`git branch --show-current`). Nhánh git **bắt buộc** phải khớp với trường `branch` trong frontmatter.
-3. Tạo lock file tại `.handoff/runs/.lock` với nội dung JSON: `{ "task_id": "...", "started_at": "..." }`.
-4. Cập nhật task frontmatter: `status: IN_PROGRESS`, `current_attempt: 1`.
+- **Executor không commit, không push.** Dev tự commit sau khi Claude verify.
+- **Executor luôn ghi `.handoff/runs/<task_id>/result.json`** khi dừng, kể cả `ESCALATED`/`ABORTED`.
+- Executor chỉ sửa file trong `boundaries.allowed_to_modify` của spec, cộng với chính file spec (trạng thái, checklist, mục 4–5). Task `review` thì chỉ sửa file spec. Không bao giờ chạy `git restore .`, `git reset --hard`, `git clean`.
+- Claude **không tin `result.json`**: tự chạy `check-boundary.sh` và gate rồi mới kết luận.
+- Rule dự án nằm ở `AGENTS.md`. Spec chỉ ghi rule riêng của task.
 
-### Bước 2: Atomic Execution (Tuân thủ Boundary)
-1. Chỉ được phép tạo/sửa các file nằm trong danh sách `allowed_to_modify`.
-2. **Tuyệt đối cấm** chỉnh sửa bất kỳ file nào trong danh sách `strictly_forbidden` (ví dụ: `package.json`, `yarn.lock`, config files).
-3. Tuân thủ style guide của dự án:
-   - TypeScript strict mode, không dùng `any`, không `@ts-ignore`.
-   - Không comment vào code mới.
-   - Không dùng `px`, chỉ dùng `rem` hoặc Tailwind class có sẵn.
-4. Đánh dấu `[x]` vào checklist sau mỗi bước hoàn thành.
+## Thành phần
 
-### Bước 3: Verification Gate & Circuit Breaker (Cơ chế 3 lần)
-Chạy toàn bộ các lệnh trong `verification_gate`:
-- Nếu toàn bộ test/lint/type-check đều **PASS**:
-  - Chạy `git status --porcelain` để kiểm tra boundary. Nếu không có file vi phạm, chuyển sang Bước 4.
-- Nếu **FAIL**:
-  - Tăng `current_attempt`.
-  - Tự debug tối đa 3 lần. Nếu `current_attempt >= 3`:
-    - **Dừng ngay lập tức (Trigger Circuit Breaker)**.
-    - Chạy `git restore .` để hoàn trả workspace về trạng thái sạch ban đầu.
-    - Tạo file `.handoff/runs/escalations/ESC-{task_id}.md` (ghi 5 dòng log lỗi + 3 giả thuyết đã thử + câu hỏi kiến trúc cho Claude Code).
-    - Cập nhật task frontmatter: `status: ESCALATED`.
-    - Xóa `.handoff/runs/.lock` và dừng lại.
-
-### Bước 4: Handback (Bàn giao hoàn tất)
-1. Commit code bằng git theo format: `feat/fix: [task description] ({task_id})`.
-2. Điền commit hash và danh sách modified files vào mục `Execution Audit Log`.
-3. Cập nhật task frontmatter: `status: COMPLETED`.
-4. Xóa file `.handoff/runs/.lock`.
-5. Báo cáo hoàn tất để người dùng chuyển sang Claude Code review.
+- Spec: `.handoff/specs/TASK-<branch-slug>-<id>.md` (mẫu: `.handoff/specs/TEMPLATE-TASK.md`, schema: `.handoff/rfc-agent-handoff.md`).
+- Trạng thái runtime (gitignore): `.handoff/runs/<task_id>/{baseline.txt,result.json,review.md}`, `.handoff/runs/.lock`, `.handoff/runs/escalations/`.
+- Script (bash, không cần dependency), trong `scripts/`:
+  - `baseline.sh <task_id>`: ghi mốc working tree trước khi giao.
+  - `check-boundary.sh <task_id>`: so với baseline, đối chiếu `allowed_to_modify`/`strictly_forbidden`.
+  - `wait-result.sh <task_id> [timeout] [chu_kỳ] [stall]`: chờ `result.json`, in một dòng rồi thoát (chạy nền): `RESULT`, `SPEC_TERMINAL`, `STALLED` hoặc `TIMEOUT`.
+  - `clean.sh [--apply] [--days N] [--force-uncommitted] [--remove-lock]`: dọn `.handoff/runs/` của task đã đóng; mặc định chỉ liệt kê (xem `references/architect.md` mục 8).
