@@ -35,6 +35,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [lesson-status.md](lesson-status.md) | Đọc và đổi Lesson Status (ADR-0010, Step 6) | Chưa chạy | Kịch bản mới |
 | [dead-code-cleanup.md](dead-code-cleanup.md) | Dọn dẹp dead code, chip chat, sitemap, topic resolution, và xóa route thừa (TASK-dead-code-cleanup-001) | 2026-11-06 @ `a2828a5` | 5/5 Pass |
 | [abot-stream-snippets.md](abot-stream-snippets.md) | Stream thẻ gợi ý (snippet) & cuộn bám đáy êm ái (TASK-abot-stream-snippets-001) | 2026-11-06 | 6/6 Pass |
+| [triage-removal.md](triage-removal.md) | Xoá Knowledge Triage & Feedback Roadmap Assistant (TASK-triage-removal-001) | 2026-11-09 | 5/5 Pass |
 
 ## Cách chạy (đã kiểm chứng)
 

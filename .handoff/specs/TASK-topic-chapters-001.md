@@ -14,7 +14,6 @@ boundaries:
     - "prisma/init-turso.sql"
     - "scripts/migrate-sections-to-chapters.ts"
     - "app/api/v1/roadmaps/[slug]/**"
-    - "app/api/v1/roadmaps/triage/**"
     - "logic/roadmap/**"
     - "lib/roadmap/**"
     - "hooks/use-roadmap.ts"
@@ -94,7 +93,6 @@ model RoadmapItem {
 }
 ```
 
-- `KnowledgeTriage.section` (string) đổi sang `sectionId`, hoặc giữ string và resolve khi duyệt. Chọn cách ít đụng nhất; ghi lại lựa chọn.
 - So khớp tên chương vẫn theo `normalizeTitle()` như ADR-0009.
 - Trường `RoadmapItem.section` (string) giữ lại trong một bản phát hành để rollback, rồi xoá ở task sau.
 
@@ -124,12 +122,11 @@ model RoadmapItem {
   - Tool tạo Lesson nhận tên chương. Thêm tool tạo/đổi tên/sắp xếp chương, đều đi qua Preview → Confirm (`FLOW_ABOT_CUD_PREVIEW_CONFIRM`).
   - Metadata ingestion (`retrieval/ingestion.py`) ghi tên chương và số thứ tự để câu trả lời trích "Chương 2: …".
   - Cập nhật prompts và evals liên quan. `python -m pytest -q`, `python -m evals validate`.
-- [ ] **Step 6 (Triage)**: duyệt Knowledge Triage chọn đích là chương (danh sách), không còn chuỗi tự do.
-- [ ] **Step 7 (Tests)**
+- [ ] **Step 6 (Tests)**
   - Unit test: migration (dry-run không ghi; `--apply` tạo đúng chương và thứ tự).
   - Route test: CRUD chương, quyền Owner, xoá chương giữ Lesson.
   - UI test: thứ tự chương và đánh số.
-- [ ] **Step 8 (Code intel)**: cập nhật `cris-workspace-map.json` (model `RoadmapSection`, route chương, flow `FLOW_TOPIC_SECTION_REORGANIZE`), chạy `yarn intel status`.
+- [ ] **Step 7 (Code intel)**: cập nhật `cris-workspace-map.json` (model `RoadmapSection`, route chương, flow `FLOW_TOPIC_SECTION_REORGANIZE`), chạy `yarn intel status`.
 
 ## 4. Ngoài phạm vi
 

@@ -27,25 +27,6 @@ CREATE TABLE IF NOT EXISTS "RoadmapItem" (
     CONSTRAINT "RoadmapItem_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- CreateTable
-CREATE TABLE IF NOT EXISTS "KnowledgeTriage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "traceId" TEXT,
-    "query" TEXT NOT NULL,
-    "assistantMsg" TEXT,
-    "reason" TEXT,
-    "comment" TEXT,
-    "status" TEXT NOT NULL DEFAULT 'PENDING',
-    "roadmapSlug" TEXT,
-    "section" TEXT,
-    "draftTitle" TEXT,
-    "draftContent" TEXT,
-    "verifyScore" INTEGER,
-    "verifyNote" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
-
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Roadmap_slug_key" ON "Roadmap"("slug");
 
@@ -55,9 +36,4 @@ CREATE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_idx" ON "RoadmapItem"("roadmap
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title");
 
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "KnowledgeTriage_status_idx" ON "KnowledgeTriage"("status");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "KnowledgeTriage_createdAt_idx" ON "KnowledgeTriage"("createdAt");
 

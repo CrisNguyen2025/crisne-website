@@ -85,7 +85,7 @@ const feedbackScoreId = (traceId: string) => `${traceId}-user-feedback`;
 
 /**
  * Records a user's thumbs up (1) / down (0) on a chat trace, optionally with the reason and comment.
- * Reason, comment and source are also kept apart in metadata, so knowledge triage can import them.
+ * Reason, comment and source are also kept apart in metadata.
  */
 export async function createFeedbackScore(
   traceId: string,
@@ -136,116 +136,4 @@ export async function deleteFeedbackScore(traceId: string): Promise<void> {
     // Already gone: nothing to remove
     if ((error as { statusCode?: number }).statusCode !== 404) throw error;
   }
-}
-
-export interface DownvotedTrace {
-  traceId: string;
-  input: unknown;
-  output: unknown;
-  reason?: string;
-  comment?: string;
-}
-
-// The v2 observations endpoint returns input / output as raw strings: JSON when the SDK serialized an object
-function parseIo(value: unknown): unknown {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-}
-
-// The root observation starts seconds before the vote; a day either side is a safe window
-const DAY_MS = 86_400_000;
-
-/**
- * 👎 scores of the last `days` days recorded with `source` (see FeedbackDetail) on traces not in `skip`,
- * with the input and output of each trace's `source` observation (its root span).
- * Reads at most `limit` traces per call: the public API is rate limited, so a big backlog is imported
- * in steps; `remaining` is how many votes were not read yet.
- */
-export async function listDownvotedTraces({
-  source,
-  days,
-  limit,
-  skip,
-}: {
-  source: string;
-  days: number;
-  limit: number;
-  skip: Set<string>;
-}): Promise<{ traces: DownvotedTrace[]; remaining: number }> {
-  const langfuseClient = getLangfuseClient();
-  if (!langfuseClient) throw new Error("Langfuse is not configured (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY).");
-
-  const fromTimestamp = new Date(Date.now() - days * DAY_MS).toISOString();
-  const pending = new Map<string, FeedbackDetail & { timestamp: string }>();
-  let cursor: string | undefined;
-  do {
-    // v3: the v2 scores and traces endpoints are gone on Langfuse Cloud
-    const { data, meta } = await langfuseClient.api.scoresV3.getManyV3({
-      name: FEEDBACK_SCORE_NAME,
-      dataType: "BOOLEAN",
-      value: "false",
-      fromTimestamp,
-      fields: "core,subject,details",
-      limit: 100,
-      cursor,
-    });
-    for (const score of data) {
-      const metadata = (score.metadata ?? {}) as FeedbackDetail;
-      if (score.subject?.kind !== "trace" || metadata.source !== source) continue;
-      const traceId = score.subject.id;
-      if (skip.has(traceId) || pending.has(traceId)) continue;
-      pending.set(traceId, { reason: metadata.reason, comment: metadata.comment, timestamp: score.timestamp });
-    }
-    cursor = meta.cursor;
-  } while (cursor);
-
-  const traces: DownvotedTrace[] = [];
-  const batch = [...pending].slice(0, limit);
-  for (const [traceId, { reason, comment, timestamp }] of batch) {
-    const voted = new Date(timestamp).getTime();
-    const { data } = await langfuseClient.api.observations.getMany({
-      traceId,
-      name: source,
-      fields: "core,basic,io",
-      fromStartTime: new Date(voted - DAY_MS).toISOString(),
-      toStartTime: new Date(voted + DAY_MS).toISOString(),
-    });
-    const root = data[0];
-    if (!root) continue; // not ingested yet: picked up by a later import
-    traces.push({ traceId, input: parseIo(root.input), output: parseIo(root.output), reason, comment });
-  }
-  return { traces, remaining: pending.size - batch.length };
-}
-
-export interface ReviewStatus {
-  /** Items in the Langfuse golden set dataset (what the next sync-dataset would read) */
-  datasetItems: number;
-  /** 👎 traces still waiting in the review queue; null when no queue is configured */
-  queuePending: number | null;
-  /** Link to the review queue in the Langfuse UI; null when no queue is configured */
-  queueUrl: string | null;
-}
-
-/** Live numbers of the 👎 review loop for the back-office card (see scripts/setup-langfuse-review.ts). */
-export async function getReviewStatus(dataset: string): Promise<ReviewStatus> {
-  const langfuseClient = getLangfuseClient();
-  if (!langfuseClient) throw new Error("Langfuse is not configured (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY).");
-
-  const queueId = process.env.LANGFUSE_ANNOTATION_QUEUE_ID;
-  const [items, pending, projects] = await Promise.all([
-    langfuseClient.api.datasetItems.list({ datasetName: dataset, limit: 1 }),
-    queueId ? langfuseClient.api.annotationQueues.listQueueItems(queueId, { status: "PENDING", limit: 1 }) : null,
-    queueId ? langfuseClient.api.projects.get() : null,
-  ]);
-  const projectId = projects?.data[0]?.id;
-  const baseUrl = process.env.LANGFUSE_BASE_URL ?? "https://cloud.langfuse.com";
-  return {
-    datasetItems: items.meta.totalItems,
-    queuePending: pending ? pending.meta.totalItems : null,
-    queueUrl: queueId && projectId ? `${baseUrl}/project/${projectId}/annotation-queues/${queueId}` : null,
-  };
 }

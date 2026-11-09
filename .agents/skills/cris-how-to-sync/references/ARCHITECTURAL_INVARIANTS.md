@@ -68,7 +68,6 @@ Khi một Target được chấp thuận (hoặc cần cải thiện), hãy đ�
       - scripts/index-knowledge.ts: Kiểm tra tính sẵn sàng của embeddings.
 - [ ] 5. Observability & Feedback Sync
       - Langfuse: Gắn thẻ metadata, trace ID, generation span.
-      - Triage: Kiểm tra ảnh hưởng tới luồng Negative Feedback -> Knowledge Triage Queue.
 - [ ] 6. Code Intelligence Dataset Sync (cris-code-intel)
       - .agents/skills/cris-code-intel/data/cris-workspace-map.json: Cập nhật entryPoints, executionFlows, dataModels, symbols.
       - docs/code-intel/CRIS_WORKSPACE_MAP.md: Cập nhật bản đồ markdown.

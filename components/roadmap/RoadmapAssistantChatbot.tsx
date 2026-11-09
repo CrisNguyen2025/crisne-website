@@ -5,18 +5,11 @@ import {
   ROADMAP_ASSISTANT_BASE_URL,
   runWebMcpCommand,
 } from "@/logic/roadmap/roadmapAssistantService";
-import { submitChatFeedback } from "@/logic/roadmap/knowledgeTriageService";
 import React from "react";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
-import type {
-  ChatbotPosition,
-  FeedbackDetail,
-} from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
+import type { ChatbotPosition } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
-// 👍/👎 hidden for now: no rule decides yet how a vote becomes Triage work. The handler stays,
-// so turning this back on is this one flag.
-const FEEDBACK_ENABLED = false;
 
 export interface RoadmapAssistantChatbotProps {
   /**
@@ -105,24 +98,6 @@ export function RoadmapAssistantChatbot({
     }
   };
 
-  // A failed request rejects: the widget then shows the previous vote again
-  const handleFeedback = async (
-    _msgId: string,
-    value: 0 | 1 | null,
-    detail?: FeedbackDetail
-  ) => {
-    // Without the turn's Langfuse trace (service running without tracing) there is nothing to score
-    if (!detail?.traceId) return;
-    await submitChatFeedback({
-      traceId: detail.traceId,
-      value,
-      reason: detail.reason,
-      comment: detail.comment,
-      // Triage imports this assistant's 👎 by it
-      source: "roadmap-assistant",
-    });
-  };
-
   // Same-origin proxy: it checks who the caller is before forwarding to the Python service
   const baseUrl = ROADMAP_ASSISTANT_BASE_URL;
 
@@ -139,7 +114,6 @@ export function RoadmapAssistantChatbot({
       canWrite={canWrite}
       className={className}
       onToolExecuted={handleToolExecuted}
-      onFeedback={FEEDBACK_ENABLED ? handleFeedback : undefined}
       getContext={getRoadmapPageContext}
       onWebMcpMessage={runWebMcpCommand}
     />

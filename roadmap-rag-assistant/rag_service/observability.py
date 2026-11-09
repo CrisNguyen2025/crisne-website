@@ -18,7 +18,7 @@ from contextvars import ContextVar
 from typing import Any, AsyncGenerator, AsyncIterator, Optional
 
 TRACE_NAME = "roadmap-assistant"
-# Also a trace tag: the Next.js triage import filters 👎 scores by it (the portfolio chat shares the score name)
+# Also a trace tag, so Langfuse can filter this assistant's traces
 TRACE_TAGS = [TRACE_NAME]
 
 _client: Any = None
