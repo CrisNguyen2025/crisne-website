@@ -36,21 +36,13 @@ Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ l�
 
 ## 📐 Conventions
 
-- Don't mix Tailwind with inline styles
+Chỉ ghi quy ước riêng của repo. Quy ước chung của Next.js/React/Tailwind và những gì ESLint đã bắt thì không ghi lại ở đây.
+
 - Don't import server-only code in client components
-- Environment variables: chỉ biến có prefix `NEXT_PUBLIC_` mới được dùng ở client
-- Don't use useEffect for data fetching — use server actions or loader
-- Clean up effects — return cleanup function from useEffect
-- Extract repeated class patterns into components
-- Use responsive prefixes consistently (sm:, md:, lg:, xl:)
-- Don't use arbitrary values when a utility class exists
-- Use middleware.ts for authentication guards, not client-side checks
-- Use next/image (not img tag) for automatic optimization
-- Handle loading.tsx and error.tsx for every async route
-- Use Server Components by default — add "use client" only when needed
-- Use Suspense and Error Boundaries for async operations
 - Không hardcode secret, API key, token, password trong code
 - Không để console.log/debug log trong code commit
+- Inline style chỉ dùng cho giá trị tính lúc runtime; còn lại dùng Tailwind
+- Code mới không fetch data trong useEffect; dùng server action hoặc Server Component
 - Naming props/biến theo đúng single component/func, không gắn use-case (sai: isChatLoading, đúng: isLoading)
 - Giá trị optional khi hiển thị phải qua hàm format tương ứng (formatString, formatDateTime, ...)
 
@@ -98,6 +90,11 @@ Nguồn sự thật về ngôn ngữ domain và quyết định kiến trúc. In
 - Thuật ngữ giữ tiếng Anh như tên trong code, định nghĩa viết tiếng Việt. Glossary không chứa chi tiết implementation.
 - ADR đã chốt thì không sửa nội dung: viết ADR mới, đổi ADR cũ sang `superseded by ADR-NNNN`.
 - Repo public: không ghi email, key, token, URL nội bộ vào core docs.
+
+## 🎯 Phạm vi hiện tại
+
+- Từ 2026-11-09 chỉ tập trung vào Abot (Roadmap Assistant, `roadmap-rag-assistant/`). Cris AI (`/portfolio`, `hooks/use-floating-chat.ts`, `components/floating-bot/**`) tạm ngoài phạm vi: không đưa vào plan, review, test hay đề xuất cho tới khi Abot hoàn thiện.
+- Vẫn giữ nguyên luồng 👍/👎 hiện có của Cris AI. Khi sửa code dùng chung (`app/api/chat/feedback/route.ts`, `lib/ai/langfuse.ts`) thì không được đổi behavior của luồng này.
 
 ## 📌 Việc đang mở
 
