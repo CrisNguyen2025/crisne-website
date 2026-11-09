@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/agent-adapter/hook-runner.js\" guard-generated --agent=claude",
+            "timeout": 10
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ]
+  }
+}

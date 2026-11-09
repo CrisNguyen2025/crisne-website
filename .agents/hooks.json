@@ -1,0 +1,15 @@
+{
+  "guard-generated": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node ../scripts/agent-adapter/hook-runner.js guard-generated --agent=antigravity",
+            "timeout": 10
+          }
+        ],
+        "matcher": "edit_file|write_file"
+      }
+    ]
+  }
+}

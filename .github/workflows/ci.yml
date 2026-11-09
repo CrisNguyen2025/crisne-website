@@ -93,6 +93,9 @@ jobs:
       - name: Knowledge vector index is up to date
         run: yarn check:knowledge-index
 
+      - name: Agent config is up to date
+        run: yarn agents:sync --check
+
       - name: Build
         run: yarn build
 

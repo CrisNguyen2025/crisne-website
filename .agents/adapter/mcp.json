@@ -1,0 +1,13 @@
+{
+  "servers": [
+    {
+      "id": "playwright",
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ],
+      "env": {}
+    }
+  ]
+}

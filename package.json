@@ -27,6 +27,7 @@
     "setup:langfuse-dashboard": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/setup-langfuse-dashboard.ts",
     "setup:langfuse-review": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/setup-langfuse-review.ts",
     "test:schema-sql": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/export-test-schema.ts",
+    "agents:sync": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/agent-adapter/cli.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

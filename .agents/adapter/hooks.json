@@ -1,0 +1,13 @@
+{
+  "hooks": [
+    {
+      "id": "guard-generated",
+      "event": "PreToolUse",
+      "tools": [
+        "edit"
+      ],
+      "script": "hooks/guard-generated.js",
+      "timeout": 10
+    }
+  ]
+}

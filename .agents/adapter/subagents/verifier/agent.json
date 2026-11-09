@@ -1,0 +1,11 @@
+{
+  "name": "verifier",
+  "description": "Chạy các lệnh CI của repo, báo pass/fail kèm lỗi file:line, chỉ đọc không sửa file, dùng chủ động sau khi sửa code.",
+  "tools": ["read", "shell"],
+  "model": "fast",
+  "readOnly": true,
+  "skills": ["verify-ci"],
+  "x-claude": {
+    "maxTurns": 15
+  }
+}
