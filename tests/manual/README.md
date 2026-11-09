@@ -37,6 +37,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [abot-stream-snippets.md](abot-stream-snippets.md) | Stream thẻ gợi ý (snippet) & cuộn bám đáy êm ái (TASK-abot-stream-snippets-001) | 2026-11-06 | 6/6 Pass |
 | [triage-removal.md](triage-removal.md) | Xoá Knowledge Triage & Feedback Roadmap Assistant (TASK-triage-removal-001) | 2026-11-09 | 5/5 Pass |
 | [agent-handoff.md](agent-handoff.md) | Handoff v3 Claude ↔ Antigravity: baseline, check-boundary, wait-result, result.json | 2026-11-09 @ `5a75dce` | S1–S7, E1, E2, E3, E7 Pass; E4–E6, E8 chưa chạy |
+| [agent-adapter.md](agent-adapter.md) | AgentAdapter: MCP, skill, subagent, hook giữa Claude Code và Antigravity | 2026-11-09 @ `e1a7ce2` | T7, T8, T9 Pass; T5, T6 một phần; T1–T4 chưa chạy |
 
 ## Cách chạy (đã kiểm chứng)
 

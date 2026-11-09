@@ -9,6 +9,7 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Typecheck: `yarn tsc --noEmit -p .`
 - Lint / test: `yarn lint` · `yarn test`
 - Schema và index: `yarn test:schema-sql --check` · `yarn check:knowledge-index`
+- Config agent: `yarn agents:sync --check` (sinh lại bằng `yarn agents:sync`)
 - Python (`cd roadmap-rag-assistant`): `python -m pytest -q` · `python -m evals validate`
 
 ## 📚 Skills
@@ -23,6 +24,12 @@ Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ l�
   - Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
   - Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
   - Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
+- **`agent-handoff`:** dùng khi giao task cho Antigravity/Codex qua spec `.handoff/specs/TASK-*.md` hoặc khi nhận prompt "vai Executor". Quy trình: `.agents/skills/agent-handoff/SKILL.md`.
+- **`verify-ci`:** dùng sau khi sửa code để chạy các lệnh CI theo phạm vi file đổi và báo pass/fail kèm `file:line` (subagent `verifier` của Claude Code dùng skill này).
+
+## 🤖 Config agent (MCP, subagent, hook)
+
+Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file do sync sinh ra (`.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md`, `.claude/settings.json` mục `hooks`): hook sẽ chặn, CI chạy `--check`. Chi tiết: `.agents/adapter/README.md`.
 
 ## 🧪 Manual Test Results
 
