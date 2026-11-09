@@ -210,7 +210,7 @@ verification_gate:
 
 ## 5. Execution Audit Log
 
-- **Git Commit Hash**: `acd16f8` (branch `chore/remove-knowledge-triage`)
+- **Git Commit Hash**: `671c3af` (branch `chore/remove-knowledge-triage`)
 - **Số handler ở rag-reindex (Step 4.3)**: `10`
 - **Modified Files**:
   - `app/page.tsx`

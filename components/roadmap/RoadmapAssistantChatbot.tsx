@@ -10,7 +10,6 @@ import { useCanWrite } from "@/hooks/use-can-write";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
 import type { ChatbotPosition } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
-
 export interface RoadmapAssistantChatbotProps {
   /**
    * Corner placement on screen.

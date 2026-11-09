@@ -35,5 +35,3 @@ CREATE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_idx" ON "RoadmapItem"("roadmap
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title");
-
-
