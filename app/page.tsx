@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useCallback, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useQueryState, parseAsString, debounce } from "nuqs";
-import { Home as HomeIcon, Layers, Sparkles, UserRound, Plus, X } from "lucide-react";
+import { Home as HomeIcon, Layers, UserRound, Plus, X } from "lucide-react";
 import { useRoadmap } from "@/hooks/use-roadmap";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { MasterPanel } from "@/components/roadmap/MasterPanel";
@@ -14,10 +14,9 @@ import { CreateItemModal } from "@/components/roadmap/CreateItemModal";
 import { CreateTopicModal } from "@/components/roadmap/CreateTopicModal";
 import { HomeDashboard } from "@/components/roadmap/HomeDashboard";
 import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
-import { KnowledgeTriageDrawer } from "@/components/roadmap/KnowledgeTriageDrawer";
 import { Sheet } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { fetchTriageItems } from "@/logic/roadmap/knowledgeTriageService";
+
 
 import {
   RoadmapMeta,
@@ -167,28 +166,8 @@ function RoadmapWorkspace() {
   // Modal states
   const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
-  const [isTriageDrawerOpen, setIsTriageDrawerOpen] = useState(false);
-  const [triageBadgeCount, setTriageBadgeCount] = useState<number>(0);
   // The section a new lesson opens in; null is the group of lessons outside any section
   const [targetSection, setTargetSection] = useState<string | null>(null);
-
-  const refreshTriageBadge = useCallback(() => {
-    fetchTriageItems()
-      .then((items) => {
-        const pendingCount = items.filter((i) => i.status === "PENDING").length;
-        setTriageBadgeCount(pendingCount);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    refreshTriageBadge();
-    const handleTriageUpdate = () => {
-      refreshTriageBadge();
-    };
-    window.addEventListener("roadmap:triage-updated", handleTriageUpdate);
-    return () => window.removeEventListener("roadmap:triage-updated", handleTriageUpdate);
-  }, [refreshTriageBadge]);
 
   const handleOpenCreateItem = (section: string | null) => {
     setTargetSection(section);
@@ -306,19 +285,6 @@ function RoadmapWorkspace() {
                 >
                   <Plus className="size-4" />
                   <span>Tạo topic</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsTriageDrawerOpen(true)}
-                  className="relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-[#C2410C] cursor-pointer"
-                >
-                  <Sparkles className="size-4" />
-                  <span>Triage</span>
-                  {triageBadgeCount > 0 && (
-                    <span className="flex size-4 items-center justify-center rounded-full bg-[#C2410C] text-[0.5625rem] font-bold text-white">
-                      {triageBadgeCount}
-                    </span>
-                  )}
                 </button>
               </>
             )}
@@ -512,19 +478,6 @@ function RoadmapWorkspace() {
         targetSection={targetSection}
         onClose={() => setIsCreateItemOpen(false)}
         onSubmit={(section, title, description) => addItem(section, title, description)}
-      />
-
-      {/* Knowledge Triage Drawer */}
-      <KnowledgeTriageDrawer
-        isOpen={isTriageDrawerOpen}
-        onClose={() => {
-          setIsTriageDrawerOpen(false);
-          refreshTriageBadge();
-        }}
-        onRoadmapUpdated={() => {
-          refreshRoadmaps();
-          refreshTriageBadge();
-        }}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-06T09:54:11.000Z",
-  "headCommit": "2aa4670b2f50e064a37ab4b43a9286cd5a9ba3ce",
+  "generatedAt": "2026-11-09T03:00:00.000Z",
+  "headCommit": "d3da574bc6e0cbe346dc5406a74b182183545b22",
   "repository": "crisne-website",
   "architecture": {
     "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
@@ -14,7 +14,7 @@
       "Google Gemini (gemini-2.5-flash / text-embedding-004 768d)",
       "Groq Llama 3 (fallback)"
     ],
-    "observability": "Langfuse v5 OTEL SDK for spans, generations, and user feedback triage",
+    "observability": "Langfuse v5 OTEL SDK for spans, generations, and user feedback",
     "layers": [
       {
         "id": "Presentation_UI",
@@ -43,8 +43,8 @@
       },
       {
         "id": "Observability",
-        "name": "Observability & Active Learning",
-        "description": "Langfuse traces/scores, Knowledge Triage queue, Golden set evaluation kit"
+        "name": "Observability & Evaluation",
+        "description": "Langfuse traces/scores, Golden set evaluation kit"
       }
     ]
   },
@@ -192,32 +192,22 @@
       "dataModels": []
     },
     {
-      "id": "triage-observability",
-      "name": "Triage & Active Learning",
-      "summary": "Vòng lặp học tập tích cực (Active Learning Loop). Thu thập các câu hỏi chưa được giải đáp tốt hoặc bị vote 👎 từ Langfuse traces vào hàng đợi KnowledgeTriage để Owner duyệt, tạo bản nháp bài học và bổ sung vào Roadmap.",
-      "cohesionScore": 0.93,
+      "id": "observability",
+      "name": "Observability & Golden Set",
+      "summary": "Langfuse traces, feedback scores, và bộ đánh giá Golden Set evals.",
+      "cohesionScore": 0.95,
       "adrs": [
-        "ADR-0003"
+        "ADR-0011"
       ],
       "glossary": [
-        "Missing Knowledge Triage",
         "Golden Set"
       ],
       "keyFiles": [
-        "app/api/v1/roadmaps/triage/route.ts",
-        "app/api/v1/roadmaps/triage/[id]/route.ts",
-        "app/api/v1/roadmaps/triage/[id]/approve/route.ts",
-        "app/api/v1/roadmaps/triage/[id]/dismiss/route.ts",
-        "app/api/v1/roadmaps/triage/[id]/generate/route.ts",
-        "app/api/v1/roadmaps/triage/golden-set/route.ts",
-        "logic/roadmap/knowledgeTriageService.ts",
-        "components/roadmap/KnowledgeTriageDrawer.tsx",
-        "components/roadmap/GoldenSetStatusCard.tsx",
+        "lib/ai/langfuse.ts",
+        "app/api/chat/feedback/route.ts",
         "roadmap-rag-assistant/evals/sync_dataset.py"
       ],
-      "dataModels": [
-        "KnowledgeTriage"
-      ]
+      "dataModels": []
     }
   ],
   "entryPoints": [
@@ -363,28 +353,6 @@
       "summary": "Tải ảnh lên Cloudflare R2 / AWS S3",
       "handler": "app/api/upload-image/route.ts#POST",
       "triggersFlow": "FLOW_IMAGE_UPLOAD_S3"
-    },
-    {
-      "id": "EP_API_TRIAGE_POST",
-      "type": "api_route",
-      "path": "/api/v1/roadmaps/triage",
-      "method": "POST",
-      "authRequirement": "owner_only",
-      "domainId": "triage-observability",
-      "summary": "Tạo bản ghi hàng đợi Missing Knowledge Triage từ phản hồi người dùng",
-      "handler": "app/api/v1/roadmaps/triage/route.ts#POST",
-      "triggersFlow": "FLOW_MISSING_KNOWLEDGE_TRIAGE"
-    },
-    {
-      "id": "EP_API_TRIAGE_APPROVE",
-      "type": "api_route",
-      "path": "/api/v1/roadmaps/triage/[id]/approve",
-      "method": "POST",
-      "authRequirement": "owner_only",
-      "domainId": "triage-observability",
-      "summary": "Duyệt bản nháp bài học từ hàng đợi triage và tự động tạo thành Lesson trong Roadmap",
-      "handler": "app/api/v1/roadmaps/triage/[id]/approve/route.ts#POST",
-      "triggersFlow": "FLOW_MISSING_KNOWLEDGE_TRIAGE"
     }
   ],
   "executionFlows": [
@@ -777,66 +745,6 @@
       "relatedAdrs": []
     },
     {
-      "id": "FLOW_MISSING_KNOWLEDGE_TRIAGE",
-      "name": "Xử lý hàng đợi Kiến thức Thiếu hụt (Active Learning Loop)",
-      "domainId": "triage-observability",
-      "actor": "Owner",
-      "trigger": "Người dùng bấm 👎 trên câu trả lời của Abot hoặc Owner nhận thấy câu trả lời thiếu kiến thức",
-      "preconditions": [
-        "Langfuse trace tồn tại",
-        "Quyền ghi Owner để duyệt"
-      ],
-      "steps": [
-        {
-          "order": 1,
-          "layer": "Observability",
-          "component": "components/floating-bot/FloatingChatDrawer.tsx",
-          "functionOrMethod": "handleFeedback",
-          "action": "Gửi điểm vote 👎 lên Langfuse qua API, đồng thời tạo bản ghi PENDING trong KnowledgeTriage",
-          "callsNext": "app/api/v1/roadmaps/triage/route.ts#POST",
-          "dataPassed": "{ query, assistantMsg, reason, traceId, roadmapSlug }"
-        },
-        {
-          "order": 2,
-          "layer": "Persistence",
-          "component": "prisma/schema.prisma#KnowledgeTriage",
-          "functionOrMethod": "prisma.knowledgeTriage.create",
-          "action": "Lọc thông tin nhạy cảm (PII mask) và lưu bản ghi triage",
-          "callsNext": "components/roadmap/KnowledgeTriageDrawer.tsx",
-          "dataPassed": "KnowledgeTriage with status: PENDING"
-        },
-        {
-          "order": 3,
-          "layer": "Presentation_UI",
-          "component": "components/roadmap/KnowledgeTriageDrawer.tsx",
-          "functionOrMethod": "handleGenerateDraft",
-          "action": "Owner xem danh sách triage, bấm 'Tạo bản nháp'. Hệ thống gọi LLM tóm tắt câu hỏi thành draftTitle và draftContent",
-          "callsNext": "app/api/v1/roadmaps/triage/[id]/generate/route.ts#POST",
-          "dataPassed": "{ id, roadmapSlug, section }"
-        },
-        {
-          "order": 4,
-          "layer": "Domain_Logic",
-          "component": "logic/roadmap/knowledgeTriageService.ts",
-          "functionOrMethod": "approveTriageItem",
-          "action": "Owner bấm 'Phê duyệt'. Hệ thống tự động tạo `RoadmapItem` mới trong Topic, chuyển status của triage thành APPROVED và kích hoạt re-index",
-          "callsNext": "app/api/v1/roadmaps/items/route.ts#POST",
-          "dataPassed": "{ roadmapId, title: draftTitle, content: draftContent, section }"
-        }
-      ],
-      "invariants": [
-        "Dữ liệu câu hỏi từ người dùng được mask PII trước khi lưu",
-        "Khi phê duyệt, tự động bổ sung bài học vào Roadmap và kích hoạt re-index cho RAG Assistant"
-      ],
-      "failureModes": [
-        "Triage item đã bị DISMISSED trước đó"
-      ],
-      "relatedAdrs": [
-        "ADR-0003",
-        "ADR-0009"
-      ]
-    },
-    {
       "id": "FLOW_ABOT_ACCESS_GUARD",
       "name": "Bảo vệ Phân quyền & Chặn lệnh ghi của Visitor trên Abot",
       "domainId": "auth-security",
@@ -979,35 +887,6 @@
         "status nhận 1 trong 3 giá trị: 'target', 'learning', 'known' (ADR-0010)",
         "section là chuỗi tự do gom bài theo ADR-0009; null = chung"
       ]
-    },
-    {
-      "id": "MODEL_KNOWLEDGE_TRIAGE",
-      "name": "KnowledgeTriage",
-      "source": "prisma",
-      "table": "KnowledgeTriage",
-      "domainId": "triage-observability",
-      "fields": [
-        "id",
-        "traceId",
-        "query",
-        "assistantMsg",
-        "reason",
-        "comment",
-        "status",
-        "roadmapSlug",
-        "section",
-        "draftTitle",
-        "draftContent",
-        "verifyScore",
-        "verifyNote",
-        "createdAt",
-        "updatedAt"
-      ],
-      "relations": [],
-      "invariants": [
-        "status: PENDING | DRAFTED | APPROVED | DISMISSED",
-        "query và nội dung người dùng phải được mask PII trước khi lưu"
-      ]
     }
   ],
   "symbols": [
@@ -1032,8 +911,7 @@
       "domainId": "auth-security",
       "description": "Guard kiểm tra request có quyền ghi Owner hay không, trả về 401 nếu từ chối.",
       "callers": [
-        "app/api/v1/roadmaps/items/[id]/route.ts",
-        "app/api/v1/roadmaps/triage/route.ts"
+        "app/api/v1/roadmaps/items/[id]/route.ts"
       ],
       "callees": [
         "hasWriteAccess"

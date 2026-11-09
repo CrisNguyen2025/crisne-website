@@ -93,7 +93,7 @@ Cuối báo cáo, luôn đính kèm **Data Spec** để cập nhật dataset c�
 # 🛡️ CRIS TARGET ASSESSMENT: [Tên Target]
 
 - **Phân loại**: [FEATURE | DEPENDENCY_LIB | MODEL_SCHEMA | API_ROUTE | PATTERN | VOCABULARY]
-- **Domain Tiếp Nhận**: [roadmap-learning | roadmap-assistant-abot | notes-editor | storage-media | auth-security | triage-observability]
+- **Domain Tiếp Nhận**: [roadmap-learning | roadmap-assistant-abot | notes-editor | storage-media | auth-security | observability]
 - **KẾT LUẬN CUỐI CÙNG**: [🟢 NÊN / 🔴 KHÔNG NÊN / 🟡 CẢI THIỆN]
 
 ---
@@ -107,7 +107,7 @@ Cuối báo cáo, luôn đính kèm **Data Spec** để cập nhật dataset c�
 - [ ] **Dual-Service Sync**: [Cần cập nhật Next.js route / Python FastAPI router]
 - [ ] **RAG Re-index Sync**: [Có cần gọi after(requestRagReindex) khi mutation diễn ra]
 - [ ] **Database & Migration Sync**: [Cập nhật prisma/schema.prisma, chạy db:push Turso]
-- [ ] **Observability Sync**: [Khai báo Langfuse trace tags hoặc Triage queue]
+- [ ] **Observability Sync**: [Khai báo Langfuse trace tags]
 - [ ] **Environment Sync**: [Bổ sung biến ENV vào docs/DEPLOY_ENV.md cho Vercel/Render]
 - [ ] **Core Docs Sync**: [Bổ sung định nghĩa vào GLOSSARY.md hoặc viết ADR mới]
 

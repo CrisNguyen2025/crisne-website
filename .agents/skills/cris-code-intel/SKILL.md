@@ -101,7 +101,7 @@ npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-
 | `notes-editor`           | Notes & Lexical CMS             | N/A                              | Lexical Editor, autosave debounce, tag taxonomy, markdown serialize                                                        |
 | `storage-media`          | Storage & Media Assets          | N/A                              | S3/R2 client, image upload                                                                                                 |
 | `auth-security`          | Auth & Actor Model              | ADR-0002                         | NextAuth, Actor `Owner` vs `Visitor`, `requireWriteAccess`, internal Bearer token                                          |
-| `triage-observability`   | Triage & Active Learning        | ADR-0003                         | Missing Knowledge Triage queue, Langfuse 👎 vote sync, Golden set evals                                                    |
+| `observability`          | Observability & Golden Set      | ADR-0011                         | Langfuse traces, feedback scores, Golden set evals                                                                         |
 
 ---
 

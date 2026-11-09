@@ -76,8 +76,8 @@ Ký hiệu: **[Chung]** nghĩa là bài có `section = null`.
 | # | Thao tác | Kết quả mong đợi |
 |---|---|---|
 | G1 | Đăng xuất (visitor), gõ `thêm bài X vào topic QA Section Test mục RAG` | Trả `OWNER_ONLY_MESSAGE`, không ghi gì. |
-| G2 | Đánh giá "không tốt" một câu trả lời khi đang mở topic test, rồi mở Triage | Bản ghi triage có `roadmapSlug` của topic, có trường `section`, không còn `layerId` hay `groupTitle`. |
-| G3 | Approve triage có `section = "RAG"` | Bài mới vào section `RAG`, giữ đúng cách viết đã có. |
+| G2 | (Đã bỏ — TASK-triage-removal-001) | Đã bỏ cùng feature Knowledge Triage. |
+| G3 | (Đã bỏ — TASK-triage-removal-001) | Đã bỏ cùng feature Knowledge Triage. |
 
 ## Dọn dẹp
 
@@ -124,7 +124,8 @@ Vì lỗi 1 bên dưới, các bài nền được tạo qua `POST /api/v1/roadm
 | F1 | Fail | Lỗi 7. |
 | F2 | Pass | Trả đúng Chunking, Hybrid Search. |
 | F3, F4 | Chưa chạy | Lịch sử chat còn giữ nên không thấy lời chào. |
-| G1–G3 | Chưa chạy | Bypass owner đang bật nên không thử được vai visitor. |
+| G1 | Chưa chạy | Bypass owner đang bật nên không thử được vai visitor. |
+| G2, G3 | Đã bỏ | Feature Knowledge Triage đã được gỡ (TASK-triage-removal-001). |
 
 ### Chạy lại sau bản sửa lỗi 1 và 4 (2026-11-05)
 

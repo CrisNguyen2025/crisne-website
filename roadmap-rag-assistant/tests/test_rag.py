@@ -9,7 +9,7 @@ from rag_service.domains.roadmap.retrieval.engine import MiniRagEngine
 
 @pytest.mark.asyncio
 async def test_stale_index_is_refreshed_in_background():
-    """Edits made outside the agent (web UI, triage approve) reach the index after the TTL."""
+    """Edits made outside the agent (web UI) reach the index after the TTL."""
     import time
 
     from rag_service.domains.roadmap.retrieval.engine import INDEX_TTL_SECONDS

@@ -25,12 +25,10 @@ graph TB
             AuthCheck["NextAuth / write-access.ts<br/>(Owner vs Visitor)"]
             Proxy_Route["Same-Origin Proxy Route<br/>/api/roadmap-assistant/[...path]"]
             API_Roadmap["/api/v1/roadmaps/*"]
-            API_Triage["/api/v1/roadmaps/triage/*"]
         end
 
         subgraph Service_Layer ["Domain Logic & Services"]
             RoadmapService["roadmapService.ts"]
-            TriageService["knowledgeTriageService.ts"]
             ReindexHook["rag-reindex.ts (after request)"]
         end
 
@@ -61,7 +59,6 @@ graph TB
 
     %% Gateway & Routing
     API_Roadmap --> RoadmapService --> PrismaORM
-    API_Triage --> TriageService --> PrismaORM
     PrismaORM --> SQLiteTurso
 
     %% Proxying to Python
@@ -75,7 +72,6 @@ graph TB
 
     %% Observability
     FastAPI_Server --> LangfuseObs
-    LangfuseObs -. "Negative Feedback" .-> API_Triage
 ```
 
 ---
@@ -89,7 +85,7 @@ graph TB
 | `notes-editor`           | Notes & Lexical CMS      | N/A                                              | Lexical Editor, autosave debounce, tag taxonomy, markdown serialize                                        | `app/notes/*`, `app/api/tags/*`, `lib/notion.ts`                                                                          |
 | `storage-media`          | Storage & Media          | N/A                                              | S3/R2 client, image upload                                                                                 | `app/api/upload-image/*`, `lib/r2-client.ts`                                                                               |
 | `auth-security`          | Auth & Actor Model       | ADR-0002                                         | NextAuth, Actor `Owner` vs `Visitor`, `requireWriteAccess`, internal Bearer token                          | `auth.ts`, `lib/auth/*`, `hooks/use-can-write.ts`, `rag_service/auth.py`                                                  |
-| `triage-observability`   | Triage & Active Learning | ADR-0003                                         | Missing Knowledge Triage queue, Langfuse 👎 vote sync, Golden set evals                                    | `app/api/v1/roadmaps/triage/*`, `logic/roadmap/knowledgeTriageService.ts`, `components/roadmap/KnowledgeTriageDrawer.tsx` |
+| `observability`          | Observability & Golden Set | ADR-0011                                         | Langfuse traces, feedback scores, Golden set evals                                                         | `lib/ai/langfuse.ts`, `app/api/chat/feedback/route.ts`                                                                    |
 
 ---
 
@@ -218,8 +214,6 @@ sequenceDiagram
 | `POST`   | `/api/roadmap-assistant/[...path]`              | None (Actor Header) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts#POST`              | Proxy to Python Service   |
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
-| `POST`   | `/api/v1/roadmaps/triage`                       | Owner Only          | `triage-observability`   | `app/api/v1/roadmaps/triage/route.ts#POST`                       | Create Triage Item        |
-| `POST`   | `/api/v1/roadmaps/triage/[id]/approve`          | Owner Only          | `triage-observability`   | `app/api/v1/roadmaps/triage/[id]/approve/route.ts#POST`          | Approve Triage to Lesson  |
 
 ---
 

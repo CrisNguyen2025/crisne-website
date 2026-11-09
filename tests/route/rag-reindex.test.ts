@@ -68,16 +68,9 @@ describe("notifyRoadmapChanged", () => {
 });
 
 // The assistant indexes roadmaps, layers, groups and items. Every handler that changes them must report it,
-// so a new write route that forgets fails here. Triage routes only touch KnowledgeTriage, except approve.
+// so a new write route that forgets fails here.
 const ROADMAPS_DIR = path.join(process.cwd(), "app/api/v1/roadmaps");
-const NOT_INDEXED = new Set([
-  "triage/route.ts",
-  "triage/[id]/route.ts",
-  "triage/[id]/dismiss/route.ts",
-  "triage/[id]/generate/route.ts",
-  "triage/import/route.ts",
-  "triage/golden-set/route.ts",
-]);
+const NOT_INDEXED = new Set<string>();
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -105,7 +98,7 @@ const handlers = routeFiles(ROADMAPS_DIR)
 
 describe("roadmap write routes report their changes to the assistant", () => {
   it("discovers the write handlers", () => {
-    // Topic, lesson, lesson-content, reorder, section rename and triage approve (ADR-0009)
+    // Topic, lesson, lesson-content, reorder, section rename (ADR-0009)
     expect(handlers.length).toBeGreaterThanOrEqual(10);
   });
 

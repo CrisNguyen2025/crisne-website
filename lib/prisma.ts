@@ -37,7 +37,6 @@ function isCurrentClient(client: PrismaClient) {
     workflowProject?: unknown;
     workflowVersion?: unknown;
     projectDocument?: unknown;
-    knowledgeTriage?: unknown;
   };
 
   return Boolean(
@@ -48,8 +47,7 @@ function isCurrentClient(client: PrismaClient) {
     delegates.workflow &&
     delegates.workflowProject &&
     delegates.workflowVersion &&
-    delegates.projectDocument &&
-    delegates.knowledgeTriage
+    delegates.projectDocument
   );
 }
 

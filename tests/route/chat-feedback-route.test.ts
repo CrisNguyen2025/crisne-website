@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const prismaMock = vi.hoisted(() => ({ knowledgeTriage: { create: vi.fn() } }));
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 const langfuseMock = vi.hoisted(() => ({
   createFeedbackScore: vi.fn(),
   deleteFeedbackScore: vi.fn(),
@@ -59,12 +57,6 @@ describe("POST /api/chat/feedback", () => {
     expect(res.status).toBe(204);
     expect(langfuseMock.deleteFeedbackScore).toHaveBeenCalledWith(TRACE_ID);
     expect(langfuseMock.createFeedbackScore).not.toHaveBeenCalled();
-  });
-
-  it("never writes knowledge triage: items are imported from Langfuse by the owner", async () => {
-    await POST(feedbackRequest({ traceId: TRACE_ID, value: 0, reason: "Lạc đề", comment: "x" }));
-
-    expect(prismaMock.knowledgeTriage.create).not.toHaveBeenCalled();
   });
 
   it.each([

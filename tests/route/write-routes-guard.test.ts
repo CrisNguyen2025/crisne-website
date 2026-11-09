@@ -86,7 +86,7 @@ afterAll(() => {
 
 describe("write routes reject anonymous callers", () => {
   it("discovers the write routes", () => {
-    expect(guardedHandlers.length).toBeGreaterThan(20);
+    expect(guardedHandlers.length).toBeGreaterThanOrEqual(18);
   });
 
   it.each(guardedHandlers.map((h) => [`${h.method} /api/${h.rel.replace(/\/?route\.ts$/, "")}`, h] as const))(

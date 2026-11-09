@@ -11,7 +11,7 @@ interface FeedbackRequestPayload {
   value: 0 | 1 | null;
   reason?: string;
   comment?: string;
-  /** Which assistant answered, e.g. "roadmap-assistant"; lets triage import its 👎 only */
+  /** Which assistant answered, e.g. "roadmap-assistant" */
   source?: string;
 }
 
@@ -21,7 +21,7 @@ const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
 // Public on purpose: portfolio visitors rate answers without signing in.
 // Abuse is bounded by the rate limit and the trace id check below.
 // Langfuse is the only store: the score id is derived from the trace, so a repeated vote overwrites
-// the previous one. Knowledge triage items are imported from these scores by the owner.
+// the previous one.
 export async function POST(req: NextRequest) {
   const rateLimit = checkRateLimit(req, { key: "chat-feedback", limit: 60, windowMs: 5 * 60_000 });
   if (!rateLimit.isAllowed) {
