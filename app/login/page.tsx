@@ -8,8 +8,37 @@ interface LoginPageProps {
   }>;
 }
 
+const getErrorMessage = (err: string) => {
+  switch (err) {
+    case "AccessDenied":
+      return {
+        title: "Email của bạn không có quyền truy cập.",
+        detail: "Tài khoản Google này không nằm trong danh sách AUTH_OWNER_EMAILS được cấp quyền.",
+      };
+    case "Configuration":
+    case "MissingSecret":
+      return {
+        title: "Chưa cấu hình biến môi trường Auth.",
+        detail: "Vercel đang thiếu AUTH_SECRET hoặc AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET.",
+      };
+    case "OAuthCallbackError":
+    case "OAuthSignInError":
+    case "OAuthSignin":
+      return {
+        title: "Lỗi kết nối Google OAuth.",
+        detail: "Kiểm tra Redirect URI (https://crisne.blog/api/auth/callback/google) trên Google Cloud Console.",
+      };
+    default:
+      return {
+        title: `Lỗi xác thực: ${err}`,
+        detail: "Vui lòng kiểm tra cấu hình biến môi trường hoặc log của máy chủ.",
+      };
+  }
+};
+
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { error, callbackUrl } = await searchParams;
+  const errorInfo = error ? getErrorMessage(error) : null;
 
   const handleSignIn = async () => {
     "use server";
@@ -30,18 +59,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           Workspace cá nhân riêng tư. Vui lòng đăng nhập bằng tài khoản Google của Owner để tiếp tục.
         </p>
 
-        {error && (
+        {errorInfo && (
           <div className="mt-6 flex items-start gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-left text-sm text-destructive">
             <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">
-                {error === "AccessDenied"
-                  ? "Email của bạn không có quyền truy cập."
-                  : "Đã có lỗi xảy ra khi xác thực."}
-              </p>
-              <p className="text-xs opacity-90 mt-0.5">
-                Chỉ những email được cấu hình trong hệ thống mới có thể đăng nhập.
-              </p>
+              <p className="font-medium">{errorInfo.title}</p>
+              <p className="text-xs opacity-90 mt-0.5">{errorInfo.detail}</p>
             </div>
           </div>
         )}

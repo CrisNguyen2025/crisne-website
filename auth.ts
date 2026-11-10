@@ -4,6 +4,7 @@ import { isOwnerEmail } from "@/lib/auth/owner-access";
 
 // Auth.js v5 reads AUTH_SECRET, AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET from env automatically
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [Google],
   session: { strategy: "jwt" },
   pages: {
