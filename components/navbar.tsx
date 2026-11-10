@@ -2,10 +2,11 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { useScrollSpy } from "@/hooks/use-scroll-spy";
+import { useCanWrite } from "@/hooks/use-can-write";
 
 const navLinks = [
   { label: "Skills", href: "#skills" },
@@ -58,6 +59,7 @@ const mobileItemVariants = {
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const canWrite = useCanWrite();
   const navRef = useRef<HTMLDivElement>(null);
   const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
   const [indicatorStyle, setIndicatorStyle] = useState<{
@@ -200,6 +202,20 @@ export function Navbar() {
               }}
             />
 
+            {canWrite && (
+              <form action="/api/auth/signout" method="POST" className="ml-1 inline-flex items-center">
+                <button
+                  type="submit"
+                  title="Đăng xuất"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <ShieldCheck className="size-3.5 text-emerald-500" />
+                  <span>Owner</span>
+                  <LogOut className="size-3 ml-0.5 opacity-70" />
+                </button>
+              </form>
+            )}
+
             <div className="ml-2">
               <ThemeToggle />
             </div>
@@ -299,6 +315,21 @@ export function Navbar() {
                     </motion.a>
                   );
                 })}
+
+                {canWrite && (
+                  <form action="/api/auth/signout" method="POST" className="pt-2 border-t border-border/40">
+                    <button
+                      type="submit"
+                      className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck className="size-4 text-emerald-500" />
+                        <span>Đăng xuất (Owner)</span>
+                      </span>
+                      <LogOut className="size-4" />
+                    </button>
+                  </form>
+                )}
               </div>
             </motion.div>
           )}
