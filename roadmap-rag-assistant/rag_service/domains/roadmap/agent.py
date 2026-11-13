@@ -50,6 +50,7 @@ from rag_service.domains.roadmap.router import (
     IntentClassificationResult,
     IntentRouter,
     IntentType,
+    KnowledgeSubIntent,
     StructuredEntityExtractor,
     normalize_vietnamese,
 )
@@ -226,6 +227,19 @@ class NextGenRoadmapAgent(
         record_turn(session_id, message, "".join(reply))
         log_turn(session_id, steps, tools, metadata)
 
+    async def handle_catalog(
+        self, *, content: str, lower: str, raw_content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """The roadmap's structure, from the data and never the model: the topic list, then a topic's sections."""
+        async for ev in self.handle_listing(content=content, lower=lower, delay=delay, outcome=outcome):
+            yield ev
+        if outcome["handled"]:
+            return
+        async for ev in self.handle_section_list(
+            content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        ):
+            yield ev
+
     async def _astream_events_impl(
         self, input_dict: dict, config: dict | None = None
     ) -> AsyncGenerator[dict, None]:
@@ -279,15 +293,10 @@ class NextGenRoadmapAgent(
                 yield ev
             return
 
-        # ── 1. Topic listing (roadmap domain: commands.py) ──
+        # ── 1b. A section rename: preview, "ok" applies it (roadmap domain: sections.py). It writes, so it runs
+        #        before the router; listing topics and sections, a read, is answered after it (step 5) ──
         outcome = {"handled": False}
-        async for ev in self.handle_listing(content=content, lower=lower, delay=delay, outcome=outcome):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1b. A topic's sections: list them, or preview a rename (roadmap domain: sections.py) ──
-        async for ev in self.handle_sections(
+        async for ev in self.handle_section_rename(
             content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
         ):
             yield ev
@@ -302,10 +311,10 @@ class NextGenRoadmapAgent(
         if outcome["handled"]:
             return
 
-        # ── 1d. Lesson status queries & previewed changes (lesson_status.py, ADR-0010) ──
-        async for ev in self.handle_lesson_status(
+        # ── 1d. A lesson status change: preview, "ok" applies it (lesson_status.py, ADR-0010). It writes, so it runs
+        #        before the router; the status questions (a)-(c) are answered after it (step 5) ──
+        async for ev in self.handle_status_change(
             content=content,
-            raw_content=raw_content,
             page_context=page_context,
             session_ctx=session_ctx,
             delay=delay,
@@ -363,6 +372,7 @@ class NextGenRoadmapAgent(
             "routing",
             "done",
             intent=intent_res.intent.value,
+            sub_intent=intent_res.sub_intent_value,
             confidence=round(intent_res.confidence, 2),
             method=method,
             act=understood.act.value,
@@ -375,6 +385,8 @@ class NextGenRoadmapAgent(
             trace.flags["act"] = understood.act.value
             trace.flags["target"] = understood.target.value
             trace.flags["intent"] = intent_res.intent.value
+            if intent_res.sub_intent is not None:
+                trace.flags["sub_intent"] = intent_res.sub_intent.value
             trace.flags["write"] = route_gate.mode
             if outcome.scope is not None:
                 trace.flags["scope"] = outcome.scope.scope.value
@@ -434,6 +446,27 @@ class NextGenRoadmapAgent(
 
         # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
         if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
+            # The sub-intent picks a read-only handler; one that does not read the message leaves it to the search
+            answered = {"handled": False}
+            if intent_res.sub_intent == KnowledgeSubIntent.CATALOG:
+                async for ev in self.handle_catalog(
+                    content=content, lower=lower, raw_content=raw_content, page_context=page_context,
+                    session_ctx=session_ctx, delay=delay, outcome=answered,
+                ):
+                    yield ev
+                if not answered["handled"] and (trace := current_trace()) is not None:
+                    trace.flags["catalog_fallback"] = True  # counts, positions: no handler yet, the search answers
+            elif intent_res.sub_intent == KnowledgeSubIntent.LESSON_STATUS:
+                if not is_owner():  # ADR-0010: only the Owner sees lesson status; nothing is searched for a visitor
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                    return
+                async for ev in self.handle_lesson_status_query(
+                    content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=answered,
+                ):
+                    yield ev
+            if answered["handled"]:
+                return
             deps = self._source_deps(content)
             if outcome.scope is not None and outcome.scope.scope == Scope.DOMAIN_GAP:
                 # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"

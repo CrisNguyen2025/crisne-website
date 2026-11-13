@@ -94,7 +94,7 @@ const response = await client.chat('tạo cho tôi 3 topic A, B và C');
 console.log(response.message);
 ```
 
-## Available Tools (14)
+## Available Tools (11)
 
 | Category | Tool | Description |
 |----------|------|-------------|
@@ -102,16 +102,13 @@ console.log(response.message);
 | Topic | `create_topics_batch` | Tạo nhiều topic cùng lúc |
 | Topic | `list_topics` | Liệt kê tất cả topic |
 | Topic | `delete_topic` | Xóa topic theo slug |
-| Layer | `create_layer` | Tạo layer trong topic |
-| Layer | `update_layer` | Cập nhật layer |
-| Layer | `delete_layer` | Xóa layer |
-| Group | `create_group` | Tạo group trong layer |
-| Group | `update_group` | Đổi tên group |
-| Group | `delete_group` | Xóa group |
-| Item | `create_item` | Tạo 1 item |
-| Item | `create_items_batch` | Tạo nhiều item cùng lúc |
-| Item | `update_item` | Cập nhật/di chuyển item |
-| Item | `delete_item` | Xóa item |
+| Item / Section | `create_item` | Tạo 1 bài học (tùy chọn vào mục) |
+| Item / Section | `create_items_batch` | Tạo nhiều bài học cùng lúc |
+| Item / Section | `import_items_from_text` | Nhập nhiều bài từ danh sách text/bullet |
+| Item / Section | `update_item` | Cập nhật tên, mô tả hoặc đổi mục của bài học |
+| Item / Section | `update_item_content` | Thêm nội dung chi tiết vào bài học |
+| Item / Section | `rename_section` | Đổi tên một mục của topic |
+| Item / Section | `delete_item` | Xóa bài học theo ID |
 
 ## SSE Events (`POST /chat/stream`)
 

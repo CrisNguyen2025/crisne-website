@@ -29,26 +29,11 @@ function createPrismaClient() {
 
 function isCurrentClient(client: PrismaClient) {
   const delegates = client as PrismaClient & {
-    role?: unknown;
-    apiEndpoint?: unknown;
-    roleApiAccess?: unknown;
     roadmap?: unknown;
-    workflow?: unknown;
-    workflowProject?: unknown;
-    workflowVersion?: unknown;
-    projectDocument?: unknown;
+    roadmapItem?: unknown;
   };
 
-  return Boolean(
-    delegates.role &&
-    delegates.apiEndpoint &&
-    delegates.roleApiAccess &&
-    delegates.roadmap &&
-    delegates.workflow &&
-    delegates.workflowProject &&
-    delegates.workflowVersion &&
-    delegates.projectDocument
-  );
+  return Boolean(delegates.roadmap && delegates.roadmapItem);
 }
 
 export const prisma =

@@ -7,6 +7,7 @@ from rag_service.domains.roadmap.router.schemas import (
     EntityLevel,
     IntentClassificationResult,
     IntentType,
+    KnowledgeSubIntent,
     SingleEntity,
     StructuredRoadmapAction,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "IntentClassificationResult",
     "IntentRouter",
     "IntentType",
+    "KnowledgeSubIntent",
     "SingleEntity",
     "StructuredEntityExtractor",
     "StructuredRoadmapAction",

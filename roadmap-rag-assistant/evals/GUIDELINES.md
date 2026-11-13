@@ -80,7 +80,7 @@ Tag riêng của domain thêm vào `datasets/tags.json`; tag không có trong da
 
 ## 7. Không đưa vào
 
-- Câu test logic không thuộc RAG (trích entity, tạo topic): đã có `tests/benchmark_eval.py`.
+- Câu test logic không thuộc RAG (trích entity, tạo topic): đã có `tests/test_entity_extractor.py`.
 - Hàng loạt biến thể gần giống nhau của một câu.
 - Sample trích document có tầng ACL cao hơn thư mục dataset (validate sẽ chặn).
 - Câu có đáp án thay đổi theo thời gian mà chưa có tag `temporal` và cách cập nhật.

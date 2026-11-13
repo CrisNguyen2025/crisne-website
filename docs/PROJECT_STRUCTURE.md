@@ -9,7 +9,13 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 ```
 ├── app/                          # Next.js App Router
 │   ├── layout.tsx               # Root layout with fonts, metadata, analytics
-│   ├── page.tsx                 # Home page with dynamic imports
+│   ├── page.tsx                 # Home page (redirects or renders main roadmap)
+│   ├── portfolio/               # Portfolio view (sections + Cris AI bot)
+│   ├── notes/                   # Notes module (Notion synced)
+│   ├── api/                     # Next.js API Route Handlers
+│   │   ├── roadmap-assistant/   # Abot assistant proxy / me endpoint
+│   │   ├── v1/roadmaps/         # Roadmap CRUD API routes
+│   │   └── chat/                # Cris AI chat & feedback endpoints
 │   ├── sitemap.ts               # SEO sitemap generation
 │   ├── robots.ts                # SEO robots.txt
 │   ├── manifest.ts              # PWA manifest
@@ -20,13 +26,15 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 │       └── typography.css       # Typography utilities
 │
 ├── components/                   # React components
-│   ├── ui/                      # Reusable UI components (shadcn/ui)
+│   ├── ui/                      # Reusable UI components (shadcn/ui + custom)
 │   │   ├── button.tsx
 │   │   ├── card.tsx
 │   │   ├── skeleton.tsx         # Loading skeletons
 │   │   ├── tooltip.tsx
-│   │   └── ...
+│   │   └── editor/              # Lexical rich-text editor
 │   │
+│   ├── roadmap/                 # Roadmap interactive viewer, map & editor
+│   ├── floating-bot/            # Cris AI floating chatbot (portfolio)
 │   ├── analytics/               # Analytics components
 │   │   ├── gtm.tsx             # Google Tag Manager
 │   │   ├── scroll-tracker.tsx   # Scroll tracking
@@ -43,27 +51,21 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 │   ├── testimonials-section.tsx
 │   ├── faq-section.tsx
 │   ├── cta-section.tsx
-│   ├── footer.tsx
-│   ├── animated-background.tsx
-│   ├── floating-shapes.tsx
-│   ├── json-ld.tsx             # Structured data
-│   └── theme-provider.tsx
+│   └── footer.tsx
+│
+├── prisma/                       # Database schema & migrations (SQLite / Turso)
+│   ├── schema.prisma            # Roadmap & RoadmapItem models
+│   └── migrations/
+│
+├── roadmap-rag-assistant/        # Abot: Python FastAPI RAG Service
+│   ├── rag_service/             # Core service: router, retrieval, tools, generation
+│   ├── evals/                   # Evaluation suites and corpus
+│   └── tests/                   # Pytest suite
 │
 ├── hooks/                        # Custom React hooks
-│   ├── use-reduced-motion.ts    # Detect prefers-reduced-motion
-│   ├── use-scroll-spy.ts
-│   └── use-track-section.ts
-│
-├── lib/                          # Utility functions
-│   ├── utils.ts                # cn() and helpers
-│   └── analytics.ts            # Analytics utilities
-│
+├── lib/                          # Utility functions (Prisma, Notion, AI, etc.)
 ├── public/                       # Static assets
-│   ├── cris-nguyen-cv.pdf
-│   ├── og-image.png
-│   ├── icon.png
-│   └── ...
-│
+├── scripts/                      # Utility scripts (seed, backup, sync)
 ├── next.config.ts               # Next.js config with optimizations
 ├── package.json
 ├── tsconfig.json
@@ -93,7 +95,6 @@ const ExperienceSection = dynamic(
 - `CtaSection` - Below the fold
 - `AnimatedBackground` - Decorative
 - `FloatingShapes` - Decorative
-- `UnlockGate` - Interactive feature
 
 ### 2. Error Boundaries (Resilience)
 

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { ToastProvider } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Notes — Cris.dev",
@@ -55,7 +54,7 @@ export default function NotesLayout({
       </div>
 
       <main className="relative">
-        <ToastProvider>{children}</ToastProvider>
+        {children}
       </main>
     </div>
   );

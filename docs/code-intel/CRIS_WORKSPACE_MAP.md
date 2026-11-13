@@ -112,7 +112,8 @@ sequenceDiagram
     Proxy->>Agent: Forward với Bearer RAG_INTERNAL_KEY
     Agent->>Obs: Bắt đầu traced_turn()
     Agent->>Router: decide_route() (Phases P0-P8)
-    Router-->>Agent: Intent = KNOWLEDGE_QUERY
+    Router-->>Agent: Intent = KNOWLEDGE_QUERY + sub_intent (search | catalog | lesson_status)
+    Note over Agent: catalog / lesson_status: trả lời từ dữ liệu (Visitor bị chặn với lesson_status).<br/>Handler không nhận câu ➔ rơi xuống tìm kiếm
     Agent->>RAG: search_similar(query, topic_slug)
     RAG->>RAG: Hybrid Search (BM25 FTS + In-memory Gemini 768d vectors)
     RAG-->>Agent: Trả về danh sách bài học có độ liên quan cao

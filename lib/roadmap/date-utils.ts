@@ -10,9 +10,4 @@ export function formatFriendlyTime(dateString?: string): string {
   return dayjs(dateString).fromNow();
 }
 
-export function formatExactDate(dateString?: string): string {
-  if (!dateString) return '';
-  return dayjs(dateString).format('DD/MM/YYYY HH:mm');
-}
-
 export { dayjs };

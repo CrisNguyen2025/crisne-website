@@ -17,7 +17,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.llm_keys import invoke_structured, missed_structure
-from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
+from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType, KnowledgeSubIntent
 from rag_service.domains.roadmap.retrieval.relevance import content_words
 from rag_service.domains.roadmap.router.policy import (
     ANAPHORA_REF,
@@ -30,7 +30,13 @@ from rag_service.domains.roadmap.router.policy import (
     WRITE_NONE,
     Row,
 )
-from rag_service.domains.roadmap.router.understanding import Understanding, understand
+from rag_service.domains.roadmap.router.understanding import (
+    Understanding,
+    matches_catalog_cue,
+    matches_catalog_list,
+    matches_lesson_status,
+    understand,
+)
 
 
 @dataclass(frozen=True)
@@ -45,6 +51,7 @@ class Decision:
     write: str                 # policy section 4: none | allow | confirm | deny
     row: Optional[str]         # the decision-table row that matched
     understanding: Understanding
+    sub_intent: Optional[KnowledgeSubIntent] = None  # the matched row's sub-intent (KNOWLEDGE_QUERY only)
 
     @property
     def rules(self) -> list[str]:
@@ -64,6 +71,7 @@ class Decision:
         return IntentClassificationResult(
             intent=self.intent,
             confidence=self.confidence,
+            sub_intent=self.sub_intent,
             needs_cud_extraction=self.intent == IntentType.ROADMAP_CUD,
             needs_confirmation=self.write == WRITE_CONFIRM,
         )
@@ -72,13 +80,16 @@ class Decision:
         """Plain fields for evals/router/decisions.jsonl."""
         if self.intent is None:
             return {"route": "undecided", "write": self.write, "rules": self.rules}
-        return {
+        snap = {
             "route": self.intent.value,
             "confirm": self.write == WRITE_CONFIRM,
             "confidence": self.confidence,
             "write": self.write,
             "rules": self.rules,
         }
+        if self.sub_intent is not None:
+            snap["sub_intent"] = self.sub_intent.value
+        return snap
 
 
 def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
@@ -87,11 +98,11 @@ def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
     turns = "\n".join(f"{t.role}: {t.content}" for t in history) or "(chưa có)"
     return (
         "Phân loại ý định của người dùng trong hệ thống quản lý Roadmap:\n"
-        "- ROADMAP_CUD: người dùng RA LỆNH tạo, thêm, sửa, xóa, chuyển một topic/layer/group/item cụ thể\n"
+        "- ROADMAP_CUD: người dùng RA LỆNH tạo, thêm, sửa, xóa, chuyển một topic/mục/bài học cụ thể\n"
         "- KNOWLEDGE_QUERY: hỏi về kiến thức, tìm kiếm bài học, tra cứu roadmap hiện có\n"
         "- PLAN_GOAL: muốn lập kế hoạch hoặc sinh lộ trình trọn gói\n"
         "- CHITCHAT: chào hỏi, cảm ơn, hỏi trợ lý/dự án làm được gì, cách dùng\n"
-        "- OUT_OF_SCOPE: không liên quan đến roadmap/topic/layer/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n"
+        "- OUT_OF_SCOPE: không liên quan đến roadmap/topic/mục/bài học (thời tiết, tài chính, giải trí, lập trình chung...)\n"
         "Phân biệt theo CHỦ ĐỀ được hỏi (bỏ khung câu như 'bạn có biết thông tin về', 'cho mình hỏi'):\n"
         "  - chủ đề thuộc lĩnh vực của roadmap (AI, LLM, RAG, MLOps…), kể cả khi roadmap chưa có bài → KNOWLEDGE_QUERY\n"
         "  - chủ đề thuộc lĩnh vực khác (ứng dụng, mạng xã hội, đời sống, tài chính, phần mềm văn phòng…) → OUT_OF_SCOPE\n"
@@ -148,6 +159,12 @@ class IntentRouter:
             return u.how_to
         if row.needs == "show_request":
             return u.show_request
+        if row.needs == "lesson_status_cue":
+            return matches_lesson_status(u)
+        if row.needs == "catalog_list":
+            return matches_catalog_list(u, text)
+        if row.needs == "catalog_cue":
+            return matches_catalog_cue(u)
         if row.needs == "known_title":  # checked last: it reads the title vocabulary
             return self.names_known_lesson(text)
         return row.needs is None
@@ -156,7 +173,7 @@ class IntentRouter:
         """Apply the policy decision table (policy.py section 3) to the message's act × target. Sub-5ms, no LLM."""
         u = understand(text, self.known_place)
         decision = next(
-            (Decision(row.intent, row.confidence, row.write, row.name, u)
+            (Decision(row.intent, row.confidence, row.write, row.name, u, row.sub_intent)
              for row in DECISION_TABLE if self._matches(row, u, text)),
             Decision(None, 0.0, WRITE_NONE, None, u),
         )
@@ -173,7 +190,7 @@ class IntentRouter:
         first = next((c for c in clauses if c.intent is not None), None)
         if first is None:
             return Decision(None, 0.0, WRITE_NONE, "change_not_in_any_clause", u)
-        return Decision(first.intent, first.confidence, first.write, f"clause:{first.row}", u)
+        return Decision(first.intent, first.confidence, first.write, f"clause:{first.row}", u, first.sub_intent)
 
     def classify_heuristics(self, text: str) -> Optional[IntentClassificationResult]:
         """The heuristic decision as a classification result, or None to leave the message to the LLM router."""
@@ -243,7 +260,8 @@ class IntentRouter:
             try:
                 res = await invoke_structured(self._llm, IntentClassificationResult, build_router_prompt(text, history))
                 if isinstance(res, IntentClassificationResult):
-                    return res, "llm"
+                    # The prompt never describes sub_intent: only the decision table sets it
+                    return res.model_copy(update={"sub_intent": None}), "llm"
             except Exception as exc:
                 print(f"[IntentRouter] LLM classification error: {exc}")
                 # A skipped structured output is the model's answer, not the provider failing

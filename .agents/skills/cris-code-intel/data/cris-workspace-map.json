@@ -400,7 +400,7 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
           "functionOrMethod": "decide_route",
-          "action": "Chạy qua các phases P0-P8 (focus, grounding, polarity, scope, write_gate). Xác định intent: KNOWLEDGE_QUERY",
+          "action": "Chạy qua các phases P0-P8 (focus, grounding, polarity, scope, write_gate). Xác định intent: KNOWLEDGE_QUERY kèm sub_intent (search | catalog | lesson_status). catalog và lesson_status trả lời từ dữ liệu (không gọi scope, không tìm kiếm); không handler nào nhận thì rơi xuống tìm kiếm",
           "callsNext": "roadmap-rag-assistant/rag_service/core/orchestration/sources.py#answer_from_sources",
           "dataPassed": "Target entities, topic filter, keywords"
         },

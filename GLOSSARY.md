@@ -104,44 +104,6 @@ _Avoid_: rating, vote, score
 Tập câu hỏi kèm đáp án chuẩn dùng để đánh giá chất lượng trả lời.
 _Avoid_: test set, benchmark
 
-## Workflow Builder
-
-**Project**:
-Không gian làm việc của Owner trong Workflow Builder, chứa Document và Workflow.
-_Avoid_: workspace
-
-**Document**:
-Tệp Owner tải lên một Project để làm kiến thức cho Workflow.
-_Avoid_: file, attachment, KB doc
-
-**Chunk**:
-Một đoạn của Document dùng để tìm kiếm theo nghĩa.
-_Avoid_: passage, segment
-
-**Workflow**:
-Một đồ thị các Node trong Project, có một Draft và các Version.
-_Avoid_: flow, pipeline, graph
-
-**Draft**:
-Bản đang chỉnh sửa của một Workflow.
-_Avoid_: working copy
-
-**Version**:
-Bản đã publish của một Workflow; không đổi sau khi publish.
-_Avoid_: release, snapshot
-
-**Node**:
-Một bước trong Workflow.
-_Avoid_: step, block
-
-**Run**:
-Một lần chạy Workflow, từ Version hoặc từ Draft, kích hoạt thủ công hoặc qua API.
-_Avoid_: execution, job
-
-**Node Execution**:
-Kết quả chạy một Node trong một Run.
-_Avoid_: step run
-
 ## Notes & API Docs
 
 **Note**:

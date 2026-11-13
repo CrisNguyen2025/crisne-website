@@ -129,3 +129,20 @@ def test_query_recognition():
     assert asks_what_i_know("tôi đang biết gì về AI Architecture")
     assert asks_what_i_know("tôi đã nắm những gì về RAG")
     assert asks_what_i_know("tiến độ học về topic AI")
+
+
+def test_query_recognition_new_phrasings():
+    assert asks_what_i_know("Tôi đã nắm được những bài học nào rồi")
+    assert asks_what_i_know("Bài Docker đã nắm chưa")
+    assert asks_next_learning("Sau bài Docker Compose thì nên học bài nào")
+    assert asks_next_learning("Gợi ý bài tiếp theo trong topic Docker")
+    assert asks_review("Những bài đã nắm lâu rồi chưa xem lại")
+
+
+def test_query_recognition_look_alikes_are_not_status_queries():
+    for text in [
+        "Tiến độ giải ngân vốn đầu tư công hiện nay thế nào",  # "tiến độ" alone is not about lessons
+        "Học gì tiếp theo sau khi tốt nghiệp cấp 3",  # life advice
+        "bài tiếp theo của series này nói về gì",  # asks what a lesson says
+    ]:
+        assert not (asks_review(text) or asks_next_learning(text) or asks_what_i_know(text)), text

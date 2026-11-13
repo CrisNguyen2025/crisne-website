@@ -96,9 +96,9 @@ def build_verify_prompt(text: str, history: Sequence[Any] = (), page_context: st
     examples = "\n".join(f'- "{msg}" → {label}' for msg, label in VERIFY_EXAMPLES)
     turns = "\n".join(f"{t.role}: {t.content}" for t in history) or "(chưa có)"
     return (
-        "Bạn kiểm tra một tin nhắn gửi tới trợ lý quản lý Roadmap học tập (topic → layer → group → bài học).\n"
-        "Chỉ được coi là thay đổi Roadmap khi người dùng THẬT SỰ yêu cầu ngay bây giờ thay đổi một topic/layer/"
-        "group/bài học CỦA ROADMAP NÀY.\n\n"
+        "Bạn kiểm tra một tin nhắn gửi tới trợ lý quản lý Roadmap học tập (topic → mục/section → bài học).\n"
+        "Chỉ được coi là thay đổi Roadmap khi người dùng THẬT SỰ yêu cầu ngay bây giờ thay đổi một topic/mục/"
+        "bài học CỦA ROADMAP NÀY.\n\n"
         "Quy tắc:\n"
         "- target_system=external khi đối tượng thuộc hệ thống khác: mạng xã hội, ứng dụng, phần mềm thiết kế, "
         "cloud, cơ sở dữ liệu, thư viện, code, playlist, menu, lớp học... dù có các từ topic/layer/nhóm/bài/mục.\n"

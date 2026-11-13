@@ -121,7 +121,7 @@ def test_a_change_must_come_from_one_clause():
         ("tạo topic AI Engineering", "change_command", WRITE_ALLOW),
         ("bạn tạo topic AI được không", "change_request", WRITE_CONFIRM),
         ("tìm bài về Docker", "search_word", WRITE_NONE),
-        ("topic này có mấy bài", "roadmap_question", WRITE_NONE),
+        ("topic này có mấy bài", "roadmap_catalog_query", WRITE_NONE),
         ("có thể thao tác gì ở dự án này", "about_assistant", WRITE_NONE),
         ("giá vàng hôm nay", "off_topic", WRITE_NONE),
         ("Kafka", None, WRITE_NONE),

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class IntentType(str, Enum):
@@ -18,6 +18,14 @@ class IntentType(str, Enum):
     CHITCHAT = "chitchat"               # Greetings, thanks, identity questions
     OUT_OF_SCOPE = "out_of_scope"       # Unrelated to roadmaps (weather, finance, general coding...)
     UNCLEAR = "unclear"                 # LLM router could not tell; the user is asked to rephrase
+
+
+class KnowledgeSubIntent(str, Enum):
+    """Which downstream answers a KNOWLEDGE_QUERY. Set by the decision table only, never by the LLM router."""
+
+    SEARCH = "search"                # Vector RAG: concepts, lesson content
+    CATALOG = "catalog"              # Roadmap structure: topic and section lists, counts, positions
+    LESSON_STATUS = "lesson_status"  # ADR-0010: the Owner's target / learning / known lessons (read-only)
 
 
 class ActionType(str, Enum):
@@ -108,3 +116,18 @@ class IntentClassificationResult(BaseModel):
         False,
         description="True if the change is asked politely or on a condition and must be confirmed before it runs.",
     )
+    sub_intent: Optional[KnowledgeSubIntent] = Field(
+        None,
+        description="Set by the decision table for KNOWLEDGE_QUERY only; leave empty.",
+    )
+
+    @property
+    def sub_intent_value(self) -> Optional[str]:
+        """The sub-intent's string, or None: safe where `sub_intent.value` would raise on None."""
+        return self.sub_intent.value if self.sub_intent is not None else None
+
+    @model_validator(mode="after")
+    def _only_knowledge_query_has_sub_intent(self) -> "IntentClassificationResult":
+        if self.intent != IntentType.KNOWLEDGE_QUERY:
+            self.sub_intent = None
+        return self

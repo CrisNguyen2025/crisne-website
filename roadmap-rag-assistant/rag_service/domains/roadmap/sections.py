@@ -1,6 +1,6 @@
 """Sections of a topic through the agent (ADR-0009): list them, and rename one (owner only, after a preview).
 
-Mixed into NextGenRoadmapAgent. Both are read from the message by pattern, before the router: listing is answered
+Mixed into NextGenRoadmapAgent. Listing runs after the router (sub_intent CATALOG), a rename before it (it writes): listing is answered
 from the topic's `sections` (never the LLM, so no section is made up), and a rename is previewed and runs on "ok"
 through handle_pending. The topic is the one named in the message, else the open page, else the session's.
 """
@@ -14,19 +14,13 @@ from rag_service.adapters.errors import normalize_title
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import example_blocks
+from rag_service.domains.roadmap.router.policy import LIST_SECTIONS
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
 
 GENERAL_SECTION = "Chung"
 _CHANGE_VERB = re.compile(r"\b(?:them|xoa|tao|doi|sua|chuyen|add|delete|create|rename)\b")
-
-# "topic X có những mục nào", "các mục của topic X", "liệt kê mục". Folded. "mục RAG có những bài gì" is a search.
-LIST_SECTIONS = re.compile(
-    r"\bco\s+(?:nhung\s+|cac\s+)?(?:muc|section)s?\s+(?:nao|gi)\b"
-    r"|\b(?:liet\s+ke|danh\s+sach|xem)\s+(?:cac\s+|nhung\s+)?(?:muc|section)s?\b"
-    r"|\b(?:cac|nhung)\s+(?:muc|section)s?\s+(?:cua|trong)\b"
-)
 
 # The topic the message names: "… (trong|của) topic <name>", up to "thành" or the end. Accented or not.
 _TOPIC_CLAUSE = re.compile(
@@ -126,30 +120,43 @@ class SectionCommands:
         async for ev in self._stream_text(text, delay):
             yield ev
 
-    async def handle_sections(
+    async def handle_section_list(
         self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
-        """List a topic's sections, or preview renaming one. Leaves `outcome["handled"]` False for other messages."""
-        rename = parse_section_rename(content)
-        if rename is None and not asks_section_list(content):
+        """List a topic's sections: read-only, runs after the router for sub_intent CATALOG.
+
+        Leaves `outcome["handled"]` False for other messages, so the caller falls back to the search.
+        """
+        if parse_section_rename(content) is not None or not asks_section_list(content):
             return
         outcome["handled"] = True
 
-        if rename is None:
-            named = None
-            if (m := re.search(r"(?:topic|lộ\s+trình|chủ\s+đề)\s+(.+?)\s+(?:có|co)\s", content, re.IGNORECASE)):
-                named = _clean(m.group(1))
-            topic = await self._section_topic(named, content, page_context, session_ctx)
-            if topic is None:
-                async for ev in self._ask_section_topic(delay, "topic <tên topic> có những mục nào"):
-                    yield ev
-                return
-            yield {"type": "tool_start", "name": "list_sections", "args": {"topic": topic.get("slug")}}
-            reply = section_list_reply(topic)
-            yield {"type": "tool_end", "name": "list_sections", "result": reply}
-            async for ev in self._stream_text(reply, delay):
+        named = None
+        if (m := re.search(r"(?:topic|lộ\s+trình|chủ\s+đề)\s+(.+?)\s+(?:có|co)\s", content, re.IGNORECASE)):
+            named = _clean(m.group(1))
+        topic = await self._section_topic(named, content, page_context, session_ctx)
+        if topic is None:
+            async for ev in self._ask_section_topic(delay, "topic <tên topic> có những mục nào"):
                 yield ev
             return
+        yield {"type": "tool_start", "name": "list_sections", "args": {"topic": topic.get("slug")}}
+        reply = section_list_reply(topic)
+        yield {"type": "tool_end", "name": "list_sections", "result": reply}
+        async for ev in self._stream_text(reply, delay):
+            yield ev
+        return
+
+    async def handle_section_rename(
+        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Preview renaming a section. Runs before the router: it writes, after "ok" (commands.handle_pending).
+
+        Leaves `outcome["handled"]` False for other messages.
+        """
+        rename = parse_section_rename(content)
+        if rename is None:
+            return
+        outcome["handled"] = True
 
         if not is_owner():
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):

@@ -21,7 +21,7 @@ from typing import Any, Awaitable, Callable, Optional, Sequence
 from rag_service.domains.roadmap.router.grounding import build_grounding
 from rag_service.domains.roadmap.router.intent_router import Decision, IntentRouter
 from rag_service.domains.roadmap.router.policy import NAMED_PART, WRITE_ALLOW, WRITE_CONFIRM, WRITE_DENY, WRITE_NONE
-from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType
+from rag_service.domains.roadmap.router.schemas import IntentClassificationResult, IntentType, KnowledgeSubIntent
 from rag_service.domains.roadmap.router.scope import ScopeResult, out_of_scope_act, search_act
 from rag_service.domains.roadmap.router.policy import Target
 from rag_service.domains.roadmap.router.target_grounding import Catalog, Grounding, ground_change
@@ -131,7 +131,13 @@ async def decide_route(
     scope: Optional[ScopeResult] = None
     # Keywords named no target: read it from the roadmap's data (scope.py). An outside topic is answered
     # "out of scope" here, before the LLM router, retrieval or System 2 is called.
-    if scope_fn is not None and decision.understanding.target == Target.NONE:
+    # A Lesson Status or catalog question is about the Owner's data or the roadmap's structure, not a topic of the
+    # field: the table already read it, so it skips the scope check (one embedding call saved, no "out of scope")
+    if (
+        scope_fn is not None
+        and decision.understanding.target == Target.NONE
+        and decision.sub_intent not in (KnowledgeSubIntent.LESSON_STATUS, KnowledgeSubIntent.CATALOG)
+    ):
         scope = await scope_fn(content)
         if out_of_scope_act(decision.understanding.act.value, scope.scope):
             out = IntentClassificationResult(intent=IntentType.OUT_OF_SCOPE, confidence=0.9, needs_cud_extraction=False)

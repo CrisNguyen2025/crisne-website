@@ -21,6 +21,17 @@ from rag_service.domains.roadmap.router.object_sense import names_another_place,
 from rag_service.domains.roadmap.router.polarity import BLOCKER_OF, NONE as NO_POLARITY, polarity_of
 from rag_service.domains.roadmap.router.policy import (  # cues and their vocabulary live in policy.py
     ADVICE,
+    CATALOG_CONTAINER,
+    CONTENT_ASK,
+    COUNTING_CUE,
+    HIERARCHY_CUE,
+    KNOWN_CUE,
+    LIST_SECTIONS,
+    LIST_VERBS,
+    POSITION_CUE,
+    REVIEW_CUE,
+    SEARCH_VERB,
+    asks_next_lesson,
     DESCRIPTION_UPDATE,
     DESCRIPTION_UPDATE_FOLDED,
     VAGUE_CONTENT,
@@ -370,3 +381,29 @@ def instruction_part(text: str) -> str:
             head = head[:match.end()] + (" " + tail.group(0) if tail else "")
     return re.sub(r"\s+", " ", head).strip()
 
+
+# ── Cues that pick a KNOWLEDGE_QUERY sub-intent (read by intent_router._matches) ─────────────────────────────
+
+def matches_lesson_status(u: Understanding) -> bool:
+    """The Owner asks about their own lessons' status (ADR-0010 queries a, b, c). A change verb, a blocked change or
+    a question about a lesson's content is not one: (d) changes run through parse_status_change_request."""
+    if u.has_change_verb or u.write_blocker is not None or CONTENT_ASK.search(u.flat):
+        return False
+    return bool(asks_next_lesson(u.flat) or KNOWN_CUE.search(u.flat) or REVIEW_CUE.search(u.flat))
+
+
+def matches_catalog_list(u: Understanding, text: str) -> bool:
+    """A request to list topics, sections or the lessons of a container."""
+    if u.has_change_verb:
+        return False
+    if is_plain_listing(text) or LIST_TOPICS.search(u.lower) or LIST_SECTIONS.search(u.flat):
+        return True
+    # "list all Kafka topics", "show me the list in Python": a container word of another system is not the roadmap's
+    return bool(LIST_VERBS.search(u.flat) and CATALOG_CONTAINER.search(u.flat) and not FALSE_OBJECT.search(u.flat))
+
+
+def matches_catalog_cue(u: Understanding) -> bool:
+    """A question about the roadmap's structure: how many lessons, where a lesson is, what a topic holds."""
+    if u.write_blocker is not None or SEARCH_VERB.search(u.flat):
+        return False
+    return bool(COUNTING_CUE.search(u.flat) or POSITION_CUE.search(u.flat) or HIERARCHY_CUE.search(u.flat))

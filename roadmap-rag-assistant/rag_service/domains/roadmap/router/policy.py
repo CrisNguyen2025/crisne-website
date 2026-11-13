@@ -21,7 +21,7 @@ from enum import Enum
 from typing import Optional
 
 from rag_service.domains.roadmap.retrieval.relevance import fold
-from rag_service.domains.roadmap.router.schemas import IntentType
+from rag_service.domains.roadmap.router.schemas import IntentType, KnowledgeSubIntent
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 
 # ── 1. Vocabulary ───────────────────────────────────────────────────────────
@@ -274,6 +274,78 @@ PLAN_REQUEST = re.compile(
     r"|\b(?:len|lap|xay\s+dung|thiet\s+ke|vach|goi\s+y|de\s+xuat|design|build)\s+(?:(?:cho|giup)\s+\w+\s+)?(?:mot\s+)?(?:lo\s+trinh|roadmap)\b"
 )
 
+# Lesson Status questions (ADR-0010), on folded text. The Owner asks what they know, what to learn next, what to review.
+# Their pattern lists replace the ones lesson_status.py had; the router (lesson_status_cue) and the handler share them.
+# "tiến độ" alone is not here: "tiến độ giải ngân vốn đầu tư công" is not about lessons.
+NEXT_CUE = re.compile(
+    r"\b(?:"
+    r"(?:nen|can|se|muon)\s+hoc\s+(?:(?:bai(?:\s+hoc)?|phan|chu\s+de|muc|cai|item)\s+)?(?:gi|nao)(?:\s+tiep(?:\s+theo)?)?"
+    r"|hoc\s+(?:(?:bai(?:\s+hoc)?|phan|chu\s+de|muc|cai|item)\s+)?gi(?:\s+tiep(?:\s+theo)?|\s+bay\s+gio)"
+    r"|tiep\s+theo(?:\s+thi)?\s+(?:nen|can|se)?\s*hoc(?:\s+(?:bai(?:\s+hoc)?|phan|chu\s+de|muc|cai|item))?(?:\s+(?:gi|nao))?"
+    r"|(?:bai(?:\s+hoc)?|phan|muc)\s+tiep\s+theo\s+(?:la\s+gi|nen\s+hoc|can\s+hoc)"
+    r"|goi\s+y\s+(?:(?:cho\s+\w+\s+)?(?:bai(?:\s+hoc)?|phan|lo\s+trinh|topic)\s+tiep(?:\s+theo)?(?:\s+can\s+hoc)?|hoc(?:\s+tiep(?:\s+theo)?)?)"
+    r"|dang\s+hoc\s+do|bai\s+(?:nao\s+)?dang\s+hoc\s+do"
+    r"|sau\s+bai\s+.*?\s+(?:thi\s+)?(?:nen\s+)?hoc\s+(?:bai\s+)?(?:gi|nao)"
+    r")\b"
+)
+KNOWN_CUE = re.compile(
+    r"\b(?:"
+    r"(?:dang|da)\s+(?:biet|nam|hoc)(?:\s+duoc)?\s+(?:(?:nhung\s+)?(?:gi|bai\s+nao|bai\s+hoc\s+nao)|nhung\s+bai)"
+    r"|da\s+(?:hoan\s+thanh|xong)\s+(?:(?:nhung\s+)?(?:gi|bai\s+nao)|nhung\s+bai)"
+    r"|(?:nam|biet|hoc)\s+nhung\s+(?:gi|bai\s+nao|bai\s+hoc\s+nao)"
+    r"|da\s+(?:nam|hoc(?:\s+xong)?|hoan\s+thanh)\s+chua"
+    r"|tien\s+do\s+(?:hoc(?:\s+tap)?|roadmap|lo\s+trinh|cua\s+(?:toi|minh)|den\s+dau)"
+    r")\b"
+)
+REVIEW_CUE = re.compile(
+    r"\b(?:"
+    r"on\s+(?:lai|tap|bai)|can\s+on|bai\s+can\s+on|can\s+review|review\s+bai|can\s+nhac\s+on"
+    r"|(?:lau\s+(?:roi\s+)?|chua\s+)(?:xem|on|hoc)\s+lai"
+    r"|can\s+xem\s+lai|bai\s+can\s+xem\s+lai|nhac\s+bai\s+can\s+on"
+    r")\b"
+)
+# "học gì tiếp theo sau khi tốt nghiệp cấp 3" asks for life advice, not the next lesson: a next-lesson cue counts
+# only when the message names a lesson or topic, or has nothing else besides these filler words
+LESSON_NOUN = re.compile(r"\b(?:bai|lesson|topic|lo\s+trinh|roadmap|muc|phan|section)\b")
+NEXT_FILLER = re.compile(r"\b(?:toi|minh|em|tui|hom\s+nay|bay\s+gio|thi|nhi|vay|a|nhe|nha|di|ban|oi|cho|la)\b|[?.!,]")
+# Asking what a lesson says or is, not about the Owner's status: "bài tiếp theo của series này nói về gì"
+CONTENT_ASK = re.compile(r"\b(?:noi\s+(?:ve\s+)?gi|noi\s+dung|giai\s+thich|la\s+gi)\b")
+
+
+def asks_next_lesson(flat: str) -> bool:
+    """A "what to learn next" question about the roadmap's lessons (query b), on folded text."""
+    m = NEXT_CUE.search(flat)
+    if m is None:
+        return False
+    return bool(LESSON_NOUN.search(flat)) or not NEXT_FILLER.sub(" ", flat[:m.start()] + " " + flat[m.end():]).strip()
+
+
+# Roadmap structure questions: counts, positions, topic and section lists (CATALOG). Folded.
+COUNTING_CUE = re.compile(
+    r"\b(?:co\s+bao\s+nhieu|bao\s+nhieu\s+bai|may\s+bai|co\s+may|tong\s+so\s+bai|dem\s+so\s+bai|may\s+topic"
+    r"|bao\s+nhieu\s+topic|may\s+muc|bao\s+nhieu\s+muc)\b"
+)
+POSITION_CUE = re.compile(
+    r"\b(?:nam\s+o\s+dau|o\s+dau|thuoc\s+topic\s+nao|thuoc\s+section\s+nao|o\s+vi\s+tri\s+nao|nam\s+o\s+muc\s+nao"
+    r"|nam\s+o\s+phan\s+nao)\b"
+)
+HIERARCHY_CUE = re.compile(
+    r"\b(?:co\s+nhung\s+topic\s+nao|gom\s+nhung\s+gi|nhung\s+topic\s+nao|gom\s+nhung\s+phan\s+nao"
+    r"|gom\s+nhung\s+muc\s+nao|cau\s+truc\s+(?:lo\s+trinh|cac\s+section)"
+    r"|which\s+(?:sections?|topics?|lessons?)\s+(?:are|is)\s+(?:in|included|under|there))\b"
+)
+# "tìm giúp mấy bài về JWT" counts nothing: the search row decides it
+SEARCH_VERB = re.compile(r"\b(?:tim|kiem|tra\s+cuu|cho\s+xin)\b")
+CATALOG_CONTAINER = re.compile(r"\b(?:topics?|sections?|muc|layers?|lo\s+trinh|roadmaps?)\b")
+# No bare "xem": "xem bài Docker trong topic DevOps nói gì" is a content question
+LIST_VERBS = re.compile(r"\b(?:danh\s+sach|liet\s+ke|list|show\s+me|cho\s+(?:\w+\s+)?xem|hien\s+thi)\b")
+# "topic X có những mục nào", "các mục của topic X", "liệt kê mục". "mục RAG có những bài gì" is a search.
+LIST_SECTIONS = re.compile(
+    r"\bco\s+(?:nhung\s+|cac\s+)?(?:muc|section)s?\s+(?:nao|gi)\b"
+    r"|\b(?:liet\s+ke|danh\s+sach|xem)\s+(?:cac\s+|nhung\s+)?(?:muc|section)s?\b"
+    r"|\b(?:cac|nhung)\s+(?:muc|section)s?\s+(?:cua|trong)\b"
+)
+
 # Change verbs, folded. "gỡ" is left out: folded it becomes "go", an English word
 CUD_VERB_WORDS = [
     "tạo", "thêm", "xóa", "xoá", "bỏ bớt", "gỡ bỏ", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
@@ -388,9 +460,12 @@ class Row:
     confidence: float
     act: Optional[SpeechAct | tuple[SpeechAct, ...]] = None
     target: Optional[Target] = None
-    # a cue the message must also have: search_word | known_title | opens_with_greeting | write_blocker
+    # a cue the message must also have: search_word | known_title | opens_with_greeting | write_blocker |
+    # lesson_status_cue | catalog_list | catalog_cue (read in intent_router._matches)
     needs: Optional[str] = None
     write: str = "none"          # see section 4
+    # Which downstream answers a KNOWLEDGE_QUERY row; empty for every other intent
+    sub_intent: Optional[KnowledgeSubIntent] = None
 
 
 DECISION_TABLE: tuple[Row, ...] = (
@@ -399,6 +474,10 @@ DECISION_TABLE: tuple[Row, ...] = (
     # Greetings, the user's own details and questions about the assistant are answered from the conversation
     Row("greeting", IntentType.CHITCHAT, 0.95, act=SpeechAct.GREETING),
     Row("recall", IntentType.CHITCHAT, 0.90, act=SpeechAct.RECALL),
+    # The Owner's lesson status (ADR-0010), before about_assistant: "gợi ý bài tiếp theo trong topic Docker" reads as
+    # a question about the assistant. No act: "tiến độ học tập của tôi đến đâu rồi" reads as a statement.
+    Row("lesson_status_query", IntentType.KNOWLEDGE_QUERY, 0.92, needs="lesson_status_cue",
+        sub_intent=KnowledgeSubIntent.LESSON_STATUS),
     Row("about_assistant", IntentType.CHITCHAT, 0.90, target=Target.ASSISTANT),
     # Names a change without asking for one ("đừng xóa…", "lỡ xóa nhầm… thì…", "đã tạo…"): never written,
     # whatever the LLM router later says
@@ -407,17 +486,29 @@ DECISION_TABLE: tuple[Row, ...] = (
     Row("change_request", IntentType.ROADMAP_CUD, 0.85, act=SpeechAct.REQUEST, write="confirm"),
     # A verb needs an object from the roadmap: "xóa nó đi" or "Xóa." alone is not a change request
     Row("change_command", IntentType.ROADMAP_CUD, 0.95, act=SpeechAct.COMMAND, target=Target.ROADMAP, write="allow"),
+    # Roadmap structure, ahead of search_word: "danh sách bài trong layer Docker" holds the search word "danh sách"
+    Row("catalog_list_query", IntentType.KNOWLEDGE_QUERY, 0.92, act=(SpeechAct.QUESTION, SpeechAct.REQUEST),
+        needs="catalog_list", sub_intent=KnowledgeSubIntent.CATALOG),
+    # "topic này có mấy bài", "bài Docker nằm ở đâu": counts and positions, answered from the catalog
+    Row("roadmap_catalog_query", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, target=Target.ROADMAP,
+        needs="catalog_cue", sub_intent=KnowledgeSubIntent.CATALOG),
     # A search word ("là gì", "tìm") is a search by itself; a weak question marker ("?", trailing "k") also
     # needs roadmap content or a known lesson title, else the message goes to the LLM router
-    Row("search_word", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="search_word"),
+    Row("search_word", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="search_word",
+        sub_intent=KnowledgeSubIntent.SEARCH),
     # "lộ trình nào phù hợp cho người mới", "nên học FE hay BE trước": which to choose is advice, not a lookup
     Row("advice_question", None, 0.0, act=SpeechAct.QUESTION, needs="advice"),
-    Row("roadmap_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, target=Target.ROADMAP),
-    Row("known_title_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="known_title"),
+    # What is left of a question about the roadmap: lesson content, "nếu xóa topic AI thì có mất bài không", "ai đã xóa bài X"
+    Row("roadmap_content_query", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, target=Target.ROADMAP,
+        sub_intent=KnowledgeSubIntent.SEARCH),
+    Row("known_title_question", IntentType.KNOWLEDGE_QUERY, 0.90, act=SpeechAct.QUESTION, needs="known_title",
+        sub_intent=KnowledgeSubIntent.SEARCH),
     # "cách tạo topic trong Kafka", "mạng nơ-ron dùng thế nào": a how-to about no roadmap object is a lesson question
-    Row("how_to_question", IntentType.KNOWLEDGE_QUERY, 0.85, act=SpeechAct.QUESTION, target=Target.NONE, needs="how_to"),
+    Row("how_to_question", IntentType.KNOWLEDGE_QUERY, 0.85, act=SpeechAct.QUESTION, target=Target.NONE, needs="how_to",
+        sub_intent=KnowledgeSubIntent.SEARCH),
     # "cho mình xem lại toàn bộ cấu trúc các layer": seeing roadmap content, not changing it
-    Row("show_request", IntentType.KNOWLEDGE_QUERY, 0.85, target=Target.ROADMAP, needs="show_request"),
+    Row("show_request", IntentType.KNOWLEDGE_QUERY, 0.85, target=Target.ROADMAP, needs="show_request",
+        sub_intent=KnowledgeSubIntent.CATALOG),
     Row("greeting_opener", IntentType.CHITCHAT, 0.95, needs="opens_with_greeting"),
 )
 

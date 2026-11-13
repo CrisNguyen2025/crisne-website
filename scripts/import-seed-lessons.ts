@@ -62,20 +62,10 @@ async function main(): Promise<void> {
     const topic = topicRes.rows[0];
     const roadmapId = String(topic.id);
 
-    const itemColumns = new Set(
-      (await client.execute('PRAGMA table_info("RoadmapItem")')).rows.map((r) => String(r.name))
-    );
-    const hasRoadmapId = itemColumns.has("roadmapId");
-
-    const existingRes = hasRoadmapId
-      ? await client.execute({
-          sql: 'SELECT id, title, "order" FROM "RoadmapItem" WHERE roadmapId = ?',
-          args: [roadmapId],
-        })
-      : await client.execute({
-          sql: 'SELECT i.id, i.title, i."order" FROM "RoadmapItem" i JOIN "RoadmapGroup" g ON i.groupId = g.id JOIN "RoadmapLayer" l ON g.layerId = l.id WHERE l.roadmapId = ?',
-          args: [roadmapId],
-        });
+    const existingRes = await client.execute({
+      sql: 'SELECT id, title, "order" FROM "RoadmapItem" WHERE roadmapId = ?',
+      args: [roadmapId],
+    });
 
     const existingLessons: ExistingLesson[] = existingRes.rows.map((r) => ({
       title: String(r.title),
@@ -109,11 +99,6 @@ async function main(): Promise<void> {
     if (!apply) {
       console.log(`\nDry-run only. Re-run with --apply after reviewing.`);
       return;
-    }
-
-    if (!hasRoadmapId) {
-      console.error("Target database has not been migrated to ADR-0009. Run yarn db:flatten-sections first.");
-      process.exit(1);
     }
 
     const backupRows = (

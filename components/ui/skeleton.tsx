@@ -9,32 +9,6 @@ export function Skeleton({ className }: SkeletonProps) {
 }
 
 // Section-specific skeletons
-export function HeroSkeleton() {
-  return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center gap-8 p-8">
-      <Skeleton className="h-12 w-64" />
-      <Skeleton className="h-6 w-96" />
-      <div className="flex gap-4">
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-10 w-32" />
-      </div>
-    </div>
-  );
-}
-
-export function SkillsSkeleton() {
-  return (
-    <div className="py-20 px-4">
-      <Skeleton className="h-8 w-48 mx-auto mb-12" />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-24 w-full" />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function ExperienceSkeleton() {
   return (
     <div className="py-20 px-4 min-h-[400px]">

@@ -15,6 +15,7 @@ from typing import Any, AsyncGenerator, Optional, Sequence
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.domains.roadmap.retrieval.relevance import fold
+from rag_service.domains.roadmap.router.policy import KNOWN_CUE, REVIEW_CUE, asks_next_lesson
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
@@ -148,26 +149,13 @@ def format_what_i_know_reply(
 
 # ── Query Recognition & Parsing ────────────────────────────────────────────
 
-_REVIEW_CUE = re.compile(
-    r"\b(?:on\s+lai|can\s+on|on\s+tap|on\s+bai|bai\s+can\s+on|can\s+review|review\s+bai|can\s+nhac\s+on)\b"
-)
-
-_NEXT_CUE = re.compile(
-    r"\b(?:hoc\s+gi\s+tiep|nen\s+hoc\s+gi|hoc\s+tiep|tiep\s+theo\s+nen\s+hoc|goi\s+y\s+hoc|hoc\s+cai\s+gi\s+tiep|can\s+hoc\s+gi\s+tiep|hoc\s+gi\s+bay\s+gio)\b"
-)
-
-_KNOWN_CUE = re.compile(
-    r"\b(?:dang\s+biet\s+gi|da\s+biet\s+gi|da\s+nam\s+gi|da\s+nam\s+nhung\s+gi|nam\s+nhung\s+gi|biet\s+nhung\s+gi|da\s+hoc\s+nhung\s+gi|da\s+hoc\s+gi|tien\s+do\s+hoc|tien\s+do)\b"
-)
-
-
 def asks_review(text: str) -> bool:
     """True when the user asks which lessons to review (query c)."""
     flat = fold(normalize_vietnamese(text).lower())
     # Must not be a change request or tech question
     if re.search(r"\b(?:danh\s+dau|chuyen|dat|mark|set|doi|giai\s+thich|la\s+gi)\b", flat):
         return False
-    return _REVIEW_CUE.search(flat) is not None
+    return REVIEW_CUE.search(flat) is not None
 
 
 def asks_next_learning(text: str) -> bool:
@@ -175,7 +163,7 @@ def asks_next_learning(text: str) -> bool:
     flat = fold(normalize_vietnamese(text).lower())
     if re.search(r"\b(?:danh\s+dau|chuyen|dat|mark|set|doi|giai\s+thich|la\s+gi)\b", flat):
         return False
-    return _NEXT_CUE.search(flat) is not None
+    return asks_next_lesson(flat)
 
 
 def asks_what_i_know(text: str) -> bool:
@@ -183,7 +171,7 @@ def asks_what_i_know(text: str) -> bool:
     flat = fold(normalize_vietnamese(text).lower())
     if re.search(r"\b(?:danh\s+dau|chuyen|dat|mark|set|doi)\b", flat):
         return False
-    return _KNOWN_CUE.search(flat) is not None
+    return KNOWN_CUE.search(flat) is not None
 
 
 # ── Status Change Command Parsing (Query d) ────────────────────────────────
@@ -291,21 +279,19 @@ class LessonStatusCommands:
                 pass
         return None
 
-    async def handle_lesson_status(
+    async def handle_status_change(
         self,
         *,
         content: str,
-        raw_content: str,
         page_context,
         session_ctx,
         delay: float,
         outcome: dict,
     ) -> AsyncGenerator[dict, None]:
-        """Handle (a)-(d) lesson status queries and changes.
+        """Handle (d), a previewed lesson status change. Runs before the router: it writes, after "ok".
 
         Sets outcome["handled"] = True when handled.
         """
-        # 1. Status change command (d)
         req = parse_status_change_request(content)
         if req is not None:
             outcome["handled"] = True
@@ -381,7 +367,20 @@ class LessonStatusCommands:
                 yield ev
             return
 
-        # 2. Status queries (a), (b), (c)
+    async def handle_lesson_status_query(
+        self,
+        *,
+        content: str,
+        page_context,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        """Handle (a), (b), (c): read-only questions about the Owner's lesson status.
+
+        Runs after the router, for sub_intent LESSON_STATUS. Leaves outcome["handled"] False for a message none of
+        the three cues reads, so the caller falls back to the search.
+        """
         is_rev = asks_review(content)
         is_nxt = asks_next_learning(content)
         is_kwn = asks_what_i_know(content)
