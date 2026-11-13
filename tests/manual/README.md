@@ -38,6 +38,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [triage-removal.md](triage-removal.md) | Xoá Knowledge Triage & Feedback Roadmap Assistant (TASK-triage-removal-001) | 2026-11-09 | 5/5 Pass |
 | [agent-handoff.md](agent-handoff.md) | Handoff v3 Claude ↔ Antigravity: baseline, check-boundary, wait-result, result.json | 2026-11-09 @ `5a75dce` | S1–S7, E1, E2, E3, E7 Pass; E4–E6, E8 chưa chạy |
 | [agent-adapter.md](agent-adapter.md) | AgentAdapter: MCP, skill, subagent, hook giữa Claude Code và Antigravity | 2026-11-09 @ `e1a7ce2` | T7, T8, T9 Pass; T5, T6 một phần; T1–T4 chưa chạy |
+| [abot-context-panel.md](abot-context-panel.md) | Mục Context trong menu ⋮ của Abot (TASK-abot-context-panel-001) | 2026-11-14 | C1–C5 Pass; C6 chưa chạy |
 
 ## Cách chạy (đã kiểm chứng)
 

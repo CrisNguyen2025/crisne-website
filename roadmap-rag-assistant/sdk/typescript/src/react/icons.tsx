@@ -92,6 +92,15 @@ export function NewChatIcon({ className }: IconProps) {
   );
 }
 
+export function ContextIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3v9h9" />
+    </Icon>
+  );
+}
+
 export function CloseIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

@@ -10,7 +10,7 @@ import {
 import { buildWelcomeMessage, WELCOME_MESSAGE_ID } from './welcome';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
-import type { AssistantStepEvent, PageContext } from '../types';
+import type { AssistantStepEvent, ContextUsage, PageContext } from '../types';
 
 /**
  * Merge a step event into the step already shown under that id.
@@ -81,6 +81,8 @@ export interface UseRoadmapAssistantChatReturn {
   conversationId: string;
   sendMessage: (textToSend?: string) => Promise<void>;
   stopStreaming: () => void;
+  /** Context of the last LLM answer; null before one arrives and after a new conversation. */
+  contextUsage: ContextUsage | null;
   clearMessages: () => void;
   retry: (errorMessageId: string) => void;
 }
@@ -155,6 +157,7 @@ export function useRoadmapAssistantChat(
   }, [canWrite]);
 
   const [input, setInput] = useState('');
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
@@ -384,6 +387,8 @@ export function useRoadmapAssistantChat(
               );
             },
 
+            onContext: (usage) => setContextUsage(usage),
+
             onChangeReview: (change) => {
               setMessages((prev) =>
                 prev.map((msg) =>
@@ -509,6 +514,7 @@ export function useRoadmapAssistantChat(
     setIsStreaming(false);
     setActiveTool(null);
     setError(null);
+    setContextUsage(null);
     setMessages([buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)]);
     setConversationId(generateConversationId());
     clearConversation(storageKey);
@@ -526,6 +532,7 @@ export function useRoadmapAssistantChat(
     conversationId,
     sendMessage,
     stopStreaming,
+    contextUsage,
     clearMessages,
     retry,
   };

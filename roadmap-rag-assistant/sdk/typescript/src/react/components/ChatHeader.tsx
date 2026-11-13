@@ -1,10 +1,11 @@
 import React from "react";
-import { CheckIcon, CloseIcon, CopyIcon, MoreVerticalIcon, NewChatIcon, SparklesIcon } from "../icons";
+import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MoreVerticalIcon, NewChatIcon, SparklesIcon } from "../icons";
 
 export interface ChatHeaderProps {
   canWrite: boolean;
   clearMessages: () => void;
   copiedConvId: boolean;
+  openContext: () => void;
   handleCopyConversationId: (e: React.MouseEvent) => void;
   isOptionsOpen: boolean;
   optionsRef: React.RefObject<HTMLDivElement | null>;
@@ -14,7 +15,7 @@ export interface ChatHeaderProps {
   title: string;
 }
 
-export function ChatHeader({ canWrite, clearMessages, copiedConvId, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
+export function ChatHeader({ canWrite, clearMessages, copiedConvId, openContext, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
   return (
     // Like Claude: no divider; messages fade out under the header instead of meeting a line.
     <div className="relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 bg-[#FFFFFF] px-2 py-1 pt-[max(0.25rem,env(safe-area-inset-top))] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-[#FFFFFF] after:to-transparent">
@@ -54,6 +55,17 @@ export function ChatHeader({ canWrite, clearMessages, copiedConvId, handleCopyCo
               >
                 <NewChatIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
                 <span>Cuộc trò chuyện mới</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  openContext();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
+              >
+                <ContextIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                <span>Context</span>
               </button>
               <button
                 type="button"

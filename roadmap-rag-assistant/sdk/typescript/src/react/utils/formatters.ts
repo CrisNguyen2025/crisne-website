@@ -157,3 +157,17 @@ export function formatStepsDigest(steps: AssistantStepEvent[]): string | undefin
   }
   return parts.length ? parts.join(', ') : undefined;
 }
+
+/** Token counts as "842", "12.4k" or "1M". */
+export function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) return `${+(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${+(tokens / 1_000).toFixed(1)}k`;
+  return String(Math.round(tokens));
+}
+
+/** A share of the whole as "24.2%", or "<0.1%" when it would round to zero. */
+export function formatPercent(part: number, whole: number): string {
+  if (whole <= 0 || part <= 0) return '0%';
+  const pct = (part / whole) * 100;
+  return pct < 0.1 ? '<0.1%' : `${pct.toFixed(pct < 10 ? 1 : 0)}%`;
+}

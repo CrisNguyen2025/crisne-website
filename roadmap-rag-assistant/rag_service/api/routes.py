@@ -92,6 +92,9 @@ async def _sse_stream_generator(
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 changes.append(payload)
                 yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            elif ev_type == "context":
+                payload = {k: v for k, v in ev.items() if k != "type"}
+                yield f"event: context\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
                 metadata.update({k: v for k, v in ev.items() if k != "type"})
             elif ev_type == "trace":

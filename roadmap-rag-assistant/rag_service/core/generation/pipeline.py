@@ -21,6 +21,7 @@ from typing import Any, AsyncGenerator
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
+from rag_service.context_usage import build_context_usage
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
@@ -190,6 +191,7 @@ class GenerationPipeline:
         yield step_event("answer", "generation", "done", mode="llm")
         if report is not None and is_owner():
             yield guard_step()
+        yield {"type": "context", **build_context_usage(prompt, model=settings.llm_model, usage=usage)}
         yield metadata_event(  # S5
             req.mode,
             answer,

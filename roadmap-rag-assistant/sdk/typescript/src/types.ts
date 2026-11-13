@@ -103,6 +103,28 @@ export interface AssistantStepItem {
   score?: number;
 }
 
+/** One input of the model's context in a turn, sent as SSE `event: context` (rag_service/context_usage.py). */
+export interface ContextUsagePart {
+  key: 'system' | 'history' | 'retrieved' | 'message' | (string & {});
+  label: string;
+  /** Estimated from the prompt text; the sum can differ from `input_tokens`. */
+  tokens: number;
+  /** Turns of history or documents retrieved. */
+  count?: number;
+}
+
+/** What the last LLM answer put into the model's context. Numbers only, never the text. */
+export interface ContextUsage {
+  model: string;
+  /** Context window of the model. */
+  window: number;
+  input_tokens: number;
+  output_tokens: number;
+  /** true when `input_tokens` came from the provider, false when it is estimated. */
+  measured: boolean;
+  parts: ContextUsagePart[];
+}
+
 export type AssistantStepKind = 'routing' | 'retrieval' | 'tool' | 'generation' | 'guard';
 
 /**

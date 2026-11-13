@@ -23,6 +23,8 @@ export type {
   AssistantStepKind,
   ChangeReview,
   ChangeEntry,
+  ContextUsage,
+  ContextUsagePart,
 } from './types';
 
 // React Chatbot Widget & Headless Hooks

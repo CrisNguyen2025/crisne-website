@@ -10,6 +10,7 @@ import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
 import { SparklesIcon } from "./icons";
 import { formatTime } from "./utils/formatters";
 import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
+import { ContextUsageSheet } from "./components/ContextUsageSheet";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { useVisualViewportBox } from "./utils/useVisualViewportBox";
@@ -42,6 +43,7 @@ export function RoadmapChatbotWidget({
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
+  const [isContextOpen, setIsContextOpen] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
@@ -101,6 +103,7 @@ export function RoadmapChatbotWidget({
     conversationId,
     sendMessage,
     stopStreaming,
+    contextUsage,
     clearMessages,
     retry,
   } = useRoadmapAssistantChat({
@@ -180,7 +183,9 @@ export function RoadmapChatbotWidget({
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        closeDrawer();
+        // The context sheet closes first; the drawer only when none is open
+        if (isContextOpen) setIsContextOpen(false);
+        else closeDrawer();
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -191,7 +196,7 @@ export function RoadmapChatbotWidget({
       document.removeEventListener("touchstart", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [isOpen, isOptionsOpen, closeDrawer]);
+  }, [isOpen, isOptionsOpen, isContextOpen, closeDrawer]);
 
   const handleCopyConversationId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -525,6 +530,7 @@ export function RoadmapChatbotWidget({
             canWrite={canWrite}
             clearMessages={clearMessages}
             copiedConvId={copiedConvId}
+            openContext={() => setIsContextOpen(true)}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
             optionsRef={optionsRef}
@@ -581,6 +587,11 @@ export function RoadmapChatbotWidget({
               window.innerHeight - keyboardBox.height > 100
             }
           />
+
+          {/* ── Context Bottom Sheet ── */}
+          {isContextOpen && (
+            <ContextUsageSheet usage={contextUsage} onClose={() => setIsContextOpen(false)} />
+          )}
 
           {/* ── Feedback Reason Bottom Sheet ── */}
           {activeFeedbackMsgId && (
