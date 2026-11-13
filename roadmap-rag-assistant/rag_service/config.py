@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     llm_model_router: str = ""
     # Reasoning effort for that model when it is a reasoning model (gpt-oss on Groq); empty = provider default
     llm_router_reasoning_effort: str = "low"
+    # Context window of LLM_MODEL in tokens, a reference line in the Context sheet; 0 = look it up by model name
+    # (rag_service/context_usage.py MODEL_WINDOWS)
+    llm_context_window: int = 0
 
     # ── Adapter ──
     rag_adapter_mode: str = Field(default="http")

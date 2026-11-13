@@ -103,7 +103,8 @@ export function RoadmapChatbotWidget({
     conversationId,
     sendMessage,
     stopStreaming,
-    contextUsage,
+    conversationContext,
+    refreshContext,
     clearMessages,
     retry,
   } = useRoadmapAssistantChat({
@@ -183,9 +184,7 @@ export function RoadmapChatbotWidget({
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        // The context sheet closes first; the drawer only when none is open
-        if (isContextOpen) setIsContextOpen(false);
-        else closeDrawer();
+        closeDrawer();
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -196,7 +195,7 @@ export function RoadmapChatbotWidget({
       document.removeEventListener("touchstart", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [isOpen, isOptionsOpen, isContextOpen, closeDrawer]);
+  }, [isOpen, isOptionsOpen, closeDrawer]);
 
   const handleCopyConversationId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -530,7 +529,10 @@ export function RoadmapChatbotWidget({
             canWrite={canWrite}
             clearMessages={clearMessages}
             copiedConvId={copiedConvId}
-            openContext={() => setIsContextOpen(true)}
+            openContext={() => {
+              setIsContextOpen(true);
+              void refreshContext();
+            }}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
             optionsRef={optionsRef}
@@ -590,7 +592,11 @@ export function RoadmapChatbotWidget({
 
           {/* ── Context Bottom Sheet ── */}
           {isContextOpen && (
-            <ContextUsageSheet usage={contextUsage} onClose={() => setIsContextOpen(false)} />
+            <ContextUsageSheet
+              context={conversationContext}
+              onRetry={() => void refreshContext()}
+              onClose={() => setIsContextOpen(false)}
+            />
           )}
 
           {/* ── Feedback Reason Bottom Sheet ── */}

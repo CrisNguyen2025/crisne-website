@@ -6,7 +6,7 @@ import type {
   AssistantStepEvent,
   ChangeReview,
   ChatResponse,
-  ContextUsage,
+  ConversationContext,
   HealthResponse,
   PageContext,
   PlanResponse,
@@ -42,8 +42,6 @@ export interface StreamCallbacks {
   onToolEnd?: (name: string, result: string, isError: boolean) => void;
   onStep?: (step: AssistantStepEvent) => void;
   onChangeReview?: (change: ChangeReview) => void;
-  /** Context of the turn's LLM answer, sent before `done`. Absent for template or guard replies. */
-  onContext?: (usage: ContextUsage) => void;
   /** Langfuse trace of the turn, sent before the reply (also repeated on `done` as `traceId`) */
   onTrace?: (traceId: string) => void;
   onDone?: (response: ChatResponse) => void;
@@ -241,8 +239,6 @@ export class RoadmapChatClient {
                   callbacks.onStep?.(data as AssistantStepEvent);
                 } else if (currentEvent === 'change_review') {
                   callbacks.onChangeReview?.(data as ChangeReview);
-                } else if (currentEvent === 'context') {
-                  callbacks.onContext?.(data as ContextUsage);
                 } else if (currentEvent === 'trace') {
                   if (typeof data.trace_id === 'string') callbacks.onTrace?.(data.trace_id);
                 } else if (currentEvent === 'done') {
@@ -330,6 +326,21 @@ export class RoadmapChatClient {
       throw new Error(`Plan request failed (${resp.status})`);
     }
     return (await resp.json()) as PlanResponse;
+  }
+
+  /**
+   * What the conversation's next answer carries, against Abot's budget. Cheap: no LLM call.
+   */
+  async getConversationContext(threadId: string): Promise<ConversationContext> {
+    const resp = await fetch(`${this.baseUrl}/chat/context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    if (!resp.ok) {
+      throw new Error(`Context request failed (${resp.status})`);
+    }
+    return (await resp.json()) as ConversationContext;
   }
 
   /**

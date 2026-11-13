@@ -103,26 +103,53 @@ export interface AssistantStepItem {
   score?: number;
 }
 
-/** One input of the model's context in a turn, sent as SSE `event: context` (rag_service/context_usage.py). */
-export interface ContextUsagePart {
-  key: 'system' | 'history' | 'retrieved' | 'message' | (string & {});
+/** One kind of input in the conversation's context (POST /chat/context, rag_service/context_usage.py). */
+export interface ContextPart {
+  key: 'system' | 'messages' | 'retrieved' | 'message' | 'output' | (string & {});
   label: string;
-  /** Estimated from the prompt text; the sum can differ from `input_tokens`. */
+  /** Estimated from the prompt text (characters / 4). */
   tokens: number;
-  /** Turns of history or documents retrieved. */
+  /** messages: how many are in the window; retrieved: most documents per answer. */
   count?: number;
+  /** messages: most the window holds before the oldest drop out. */
+  limit?: number;
 }
 
-/** What the last LLM answer put into the model's context. Numbers only, never the text. */
-export interface ContextUsage {
-  model: string;
-  /** Context window of the model. */
-  window: number;
+/** An input that exists but is kept out of the prompt (shown without a share, like deferred tools). */
+export interface ContextOmitted {
+  key: 'history_outside' | 'retrieved_dropped' | (string & {});
+  label: string;
+  count: number;
+}
+
+/** What the last answer of the conversation actually sent. */
+export interface ContextLastTurn {
+  /** Measured by the provider when `measured`, else estimated. */
   input_tokens: number;
   output_tokens: number;
-  /** true when `input_tokens` came from the provider, false when it is estimated. */
   measured: boolean;
-  parts: ContextUsagePart[];
+  retrieved_tokens: number;
+  documents: { label: string; tokens: number }[];
+  dropped_documents: number;
+}
+
+/**
+ * The conversation's context the way Claude Code's Context panel shows it: what the next answer carries
+ * for sure (`parts`), slots kept for each answer (`reserved`), against Abot's own budget. Numbers and
+ * labels only, never prompt text.
+ */
+export interface ConversationContext {
+  model: string;
+  /** The model's context window, a reference only: Abot's caps keep prompts far below it. */
+  window: number;
+  /** Sum of Abot's caps: system prompt, full history window and the reserved slots. */
+  budget: number;
+  /** Tokens in context now: the parts. */
+  used: number;
+  parts: ContextPart[];
+  reserved: ContextPart[];
+  omitted: ContextOmitted[];
+  last_turn: ContextLastTurn | null;
 }
 
 export type AssistantStepKind = 'routing' | 'retrieval' | 'tool' | 'generation' | 'guard';

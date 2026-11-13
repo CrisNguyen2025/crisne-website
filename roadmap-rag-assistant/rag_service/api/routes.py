@@ -14,6 +14,7 @@ from rag_service.api.schemas import (
     ActionConfirmResponse,
     ChatRequest,
     ChatResponse,
+    ContextRequest,
     HealthResponse,
     PlanRequest,
     PlanResponse,
@@ -92,9 +93,6 @@ async def _sse_stream_generator(
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 changes.append(payload)
                 yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            elif ev_type == "context":
-                payload = {k: v for k, v in ev.items() if k != "type"}
-                yield f"event: context\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
                 metadata.update({k: v for k, v in ev.items() if k != "type"})
             elif ev_type == "trace":
@@ -235,6 +233,17 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         ]
         last_content = msgs[-1].content if msgs else ""
         return ChatResponse(message=last_content, tool_calls=tool_calls)
+
+
+@router.post("/chat/context")
+async def chat_context(req: ContextRequest) -> dict:
+    """What the thread's next answer carries, against Abot's budget (rag_service/context_usage.py)."""
+    from rag_service.context_usage import conversation_context
+    from rag_service.domains.roadmap.profile import PROFILE
+
+    return conversation_context(
+        req.thread_id, PROFILE, model=settings.llm_model, window=settings.llm_context_window or None
+    )
 
 
 @router.post("/chat/plan", response_model=PlanResponse)

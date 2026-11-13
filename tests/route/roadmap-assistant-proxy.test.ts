@@ -157,6 +157,18 @@ describe("Roadmap Assistant proxy — what it forwards", () => {
     const owner = await callPost("chat/stream", { message: "hi" }, { ...ip, "x-admin-key": "machine-key" });
     expect(owner.status).toBe(200);
   });
+
+  it("forwards the Context sheet's request scoped to the caller, without using up their questions", async () => {
+    const ip = { "x-forwarded-for": "198.51.100.88" };
+    for (let i = 0; i < 30; i++) await callPost("chat/stream", { message: "hi" }, ip);
+
+    const res = await callPost("chat/context", { thread_id: "web-session" }, ip);
+
+    expect(res.status).toBe(200);
+    const { url, body } = forwarded(30);
+    expect(url).toBe("https://rag.example.com/chat/context");
+    expect(body).toEqual({ thread_id: "visitor:web-session" });
+  });
 });
 
 describe("message length limit (P1-6)", () => {

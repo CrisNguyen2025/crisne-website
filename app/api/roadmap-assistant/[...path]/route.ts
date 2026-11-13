@@ -9,7 +9,9 @@ export const maxDuration = 60;
 // Public on purpose: visitors chat with the Roadmap Assistant without signing in. The Python
 // service only accepts requests carrying RAG_INTERNAL_KEY and only runs writes for x-actor=owner.
 const MAX_MESSAGE_LENGTH = 2000;
-const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", "chat/cancel"]);
+const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", "chat/cancel", "chat/context"]);
+// No LLM call behind it: opening the Context sheet must not use up a visitor's questions
+const UNLIMITED_PATHS = new Set(["chat/context"]);
 const GET_PATHS = new Set(["health"]);
 
 type Actor = "owner" | "visitor";
@@ -43,7 +45,7 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
 
   const actor: Actor = (await hasWriteAccess(req)) ? "owner" : "visitor";
 
-  if (actor === "visitor") {
+  if (actor === "visitor" && !UNLIMITED_PATHS.has(path)) {
     const rateLimit = checkRateLimit(req, { key: "roadmap-assistant", limit: 30, windowMs: 5 * 60_000 });
     if (!rateLimit.isAllowed) {
       return jsonError("Bạn hỏi hơi nhanh rồi, thử lại sau ít phút nhé!", 429, {

@@ -171,3 +171,9 @@ export function formatPercent(part: number, whole: number): string {
   const pct = (part / whole) * 100;
   return pct < 0.1 ? '<0.1%' : `${pct.toFixed(pct < 10 ? 1 : 0)}%`;
 }
+
+/** Change in tokens since the previous answer, signed: "+320", "−1.2k", "±0". */
+export function formatTokenDelta(delta: number): string {
+  if (delta === 0) return '±0';
+  return `${delta > 0 ? '+' : '−'}${formatTokenCount(Math.abs(delta))}`;
+}

@@ -21,11 +21,11 @@ from typing import Any, AsyncGenerator
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
-from rag_service.context_usage import build_context_usage
+from rag_service.context_usage import record_last_turn
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
-from rag_service.core.augmentation.context import GenerationRequest, build_prompt, select_documents
+from rag_service.core.augmentation.context import GenerationRequest, build_prompt, format_documents, select_documents
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.faithfulness import unsupported_claims
 from rag_service.core.generation.grounding import FAIL_PATTERNS
@@ -191,7 +191,18 @@ class GenerationPipeline:
         yield step_event("answer", "generation", "done", mode="llm")
         if report is not None and is_owner():
             yield guard_step()
-        yield {"type": "context", **build_context_usage(prompt, model=settings.llm_model, usage=usage)}
+        # Read back by POST /chat/context ("last answer" section)
+        record_last_turn(
+            req.thread_id,
+            prompt,
+            usage=usage,
+            # Each block without the <context> wrapper, so the items add up to the retrieved part
+            documents=[
+                (d.title, format_documents([d]).removeprefix("<context>\n").removesuffix("\n</context>"))
+                for d in documents
+            ],
+            dropped_documents=sections["dropped_documents"],
+        )
         yield metadata_event(  # S5
             req.mode,
             answer,

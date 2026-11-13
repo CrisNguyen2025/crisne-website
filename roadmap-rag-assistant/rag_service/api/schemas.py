@@ -28,6 +28,14 @@ class ChatRequest(BaseModel):
     )
 
 
+class ContextRequest(BaseModel):
+    """POST /chat/context request body."""
+
+    thread_id: str = Field(min_length=1, max_length=200)
+
+    _thread = field_validator("thread_id")(lambda cls, v: reject_shared_thread(v))
+
+
 class ToolCallResult(BaseModel):
     """Represents a single tool call executed by the agent."""
 

@@ -118,8 +118,7 @@ def test_pipeline_event_shape_is_unchanged():
     events = asyncio.run(run())
     kinds = [(e["type"], e.get("status")) for e in events]
     assert kinds[0] == ("step", "running")
-    assert kinds[-3] == ("step", "done") and events[-3]["mode"] == "llm"
-    assert events[-2]["type"] == "context"
+    assert kinds[-2] == ("step", "done") and events[-2]["mode"] == "llm"
     assert events[-1]["type"] == "metadata" and events[-1]["sources"] == []
     assert _text(events) == "a b "
 

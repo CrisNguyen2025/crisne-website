@@ -10,7 +10,7 @@ import {
 import { buildWelcomeMessage, WELCOME_MESSAGE_ID } from './welcome';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
-import type { AssistantStepEvent, ContextUsage, PageContext } from '../types';
+import type { AssistantStepEvent, ConversationContext, PageContext } from '../types';
 
 /**
  * Merge a step event into the step already shown under that id.
@@ -69,6 +69,16 @@ export interface UseRoadmapAssistantChatOptions {
   canWrite?: boolean;
 }
 
+export interface ConversationContextState {
+  data: ConversationContext | null;
+  /** `used` minus the previous load's in this conversation, like "Since last update"; absent on the first load. */
+  deltaTokens?: number;
+  isLoading: boolean;
+  error: string | null;
+}
+
+const EMPTY_CONTEXT: ConversationContextState = { data: null, isLoading: false, error: null };
+
 export interface UseRoadmapAssistantChatReturn {
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
@@ -81,8 +91,10 @@ export interface UseRoadmapAssistantChatReturn {
   conversationId: string;
   sendMessage: (textToSend?: string) => Promise<void>;
   stopStreaming: () => void;
-  /** Context of the last LLM answer; null before one arrives and after a new conversation. */
-  contextUsage: ContextUsage | null;
+  /** The conversation's context as last loaded by `refreshContext`. */
+  conversationContext: ConversationContextState;
+  /** Loads what the conversation's next answer carries (POST /chat/context). */
+  refreshContext: () => Promise<void>;
   clearMessages: () => void;
   retry: (errorMessageId: string) => void;
 }
@@ -157,7 +169,7 @@ export function useRoadmapAssistantChat(
   }, [canWrite]);
 
   const [input, setInput] = useState('');
-  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null);
+  const [conversationContext, setConversationContext] = useState<ConversationContextState>(EMPTY_CONTEXT);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
@@ -387,7 +399,6 @@ export function useRoadmapAssistantChat(
               );
             },
 
-            onContext: (usage) => setContextUsage(usage),
 
             onChangeReview: (change) => {
               setMessages((prev) =>
@@ -506,6 +517,22 @@ export function useRoadmapAssistantChat(
     [messages, sendMessage]
   );
 
+  const refreshContext = useCallback(async () => {
+    setConversationContext((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const data = await client.getConversationContext(conversationId);
+      setConversationContext((prev) => ({
+        data,
+        deltaTokens: prev.data ? data.used - prev.data.used : undefined,
+        isLoading: false,
+        error: null,
+      }));
+    } catch (err) {
+      if (typeof console !== 'undefined') console.error('[Abot] context', err);
+      setConversationContext((prev) => ({ ...prev, isLoading: false, error: 'Chưa tải được context. Bạn thử lại nhé.' }));
+    }
+  }, [client, conversationId]);
+
   const clearMessages = useCallback(() => {
     // Stop anything still streaming so its tokens can't land in the new conversation
     abortControllerRef.current?.abort();
@@ -514,7 +541,7 @@ export function useRoadmapAssistantChat(
     setIsStreaming(false);
     setActiveTool(null);
     setError(null);
-    setContextUsage(null);
+    setConversationContext(EMPTY_CONTEXT);
     setMessages([buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)]);
     setConversationId(generateConversationId());
     clearConversation(storageKey);
@@ -532,7 +559,8 @@ export function useRoadmapAssistantChat(
     conversationId,
     sendMessage,
     stopStreaming,
-    contextUsage,
+    conversationContext,
+    refreshContext,
     clearMessages,
     retry,
   };
