@@ -31,6 +31,7 @@
 {"input": "Cho mình xem danh sách các section trong topic DevOps", "route": "knowledge_query", "confirm": false, "confidence": 0.92, "write": "none", "rules": ["row=catalog_list_query", "act=question", "target=roadmap", "object", "search_word"], "sub_intent": "catalog"}
 {"input": "Cho tôi biết chi tiết hợp đồng mã HD-999", "route": "out_of_scope", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=off_topic", "act=statement", "target=off_topic"]}
 {"input": "Cho tôi danh sách bài cần ôn trong phần RAG", "route": "knowledge_query", "confirm": false, "confidence": 0.92, "write": "none", "rules": ["row=lesson_status_query", "act=question", "target=roadmap", "object", "search_word"], "sub_intent": "lesson_status"}
+{"input": "Cho tôi danh sách bài trong mục Context Engineering", "route": "knowledge_query", "confirm": false, "confidence": 0.92, "write": "none", "rules": ["row=catalog_list_query", "act=question", "target=roadmap", "object", "search_word"], "sub_intent": "catalog"}
 {"input": "Chuyển topic Docker lên đầu", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}
 {"input": "Chào bạn, chúc một ngày làm việc hiệu quả nha!", "route": "chitchat", "confirm": false, "confidence": 0.95, "write": "none", "rules": ["row=greeting_opener", "act=statement", "target=none", "greeting_opener"]}
 {"input": "CÁC BƯỚC TẠO TOPIC", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "change_verb", "object", "usage"]}
@@ -305,6 +306,7 @@
 {"input": "co the thao tac gi o day", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "usage"]}
 {"input": "co the thao tac gi o du an nay", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "usage"]}
 {"input": "co the them bai Machine Learning vao topic Backend khong", "route": "roadmap_cud", "confirm": true, "confidence": 0.85, "write": "confirm", "rules": ["row=change_request", "act=request", "target=roadmap", "change_verb", "object"]}
+{"input": "context rot là gì?", "route": "knowledge_query", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=search_word", "act=question", "target=none", "search_word"], "sub_intent": "search"}
 {"input": "could you please delete the lesson about semantic caching?", "route": "roadmap_cud", "confirm": true, "confidence": 0.85, "write": "confirm", "rules": ["row=change_request", "act=request", "target=roadmap", "change_verb", "object"]}
 {"input": "cu phap tao topic", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=command", "target=assistant", "change_verb", "object", "usage"]}
 {"input": "các bước tạo topic", "route": "chitchat", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=about_assistant", "act=question", "target=assistant", "change_verb", "object", "usage"]}
@@ -577,6 +579,7 @@
 {"input": "thoi khong xoa bai Redis nua", "route": "undecided", "write": "deny", "rules": ["row=blocked_change", "act=command", "target=roadmap", "change_verb", "object", "blocker=negation"]}
 {"input": "thoi tiet hom nay the nao", "route": "out_of_scope", "confirm": false, "confidence": 0.9, "write": "none", "rules": ["row=off_topic", "act=question", "target=off_topic", "search_word"]}
 {"input": "thêm bài Caching vào topic Backend", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}
+{"input": "thêm bài Context Pruning vào mục Context Engineering", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}
 {"input": "thêm bài Kafka vào topic Backend", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}
 {"input": "thêm bài Kafka vào topic Backend nhé ạ", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}
 {"input": "thêm bài Kafka vào topic Backend 🙏", "route": "roadmap_cud", "confirm": false, "confidence": 0.95, "write": "allow", "rules": ["row=change_command", "act=command", "target=roadmap", "change_verb", "object"]}

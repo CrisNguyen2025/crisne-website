@@ -250,3 +250,6 @@
 {"id": "routing-250", "input": "Tìm giúp mấy bài về authentication và JWT", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["sub-intent"], "sub_intent": "search"}}
 {"id": "routing-251", "input": "bài tiếp theo của series này nói về gì", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["sub-intent"], "sub_intent": "search"}}
 {"id": "routing-252", "input": "Lập lộ trình học Backend hoàn chỉnh cho người mới", "expected": {"behavior": "answer", "route": ["plan_goal"]}, "metadata": {"status": "active", "tags": ["sub-intent"]}}
+{"id": "routing-253", "input": "context rot là gì?", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": []}}
+{"id": "routing-254", "input": "Cho tôi danh sách bài trong mục Context Engineering", "expected": {"behavior": "answer", "route": ["knowledge_query"]}, "metadata": {"status": "active", "tags": ["sub-intent"]}}
+{"id": "routing-255", "input": "thêm bài Context Pruning vào mục Context Engineering", "expected": {"behavior": "answer", "route": ["roadmap_cud"]}, "metadata": {"status": "active", "tags": []}}

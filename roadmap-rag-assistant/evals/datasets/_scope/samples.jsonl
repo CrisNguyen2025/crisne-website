@@ -68,3 +68,18 @@
 {"id": "scope-068", "input": "còn nữa không", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "question"}}
 {"id": "scope-069", "input": "ừ", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "statement"}}
 {"id": "scope-070", "input": "thế à", "expected": {"target": "none"}, "metadata": {"status": "active", "tags": ["scope-none", "split-holdout"], "act": "statement"}}
+{"id": "scope-071", "input": "context engineering là gì", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-072", "input": "context engineering khác gì prompt engineering", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-073", "input": "token budget của context nên chia thế nào", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-074", "input": "mình muốn tìm hiểu về compaction hội thoại", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune", "frame-heavy"], "act": "statement"}}
+{"id": "scope-075", "input": "just-in-time retrieval hoạt động ra sao", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune"], "act": "question"}}
+{"id": "scope-076", "input": "cho mình hỏi về sub-agent và cô lập context", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-tune", "frame-heavy"], "act": "question"}}
+{"id": "scope-077", "input": "what is context rot", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-078", "input": "lost in the middle là hiện tượng gì", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-079", "input": "how do memory files like CLAUDE.md work", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-080", "input": "tell me about deferred tool loading", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout", "frame-heavy"], "act": "statement"}}
+{"id": "scope-081", "input": "tại sao phải tóm tắt lịch sử chat khi gần đầy context", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-082", "input": "how should I budget tokens across system prompt, tools and history", "expected": {"target": "roadmap"}, "metadata": {"status": "active", "tags": ["scope-roadmap", "split-holdout"], "act": "question"}}
+{"id": "scope-083", "input": "speculative decoding là gì", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune"], "act": "question"}}
+{"id": "scope-084", "input": "mình muốn tìm hiểu về model merging", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-tune", "frame-heavy"], "act": "statement"}}
+{"id": "scope-085", "input": "what is rotary position embedding", "expected": {"target": "domain_gap"}, "metadata": {"status": "active", "tags": ["scope-gap", "split-holdout"], "act": "question"}}
