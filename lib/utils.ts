@@ -27,3 +27,12 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, ""); // trim - from ends
 }
 
+/** Slug of a lesson title not in `used` (adds -2, -3...), and records it in `used`. */
+export function uniqueSlug(title: string, used: Set<string>): string {
+  const base = slugify(title) || "lesson";
+  let slug = base;
+  for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+  used.add(slug);
+  return slug;
+}
+

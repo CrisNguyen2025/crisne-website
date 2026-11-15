@@ -52,6 +52,8 @@ describe("useRoadmap: a missing topic is reported for that topic only", () => {
     const old = deferred<never>();
     fetchRoadmapBySlug.mockReturnValueOnce(old.promise).mockResolvedValueOnce(topic("ai-engineering"));
     const { result, rerender } = renderHook(({ slug }) => useRoadmap(slug), { initialProps: { slug: "gone" } });
+    // The load starts a microtask after the effect: wait for the request to "gone" before leaving it
+    await waitFor(() => expect(fetchRoadmapBySlug).toHaveBeenCalledWith("gone"));
 
     rerender({ slug: "ai-engineering" });
     await waitFor(() => expect(result.current.roadmapMeta?.slug).toBe("ai-engineering"));

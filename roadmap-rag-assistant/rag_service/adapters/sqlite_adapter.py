@@ -12,6 +12,7 @@ All IDs use UUID v7 for time-ordered uniqueness.
 from __future__ import annotations
 
 import re
+import unicodedata
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -38,6 +39,19 @@ def _slugify(text: str) -> str:
     slug = re.sub(r"[\s_-]+", "-", slug)
     slug = re.sub(r"^-+|-+$", "", slug)
     return slug or f"topic-{int(datetime.now(timezone.utc).timestamp())}"
+
+
+def _lesson_slug(title: str, used: set[str]) -> str:
+    """Same rules as `slugify` in lib/utils.ts, plus `-2`, `-3`... when the slug is taken in the topic."""
+    text = title.lower().strip().replace("đ", "d")
+    text = "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c))
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.ASCII)
+    text = re.sub(r"[\s_-]+", "-", text, flags=re.ASCII)
+    base = re.sub(r"^-+|-+$", "", text) or "lesson"
+    slug, n = base, 2
+    while slug in used:
+        slug, n = f"{base}-{n}", n + 1
+    return slug
 
 
 @guard_writes
@@ -211,17 +225,20 @@ class SqliteAdapter:
 
             used = resolve_section([i.get("section") for i in items], section)
             order = max((i["order"] for i in items), default=0) + 1
+            # Fixed at creation (D2), unique within the topic (D3)
+            slug = _lesson_slug(title, {i["slug"] for i in items if i.get("slug")})
             item_id, now = _uuid7(), _now_iso()
             await db.execute(
                 """
-                INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO RoadmapItem (id, roadmapId, slug, section, title, description, content, "order", createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (item_id, topic["id"], used, title.strip(), description.strip(), content or None, order, now, now),
+                (item_id, topic["id"], slug, used, title.strip(), description.strip(), content or None, order, now, now),
             )
             await db.commit()
         return {
             "id": item_id,
+            "slug": slug,
             "roadmapSlug": topic["slug"],
             "section": used,
             "title": title.strip(),

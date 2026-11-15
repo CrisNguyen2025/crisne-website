@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS "Roadmap" (
 CREATE TABLE IF NOT EXISTS "RoadmapItem" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "roadmapId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL DEFAULT '',
     "section" TEXT,
     "title" TEXT NOT NULL,
     "description" TEXT,
@@ -35,3 +36,6 @@ CREATE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_idx" ON "RoadmapItem"("roadmap
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug");

@@ -15,6 +15,7 @@ CREATE TABLE "Roadmap" (
 CREATE TABLE "RoadmapItem" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "roadmapId" TEXT NOT NULL,
+    "slug" TEXT NOT NULL DEFAULT '',
     "section" TEXT,
     "title" TEXT NOT NULL,
     "description" TEXT,
@@ -35,4 +36,7 @@ CREATE INDEX "RoadmapItem_roadmapId_idx" ON "RoadmapItem"("roadmapId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug");
 

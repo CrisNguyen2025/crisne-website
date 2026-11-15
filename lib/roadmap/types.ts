@@ -4,6 +4,7 @@ import type { LessonStatus } from './status';
 /** A lesson as the UI and the API see it. `section` is null for lessons outside any section. */
 export interface ChecklistItem {
   id: string;
+  slug: string;
   title: string;
   description: string;
   section: string | null;

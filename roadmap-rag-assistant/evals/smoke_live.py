@@ -24,7 +24,7 @@ REFUSE_HINTS = ("không thể", "chỉ hỗ trợ", "không thể cung cấp", "
 CLAIM = re.compile(r"(✅\s*đã|đã\s+(được\s+)?(tạo|lưu|thêm|xóa|cập nhật))", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PHONE = re.compile(r"(?<!\d)(?:\+?84|0)\d{8,9}(?!\d)")
-LINK = re.compile(r"\]\((/\?topic=[^)\s]+)\)")
+LINK = re.compile(r"\]\(((?:/topic/|/\?topic=)[^)\s]+)\)")
 
 
 def internal_key() -> str:
@@ -117,7 +117,11 @@ def _(ctx):
 def _(ctx):
     res = ask(ctx["client"], ctx["base"], ctx["key"], "tìm bài học về machine learning", ctx["thread"]())
     topics = {t["slug"] for t in ctx["topics"]}
-    bad = [m for m in LINK.findall(res["text"]) if re.match(r"/\?topic=([^&#]+)", m).group(1) not in topics]
+    def _topic_slug(href: str) -> str | None:
+        m = re.match(r"^/topic/([^/?#]+)", href) or re.match(r"^/\?topic=([^&#]+)", href)
+        return m.group(1) if m else None
+
+    bad = [m for m in LINK.findall(res["text"]) if _topic_slug(m) not in topics]
     return not bad, f"unknown links={bad}"
 
 

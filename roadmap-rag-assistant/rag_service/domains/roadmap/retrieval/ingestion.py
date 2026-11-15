@@ -18,6 +18,7 @@ class KnowledgeDocument(BaseModel):
     title: str = Field(..., description="Title of the entity")
     topic_slug: str = Field(..., description="Slug of the parent Roadmap topic")
     topic_title: str = Field(..., description="Display title of the Roadmap topic")
+    item_slug: Optional[str] = Field(None, description="Slug of the lesson item")
     section: Optional[str] = Field(None, description="The lesson's section (mục) of the topic, items only (ADR-0009)")
     description: Optional[str] = Field("", description="Summary description")
     content_text: Optional[str] = Field("", description="Plain text extracted from Lexical HTML")
@@ -102,6 +103,7 @@ class DatabaseIngestionWorker:
                         title=item_title,
                         topic_slug=slug,
                         topic_title=topic_title,
+                        item_slug=item.get("slug") or None,
                         section=section,
                         description=item_desc,
                         content_text=clean_content[:1500],  # truncated for retrieval context

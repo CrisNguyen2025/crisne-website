@@ -222,6 +222,28 @@
       "triggersFlow": "N/A"
     },
     {
+      "id": "EP_UI_TOPIC",
+      "type": "page",
+      "path": "/topic/[topicSlug]",
+      "method": "GET",
+      "authRequirement": "none",
+      "domainId": "roadmap-learning",
+      "summary": "Trang lộ trình của một topic cụ thể (thay thế query ?topic=)",
+      "handler": "app/topic/[topicSlug]/page.tsx",
+      "triggersFlow": "N/A"
+    },
+    {
+      "id": "EP_UI_TOPIC_ITEM",
+      "type": "page",
+      "path": "/topic/[topicSlug]/[itemSlug]",
+      "method": "GET",
+      "authRequirement": "none",
+      "domainId": "roadmap-learning",
+      "summary": "Trang chi tiết bài học của topic (thay thế query ?topic=&item=)",
+      "handler": "app/topic/[topicSlug]/[itemSlug]/page.tsx",
+      "triggersFlow": "N/A"
+    },
+    {
       "id": "EP_UI_NOTES",
       "type": "page",
       "path": "/notes",

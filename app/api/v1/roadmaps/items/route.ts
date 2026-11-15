@@ -5,6 +5,7 @@ import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { DEFAULT_LESSON_STATUS, LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
+import { slugify } from '@/lib/utils';
 
 // POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const roadmap = await prisma.roadmap.findUnique({
       where: { slug: roadmapSlug },
-      include: { items: { select: { id: true, title: true, section: true, order: true } } },
+      include: { items: { select: { id: true, title: true, slug: true, section: true, order: true } } },
     });
     if (!roadmap) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
 
@@ -34,12 +35,22 @@ export async function POST(req: NextRequest) {
       return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, roadmapSlug: roadmap.slug });
     }
 
+    const baseSlug = slugify(title.trim()) || 'lesson';
+    const existingSlugs = new Set(roadmap.items.map((i) => i.slug).filter(Boolean));
+    let itemSlug = baseSlug;
+    let counter = 2;
+    while (existingSlugs.has(itemSlug)) {
+      itemSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
     const sectionName = sectionSpelling(roadmap.items.map((i) => i.section), section);
     const order = roadmap.items.reduce((max, i) => Math.max(max, i.order), 0) + 1;
 
     const newItem = await prisma.roadmapItem.create({
       data: {
         roadmapId: roadmap.id,
+        slug: itemSlug,
         section: sectionName,
         title: title.trim(),
         description: description || '',
@@ -54,6 +65,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       item: {
         id: newItem.id,
+        slug: newItem.slug,
         title: newItem.title,
         description: newItem.description,
         section: newItem.section,

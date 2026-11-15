@@ -135,7 +135,7 @@ async def test_knowledge_query_steps_for_visitor(one_match):
     assert list(done) == ["route", "retrieve", "answer"]
     assert done["route"]["intent"] == "knowledge_query"
     assert done["retrieve"]["items"] == [
-        {"title": "Vector Database", "type": "item", "topic": "ai", "href": "/?topic=ai&item=vdb"}
+        {"title": "Vector Database", "type": "item", "topic": "ai", "href": "/topic/ai/vdb"}
     ]  # no score for visitors
     assert done["answer"]["mode"] == "context"
     assert "fallback_reason" not in done["answer"]  # no LLM configured, not an LLM failure
@@ -146,7 +146,7 @@ async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_matc
     # Policy "note" streams the answer despite grounding issues, so the guard step follows it
     monkeypatch.setattr(generation_pipeline, "profile", replace(generation_pipeline.profile, grounding_policy="note"))
     set_actor("owner")
-    llm = _FakeLlm("Có bài **Vector Database** trong **Frontend**, xem [đây](/?topic=fe).")
+    llm = _FakeLlm("Có bài **Vector Database** trong **Frontend**, xem [đây](/topic/fe).")
     steps = _steps(await _ask(NextGenRoadmapAgent(llm_model=llm), "tìm bài học về vector database"))
     done = {s["id"]: s for s in steps if s["status"] != "running"}
     assert list(done) == ["route", "retrieve", "answer", "guard"]
@@ -154,7 +154,7 @@ async def test_knowledge_query_steps_for_owner_include_scores_and_guard(one_matc
     assert done["answer"]["mode"] == "llm" and done["answer"]["duration_ms"] >= 0
     assert done["guard"]["grounding"] == "issues"
     assert done["guard"]["ungrounded_terms"] == ["Frontend"]
-    assert done["guard"]["invalid_links"] == ["/?topic=fe"]
+    assert done["guard"]["invalid_links"] == ["/topic/fe"]
 
 
 @pytest.mark.asyncio

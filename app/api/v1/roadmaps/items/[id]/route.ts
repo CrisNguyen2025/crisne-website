@@ -18,7 +18,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const { title, description, section, status } = body;
+    const { title, description, section, status, slug } = body;
+
+    if (slug !== undefined) {
+      return NextResponse.json({ error: 'slug cannot be modified' }, { status: 400 });
+    }
 
     if (status !== undefined && !isLessonStatus(status)) {
       return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });

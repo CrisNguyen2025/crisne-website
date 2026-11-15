@@ -55,10 +55,11 @@ def session_test_db(tmp_path_factory) -> Path:
                     section = doc.get("metadata", {}).get("section")
                     title = doc["title"]
                     text = doc["sections"][0]["text"] if doc.get("sections") else ""
+                    item_slug = doc.get("item_slug") or doc.get("metadata", {}).get("slug") or doc.get("doc_id", item_id)
                     conn.execute(
-                        """INSERT INTO RoadmapItem (id, roadmapId, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (item_id, topic_id, section, title, text, text, item_order, "known", now_ms, now_ms, now_ms),
+                        """INSERT INTO RoadmapItem (id, roadmapId, slug, section, title, description, content, "order", status, statusUpdatedAt, createdAt, updatedAt)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (item_id, topic_id, item_slug, section, title, text, text, item_order, "known", now_ms, now_ms, now_ms),
                     )
                     item_order += 1
         conn.commit()

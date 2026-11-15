@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getPosts } from "@/lib/notion";
+import { prisma } from "@/lib/prisma";
 
 export const revalidate = 3600;
 
@@ -43,7 +44,47 @@ async function getNoteRoutes(): Promise<MetadataRoute.Sitemap> {
   }
 }
 
+async function getRoadmapRoutes(): Promise<MetadataRoute.Sitemap> {
+  try {
+    const roadmaps = await prisma.roadmap.findMany({
+      where: { isLocked: false },
+      include: {
+        items: {
+          select: {
+            slug: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    const routes: MetadataRoute.Sitemap = [];
+    for (const rm of roadmaps) {
+      routes.push({
+        url: `${SITE_URL}/topic/${rm.slug}`,
+        lastModified: rm.updatedAt,
+        changeFrequency: "weekly",
+        priority: 0.8,
+      });
+      for (const item of rm.items) {
+        if (item.slug) {
+          routes.push({
+            url: `${SITE_URL}/topic/${rm.slug}/${item.slug}`,
+            lastModified: item.updatedAt,
+            changeFrequency: "weekly",
+            priority: 0.7,
+          });
+        }
+      }
+    }
+    return routes;
+  } catch (error) {
+    console.error("Sitemap: failed to load roadmaps", error);
+    return [];
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const noteRoutes = await getNoteRoutes();
-  return [...staticRoutes, ...noteRoutes];
+  const [noteRoutes, roadmapRoutes] = await Promise.all([getNoteRoutes(), getRoadmapRoutes()]);
+  return [...staticRoutes, ...noteRoutes, ...roadmapRoutes];
 }

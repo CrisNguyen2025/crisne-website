@@ -63,9 +63,13 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 export function getRoadmapPageContext(): PageContext | undefined {
   if (typeof window === 'undefined') return undefined;
   const params = new URLSearchParams(window.location.search);
-  const roadmapSlug = params.get('topic') || undefined;
-  const itemId = params.get('item') || undefined;
   const section = params.get('section') || undefined;
+
+  const pathname = window.location.pathname;
+  const topicMatch = pathname.match(/^\/topic\/([^/]+)(?:\/([^/]+))?/);
+  const roadmapSlug = topicMatch ? decodeURIComponent(topicMatch[1]) : params.get('topic') || undefined;
+  const itemId = topicMatch && topicMatch[2] ? decodeURIComponent(topicMatch[2]) : params.get('item') || undefined;
+
   if (!roadmapSlug && !itemId && !section) return undefined;
   return { roadmapSlug, itemId, section };
 }

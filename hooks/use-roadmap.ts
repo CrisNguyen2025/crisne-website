@@ -70,7 +70,7 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
   const pickActive = useCallback((list: ChecklistItem[]) => {
     const wanted = initialActiveItemIdRef.current;
     const match = wanted
-      ? list.find((i) => i.id === wanted || slugify(i.title) === wanted || i.title === wanted)
+      ? list.find((i) => i.id === wanted || i.slug === wanted || slugify(i.title) === wanted || i.title === wanted)
       : undefined;
     return match?.id ?? list[0]?.id ?? '';
   }, []);
@@ -125,7 +125,16 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
 
   useEffect(() => {
     if (!slug) return;
-    loadRoadmap(slug);
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (!cancelled) {
+        loadRoadmap(slug);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [slug, loadRoadmap]);
 
   // Re-fetch the open topic when the assistant creates/updates/deletes data
@@ -173,6 +182,7 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
       const usedSection = sectionSpelling(sections, section);
       const optimisticItem: ChecklistItem = {
         id: tempId,
+        slug: slugify(title.trim()) || 'lesson',
         title: title.trim(),
         description: description.trim(),
         section: usedSection,

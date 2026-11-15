@@ -18,16 +18,16 @@ def _roadmap(slugs, items=None) -> LinkGuard:
 
 def test_valid_topic_link_is_kept_across_chunks():
     guard = _roadmap({"fe"})
-    out = _stream(guard, ["Xem [Gene", "ral](/?to", "pic=fe) nhé"])
-    assert out == "Xem [General](/?topic=fe) nhé"
+    out = _stream(guard, ["Xem [Gene", "ral](/to", "pic/fe) nhé"])
+    assert out == "Xem [General](/topic/fe) nhé"
     assert guard.removed == []
 
 
 def test_unknown_topic_link_becomes_plain_text():
     guard = _roadmap({"fe"})
-    out = _stream(guard, ["Đọc [Frontend](/?topic=frontend)", " và [Docs](https://x.dev)."])
+    out = _stream(guard, ["Đọc [Frontend](/topic/frontend)", " và [Docs](https://x.dev)."])
     assert out == "Đọc Frontend và [Docs](https://x.dev)."
-    assert guard.removed == ["/?topic=frontend"]
+    assert guard.removed == ["/topic/frontend"]
 
 
 def test_brackets_that_are_not_links_pass_through():
@@ -120,11 +120,11 @@ def test_normal_answers_are_not_flagged_as_actions():
 
 def test_link_guard_checks_item_ids_when_given():
     guard = _roadmap({"ai"}, {"vdb"})
-    out = guard.feed("[A](/?topic=ai&item=vdb) [B](/?topic=ai&item=fake) [C](/?topic=ai)") + guard.flush()
-    assert out == "[A](/?topic=ai&item=vdb) B [C](/?topic=ai)"
-    assert guard.removed == ["/?topic=ai&item=fake"]
+    out = guard.feed("[A](/topic/ai/vdb) [B](/topic/ai/fake) [C](/topic/ai)") + guard.flush()
+    assert out == "[A](/topic/ai/vdb) B [C](/topic/ai)"
+    assert guard.removed == ["/topic/ai/fake"]
 
 
 def test_link_guard_without_item_set_keeps_item_links_of_known_topics():
     guard = _roadmap({"ai"})
-    assert guard.feed("[A](/?topic=ai&item=anything)") + guard.flush() == "[A](/?topic=ai&item=anything)"
+    assert guard.feed("[A](/topic/ai/anything)") + guard.flush() == "[A](/topic/ai/anything)"

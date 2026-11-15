@@ -44,10 +44,11 @@ def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
 
 
 def knowledge_href(doc: KnowledgeDocument) -> str:
-    """Page link for a retrieved document: items open the lesson itself (?item= accepts its id)."""
-    if doc.doc_type == "item" and doc.id:
-        return f"/?topic={doc.topic_slug}&item={doc.id}"
-    return f"/?topic={doc.topic_slug}"
+    """Page link for a retrieved document: items open the lesson path (/topic/[topic_slug]/[item_slug])."""
+    if doc.doc_type == "item" and (doc.item_slug or doc.id):
+        item_slug = doc.item_slug or doc.id
+        return f"/topic/{doc.topic_slug}/{item_slug}"
+    return f"/topic/{doc.topic_slug}"
 
 
 class HybridRagEngine:
@@ -262,7 +263,7 @@ class HybridRagEngine:
         return self._vocabulary
 
     def known_topic_slugs(self) -> set[str]:
-        """Slugs of every roadmap in the current index (valid targets for `/?topic=` links)."""
+        """Slugs of every roadmap in the current index (valid targets for `/topic/` links)."""
         return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}
 
     def format_knowledge_context(self, matches: List[Tuple[KnowledgeDocument, float]]) -> str:
@@ -283,7 +284,7 @@ class HybridRagEngine:
                     lines.append(f"- **Nội dung tóm tắt:** {doc.content_text[:300]}...")
             elif doc.doc_type == "topic":
                 lines.append(
-                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/?topic={doc.topic_slug})\n"
+                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/topic/{doc.topic_slug})\n"
                     + (f"- **Mô tả:** {doc.description}\n" if doc.description else "")
                 )
 

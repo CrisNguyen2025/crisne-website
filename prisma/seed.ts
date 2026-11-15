@@ -31,10 +31,14 @@ loadEnv();
 import { prisma } from "../lib/prisma";
 import { INITIAL_ROADMAP_DATA, type SeedLayer } from "../lib/roadmap/data";
 import { sectionName } from "../scripts/lib/flatten-sections";
+import { uniqueSlug } from "../lib/utils";
 
 /** Writes the lessons of a topic in page order, each under its section (ADR-0009). */
 async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
   let order = 0;
+  const existing = await prisma.roadmapItem.findMany({ where: { roadmapId }, select: { id: true, slug: true } });
+  const existingIds = new Set(existing.map((i) => i.id));
+  const usedSlugs = new Set(existing.map((i) => i.slug).filter(Boolean));
   for (const layer of layers) {
     for (const group of layer.groups) {
       const section = sectionName(
@@ -52,7 +56,13 @@ async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
           content: item.content || null,
           order,
         };
-        await prisma.roadmapItem.upsert({ where: { id: item.id }, update: data, create: { id: item.id, ...data } });
+        // Slug is set once on create and never changed on update (D2)
+        const slug = existingIds.has(item.id) ? undefined : uniqueSlug(item.title, usedSlugs);
+        await prisma.roadmapItem.upsert({
+          where: { id: item.id },
+          update: data,
+          create: { id: item.id, ...(slug ? { slug } : {}), ...data },
+        });
       }
     }
   }

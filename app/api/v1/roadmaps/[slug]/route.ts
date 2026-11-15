@@ -34,6 +34,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
 
     const items: ChecklistItem[] = roadmap.items.map((item) => ({
       id: item.id,
+      slug: item.slug || item.id,
       title: item.title,
       description: item.description || '',
       section: item.section,

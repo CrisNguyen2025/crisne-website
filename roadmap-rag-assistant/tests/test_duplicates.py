@@ -17,8 +17,9 @@ from rag_service.state.session_store import session_store
 SCHEMA = """
 CREATE TABLE Roadmap (id TEXT PRIMARY KEY, slug TEXT UNIQUE, title TEXT, description TEXT,
   icon TEXT, "order" INT, isLocked INT, createdAt TEXT, updatedAt TEXT);
-CREATE TABLE RoadmapItem (id TEXT PRIMARY KEY, roadmapId TEXT, section TEXT, title TEXT, description TEXT,
-  content TEXT, "order" INT, createdAt TEXT, updatedAt TEXT);
+CREATE TABLE RoadmapItem (id TEXT PRIMARY KEY, roadmapId TEXT, slug TEXT NOT NULL DEFAULT '', section TEXT,
+  title TEXT, description TEXT, content TEXT, "order" INT, createdAt TEXT, updatedAt TEXT);
+CREATE UNIQUE INDEX RoadmapItem_roadmapId_slug_key ON RoadmapItem(roadmapId, slug);
 """
 
 
@@ -51,6 +52,22 @@ def test_sqlite_refuses_duplicates_at_every_level(adapter):
         assert exc.value.existing["id"] == lesson["id"]
 
     asyncio.run(run())
+
+
+@pytest.mark.usefixtures("write_grant")
+def test_sqlite_gives_each_new_lesson_a_unique_slug(adapter):
+    async def run():
+        topic = await adapter.create_topic("Backend")
+        first = await adapter.create_item(topic["slug"], "Core", "Cơ bản về Docker")
+        second = await adapter.create_item(topic["slug"], "Core", "Kubernetes")
+        # Different titles that slugify the same get -2 instead of breaking the unique index
+        third = await adapter.create_item(topic["slug"], "Core", "Kubernetes!")
+        return first, second, third
+
+    first, second, third = asyncio.run(run())
+    assert first["slug"] == "co-ban-ve-docker"
+    assert second["slug"] == "kubernetes"
+    assert third["slug"] == "kubernetes-2"
 
 
 class _DupItemAdapter:

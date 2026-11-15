@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
+import { uniqueSlug } from "../lib/utils";
 import { planSeedImport, type ExistingLesson } from "./lib/seed-import-plan";
 
 const envPath = path.join(__dirname, "../.env.local");
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
     const roadmapId = String(topic.id);
 
     const existingRes = await client.execute({
-      sql: 'SELECT id, title, "order" FROM "RoadmapItem" WHERE roadmapId = ?',
+      sql: 'SELECT id, title, slug, "order" FROM "RoadmapItem" WHERE roadmapId = ?',
       args: [roadmapId],
     });
 
@@ -71,6 +72,8 @@ async function main(): Promise<void> {
       title: String(r.title),
       order: Number(r.order),
     }));
+
+    const usedSlugs = new Set(existingRes.rows.map((r) => String(r.slug ?? "")).filter(Boolean));
 
     const plan = planSeedImport({
       existingLessons,
@@ -135,11 +138,12 @@ async function main(): Promise<void> {
       }
       return {
         sql: `INSERT INTO "RoadmapItem" (
-        "id", "roadmapId", "section", "title", "description", "content", "order", "status", "statusUpdatedAt", "createdAt", "updatedAt"
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        "id", "roadmapId", "slug", "section", "title", "description", "content", "order", "status", "statusUpdatedAt", "createdAt", "updatedAt"
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           item.id,
           roadmapId,
+          uniqueSlug(item.title, usedSlugs),
           item.section,
           item.title,
           item.description,
