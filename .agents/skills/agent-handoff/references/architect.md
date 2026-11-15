@@ -28,7 +28,15 @@ bash .agents/skills/agent-handoff/scripts/baseline.sh <task_id>
 
 Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev giao việc**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
 
-Báo Dev: mở Antigravity ở đúng thư mục repo, đúng nhánh của spec, rồi gõ:
+**Mặc định: Claude tự giao qua CLI**, chạy nền (Bash `run_in_background`) từ thư mục repo, đúng nhánh của spec:
+
+```bash
+agy -p "/executor <task_id>" --model gemini-3.8-flash-high --mode auto --print-timeout 3600s --output-format json --log-file <scratchpad>/agy-<task_id>.log
+```
+
+Luôn truyền `--model` (mặc định `gemini-3.8-flash-high`, tức Gemini 3.8 Flash (High)) để không phụ thuộc model đang chọn trong IDE. Xem model khác bằng `agy models`. Lệnh thoát thì sang mục 4, không cần watcher. Trong lúc agy chạy, không sửa file nào trong working tree (kể cả spec khác), nếu không `check-boundary.sh` sẽ báo `OUT_OF_SCOPE`.
+
+**Dự phòng khi CLI lỗi:** báo Dev mở Antigravity ở đúng thư mục repo, đúng nhánh của spec, rồi gõ:
 
 ```text
 /executor
