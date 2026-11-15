@@ -13,7 +13,8 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 - Copy `.handoff/specs/TEMPLATE-TASK.md` thành `.handoff/specs/TASK-<branch-slug>-<id>.md`, `status: "READY"`, `current_attempt: 0`.
 - Ánh xạ plan → spec theo `.claude/skills/think/references/task-spec.md` (nếu máy có skill `think`), nếu không thì theo bảng trong RFC mục 3.
 - `type: "implement"` cho việc sửa code; `type: "review"` cho việc chỉ kiểm tra và báo cáo (Executor không sửa file nào trừ chính file spec).
-- `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`.
+- Trước khi viết: chạy `yarn intel how-to-sync "<target>"` (kết quả khớp theo keyword, chỉ là bước lọc sơ bộ). Flow `FLOW_*` mà task thật sự đụng tới thì ghi vào mục Dependencies.
+- `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`, luôn có `intel_status: "yarn intel status"`.
 - Không commit spec. Báo Dev spec đã sẵn sàng để họ commit nếu muốn.
 
 ## 2. Baseline và prompt

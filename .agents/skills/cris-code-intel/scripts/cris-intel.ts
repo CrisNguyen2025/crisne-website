@@ -2,9 +2,9 @@
 /**
  * CRIS CODE INTELLIGENCE CLI (cris-intel)
  *
- * Tra cứu bản đồ xử lý logic, lần vết luồng thực thi (execution flow trace),
- * phân tích tầm ảnh hưởng (impact analysis) và ánh xạ route-to-code cho workspace crisne-website.
- * Theo mô hình Code Intelligence của GitNexus.
+ * Lớp nghiệp vụ của code intel cho workspace crisne-website: domain, flow nghiệp vụ,
+ * invariant, failure mode. Impact và route map dùng GitNexus (gitnexus_impact,
+ * gitnexus_api_impact, gitnexus_route_map).
  *
  * Cách chạy:
  *   npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts <command> [args]
@@ -73,16 +73,6 @@ interface DataModel {
   invariants: string[];
 }
 
-interface SymbolRef {
-  name: string;
-  type: string;
-  filePath: string;
-  domainId: string;
-  description: string;
-  callers: string[];
-  callees: string[];
-}
-
 interface InvariantRule {
   ruleId: string;
   title: string;
@@ -106,7 +96,6 @@ interface WorkspaceMap {
   entryPoints: EntryPoint[];
   executionFlows: ExecutionFlow[];
   dataModels: DataModel[];
-  symbols: SymbolRef[];
   invariantsAndRules: InvariantRule[];
 }
 
@@ -131,26 +120,55 @@ function getCurrentCommit(): string {
 // Command Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Gom mọi ref dạng `path[#symbol]` mà map nhắc tới.
+function collectRefs(data: WorkspaceMap): string[] {
+  const refs = [
+    ...data.domains.flatMap((d) => d.keyFiles),
+    ...data.executionFlows.flatMap((f) =>
+      f.steps.flatMap((s) => [
+        s.functionOrMethod ? `${s.component}#${s.functionOrMethod}` : s.component,
+        ...(s.callsNext ? [s.callsNext] : []),
+      ])
+    ),
+    ...data.entryPoints.map((e) => e.handler),
+    ...data.dataModels.map((m) => m.source),
+  ];
+  return [...new Set(refs)];
+}
+
+// Trả về mô tả lỗi, hoặc null nếu ref còn khớp code. Bỏ qua chuỗi không phải đường dẫn.
+function checkRef(repoRoot: string, ref: string): string | null {
+  const [filePath, symbol] = ref.split("#");
+  if (!/^[\w.\-[\]]+\/|\.\w+$/.test(filePath)) return null;
+  const fullPath = path.join(repoRoot, filePath);
+  if (!fs.existsSync(fullPath)) return `MISSING_FILE   ${ref}`;
+  if (!symbol) return null;
+  const name = symbol.replace(/\(.*$/, "").split(".").pop() ?? symbol;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const content = fs.readFileSync(fullPath, "utf-8");
+  return new RegExp(`\\b${escaped}\\b`).test(content) ? null : `MISSING_SYMBOL ${ref}`;
+}
+
 function handleStatus(data: WorkspaceMap) {
-  const currentCommit = getCurrentCommit();
-  const isFresh = currentCommit === data.headCommit;
+  const repoRoot = path.resolve(__dirname, "../../../..");
+  const refs = collectRefs(data);
+  const errors = refs.map((r) => checkRef(repoRoot, r)).filter((e): e is string => e !== null);
 
   console.log("\n📊 === CRIS WORKSPACE CODE INTELLIGENCE STATUS ===");
-  console.log(`Repository    : ${data.repository}`);
-  console.log(`Map Version   : ${data.version}`);
-  console.log(`Generated At  : ${data.generatedAt}`);
-  console.log(`Map Commit    : ${data.headCommit.slice(0, 7)}`);
-  console.log(`Current Commit: ${currentCommit.slice(0, 7)}`);
+  console.log(`Map Commit    : ${data.headCommit.slice(0, 7)} (tham khảo)`);
+  console.log(`Current Commit: ${getCurrentCommit().slice(0, 7)}`);
   console.log(
-    `Index Status  : ${isFresh ? "🟢 FRESH (Đồng bộ)" : "⚠️ MODIFIED (Chênh lệch commit nhưng logic cơ bản giữ nguyên)"}`
+    `Domains ${data.domains.length} | Entry Points ${data.entryPoints.length} | Flows ${data.executionFlows.length} | Data Models ${data.dataModels.length} | ADR Rules ${data.invariantsAndRules.length}`
   );
   console.log("───────────────────────────────────────────────────");
-  console.log(`Domains       : ${data.domains.length}`);
-  console.log(`Entry Points  : ${data.entryPoints.length}`);
-  console.log(`ExecutionFlows: ${data.executionFlows.length}`);
-  console.log(`Data Models   : ${data.dataModels.length}`);
-  console.log(`Core Symbols  : ${data.symbols.length}`);
-  console.log(`ADR Rules     : ${data.invariantsAndRules.length}\n`);
+  if (errors.length === 0) {
+    console.log(`🟢 OK: ${refs.length} ref đều khớp code\n`);
+    return;
+  }
+  console.log(`🔴 ${errors.length}/${refs.length} ref không khớp code:`);
+  errors.forEach((e) => console.log(`  ${e}`));
+  console.log("");
+  process.exit(1);
 }
 
 function handleQuery(data: WorkspaceMap, query: string) {
@@ -242,27 +260,11 @@ function handleQuery(data: WorkspaceMap, query: string) {
     }
   }
 
-  // 5. Matches in Symbols
-  const matchedSymbols = data.symbols.filter(
-    (s) =>
-      s.name.toLowerCase().includes(q) ||
-      s.description.toLowerCase().includes(q)
-  );
-
-  if (matchedSymbols.length > 0) {
-    console.log(`🧩 CORE SYMBOLS (${matchedSymbols.length}):`);
-    for (const s of matchedSymbols) {
-      console.log(`  • ${s.name} (${s.type}) -> ${s.filePath}`);
-      console.log(`    ${s.description}\n`);
-    }
-  }
-
   if (
     matchedFlows.length === 0 &&
     matchedDomains.length === 0 &&
     matchedRoutes.length === 0 &&
-    matchedModels.length === 0 &&
-    matchedSymbols.length === 0
+    matchedModels.length === 0
   ) {
     console.log("Không tìm thấy thực thể hoặc luồng nào khớp với từ khóa.");
   }
@@ -372,99 +374,6 @@ function handleConcept(data: WorkspaceMap, domainArg: string) {
     console.log(`  • [${r.method}] ${r.path} -> ${r.handler}`)
   );
   console.log("");
-}
-
-function handleRouteMap(data: WorkspaceMap, filter?: string) {
-  let routes = data.entryPoints;
-  if (filter) {
-    const f = filter.toLowerCase();
-    routes = routes.filter(
-      (r) =>
-        r.path.toLowerCase().includes(f) ||
-        r.domainId.toLowerCase().includes(f) ||
-        r.method.toLowerCase().includes(f)
-    );
-  }
-
-  console.log(`\n🚪 === API ROUTE MAP (${routes.length} routes) ===\n`);
-  console.log("| Method | Path | Auth | Domain | Handler | Triggered Flow |");
-  console.log("| --- | --- | --- | --- | --- | --- |");
-  for (const r of routes) {
-    console.log(
-      `| \`${r.method}\` | \`${r.path}\` | ${r.authRequirement} | ${r.domainId} | \`${r.handler}\` | ${r.triggersFlow} |`
-    );
-  }
-  console.log("");
-}
-
-function handleImpact(data: WorkspaceMap, target: string) {
-  if (!target) {
-    console.error(
-      "Vui lòng truyền tên hàm, model hoặc route cần phân tích ảnh hưởng (blast radius)."
-    );
-    return;
-  }
-  const t = target.toLowerCase();
-
-  console.log(`\n💥 === BLAST RADIUS & IMPACT ANALYSIS: "${target}" ===\n`);
-
-  // Symbol match
-  const symbol = data.symbols.find((s) => s.name.toLowerCase() === t);
-  if (symbol) {
-    console.log(
-      `Target: Symbol ${symbol.name} (${symbol.type}) tại ${symbol.filePath}`
-    );
-    console.log(`Mô tả : ${symbol.description}`);
-    console.log(`Caller trực tiếp (Ai gọi hàm này?):`);
-    symbol.callers.forEach((c) => console.log(`  ▲ ${c}`));
-    console.log(`Callee (Hàm này gọi ai?):`);
-    symbol.callees.forEach((c) => console.log(`  ▼ ${c}`));
-  }
-
-  // Model match
-  const model = data.dataModels.find(
-    (m) => m.name.toLowerCase().includes(t) || m.table.toLowerCase() === t
-  );
-  if (model) {
-    console.log(`Target: Data Model [${model.name}] (Bảng: ${model.table})`);
-    console.log(`Domain: ${model.domainId}`);
-    console.log(`Relations: ${model.relations.join(", ") || "None"}`);
-    console.log(`Bất biến : ${model.invariants.join("; ")}`);
-  }
-
-  // Flows affected
-  const affectedFlows = data.executionFlows.filter(
-    (f) =>
-      f.steps.some(
-        (s) =>
-          s.component.toLowerCase().includes(t) ||
-          (s.functionOrMethod &&
-            s.functionOrMethod.toLowerCase().includes(t)) ||
-          s.action.toLowerCase().includes(t)
-      ) ||
-      (model && f.domainId === model.domainId)
-  );
-
-  console.log(
-    `\nLuồng thực thi bị ảnh hưởng (Affected Execution Flows) [${affectedFlows.length}]:`
-  );
-  if (affectedFlows.length === 0) {
-    console.log("  Không phát hiện flow trực tiếp nào.");
-  } else {
-    for (const f of affectedFlows) {
-      console.log(`  ⚠️ [${f.id}] ${f.name} (Actor: ${f.actor})`);
-    }
-  }
-
-  const riskLevel =
-    affectedFlows.length > 3
-      ? "HIGH"
-      : affectedFlows.length > 0
-        ? "MEDIUM"
-        : "LOW";
-  console.log(
-    `\nĐánh giá rủi ro (Risk Level): ${riskLevel === "HIGH" ? "🔴 HIGH" : riskLevel === "MEDIUM" ? "🟡 MEDIUM" : "🟢 LOW"}\n`
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -753,13 +662,6 @@ function main() {
     case "concept":
       handleConcept(data, subArg);
       break;
-    case "route-map":
-    case "routes":
-      handleRouteMap(data, subArg);
-      break;
-    case "impact":
-      handleImpact(data, subArg);
-      break;
     case "how-to-sync":
     case "eval":
     case "sync-check":
@@ -768,24 +670,22 @@ function main() {
     default:
       console.log(`
 CRIS CODE INTELLIGENCE CLI (cris-intel)
-Bản đồ cấu trúc xử lý logic của workspace crisne-website theo GitNexus Code-Intel.
+Lớp nghiệp vụ của code intel cho workspace crisne-website: domain, flow, invariant, failure mode.
 
 LỆNH HỖ TRỢ:
-  status                   Kiểm tra tình trạng và độ tươi của dataset
-  query <từ khóa>          Tìm kiếm processes, domains, routes, symbols liên quan
+  status                   Kiểm mọi file/symbol mà map nhắc tới còn tồn tại (exit 1 nếu lệch)
+  query <từ khóa>          Tìm flow, domain, route, data model liên quan
   trace <flow_id>          Lần vết từng chặng chi tiết của một luồng xử lý
   concept [domain_id]      Xem kiến trúc tổng quan hoặc chi tiết một domain
-  route-map [bộ lọc]       Hiển thị ma trận API Route -> Handler -> Domain
-  impact <symbol/model>    Phân tích blast radius và đánh giá rủi ro khi sửa đổi
   how-to-sync <mục tiêu>   Thẩm định xung đột, hiệu ứng đồng bộ và kết luận NÊN/KHÔNG NÊN
 
+  impact / route map: dùng GitNexus (gitnexus_impact, gitnexus_api_impact, gitnexus_route_map)
+
 VÍ DỤ:
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts query "lesson status"
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts trace FLOW_LESSON_STATUS_UPDATE
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts concept roadmap-learning
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts route-map roadmaps
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts impact RoadmapItem
-  npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts how-to-sync "Thêm trường metadata vào RoadmapItem"
+  yarn intel query "lesson status"
+  yarn intel trace FLOW_LESSON_STATUS_UPDATE
+  yarn intel concept roadmap-learning
+  yarn intel how-to-sync "Thêm trường metadata vào RoadmapItem"
 `);
       break;
   }

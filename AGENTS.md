@@ -16,7 +16,7 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 
 Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ là symlink trỏ sang đó.
 
-- **`cris-code-intel`:** dùng khi cần nắm kiến trúc, trace luồng thực thi (UI → API → Service → AI/DB), xem bản đồ API route hoặc đánh giá blast radius. CLI: `yarn intel <lệnh>`. Bản đồ chi tiết: `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
+- **`cris-code-intel`:** dùng khi cần flow nghiệp vụ, domain, invariant (UI → API → Service → AI/DB). Impact và route map dùng GitNexus, trừ route FastAPI và `/api/roadmap-assistant/*`: GitNexus không thấy consumer nên mức risk nó báo không đáng tin, dùng `yarn intel trace FLOW_ABOT_*`. CLI: `yarn intel <lệnh>`. Bản đồ chi tiết: `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
 - **`cris-how-to-sync`:** bắt buộc dùng trước khi lập plan, review thiết kế hoặc đưa target mới (feature, thư viện, model/migration, API route, pattern, thuật ngữ) vào repo. CLI: `yarn intel how-to-sync "<mô tả target>"`.
 - **`abot-trace-report`:** dùng khi phân tích trace Langfuse của Abot.
 - **`design-doc-mermaid`:** dùng khi cần sơ đồ Mermaid để commit trong một file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).

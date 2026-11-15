@@ -1,53 +1,45 @@
 ---
 name: cris-code-intel
-description: Bản đồ cấu trúc xử lý logic và công cụ tra cứu code intelligence cho workspace crisne-website. Hỗ trợ trace luồng thực thi (execution flow), tra cứu concept/domain, blast radius impact analysis, và ánh xạ API route -> service -> DB theo tư duy GitNexus. Dùng khi cần hiểu kiến trúc, giải thích cách hoạt động, lần vết lỗi hoặc kiểm tra ảnh hưởng trước khi sửa code.
+description: Lớp nghiệp vụ của code intel cho workspace crisne-website - flow nghiệp vụ (UI → API → Service → AI/DB), domain, invariant, failure mode và ADR liên quan. Dùng khi cần hiểu một luồng nghiệp vụ đi qua những đâu, giải thích cách hoạt động hoặc lần vết lỗi. Impact và route map của code dùng GitNexus, trừ route FastAPI và /api/roadmap-assistant/* (GitNexus không thấy consumer) thì dùng `yarn intel trace FLOW_ABOT_*`.
 ---
 
 # Cris Code Intelligence (`cris-code-intel`)
 
-Bản đồ hóa toàn diện cấu trúc xử lý logic của workspace `crisne-website` (Next.js 15 App Router + Python FastAPI AI Microservice), theo mô hình Code Intelligence của GitNexus.
+Lớp nghiệp vụ của workspace `crisne-website` (Next.js App Router + Python FastAPI): domain, flow nghiệp vụ, invariant, failure mode. Phần cấu trúc code (ai gọi ai, blast radius, route ↔ consumer) do GitNexus lo.
 
 ---
 
 ## ⚡ Khi nào sử dụng
 
-- **Khám phá kiến trúc / Concept**: "Hệ thống hoạt động thế nào?", "Cơ chế phân quyền Actor hoạt động ra sao?", "Tại sao Lesson Status lại chỉ hiển thị cho Owner?"
-- **Lần vết luồng thực thi (Flow Trace)**: "Luồng tạo bài học qua Abot đi qua những file nào?", "Khi user đổi trạng thái bài học thì data đi từ UI đến DB thế nào?", "Chặng nào là điểm nghẽn hoặc rủi ro?"
-- **Truy vết lỗi (Debugging)**: "Lỗi 401 khi lưu bài học đến từ đâu?", "Tại sao lệnh CUD của Visitor bị chặn?", "Endpoint `/api/workflows/[id]/runs` xử lý thế nào khi lỗi node?"
-- **Phân tích tầm ảnh hưởng (Impact Analysis)**: "Sửa `RoadmapItem` hay hàm `updateItemStatus` sẽ ảnh hưởng đến những flow nào?", "Blast radius rủi ro ở mức nào?"
-- **Ánh xạ Route (Route Mapping)**: "Endpoint X được xử lý bởi handler nào và gọi service nào?"
+- **Khám phá kiến trúc / Concept**: "Cơ chế phân quyền Actor hoạt động ra sao?", "Tại sao Lesson Status chỉ hiển thị cho Owner?"
+- **Lần vết luồng nghiệp vụ**: "Luồng tạo bài học qua Abot đi qua những file nào?", "Đổi trạng thái bài học thì data đi từ UI đến DB thế nào?"
+- **Truy vết lỗi**: "Lỗi 401 khi lưu bài học đến từ đâu?", "Tại sao lệnh CUD của Visitor bị chặn?"
+
+**Không dùng skill này cho impact hay route map:** dùng `gitnexus_impact`, `gitnexus_api_impact`, `gitnexus_route_map`.
+**Ngoại lệ:** route FastAPI và `/api/roadmap-assistant/*`. GitNexus không nối được proxy catch-all với FastAPI, nên báo `consumers: []` và risk LOW không đáng tin. Dùng `yarn intel trace FLOW_ABOT_*`.
 
 ---
 
-## 🛠️ Công cụ Tra cứu CLI: `cris-intel`
+## 🛠️ CLI: `yarn intel <lệnh>`
 
-Chạy từ thư mục gốc của repository:
+| Lệnh               | Ý nghĩa                                                                       | Ví dụ                                       |
+| ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| `status`           | Kiểm mọi file/symbol mà map nhắc tới còn tồn tại (exit 1 nếu lệch)            | `yarn intel status`                         |
+| `query <từ khóa>`  | Tìm flow, domain, route, data model liên quan                                 | `yarn intel query "lesson status"`          |
+| `trace <flow_id>`  | Lần vết từng chặng (UI ➔ Gateway ➔ Logic ➔ DB) kèm invariant và failure mode | `yarn intel trace FLOW_LESSON_STATUS_UPDATE` |
+| `concept [domain]` | Chi tiết một domain: ADR, glossary, key files                                 | `yarn intel concept roadmap-learning`       |
 
-```bash
-# Cú pháp tổng quát:
-npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-intel/scripts/cris-intel.ts <command> [args]
-```
-
-### Các lệnh chính:
-
-| Lệnh                 | Ý nghĩa                                                                | Ví dụ                                               |
-| -------------------- | ---------------------------------------------------------------------- | --------------------------------------------------- |
-| `status`             | Kiểm tra độ tươi của dataset và tóm tắt số lượng thực thể              | `... cris-intel.ts status`                          |
-| `query <từ khóa>`    | Tìm kiếm processes, domains, routes, symbols liên quan đến một concept | `... cris-intel.ts query "lesson status"`           |
-| `trace <flow_id>`    | Lần vết từng chặng chi tiết (UI ➔ Gateway ➔ Logic ➔ DB) với file:line  | `... cris-intel.ts trace FLOW_LESSON_STATUS_UPDATE` |
-| `concept [domain]`   | Xem chi tiết kiến trúc một domain, quy ước ADRs, glossary và key files | `... cris-intel.ts concept roadmap-learning`        |
-| `route-map [filter]` | Xuất bảng ánh xạ Route ➔ Handler ➔ Domain ➔ Flow kích hoạt             | `... cris-intel.ts route-map roadmaps`              |
-| `impact <target>`    | Phân tích blast radius (ai gọi, flow nào dùng, mức độ rủi ro)          | `... cris-intel.ts impact RoadmapItem`              |
+Sửa map (`data/cris-workspace-map.json`) xong phải chạy `yarn intel status` tới khi báo 🟢 OK. Ref ghi dạng `path#symbol` theo tên có thật trong code, không đoán.
 
 ---
 
-## 📋 5 Quy Trình Thao Tác (Workflows)
+## 📋 Quy Trình Thao Tác (Workflows)
 
 ### 1. Concept Exploration (Khám phá Concept & Domain)
 
 ```
-1. Liệt kê các domain: cris-intel concept
-2. Đi sâu vào domain mục tiêu: cris-intel concept <domain_id>
+1. Liệt kê các domain: yarn intel concept
+2. Đi sâu vào domain mục tiêu: yarn intel concept <domain_id>
 3. Đối chiếu các ADR liên quan trong `docs/adr/` và thuật ngữ trong `GLOSSARY.md`
 4. Kiểm tra các key files được liệt kê trong domain
 ```
@@ -55,8 +47,8 @@ npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-
 ### 2. Execution Flow Tracing (Lần vết Luồng Thực thi)
 
 ```
-1. Tìm luồng liên quan: cris-intel query "<từ khóa>"
-2. Chạy trace chi tiết: cris-intel trace <FLOW_ID>
+1. Tìm luồng liên quan: yarn intel query "<từ khóa>"
+2. Chạy trace chi tiết: yarn intel trace <FLOW_ID>
 3. Đọc tuần tự các Chặng (Hops) từ Layer Presentation -> Gateway -> Logic -> Persistence
 4. Lưu ý các Bất biến (Invariants) và Kịch bản thất bại (Failure Modes)
 5. Mở trực tiếp các file tại chặng nghi vấn để đọc implementation
@@ -66,28 +58,9 @@ npx ts-node --compiler-options '{"module":"CommonJS"}' .agents/skills/cris-code-
 
 ```
 1. Xác định triệu chứng (mã lỗi HTTP 401, 503, lỗi router hoặc SSE stream timeout)
-2. Tra cứu route hoặc flow liên quan: cris-intel query "<error/symptom>"
-3. Xem vết trace để xác định chặng nào có thể ném lỗi: cris-intel trace <FLOW_ID>
+2. Tra cứu route hoặc flow liên quan: yarn intel query "<error/symptom>"
+3. Xem vết trace để xác định chặng nào có thể ném lỗi: yarn intel trace <FLOW_ID>
 4. Đối chiếu Failure Modes đã được tài liệu hóa trong dataset
-```
-
-### 4. Blast Radius Impact Analysis (Phân tích Ảnh hưởng trước khi Sửa)
-
-```
-1. Chạy phân tích trước khi chạm vào bất kỳ hàm hoặc model nào: cris-intel impact <symbol_or_model>
-2. Kiểm tra danh sách callers (ai đang phụ thuộc vào nó)
-3. Kiểm tra danh sách affected flows (những luồng nghiệp vụ nào sẽ bị ảnh hưởng)
-4. Nếu Risk Level là 🔴 HIGH: Cảnh báo người dùng và lập kế hoạch regression testing nghiêm ngặt
-```
-
-### 5. Route Mapping (Kiểm tra Endpoint & Quyền)
-
-```
-1. Tra cứu route: cris-intel route-map <tên_route>
-2. Xác minh:
-   - Phương thức HTTP (GET, POST, PATCH, PUT, DELETE)
-   - Yêu cầu xác thực (none, owner_only, internal_bearer)
-   - Handler file và luồng logic tương ứng
 ```
 
 ---

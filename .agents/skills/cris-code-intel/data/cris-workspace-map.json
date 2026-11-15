@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-09T03:00:00.000Z",
-  "headCommit": "d3da574bc6e0cbe346dc5406a74b182183545b22",
+  "generatedAt": "2026-11-15T05:56:19.000Z",
+  "headCommit": "2fdb93f92816afb3262dc7ef43f38410b1819f19",
   "repository": "crisne-website",
   "architecture": {
     "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
@@ -118,7 +118,6 @@
         "app/api/roadmap-assistant/[...path]/route.ts",
         "logic/roadmap/roadmapAssistantService.ts",
         "components/roadmap/RoadmapAssistantChatbot.tsx",
-        "components/floating-bot/FloatingChatDrawer.tsx",
         "roadmap-rag-assistant/rag_service/api/server.py",
         "roadmap-rag-assistant/rag_service/api/routes.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py",
@@ -128,7 +127,7 @@
         "roadmap-rag-assistant/rag_service/domains/roadmap/agent_actions.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
         "roadmap-rag-assistant/rag_service/core/orchestration/sources.py",
-        "roadmap-rag-assistant/rag_service/core/retrieval/vector_store.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
         "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
         "roadmap-rag-assistant/rag_service/observability.py"
       ],
@@ -361,7 +360,7 @@
       "name": "Hỏi đáp kiến thức Roadmap với Abot (RAG Query)",
       "domainId": "roadmap-assistant-abot",
       "actor": "Visitor | Owner",
-      "trigger": "Người dùng gửi tin nhắn trên giao diện chat FloatingChatDrawer hoặc RoadmapAssistantChatbot",
+      "trigger": "Người dùng gửi tin nhắn trên giao diện chat RoadmapAssistantChatbot",
       "preconditions": [
         "Tin nhắn không vượt quá 2000 ký tự",
         "Visitor không bị chặn bởi rate limit (30 req / 5 phút)",
@@ -371,10 +370,9 @@
         {
           "order": 1,
           "layer": "Presentation_UI",
-          "component": "components/floating-bot/FloatingChatDrawer.tsx",
-          "functionOrMethod": "handleSubmit",
+          "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
           "action": "Đóng gói message, threadId và pageContext (topic slug hiện tại); hiển thị tin nhắn tạm thời trên UI",
-          "callsNext": "logic/roadmap/roadmapAssistantService.ts#sendRoadmapAssistantMessage",
+          "callsNext": "logic/roadmap/roadmapAssistantService.ts#roadmapChatClient",
           "dataPassed": "{ message, threadId, pageContext }"
         },
         {
@@ -390,16 +388,16 @@
           "order": 3,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py",
-          "functionOrMethod": "run_turn",
+          "functionOrMethod": "NextGenRoadmapAgent.astream_events",
           "action": "Khởi tạo traced_turn trên Langfuse; chuyển tin nhắn vào Intent Router để phân loại",
-          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py#decide_route",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py#IntentRouter.aroute",
           "dataPassed": "User message, actor, thread history"
         },
         {
           "order": 4,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
-          "functionOrMethod": "decide_route",
+          "functionOrMethod": "IntentRouter.aroute",
           "action": "Chạy qua các phases P0-P8 (focus, grounding, polarity, scope, write_gate). Xác định intent: KNOWLEDGE_QUERY kèm sub_intent (search | catalog | lesson_status). catalog và lesson_status trả lời từ dữ liệu (không gọi scope, không tìm kiếm); không handler nào nhận thì rơi xuống tìm kiếm",
           "callsNext": "roadmap-rag-assistant/rag_service/core/orchestration/sources.py#answer_from_sources",
           "dataPassed": "Target entities, topic filter, keywords"
@@ -407,17 +405,17 @@
         {
           "order": 5,
           "layer": "Persistence",
-          "component": "roadmap-rag-assistant/rag_service/core/retrieval/vector_store.py",
-          "functionOrMethod": "search_similar",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
+          "functionOrMethod": "HybridRagEngine.search_live_knowledge",
           "action": "Thực hiện tìm kiếm lai (Hybrid Retrieval: BM25 FTS + cosine similarity trên Gemini 768d in-memory vectors) lấy ra top bài học liên quan",
-          "callsNext": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py#synthesize_answer",
+          "callsNext": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py#GenerationPipeline.astream",
           "dataPassed": "Retrieved chunks with relevance scores and content"
         },
         {
           "order": 6,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
-          "functionOrMethod": "synthesize_answer",
+          "functionOrMethod": "GenerationPipeline.astream",
           "action": "Ghép context và gọi Gemini 2.5 Flash để sinh câu trả lời có trích dẫn nguồn (grounded citation), truyền luồng token qua SSE stream",
           "callsNext": "app/api/roadmap-assistant/[...path]/route.ts",
           "dataPassed": "SSE chunks: data: { token, sources, trace_id }"
@@ -425,8 +423,7 @@
         {
           "order": 7,
           "layer": "Presentation_UI",
-          "component": "components/floating-bot/FloatingChatDrawer.tsx",
-          "functionOrMethod": "onMessageStream",
+          "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
           "action": "Nhận từng token SSE, hiển thị typewriter effect và render danh sách trích dẫn bài học (sources badges)",
           "callsNext": null,
           "dataPassed": "Rendered chat bubble"
@@ -467,23 +464,23 @@
           "component": "app/api/roadmap-assistant/[...path]/route.ts",
           "functionOrMethod": "forward",
           "action": "Xác nhận actor='owner', forward lệnh tới /api/chat",
-          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#run_turn",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#NextGenRoadmapAgent",
           "dataPassed": "{ message, actor: 'owner' }"
         },
         {
           "order": 2,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
-          "functionOrMethod": "decide_route",
+          "functionOrMethod": "IntentRouter.aroute",
           "action": "Phát hiện speech act COMMAND / REQUEST và target ROADMAP -> Chọn intent ROADMAP_CUD, write policy = CONFIRM",
-          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent_actions.py#create_action_preview",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_cud",
           "dataPassed": "Extracted entities: topic, section, lesson title"
         },
         {
           "order": 3,
           "layer": "AI_Orchestration",
-          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/agent_actions.py",
-          "functionOrMethod": "create_action_preview",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
+          "functionOrMethod": "RoadmapCommands.handle_cud",
           "action": "Tạo PendingAction lưu vào session store (prefix 'owner:'), sinh thẻ Preview payload trả về cho client",
           "callsNext": "components/roadmap/RoadmapAssistantChatbot.tsx",
           "dataPassed": "PendingAction: { action_id, type: 'CREATE_LESSON', target, preview_card }"
@@ -491,17 +488,16 @@
         {
           "order": 4,
           "layer": "Presentation_UI",
-          "component": "components/floating-bot/FloatingChatDrawer.tsx",
-          "functionOrMethod": "renderPreviewCard",
+          "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
           "action": "Hiển thị Preview Card với nút 'Xác nhận' và 'Huỷ'. Owner click 'Xác nhận'",
-          "callsNext": "logic/roadmap/roadmapAssistantService.ts#confirmPendingAction",
+          "callsNext": "logic/roadmap/roadmapAssistantService.ts#roadmapChatClient",
           "dataPassed": "{ action_id }"
         },
         {
           "order": 5,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
-          "functionOrMethod": "execute_pending_action",
+          "functionOrMethod": "RoadmapCommands.handle_pending",
           "action": "Lấy PendingAction từ store, gọi ngược về Next.js API để thực thi ghi vào database",
           "callsNext": "app/api/v1/roadmaps/items/route.ts#POST",
           "dataPassed": "HTTP POST /api/v1/roadmaps/items với { roadmapId, section, title }"
@@ -546,7 +542,6 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/roadmap/LessonStatus.tsx",
-          "functionOrMethod": "handleStatusChange",
           "action": "Cập nhật UI optimistic và gọi `updateItemStatus(id, newStatus)`",
           "callsNext": "logic/roadmap/roadmapService.ts#updateItemStatus",
           "dataPassed": "{ id, status: 'learning' }"
@@ -659,7 +654,7 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/roadmap/SectionList.tsx",
-          "functionOrMethod": "handleRenameSection",
+          "functionOrMethod": "onRenameSection",
           "action": "Gọi `renameSection(slug, { oldName, newName })`",
           "callsNext": "logic/roadmap/roadmapService.ts#renameSection",
           "dataPassed": "{ oldName: 'RAG', newName: 'Retrieval Augmented Generation' }"
@@ -711,7 +706,6 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/roadmap/EditItemContentDrawer.tsx",
-          "functionOrMethod": "uploadImagePlugin",
           "action": "Đóng gói file vào FormData, gọi POST /api/upload-image",
           "callsNext": "app/api/upload-image/route.ts#POST",
           "dataPassed": "FormData with image file"
@@ -760,14 +754,14 @@
           "component": "app/api/roadmap-assistant/[...path]/route.ts",
           "functionOrMethod": "forward",
           "action": "hasWriteAccess(req) trả về false -> Gắn header `x-actor: visitor` và gửi sang FastAPI",
-          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#run_turn",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#NextGenRoadmapAgent",
           "dataPassed": "{ message, actor: 'visitor' }"
         },
         {
           "order": 2,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/router/write_gate.py",
-          "functionOrMethod": "apply_write_gate",
+          "functionOrMethod": "gate_route",
           "action": "Phát hiện lệnh CUD nhưng actor không phải Owner (is_owner() == false). Chặn kích hoạt Tool CUD.",
           "callsNext": "roadmap-rag-assistant/rag_service/auth.py#OWNER_ONLY_MESSAGE",
           "dataPassed": "Denied write attempt"
@@ -775,8 +769,7 @@
         {
           "order": 3,
           "layer": "Presentation_UI",
-          "component": "components/floating-bot/FloatingChatDrawer.tsx",
-          "functionOrMethod": "renderChatMessage",
+          "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
           "action": "Trả về thông báo giải thích: 'Tính năng tạo, sửa, xóa roadmap chỉ dành cho Cris (Owner). Bạn có thể đặt câu hỏi về các bài học hiện có nhé!'",
           "callsNext": null,
           "dataPassed": "Warning text message"
@@ -886,65 +879,6 @@
         "@@unique([roadmapId, title]): Tiêu đề bài học là duy nhất trong cùng một Topic",
         "status nhận 1 trong 3 giá trị: 'target', 'learning', 'known' (ADR-0010)",
         "section là chuỗi tự do gom bài theo ADR-0009; null = chung"
-      ]
-    }
-  ],
-  "symbols": [
-    {
-      "name": "updateItemStatus",
-      "type": "function",
-      "filePath": "logic/roadmap/roadmapService.ts",
-      "domainId": "roadmap-learning",
-      "description": "Gọi PATCH /api/v1/roadmaps/items/[id] để cập nhật trạng thái học (target/learning/known) của bài học.",
-      "callers": [
-        "components/roadmap/LessonStatus.tsx",
-        "components/roadmap/ChecklistItemRow.tsx"
-      ],
-      "callees": [
-        "apiFetch"
-      ]
-    },
-    {
-      "name": "requireWriteAccess",
-      "type": "function",
-      "filePath": "lib/auth/write-access.ts",
-      "domainId": "auth-security",
-      "description": "Guard kiểm tra request có quyền ghi Owner hay không, trả về 401 nếu từ chối.",
-      "callers": [
-        "app/api/v1/roadmaps/items/[id]/route.ts"
-      ],
-      "callees": [
-        "hasWriteAccess"
-      ]
-    },
-    {
-      "name": "decide_route",
-      "type": "function",
-      "filePath": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
-      "domainId": "roadmap-assistant-abot",
-      "description": "Bộ định tuyến ý định Intent Router phân loại tin nhắn người dùng qua các phases P0-P8.",
-      "callers": [
-        "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#run_turn"
-      ],
-      "callees": [
-        "understand",
-        "classify_heuristics",
-        "write_gate"
-      ]
-    },
-    {
-      "name": "notifyRoadmapChanged",
-      "type": "function",
-      "filePath": "lib/roadmap/rag-reindex.ts",
-      "domainId": "roadmap-learning",
-      "description": "Kích hoạt hook sau request để gửi lệnh re-index sang Python RAG service khi có thay đổi dữ liệu roadmap.",
-      "callers": [
-        "app/api/v1/roadmaps/items/[id]/route.ts",
-        "app/api/v1/roadmaps/items/route.ts"
-      ],
-      "callees": [
-        "after",
-        "requestRagReindex"
       ]
     }
   ],

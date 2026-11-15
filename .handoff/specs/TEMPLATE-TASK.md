@@ -24,6 +24,7 @@ verification_gate:
   type_check: "yarn tsc --noEmit -p ."
   lint: "yarn lint"
   test: "yarn test"
+  intel_status: "yarn intel status" # map cris-code-intel phải khớp code
   boundary_check: "bash .agents/skills/agent-handoff/scripts/check-boundary.sh [task_id]"
 ---
 
@@ -32,7 +33,7 @@ verification_gate:
 ## 1. Context & Architectural Intent
 - **Goal**: [Mục tiêu cốt lõi]
 - **Why**: [Lý do kỹ thuật/nghiệp vụ]
-- **Dependencies**: [Con trỏ tới file/symbol/ADR, ví dụ `lib/example.ts#fn`. Không dán code]
+- **Dependencies**: [Con trỏ tới file/symbol/ADR/flow, ví dụ `lib/example.ts#fn`, `FLOW_ABOT_CHAT_QUERY`. Không dán code]
 
 ## 2. Invariants & Rules
 - Rule dự án: `AGENTS.md`. Chỉ ghi ở đây rule riêng của task và ADR liên quan.
@@ -47,6 +48,7 @@ verification_gate:
 - [ ] `TypeCheck`: PENDING
 - [ ] `Lint`: PENDING
 - [ ] `Test`: PENDING
+- [ ] `Intel Status`: PENDING
 - [ ] `Boundary Check`: PENDING
 
 ## 5. Execution Audit Log

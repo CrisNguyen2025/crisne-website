@@ -26,6 +26,10 @@ Skill kiểm tra chất lượng mã nguồn và đảm bảo tương thích CI 
 | Có file trong `roadmap-rag-assistant/` | `cd roadmap-rag-assistant && python -m pytest -q && python -m evals validate` | Test service Python |
 | Có file trong `prisma/` | `yarn test:schema-sql --check` | Kiểm tra schema SQL fixture |
 | Có file trong dữ liệu knowledge (`lib/ai/data/`, `lib/ai/portfolio-knowledge.ts` hoặc `lib/ai/knowledge-base.ts`, nơi tính hash của index) | `yarn check:knowledge-index` | Kiểm tra tính đồng bộ của vector index |
+| Có file code (`.ts`, `.tsx`, `.py`, `.prisma`) hoặc file trong `.agents/skills/cris-code-intel/` | `yarn intel status` | Exit 1 nghĩa là map lệch code: báo các ref `MISSING_*`, cần sửa `cris-workspace-map.json` trong cùng thay đổi |
+| Có file trong `.agents/**` hoặc `.claude/**` | `yarn agents:sync --check` | CI chạy lệnh này |
+
+**Ghi chú GitNexus (chỉ báo, không chạy):** nếu có `.gitnexus/meta.json` mà `lastCommit` khác `git rev-parse HEAD`, thêm một dòng vào report gợi ý chạy `gitnexus analyze --skip-agents-md`.
 
 ## 📊 Mẫu báo cáo kết quả
 

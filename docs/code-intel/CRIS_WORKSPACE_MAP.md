@@ -1,7 +1,7 @@
 # BẢN ĐỒ KIẾN TRÚC & CẤU TRÚC XỬ LÝ LOGIC WORKSPACE CRIS (`crisne-website`)
 
 > **Phiên bản:** 1.0.0 | **Commit:** `52a3596` | **Mô hình:** GitNexus Code Intelligence  
-> **Skill đi kèm:** `.agents/skills/cris-code-intel/` | **CLI Tra cứu:** `cris-intel`
+> **Skill đi kèm:** `.agents/skills/cris-code-intel/` | **CLI Tra cứu:** `yarn intel`
 
 ---
 
@@ -97,11 +97,11 @@ graph TB
 sequenceDiagram
     autonumber
     actor User as Người dùng (Visitor/Owner)
-    participant UI as FloatingChatDrawer.tsx
+    participant UI as RoadmapAssistantChatbot.tsx
     participant Proxy as /api/roadmap-assistant/[...path]
     participant Agent as Python agent.py
     participant Router as intent_router.py (P0-P8)
-    participant RAG as sources.py & vector_store.py
+    participant RAG as sources.py & retrieval/engine.py
     participant LLM as Google Gemini 2.5 Flash
     participant Obs as Langfuse Tracing
 
@@ -111,10 +111,10 @@ sequenceDiagram
     Proxy->>Proxy: Rate limit check (Visitor: max 30/5min)
     Proxy->>Agent: Forward với Bearer RAG_INTERNAL_KEY
     Agent->>Obs: Bắt đầu traced_turn()
-    Agent->>Router: decide_route() (Phases P0-P8)
+    Agent->>Router: IntentRouter.aroute() (Phases P0-P8)
     Router-->>Agent: Intent = KNOWLEDGE_QUERY + sub_intent (search | catalog | lesson_status)
     Note over Agent: catalog / lesson_status: trả lời từ dữ liệu (Visitor bị chặn với lesson_status).<br/>Handler không nhận câu ➔ rơi xuống tìm kiếm
-    Agent->>RAG: search_similar(query, topic_slug)
+    Agent->>RAG: HybridRagEngine.search_live_knowledge(query)
     RAG->>RAG: Hybrid Search (BM25 FTS + In-memory Gemini 768d vectors)
     RAG-->>Agent: Trả về danh sách bài học có độ liên quan cao
     Agent->>LLM: Gọi Gemini với System Prompt + Grounded Chunks
@@ -132,10 +132,10 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor Owner as Owner
-    participant UI as FloatingChatDrawer.tsx
+    participant UI as RoadmapAssistantChatbot.tsx
     participant Proxy as /api/roadmap-assistant/[...path]
     participant Router as intent_router.py
-    participant Actions as agent_actions.py (PendingAction)
+    participant Actions as commands.py (RoadmapCommands)
     participant Commands as commands.py
     participant NextAPI as Next.js /api/v1/roadmaps/items
     participant Prisma as Prisma DB (RoadmapItem)
@@ -144,15 +144,15 @@ sequenceDiagram
     Owner->>UI: "Thêm bài Prompt Engineering vào section LLM của topic AI"
     UI->>Proxy: POST /api/roadmap-assistant/chat
     Proxy->>Proxy: hasWriteAccess() = true ➔ x-actor: owner
-    Proxy->>Router: decide_route() ➔ Intent: ROADMAP_CUD, write: CONFIRM
-    Router->>Actions: create_action_preview()
+    Proxy->>Router: IntentRouter.aroute() ➔ Intent: ROADMAP_CUD, write: CONFIRM
+    Router->>Actions: handle_cud()
     Actions->>Actions: Lưu PendingAction (store id: 'owner:UUID')
     Actions-->>UI: Trả về thẻ Preview (Preview Card)
     UI-->>Owner: Hiển thị thẻ Preview kèm nút "Xác nhận" và "Huỷ"
 
     Owner->>UI: Bấm nút "Xác nhận"
     UI->>Proxy: POST /api/roadmap-assistant/chat/confirm { action_id }
-    Proxy->>Commands: execute_pending_action(action_id)
+    Proxy->>Commands: handle_pending(action_id)
     Commands->>NextAPI: POST /api/v1/roadmaps/items (Internal HTTP)
     NextAPI->>Prisma: prisma.roadmapItem.create()
     NextAPI->>Reindex: after(requestRagReindex)
