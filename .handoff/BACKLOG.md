@@ -20,4 +20,6 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 ## Nội dung
 
+- Lộ trình tổng (second brain + trợ lý cá nhân): `.handoff/PLAN-second-brain.md`.
+
 - Pilot topic Next.js, 7 lesson (PROPOSED): `.handoff/specs/PLAN-nextjs-topic-pilot.md`.
