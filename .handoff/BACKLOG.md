@@ -12,7 +12,6 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 ## Hạ tầng và deploy
 
 - Langfuse legacy API sẽ bị gỡ ngày 2026-11-16, còn gọi ở `lib/ai/langfuse.ts:134` (`api.legacy.scoreV1.delete`): `docs/abot-next-actions-plan.md` mục 8. Lưu ý: code này dùng chung với luồng 👍/👎 của Cris AI, không được đổi behavior của luồng đó.
-- Migration slug trên Turso trước khi deploy `de51a44`: `scripts/migrate-roadmap-item-slugs.ts` (chạy dry-run trước, rồi `--apply`).
 
 ## Chờ Owner quyết định
 
