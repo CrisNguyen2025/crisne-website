@@ -1,5 +1,8 @@
 {
   "exclude": {
-    "claude": ["ui-taste"]
+    "claude": [
+      "executor",
+      "ui-taste"
+    ]
   }
 }

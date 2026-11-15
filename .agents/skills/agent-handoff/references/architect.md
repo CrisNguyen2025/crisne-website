@@ -26,9 +26,17 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 bash .agents/skills/agent-handoff/scripts/baseline.sh <task_id>
 ```
 
-Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev dán prompt**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
+Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev giao việc**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
 
-In prompt cho Dev trong một khối `text` để copy:
+Báo Dev: mở Antigravity ở đúng thư mục repo, đúng nhánh của spec, rồi gõ:
+
+```text
+/executor
+```
+
+Skill `executor` tự tìm spec theo nhánh hiện tại. Nhiều spec cùng nhánh thì dùng `/executor <task_id>`.
+
+**Dự phòng** (khi `/executor` không chạy): in prompt cho Dev trong một khối `text` để copy:
 
 ```text
 Dùng skill agent-handoff, vai Executor. Thực thi `.handoff/specs/<task_id>.md`.
@@ -105,7 +113,7 @@ Chọn **một** đề xuất chính và nêu lý do ngắn; kèm nút qua `wrap
 | ESCALATED | Trả lời câu hỏi kiến trúc, rồi sinh prompt giao lại |
 | ABORTED vì lock cũ | Cho Dev xem nội dung `.handoff/runs/.lock` và hỏi có xoá không. Chỉ xoá khi Dev đồng ý trong chat, rồi chạy lại `baseline.sh` và sinh prompt giao lại |
 
-**Prompt sửa lần 2:** cùng `task_id`, đặt `current_attempt` = lần trước + 1 trong spec, chạy lại `baseline.sh` (result cũ tự được lưu thành `result.<thời gian>.json`), rồi in prompt:
+**Prompt sửa lần 2:** cùng `task_id`, đặt `current_attempt` = lần trước + 1 trong spec, chạy lại `baseline.sh` (result cũ tự được lưu thành `result.<thời gian>.json`), rồi báo Dev gõ `/executor <task_id>` kèm danh sách lỗi bên dưới. Dự phòng là prompt đầy đủ:
 
 ```text
 Dùng skill agent-handoff, vai Executor. Tiếp tục `.handoff/specs/<task_id>.md` (lần <n>).

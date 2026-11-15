@@ -5,7 +5,7 @@ description: Giao task giữa Claude Code (Architect) và Antigravity/Codex (Exe
 
 # Agent Handoff v3
 
-Dev dán prompt cho Executor, Executor làm xong ghi `result.json`, Claude Code được báo lại, verify độc lập rồi báo cáo và đề xuất bước tiếp theo.
+Dev gõ `/executor` trong Antigravity (dự phòng: dán prompt), Executor làm xong ghi `result.json`, Claude Code được báo lại, verify độc lập rồi báo cáo và đề xuất bước tiếp theo.
 
 | Bạn là | Đọc | Việc |
 |---|---|---|
