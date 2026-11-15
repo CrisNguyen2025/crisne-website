@@ -21,13 +21,15 @@ Skill kiểm tra chất lượng mã nguồn và đảm bảo tương thích CI 
 | Phạm vi file thay đổi | Lệnh thực thi | Ghi chú |
 |---|---|---|
 | Có file `.ts` hoặc `.tsx` | `yarn tsc --noEmit -p .` | Typecheck toàn bộ TypeScript |
-| File `.ts`, `.tsx`, `.js`, `.mjs`, `.mts` thay đổi | `yarn eslint <danh_sách_file_đổi>` | **Chỉ lint trên file đổi**, không chạy `yarn lint` toàn repo (tránh 78 lỗi cũ) |
+| File `.ts`, `.tsx`, `.js`, `.mjs`, `.mts` thay đổi | `yarn eslint <danh_sách_file_đổi>` | **Chỉ lint trên file đổi**, không chạy `yarn lint` toàn repo (toàn repo có lỗi cũ, không ghi số cứng) |
 | Bất kỳ file code / test nào | `yarn test` | Chạy toàn bộ test suite với Vitest |
-| Có file trong `roadmap-rag-assistant/` | `cd roadmap-rag-assistant && python -m pytest -q && python -m evals validate` | Test service Python |
+| Có file trong `roadmap-rag-assistant/` | `cd roadmap-rag-assistant && .venv/bin/python -m pytest -q && .venv/bin/python -m evals validate` | Test service Python |
 | Có file trong `prisma/` | `yarn test:schema-sql --check` | Kiểm tra schema SQL fixture |
 | Có file trong dữ liệu knowledge (`lib/ai/data/`, `lib/ai/portfolio-knowledge.ts` hoặc `lib/ai/knowledge-base.ts`, nơi tính hash của index) | `yarn check:knowledge-index` | Kiểm tra tính đồng bộ của vector index |
 | Có file code (`.ts`, `.tsx`, `.py`, `.prisma`) hoặc file trong `.agents/skills/cris-code-intel/` | `yarn intel status` | Exit 1 nghĩa là map lệch code: báo các ref `MISSING_*`, cần sửa `cris-workspace-map.json` trong cùng thay đổi |
 | Có file trong `.agents/**` hoặc `.claude/**` | `yarn agents:sync --check` | CI chạy lệnh này |
+
+**Lỗi lint nghi là có từ trước:** chứng minh bằng `git show <nhánh gốc>:<file> | yarn eslint --stdin --stdin-filename <file>`. Bản gốc có cùng lỗi thì ghi "có từ trước (đã chứng minh)"; không chứng minh được thì coi là lỗi mới.
 
 **Ghi chú GitNexus (chỉ báo, không chạy):** nếu có `.gitnexus/meta.json` mà `lastCommit` khác `git rev-parse HEAD`, thêm một dòng vào report gợi ý chạy `gitnexus analyze --skip-agents-md`.
 

@@ -10,7 +10,9 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 
 ## 1. Viết spec
 
+- **Mỗi spec một nhánh riêng**, tạo trước khi chạy `baseline.sh`. Nhánh gốc là `main`; nếu spec phụ thuộc commit chưa merge thì ghi rõ nhánh gốc trong mục Context của spec.
 - Copy `.handoff/specs/TEMPLATE-TASK.md` thành `.handoff/specs/TASK-<branch-slug>-<id>.md`, `status: "READY"`, `current_attempt: 0`.
+- Việc cần làm ngoài repo sau khi merge (migration DB, biến môi trường, reindex) ghi vào `deploy_steps`.
 - Ánh xạ plan → spec theo `.claude/skills/think/references/task-spec.md` (nếu máy có skill `think`), nếu không thì theo bảng trong RFC mục 3.
 - `type: "implement"` cho việc sửa code; `type: "review"` cho việc chỉ kiểm tra và báo cáo (Executor không sửa file nào trừ chính file spec).
 - Trước khi viết: chạy `yarn intel how-to-sync "<target>"` (kết quả khớp theo keyword, chỉ là bước lọc sơ bộ). Flow `FLOW_*` mà task thật sự đụng tới thì ghi vào mục Dependencies.
@@ -23,7 +25,7 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 bash .agents/skills/agent-handoff/scripts/baseline.sh <task_id>
 ```
 
-Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **sau khi spec đã xong và trước khi Dev dán prompt**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
+Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev dán prompt**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
 
 In prompt cho Dev trong một khối `text` để copy:
 
@@ -83,6 +85,9 @@ Watcher chỉ sống khi phiên Claude còn mở. Nếu phiên đã đóng, Dev 
 
 PASS chỉ khi boundary sạch, mọi gate Claude chạy lại đều pass, checklist đủ, không có finding loại bug.
 
+- Spec có `deploy_steps` thì report và nội dung PR phải liệt kê đủ.
+- Khi PASS, Claude ghi tối đa 3 dòng **Bài học** vào mục 5 của spec. Bài học nào đáng thành rule thì đề xuất sửa `AGENTS.md`/skill trong mục 6, không tự sửa.
+
 ## 6. Next action
 
 Chọn **một** đề xuất chính và nêu lý do ngắn; kèm nút qua `wrap_up`:
@@ -90,7 +95,7 @@ Chọn **một** đề xuất chính và nêu lý do ngắn; kèm nút qua `wrap
 | Tình huống | Đề xuất |
 |---|---|
 | PASS, còn phase sau | Giao phase kế tiếp (quay về mục 1). Chưa commit: theo rule, xong cả plan rồi mới đề xuất commit |
-| PASS, hết plan | Đề xuất Dev commit (Claude không tự commit) |
+| PASS, hết plan | Đề xuất Dev commit (Claude không tự commit). Trước khi đề xuất push/PR, chạy `gh auth status`; chưa đăng nhập thì báo Dev chạy `gh auth login` |
 | PARTIAL/FAIL, lỗi nhỏ rõ ràng | Claude sửa ngay tại đây, hoặc sinh prompt sửa lần 2 |
 | PARTIAL/FAIL, nhiều lỗi hoặc cần chạy dài | Sinh prompt sửa lần 2 cho Executor |
 | ESCALATED | Trả lời câu hỏi kiến trúc, rồi sinh prompt giao lại |

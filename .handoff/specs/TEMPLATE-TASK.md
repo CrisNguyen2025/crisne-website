@@ -20,6 +20,8 @@ boundaries:
     - "yarn.lock"
     - "tsconfig.json"
 
+deploy_steps: [] # việc phải làm ngoài repo sau khi merge (migration DB, biến môi trường, reindex); để trống nếu không có
+
 verification_gate:
   type_check: "yarn tsc --noEmit -p ."
   lint: "yarn lint"
@@ -37,6 +39,7 @@ verification_gate:
 
 ## 2. Invariants & Rules
 - Rule dự án: `AGENTS.md`. Chỉ ghi ở đây rule riêng của task và ADR liên quan.
+- Lỗi hoặc test fail "có từ trước": chỉ ghi khi kèm lệnh tái hiện, commit và ngày. Thiếu một trong ba thì không ghi.
 - Ngoài phạm vi: [liệt kê]
 
 ## 3. Step-by-Step Implementation Checklist
@@ -56,3 +59,4 @@ verification_gate:
 - **Result file**: `.handoff/runs/[task_id]/result.json`
 - **Modified Files**:
   - `...`
+- **Bài học** (Claude điền khi verify PASS, tối đa 3 dòng): ...

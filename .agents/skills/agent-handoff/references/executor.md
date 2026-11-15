@@ -22,7 +22,8 @@ Bạn nhận task từ Claude Code (Architect) qua spec `.handoff/specs/<task_id
    - Có và `task_id` trùng task này (phiên trước của chính task chết giữa chừng, hoặc chạy lại): ghi đè, ghi chú trong `notes`.
    - Có của task khác (mới hơn 4 giờ, hoặc `started_at` không đọc được): `ABORTED`, `notes` nêu task đang giữ lock.
    - Có của task khác và cũ hơn 4 giờ: có thể là lock mồ côi nhưng bạn không phân biệt được với phiên khác còn chạy. **Không xoá, không ghi đè.** Ghi `result.json` `ABORTED` với `notes` chứa nội dung lock và số giờ đã qua, rồi báo Dev trong chat: "Lock của `<task_id khác>` đã `<n>` giờ. Xoá `.handoff/runs/.lock` rồi giao lại?" Dừng, chờ Dev.
-6. Đổi frontmatter spec: `status: IN_PROGRESS`, `current_attempt: 1`.
+6. Môi trường: `node -v` phải ≥ 20; nếu `allowed_to_modify` có `roadmap-rag-assistant/**` thì `test -x roadmap-rag-assistant/.venv/bin/python` phải đúng. Thiếu thì `ABORTED`, `notes` ghi rõ thiếu gì.
+7. Đổi frontmatter spec: `status: IN_PROGRESS`, `current_attempt: 1`.
 
 ## 2. Thực thi
 

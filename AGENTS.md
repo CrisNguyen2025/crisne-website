@@ -10,7 +10,7 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Lint / test: `yarn lint` · `yarn test`
 - Schema và index: `yarn test:schema-sql --check` · `yarn check:knowledge-index`
 - Config agent: `yarn agents:sync --check` (sinh lại bằng `yarn agents:sync`)
-- Python (`cd roadmap-rag-assistant`): `python -m pytest -q` · `python -m evals validate`
+- Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate`
 
 ## 📚 Skills
 
@@ -105,4 +105,4 @@ Nguồn sự thật về ngôn ngữ domain và quyết định kiến trúc. In
 
 ## 📌 Việc đang mở
 
-Không ghi ở đây. Xem `.handoff/specs/` (ví dụ Step 6 và mục 6 của `TASK-lesson-status-001.md`).
+Không ghi ở đây. Chỉ mục: `.handoff/BACKLOG.md`.
