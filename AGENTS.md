@@ -13,19 +13,11 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate`
 
 ## 📚 Skills
-
 Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ là symlink trỏ sang đó.
-
 - **`cris-code-intel`:** dùng khi cần flow nghiệp vụ, domain, invariant (UI → API → Service → AI/DB). Impact và route map dùng GitNexus, trừ route FastAPI và `/api/roadmap-assistant/*`: GitNexus không thấy consumer nên mức risk nó báo không đáng tin, dùng `yarn intel trace FLOW_ABOT_*`. CLI: `yarn intel <lệnh>`. Bản đồ chi tiết: `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
 - **`cris-how-to-sync`:** bắt buộc dùng trước khi lập plan, review thiết kế hoặc đưa target mới (feature, thư viện, model/migration, API route, pattern, thuật ngữ) vào repo. CLI: `yarn intel how-to-sync "<mô tả target>"`.
-- **`abot-trace-report`:** dùng khi phân tích trace Langfuse của Abot.
-- **`design-doc-mermaid`:** dùng khi cần sơ đồ Mermaid để commit trong một file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
-  - Sơ đồ chỉ để xem trong chat, không commit: không dùng skill này. Claude Code dùng `generative-ui`; agent khác trả fence `mermaid` ngay trong câu trả lời.
-  - Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
-  - Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
-  - Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
-- **`agent-handoff`:** dùng khi giao task cho Antigravity/Codex qua spec `.handoff/specs/TASK-*.md` hoặc khi nhận prompt "vai Executor". Quy trình: `.agents/skills/agent-handoff/SKILL.md`.
-- **`verify-ci`:** dùng sau khi sửa code để chạy các lệnh CI theo phạm vi file đổi và báo pass/fail kèm `file:line` (subagent `verifier` của Claude Code dùng skill này).
+- **Skill còn lại:** `abot-trace-report` (phân tích trace Langfuse của Abot); `agent-handoff` (giao task cho Antigravity/Codex qua spec `.handoff/specs/TASK-*.md`, hoặc khi nhận prompt "vai Executor"; quy trình: `.agents/skills/agent-handoff/SKILL.md`); `verify-ci` (chạy các lệnh CI theo phạm vi file đổi, báo pass/fail kèm `file:line`; subagent `verifier` của Claude Code dùng skill này).
+- **`design-doc-mermaid`:** dùng khi cần sơ đồ Mermaid để commit trong một file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT). Quy ước vị trí, style, validate: `docs/README.md` mục Sơ đồ Mermaid.
 
 ## 🤖 Config agent (MCP, subagent, hook)
 
@@ -72,16 +64,7 @@ This project is indexed by GitNexus as **crisne-website**. GitNexus builds a cal
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
 - NEVER rename symbols with find-and-replace — use GitNexus rename, which understands the call graph.
 
-## Skills
-
-| Task                                         | Read this skill file                               |
-| -------------------------------------------- | -------------------------------------------------- |
-| Understand architecture / "How does X work?" | `.agents/skills/gitnexus-exploring/SKILL.md`       |
-| Blast radius / "What breaks if I change X?"  | `.agents/skills/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?"             | `.agents/skills/gitnexus-debugging/SKILL.md`       |
-| Rename / extract / split / refactor          | `.agents/skills/gitnexus-refactoring/SKILL.md`     |
-| Tools, resources, schema reference           | `.agents/skills/gitnexus-guide/SKILL.md`           |
-| Index, status, clean, wiki CLI commands      | `.agents/skills/gitnexus-cli/SKILL.md`             |
+Skill `gitnexus-*` (exploring, impact-analysis, debugging, refactoring, guide, cli) nằm ở `.agents/skills/`.
 
 <!-- gitnexus:end -->
 

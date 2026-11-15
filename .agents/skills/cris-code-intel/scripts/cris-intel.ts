@@ -149,10 +149,38 @@ function checkRef(repoRoot: string, ref: string): string | null {
   return new RegExp(`\\b${escaped}\\b`).test(content) ? null : `MISSING_SYMBOL ${ref}`;
 }
 
+// Code refs written in backticks in docs/code-intel/*.md: `path/to/file.ext` or `path/to/file.ext#symbol`
+function collectDocRefs(repoRoot: string): { file: string; ref: string }[] {
+  const dir = path.join(repoRoot, "docs/code-intel");
+  if (!fs.existsSync(dir)) return [];
+  const pattern = /`([\w.\-[\]]+(?:\/[\w.\-[\]]+)+\.(?:ts|tsx|py|prisma|json)(?:#[\w.]+)?)`/g;
+  const found: { file: string; ref: string }[] = [];
+  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(".md"))) {
+    const text = fs.readFileSync(path.join(dir, name), "utf-8");
+    for (const m of text.matchAll(pattern)) found.push({ file: `docs/code-intel/${name}`, ref: m[1] });
+  }
+  return found.filter((x, i) => found.findIndex((y) => y.file === x.file && y.ref === x.ref) === i);
+}
+
+// Python refs in docs are relative to roadmap-rag-assistant/, so retry there before reporting a missing file
+function checkDocRef(repoRoot: string, ref: string): string | null {
+  const first = checkRef(repoRoot, ref);
+  if (first === null || !first.startsWith("MISSING_FILE")) return first;
+  return checkRef(path.join(repoRoot, "roadmap-rag-assistant"), ref) === null ? null : first;
+}
+
 function handleStatus(data: WorkspaceMap) {
   const repoRoot = path.resolve(__dirname, "../../../..");
   const refs = collectRefs(data);
-  const errors = refs.map((r) => checkRef(repoRoot, r)).filter((e): e is string => e !== null);
+  const docRefs = collectDocRefs(repoRoot);
+  const errors = [
+    ...refs.map((r) => checkRef(repoRoot, r)),
+    ...docRefs.map(({ file, ref }) => {
+      const err = checkDocRef(repoRoot, ref);
+      return err === null ? null : `${err.split(" ")[0]} ${file}: ${ref}`;
+    }),
+  ].filter((e): e is string => e !== null);
+  const total = refs.length + docRefs.length;
 
   console.log("\n📊 === CRIS WORKSPACE CODE INTELLIGENCE STATUS ===");
   console.log(`Map Commit    : ${data.headCommit.slice(0, 7)} (tham khảo)`);
@@ -162,10 +190,10 @@ function handleStatus(data: WorkspaceMap) {
   );
   console.log("───────────────────────────────────────────────────");
   if (errors.length === 0) {
-    console.log(`🟢 OK: ${refs.length} ref đều khớp code\n`);
+    console.log(`🟢 OK: ${refs.length} ref map + ${docRefs.length} ref docs đều khớp code\n`);
     return;
   }
-  console.log(`🔴 ${errors.length}/${refs.length} ref không khớp code:`);
+  console.log(`🔴 ${errors.length}/${total} ref không khớp code:`);
   errors.forEach((e) => console.log(`  ${e}`));
   console.log("");
   process.exit(1);
@@ -577,11 +605,15 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
       d.glossary.some((g) => queryLower.includes(g.toLowerCase()))
   );
 
-  const matchedFlows = data.executionFlows.filter(
-    (f) =>
-      queryLower.includes(f.domainId.toLowerCase()) ||
-      f.name.toLowerCase().split(" ").some((w) => w.length > 3 && queryLower.includes(w))
-  );
+  const flowMatchReasons = new Map<string, string>();
+  for (const f of data.executionFlows) {
+    const reasons: string[] = [];
+    if (queryLower.includes(f.domainId.toLowerCase())) reasons.push(`domain "${f.domainId}"`);
+    const words = f.name.toLowerCase().split(" ").filter((w) => w.length > 3 && queryLower.includes(w));
+    if (words.length > 0) reasons.push(`tên flow chứa "${[...new Set(words)].join('", "')}"`);
+    if (reasons.length > 0) flowMatchReasons.set(f.id, reasons.join("; "));
+  }
+  const matchedFlows = data.executionFlows.filter((f) => flowMatchReasons.has(f.id));
 
   // 5. Output Findings
   console.log("───────────────────────────────────────────────────");
@@ -614,7 +646,11 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
   }
   if (matchedFlows.length > 0) {
     console.log(`  🛤️ Execution Flows có thể bị ảnh hưởng (${matchedFlows.length}):`);
-    matchedFlows.forEach((f) => console.log(`     • [${f.id}] ${f.name} (Actor: ${f.actor})`));
+    matchedFlows.forEach((f) => {
+      console.log(`     • [${f.id}] ${f.name} (Actor: ${f.actor})`);
+      console.log(`       khớp vì: ${flowMatchReasons.get(f.id)}`);
+    });
+    console.log("  ⚠️ Khớp theo keyword: xác nhận bằng `yarn intel trace <FLOW_ID>` trước khi ghi vào Dependencies.");
   }
 
   // 6. Final Verdict
