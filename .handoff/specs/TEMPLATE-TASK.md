@@ -22,6 +22,7 @@ boundaries:
 
 deploy_steps: [] # việc phải làm ngoài repo sau khi merge (migration DB, biến môi trường, reindex); để trống nếu không có
 
+fast_gate: ["type_check", "boundary_check"] # key của verification_gate chạy ở mỗi lần thử; mọi key chạy một lần trước COMPLETED. Bỏ trống = chạy tất cả mỗi lần
 verification_gate:
   type_check: "yarn tsc --noEmit -p ."
   lint: "yarn lint"

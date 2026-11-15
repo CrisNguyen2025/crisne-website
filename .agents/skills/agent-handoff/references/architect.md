@@ -17,6 +17,7 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 - `type: "implement"` cho việc sửa code; `type: "review"` cho việc chỉ kiểm tra và báo cáo (Executor không sửa file nào trừ chính file spec).
 - Trước khi viết: chạy `yarn intel how-to-sync "<target>"` (kết quả khớp theo keyword, chỉ là bước lọc sơ bộ). Flow `FLOW_*` mà task thật sự đụng tới thì ghi vào mục Dependencies.
 - `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`, luôn có `intel_status: "yarn intel status"`.
+- `fast_gate` chọn lệnh nhanh và đúng phạm vi file sửa (ví dụ `type_check`, `boundary_check`, một test file cụ thể). Test toàn bộ (`yarn test`, `pytest -q`) để ngoài `fast_gate`.
 - Không commit spec. Báo Dev spec đã sẵn sàng để họ commit nếu muốn.
 
 ## 2. Baseline và prompt
@@ -33,6 +34,7 @@ In prompt cho Dev trong một khối `text` để copy:
 Dùng skill agent-handoff, vai Executor. Thực thi `.handoff/specs/<task_id>.md`.
 Kết thúc ở bất kỳ trạng thái nào cũng phải ghi `.handoff/runs/<task_id>/result.json`
 theo references/executor.md mục 6. Không commit.
+Xong thì nhắc Dev: gõ "verify <task_id>" cho Claude.
 ```
 
 Với task `review`, thêm một dòng: `Task này chỉ đọc và báo cáo, ghi kết quả vào .handoff/runs/<task_id>/review.md.`
@@ -109,6 +111,7 @@ Claude verify lần trước còn các lỗi sau, chỉ sửa đúng các mục 
 1. <file:line — lỗi — cách kiểm>
 2. ...
 Kết thúc ghi lại `.handoff/runs/<task_id>/result.json`. Không commit.
+Xong thì nhắc Dev: gõ "verify <task_id>" cho Claude.
 ```
 
 ## 7. Nhiều phase và nhiều task

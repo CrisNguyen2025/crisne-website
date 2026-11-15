@@ -73,6 +73,8 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 ## 5. Tên topic có chữ "Section" bị cắt sai (lỗi 2)
 
+**Đã xong** (ở `TASK-abot-bugs-001`, xem lỗi 2 trong `tests/manual/assistant-sections.md`).
+
 **Hiện tại:** "thêm bài X vào topic QA Section Test mục RAG" bị hiểu thành topic "QA Section" và mục "Test mục rag".
 
 **Cách làm:** sau khi trích xuất, nếu `topic_named_in_message` tìm thấy một topic có thật mà tên dài hơn parent đã trích, dùng topic đó, rồi tính lại `section` là phần sau chữ "mục" nằm **sau** tên topic. Test với topic có các chữ "Section", "Mục", "Topic" trong tên.
@@ -90,6 +92,8 @@ Trong `core/generation/pipeline.py`, ghi khối `<conversation_history>` đã đ
 `GET /api/public/traces/{id}` đã trả 410 và sẽ bị gỡ vào 2026-11-16. Code của project không gọi endpoint này, nhưng triage có gọi `api.legacy.scoreV1.delete` (`lib/` → `listDownvotedTraces` và các hàm liên quan). Cần kiểm tra lời gọi này có nằm trong đợt gỡ bỏ không, nếu có thì chuyển sang API score mới. Liên quan tới việc bật lại 👍/👎 (`FEEDBACK_ENABLED`).
 
 ## 9. Hai test đang fail sẵn
+
+**Đã cũ (kiểm 2026-11-15):** không còn test `test_evals_answer_target`; `wrong_branch` đo offline là 91 ≤ mốc 103, nên `test_write_invariants` pass.
 
 - `test_evals_answer_target`: cần `prisma/dev.db` có dữ liệu. File hiện bị sửa (co từ 1,2 MB còn 274 KB) và chưa commit. Khôi phục bằng `git checkout prisma/dev.db` nếu bản đang có trên đĩa là ngoài ý muốn.
 - `test_write_invariants`: `wrong_branch` đang là 107 so với mốc 103. Xem 4 câu nào mới đi sai nhánh, rồi sửa router hoặc cập nhật mốc trong `evals/router/confuse_baseline.json` nếu thay đổi đó là chủ ý.

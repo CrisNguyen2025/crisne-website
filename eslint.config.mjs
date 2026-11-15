@@ -7,6 +7,11 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   eslintConfigPrettier,
+  // CI lints only changed files, so existing console.log calls get cleaned up when their file is touched
+  {
+    files: ["{app,lib,components,hooks,logic}/**/*.{ts,tsx}"],
+    rules: { "no-console": ["error", { allow: ["warn", "error"] }] },
+  },
   // Node CommonJS scripts (e.g. git hooks) legitimately use require()
   {
     files: ["scripts/**/*.js"],

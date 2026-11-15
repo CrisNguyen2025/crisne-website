@@ -47,7 +47,6 @@ Chỉ ghi quy ước riêng của repo. Quy ước chung của Next.js/React/Tai
 
 - Don't import server-only code in client components
 - Không hardcode secret, API key, token, password trong code
-- Không để console.log/debug log trong code commit
 - Inline style chỉ dùng cho giá trị tính lúc runtime; còn lại dùng Tailwind
 - Code mới không fetch data trong useEffect; dùng server action hoặc Server Component
 - Naming props/biến theo đúng single component/func, không gắn use-case (sai: isChatLoading, đúng: isLoading)

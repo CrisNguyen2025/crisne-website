@@ -33,7 +33,10 @@ Bạn nhận task từ Claude Code (Architect) qua spec `.handoff/specs/<task_id
 
 ## 3. Verification gate
 
-- **`implement`:** chạy lần lượt mọi lệnh trong `verification_gate` (`type_check`, `lint`, `test`, `boundary_check`).
+- **`implement`:**
+  - Mỗi lần thử: chạy các key trong `fast_gate`, hoặc mọi key của `verification_gate` nếu spec không có `fast_gate`.
+  - `fast_gate` pass: chạy mọi key còn lại một lần. Fail thì tính là một lần thử.
+  - Chỉ ghi `COMPLETED` khi **mọi** key đều pass ở lần chạy cuối.
 - **`review`:** vẫn **bắt buộc** chạy `boundary_check`, để chắc chắn không có file nào bị sửa ngoài ý muốn. Các lệnh khác thường không có trong spec review; nếu có thì chạy.
 
 Lệnh `boundary_check` thường là `bash .agents/skills/agent-handoff/scripts/check-boundary.sh <task_id>`: nó so với baseline nên không nhầm thay đổi cũ của Dev.
