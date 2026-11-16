@@ -14,18 +14,12 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 
 ## 📚 Skills
 
-Skill dự án nằm thật ở `.agents/skills/`. `.claude/skills/<x>` chỉ là symlink trỏ sang đó.
+Skill dự án nằm thật ở `.agents/skills/` (Claude Code, Codex, Antigravity đều tự đọc description từ đây). `.claude/skills/<x>` chỉ là symlink trỏ sang đó. Phần dưới chỉ ghi rule mà description không nói:
 
-- **`cris-code-intel`:** dùng khi cần nắm kiến trúc, trace luồng thực thi (UI → API → Service → AI/DB), xem bản đồ API route hoặc đánh giá blast radius. CLI: `yarn intel <lệnh>`. Bản đồ chi tiết: `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
-- **`cris-how-to-sync`:** bắt buộc dùng trước khi lập plan, review thiết kế hoặc đưa target mới (feature, thư viện, model/migration, API route, pattern, thuật ngữ) vào repo. CLI: `yarn intel how-to-sync "<mô tả target>"`.
-- **`abot-trace-report`:** dùng khi phân tích trace Langfuse của Abot.
-- **`design-doc-mermaid`:** dùng khi cần sơ đồ Mermaid để commit trong một file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
-  - Sơ đồ chỉ để xem trong chat, không commit: không dùng skill này. Claude Code dùng `generative-ui`; agent khác trả fence `mermaid` ngay trong câu trả lời.
-  - Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
-  - Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
-  - Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
-- **`agent-handoff`:** dùng khi giao task cho Antigravity/Codex qua spec `.handoff/specs/TASK-*.md` hoặc khi nhận prompt "vai Executor". Quy trình: `.agents/skills/agent-handoff/SKILL.md`.
-- **`verify-ci`:** dùng sau khi sửa code để chạy các lệnh CI theo phạm vi file đổi và báo pass/fail kèm `file:line` (subagent `verifier` của Claude Code dùng skill này).
+- **`cris-how-to-sync`:** bắt buộc dùng trước khi lập plan, review thiết kế hoặc đưa target mới vào repo.
+- **`cris-code-intel`:** CLI `yarn intel <lệnh>`, bản đồ chi tiết `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
+- **`design-doc-mermaid`:** chỉ dùng cho sơ đồ commit trong file `.md` của repo; quy ước repo nằm đầu `SKILL.md`. Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
+- **`verify-ci`:** dùng sau khi sửa code; subagent `verifier` của Claude Code chạy skill này.
 
 ## 🤖 Config agent (MCP, subagent, hook)
 
@@ -61,28 +55,11 @@ This project is indexed by GitNexus as **crisne-website**. GitNexus builds a cal
 
 > **Setup:** GitNexus cần Node ≥ 22.18 (dự án vẫn chạy Node 20). Index nằm ở `.gitnexus/` (đã gitignore). Khi index cũ, chạy lại **luôn kèm cờ** `gitnexus analyze --skip-agents-md`; thiếu cờ thì GitNexus chèn lại block này vào cả `AGENTS.md` lẫn `CLAUDE.md`. Đường dẫn cài đặt riêng từng máy để trong `CLAUDE.local.md`. Giấy phép của GitNexus là PolyForm Noncommercial.
 
-## Always Do
-
-- **Run impact analysis before editing any function, class, or method**, and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **Detect changes before committing** to verify the diff only affects expected symbols and execution flows.
-- **Warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- When exploring unfamiliar code, query GitNexus for execution flows instead of grepping.
-
-## Never Do
-
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
-- NEVER rename symbols with find-and-replace — use GitNexus rename, which understands the call graph.
-
-## Skills
-
-| Task                                         | Read this skill file                               |
-| -------------------------------------------- | -------------------------------------------------- |
-| Understand architecture / "How does X work?" | `.agents/skills/gitnexus-exploring/SKILL.md`       |
-| Blast radius / "What breaks if I change X?"  | `.agents/skills/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?"             | `.agents/skills/gitnexus-debugging/SKILL.md`       |
-| Rename / extract / split / refactor          | `.agents/skills/gitnexus-refactoring/SKILL.md`     |
-| Tools, resources, schema reference           | `.agents/skills/gitnexus-guide/SKILL.md`           |
-| Index, status, clean, wiki CLI commands      | `.agents/skills/gitnexus-cli/SKILL.md`             |
+- **Trước khi sửa function/class/method:** chạy impact analysis, báo blast radius (direct callers, affected processes, risk level). Có tool GitNexus (MCP `gitnexus_*`) trong phiên thì dùng nó; không có thì dùng `yarn intel impact <symbol>` và nói rõ kết quả lấy từ dataset `cris-code-intel`, không phải GitNexus.
+- Risk HIGH hoặc CRITICAL: cảnh báo user trước khi sửa, không được bỏ qua.
+- Trước khi commit: kiểm tra diff chỉ chạm các symbol và luồng dự kiến (`gitnexus_detect_changes()` nếu có).
+- Đổi tên symbol: không find-and-replace; dùng GitNexus rename nếu có, không có thì hỏi user.
+- Cách dùng chi tiết nằm trong các skill `gitnexus-*`.
 
 <!-- gitnexus:end -->
 

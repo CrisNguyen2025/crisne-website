@@ -3,6 +3,15 @@ name: design-doc-mermaid
 description: Create Mermaid diagrams (flowchart, sequence, class, ER, state, C4, architecture) from text or source code. Default for GitHub wiki. Use when asked to create a diagram, generate mermaid, document architecture, or convert code to diagram. PlantUML is only for leftover types. Confluence needs PNG/SVG as well as the fence.
 ---
 
+## Quy ước repo crisne-website (ưu tiên hơn mọi hướng dẫn bên dưới)
+
+Phần này do repo thêm vào skill vendored từ upstream; khi cập nhật bản upstream thì giữ lại.
+
+- Chỉ dùng cho sơ đồ commit trong file `.md` của repo (`docs/code-intel/`, `docs/adr/`, runbook trong `docs/`, `.handoff/specs/`, `.handoff/PLAN-*`). Sơ đồ chỉ để xem trong chat thì dừng skill: Claude Code dùng `generative-ui`, agent khác trả fence `mermaid` ngay trong câu trả lời.
+- Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
+- Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
+- Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
+
 # Mermaid Architect - Hierarchical Diagram and Documentation Skill
 
 Mermaid diagram and documentation system with specialized guides and code-to-diagram capabilities.
