@@ -23,7 +23,7 @@ Skill dự án nằm thật ở `.agents/skills/` (Claude Code, Codex, Antigravi
 
 ## 🤖 Config agent (MCP, subagent, hook)
 
-Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file do sync sinh ra (`.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md`, `.claude/settings.json` mục `hooks`): hook sẽ chặn, CI chạy `--check`. Chi tiết: `.agents/adapter/README.md`.
+Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file do sync sinh ra: `.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md` (hook chặn), `.claude/settings.json` mục `hooks` (hook không chặn, chỉ CI `--check` bắt). Chi tiết: `.agents/adapter/README.md`.
 
 ## 🧪 Manual Test Results
 
