@@ -67,11 +67,18 @@ def format_documents(docs: List[ContextDocument]) -> str:
 
 
 def format_history(turns: List[Turn], profile: DomainProfile) -> str:
-    if not turns:
+    """Newest turns kept within history_total_chars; the oldest are dropped first."""
+    lines: List[str] = []
+    total = 0
+    for t in reversed(turns):
+        content = _clip(t.content, profile.history_max_chars)
+        if lines and total + len(content) > profile.history_total_chars:
+            break
+        total += len(content)
+        lines.append(f'<turn role="{t.role}">{_escape(content)}</turn>')
+    if not lines:
         return ""
-    lines = [
-        f'<turn role="{t.role}">{_escape(_clip(t.content, profile.history_max_chars))}</turn>' for t in turns
-    ]
+    lines.reverse()
     return f"{profile.history_note}\n<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
 
 
