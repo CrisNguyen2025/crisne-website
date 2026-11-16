@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from rag_service.core.bounded import BoundedStore
+from rag_service.core.thread_api import ThreadApi, default_thread_api
 from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 
@@ -43,6 +44,8 @@ class SessionContext(BaseModel):
     # A previewed lesson status change waiting for "ok" (domains/roadmap/lesson_status.py)
     pending_status_change: Optional[Dict[str, Any]] = None
     recent_created_entities: List[dict] = Field(default_factory=list)
+    # The open Topic was read from Turso (SessionStore.load): once per context, so a thread without one is not read again
+    topic_loaded: bool = False
     # When each pending field was set (time.monotonic); stamped on assignment
     pending_since: Dict[str, float] = Field(default_factory=dict)
 
@@ -66,11 +69,16 @@ class SessionContext(BaseModel):
 
 
 class SessionStore:
-    """In-memory multi-turn session storage."""
+    """In-memory multi-turn session storage.
 
-    def __init__(self) -> None:
+    With an `api`, the Topic an Owner's thread has open is also kept in Turso (ADR-0012), so it survives a
+    restart. Nothing else of the context is kept: a pending change must never outlive the process.
+    """
+
+    def __init__(self, api: Optional[ThreadApi] = None) -> None:
         # Bounded: every chat is a new thread, so a plain dict grew for as long as the process ran
         self._sessions: BoundedStore[SessionContext] = BoundedStore()
+        self._api = api
 
     def get_or_create(self, session_id: str) -> SessionContext:
         """Retrieve existing session context or instantiate a new one."""
@@ -82,6 +90,25 @@ class SessionStore:
         ctx.active_topic_slug = slug
         if title:
             ctx.active_topic_title = title
+        if self._api and slug and self._api.stored(session_id):
+            self._api.write_later(
+                "PATCH", session_id, {"activeTopicSlug": slug, "activeTopicTitle": ctx.active_topic_title}
+            )
+
+    async def load(self, session_id: str) -> None:
+        """Read an Owner thread's open Topic from Turso, once per context (after a restart or a spin down)."""
+        ctx = self.get_or_create(session_id)
+        if ctx.topic_loaded or not self._api or not self._api.stored(session_id):
+            return
+        # Set before the call: two turns of one thread must not both read
+        ctx.topic_loaded = True
+        data = await self._api.read(session_id)
+        state = data.get("state") if data else None
+        # A Topic opened while the call was in flight is newer than the stored one
+        if isinstance(state, dict) and not ctx.active_topic_slug and isinstance(state.get("activeTopicSlug"), str):
+            ctx.active_topic_slug = state["activeTopicSlug"]
+            title = state.get("activeTopicTitle")
+            ctx.active_topic_title = title if isinstance(title, str) else None
 
     def set_last_action(self, session_id: str, action: StructuredRoadmapAction) -> None:
         ctx = self.get_or_create(session_id)
@@ -100,4 +127,4 @@ class SessionStore:
 
 
 # Global singleton instance
-session_store = SessionStore()
+session_store = SessionStore(default_thread_api())

@@ -28,6 +28,23 @@ CREATE TABLE "RoadmapItem" (
     CONSTRAINT "RoadmapItem_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "ThreadMessage" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "threadId" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "ThreadState" (
+    "threadId" TEXT NOT NULL PRIMARY KEY,
+    "activeTopicSlug" TEXT,
+    "activeTopicTitle" TEXT,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Roadmap_slug_key" ON "Roadmap"("slug");
 
@@ -39,4 +56,13 @@ CREATE UNIQUE INDEX "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapI
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug");
+
+-- CreateIndex
+CREATE INDEX "ThreadMessage_threadId_idx" ON "ThreadMessage"("threadId");
+
+-- CreateIndex
+CREATE INDEX "ThreadMessage_createdAt_idx" ON "ThreadMessage"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "ThreadState_updatedAt_idx" ON "ThreadState"("updatedAt");
 

@@ -417,7 +417,21 @@ const AVOID_TERMS_CATALOG: AvoidTermCheck[] = [
   { term: "confirm card", preferred: "Preview", reason: "GLOSSARY.md: Dùng Preview cho thẻ xác nhận CUD" },
   { term: "pending card", preferred: "Preview", reason: "GLOSSARY.md: Dùng Preview" },
   { term: "queued action", preferred: "Pending Action", reason: "GLOSSARY.md: Dùng Pending Action" },
-  { term: "star", preferred: "Favorite", reason: "GLOSSARY.md: Dùng Favorite cho Tag" }
+  { term: "star", preferred: "Favorite", reason: "GLOSSARY.md: Dùng Favorite cho Tag" },
+  // Chỉ thêm các từ cấm ít nghĩa khác. Chưa đưa vào: write, domain, user, API, route, post, label, score,
+  // benchmark, log, run, outline, template, auto-generate, knowledge base, topic (khi nói về phạm vi),
+  // vì chúng phổ biến trong mô tả kỹ thuật hoặc chỉ bị cấm theo ngữ cảnh (code dùng write_gate, write_grant).
+  { term: "rag bot", preferred: "Roadmap Assistant", reason: "GLOSSARY.md: Dùng Roadmap Assistant (Abot)" },
+  { term: "roadmap chatbot", preferred: "Roadmap Assistant", reason: "GLOSSARY.md: Dùng Roadmap Assistant (Abot)" },
+  { term: "no-context", preferred: "Domain Gap", reason: "GLOSSARY.md: Câu hỏi thuộc lĩnh vực nhưng chưa có Lesson là Domain Gap" },
+  { term: "missing lesson", preferred: "Domain Gap", reason: "GLOSSARY.md: Dùng Domain Gap" },
+  { term: "external question", preferred: "Out of Scope", reason: "GLOSSARY.md: Dùng Out of Scope (off-topic)" },
+  { term: "floating bot", preferred: "Cris AI", reason: "GLOSSARY.md: Chatbot trang portfolio là Cris AI" },
+  { term: "site chatbot", preferred: "Cris AI", reason: "GLOSSARY.md: Dùng Cris AI" },
+  { term: "rating", preferred: "Feedback", reason: "GLOSSARY.md: Đánh giá 👍/👎 là Feedback" },
+  { term: "vote", preferred: "Feedback", reason: "GLOSSARY.md: Dùng Feedback" },
+  { term: "test set", preferred: "Golden Set", reason: "GLOSSARY.md: Tập câu hỏi kèm đáp án chuẩn là Golden Set" },
+  { term: "bookmark", preferred: "Note / Favorite", reason: "GLOSSARY.md: Ghi chú/link là Note, Tag yêu thích là Favorite" }
 ];
 
 const INVARIANT_RULES_CATALOG: InvariantRuleCheck[] = [
@@ -428,7 +442,7 @@ const INVARIANT_RULES_CATALOG: InvariantRuleCheck[] = [
     severity: "CRITICAL"
   },
   {
-    keywords: ["openai", "text-embedding-3", "cohere", "huggingface"],
+    keywords: ["openai", "text-embedding-3", "text-embedding-3-small", "text-embedding-3-large", "cohere", "huggingface"],
     rule: "ADR-0004",
     message: "Vi phạm ADR-0004: Toàn bộ vector embeddings bắt buộc dùng Google Gemini text-embedding-004 (768d).",
     severity: "CRITICAL"
@@ -476,6 +490,18 @@ const INVARIANT_RULES_CATALOG: InvariantRuleCheck[] = [
   }
 ];
 
+// Khớp nguyên từ: ký tự liền trước và sau không được là chữ, số, "_" hay "-",
+// nên "schema-first" không khớp "schema", "authorization" không khớp "author".
+// Không dùng \b vì \b của JS coi chữ có dấu tiếng Việt là ký tự ngắt từ.
+function containsTerm(text: string, term: string): boolean {
+  const escaped = term.normalize("NFC").toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{M}\\p{N}_-])${escaped}(?![\\p{L}\\p{M}\\p{N}_-])`, "u").test(text);
+}
+
+function containsAnyTerm(text: string, terms: string[]): boolean {
+  return terms.some((term) => containsTerm(text, term));
+}
+
 function handleHowToSync(data: WorkspaceMap, target: string) {
   if (!target) {
     console.error(
@@ -484,7 +510,7 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
     return;
   }
 
-  const queryLower = target.toLowerCase();
+  const queryLower = target.normalize("NFC").toLowerCase();
 
   console.log(`\n🛡️ === CRIS HOW-TO-SYNC AUDIT REPORT ===`);
   console.log(`Mục tiêu đánh giá (Target): "${target}"\n`);
@@ -492,8 +518,7 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
   // 1. Check Glossary Violations
   const detectedAvoidTerms: AvoidTermCheck[] = [];
   for (const item of AVOID_TERMS_CATALOG) {
-    const regex = new RegExp(`\\b${item.term}\\b`, "i");
-    if (regex.test(queryLower) || queryLower.includes(item.term.toLowerCase())) {
+    if (containsTerm(queryLower, item.term)) {
       detectedAvoidTerms.push(item);
     }
   }
@@ -501,8 +526,7 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
   // 2. Check ADR Invariant Violations
   const detectedViolations: InvariantRuleCheck[] = [];
   for (const rule of INVARIANT_RULES_CATALOG) {
-    const matched = rule.keywords.some((kw) => queryLower.includes(kw.toLowerCase()));
-    if (matched) {
+    if (containsAnyTerm(queryLower, rule.keywords)) {
       detectedViolations.push(rule);
     }
   }
@@ -510,58 +534,62 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
   // 3. Scan Sync Effects
   const syncEffects: string[] = [];
 
-  const mentionsDb =
-    queryLower.includes("model") ||
-    queryLower.includes("schema") ||
-    queryLower.includes("bảng") ||
-    queryLower.includes("trường") ||
-    queryLower.includes("table") ||
-    queryLower.includes("prisma") ||
-    queryLower.includes("field") ||
-    queryLower.includes("column");
+  const mentionsDb = containsAnyTerm(queryLower, [
+    "model",
+    "schema",
+    "bảng",
+    "trường",
+    "table",
+    "prisma",
+    "field",
+    "column",
+  ]);
   if (mentionsDb) {
     syncEffects.push("Database & Schema: prisma/schema.prisma -> chạy yarn db:push Turso -> scripts/export-test-schema.ts");
   }
 
-  const mentionsRoadmapMutation =
-    queryLower.includes("lesson") ||
-    queryLower.includes("topic") ||
-    queryLower.includes("section") ||
-    queryLower.includes("roadmapitem") ||
-    queryLower.includes("bài học") ||
-    queryLower.includes("status");
+  const mentionsRoadmapMutation = containsAnyTerm(queryLower, [
+    "lesson",
+    "topic",
+    "section",
+    "roadmapitem",
+    "bài học",
+    "status",
+  ]);
   if (mentionsRoadmapMutation) {
     syncEffects.push("RAG Vector Index: Cần gắn hook after(requestRagReindex) khi có CUD để Python backend nạp lại in-memory vector store");
   }
 
-  const mentionsPython =
-    queryLower.includes("fastapi") ||
-    queryLower.includes("intent") ||
-    queryLower.includes("router") ||
-    queryLower.includes("abot") ||
-    queryLower.includes("rag") ||
-    queryLower.includes("python") ||
-    queryLower.includes("p0") ||
-    queryLower.includes("preview");
+  const mentionsPython = containsAnyTerm(queryLower, [
+    "fastapi",
+    "intent",
+    "router",
+    "abot",
+    "rag",
+    "python",
+    "p0",
+    "preview",
+  ]);
   if (mentionsPython) {
     syncEffects.push("Dual-Service Sync: Đồng bộ schemas Pydantic (Python) với Next.js BFF proxy /api/roadmap-assistant");
   }
 
-  const mentionsEnv =
-    queryLower.includes("env") ||
-    queryLower.includes("token") ||
-    queryLower.includes("secret") ||
-    queryLower.includes("api key") ||
-    queryLower.includes("key");
+  // "environment" và "biến môi trường" bù cho "env": khớp nguyên từ nên "env" không còn khớp "environment"
+  const mentionsEnv = containsAnyTerm(queryLower, [
+    "env",
+    "environment",
+    "biến môi trường",
+    "token",
+    "secret",
+    "api key",
+    "key",
+  ]);
   if (mentionsEnv) {
     syncEffects.push("Deployment Env: Cập nhật docs/DEPLOY_ENV.md cho cả Vercel (Next.js) và Render (Python microservice)");
   }
 
   const mentionsNewTerm =
-    queryLower.includes("thuật ngữ") ||
-    queryLower.includes("concept") ||
-    queryLower.includes("từ mới") ||
-    detectedAvoidTerms.length > 0;
+    containsAnyTerm(queryLower, ["thuật ngữ", "concept", "từ mới"]) || detectedAvoidTerms.length > 0;
   if (mentionsNewTerm) {
     syncEffects.push("Core Docs: Cập nhật định nghĩa vào GLOSSARY.md (chú ý _Also_ và _Avoid_)");
   }
@@ -571,16 +599,13 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
 
   // 4. Find affected Domains & Execution Flows
   const matchedDomains = data.domains.filter(
-    (d) =>
-      queryLower.includes(d.id.toLowerCase()) ||
-      queryLower.includes(d.name.toLowerCase()) ||
-      d.glossary.some((g) => queryLower.includes(g.toLowerCase()))
+    (d) => containsAnyTerm(queryLower, [d.id, d.name, ...d.glossary])
   );
 
   const matchedFlows = data.executionFlows.filter(
     (f) =>
-      queryLower.includes(f.domainId.toLowerCase()) ||
-      f.name.toLowerCase().split(" ").some((w) => w.length > 3 && queryLower.includes(w))
+      containsTerm(queryLower, f.domainId) ||
+      f.name.split(" ").some((w) => w.length > 3 && containsTerm(queryLower, w))
   );
 
   // 5. Output Findings
@@ -622,19 +647,21 @@ function handleHowToSync(data: WorkspaceMap, target: string) {
   const hasHighOrMedium = detectedViolations.some((v) => v.severity !== "CRITICAL");
   const hasGlossaryWarning = detectedAvoidTerms.length > 0;
 
+  // CLI chỉ so keyword: không kiểm tra được trùng lặp với module sẵn có hay độ cần thiết (bước 3 của skill),
+  // nên mọi kết quả ở đây là sơ bộ, và không phát hiện vi phạm không có nghĩa là NÊN.
   console.log("\n───────────────────────────────────────────────────");
   if (hasCritical) {
-    console.log("⚖️ KẾT LUẬN: 🔴 KHÔNG NÊN (REJECTED / ANTI-PATTERN)");
-    console.log("Lý do: Target vi phạm trực tiếp các bất biến hệ thống không thể thỏa hiệp.");
-    console.log("Hành động: Hủy bỏ hoặc thiết kế lại theo các giải pháp thay thế chính quy trong references/ARCHITECTURAL_INVARIANTS.md.\n");
+    console.log("⚖️ KẾT LUẬN SƠ BỘ: 🔴 KHÔNG NÊN (REJECTED / ANTI-PATTERN)");
+    console.log("Lý do: Target khớp keyword vi phạm trực tiếp các bất biến hệ thống không thể thỏa hiệp.");
+    console.log("Hành động: Xác nhận vi phạm là thật (keyword có thể nằm trong câu phủ định), rồi hủy bỏ hoặc thiết kế lại theo references/ARCHITECTURAL_INVARIANTS.md.\n");
   } else if (hasHighOrMedium || hasGlossaryWarning) {
-    console.log("⚖️ KẾT LUẬN: 🟡 CẢI THIỆN / ĐIỀU CHỈNH (CONDITIONAL / NEEDS ALIGNMENT)");
-    console.log("Lý do: Ý tưởng phù hợp nhưng cần điều chỉnh thuật ngữ, ranh giới proxy, hoặc bổ sung đầy đủ các bước đồng bộ.");
-    console.log("Hành động: Sửa đổi các điểm cảnh báo ở trên trước khi lập kế hoạch triển khai chi tiết.\n");
+    console.log("⚖️ KẾT LUẬN SƠ BỘ: 🟡 CẢI THIỆN / ĐIỀU CHỈNH (CONDITIONAL / NEEDS ALIGNMENT)");
+    console.log("Lý do: Target khớp keyword cảnh báo về thuật ngữ, ranh giới kiến trúc hoặc bước đồng bộ.");
+    console.log("Hành động: Xử lý các điểm cảnh báo ở trên, rồi làm bước 3 của skill (phân tích trùng lặp) trước khi kết luận.\n");
   } else {
-    console.log("⚖️ KẾT LUẬN: 🟢 NÊN (APPROVED / ARCHITECTURALLY ALIGNED)");
-    console.log("Lý do: Target tương thích kiến trúc, tuân thủ Glossary và không xung đột với các ADRs.");
-    console.log("Hành động: Triển khai theo Sync Effects Checklist và cập nhật dataset cris-code-intel sau khi hoàn tất.\n");
+    console.log("⚖️ KẾT LUẬN SƠ BỘ: ⚪ CHƯA KẾT LUẬN (KHÔNG PHÁT HIỆN VI PHẠM KEYWORD)");
+    console.log("Lý do: Không khớp keyword vi phạm ADR hay từ cấm trong GLOSSARY.md. CLI không kiểm tra trùng lặp với module sẵn có hay độ cần thiết.");
+    console.log("Hành động: Làm bước 3 của skill (đọc code liên quan, tìm module đã giải quyết việc này) rồi mới kết luận NÊN / KHÔNG NÊN / CẢI THIỆN.\n");
   }
 }
 

@@ -30,6 +30,28 @@ Các file sau do `yarn agents:sync` sinh ra và được commit trong git:
 
 - **Hook Runner (`scripts/agent-adapter/hook-runner.js`)**: Runner dùng chung chuẩn hoá stdin/stdout giữa Claude Code và Antigravity, truyền payload `{ event, tool, repoRoot }` tới script thực thi. Runner tuân thủ nguyên tắc **fail-open** (exit code 0 nếu gặp lỗi cú pháp stdin, thiếu script, hoặc hook crash) để không làm treo phiên làm việc của agent.
 - **Hook `guard-generated`**: Hook `PreToolUse` kiểm tra công cụ `edit` (bao gồm `Edit`, `Write` trên Claude; `edit_file`, `write_file` trên Antigravity). Nếu agent định sửa các file sinh tự động (`.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md`), hook sẽ từ chối (`deny`) và hướng dẫn sửa tại nguồn trong `.agents/adapter/`.
+- **Ngoại lệ `.claude/settings.json`**: guard chặn theo cả file, mà file này còn các key khác được sửa tay (ví dụ `permissions`), nên guard không chặn. Mục `hooks` trong đó chỉ được `yarn agents:sync --check` bắt ở CI.
+
+### Chọn hook, subagent hay skill
+
+Hook do harness tự chạy theo event, agent không chọn gọi. Subagent và skill thì agent tự quyết định gọi dựa vào `description`.
+
+| Cần | Dùng | Lý do |
+|---|---|---|
+| Rule bắt buộc, chạy nhanh (< timeout 10s), logic rõ: chặn, nhắc, chèn context | Hook | Chạy mỗi lần event xảy ra, không phụ thuộc model nhớ |
+| Việc chạy lâu hoặc cần đọc, diễn giải kết quả, nên tách khỏi context chính | Subagent | Có context, tool và model riêng; chỉ trả báo cáo |
+| Quy trình hoặc kiến thức agent chính tự làm trong phiên | Skill | Nạp khi cần, dùng chung cho cả Claude Code và Antigravity |
+
+Chọn event cho hook. Adapter chỉ nhận 4 event dưới đây (`scripts/agent-adapter/core/load.ts`); `SessionStart` và `Stop` không được khai báo `tools`:
+
+| Event | Dùng khi |
+|---|---|
+| `PreToolUse` | Chặn một tool call trước khi chạy (ví dụ `guard-generated`) |
+| `PostToolUse` | Việc nhanh trên đúng file vừa sửa. Không chạy `tsc`/`yarn test` ở đây: chạy sau mỗi lần Edit, chậm và dễ quá timeout |
+| `SessionStart` | Kiểm tra môi trường đầu phiên |
+| `Stop` | Nhắc việc trước khi agent kết thúc lượt (ví dụ nhắc gọi `verifier`), không chạy CI nặng trong hook |
+
+Claude Code còn các event khác (ví dụ `UserPromptSubmit`) nhưng adapter chưa hỗ trợ; muốn dùng thì phải mở rộng `load.ts` và adapter của từng agent trước. Tài liệu: [Claude Code hooks](https://code.claude.com/docs/en/hooks), [Claude Code subagents](https://code.claude.com/docs/en/sub-agents).
 
 ## 4. Cấu hình riêng cho từng agent (`x-claude`, `x-antigravity`)
 

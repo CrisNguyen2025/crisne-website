@@ -29,6 +29,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0009](adr/0009-topic-holds-lessons-by-section.md)            | Topic chứa Lesson trực tiếp, Section thay cho Layer và Group | accepted               |
 | [0010](adr/0010-lesson-status-known-learning-target.md)       | Lesson có trạng thái: target, learning, known                | accepted               |
 | [0011](adr/0011-drop-knowledge-triage.md)                     | Bỏ Knowledge Triage, Langfuse vẫn giữ Feedback và Golden Set | accepted               |
+| [0012](adr/0012-owner-thread-state-in-turso.md)               | Thread Owner lưu ở Turso, Thread Visitor chỉ trong RAM       | accepted               |
 
 ## Runbook: cách setup / vận hành
 

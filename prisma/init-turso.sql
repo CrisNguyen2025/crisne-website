@@ -39,3 +39,29 @@ CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_title_key" ON "RoadmapI
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug");
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "ThreadMessage" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "threadId" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "ThreadState" (
+    "threadId" TEXT NOT NULL PRIMARY KEY,
+    "activeTopicSlug" TEXT,
+    "activeTopicTitle" TEXT,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "ThreadMessage_threadId_idx" ON "ThreadMessage"("threadId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "ThreadMessage_createdAt_idx" ON "ThreadMessage"("createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "ThreadState_updatedAt_idx" ON "ThreadState"("updatedAt");

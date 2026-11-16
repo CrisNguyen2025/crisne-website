@@ -50,3 +50,27 @@ model RoadmapItem {
   @@index([roadmapId])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Thread state of the Owner (ADR-0012): history and open Topic of a Roadmap Assistant Thread
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ThreadMessage {
+  id        Int      @id @default(autoincrement()) // Strictly increasing, so it orders a Thread's messages
+  threadId  String   // Always "owner:..."; a Visitor's Thread is never stored
+  role      String   // user | assistant
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([threadId])
+  @@index([createdAt])
+}
+
+model ThreadState {
+  threadId         String   @id
+  activeTopicSlug  String?
+  activeTopicTitle String?
+  updatedAt        DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+

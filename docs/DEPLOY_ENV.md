@@ -129,7 +129,7 @@ Kiểm tra tên model Groq trên console.groq.com trước khi set.
 | `RAG_RERANK` | 🟡 | Mặc định `false` (+1 LLM call/câu) |
 | `RAG_RERANK_GAP` | 🟡 | Mặc định `auto` |
 | `RAG_SEMANTIC_GROUNDING` | 🟡 | Mặc định `false` (+1 LLM call/câu) |
-| `RAG_HISTORY_DB` | 🟡 | Trống = lịch sử trong RAM, mất khi redeploy. Chỉ set khi có Persistent Disk |
+| `RAG_HISTORY_DB` | 🟡 | Trống (nên để trống trên Render Free): lịch sử Thread của Owner lưu ở Turso qua Next.js (ADR-0012, cần `ADMIN_API_KEY` và đã chạy `yarn db:turso:init`), Thread của Visitor chỉ trong RAM. Chỉ set khi có Persistent Disk |
 | `RAG_ADAPTER_MODE` | 🟡 | Giữ mặc định `http` |
 
 ### Langfuse
