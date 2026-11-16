@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireWriteAccess } from '@/lib/auth/write-access';
+import {
+  MAX_THREAD_MESSAGES,
+  THREAD_RETENTION_MS,
+  clipMessageContent,
+  cleanTopicField,
+  isOwnerThreadId,
+  isThreadRole,
+} from '@/lib/roadmap/thread-state';
+
+// History and open Topic of an Owner's Roadmap Assistant Thread (ADR-0012).
+// Called by the Python service with the admin key; a Visitor's Thread is never stored.
+
+interface RouteContext {
+  params: Promise<{ threadId: string }>;
+}
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' };
+
+/** The Thread id from the URL, or the 400 response to send when it is not an Owner Thread. */
+async function ownerThreadId(context: RouteContext): Promise<{ threadId: string } | { denied: NextResponse }> {
+  const { threadId } = await context.params;
+  if (!isOwnerThreadId(threadId)) {
+    return { denied: NextResponse.json({ error: 'Only an owner thread is stored' }, { status: 400 }) };
+  }
+  return { threadId };
+}
+
+// GET /api/v1/threads/[threadId] - The Thread's messages (oldest first) and its open Topic.
+export async function GET(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
+  const thread = await ownerThreadId(context);
+  if ('denied' in thread) return thread.denied;
+
+  try {
+    const [newestFirst, state] = await Promise.all([
+      prisma.threadMessage.findMany({
+        where: { threadId: thread.threadId },
+        orderBy: { id: 'desc' },
+        take: MAX_THREAD_MESSAGES,
+        select: { role: true, content: true },
+      }),
+      prisma.threadState.findUnique({
+        where: { threadId: thread.threadId },
+        select: { activeTopicSlug: true, activeTopicTitle: true },
+      }),
+    ]);
+
+    return NextResponse.json({ messages: newestFirst.reverse(), state }, { headers: NO_STORE });
+  } catch (error) {
+    console.error('[API GET /api/v1/threads/[threadId]] Error:', error);
+    return NextResponse.json({ error: 'Failed to read thread' }, { status: 500 });
+  }
+}
+
+// POST /api/v1/threads/[threadId] - Append one message. Keeps the newest MAX_THREAD_MESSAGES and drops old data.
+export async function POST(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
+  const thread = await ownerThreadId(context);
+  if ('denied' in thread) return thread.denied;
+
+  try {
+    const body = await req.json();
+    const content = typeof body?.content === 'string' ? clipMessageContent(body.content) : '';
+    if (!isThreadRole(body?.role) || !content) {
+      return NextResponse.json({ error: 'role (user | assistant) and content are required' }, { status: 400 });
+    }
+
+    await prisma.threadMessage.create({ data: { threadId: thread.threadId, role: body.role, content } });
+
+    // Older than the newest MAX_THREAD_MESSAGES of this Thread
+    const firstExcess = await prisma.threadMessage.findMany({
+      where: { threadId: thread.threadId },
+      orderBy: { id: 'desc' },
+      skip: MAX_THREAD_MESSAGES,
+      take: 1,
+      select: { id: true },
+    });
+    if (firstExcess.length > 0) {
+      await prisma.threadMessage.deleteMany({
+        where: { threadId: thread.threadId, id: { lte: firstExcess[0].id } },
+      });
+    }
+
+    // Threads nobody continued are dropped, so the tables do not grow for as long as the site runs
+    const cutoff = new Date(Date.now() - THREAD_RETENTION_MS);
+    await prisma.threadMessage.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    await prisma.threadState.deleteMany({ where: { updatedAt: { lt: cutoff } } });
+
+    return NextResponse.json({ ok: true }, { status: 201 });
+  } catch (error) {
+    console.error('[API POST /api/v1/threads/[threadId]] Error:', error);
+    return NextResponse.json({ error: 'Failed to save message' }, { status: 500 });
+  }
+}
+
+// PATCH /api/v1/threads/[threadId] - Set the Topic the Thread has open.
+export async function PATCH(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
+  const thread = await ownerThreadId(context);
+  if ('denied' in thread) return thread.denied;
+
+  try {
+    const body = await req.json();
+    const activeTopicSlug = cleanTopicField(body?.activeTopicSlug);
+    if (!activeTopicSlug) {
+      return NextResponse.json({ error: 'activeTopicSlug is required' }, { status: 400 });
+    }
+    const activeTopicTitle = cleanTopicField(body?.activeTopicTitle);
+
+    await prisma.threadState.upsert({
+      where: { threadId: thread.threadId },
+      create: { threadId: thread.threadId, activeTopicSlug, activeTopicTitle },
+      // A missing title keeps the stored one, like SessionStore.set_active_topic
+      update: { activeTopicSlug, ...(activeTopicTitle ? { activeTopicTitle } : {}) },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('[API PATCH /api/v1/threads/[threadId]] Error:', error);
+    return NextResponse.json({ error: 'Failed to save thread state' }, { status: 500 });
+  }
+}
+
+// DELETE /api/v1/threads/[threadId] - Forget the Thread: its messages and its open Topic.
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
+  const thread = await ownerThreadId(context);
+  if ('denied' in thread) return thread.denied;
+
+  try {
+    await prisma.threadMessage.deleteMany({ where: { threadId: thread.threadId } });
+    await prisma.threadState.deleteMany({ where: { threadId: thread.threadId } });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('[API DELETE /api/v1/threads/[threadId]] Error:', error);
+    return NextResponse.json({ error: 'Failed to delete thread' }, { status: 500 });
+  }
+}

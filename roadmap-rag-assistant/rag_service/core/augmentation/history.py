@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Deque, List, Literal, Protocol
 
 from rag_service.core.bounded import BoundedStore
+from rag_service.core.thread_api import ThreadApi, default_thread_api
 
 Role = Literal["user", "assistant"]
 
@@ -29,6 +30,10 @@ class HistoryStore(Protocol):
         ...
 
     def clear(self, thread_id: str) -> None: ...
+
+    async def load(self, thread_id: str) -> None:
+        """Bring a thread kept elsewhere into memory before its first read; a no-op for a local store."""
+        ...
 
 
 # Conversation turns kept on disk this long; purged when the store opens
@@ -57,6 +62,9 @@ class InMemoryHistoryStore:
 
     def clear(self, thread_id: str) -> None:
         self._threads.pop(thread_id or "default", None)
+
+    async def load(self, thread_id: str) -> None:
+        return None
 
 
 class SqliteHistoryStore:
@@ -118,13 +126,64 @@ class SqliteHistoryStore:
             self._db.execute("DELETE FROM chat_turn WHERE thread_id = ?", (thread_id or "default",))
             self._db.commit()
 
+    async def load(self, thread_id: str) -> None:
+        return None
+
+
+class HttpHistoryStore:
+    """The Owner's conversation memory kept in Turso through the Next.js API (ADR-0012).
+
+    Reads and writes go to RAM, so a turn never waits for the network:
+    - `load` fills RAM from the API once, when a thread is first seen after a restart or a spin down
+    - `append` and `clear` change RAM at once and send the change in the background, in order
+
+    A Visitor's thread is never sent, and a failed call only logs: the thread keeps working from RAM.
+    """
+
+    def __init__(self, api: ThreadApi, max_messages: int = 50) -> None:
+        self._cache = InMemoryHistoryStore(max_messages)
+        self._api = api
+
+    def append(self, thread_id: str, role: Role, content: str) -> None:
+        self._cache.append(thread_id, role, content)
+        if content and self._api.stored(thread_id):
+            self._api.write_later("POST", thread_id, {"role": role, "content": content})
+
+    def get_recent(self, thread_id: str, n: int) -> List[Turn]:
+        return self._cache.get_recent(thread_id, n)
+
+    def clear(self, thread_id: str) -> None:
+        self._cache.clear(thread_id)
+        if self._api.stored(thread_id):
+            self._api.write_later("DELETE", thread_id)
+
+    async def load(self, thread_id: str) -> None:
+        # Only a thread RAM knows nothing about: one that RAM already holds is newer than the API
+        if not self._api.stored(thread_id) or self._cache.get_recent(thread_id, 1):
+            return
+        data = await self._api.read(thread_id)
+        messages = data.get("messages") if data else None
+        # Another turn of this thread may have filled RAM while the call was in flight
+        if not isinstance(messages, list) or self._cache.get_recent(thread_id, 1):
+            return
+        for message in messages:
+            if isinstance(message, dict) and message.get("role") in ("user", "assistant"):
+                self._cache.append(thread_id, message["role"], str(message.get("content", "")))
+
+    async def flush(self) -> None:
+        await self._api.flush()
+
 
 def _make_default() -> HistoryStore:
-    """SQLite when RAG_HISTORY_DB is set in .env (e.g. data/history.db), otherwise RAM as before."""
+    """SQLite when RAG_HISTORY_DB is set (a local file), else the Owner's threads in Turso through the
+    Next.js API when it can be reached with the admin key (ADR-0012), else RAM as before."""
     from rag_service.config import settings
 
     path = settings.rag_history_db.strip()
-    return SqliteHistoryStore(path) if path else InMemoryHistoryStore()
+    if path:
+        return SqliteHistoryStore(path)
+    api = default_thread_api()
+    return HttpHistoryStore(api) if api else InMemoryHistoryStore()
 
 
 history_store: HistoryStore = _make_default()

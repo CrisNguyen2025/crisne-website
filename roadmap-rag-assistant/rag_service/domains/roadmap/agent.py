@@ -262,6 +262,10 @@ class NextGenRoadmapAgent(
                 yield ev
             return
 
+        # An Owner's thread kept in Turso (ADR-0012), its history and open Topic, is read once, before anything
+        # below reads either; the two reads run together so a cold start waits for one round trip
+        await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
+
         # ── 0. Pending roadmap change: confirmation (roadmap domain) ──
         outcome = {"handled": False}
         async for ev in self.handle_pending(
