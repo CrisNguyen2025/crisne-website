@@ -24,7 +24,7 @@ Lớp nghiệp vụ của workspace `crisne-website` (Next.js App Router + Pytho
 
 | Lệnh               | Ý nghĩa                                                                       | Ví dụ                                       |
 | ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------- |
-| `status`           | Kiểm mọi file/symbol mà map nhắc tới còn tồn tại (exit 1 nếu lệch)            | `yarn intel status`                         |
+| `status`           | Kiểm file/symbol trong map và ref trong `docs/code-intel/` còn tồn tại (exit 1 nếu lệch) | `yarn intel status`                         |
 | `query <từ khóa>`  | Tìm flow, domain, route, data model liên quan                                 | `yarn intel query "lesson status"`          |
 | `trace <flow_id>`  | Lần vết từng chặng (UI ➔ Gateway ➔ Logic ➔ DB) kèm invariant và failure mode | `yarn intel trace FLOW_LESSON_STATUS_UPDATE` |
 | `concept [domain]` | Chi tiết một domain: ADR, glossary, key files                                 | `yarn intel concept roadmap-learning`       |

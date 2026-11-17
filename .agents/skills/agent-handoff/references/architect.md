@@ -18,7 +18,7 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 - Trước khi viết: chạy `yarn intel how-to-sync "<target>"` (kết quả khớp theo keyword, chỉ là bước lọc sơ bộ). Flow `FLOW_*` mà task thật sự đụng tới thì ghi vào mục Dependencies.
 - `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`, luôn có `intel_status: "yarn intel status"`.
 - `fast_gate` chọn lệnh nhanh và đúng phạm vi file sửa (ví dụ `type_check`, `boundary_check`, một test file cụ thể). Test toàn bộ (`yarn test`, `pytest -q`) để ngoài `fast_gate`.
-- Không commit spec. Báo Dev spec đã sẵn sàng để họ commit nếu muốn.
+- Spec được commit cùng code của task (cùng nhánh). Spec chưa commit thì không được gỡ worktree hay xoá nhánh.
 
 ## 2. Baseline và prompt
 
@@ -26,9 +26,25 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 bash .agents/skills/agent-handoff/scripts/baseline.sh <task_id>
 ```
 
-Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev dán prompt**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
+Lệnh này ghi HEAD và danh sách file đang dirty (kèm hash) vào `.handoff/runs/<task_id>/baseline.txt`. Có nó thì `check-boundary.sh` mới phân biệt được thay đổi của Dev với thay đổi của Executor. Chạy **trên đúng nhánh của spec, sau khi spec đã xong và trước khi Dev giao việc**; không sửa file nào trong `allowed_to_modify` giữa hai thời điểm đó.
 
-In prompt cho Dev trong một khối `text` để copy:
+**Mặc định: Claude tự giao qua CLI**, chạy nền (Bash `run_in_background`) từ thư mục repo, đúng nhánh của spec:
+
+```bash
+agy -p "/executor <task_id>" --model gemini-3.8-flash-high --mode auto --print-timeout 3600s --output-format json --log-file <scratchpad>/agy-<task_id>.log
+```
+
+Luôn truyền `--model` (mặc định `gemini-3.8-flash-high`, tức Gemini 3.8 Flash (High)) để không phụ thuộc model đang chọn trong IDE. Xem model khác bằng `agy models`. Lệnh thoát thì sang mục 4, không cần watcher. Trong lúc agy chạy, không sửa file nào trong working tree (kể cả spec khác), nếu không `check-boundary.sh` sẽ báo `OUT_OF_SCOPE`.
+
+**Dự phòng khi CLI lỗi:** báo Dev mở Antigravity ở đúng thư mục repo, đúng nhánh của spec, rồi gõ:
+
+```text
+/executor
+```
+
+Skill `executor` tự tìm spec theo nhánh hiện tại. Nhiều spec cùng nhánh thì dùng `/executor <task_id>`.
+
+**Dự phòng** (khi `/executor` không chạy): in prompt cho Dev trong một khối `text` để copy:
 
 ```text
 Dùng skill agent-handoff, vai Executor. Thực thi `.handoff/specs/<task_id>.md`.
@@ -59,6 +75,8 @@ Tham số: `timeout` 14400 giây (4 giờ), chu kỳ 5 giây, `stall` 1800 giây
 Watcher chỉ sống khi phiên Claude còn mở. Nếu phiên đã đóng, Dev gõ "verify `<task_id>`" thì bắt đầu từ mục 4.
 
 ## 4. Verify độc lập
+
+Sau mỗi lần verify, cập nhật dòng **Trạng thái hiện tại** ở đầu spec, để sau khi context bị nén chỉ cần đọc lại spec.
 
 **Không tin `result.json`.** Đọc nó để biết Executor nói gì, rồi tự kiểm:
 
@@ -97,13 +115,13 @@ Chọn **một** đề xuất chính và nêu lý do ngắn; kèm nút qua `wrap
 | Tình huống | Đề xuất |
 |---|---|
 | PASS, còn phase sau | Giao phase kế tiếp (quay về mục 1). Chưa commit: theo rule, xong cả plan rồi mới đề xuất commit |
-| PASS, hết plan | Đề xuất Dev commit (Claude không tự commit). Trước khi đề xuất push/PR, chạy `gh auth status`; chưa đăng nhập thì báo Dev chạy `gh auth login` |
+| PASS, hết plan | Đề xuất Dev commit, gồm cả spec (Claude không tự commit). Trước khi đề xuất push/PR, chạy `gh auth status`; chưa đăng nhập thì báo Dev chạy `gh auth login` |
 | PARTIAL/FAIL, lỗi nhỏ rõ ràng | Claude sửa ngay tại đây, hoặc sinh prompt sửa lần 2 |
 | PARTIAL/FAIL, nhiều lỗi hoặc cần chạy dài | Sinh prompt sửa lần 2 cho Executor |
 | ESCALATED | Trả lời câu hỏi kiến trúc, rồi sinh prompt giao lại |
 | ABORTED vì lock cũ | Cho Dev xem nội dung `.handoff/runs/.lock` và hỏi có xoá không. Chỉ xoá khi Dev đồng ý trong chat, rồi chạy lại `baseline.sh` và sinh prompt giao lại |
 
-**Prompt sửa lần 2:** cùng `task_id`, đặt `current_attempt` = lần trước + 1 trong spec, chạy lại `baseline.sh` (result cũ tự được lưu thành `result.<thời gian>.json`), rồi in prompt:
+**Prompt sửa lần 2:** cùng `task_id`, đặt `current_attempt` = lần trước + 1 trong spec, chạy lại `baseline.sh` (result cũ tự được lưu thành `result.<thời gian>.json`), rồi báo Dev gõ `/executor <task_id>` kèm danh sách lỗi bên dưới. Dự phòng là prompt đầy đủ:
 
 ```text
 Dùng skill agent-handoff, vai Executor. Tiếp tục `.handoff/specs/<task_id>.md` (lần <n>).
@@ -126,5 +144,6 @@ Xong thì nhắc Dev: gõ "verify <task_id>" cho Claude.
 
 - **Khi nào:** sau khi Dev commit xong một plan (hoặc khi Dev nói "dọn handoff"). Không dọn khi một Executor đang chạy.
 - **Cách làm:** chạy `bash .agents/skills/agent-handoff/scripts/clean.sh` (mặc định chỉ liệt kê), cho Dev xem danh sách, và **chỉ chạy `--apply` khi Dev đồng ý trong chat**. Script chỉ xoá `runs/TASK-*/` của task `COMPLETED`/`DONE` mà spec đã commit và sạch, hoặc `ABORTED` quá 7 ngày. `ESCALATED` luôn giữ và in danh sách file Executor đã đổi hoặc tạo để Dev quyết.
+- **Trước khi gỡ worktree hoặc xoá nhánh:** `git -C <worktree> status --porcelain` phải trống; file untracked (spec, plan) phải được commit hoặc backup trước.
 - **Lock:** `.handoff/runs/.lock` mồ côi chỉ báo, không xoá. Xoá bằng `--apply --remove-lock` sau khi Dev đồng ý (cùng quy tắc với `ABORTED` vì lock cũ ở mục 6).
 - **Spec của lần chạy thử** (ví dụ task mock để thử luồng) là sản phẩm của bài thử, không phải lịch sử của sản phẩm: hỏi Dev giữ làm ví dụ hay xoá khi commit.

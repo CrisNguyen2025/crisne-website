@@ -31,6 +31,15 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0011](adr/0011-drop-knowledge-triage.md)                     | Bỏ Knowledge Triage, Langfuse vẫn giữ Feedback và Golden Set | accepted               |
 | [0012](adr/0012-owner-thread-state-in-turso.md)               | Thread Owner lưu ở Turso, Thread Visitor chỉ trong RAM       | accepted               |
 
+## Sơ đồ Mermaid
+
+Dùng cho sơ đồ commit trong file `.md` của repo (skill `design-doc-mermaid`).
+
+- Sơ đồ chỉ để xem trong chat, không commit: không dùng skill này. Claude Code dùng `generative-ui`; agent khác trả fence `mermaid` ngay trong câu trả lời.
+- Fence `mermaid` đặt ngay trong file đích. Không tạo `docs/design/`, `./diagrams/` hay ảnh PNG/SVG để commit. Không dùng template trong `assets/` của skill; vị trí docs theo `docs/README.md`, spec theo `.handoff/specs/TEMPLATE-TASK.md`.
+- Style theo `docs/code-intel/CRIS_WORKSPACE_MAP.md`: nhãn tiếng Việt kèm tên trong code, tên domain đúng `GLOSSARY.md`. Không bắt buộc emoji hay `classDef`; nếu dùng `classDef` thì phải có `color:`.
+- Validate bằng `python3 .agents/skills/design-doc-mermaid/scripts/extract_mermaid.py <file.md> --validate` khi máy có `mmdc`. Không có `mmdc` (hoặc sandbox chặn) thì ghi rõ sơ đồ chưa validate.
+
 ## Runbook: cách setup / vận hành
 
 - [`TURSO_SETUP.md`](TURSO_SETUP.md)

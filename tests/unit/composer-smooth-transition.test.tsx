@@ -30,136 +30,101 @@ function ComposerTestHarness(props: {
   );
 }
 
-describe("ChatComposer - Smooth Transition & 1-Row / 2-Row UX", () => {
+describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("renders in compact 1-row mode when unfocused, no keyboard, and empty (perfectly centered Y=24px)", () => {
+  it("renders 2-column layout with textarea and composer-toolbar as siblings, with no voice button", () => {
     render(<ComposerTestHarness initialInput="" isKeyboardOpen={false} />);
 
     const card = screen.getByTestId("composer-card");
-    const spacer = screen.getByTestId("composer-spacer");
     const toolbar = screen.getByTestId("composer-toolbar");
     const textarea = screen.getByPlaceholderText("Hỏi Abot…");
 
-    // Mode is compact
-    expect(card.getAttribute("data-mode")).toBe("compact");
-    expect(card.className).toContain("min-h-[48px]");
-    expect(card.className).toContain("justify-center");
+    // Card contains textarea (left) and toolbar (right) as direct siblings
+    expect(card.children[0]).toBe(textarea);
+    expect(card.children[1]).toBe(toolbar);
 
-    // Textarea is exactly 46px (11px + 24px line + 11px) centering text line at Y=24.0px
-    expect((textarea as HTMLTextAreaElement).style.height).toBe("46px");
-    expect(textarea.className).toContain("py-[11px]");
-    expect(textarea.className).toContain("pl-12 pr-12");
+    // Send button lives inside toolbar
+    expect(toolbar.contains(screen.getByRole("button", { name: "Gửi tin nhắn" }))).toBe(true);
 
-    // Spacer is collapsed
-    expect(spacer.className).toContain("h-0");
-
-    // Toolbar occupies full height (48px) with items-center centering buttons at Y=24.0px
-    expect(toolbar.className).toContain("h-full");
-
-    // Both action buttons exist in the same DOM tree without re-mounting
-    expect(screen.getByRole("button", { name: "Nhập bằng giọng nói (sắp có)" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Gửi tin nhắn" })).toBeDefined();
+    // Voice button and spacer are removed; no data-mode on card
+    expect(screen.queryByRole("button", { name: /giọng nói/i })).toBeNull();
+    expect(screen.queryByTestId("composer-spacer")).toBeNull();
+    expect(card.getAttribute("data-mode")).toBeNull();
   });
 
-  it("smoothly expands to 2-row mode upon focusing the input", () => {
+  it("textarea maintains constant className across focus, blur, single-line, and multi-line input", () => {
     render(<ComposerTestHarness initialInput="" isKeyboardOpen={false} />);
 
-    const card = screen.getByTestId("composer-card");
-    const spacer = screen.getByTestId("composer-spacer");
     const textarea = screen.getByPlaceholderText("Hỏi Abot…");
+    const initialClassName = textarea.className;
 
-    // Focus into textarea
+    // Focus / blur
     fireEvent.focus(textarea);
-
-    // Mode morphs to expanded
-    expect(card.getAttribute("data-mode")).toBe("expanded");
-    expect(card.className).toContain("min-h-[86px]");
-    // Textarea starts at 38px (10px + 24px line + 4px)
-    expect((textarea as HTMLTextAreaElement).style.height).toBe("38px");
-
-    // Spacer smoothly opens to 44px (h-11) pushing toolbar down
-    expect(spacer.className).toContain("h-11");
-
-    // Textarea expands to full width padding
-    expect(textarea.className).toContain("px-3.5 pt-2.5 pb-1");
-  });
-
-  it("remains in 2-row mode when input contains text even if blurred", () => {
-    render(<ComposerTestHarness initialInput="Lộ trình React" isKeyboardOpen={false} />);
-
-    const card = screen.getByTestId("composer-card");
-    const textarea = screen.getByDisplayValue("Lộ trình React");
-
-    // Mode stays expanded so user can read/edit multi-line and send
-    expect(card.getAttribute("data-mode")).toBe("expanded");
-
-    // Blur should not collapse if input is non-empty
+    expect(textarea.className).toBe(initialClassName);
     fireEvent.blur(textarea);
-    expect(card.getAttribute("data-mode")).toBe("expanded");
+    expect(textarea.className).toBe(initialClassName);
+
+    // Single line text
+    fireEvent.change(textarea, { target: { value: "Single line text" } });
+    expect(textarea.className).toBe(initialClassName);
+
+    // Multi-line text with newlines
+    fireEvent.change(textarea, { target: { value: "Line 1\nLine 2\nLine 3" } });
+    expect(textarea.className).toBe(initialClassName);
   });
 
-  it("expands to 2-row mode when isKeyboardOpen is true even before focus", () => {
-    render(<ComposerTestHarness initialInput="" isKeyboardOpen={true} />);
-
-    const card = screen.getByTestId("composer-card");
-    expect(card.getAttribute("data-mode")).toBe("expanded");
-
-    // Container switches to tight pb-2 without safe-area inset
-    const container = card.parentElement;
-    expect(container?.className).toContain("pb-2");
-  });
-
-  it("smoothly collapses back to 1-row mode when text is cleared and blurred", () => {
-    render(<ComposerTestHarness initialInput="Hello" isKeyboardOpen={false} />);
-
-    const card = screen.getByTestId("composer-card");
-    const textarea = screen.getByDisplayValue("Hello");
-
-    // Initially expanded
-    expect(card.getAttribute("data-mode")).toBe("expanded");
-
-    // Clear input and blur
-    fireEvent.change(textarea, { target: { value: "" } });
-    fireEvent.blur(textarea);
-
-    // Morphs back to compact
-    expect(card.getAttribute("data-mode")).toBe("compact");
-    expect(card.className).toContain("min-h-[48px]");
-    expect((textarea as HTMLTextAreaElement).style.height).toBe("46px");
-  });
-
-  it("collapses back to 1-row mode on mobile when user presses Back button to dismiss keyboard", () => {
-    // Mock mobile viewport matchMedia: max-width: 767px matches true
-    const origMatchMedia = window.matchMedia;
-    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query.includes("max-width: 767px"),
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
+  it("auto-grows height based on scrollHeight and caps at MAX_TEXTAREA_HEIGHT (160px)", () => {
+    const originalScrollHeight = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "scrollHeight"
+    );
 
     try {
-      // User focuses input on phone: keyboard opens
-      const { rerender } = render(<ComposerTestHarness initialInput="" isKeyboardOpen={true} />);
-      const card = screen.getByTestId("composer-card");
-      expect(card.getAttribute("data-mode")).toBe("expanded");
+      let mockHeight = 70;
+      Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", {
+        configurable: true,
+        get: () => mockHeight,
+      });
 
-      // User presses Android Back button: keyboard closes while text is empty
-      rerender(<ComposerTestHarness initialInput="" isKeyboardOpen={false} />);
+      render(<ComposerTestHarness initialInput="Hello" isKeyboardOpen={false} />);
+      const textarea = screen.getByDisplayValue("Hello") as HTMLTextAreaElement;
+      expect(textarea.style.height).toBe("70px");
 
-      // On mobile without text, closing keyboard returns directly to 1-row compact mode
-      expect(card.getAttribute("data-mode")).toBe("compact");
-      expect(card.className).toContain("min-h-[48px]");
+      // When scrollHeight exceeds 160px, capped at 160px
+      mockHeight = 220;
+      fireEvent.change(textarea, { target: { value: "Hello\nLine 2\nLine 3" } });
+      expect(textarea.style.height).toBe("160px");
     } finally {
-      window.matchMedia = origMatchMedia;
+      if (originalScrollHeight) {
+        Object.defineProperty(HTMLTextAreaElement.prototype, "scrollHeight", originalScrollHeight);
+      } else {
+        delete (HTMLTextAreaElement.prototype as unknown as { scrollHeight?: unknown }).scrollHeight;
+      }
     }
+  });
+
+  it("switches container padding to pb-2 when isKeyboardOpen is true, and restores normal padding when false", () => {
+    const { rerender } = render(<ComposerTestHarness initialInput="" isKeyboardOpen={true} />);
+
+    const card = screen.getByTestId("composer-card");
+    expect(card.parentElement?.className).toContain("pb-2");
+
+    rerender(<ComposerTestHarness initialInput="" isKeyboardOpen={false} />);
+    expect(card.parentElement?.className).not.toContain("pb-2");
+    expect(card.parentElement?.className).toContain("pb-[max(0.75rem,env(safe-area-inset-bottom))]");
+  });
+
+  it("blurs textarea on mobile when keyboard closes while input is empty", () => {
+    const { rerender } = render(<ComposerTestHarness initialInput="" isKeyboardOpen={true} />);
+
+    const textarea = screen.getByPlaceholderText("Hỏi Abot…") as HTMLTextAreaElement;
+    const blurSpy = vi.spyOn(textarea, "blur");
+
+    rerender(<ComposerTestHarness initialInput="" isKeyboardOpen={false} />);
+    expect(blurSpy).toHaveBeenCalled();
   });
 
   it("handles stop streaming button and send trigger correctly", () => {
@@ -168,7 +133,7 @@ describe("ChatComposer - Smooth Transition & 1-Row / 2-Row UX", () => {
 
     const { rerender } = render(
       <ComposerTestHarness
-        initialInput="Test question"
+        initialInput=""
         showStop={false}
         onSend={handleSend}
         onStop={handleStop}
@@ -176,6 +141,9 @@ describe("ChatComposer - Smooth Transition & 1-Row / 2-Row UX", () => {
     );
 
     const sendBtn = screen.getByRole("button", { name: "Gửi tin nhắn" }) as HTMLButtonElement;
+    expect(sendBtn.disabled).toBe(true);
+
+    fireEvent.change(screen.getByPlaceholderText("Hỏi Abot…"), { target: { value: "Test question" } });
     expect(sendBtn.disabled).toBe(false);
     fireEvent.click(sendBtn);
     expect(handleSend).toHaveBeenCalledTimes(1);
@@ -197,10 +165,16 @@ describe("ChatComposer - Smooth Transition & 1-Row / 2-Row UX", () => {
     expect(handleStop).toHaveBeenCalledTimes(1);
   });
 
-  it("shows counter smoothly near character limit threshold", () => {
+  it("shows character counter near threshold (1.805/2.000) and turns red at limit", () => {
     render(<ComposerTestHarness initialInput={"a".repeat(1805)} isKeyboardOpen={false} />);
 
-    // Text count counter visible
-    expect(screen.getByText("1.805/2.000")).toBeDefined();
+    const counter = screen.getByText("1.805/2.000");
+    expect(counter).toBeDefined();
+    expect(counter.className).toContain("text-[#5E5B55]");
+
+    const textarea = screen.getByDisplayValue("a".repeat(1805));
+    fireEvent.change(textarea, { target: { value: "a".repeat(2000) } });
+    const maxCounter = screen.getByText("2.000/2.000");
+    expect(maxCounter.className).toContain("text-[#B42318]");
   });
 });

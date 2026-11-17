@@ -33,6 +33,8 @@ verification_gate:
 
 # TASK: [Tên nhiệm vụ ngắn gọn]
 
+> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): đang ở bước ..., đã quyết ..., đang chờ ...
+
 ## 1. Context & Architectural Intent
 - **Goal**: [Mục tiêu cốt lõi]
 - **Why**: [Lý do kỹ thuật/nghiệp vụ]

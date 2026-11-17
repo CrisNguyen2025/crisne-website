@@ -1,6 +1,6 @@
 # Executor SOP (Antigravity / Codex)
 
-Bạn nhận task từ Claude Code (Architect) qua spec `.handoff/specs/<task_id>.md`. Dev dán prompt có `task_id` cho bạn. Dưới đây là toàn bộ quy trình. Rule dự án (ngôn ngữ, naming, không `any`, i18n, ...) lấy từ `AGENTS.md`, không chép lại ở đây.
+Bạn nhận task từ Claude Code (Architect) qua spec `.handoff/specs/<task_id>.md`. Dev giao việc bằng `/executor` (skill `executor` chọn spec theo nhánh) hoặc, dự phòng, dán prompt có `task_id`. Dưới đây là toàn bộ quy trình. Rule dự án (ngôn ngữ, naming, không `any`, i18n, ...) lấy từ `AGENTS.md`, không chép lại ở đây.
 
 ## Quy tắc không thương lượng
 

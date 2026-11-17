@@ -2,21 +2,19 @@
 
 **Mục tiêu cuối:** một kho tri thức về những topic Owner đang theo dõi ngoài thực tế, cộng với Abot là trợ lý riêng: trả lời trên kho, gợi ý ôn tập, và nhắc cập nhật khi một công nghệ ra version mới hoặc Owner đổi techstack.
 
-## Vai trò và cách chạy với Orca
+## Vai trò và cách chạy
 
 | Vai trò | Ai | Làm gì |
 |---|---|---|
-| Planner / Coordinator / Reviewer | Claude | Viết `.handoff/specs/TASK-*.md`, tạo workspace trong Orca, giao việc, review branch, chạy lại verification gate, quyết định merge |
-| Executor | Antigravity (trong Orca) | Làm theo spec và SOP `.agents/skills/agent-handoff/SKILL.md`: lock file, boundary, verification gate, tối đa 3 lần thử, escalation, commit, `status: COMPLETED` |
-| Owner | Bạn | Chốt quyết định domain, duyệt merge, chạy những lệnh ghi lên production |
+| Planner / Coordinator / Reviewer | Claude | Viết `.handoff/specs/TASK-*.md`, tạo nhánh và baseline, verify độc lập (chạy lại gate), đề xuất commit |
+| Executor | Antigravity, chạy thẳng trên repo, ở nhánh của spec | Làm theo `.agents/skills/agent-handoff/references/executor.md`: lock, boundary, gate, tối đa 3 lần thử, escalation, ghi `result.json`. Không commit |
+| Owner | Bạn | Chốt quyết định domain, commit (HITL), chạy những lệnh ghi lên production |
 
-**Vòng của một task:**
-1. Claude viết spec ở `main` → tạo workspace Orca (`orca worktree create --branch <branch trong spec>`) → copy spec vào workspace → `orca agent launch --agent antigravity`.
-2. Antigravity làm xong → `status: COMPLETED` (hoặc `ESCALATED` kèm `.handoff/runs/escalations/ESC-*.md`).
-3. Owner nhắn Claude "review <task>" → Claude đọc diff, đối chiếu spec / ADR / boundary, chạy lại gate. Cần sửa thì Claude ghi "Review notes" vào spec và giao lại cho Antigravity. Đạt thì merge vào `main` khi Owner đồng ý.
-4. Merge xong thì xoá workspace, lên task tiếp theo trong hàng đợi.
-
-> Claude desktop không nhận được báo cáo tự động từ worker Orca (cần chạy trong một terminal của Orca). Vì vậy bước 3 đi qua Owner. Muốn tự động hoàn toàn thì chạy Claude Code (`claude`) trong một terminal của Orca để làm coordinator.
+**Vòng của một task** (chi tiết: `.agents/skills/agent-handoff/references/architect.md`):
+1. Claude viết spec, tạo nhánh của spec, chạy `baseline.sh`, bật watcher.
+2. Owner mở Antigravity ở repo, đúng nhánh, gõ `/executor`. Dự phòng: dán prompt Claude in ra.
+3. Antigravity ghi `result.json`; watcher báo Claude, Claude verify và report. Phiên Claude đã đóng thì Owner gõ "verify <task_id>".
+4. Owner commit. Claude đề xuất task tiếp theo trong hàng đợi.
 
 ## Giai đoạn và hàng đợi task
 
