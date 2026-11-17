@@ -339,3 +339,12 @@ def test_claim_filter_lets_long_text_without_a_sentence_end_flow():
     f = ClaimStreamFilter(FAIL_PATTERNS)
     assert f.feed("x" * 450) == "x" * 450  # past MAX_HOLD it is let through
     assert f.feed("Hệ thống sẽ sớm cập nhật thêm. ") == "" and f.dropped
+
+
+def test_fixed_text_comes_before_per_request_data():
+    for mode in ("rag", "chitchat"):
+        req = GenerationRequest(mode=mode, query="gợi ý vài prompt", thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9)])
+        prompt = build_prompt(req, PROFILE)
+        system = prompt.split("</system>")[0]
+        assert PROFILE.suggestion_format.strip() in system
+        assert prompt.endswith("</user_query>")

@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
+from rag_service.core.augmentation.context import _escape
+
 MAX_VARIANTS = 2
 MAX_PARTS = 3
 REWRITE_TIMEOUT = 8.0
@@ -64,7 +66,7 @@ def is_compound(query: str) -> bool:
 
 
 def build_prompt(query: str, turns: Sequence[Any]) -> str:
-    history = "\n".join(f"{t.role}: {t.content}" for t in turns[-HISTORY_TURNS:]) or "(chưa có)"
+    history = "\n".join(f"{t.role}: {_escape(t.content)}" for t in turns[-HISTORY_TURNS:]) or "(chưa có)"
     return (
         "Bạn chuẩn bị câu truy vấn tìm kiếm cho một hệ thống tra cứu tài liệu. "
         "Chỉ trả về một JSON object với các khóa:\n"
@@ -74,7 +76,7 @@ def build_prompt(query: str, turns: Sequence[Any]) -> str:
         f'- "parts": tối đa {MAX_PARTS} câu hỏi con, chỉ khi câu hỏi so sánh hoặc liệt kê nhiều thứ; nếu không thì [].\n'
         "Không giải thích thêm.\n\n"
         f"<conversation_history>\n{history}\n</conversation_history>\n"
-        f"<question>{query}</question>"
+        f"<question>{_escape(query)}</question>"
     )
 
 

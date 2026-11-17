@@ -13,6 +13,7 @@ import json
 import re
 from typing import Any, List, Optional
 
+from rag_service.core.augmentation.context import _escape
 from rag_service.core.retrieval.transform import _text_of
 
 FAITHFULNESS_TIMEOUT = 10.0
@@ -32,8 +33,8 @@ def build_prompt(answer: str, context: str, question: str) -> str:
         "KHÔNG liệt kê: diễn đạt lại, tóm tắt, so sánh hay suy luận rút ra trực tiếp từ tài liệu; "
         "lời chào, câu dẫn, gợi ý hỏi tiếp; kiến thức chung hiển nhiên.\n"
         'Chỉ trả về JSON: {"unsupported": ["nhận định 1", ...]}, mảng rỗng nếu mọi nhận định đều có cơ sở.\n\n'
-        f"<question>{question}</question>\n<documents>\n{context[:CONTEXT_CHARS]}\n</documents>\n"
-        f"<answer>\n{answer}\n</answer>"
+        f"<question>{_escape(question)}</question>\n<documents>\n{_escape(context[:CONTEXT_CHARS])}\n</documents>\n"
+        f"<answer>\n{_escape(answer)}\n</answer>"
     )
 
 

@@ -30,6 +30,8 @@ Bạn nhận task từ Claude Code (Architect) qua spec `.handoff/specs/<task_id
 - **`implement`:** làm tuần tự checklist mục 3 của spec, đánh `[x]` sau mỗi bước. Con trỏ trong spec (`path#symbol`) là chỗ bắt đầu, đọc code thật trước khi sửa.
 - **`review`:** không sửa file mã nguồn hay tài liệu nào trong repo; ngoại lệ duy nhất là cập nhật trạng thái và kết quả trên chính file spec (quy tắc 3). Đọc các file được chỉ định, kiểm từng mục, ghi kết quả vào `.handoff/runs/<task_id>/review.md` (bảng kết quả + bằng chứng + đề xuất, phân loại bug / risk / nit). Bắt buộc ghi nguồn cho mọi kết luận: docs chính thức kèm link, hoặc quan sát thực tế (đã chạy gì, thấy gì).
 - File thử nghiệm tạm chỉ đặt dưới `.handoff/runs/<task_id>/`, không đặt trong repo.
+- Quyết định kỹ thuật hoặc hướng đã thử và loại mà checklist không thể hiện: ghi vào `.handoff/runs/<task_id>/progress.md` ngay khi phát sinh, mỗi mục 1–2 dòng. File này không thay cho `notes` trong `result.json`.
+- **Khi ngữ cảnh bị nén (compact) hoặc phiên bị ngắt giữa chừng:** trước khi làm tiếp, đọc lại spec, file này, `baseline.txt` và `progress.md` (nếu có). Tiếp tục từ mục checklist đầu tiên chưa đánh `[x]`, không làm lại mục đã xong.
 
 ## 3. Verification gate
 

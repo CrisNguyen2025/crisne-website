@@ -93,12 +93,12 @@ def build_prompt(
         if req.mode == "rag"
         else (profile.persona_chitchat, profile.rules_chitchat)
     )
-    parts = [f"<system>\n{persona}\n{rules}\n</system>"]
+    # Fixed text first, per-request data after: the prefix stays the same from one request to the next
+    system = "\n".join(s.strip("\n") for s in (persona, rules, profile.suggestion_format) if s)
+    parts = [f"<system>\n{system}\n</system>"]
     if hist := format_history(history.get_recent(req.thread_id, profile.history_turns * 2), profile):
         parts.append(hist)
     if req.mode == "rag":
         parts.append(format_documents(select_documents(req, profile) if documents is None else documents))
     parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
-    if profile.suggestion_format:
-        parts.append(profile.suggestion_format)
     return "\n\n".join(parts)
