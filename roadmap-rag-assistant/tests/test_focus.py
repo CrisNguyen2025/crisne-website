@@ -25,6 +25,8 @@ from rag_service.domains.roadmap.router.focus import focus_of, focus_written
     ("speculative decoding là gì vậy", "speculative decoding"),
     ("Kafka thì sao", "kafka"),
     ("con trỏ trong C là gì", "con tro trong c"),  # "con" is part of the topic here
+    ("Có thể hack facebook k", "hack facebook"),  # the modal opens the question (trace 80820e50)
+    ("bạn có thể giải thích RAG không", "rag"),
 ])
 def test_frame_is_removed_and_the_topic_kept(text, focus):
     assert focus_of(text) == focus

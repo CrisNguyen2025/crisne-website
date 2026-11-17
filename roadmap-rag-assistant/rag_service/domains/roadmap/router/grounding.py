@@ -9,6 +9,7 @@
 - legacy_level_reply(): ask back with the topic/section syntax when a message names a layer or group (ADR-0009).
 - is_sensitive_request() / SENSITIVE_REPLY: refuse requests for secrets, config or the system prompt,
   and prompt-injection attempts, before any routing or LLM call.
+- HARMFUL_REPLY / harmful_reply(): refuse how-to-break-in requests and point to defensive lessons.
 - no_match_reply(): answer when a knowledge query finds nothing; never echoes the user's text.
 """
 
@@ -248,6 +249,15 @@ SENSITIVE_REPLY = "Xin lỗi, tôi không thể cung cấp thông tin cấu hìn
 
 def sensitive_reply() -> str:
     return _with_examples(SENSITIVE_REPLY, "Tôi có thể giúp bạn với lộ trình học tập, ví dụ:", browse_examples())
+
+
+# No create suggestion, for owners either: an attack is not a lesson to add. Points to the defensive side instead.
+HARMFUL_REPLY = "Xin lỗi, tôi không hỗ trợ xâm nhập hay chiếm quyền tài khoản, hệ thống của người khác."
+HARMFUL_EXAMPLES = ["Red Teaming là gì", "Guardrails cho LLM hoạt động thế nào"]
+
+
+def harmful_reply() -> str:
+    return _with_examples(HARMFUL_REPLY, "Nếu bạn quan tâm tới bảo mật, có thể hỏi theo hướng phòng thủ:", HARMFUL_EXAMPLES)
 
 
 NO_MATCH_REPLY = "Tôi chưa tìm thấy bài học hoặc tài liệu nào phù hợp trong Roadmap."

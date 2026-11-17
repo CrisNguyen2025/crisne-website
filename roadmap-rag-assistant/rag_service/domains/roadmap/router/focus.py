@@ -31,6 +31,8 @@ LEADING_FRAME = re.compile(
     r"|(?:minh|toi|em|tui)\s+(?:muon|dang|can)\s+(?:tim\s+hieu|hoc|hieu|biet|hoi)\s+(?:them\s+)?(?:ve\s+)?"
     r"|(?:hay\s+)?(?:giai\s+thich|noi|ke|tom\s+tat|trinh\s+bay)\s+(?:giup\s+(?:minh|toi|em)\s+)?(?:cho\s+(?:minh|toi|em)\s+)?(?:ve\s+)?"
     r"|thong\s+tin\s+ve\s+"
+    # "có thể …": the modal opens the question, it is not part of the topic ("có thể hack facebook k")
+    r"|co\s+the\s+"
     r"|so\s+sanh\s+"
     r"|(?:tell\s+me\s+about|what\s+(?:is|are)(?:\s+an?)?|explain|how\s+to\s+use|how\s+does)\s+"
     r"|(?:cach\s+(?:dung|lam|cai|su\s+dung)\s+))"

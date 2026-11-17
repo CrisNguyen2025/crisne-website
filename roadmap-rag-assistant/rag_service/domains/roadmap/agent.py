@@ -22,7 +22,7 @@ from rag_service.config import settings
 from rag_service.llm_keys import KeyRotatingLLM, parse_keys
 from rag_service.execution.executor import ActionExecutor
 from rag_service.core.generation.delivery import record_turn
-from rag_service.core.guards import input_problem, is_sensitive_request
+from rag_service.core.guards import input_problem, is_harmful_request, is_sensitive_request
 from rag_service.core.orchestration.llm_answer import answer_with_llm
 from rag_service.core.orchestration.sources import SourceDeps, answer_from_sources, llm_fallback_reason, stream_words
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
@@ -75,6 +75,7 @@ from rag_service.domains.roadmap.router.grounding import (
     domain_gap_reply,
     empty_message_reply,
     empty_roadmap_reply,
+    harmful_reply,
     no_match_reply,
     out_of_scope_reply,
     sensitive_reply,
@@ -280,6 +281,13 @@ class NextGenRoadmapAgent(
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "sensitive"
             async for ev in self._stream_text(sensitive_reply(), delay):
+                yield ev
+            return
+        # Breaking into someone's account or system: refuse before scope, which may call it "the field, no lesson"
+        if is_harmful_request(content):
+            if (trace := current_trace()) is not None:
+                trace.flags["guard"] = "harmful"
+            async for ev in self._stream_text(harmful_reply(), delay):
                 yield ev
             return
 

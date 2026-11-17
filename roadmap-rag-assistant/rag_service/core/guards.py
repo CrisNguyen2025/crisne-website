@@ -76,6 +76,30 @@ def is_sensitive_request(message: str, instruction: Optional[str] = None) -> boo
     return bool(ENV_FILE.search(lower) or (SECRET.search(lower) and OWNED.search(lower)))
 
 
+# Breaking into an account or system: an attack verb together with something that belongs to someone.
+# Defensive or definition questions ("cách chống hack tài khoản", "tài khoản bị hack", "phishing là gì")
+# are lessons, so they stay in scope.
+ATTACK = re.compile(
+    r"\b(?:hack|crack|bẻ\s+khóa|chiếm\s+(?:quyền|tài\s+khoản|nick|acc)|đánh\s+cắp|lấy\s+cắp|ăn\s+cắp"
+    r"|dò\s+(?:mật\s+khẩu|pass)|brute[\s-]?force|phishing)"
+)
+ATTACK_TARGET = re.compile(
+    r"\b(?:facebook|fb|zalo|instagram|insta|tiktok|gmail|e-?mail|mail|tài\s+khoản|account|acc|nick"
+    r"|mật\s+khẩu|password|pass|wifi|camera|điện\s+thoại|website|web|server|người\s+khác"
+    r"|của\s+(?:người|ai|bạn\s+(?:gái|trai)|vợ|chồng))\b"
+)
+DEFENSIVE = re.compile(
+    r"phòng\s+(?:chống|tránh|ngừa)|\bchống\b|bảo\s+vệ|\bngăn\b|bị\s+hack|phát\s+hiện|là\s+gì"
+    r"|\b(?:prevent|protect|defen[cs]e|detect|what\s+is)\b"
+)
+
+
+def is_harmful_request(message: str) -> bool:
+    """True when the message asks how to break into an account or system, not how to defend one."""
+    lower = message.lower()
+    return bool(ATTACK.search(lower) and ATTACK_TARGET.search(lower) and not DEFENSIVE.search(lower))
+
+
 def input_problem(message: str) -> Optional[str]:
     """"empty" or "too_long" when the message cannot be routed, otherwise None."""
     if not message:
