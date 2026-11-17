@@ -73,6 +73,11 @@ def run(args: argparse.Namespace) -> int:
     target = load_target(args.target, options)
     fingerprint, stale = check_corpus(target, corpora, args.allow_stale)
     guard = AclGuard(target, section_acl(corpora))
+    repeat = max(1, args.repeat)
+    if repeat > 1 and options.get("cache", "on") != "off":
+        # A cached answer is replayed on every trial, so pass^n would only measure the cache
+        print("WARNING: --repeat without --opt cache=off replays cached replies; trials will not vary",
+              file=sys.stderr)
 
     results: list[dict] = []
     per_dataset: dict[str, dict] = {}
@@ -85,19 +90,21 @@ def run(args: argparse.Namespace) -> int:
             if capability not in target.capabilities:
                 skipped.append(name)
                 continue
-            for sample in ds.samples:
-                if sample["metadata"]["status"] != "active":
-                    continue
-                run_as = sample["metadata"].get("run_as") or ds.meta.get("default_role")
-                guard.sample_id = sample["id"]
-                try:
-                    result = score(sample, guard, k, run_as)
-                except TargetUnavailable as exc:
-                    unavailable.append({"id": sample["id"], "scorer": name, "reason": exc.reason})
-                    continue
-                if result is not None:
-                    rows.append({"id": sample["id"], "dataset": ds.path, "scorer": name,
-                                 "tags": sample["metadata"].get("tags", []), **result})
+            for trial in range(repeat):
+                for sample in ds.samples:
+                    if sample["metadata"]["status"] != "active":
+                        continue
+                    run_as = sample["metadata"].get("run_as") or ds.meta.get("default_role")
+                    guard.sample_id = sample["id"]
+                    try:
+                        result = score(sample, guard, k, run_as)
+                    except TargetUnavailable as exc:
+                        unavailable.append({"id": sample["id"], "scorer": name, "reason": exc.reason})
+                        continue
+                    if result is not None:
+                        row = {"id": sample["id"], "dataset": ds.path, "scorer": name,
+                               "tags": sample["metadata"].get("tags", []), **result}
+                        rows.append({**row, "trial": trial} if repeat > 1 else row)
         summary = metrics.summarize(rows, k)
         summary["skipped_scorers"] = skipped
         # Not failures: the provider was unavailable, so these samples say nothing about the system
@@ -113,7 +120,8 @@ def run(args: argparse.Namespace) -> int:
         results += rows
 
     now = datetime.now(timezone.utc)
-    option_label = "-".join(options.values())
+    # A model name like "qwen/qwen3.8-27b" would otherwise split the run into nested folders
+    option_label = "-".join(value.replace("/", "-") for value in options.values())
     run_id = f"{now:%Y%m%d-%H%M%S}-{target.name}" + (f"-{option_label}" if option_label else "")
     summary = {
         "run_id": run_id,
@@ -122,6 +130,7 @@ def run(args: argparse.Namespace) -> int:
         "target": target.name,
         "target_options": options,
         "profile": args.profile,
+        "repeat": repeat,
         "dataset_version": source.version(),
         "corpus": fingerprint,
         "corpus_versions": {corpus.path: corpus.meta["version"] for corpus in corpora},
@@ -152,6 +161,8 @@ def main(argv: list[str] | None = None, **defaults: str) -> int:
     run_cmd.add_argument("--profile", help="threshold profile from meta.json \"profiles\", e.g. hybrid")
     run_cmd.add_argument("--opt", action="append", default=[], help="key=value passed to the target factory")
     run_cmd.add_argument("--allow-stale", action="store_true")
+    run_cmd.add_argument("--repeat", type=int, default=1,
+                         help="run every sample N times and report pass^N / pass@N (use with --opt cache=off)")
 
     diff_cmd = commands.add_parser("diff", help="compare two runs sample by sample")
     diff_cmd.add_argument("base")

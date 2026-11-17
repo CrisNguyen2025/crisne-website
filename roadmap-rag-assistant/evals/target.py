@@ -22,6 +22,7 @@ from evals.kit import judge as kit_judge
 from evals.kit.corpus import content_hash
 from evals.kit.target import Answer, Hit, RouteResult, ScopeResult, TargetUnavailable
 from rag_service.config import settings
+from rag_service.core.guards import is_harmful_request
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 from rag_service.domains.roadmap.retrieval.engine import roadmap_store
@@ -35,7 +36,9 @@ ANSWER_MODES = ("off", "llm")
 DEFAULT_JUDGE_MODELS = {
     # gemini-2.5-pro is closed to new keys (404); Google names this one as its replacement
     "google_genai": "gemini-3.1-pro-preview",
-    "groq": "llama-3.3-70b-versatile",
+    # llama-3.3-70b-versatile is gone from the account (404, 2026-11-17); qwen is a different family from the
+    # gpt-oss answer model, so it keeps some distance when Groq has to judge Groq's answers
+    "groq": "qwen/qwen3.8-27b",
 }
 CACHE_FILE = Path(__file__).parent / ".cache" / "answers.json"
 JUDGE_CACHE_FILE = Path(__file__).parent / ".cache" / "judge.json"
@@ -189,6 +192,9 @@ class RoadmapTarget:
 
     def route(self, text: str, run_as: str | None = None) -> RouteResult:
         if is_sensitive_request(text, instruction=instruction_part(text)):
+            return RouteResult(behavior="refuse")
+        # Same order as the agent: the break-in guard runs right after the sensitive one
+        if is_harmful_request(text):
             return RouteResult(behavior="refuse")
         if self._router.has_mixed_intents(text):
             return RouteResult(behavior="clarify")

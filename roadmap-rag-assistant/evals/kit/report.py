@@ -10,7 +10,7 @@ def write_run(run_dir: Path, summary: dict, results: list[dict]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     with (run_dir / "samples.jsonl").open("w", encoding="utf-8") as out:
-        for row in sorted(results, key=lambda r: (r["id"], r["scorer"])):
+        for row in sorted(results, key=lambda r: (r["id"], r["scorer"], r.get("trial", 0))):
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
@@ -42,7 +42,12 @@ def print_summary(summary: dict, results: list[dict]) -> None:
 def _load_rows(run_dir: Path) -> dict[tuple[str, str], bool]:
     lines = (run_dir / "samples.jsonl").read_text(encoding="utf-8").splitlines()
     rows = (json.loads(line) for line in lines if line.strip())
-    return {(row["id"], row["scorer"]): row["passed"] for row in rows}
+    # A run with --repeat has one row per trial: a sample passes only when every trial did
+    passed: dict[tuple[str, str], bool] = {}
+    for row in rows:
+        key = (row["id"], row["scorer"])
+        passed[key] = passed.get(key, True) and bool(row["passed"])
+    return passed
 
 
 def diff(base_dir: Path, head_dir: Path) -> dict[str, list[str]]:

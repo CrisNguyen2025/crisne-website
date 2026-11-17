@@ -14,10 +14,14 @@ def _retrieval(rows: list[dict], k: int) -> dict:
     on_topic = [r for r in rows if r["kind"] == "on_topic"]
     off_topic = [r for r in rows if r["kind"] == "off_topic"]
     reciprocal = sum(1 / r["rank"] for r in on_topic if r["rank"])
+    # Only samples with required sections have a recall: elsewhere the listed sections are alternatives
+    recalls = [r["recall"] for r in on_topic if "recall" in r]
     return {
         "n": len(rows),
         f"hit@{k}": _ratio(sum(r["passed"] for r in on_topic), len(on_topic)),
         f"mrr@{k}": round(reciprocal / len(on_topic), 4) if on_topic else None,
+        f"recall@{k}": round(sum(recalls) / len(recalls), 4) if recalls else None,
+        "recall_n": len(recalls),
         "off_topic_rejected": _ratio(sum(r["passed"] for r in off_topic), len(off_topic)),
     }
 
@@ -43,6 +47,8 @@ def _judge(rows: list[dict], k: int) -> dict:
         "faithfulness_mean": _mean([c["score"] for c in criterion("faithfulness")]),
         "relevance_mean": _mean([c["score"] for c in criterion("relevance")]),
         "facts_pass": _ratio(sum(c["passed"] for c in facts), len(facts)),
+        # Share of expected facts the cited context states: low with low facts_pass = retrieval missed them
+        "context_recall": _mean([c["context_recall"] for c in facts if "context_recall" in c]),
         # Substring baseline on the same samples: a gap with facts_pass shows how much wording varies
         "facts_pass_substring": _ratio(sum(baseline), len(baseline)),
         "refusal_pass": _ratio(sum(c["passed"] for c in refusal), len(refusal)),
@@ -68,11 +74,26 @@ def _scope(rows: list[dict], k: int) -> dict:
 METRICS = {"retrieval": _retrieval, "judge": _judge, "scope": _scope}
 
 
+def _consistency(rows: list[dict]) -> dict:
+    """With repeated trials: pass^n = every trial of a sample passed, pass@n = at least one did."""
+    by_sample: dict[str, list[bool]] = {}
+    for r in rows:
+        by_sample.setdefault(r["id"], []).append(bool(r["passed"]))
+    trials = max(len(v) for v in by_sample.values())
+    return {
+        "trials": trials,
+        f"pass^{trials}": _ratio(sum(all(v) for v in by_sample.values()), len(by_sample)),
+        f"pass@{trials}": _ratio(sum(any(v) for v in by_sample.values()), len(by_sample)),
+    }
+
+
 def summarize(results: list[dict], k: int) -> dict:
     metrics = {}
     for name in sorted({r["scorer"] for r in results}):
         rows = [r for r in results if r["scorer"] == name]
         metrics[name] = METRICS.get(name, _accuracy)(rows, k)
+        if any("trial" in r for r in rows):
+            metrics[name].update(_consistency(rows))
     by_tag: dict[str, dict] = {}
     for tag in sorted({t for r in results for t in r["tags"]}):
         rows = [r for r in results if tag in r["tags"]]
@@ -81,12 +102,16 @@ def summarize(results: list[dict], k: int) -> dict:
 
 
 def check_thresholds(metrics: dict, thresholds: dict) -> list[str]:
+    """A bare number is a minimum; {"max": n} caps a metric where lower is better (e.g. judge_false_pass)."""
     failures = []
-    for key, minimum in thresholds.items():
+    for key, limit in thresholds.items():
         name, _, metric = key.partition(".")
         value = metrics.get(name, {}).get(metric)
+        bounds = limit if isinstance(limit, dict) else {"min": limit}
         if value is None:
             failures.append(f"{key}: no value (scorer did not run?)")
-        elif value < minimum:
-            failures.append(f"{key}: {value} < {minimum}")
+        elif "min" in bounds and value < bounds["min"]:
+            failures.append(f"{key}: {value} < {bounds['min']}")
+        elif "max" in bounds and value > bounds["max"]:
+            failures.append(f"{key}: {value} > {bounds['max']}")
     return failures

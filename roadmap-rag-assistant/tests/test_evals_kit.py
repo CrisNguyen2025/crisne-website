@@ -100,6 +100,24 @@ def test_score_retrieval_requires_every_required_context():
     assert not score_retrieval(_sample(contexts=one_missing), target, 5, None)["passed"]
 
 
+def test_recall_is_measured_only_on_required_sections():
+    target = FakeTarget(hits=[Hit("1", "A"), Hit("2", "B")])
+    both = [{"section_id": "A", "required": True}, {"section_id": "B", "required": True}]
+    one_missing = [{"section_id": "A", "required": True}, {"section_id": "Z", "required": True}]
+    alternatives = [{"section_id": "B"}, {"section_id": "Z"}]
+    assert score_retrieval(_sample(contexts=both), target, 5, None)["recall"] == 1.0
+    assert score_retrieval(_sample(contexts=one_missing), target, 5, None)["recall"] == 0.5
+    assert "recall" not in score_retrieval(_sample(contexts=alternatives), target, 5, None)
+    rows = [
+        {"scorer": "retrieval", "tags": [], "kind": "on_topic", "passed": True, "rank": 2, "recall": 1.0},
+        {"scorer": "retrieval", "tags": [], "kind": "on_topic", "passed": False, "rank": None, "recall": 0.5},
+        {"scorer": "retrieval", "tags": [], "kind": "on_topic", "passed": True, "rank": 1},
+    ]
+    summary = metrics.summarize(rows, 5)["metrics"]["retrieval"]
+    assert summary["recall@5"] == 0.75 and summary["recall_n"] == 2
+    assert metrics.summarize(rows[2:], 5)["metrics"]["retrieval"]["recall@5"] is None
+
+
 def test_score_route_checks_behavior_and_route():
     target = FakeTarget(route=RouteResult("answer", ["knowledge_query"]))
     assert score_route(_sample(behavior="answer", route=["knowledge_query"]), target, 5, None)["passed"]
@@ -132,12 +150,35 @@ def test_thresholds_and_diff(tmp_path):
     assert summary["metrics"]["route"]["accuracy"] == 0.5
     assert metrics.check_thresholds(summary["metrics"], {"route.accuracy": 1.0})
     assert metrics.check_thresholds(summary["metrics"], {"route.accuracy": 0.5}) == []
+    # {"max": n} caps a metric where lower is better
+    assert metrics.check_thresholds(summary["metrics"], {"route.accuracy": {"max": 0.4}}) == ["route.accuracy: 0.5 > 0.4"]
+    assert metrics.check_thresholds(summary["metrics"], {"route.accuracy": {"max": 0.5}}) == []
 
     base, head = tmp_path / "base", tmp_path / "head"
     report.write_run(base, {}, rows)
     report.write_run(head, {}, [{**rows[0], "passed": False}, {**rows[1], "passed": True}])
     changes = report.diff(base, head)
     assert changes["regressed"] == ["a-001 [route]"] and changes["fixed"] == ["a-002 [route]"]
+
+
+def test_repeated_trials_give_pass_all_and_pass_any(tmp_path):
+    rows = [
+        {"id": "a-001", "scorer": "route", "tags": [], "passed": True, "trial": 0},
+        {"id": "a-001", "scorer": "route", "tags": [], "passed": True, "trial": 1},
+        {"id": "a-002", "scorer": "route", "tags": [], "passed": True, "trial": 0},
+        {"id": "a-002", "scorer": "route", "tags": [], "passed": False, "trial": 1},
+    ]
+    route = metrics.summarize(rows, 5)["metrics"]["route"]
+    assert route["accuracy"] == 0.75  # per trial
+    assert route["trials"] == 2 and route["pass^2"] == 0.5 and route["pass@2"] == 1.0
+    plain = [{key: value for key, value in r.items() if key != "trial"} for r in rows[::2]]
+    assert "trials" not in metrics.summarize(plain, 5)["metrics"]["route"]  # a normal run is unchanged
+
+    # diff: a sample with a failing trial counts as failed
+    base, head = tmp_path / "base", tmp_path / "head"
+    report.write_run(base, {}, [r for r in rows if r["trial"] == 0])
+    report.write_run(head, {}, rows)
+    assert report.diff(base, head)["regressed"] == ["a-002 [route]"]
 
 
 def test_acl_guard_records_sections_the_caller_may_not_read():

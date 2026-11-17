@@ -6,6 +6,9 @@ Criteria, each with a short reason:
   faithfulness 1-5  every claim is supported by the context or the conversation (None when there is neither)
   relevance    1-5  the answer addresses the question (a correct refusal counts as relevant)
   facts        pass the answer conveys every expected fact, worded any way (None without expected facts)
+               + context_recall: share of expected facts stated in the cited context. Diagnostic, not in the
+               pass rule: a fact missing from the answer AND the context is a retrieval miss, one in the context
+               but not the answer is a generation miss.
   refusal      pass the answer refuses / says nothing matches exactly when the sample expects it to
 """
 
@@ -17,7 +20,7 @@ import re
 from evals.kit.target import Answer, TargetUnavailable
 
 # Bump when the prompt or the pass rule changes: it is part of the judge cache key on the target side
-JUDGE_VERSION = "2"
+JUDGE_VERSION = "3"  # 3: facts carry in_context (context recall)
 PASS_SCORE = 4  # faithfulness / relevance scores at or above this pass
 
 PROMPT = """You grade one answer of a retrieval-augmented assistant for a learning-roadmap website.
@@ -42,7 +45,8 @@ Grade these criteria:
   suggesting what to ask next needs no support. Use null when there is no context and no earlier conversation.
 - relevance (1-5): does the answer address the question? A refusal or "nothing found" reply is relevant when the
   question really is outside the roadmap's content.
-- facts: for each expected fact, in the order given, is it conveyed by the answer? Empty list when there are no
+- facts: for each expected fact, in the order given, is it conveyed by the answer (covered), and is it stated in
+  the retrieved context above (in_context; false when the context is "(none)")? Empty list when there are no
   expected facts.
 - refused: does the answer decline, say the request is out of scope, or say no matching roadmap material exists?
   Saying the user has not shared a personal detail is not a refusal.
@@ -50,7 +54,7 @@ Grade these criteria:
 Reply with JSON only, no prose and no code fence:
 {{"faithfulness": {{"score": <1-5 or null>, "reason": "<one sentence>"}},
  "relevance": {{"score": <1-5>, "reason": "<one sentence>"}},
- "facts": [{{"fact": "<expected fact>", "covered": <true|false>}}],
+ "facts": [{{"fact": "<expected fact>", "covered": <true|false>, "in_context": <true|false>}}],
  "refused": {{"value": <true|false>, "reason": "<one sentence>"}}}}"""
 
 
@@ -113,17 +117,23 @@ def grade(verdict: dict, sample: dict) -> dict:
     criteria["relevance"] = {**relevance, "passed": relevance["score"] >= PASS_SCORE}
     if expected.get("facts"):
         items = verdict.get("facts", [])
-        by_text = {item.get("fact", "").casefold(): bool(item.get("covered")) for item in items}
+        by_text = {item.get("fact", "").casefold(): item for item in items}
 
-        def covered(index: int, fact: str) -> bool:
+        def judged(index: int, fact: str, field: str) -> bool:
             # The judge often rewords the fact it echoes back: its answer in the same position counts
             if fact.casefold() in by_text:
-                return by_text[fact.casefold()]
-            return index < len(items) and bool(items[index].get("covered"))
+                return bool(by_text[fact.casefold()].get(field))
+            return index < len(items) and bool(items[index].get(field))
 
-        # A fact the judge left out counts as missing
-        missing = [fact for i, fact in enumerate(expected["facts"]) if not covered(i, fact)]
+        # A fact the judge left out counts as missing, and as not in the context
+        facts = expected["facts"]
+        missing = [fact for i, fact in enumerate(facts) if not judged(i, fact, "covered")]
         criteria["facts"] = {"passed": not missing, "missing": missing}
+        # Only facts that should come from documents: a memory fact ("tôi tên gì") lives in the history, so its
+        # absence from the context says nothing about retrieval
+        if expected.get("contexts"):
+            in_context = sum(judged(i, fact, "in_context") for i, fact in enumerate(facts))
+            criteria["facts"]["context_recall"] = round(in_context / len(facts), 4)
     should_refuse = expected_refusal(expected)
     if should_refuse is not None:
         refused = bool(verdict["refused"]["value"])

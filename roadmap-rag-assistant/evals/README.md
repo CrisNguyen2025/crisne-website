@@ -71,6 +71,8 @@ Từ `roadmap-rag-assistant/`:
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm   # chấm câu trả lời thật: GỌI LLM, tốn quota
 .venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm --opt judge=llm \
     --opt judge_provider=google_genai --opt judge_model=gemini-3.1-pro-preview             # + LLM judge: GỌI thêm judge model
+.venv/bin/python -m evals run --only _answer --opt mode=fts --opt answer=llm --opt judge=llm --profile judge   # + chặn theo ngưỡng judge
+.venv/bin/python -m evals run --only _routing --opt cache=off --repeat 3   # chạy mỗi sample 3 lần: thêm trials, pass^3, pass@3 (tốn ×3 nếu gọi LLM)
 .venv/bin/python -m evals diff evals/runs/<base> evals/runs/<head>   # regressed / fixed / added / removed
 .venv/bin/python -m evals.router.holdout [--llm]          # write safety, held-out set: write_now_violations phải = 0
 .venv/bin/python -m evals.router.confuse [--llm]          # stress: 68 câu gây nhầm × 6 kiểu nhiễu; ratchet: evals/router/confuse_baseline.json
@@ -133,15 +135,18 @@ Scorer chỉ chạy khi sample có field nó cần; thiếu field thì bỏ qua 
 (`retrieval` \| `route` \| `answer` \| `judge`), `k` (mặc định 5), `default_role`, `thresholds`
 (key dạng `<scorer>.<metric>`, ví dụ `retrieval.hit@5`), `profiles` (tên → ngưỡng ghi đè `thresholds`, chọn bằng
 `--profile`; dùng khi cùng dataset chạy nhiều cấu hình, ví dụ một profile cho mỗi retrieval mode).
+Ngưỡng là số thì là mức tối thiểu; `{"max": n}` là mức tối đa cho metric càng thấp càng tốt (ví dụ
+`judge.judge_false_pass`). `_answer` có profile `judge` (chạy kèm `--profile judge` khi bật `judge=llm`), vì ngưỡng
+judge đặt ở `thresholds` mặc định sẽ fail mọi lần chạy offline không có judge.
 
 ### Metric
 
 | Scorer | Capability | Metric |
 |---|---|---|
-| `retrieval` | `retrieve` | `hit@k`, `mrr@k` (on-topic), `off_topic_rejected` |
+| `retrieval` | `retrieve` | `hit@k`, `mrr@k` (on-topic), `recall@k` + `recall_n` (chỉ sample có context `required`; ở sample khác các context là phương án thay thế nên không tính recall), `off_topic_rejected` |
 | `route` | `route` | `accuracy` (behavior + route cùng khớp) |
 | `answer` | `answer` | `accuracy` (behavior, facts substring, không chứa forbidden, citation ⊇ required contexts) |
-| `judge` | `judge` | `accuracy`, `faithfulness_mean`, `relevance_mean`, `facts_pass` (judge) vs `facts_pass_substring` (baseline), `refusal_pass`, `human_n`, `human_agreement`, `judge_false_pass`, `judge_false_fail` |
+| `judge` | `judge` | `accuracy`, `faithfulness_mean`, `relevance_mean`, `facts_pass` (judge) vs `facts_pass_substring` (baseline), `context_recall` (tỷ lệ fact có trong context đã cite, chỉ tính ở sample có `contexts`; chỉ để chẩn đoán, không vào luật pass), `refusal_pass`, `human_n`, `human_agreement`, `judge_false_pass`, `judge_false_fail` |
 
 Thiếu capability thì scorer bị **skip** và được ghi lại trong summary, không báo lỗi.
 
@@ -162,12 +167,14 @@ làm baseline rẻ, cả hai cùng có trong report. Chỉ chạy khi target có
   `faithfulness` 1–5: khẳng định có căn cứ trong context đã cite hoặc lịch sử hội thoại (bỏ qua khi không có cả hai);
   `relevance` 1–5: trả lời đúng câu hỏi (từ chối đúng cũng tính là relevant);
   `facts`: từng `expected.facts` được nói tới, khớp theo nghĩa (`missing` liệt kê ý thiếu);
+  mỗi fact còn có `in_context` (fact có nằm trong context đã cite không): thiếu ở cả câu trả lời lẫn context là lỗi
+  retrieval, có trong context mà câu trả lời không nói là lỗi generation;
   `refusal`: câu trả lời có từ chối / báo không có tài liệu khi và chỉ khi sample kỳ vọng
   (`behavior=refuse` hoặc `contexts=[]` → phải từ chối; `behavior=answer` → không được từ chối; còn lại bỏ qua).
   Pass = mọi tiêu chí áp dụng được đều pass, điểm 1–5 pass khi ≥ 4 (`kit/judge.py` `PASS_SCORE`).
 - **Context** đưa cho judge = text các section mà câu trả lời cite (`Target.contexts`), kèm title, topic, layer, group
   như agent thấy. Câu trả lời không cite gì chỉ được đối chiếu với lịch sử.
-- **Model & Cross-Switching**: `judge_provider` (`google_genai` | `groq`) và `judge_model`. Để tránh **Self-Preference Bias** (mô hình tự khen chính mình), hệ thống mặc định **tự động đảo ngược provider**: nếu câu trả lời sinh bởi `google_genai`, judge sẽ dùng `groq` (`llama-3.3-70b-versatile`) và ngược lại. Người dùng vẫn có thể override bằng `--opt judge_provider=...` và `--opt judge_model=...`. Temperature 0, bật JSON mode của provider.
+- **Model & Cross-Switching**: `judge_provider` (`google_genai` | `groq`) và `judge_model`. Để tránh **Self-Preference Bias** (mô hình tự khen chính mình), hệ thống mặc định **tự động đảo ngược provider**: nếu câu trả lời sinh bởi `google_genai`, judge sẽ dùng `groq` (`qwen/qwen3.8-27b`; `llama-3.3-70b-versatile` đã không còn trên tài khoản từ 2026-11-17) và ngược lại. Người dùng vẫn có thể override bằng `--opt judge_provider=...` và `--opt judge_model=...`. Temperature 0, bật JSON mode của provider.
 - **Fallback**: Chuyển sang provider còn lại nếu primary judge gặp lỗi (thiếu API key, 429 quota/rate limit, timeout),
   **trừ khi provider đó chính là provider sinh câu trả lời** (để không tự chấm bài mình). Với auto-switch mặc định thì
   không có fallback; chỉ có khi `judge_provider` được đặt trùng với `LLM_PROVIDER`.

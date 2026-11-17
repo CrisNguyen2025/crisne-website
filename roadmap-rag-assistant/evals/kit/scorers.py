@@ -40,6 +40,9 @@ def score_retrieval(sample: dict, target: Target, k: int, run_as: str | None) ->
         # Multi-section question: every required section must be retrieved; rank is the last one found
         found = required <= set(got)
         rank = max(i for i, section in enumerate(got, 1) if section in required) if found else None
+        # Recall only means something here: the required list is the whole answer, not a set of alternatives
+        recall = round(len(required & set(got)) / len(required), 4)
+        return {"passed": rank is not None, "kind": "on_topic", "rank": rank, "recall": recall, "got": got[:3]}
     else:
         # Any listed context counts as a hit: the dataset lists every acceptable section
         wanted = {c["section_id"] for c in contexts}

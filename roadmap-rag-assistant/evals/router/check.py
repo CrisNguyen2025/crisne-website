@@ -9,7 +9,7 @@ Contract (all files in evals/router/, committed):
 - decisions.jsonl  the router's decision for every message; any change is printed for a human to review
 
 Held-out sets (real messages, not generated): evals/datasets/_routing/samples.jsonl and
-tests/data/intent_eval_cases.json. The router is run in the agent's order: sensitive guard, plain topic listing,
+tests/data/intent_eval_cases.json. The router is run in the agent's order: sensitive guard, break-in (harmful) guard, plain topic listing,
 several requests in one message, then the heuristic router. No LLM, no network, no database.
 """
 
@@ -36,11 +36,14 @@ LOWER_IS_BETTER = ("stress.wrong_write", "stress.dropped", "stress.misroute")
 
 def decide(router, text: str) -> dict:
     """The decision the agent would take before any LLM call, as plain fields for the snapshot."""
+    from rag_service.core.guards import is_harmful_request
     from rag_service.domains.roadmap.router.grounding import is_sensitive_request
     from rag_service.domains.roadmap.router.understanding import instruction_part
     from rag_service.domains.roadmap.router.understanding import is_plain_listing
 
     if is_sensitive_request(text, instruction=instruction_part(text)):
+        return {"route": "refuse"}
+    if is_harmful_request(text):  # the agent's break-in guard, right after the sensitive one
         return {"route": "refuse"}
     if is_plain_listing(text):
         return {"route": "list_topics"}

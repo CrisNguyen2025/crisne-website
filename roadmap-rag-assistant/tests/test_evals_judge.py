@@ -90,6 +90,21 @@ def test_fact_left_out_by_the_judge_counts_as_missing():
     assert graded["criteria"]["facts"] == {"passed": False, "missing": ["vector"]}
 
 
+def test_context_recall_separates_retrieval_misses_from_generation_misses():
+    reply = json.loads(verdict())
+    reply["facts"] = [
+        {"fact": "BM25", "covered": False, "in_context": True},  # in the context, not in the answer: generation miss
+        {"fact": "vector", "covered": False, "in_context": False},  # in neither: retrieval miss
+    ]
+    expected = {"behavior": "answer", "facts": ["BM25", "vector"], "contexts": [{"section_id": "search"}]}
+    facts = judge.grade(reply, sample(expected))["criteria"]["facts"]
+    assert facts["context_recall"] == 0.5 and facts["missing"] == ["BM25", "vector"]
+    # A memory fact comes from the history, not the documents: no context recall for it
+    memory = judge.grade(reply, sample({"behavior": "answer", "facts": ["BM25", "vector"]}))["criteria"]["facts"]
+    assert "context_recall" not in memory
+    assert "in_context" in judge.PROMPT
+
+
 def test_no_match_sample_must_refuse_and_null_faithfulness_is_skipped():
     s = sample({"contexts": []})
     passed = judge.grade(json.loads(verdict(faithfulness=None, refused=True)), s)
@@ -247,7 +262,7 @@ def test_judge_auto_switches_provider_and_never_falls_back_to_the_answer_provide
     monkeypatch.setattr(settings, "llm_provider", "google_genai")
     target = RoadmapTarget(mode="fts", answer="llm", judge="llm")
     assert target.judge_provider == "groq"
-    assert target.judge_model == "llama-3.3-70b-versatile"
+    assert target.judge_model == "qwen/qwen3.8-27b"
     assert (target.fallback_provider, target.fallback_model) == (None, None)
 
     monkeypatch.setattr(settings, "llm_provider", "groq")

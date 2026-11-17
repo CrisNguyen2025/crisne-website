@@ -6,5 +6,13 @@
     "answer",
     "judge"
   ],
-  "thresholds": {}
+  "thresholds": {},
+  "profiles": {
+    "judge": {
+      "judge.relevance_mean": 4.5,
+      "judge.facts_pass": 0.8,
+      "judge.refusal_pass": 1.0,
+      "judge.judge_false_pass": {"max": 1}
+    }
+  }
 }

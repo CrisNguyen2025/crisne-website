@@ -23,6 +23,8 @@
     "frame-heavy",
     "split-tune",
     "split-holdout",
-    "sub-intent"
+    "sub-intent",
+    "harmful",
+    "over-refusal"
   ]
 }
