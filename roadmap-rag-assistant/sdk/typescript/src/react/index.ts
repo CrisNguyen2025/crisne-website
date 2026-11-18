@@ -31,6 +31,8 @@ export type { ChangeReviewCardProps } from './components/ChangeReviewCard';
 
 // Icons & Presentation Assets
 export * from './icons';
+export { AbotMascot } from './components/AbotMascot';
+export type { AbotMascotProps, MascotState } from './components/AbotMascot';
 
 // Utility & Formatters
 export * from './utils/formatters';

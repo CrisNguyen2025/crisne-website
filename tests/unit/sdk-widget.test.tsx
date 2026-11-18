@@ -199,4 +199,56 @@ describe("RoadmapChatbotWidget", () => {
       expect(screen.queryByRole("button", { name: "Câu trả lời hữu ích" })).toBeNull();
     });
   });
+
+  describe("mascot", () => {
+    it("renders circular mascot on launcher button, switches to happy eyes on hover, and opens chat", () => {
+      render(<RoadmapChatbotWidget baseUrl={BASE} />);
+      const launcher = screen.getByRole("button", { name: "Mở Abot" });
+      expect(launcher.querySelectorAll("clipPath")).toHaveLength(2);
+      expect(launcher.querySelectorAll("ellipse")).toHaveLength(1);
+
+      fireEvent.mouseEnter(launcher);
+      expect(launcher.querySelectorAll("ellipse").length).toBeGreaterThanOrEqual(3);
+
+      fireEvent.click(launcher);
+      expect(screen.getByPlaceholderText(/Hỏi Abot/)).toBeTruthy();
+      expect(screen.getByText(/Xin chào, mình là Abot/)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Sao chép câu trả lời" })).toBeNull();
+    });
+
+    it("hides header brand in init hero stage and docks to header on first message", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode('event: done\ndata: {"message":"đã trả lời"}\n\n'));
+                c.close();
+              },
+            }),
+            { status: 200 }
+          )
+        )
+      );
+      openWidget(false);
+      expect(screen.getByText(/Xin chào, mình là Abot/)).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Xem lộ trình" }));
+      await screen.findByText("đã trả lời");
+      expect(screen.queryByText(/Xin chào, mình là Abot/)).toBeNull();
+    });
+
+    it("reacts to clicks in init hero stage with happy and playful wink moods", () => {
+      const { container } = openWidget(false);
+      const heroSvg = container.querySelector('svg[width="92"]') as SVGSVGElement;
+      expect(heroSvg).toBeTruthy();
+
+      fireEvent.click(heroSvg);
+      expect(heroSvg.querySelectorAll("ellipse")).toHaveLength(4);
+
+      fireEvent.click(heroSvg);
+      expect(heroSvg.querySelectorAll("ellipse")).toHaveLength(3);
+    });
+  });
 });

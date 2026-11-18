@@ -13,9 +13,12 @@ import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ContextUsageSheet } from "./components/ContextUsageSheet";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
+import { AbotMascot, type MascotState } from "./components/AbotMascot";
 import { useVisualViewportBox } from "./utils/useVisualViewportBox";
 import { copyText } from "./utils/clipboard";
 import { useDrawerMotion } from "./utils/useDrawerMotion";
+import { useHeaderFlip } from "./utils/useHeaderFlip";
+import { WELCOME_MESSAGE_ID } from "./welcome";
 import { MessageList } from "./components/MessageList";
 import { useFeedback, type VoteDetail } from "./useFeedback";
 import { feedbackKey } from "./storage";
@@ -41,6 +44,7 @@ export function RoadmapChatbotWidget({
   canWrite = false,
 }: ChatbotConfig) {
   const [isOpen, setIsOpen] = useState(initialOpen);
+  const [isHovered, setIsHovered] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
@@ -445,6 +449,18 @@ export function RoadmapChatbotWidget({
     return styles;
   }, [position, offsetX, offsetY, zIndex]);
 
+  const isInitStage =
+    messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
+  const {
+    headerMascotRef,
+    headerTextRef,
+    heroMascotRef,
+    heroTextRef,
+    heroChipsRef,
+    captureBeforeSend,
+    captureBeforeReset,
+  } = useHeaderFlip(isInitStage, scrollRef);
+
   const toggleToolExpand = (id: string) => {
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -459,6 +475,8 @@ export function RoadmapChatbotWidget({
     setTimeout(() => {
       isSendingRef.current = false;
     }, 400);
+
+    captureBeforeSend();
 
     // 1. Immediately wipe both React state and DOM value
     setInput("");
@@ -502,6 +520,14 @@ export function RoadmapChatbotWidget({
   // message itself, not in the header.
   const status = subtitle;
   const showStop = isStreaming && !input.trim();
+  const lastMsg = messages[messages.length - 1];
+  const activityState: MascotState = isStreaming
+    ? "speaking"
+    : isLoading || Boolean(activeTool)
+      ? "thinking"
+      : lastMsg?.status === "error"
+        ? "error"
+        : "idle";
 
   return (
     <div
@@ -526,9 +552,16 @@ export function RoadmapChatbotWidget({
         >
           {/* ── Header ── */}
           <ChatHeader
+            activityState={activityState}
             canWrite={canWrite}
-            clearMessages={clearMessages}
+            clearMessages={() => {
+              captureBeforeReset();
+              clearMessages();
+            }}
             copiedConvId={copiedConvId}
+            hideBrand={isInitStage}
+            mascotRef={headerMascotRef}
+            textRef={headerTextRef}
             openContext={() => {
               setIsContextOpen(true);
               void refreshContext();
@@ -544,6 +577,11 @@ export function RoadmapChatbotWidget({
 
           {/* ── Messages ── */}
           <MessageList
+            activityState={activityState}
+            title={title}
+            heroMascotRef={heroMascotRef}
+            heroTextRef={heroTextRef}
+            heroChipsRef={heroChipsRef}
             messages={messages}
             isLoading={isLoading}
             isStreaming={isStreaming}
@@ -553,7 +591,7 @@ export function RoadmapChatbotWidget({
             copiedId={copiedId}
             canWrite={canWrite}
             showFeedback={Boolean(onFeedback)}
-            sendMessage={sendMessage}
+            sendMessage={handleSend}
             retry={retry}
             copyMessage={copyMessage}
             handleFeedback={handleFeedback}
@@ -625,18 +663,25 @@ export function RoadmapChatbotWidget({
       {!isOpen && (
         <button
           type="button"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            setIsHovered(false);
+            setIsOpen(true);
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           aria-label="Mở Abot"
-          className="pointer-events-auto group flex h-11 items-center gap-2 rounded-full border border-white/25 bg-[#181A20] px-4 text-[14px] font-medium tracking-normal text-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.2)] transition-all duration-200 hover:bg-[#22252D] hover:border-white/40 hover:scale-[1.03] active:scale-[0.97] select-none cursor-pointer"
+          className="pointer-events-auto group flex h-11 items-center gap-2 rounded-full border border-white/25 bg-[#181A20] pl-2.5 pr-4 text-[14px] font-medium tracking-normal text-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.2)] transition-all duration-200 hover:bg-[#22252D] hover:border-white/40 hover:scale-[1.03] active:scale-[0.97] select-none cursor-pointer"
         >
-          {/* Minimal 4-point star icon sáng rõ */}
-          <span className="flex items-center justify-center text-white/80 transition-colors group-hover:text-white">
-            <SparklesIcon className="h-4 w-4" />
-          </span>
+          <AbotMascot
+            size={30}
+            state={isHovered ? "happy" : activityState}
+          />
 
           <span className="text-white/95 transition-colors group-hover:text-white">
             Abot
           </span>
+
+          <SparklesIcon className="h-3.5 w-3.5 text-[#8BB5D9]/80 transition-transform duration-300 group-hover:rotate-12 group-hover:text-[#C4E4FF]" />
         </button>
       )}
     </div>

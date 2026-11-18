@@ -19,9 +19,16 @@ import {
 } from "../utils/formatters";
 import { PulsatingDots } from "./PulsatingDots";
 import { ChangeReviewCard } from "./ChangeReviewCard";
+import { AbotMascot, type MascotState } from "./AbotMascot";
+import { WELCOME_MESSAGE_ID } from "../welcome";
 import type { ChatMessage } from "../types";
 
 export interface MessageListProps {
+  activityState?: MascotState;
+  title?: string;
+  heroMascotRef?: React.RefObject<HTMLDivElement | null>;
+  heroTextRef?: React.RefObject<HTMLDivElement | null>;
+  heroChipsRef?: React.RefObject<HTMLDivElement | null>;
   messages: ChatMessage[];
   isLoading: boolean;
   isStreaming: boolean;
@@ -405,6 +412,11 @@ const MessageItem = React.memo(function MessageItem({
 });
 
 export function MessageList({
+  activityState = "idle",
+  title = "Abot",
+  heroMascotRef,
+  heroTextRef,
+  heroChipsRef,
   messages,
   isLoading,
   isStreaming,
@@ -424,6 +436,11 @@ export function MessageList({
   bottomSentinelRef,
   scrollToBottom,
 }: MessageListProps) {
+  const showWelcomeStage =
+    messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
+  const visibleMessages = showWelcomeStage
+    ? []
+    : messages.filter((m) => m.id !== WELCOME_MESSAGE_ID);
   // The host recreates these on every render (`retry` changes with each streamed frame), which
   // would defeat MessageItem's memo. Stable wrappers call the latest ones instead.
   const latestHandlers = React.useRef<MessageHandlers>({
@@ -462,22 +479,65 @@ export function MessageList({
         ref={scrollRef}
         className="flex-1 space-y-6 overflow-y-auto px-4 pt-5 pb-2 overscroll-contain touch-pan-y [scrollbar-color:#E6E4DF_transparent] [scrollbar-width:thin]"
       >
-        {messages.map((msg, idx) => (
-          <MessageItem
-            key={msg.id}
-            msg={msg}
-            isLast={idx === messages.length - 1}
-            isLoading={isLoading}
-            isStreaming={isStreaming}
-            runningCode={runningCode}
-            expandedTools={expandedTools}
-            feedback={feedback}
-            copiedId={copiedId}
-            canWrite={canWrite}
-            showFeedback={showFeedback}
-            handlers={handlers}
-          />
-        ))}
+        {showWelcomeStage ? (
+          <div className="flex h-full min-h-[280px] flex-col items-center justify-center pb-6 text-center">
+            <div
+              ref={heroMascotRef}
+              className="mb-3 flex items-center justify-center"
+            >
+              <AbotMascot
+                size={92}
+                state={activityState}
+                showShadow
+                enablePoke
+              />
+            </div>
+            <div ref={heroTextRef} className="max-w-[300px]">
+              <h3 className="text-[21px] font-semibold tracking-tight text-[#1F1E1C]">
+                Xin chào, mình là {title}
+              </h3>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#5E5B55]">
+                Trợ lý quản trị lộ trình học tập và tra cứu kiến thức cá nhân.
+              </p>
+            </div>
+            {!!messages[0]?.suggestions?.length && (
+              <div
+                ref={heroChipsRef}
+                className="mt-5 flex flex-wrap justify-center gap-2"
+              >
+                {messages[0].suggestions.map((s) => (
+                  <button
+                    key={s.prompt}
+                    type="button"
+                    onClick={() => handlers.sendMessage(s.prompt)}
+                    disabled={isLoading}
+                    title={s.prompt}
+                    className="rounded-full border border-[#E6E4DF] bg-white px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          visibleMessages.map((msg, idx) => (
+            <MessageItem
+              key={msg.id}
+              msg={msg}
+              isLast={idx === visibleMessages.length - 1}
+              isLoading={isLoading}
+              isStreaming={isStreaming}
+              runningCode={runningCode}
+              expandedTools={expandedTools}
+              feedback={feedback}
+              copiedId={copiedId}
+              canWrite={canWrite}
+              showFeedback={showFeedback}
+              handlers={handlers}
+            />
+          ))
+        )}
         <div
           ref={bottomSentinelRef}
           aria-hidden="true"

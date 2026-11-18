@@ -1,10 +1,15 @@
 import React from "react";
-import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MoreVerticalIcon, NewChatIcon, SparklesIcon } from "../icons";
+import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MoreVerticalIcon, NewChatIcon } from "../icons";
+import { AbotMascot, type MascotState } from "./AbotMascot";
 
 export interface ChatHeaderProps {
+  activityState?: MascotState;
   canWrite: boolean;
   clearMessages: () => void;
   copiedConvId: boolean;
+  hideBrand?: boolean;
+  mascotRef?: React.RefObject<HTMLDivElement | null>;
+  textRef?: React.RefObject<HTMLDivElement | null>;
   openContext: () => void;
   handleCopyConversationId: (e: React.MouseEvent) => void;
   isOptionsOpen: boolean;
@@ -15,22 +20,44 @@ export interface ChatHeaderProps {
   title: string;
 }
 
-export function ChatHeader({ canWrite, clearMessages, copiedConvId, openContext, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
+export function ChatHeader({ activityState = "idle", canWrite, clearMessages, copiedConvId, hideBrand = false, mascotRef, textRef, openContext, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
   return (
     // Like Claude: no divider; messages fade out under the header instead of meeting a line.
-    <div className="relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 bg-[#FFFFFF] px-2 py-1 pt-[max(0.25rem,env(safe-area-inset-top))] after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-[#FFFFFF] after:to-transparent">
+    <div
+      className={`relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] ${
+        hideBrand ? "bg-transparent" : "bg-[#FFFFFF]"
+      }`}
+    >
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 top-full z-0 h-4 bg-gradient-to-b from-[#FFFFFF] to-transparent transition-opacity ${
+          hideBrand ? "opacity-0 duration-0" : "opacity-100 delay-300 duration-200"
+        }`}
+      />
       {/* No close button: "Thu gọn" lives in the ⋮ menu. The empty cell keeps the title centred. */}
       <span aria-hidden="true" />
 
-      <div className="min-w-0 text-center">
-        <div className="flex items-center justify-center gap-1.5 truncate text-[15px] font-semibold leading-[18px] tracking-tight text-[#1F1E1C]">
-          <SparklesIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
-          <span className="truncate">{title}</span>
+      <div
+        aria-hidden={hideBrand || undefined}
+        className={`relative z-10 min-w-0 flex items-center justify-center gap-2 ${
+          hideBrand ? "pointer-events-none opacity-[0.001]" : "opacity-100"
+        }`}
+      >
+        <div
+          ref={mascotRef}
+          className="shrink-0 flex items-center justify-center will-change-transform"
+        >
+          <AbotMascot size={28} state={activityState} enablePoke />
         </div>
-        <div className="truncate text-xs leading-4 text-[#5E5B55]">{status}</div>
+        <div ref={textRef} className="min-w-0 text-left will-change-transform">
+          <div className="truncate text-[15px] font-semibold leading-[18px] tracking-tight text-[#1F1E1C]">
+            {title}
+          </div>
+          <div className="truncate text-xs leading-4 text-[#5E5B55]">{status}</div>
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center justify-end">
+      <div className="relative z-10 flex shrink-0 items-center justify-end">
         <div className="relative" ref={optionsRef}>
           <button
             type="button"
