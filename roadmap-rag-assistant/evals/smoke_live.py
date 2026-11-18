@@ -24,7 +24,7 @@ REFUSE_HINTS = ("không thể", "chỉ hỗ trợ", "không thể cung cấp", "
 CLAIM = re.compile(r"(✅\s*đã|đã\s+(được\s+)?(tạo|lưu|thêm|xóa|cập nhật))", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PHONE = re.compile(r"(?<!\d)(?:\+?84|0)\d{8,9}(?!\d)")
-LINK = re.compile(r"\]\(((?:/topic/|/\?topic=)[^)\s]+)\)")
+LINK = re.compile(r"\]\(((?:/topic/|/lessons/|/\?topic=)[^)\s]+)\)")
 
 
 def internal_key() -> str:
@@ -117,11 +117,13 @@ def _(ctx):
 def _(ctx):
     res = ask(ctx["client"], ctx["base"], ctx["key"], "tìm bài học về machine learning", ctx["thread"]())
     topics = {t["slug"] for t in ctx["topics"]}
-    def _topic_slug(href: str) -> str | None:
+    def _is_valid_link(href: str) -> bool:
+        if href.startswith("/lessons/"):
+            return bool(re.match(r"^/lessons/([^/?#\s)]+)", href))
         m = re.match(r"^/topic/([^/?#]+)", href) or re.match(r"^/\?topic=([^&#]+)", href)
-        return m.group(1) if m else None
+        return bool(m and m.group(1) in topics)
 
-    bad = [m for m in LINK.findall(res["text"]) if _topic_slug(m) not in topics]
+    bad = [m for m in LINK.findall(res["text"]) if not _is_valid_link(m)]
     return not bad, f"unknown links={bad}"
 
 

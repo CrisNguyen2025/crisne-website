@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,7 @@ export const revalidate = 0;
  * Every topic with its lessons in page order (including Lexical HTML rich-text content). Each lesson names its
  * section, or null. Used by the Roadmap Assistant's ingestion worker to synchronize live knowledge over HTTP.
  */
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     // Public, and the Roadmap Assistant indexes it for every reader: lesson fields are listed, so Lesson Status
     // (ADR-0010) and any later private field never go out
@@ -22,6 +22,7 @@ export async function GET(_req: NextRequest) {
           select: {
             id: true,
             roadmapId: true,
+            slug: true,
             section: true,
             title: true,
             description: true,

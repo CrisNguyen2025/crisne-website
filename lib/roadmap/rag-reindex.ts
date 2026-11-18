@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
 const REINDEX_TIMEOUT_MS = 5_000;
@@ -25,6 +26,11 @@ export async function requestRagReindex(): Promise<void> {
 
 /** Call once a roadmap write has succeeded. Runs after the response is sent, so it never delays or fails the write. */
 export function notifyRoadmapChanged(): void {
+  try {
+    revalidatePath("/", "layout");
+  } catch {
+    // Outside a Next.js request scope (scripts, unit tests)
+  }
   try {
     after(requestRagReindex);
   } catch {

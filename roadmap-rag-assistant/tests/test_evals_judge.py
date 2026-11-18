@@ -332,3 +332,73 @@ def test_missing_judge_keys_fail_the_run(monkeypatch):
 
     with pytest.raises(roadmap_target.JudgeConfigError):
         target.judge("p")
+
+
+def test_judge_evaluate_uses_retrieved_contexts_even_without_citations():
+    answer = Answer(text="Không có thông tin", behavior="answer", citations=[], retrieved=["hybrid", "bm25"])
+    target = FakeJudgeTarget(answer, [verdict()])
+    judge.evaluate(sample({"behavior": "answer"}), answer, target)
+    assert "text of hybrid" in target.prompts[0]
+    assert "text of bm25" in target.prompts[0]
+
+
+def test_contexts_carry_section_metadata(monkeypatch):
+    doc = {
+        "doc_id": "d2",
+        "title": "Prompt Caching",
+        "sections": [{"section_id": "d2", "text": "Cache prefix"}],
+        "metadata": {"topic": "ai-architecture", "section": "Context Engineering"},
+    }
+    monkeypatch.setattr(RoadmapTarget, "_load", lambda self: ([], [doc]))
+    target = RoadmapTarget(mode="fts")
+    assert target.contexts(["d2"]) == ["Prompt Caching (ai-architecture, Context Engineering): Cache prefix"]
+
+
+def test_judge_metrics_report_refusal_split_kappa_and_false_pass_rate():
+    rows = [
+        {
+            "scorer": "judge",
+            "passed": True,
+            "tags": [],
+            "criteria": {
+                "relevance": {"score": 5, "passed": True},
+                "refusal": {"passed": True, "expected": True},
+            },
+            "calibration": {"human": True, "judge": True, "agree": True},
+        },
+        {
+            "scorer": "judge",
+            "passed": False,
+            "tags": [],
+            "criteria": {
+                "relevance": {"score": 2, "passed": False},
+                "refusal": {"passed": False, "expected": True},
+            },
+            "calibration": {"human": False, "judge": True, "agree": False},
+        },
+        {
+            "scorer": "judge",
+            "passed": False,
+            "tags": [],
+            "criteria": {
+                "relevance": {"score": 2, "passed": False},
+                "refusal": {"passed": False, "expected": False},
+            },
+            "calibration": {"human": False, "judge": False, "agree": True},
+        },
+        {
+            "scorer": "judge",
+            "passed": True,
+            "tags": [],
+            "criteria": {
+                "relevance": {"score": 5, "passed": True},
+                "refusal": {"passed": True, "expected": False},
+            },
+            "calibration": {"human": True, "judge": True, "agree": True},
+        },
+    ]
+    got = metrics.summarize(rows, 5)["metrics"]["judge"]
+    assert got["refusal_recall"] == 0.5
+    assert got["over_refusal_rate"] == 0.5
+    assert got["judge_false_pass_rate"] == 0.25
+    assert got["human_kappa"] == 0.5

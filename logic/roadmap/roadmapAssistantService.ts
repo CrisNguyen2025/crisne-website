@@ -57,19 +57,31 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 }
 
 /**
- * Page the user is viewing, read from the URL (?topic=<slug>&section=<name>&item=<id>).
+ * Page the user is viewing, read from the URL or DOM dataset on flat lesson routes.
  * Returns undefined on the server so SSR never reads window.
  */
 export function getRoadmapPageContext(): PageContext | undefined {
   if (typeof window === 'undefined') return undefined;
   const params = new URLSearchParams(window.location.search);
-  const section = params.get('section') || undefined;
-
+  const querySection = params.get('section') || undefined;
   const pathname = window.location.pathname;
+
+  const lessonMatch = pathname.match(/^\/lessons\/([^/]+)/);
+  if (lessonMatch) {
+    const contextEl =
+      typeof document !== 'undefined'
+        ? document.querySelector<HTMLElement>('[data-roadmap-context]')
+        : null;
+    const roadmapSlug = contextEl?.dataset.roadmapSlug || undefined;
+    const section = contextEl?.dataset.section || querySection;
+    const itemId = decodeURIComponent(lessonMatch[1]);
+    return { roadmapSlug, itemId, section };
+  }
+
   const topicMatch = pathname.match(/^\/topic\/([^/]+)(?:\/([^/]+))?/);
   const roadmapSlug = topicMatch ? decodeURIComponent(topicMatch[1]) : params.get('topic') || undefined;
   const itemId = topicMatch && topicMatch[2] ? decodeURIComponent(topicMatch[2]) : params.get('item') || undefined;
 
-  if (!roadmapSlug && !itemId && !section) return undefined;
-  return { roadmapSlug, itemId, section };
+  if (!roadmapSlug && !itemId && !querySection) return undefined;
+  return { roadmapSlug, itemId, section: querySection };
 }

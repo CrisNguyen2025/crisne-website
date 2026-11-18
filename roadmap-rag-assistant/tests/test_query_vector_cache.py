@@ -70,3 +70,16 @@ def test_rate_limited_embedding_key_hands_over_to_the_next():
     emb = RotatingEmbeddings([first, second])
     assert emb.embed_query("x") == [0.5] and emb.embed_query("y") == [0.5]
     assert first.calls == 1  # the working key stays current
+
+
+def test_query_vector_cache_flags_hit_and_miss_on_trace(monkeypatch):
+    monkeypatch.setattr(hybrid, "_QUERY_VECTORS", _QueryVectorCache())
+    trace = SimpleNamespace(flags={})
+    monkeypatch.setattr("rag_service.observability.current_trace", lambda: trace)
+    store = _store(_Embedder())
+
+    store._similarities("RAG là gì")
+    assert trace.flags["embedding_cache_hit"] is False
+
+    store._similarities("RAG là gì")
+    assert trace.flags["embedding_cache_hit"] is True

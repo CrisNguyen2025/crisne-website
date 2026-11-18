@@ -1,143 +1,381 @@
 'use client';
 
-import { SECTIONS_ENABLED } from './sectionsEnabled';
-import React from 'react';
-import { RoadmapMeta, RoadmapStats } from '@/lib/roadmap/types';
-import type { SectionGroup } from '@/hooks/use-roadmap';
+import React, { useRef } from 'react';
+import Link from 'next/link';
+import { Pencil, Plus, Ungroup } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  MouseSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { ChecklistItem, RoadmapMeta, RoadmapStats, SectionGroup } from '@/lib/roadmap/types';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import type { LessonStatus } from '@/lib/roadmap/status';
 import { RoadmapView, ViewToggle } from './ViewToggle';
+import { SECTIONS_ENABLED } from './sectionsEnabled';
 
 interface RoadmapMapProps {
   sectionGroups: SectionGroup[];
   currentRoadmap?: RoadmapMeta | null;
   stats: RoadmapStats;
-  activeItemId: string;
+  activeItemId?: string;
   isLoading?: boolean;
-  view: RoadmapView;
-  onViewChange: (view: RoadmapView) => void;
-  onSelectItem: (id: string) => void;
+  view?: RoadmapView;
+  onViewChange?: (view: RoadmapView) => void;
+  onSelectItem?: (id: string) => void;
+  embedded?: boolean;
+  canWrite?: boolean;
+  isLocked?: boolean;
+  onOpenCreateItem?: (section: string | null) => void;
+  onRenameSection?: (section: string) => void;
+  onDissolveSection?: (section: string) => void;
+  onReorderSection?: (section: string | null, reordered: ChecklistItem[]) => void;
 }
 
-/** Lessons with content, out of all lessons in a section */
-function coverage(items: { content?: string }[]) {
-  return { total: items.length, withContent: items.filter((i) => i.content).length };
+const STATUS_DOT: Record<LessonStatus, string> = {
+  target: 'bg-[var(--status-target)]',
+  learning: 'bg-[var(--status-learning)]',
+  known: '',
+};
+
+interface MapChipProps {
+  item: ChecklistItem;
+  isActive: boolean;
+  onSelectItem?: (id: string) => void;
 }
 
-/**
- * The whole topic at a glance: one column per section (a station on a line on phones), its lessons inside.
- * A lesson with content is a solid chip, one without is dashed.
- */
+function chipClassName(hasBody: boolean, isActive: boolean, isDragging = false): string {
+  return cn(
+    'inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border px-3 py-1.5 text-left text-xs transition-[border-color,background-color,color,transform] duration-150 ease-out active:scale-[0.98]',
+    hasBody
+      ? 'border-border/90 bg-background/80 text-foreground shadow-[0_0.0625rem_0.0625rem_oklch(0_0_0/0.02)] hover:border-foreground/30 hover:bg-muted/50'
+      : 'border-dashed border-border/90 bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground',
+    isActive && 'border-foreground ring-1 ring-foreground',
+    isDragging && 'z-20 opacity-85 shadow-md ring-1 ring-foreground/20'
+  );
+}
+
+function ChipInner({ item }: { item: ChecklistItem }) {
+  const statusDot = item.status && item.status !== 'known' ? STATUS_DOT[item.status] : '';
+  return (
+    <>
+      {statusDot && <span className={cn('size-1.5 shrink-0 rounded-full', statusDot)} />}
+      <span className="truncate">{item.title}</span>
+    </>
+  );
+}
+
+function StaticMapChip({ item, isActive, onSelectItem }: MapChipProps) {
+  const hasBody = Boolean(item.hasContent ?? item.content);
+  const className = chipClassName(hasBody, isActive);
+
+  if (onSelectItem) {
+    return (
+      <button
+        type="button"
+        onClick={() => onSelectItem(item.id)}
+        title={item.description || item.title}
+        className={className}
+      >
+        <ChipInner item={item} />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={`/lessons/${item.slug || item.id}`}
+      prefetch={true}
+      title={item.description || item.title}
+      className={className}
+    >
+      <ChipInner item={item} />
+    </Link>
+  );
+}
+
+function SortableMapChip({
+  item,
+  isActive,
+  onSelectItem,
+  suppressClickRef,
+}: MapChipProps & { suppressClickRef: React.MutableRefObject<boolean> }) {
+  const hasBody = Boolean(item.hasContent ?? item.content);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  });
+
+  const handleClickCapture = (e: React.MouseEvent) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+  };
+
+  const className = cn(
+    chipClassName(hasBody, isActive, isDragging),
+    'touch-manipulation',
+    isDragging ? 'cursor-grabbing' : 'cursor-pointer'
+  );
+
+  if (onSelectItem) {
+    return (
+      <button
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        type="button"
+        onClickCapture={handleClickCapture}
+        onClick={() => onSelectItem(item.id)}
+        title={item.description || item.title}
+        className={className}
+      >
+        <ChipInner item={item} />
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      href={`/lessons/${item.slug || item.id}`}
+      prefetch={true}
+      draggable={false}
+      onClickCapture={handleClickCapture}
+      title={item.description || item.title}
+      className={className}
+    >
+      <ChipInner item={item} />
+    </Link>
+  );
+}
+
+function SortableSectionChips({
+  section,
+  items,
+  activeItemId,
+  onSelectItem,
+  onReorderSection,
+}: {
+  section: string | null;
+  items: ChecklistItem[];
+  activeItemId: string;
+  onSelectItem?: (id: string) => void;
+  onReorderSection: (section: string | null, reordered: ChecklistItem[]) => void;
+}) {
+  const suppressClickRef = useRef(false);
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const releaseClickLock = () => {
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 60);
+  };
+
+  const handleDragStart = () => {
+    suppressClickRef.current = true;
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    releaseClickLock();
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((i) => i.id === active.id);
+    const newIndex = items.findIndex((i) => i.id === over.id);
+    if (oldIndex !== -1 && newIndex !== -1) {
+      onReorderSection(section, arrayMove(items, oldIndex, newIndex));
+    }
+  };
+
+  return (
+    <DndContext
+      id={`roadmap-map-${section ?? '__none__'}`}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragCancel={releaseClickLock}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext items={items.map((i) => i.id)} strategy={rectSortingStrategy}>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {items.length === 0 && (
+            <p className="text-xs text-muted-foreground">Chưa có bài học nào.</p>
+          )}
+          {items.map((item) => (
+            <SortableMapChip
+              key={item.id}
+              item={item}
+              isActive={item.id === activeItemId}
+              onSelectItem={onSelectItem}
+              suppressClickRef={suppressClickRef}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 export function RoadmapMap({
   sectionGroups,
   currentRoadmap,
   stats,
-  activeItemId,
+  activeItemId = '',
   isLoading = false,
-  view,
+  view = 'map',
   onViewChange,
   onSelectItem,
+  embedded = false,
+  canWrite = false,
+  isLocked = false,
+  onOpenCreateItem,
+  onRenameSection,
+  onDissolveSection,
+  onReorderSection,
 }: RoadmapMapProps) {
-  const covered = sectionGroups.reduce((n, g) => n + coverage(g.items).withContent, 0);
-  const percent = stats.total ? Math.round((covered / stats.total) * 100) : 0;
   const sectionCount = sectionGroups.filter((g) => g.section !== null).length;
-  // Sections are off for now: one station holds every lesson (see sectionsEnabled.ts)
   const stations = SECTIONS_ENABLED
     ? sectionGroups
     : [{ section: null, items: sectionGroups.flatMap((g) => g.items) }];
+  const canReorder = canWrite && !isLocked && !currentRoadmap?.isLocked && Boolean(onReorderSection);
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 md:px-6">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-lg leading-tight text-foreground">
-            {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {isLoading ? 'Loading…' : SECTIONS_ENABLED
-                ? `${stats.total} bài · ${sectionCount} mục · ${percent}% có nội dung`
-                : `${stats.total} bài · ${percent}% có nội dung`}
-          </p>
+    <div className={cn('flex w-full flex-col', !embedded && 'h-full overflow-hidden')}>
+      {!embedded && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3 md:px-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-semibold leading-tight text-foreground">
+              {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
+            </h1>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {isLoading
+                ? 'Loading…'
+                : SECTIONS_ENABLED
+                  ? `${stats.total} bài · ${sectionCount} mục`
+                  : `${stats.total} bài`}
+            </p>
+          </div>
+          {onViewChange && <ViewToggle value={view} onChange={onViewChange} />}
         </div>
-        <ViewToggle value={view} onChange={onViewChange} />
-      </div>
+      )}
 
-      <div className="flex-1 overflow-auto scrollbar-thin">
+      <div className={cn(!embedded && 'flex-1 overflow-auto scrollbar-thin p-4 md:p-6')}>
         {isLoading ? (
-          <div className="flex flex-col gap-4 p-4 md:flex-row md:p-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-64 w-full shrink-0 rounded-xl md:w-72" />
+              <Skeleton key={i} className="h-44 w-full rounded-xl" />
             ))}
           </div>
         ) : (
-          <ol className="relative flex flex-col gap-6 p-4 pb-[max(6rem,calc(5rem+env(safe-area-inset-bottom)))] md:min-h-full md:flex-row md:items-start md:gap-4 md:p-6">
-            {stations.map((group) => {
-              const { total, withContent } = coverage(group.items);
-              const isDone = total > 0 && withContent === total;
-              return (
-                <li key={group.section ?? '__none__'} className="group/station relative pl-7 md:w-72 md:shrink-0 md:pl-0">
-                  {/* The line between stations, on phones only */}
-                  <span className="absolute bottom-[-1.5rem] left-[0.4375rem] top-3 w-0.5 bg-border group-last/station:hidden md:hidden" />
-                  <span
-                    className={cn(
-                      'absolute left-0 top-1 size-4 rounded-full border-2 md:hidden',
-                      isDone ? 'border-primary bg-primary' : 'border-border bg-background'
-                    )}
+          <ol className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 items-start">
+            {stations.map((group) => (
+              <li
+                key={group.section ?? '__none__'}
+                className="flex flex-col rounded-xl border border-border/90 bg-card p-4 shadow-[0_0.0625rem_0.125rem_oklch(0_0_0/0.025)]"
+              >
+                <div className="flex items-center gap-2">
+                  <h2 className="min-w-0 flex-1 truncate text-sm font-medium tracking-tight text-foreground">
+                    {group.section ?? 'Chung'}
+                  </h2>
+                  <span className="text-xs tabular-nums text-muted-foreground/80">
+                    {group.items.length}
+                  </span>
+                  {canWrite && (
+                    <ActionMenu
+                      label="Thao tác mục"
+                      items={[
+                        ...(onOpenCreateItem
+                          ? [
+                              {
+                                label: 'Thêm bài vào mục',
+                                icon: Plus,
+                                onSelect: () => onOpenCreateItem(group.section),
+                              },
+                            ]
+                          : []),
+                        ...(group.section !== null && onRenameSection
+                          ? [
+                              {
+                                label: 'Đổi tên mục',
+                                icon: Pencil,
+                                onSelect: () => onRenameSection(group.section as string),
+                              },
+                            ]
+                          : []),
+                        ...(group.section !== null && onDissolveSection
+                          ? [
+                              {
+                                label: 'Bỏ mục (về Chung)',
+                                icon: Ungroup,
+                                onSelect: () => onDissolveSection(group.section as string),
+                                confirm: {
+                                  title: `Bỏ mục "${group.section}"?`,
+                                  description: `${group.items.length} bài học sẽ chuyển về Chung.`,
+                                  confirmLabel: 'Bỏ mục',
+                                },
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  )}
+                </div>
+
+                {canReorder && onReorderSection ? (
+                  <SortableSectionChips
+                    section={group.section}
+                    items={group.items}
+                    activeItemId={activeItemId}
+                    onSelectItem={onSelectItem}
+                    onReorderSection={onReorderSection}
                   />
-
-                  <div className="md:rounded-xl md:border md:border-border md:bg-card md:p-3">
-                    <div className="flex items-center gap-2">
-                      {SECTIONS_ENABLED && (
-                        <h2 className="truncate text-sm font-medium leading-snug text-foreground">
-                          {group.section ?? 'Chung'}
-                        </h2>
-                      )}
-                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                        {withContent}/{total}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary/70"
-                        style={{ width: `${total ? Math.round((withContent / total) * 100) : 0}%` }}
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {group.items.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Chưa có bài học nào.</p>
+                    )}
+                    {group.items.map((item) => (
+                      <StaticMapChip
+                        key={item.id}
+                        item={item}
+                        isActive={item.id === activeItemId}
+                        onSelectItem={onSelectItem}
                       />
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {group.items.length === 0 && <p className="text-xs text-muted-foreground">Chưa có bài nào.</p>}
-                      {group.items.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => onSelectItem(item.id)}
-                          title={item.description || item.title}
-                          className={cn(
-                            'max-w-full truncate rounded-md border px-2 py-1 text-left text-xs transition-colors',
-                            item.content
-                              ? 'border-border bg-muted/60 text-foreground hover:border-primary/50'
-                              : 'border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
-                            item.id === activeItemId && 'border-primary ring-1 ring-primary'
-                          )}
-                        >
-                          {item.title}
-                        </button>
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                </li>
-              );
-            })}
+                )}
+              </li>
+            ))}
           </ol>
         )}
-      </div>
-
-      <div className="hidden shrink-0 items-center gap-4 border-t border-border px-6 py-2 text-xs text-muted-foreground md:flex">
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-4 rounded-sm border border-border bg-muted/60" /> Có nội dung
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-3 w-4 rounded-sm border border-dashed border-border" /> Chỉ có tên
-        </span>
       </div>
     </div>
   );

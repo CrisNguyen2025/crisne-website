@@ -16,7 +16,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="flex h-dvh w-full flex-col items-center justify-center bg-background p-6 text-center">
+    <div className="roadmap-theme flex h-dvh w-full flex-col items-center justify-center bg-background p-6 text-center">
       <div className="flex size-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive mb-4">
         <AlertCircle className="size-7" />
       </div>

@@ -34,13 +34,39 @@ def _mean(values: list) -> float | None:
     return round(sum(values) / len(values), 2) if values else None
 
 
+def _answer(rows: list[dict], k: int) -> dict:
+    precisions = [r["citation_precision"] for r in rows if "citation_precision" in r]
+    return {
+        "n": len(rows),
+        "accuracy": _ratio(sum(r["passed"] for r in rows), len(rows)),
+        "citation_precision": round(sum(precisions) / len(precisions), 4) if precisions else None,
+        "invalid_citation_rate": _ratio(sum(r.get("invalid_citations", 0) > 0 for r in rows), len(rows)),
+    }
+
+
+def _kappa(labeled: list[dict]) -> float | None:
+    n = len(labeled)
+    if not n:
+        return None
+    po = sum(bool(c["agree"]) for c in labeled) / n
+    h_pos = sum(bool(c["human"]) for c in labeled) / n
+    j_pos = sum(bool(c["judge"]) for c in labeled) / n
+    pe = h_pos * j_pos + (1 - h_pos) * (1 - j_pos)
+    if pe >= 1.0:
+        return None
+    return round((po - pe) / (1 - pe), 4)
+
+
 def _judge(rows: list[dict], k: int) -> dict:
     def criterion(name: str) -> list[dict]:
         return [r["criteria"][name] for r in rows if name in r["criteria"]]
 
     facts, refusal = criterion("facts"), criterion("refusal")
+    must_refuse = [c for c in refusal if c.get("expected") is True]
+    must_answer = [c for c in refusal if c.get("expected") is False]
     baseline = [r["baseline"]["facts"] for r in rows if "baseline" in r]
     labeled = [r["calibration"] for r in rows if "calibration" in r]
+    false_pass = sum(c["judge"] and not c["human"] for c in labeled)
     return {
         "n": len(rows),
         "accuracy": _ratio(sum(r["passed"] for r in rows), len(rows)),
@@ -52,10 +78,14 @@ def _judge(rows: list[dict], k: int) -> dict:
         # Substring baseline on the same samples: a gap with facts_pass shows how much wording varies
         "facts_pass_substring": _ratio(sum(baseline), len(baseline)),
         "refusal_pass": _ratio(sum(c["passed"] for c in refusal), len(refusal)),
+        "refusal_recall": _ratio(sum(c["passed"] for c in must_refuse), len(must_refuse)),
+        "over_refusal_rate": _ratio(sum(not c["passed"] for c in must_answer), len(must_answer)),
         "human_n": len(labeled),
         "human_agreement": _ratio(sum(c["agree"] for c in labeled), len(labeled)),
+        "human_kappa": _kappa(labeled),
         # Judge passed what the human failed: the dangerous direction for a quality gate
-        "judge_false_pass": sum(c["judge"] and not c["human"] for c in labeled),
+        "judge_false_pass": false_pass,
+        "judge_false_pass_rate": _ratio(false_pass, len(labeled)),
         "judge_false_fail": sum(c["human"] and not c["judge"] for c in labeled),
     }
 
@@ -71,7 +101,7 @@ def _scope(rows: list[dict], k: int) -> dict:
     }
 
 
-METRICS = {"retrieval": _retrieval, "judge": _judge, "scope": _scope}
+METRICS = {"retrieval": _retrieval, "answer": _answer, "judge": _judge, "scope": _scope}
 
 
 def _consistency(rows: list[dict]) -> dict:

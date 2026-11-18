@@ -2,23 +2,19 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import dayjs from 'dayjs';
-import { ChecklistItem, GetRoadmapResponseDto, RoadmapMeta } from '@/lib/roadmap/types';
+import { ChecklistItem, GetRoadmapResponseDto, RoadmapMeta, SectionGroup } from '@/lib/roadmap/types';
 import * as roadmapService from '@/logic/roadmap/roadmapService';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import type { LessonStatus } from '@/lib/roadmap/status';
 import { slugify } from '@/lib/utils';
+
+export type { SectionGroup };
 
 /** One topic as the page holds it: lessons in page order, and their sections (ADR-0009). */
 interface TopicState {
   roadmap: RoadmapMeta;
   items: ChecklistItem[];
   sections: (string | null)[];
-}
-
-/** A section and the lessons in it, in page order. `section` is null for lessons outside any section. */
-export interface SectionGroup {
-  section: string | null;
-  items: ChecklistItem[];
 }
 
 // In-memory cache across topic switches for instant, smooth transitions

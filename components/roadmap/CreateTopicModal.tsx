@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { AlignLeft, Sparkles } from 'lucide-react';
-import { CreateRoadmapDto } from '@/lib/roadmap/types';
+import type { CreateRoadmapDto } from '@/lib/roadmap/types';
 import { Dialog } from '@/components/ui/dialog';
 
 interface CreateTopicModalProps {
@@ -49,18 +48,22 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
     <Dialog
       open
       onClose={() => {
+        if (isSubmitting) return;
         reset();
         onClose();
       }}
       title="Tạo topic"
-      description="Bài sẽ được thêm sau khi tạo topic"
-      icon={<Sparkles className="size-4 text-primary" />}
+      className="roadmap-theme"
       footer={
         <>
           <button
             type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            onClick={() => {
+              reset();
+              onClose();
+            }}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
           >
             Hủy
           </button>
@@ -68,44 +71,40 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
             type="submit"
             form="create-topic-form"
             disabled={isSubmitting}
-            className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-xs cursor-pointer"
+            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? 'Đang tạo…' : 'Tạo topic'}
           </button>
         </>
       }
     >
-      <form id="create-topic-form" onSubmit={handleSubmit} className="space-y-4">
+      <form id="create-topic-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
         {error && (
-          <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-500 text-xs">{error}</div>
+          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
+            {error}
+          </div>
         )}
 
         <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <Sparkles className="size-3.5 text-primary" />
-            <span>Tên topic *</span>
-          </label>
+          <label className="block text-xs font-medium text-foreground">Tên topic *</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="ví dụ: AI Engineering"
-            className="w-full px-3 py-2 text-xs bg-muted/40 border border-border/60 rounded-xl focus:outline-none focus:border-primary focus:bg-background transition-colors text-foreground"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:border-foreground/50 focus:outline-none"
             autoFocus
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-            <AlignLeft className="size-3.5 text-muted-foreground" />
-            <span>Mô tả</span>
-          </label>
+          <label className="block text-xs font-medium text-foreground">Mô tả</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tóm tắt ngắn về topic này..."
+            placeholder="Tóm tắt ngắn (tuỳ chọn)…"
             rows={3}
-            className="w-full px-3 py-2 text-xs bg-muted/40 border border-border/60 rounded-xl focus:outline-none focus:border-primary focus:bg-background transition-colors text-foreground resize-none"
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground focus:border-foreground/50 focus:outline-none"
           />
         </div>
       </form>

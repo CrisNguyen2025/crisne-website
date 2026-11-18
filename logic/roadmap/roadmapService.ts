@@ -34,8 +34,12 @@ export async function exportAllRoadmaps(): Promise<unknown> {
 }
 
 /** Fetch a topic with its lessons and sections, by slug */
-export async function fetchRoadmapBySlug(slug: string): Promise<GetRoadmapResponseDto> {
-  return apiFetch<GetRoadmapResponseDto>(`/api/v1/roadmaps/${slug}`);
+export async function fetchRoadmapBySlug(
+  slug: string,
+  options?: { mode?: 'outline' }
+): Promise<GetRoadmapResponseDto> {
+  const query = options?.mode ? `?mode=${options.mode}` : '';
+  return apiFetch<GetRoadmapResponseDto>(`/api/v1/roadmaps/${slug}${query}`);
 }
 
 /** Create a topic. Lessons are added afterwards. */
@@ -86,9 +90,9 @@ export async function createItem(payload: CreateItemDto): Promise<{ item: Checkl
   });
 }
 
-/** Update a lesson's title, description and section */
-export async function updateItemInfo(payload: UpdateItemInfoDto): Promise<void> {
-  return apiFetch<void>(`/api/v1/roadmaps/items/${payload.id}`, {
+/** Update a lesson's title, description, section, topic or slug */
+export async function updateItemInfo(payload: UpdateItemInfoDto): Promise<{ item: ChecklistItem }> {
+  return apiFetch<{ item: ChecklistItem }>(`/api/v1/roadmaps/items/${payload.id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });

@@ -135,7 +135,7 @@ async def test_knowledge_query_steps_for_visitor(one_match):
     assert list(done) == ["route", "retrieve", "answer"]
     assert done["route"]["intent"] == "knowledge_query"
     assert done["retrieve"]["items"] == [
-        {"title": "Vector Database", "type": "item", "topic": "ai", "href": "/topic/ai/vdb"}
+        {"title": "Vector Database", "type": "item", "topic": "ai", "href": "/lessons/vdb"}
     ]  # no score for visitors
     assert done["answer"]["mode"] == "context"
     assert "fallback_reason" not in done["answer"]  # no LLM configured, not an LLM failure

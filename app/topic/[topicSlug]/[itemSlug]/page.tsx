@@ -1,8 +1,5 @@
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
-import { findTopic, findItemBySlug } from "@/lib/roadmap/resolveRoadmap";
-import { RoadmapWorkspace } from "@/components/roadmap/RoadmapWorkspace";
-import { GlobalPageLoader } from "@/components/roadmap/GlobalPageLoader";
+import { notFound, permanentRedirect } from 'next/navigation';
+import { findItemBySlug, findTopic, resolveLessonGlobal } from '@/lib/roadmap/resolveRoadmap';
 
 interface ItemPageProps {
   params: Promise<{
@@ -11,22 +8,24 @@ interface ItemPageProps {
   }>;
 }
 
-export default async function ItemPage({ params }: ItemPageProps) {
+export default async function LegacyItemRedirectPage({ params }: ItemPageProps) {
   const { topicSlug, itemSlug } = await params;
+
   const topic = await findTopic(topicSlug);
-
-  if (!topic) {
-    notFound();
+  if (topic) {
+    const item = await findItemBySlug(topic.id, itemSlug);
+    if (item) {
+      permanentRedirect(`/lessons/${item.slug || item.id}`);
+    }
   }
 
-  const item = await findItemBySlug(topic.id, itemSlug);
-  if (!item) {
-    notFound();
+  const globalResolved = await resolveLessonGlobal(itemSlug);
+  if (globalResolved.kind === 'found') {
+    permanentRedirect(`/lessons/${globalResolved.item.slug}`);
+  }
+  if (globalResolved.kind === 'redirect') {
+    permanentRedirect(`/lessons/${globalResolved.toSlug}`);
   }
 
-  return (
-    <Suspense fallback={<GlobalPageLoader />}>
-      <RoadmapWorkspace initialTopic={topic.slug} initialItem={item.slug || item.id} />
-    </Suspense>
-  );
+  notFound();
 }

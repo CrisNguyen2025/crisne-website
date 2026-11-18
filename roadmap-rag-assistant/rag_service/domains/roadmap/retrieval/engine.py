@@ -44,10 +44,10 @@ def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
 
 
 def knowledge_href(doc: KnowledgeDocument) -> str:
-    """Page link for a retrieved document: items open the lesson path (/topic/[topic_slug]/[item_slug])."""
+    """Page link for a retrieved document: items open the flat lesson path (/lessons/[item_slug])."""
     if doc.doc_type == "item" and (doc.item_slug or doc.id):
         item_slug = doc.item_slug or doc.id
-        return f"/topic/{doc.topic_slug}/{item_slug}"
+        return f"/lessons/{item_slug}"
     return f"/topic/{doc.topic_slug}"
 
 
@@ -188,6 +188,10 @@ class HybridRagEngine:
     def known_item_ids(self) -> set[str]:
         """Ids of every item in the current index (valid targets for `&item=` links)."""
         return {d.id for d in self._vector_store._docs_map.values() if d.doc_type == "item"}
+
+    def known_item_slugs(self) -> set[str]:
+        """Slugs of every item in the current index (valid targets for `/lessons/` links)."""
+        return {d.item_slug for d in self._vector_store._docs_map.values() if d.doc_type == "item" and d.item_slug}
 
     def title_vocabulary(self) -> set[str]:
         """Technical terms in indexed titles, for routing statements that name a lesson ("LLM", "chunking").

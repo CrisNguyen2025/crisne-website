@@ -38,13 +38,14 @@ def slugify(text: str) -> str:
 
 def to_document(kd: KnowledgeDocument, doc_id: str = "") -> dict:
     """One corpus document per indexed roadmap entity; its single section carries the text RAG indexes."""
+    text = "\n".join(part for part in (kd.description, kd.content_text) if part)
     return {
         "doc_id": doc_id,
         "source_id": kd.id,
         "title": kd.title,
         "doc_type": kd.doc_type,
         "acl": ["everyone"],
-        "sections": [{"section_id": doc_id, "text": kd.description or kd.content_text or ""}],
+        "sections": [{"section_id": doc_id, "text": text}],
         "metadata": {
             "topic": kd.topic_slug,
             "section": kd.section,
@@ -89,10 +90,12 @@ def main() -> int:
     args = parser.parse_args()
 
     previous, previous_meta = read_existing()
-    documents = build_documents(load_knowledge(), previous)
+    knowledge = load_knowledge()
+    documents = build_documents(knowledge, previous)
+    truncated_300 = sum(1 for kd in knowledge if len(kd.content_text or "") > 300)
     digest = content_hash(documents)
     if previous_meta.get("sha256") == digest and args.version in (None, previous_meta.get("version")):
-        print(f"Corpus unchanged (version {previous_meta['version']}, {len(documents)} docs)")
+        print(f"Corpus unchanged (version {previous_meta['version']}, {len(documents)} docs, truncated>300={truncated_300})")
         return 0
     if previous_meta and args.version in (None, previous_meta.get("version")):
         print(f"Content changed since {previous_meta['version']}; pass --version with a new number", file=sys.stderr)
@@ -112,7 +115,7 @@ def main() -> int:
         "".join(json.dumps(doc, ensure_ascii=False) + "\n" for doc in documents), encoding="utf-8"
     )
     (CORPUS_DIR / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote corpus {meta['version']} ({len(documents)} docs) to {CORPUS_DIR}")
+    print(f"Wrote corpus {meta['version']} ({len(documents)} docs, truncated>300={truncated_300}) to {CORPUS_DIR}")
     return 0
 
 

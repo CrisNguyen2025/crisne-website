@@ -6,6 +6,7 @@ import { hasWriteAccess, requireWriteAccess } from "@/lib/auth/write-access";
 import { DEFAULT_LESSON_STATUS, isLessonStatus } from '@/lib/roadmap/status';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionsInOrder } from '@/lib/roadmap/sections';
+import { readingMinutes } from '@/lib/roadmap/content-utils';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -19,6 +20,7 @@ export const revalidate = 0;
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
+    const isOutline = req.nextUrl.searchParams.get('mode') === 'outline';
     const ownerView = await hasWriteAccess(req);
     const found = await findTopic(slug);
     const roadmap = found
@@ -39,7 +41,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
       description: item.description || '',
       section: item.section,
       order: item.order,
-      content: item.content || undefined,
+      ...(isOutline ? {} : { content: item.content || undefined }),
+      readingMinutes: readingMinutes(item.content),
+      hasContent: Boolean(item.content?.trim()),
+      roadmapSlug: roadmap.slug,
       createdAt: item.createdAt.toISOString(),
       updatedAt: item.updatedAt.toISOString(),
       ...(ownerView

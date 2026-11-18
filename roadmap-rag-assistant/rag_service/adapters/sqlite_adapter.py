@@ -41,16 +41,30 @@ def _slugify(text: str) -> str:
     return slug or f"topic-{int(datetime.now(timezone.utc).timestamp())}"
 
 
-def _lesson_slug(title: str, used: set[str]) -> str:
-    """Same rules as `slugify` in lib/utils.ts, plus `-2`, `-3`... when the slug is taken in the topic."""
+def _lesson_slug(
+    title: str,
+    used: set[str],
+    topic_slug: str | None = None,
+    topic_used: set[str] | None = None,
+) -> str:
+    """Same rules as `allocateGlobalLessonSlug` in lib/utils.ts."""
     text = title.lower().strip().replace("đ", "d")
     text = "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c))
     text = re.sub(r"[^\w\s-]", "", text, flags=re.ASCII)
     text = re.sub(r"[\s_-]+", "-", text, flags=re.ASCII)
     base = re.sub(r"^-+|-+$", "", text) or "lesson"
-    slug, n = base, 2
+    if base not in used:
+        return base
+    taken_in_same_topic = base in topic_used if topic_used is not None else False
+    if topic_slug and not taken_in_same_topic:
+        clean_topic = _slugify(topic_slug)
+        candidate = f"{base}-{clean_topic}"
+        if candidate not in used:
+            return candidate
+    slug, n = f"{base}-2", 2
     while slug in used:
-        slug, n = f"{base}-{n}", n + 1
+        n += 1
+        slug = f"{base}-{n}"
     return slug
 
 
@@ -225,8 +239,15 @@ class SqliteAdapter:
 
             used = resolve_section([i.get("section") for i in items], section)
             order = max((i["order"] for i in items), default=0) + 1
-            # Fixed at creation (D2), unique within the topic (D3)
-            slug = _lesson_slug(title, {i["slug"] for i in items if i.get("slug")})
+            global_cursor = await db.execute("SELECT slug FROM RoadmapItem WHERE slug IS NOT NULL AND slug != ''")
+            global_slugs = {row[0] for row in await global_cursor.fetchall() if row[0]}
+            try:
+                redirect_cursor = await db.execute("SELECT fromSlug FROM SlugRedirect WHERE entity = 'lesson'")
+                global_slugs.update(row[0] for row in await redirect_cursor.fetchall() if row[0])
+            except Exception:
+                pass
+            topic_used = {i["slug"] for i in items if i.get("slug")}
+            slug = _lesson_slug(title, global_slugs, topic["slug"], topic_used)
             item_id, now = _uuid7(), _now_iso()
             await db.execute(
                 """

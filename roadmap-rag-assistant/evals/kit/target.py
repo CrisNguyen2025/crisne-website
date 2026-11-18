@@ -47,6 +47,8 @@ class Answer:
     text: str
     behavior: str
     citations: list[str] = field(default_factory=list)  # section_ids the answer cites
+    retrieved: list[str] = field(default_factory=list)
+    invalid_citations: int = 0
 
 
 class Target(Protocol):

@@ -33,7 +33,7 @@ model RoadmapItem {
   id          String       @id @default(uuid(7))
   roadmapId   String
   roadmap     Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  slug        String       @default("")
+  slug        String       @unique
   section     String?      // Optional mục of the topic (ADR-0009); null = chung
   title       String
   description String?
@@ -46,8 +46,16 @@ model RoadmapItem {
   updatedAt   DateTime     @updatedAt
 
   @@unique([roadmapId, title])
-  @@unique([roadmapId, slug])
   @@index([roadmapId])
+}
+
+model SlugRedirect {
+  fromSlug  String   @id
+  entity    String
+  targetId  String
+  createdAt DateTime @default(now())
+
+  @@index([entity, targetId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

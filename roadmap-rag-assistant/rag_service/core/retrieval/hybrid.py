@@ -378,6 +378,7 @@ class HybridVectorStore:
             _flag_degraded("no document vectors")
             return None
         q_emb = _QUERY_VECTORS.get(query)
+        hit = q_emb is not None
         if q_emb is None:
             try:
                 q_emb = embedder.embed_query(query)
@@ -385,6 +386,10 @@ class HybridVectorStore:
                 _flag_degraded(f"{type(exc).__name__}: {str(exc)[:120]}")
                 return None
             _QUERY_VECTORS.put(query, q_emb)
+        from rag_service.observability import current_trace
+
+        if (trace := current_trace()) is not None:
+            trace.flags["embedding_cache_hit"] = hit
         return {
             doc_id: _cosine_similarity(q_emb, emb)
             for doc_id, emb in self._vectors.items()

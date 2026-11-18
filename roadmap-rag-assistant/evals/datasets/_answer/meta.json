@@ -9,6 +9,7 @@
   "thresholds": {},
   "profiles": {
     "judge": {
+      "judge.faithfulness_mean": 4.0,
       "judge.relevance_mean": 4.5,
       "judge.facts_pass": 0.8,
       "judge.refusal_pass": 1.0,

@@ -196,7 +196,10 @@ sequenceDiagram
 
 | Method   | Path                                            | Quyền (Auth)        | Domain                   | Controller / Handler File                                        | Triggered Flow            |
 | -------- | ----------------------------------------------- | ------------------- | ------------------------ | ---------------------------------------------------------------- | ------------------------- |
-| `GET`    | `/`                                             | None                | `roadmap-learning`       | `app/page.tsx`                                                   | View Dashboard            |
+| `GET`    | `/`                                             | None                | `roadmap-learning`       | `app/page.tsx`                                                   | View Publication Hub      |
+| `GET`    | `/topic/[topicSlug]`                            | None                | `roadmap-learning`       | `app/topic/[topicSlug]/page.tsx`                                 | View Topic Syllabus       |
+| `GET`    | `/lessons/[lessonSlug]`                         | None                | `roadmap-learning`       | `app/lessons/[lessonSlug]/page.tsx`                              | View Editorial Lesson     |
+| `GET`    | `/topic/[topicSlug]/[itemSlug]`                 | None                | `roadmap-learning`       | `app/topic/[topicSlug]/[itemSlug]/page.tsx`                      | 308 Redirect to Lesson    |
 | `GET`    | `/notes`                                        | None                | `notes-editor`           | `app/notes/page.tsx`                                             | View Notes                |
 | `GET`    | `/notes/[slug]`                                 | None                | `notes-editor`           | `app/notes/[slug]/page.tsx`                                      | View / Edit Note          |
 | `GET`    | `/api/v1/roadmaps`                              | None                | `roadmap-learning`       | `app/api/v1/roadmaps/route.ts#GET`                               | List Topics               |
@@ -230,3 +233,4 @@ sequenceDiagram
 - **ADR-0008**: Loại bỏ cấu trúc nhóm `level` trung gian; Topic trực tiếp chứa các bài học.
 - **ADR-0009**: Section là mục tuỳ chọn của Topic để gom bài; là chuỗi tự do (free-form string), so khớp không phân biệt hoa thường; không tạo bảng riêng.
 - **ADR-0010**: Lesson Status gồm 3 trạng thái (`target`, `learning`, `known`), phản ánh tiến trình của Owner, ẩn với Visitor và mặc định là `known`.
+- **ADR-0013**: URL bài học phẳng `/lessons/[lessonSlug]` độc lập Topic, `RoadmapItem.slug` duy nhất toàn cục, chuyển hướng 308 qua `SlugRedirect` khi đổi slug.

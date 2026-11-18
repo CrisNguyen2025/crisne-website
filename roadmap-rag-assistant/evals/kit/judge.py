@@ -143,5 +143,6 @@ def grade(verdict: dict, sample: dict) -> dict:
 
 
 def evaluate(sample: dict, answer: Answer, target) -> dict:
-    contexts = target.contexts(answer.citations)
+    section_ids = list(dict.fromkeys([*answer.retrieved, *answer.citations]))
+    contexts = target.contexts(section_ids)
     return grade(parse(target.judge(build_prompt(sample, answer, contexts))), sample)

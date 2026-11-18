@@ -12,6 +12,9 @@ export interface ChecklistItem {
   createdAt: string;
   updatedAt: string;
   content?: string;
+  readingMinutes?: number;
+  hasContent?: boolean;
+  roadmapSlug?: string;
   /** Lesson Status (ADR-0010); present only for the Owner */
   status?: LessonStatus;
   statusUpdatedAt?: string | null;
@@ -19,6 +22,11 @@ export interface ChecklistItem {
 
 export interface RoadmapStats {
   total: number;
+}
+
+export interface SectionGroup {
+  section: string | null;
+  items: ChecklistItem[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,6 +67,8 @@ export interface UpdateItemInfoDto {
   title: string;
   description: string;
   section?: string | null;
+  roadmapSlug?: string;
+  slug?: string;
 }
 
 /** Payload to update item detailed HTML content only */

@@ -92,7 +92,17 @@ def score_answer(sample: dict, target: Target, k: int, run_as: str | None) -> di
         checks["no_citations"] = not got.citations
     if not checks:
         return None
-    return {"passed": all(checks.values()), "checks": checks, "got": got.text[:200]}
+    result: dict = {
+        "passed": all(checks.values()),
+        "checks": checks,
+        "got": got.text[:200],
+        "invalid_citations": got.invalid_citations,
+    }
+    contexts = expected.get("contexts")
+    if contexts and got.citations:
+        acceptable = {c["section_id"] for c in contexts}
+        result["citation_precision"] = round(len(set(got.citations) & acceptable) / len(got.citations), 4)
+    return result
 
 
 @scorer("judge", "judge")

@@ -44,6 +44,7 @@ class AclGuard:
     def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer:
         answer = self.target.answer(text, history, run_as)
         self._check(answer.citations, run_as, "answer")
+        self._check([s for s in answer.retrieved if s not in answer.citations], run_as, "answer_context")
         return answer
 
     def judge(self, prompt: str) -> str:

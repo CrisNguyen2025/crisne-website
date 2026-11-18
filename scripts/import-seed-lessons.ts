@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
-import { uniqueSlug } from "../lib/utils";
+import { allocateGlobalLessonSlug } from "../lib/utils";
 import { planSeedImport, type ExistingLesson } from "./lib/seed-import-plan";
 
 const envPath = path.join(__dirname, "../.env.local");
@@ -73,7 +73,9 @@ async function main(): Promise<void> {
       order: Number(r.order),
     }));
 
-    const usedSlugs = new Set(existingRes.rows.map((r) => String(r.slug ?? "")).filter(Boolean));
+    const topicUsedSlugs = new Set(existingRes.rows.map((r) => String(r.slug ?? "")).filter(Boolean));
+    const allSlugsRes = await client.execute('SELECT slug FROM "RoadmapItem" WHERE slug IS NOT NULL AND slug != \'\'');
+    const usedSlugs = new Set(allSlugsRes.rows.map((r) => String(r.slug ?? "")).filter(Boolean));
 
     const plan = planSeedImport({
       existingLessons,
@@ -143,7 +145,7 @@ async function main(): Promise<void> {
         args: [
           item.id,
           roadmapId,
-          uniqueSlug(item.title, usedSlugs),
+          allocateGlobalLessonSlug(item.title, usedSlugs, topicSlug, topicUsedSlugs),
           item.section,
           item.title,
           item.description,

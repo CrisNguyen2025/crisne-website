@@ -124,7 +124,7 @@ function EditItemContentForm({
         onClose={attemptClose}
         side={isMobile ? 'bottom' : 'right'}
         label="Edit lesson content"
-        className={isMobile ? 'max-h-[92dvh]' : 'md:max-w-3xl lg:max-w-4xl'}
+        className={isMobile ? 'roadmap-theme max-h-[92dvh]' : 'roadmap-theme md:max-w-3xl lg:max-w-4xl'}
       >
         {/* Header */}
         <div className="px-5 md:px-7 py-3.5 border-b border-border shrink-0 bg-muted/15 flex items-center justify-between gap-4 min-h-[57px]">

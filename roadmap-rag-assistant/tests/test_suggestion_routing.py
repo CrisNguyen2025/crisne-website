@@ -6,7 +6,7 @@ from rag_service.domains.roadmap.router.intent_router import IntentRouter
 from rag_service.domains.roadmap.router.schemas import IntentType
 
 READER_SUGGESTIONS = [
-    "Topic backend có những layer nào?",
+    "Topic này có những mục nào?",
     "Có những lộ trình nào trên website?",
     "Website có bài nào về Docker hoặc Database không?",
 ]

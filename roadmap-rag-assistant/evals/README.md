@@ -83,7 +83,8 @@ Từ `roadmap-rag-assistant/`:
 ```
 
 `mode`: `fts` | `vector` | `hybrid` (mặc định `hybrid`). `gate`: `off` | `on` (mặc định `off`; `on` là cách /chat chạy, số liệu
-retrieval nên đọc ở `gate=on`). `rerank`: `off` | `llm` (mặc định `off`, như `RAG_RERANK`).
+retrieval nên đọc ở `gate=on`). `rerank`: `off` | `llm` (mặc định `off`, như `RAG_RERANK`). `transform`: `on` | `off`
+(mặc định `on`, tắt để đo rewrite gain trên `_answer`).
 
 Exit code: `0` ok · `1` dataset / corpus không hợp lệ, dưới ngưỡng, hoặc `diff` có regressed · `2` nội dung target
 đang phục vụ (DB) khác corpus static.
@@ -145,8 +146,8 @@ judge đặt ở `thresholds` mặc định sẽ fail mọi lần chạy offline
 |---|---|---|
 | `retrieval` | `retrieve` | `hit@k`, `mrr@k` (on-topic), `recall@k` + `recall_n` (chỉ sample có context `required`; ở sample khác các context là phương án thay thế nên không tính recall), `off_topic_rejected` |
 | `route` | `route` | `accuracy` (behavior + route cùng khớp) |
-| `answer` | `answer` | `accuracy` (behavior, facts substring, không chứa forbidden, citation ⊇ required contexts) |
-| `judge` | `judge` | `accuracy`, `faithfulness_mean`, `relevance_mean`, `facts_pass` (judge) vs `facts_pass_substring` (baseline), `context_recall` (tỷ lệ fact có trong context đã cite, chỉ tính ở sample có `contexts`; chỉ để chẩn đoán, không vào luật pass), `refusal_pass`, `human_n`, `human_agreement`, `judge_false_pass`, `judge_false_fail` |
+| `answer` | `answer` | `accuracy` (behavior, facts substring, không chứa forbidden, citation ⊇ required contexts), `citation_precision`, `invalid_citation_rate` |
+| `judge` | `judge` | `accuracy`, `faithfulness_mean` (ngưỡng ≥ 4.0 ở profile `judge`), `relevance_mean`, `facts_pass` (judge) vs `facts_pass_substring` (baseline), `context_recall` (tỷ lệ fact có trong context thực nhận, chỉ tính ở sample có `contexts`; chỉ để chẩn đoán, không vào luật pass), `refusal_pass`, `refusal_recall`, `over_refusal_rate`, `human_n`, `human_agreement`, `human_kappa`, `judge_false_pass`, `judge_false_pass_rate`, `judge_false_fail` |
 
 Thiếu capability thì scorer bị **skip** và được ghi lại trong summary, không báo lỗi.
 
@@ -172,8 +173,7 @@ làm baseline rẻ, cả hai cùng có trong report. Chỉ chạy khi target có
   `refusal`: câu trả lời có từ chối / báo không có tài liệu khi và chỉ khi sample kỳ vọng
   (`behavior=refuse` hoặc `contexts=[]` → phải từ chối; `behavior=answer` → không được từ chối; còn lại bỏ qua).
   Pass = mọi tiêu chí áp dụng được đều pass, điểm 1–5 pass khi ≥ 4 (`kit/judge.py` `PASS_SCORE`).
-- **Context** đưa cho judge = text các section mà câu trả lời cite (`Target.contexts`), kèm title, topic, layer, group
-  như agent thấy. Câu trả lời không cite gì chỉ được đối chiếu với lịch sử.
+- **Context** đưa cho judge = text các section đã retrieve vào `<context>` hợp với các section câu trả lời cite (`[*answer.retrieved, *answer.citations]` qua `Target.contexts`), kèm title, topic, section như agent thấy; với `judge_label` đóng băng (`retrieved` rỗng) thì lấy theo `citations`. Câu trả lời không có cả hai chỉ được đối chiếu với lịch sử.
 - **Model & Cross-Switching**: `judge_provider` (`google_genai` | `groq`) và `judge_model`. Để tránh **Self-Preference Bias** (mô hình tự khen chính mình), hệ thống mặc định **tự động đảo ngược provider**: nếu câu trả lời sinh bởi `google_genai`, judge sẽ dùng `groq` (`qwen/qwen3.8-27b`; `llama-3.3-70b-versatile` đã không còn trên tài khoản từ 2026-11-17) và ngược lại. Người dùng vẫn có thể override bằng `--opt judge_provider=...` và `--opt judge_model=...`. Temperature 0, bật JSON mode của provider.
 - **Fallback**: Chuyển sang provider còn lại nếu primary judge gặp lỗi (thiếu API key, 429 quota/rate limit, timeout),
   **trừ khi provider đó chính là provider sinh câu trả lời** (để không tự chấm bài mình). Với auto-switch mặc định thì
@@ -201,7 +201,7 @@ làm baseline rẻ, cả hai cùng có trong report. Chỉ chạy khi target có
 | `_answer` | viết mới (bug "quên tên Cris") + câu so sánh cần đủ 2 nguồn (021–024) + calibration set (025–028) | 28 | accuracy 0.9583 (groq `openai/gpt-oss-120b`, hybrid); fail còn lại `answer-008`, cũng fail trước khi có citation theo câu. `judge` scorer: 22/28 có `judge_label` (16 pass / 6 fail), chưa đặt ngưỡng |
 
 - Baseline khớp đúng với `tests/eval_retrieval.py --fts-only` (cùng hit@5, MRR, 1/8 off-topic).
-- Corpus `public/roadmap@1.0`: 115 doc export từ `dev.db`, chỉ còn topic `ai-architecture`. Đã bỏ dữ liệu probe (`owner-probe`, `bypass-probe`),
+- Corpus `public/roadmap@1.3`: 125 doc export từ `dev.db` (gồm cả `description` và `content_text`; giữ lịch sử từ `@1.0` 115 doc, `@1.2` 125 doc). Đã bỏ dữ liệu probe (`owner-probe`, `bypass-probe`),
   các topic rác/rỗng (`3`, `sss`, `tạo-c`, `tại-c-tạo-3-item-1-2`, `d-topic`, `ai-engineering`, `backend-go`,
   `cloud-devops`) cùng layer `General` của chúng, và 2 item `1111`, `2`.
 - `off_topic_rejected` thấp ở FTS là điểm yếu đã biết của BM25 (luôn trả về kết quả); hybrid từ chối 67%, near-topic

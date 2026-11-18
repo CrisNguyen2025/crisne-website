@@ -124,6 +124,9 @@ def usage_from_langchain(message: Any) -> Optional[dict]:
         "output": meta.get("output_tokens"),
         "total": meta.get("total_tokens"),
     }
+    details = meta.get("input_token_details")
+    if isinstance(details, dict) and details.get("cache_read") is not None:
+        usage["cache_read_input_tokens"] = details.get("cache_read")
     return {k: int(v) for k, v in usage.items() if v is not None} or None
 
 
@@ -180,6 +183,11 @@ async def traced_turn(
                 idx = next((i for i, (n, _) in enumerate(open_tools) if n == name), None)
                 if idx is not None:
                     end_step(open_tools.pop(idx)[1], output=ev.get("result", ""))
+            elif kind == "step" and ev.get("status") != "running":
+                if ev.get("id") == "answer" and ev.get("mode"):
+                    trace.flags["answer_mode"] = ev["mode"]
+                elif ev.get("id") == "retrieve" and ev.get("before_gate") is not None:
+                    trace.flags["gate_dropped"] = ev["before_gate"] - ev.get("count", 0)
             elif kind == "token":
                 output.append(ev.get("delta", ""))
             yield ev

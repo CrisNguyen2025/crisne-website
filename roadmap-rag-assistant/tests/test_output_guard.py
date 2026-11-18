@@ -128,3 +128,10 @@ def test_link_guard_checks_item_ids_when_given():
 def test_link_guard_without_item_set_keeps_item_links_of_known_topics():
     guard = _roadmap({"ai"})
     assert guard.feed("[A](/topic/ai/anything)") + guard.flush() == "[A](/topic/ai/anything)"
+
+
+def test_link_guard_checks_flat_lesson_urls():
+    guard = _roadmap({"ai"}, {"vdb"})
+    out = guard.feed("[A](/lessons/vdb) [B](/lessons/fake) [C](/topic/ai)") + guard.flush()
+    assert out == "[A](/lessons/vdb) B [C](/topic/ai)"
+    assert guard.removed == ["/lessons/fake"]

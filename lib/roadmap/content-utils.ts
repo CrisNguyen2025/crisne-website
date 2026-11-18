@@ -135,6 +135,13 @@ function plainText(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+export function plainTextExcerpt(content?: string | null, maxLength = 160): string {
+  if (!content) return '';
+  const text = plainText(content);
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
 /** Minutes to read a lesson's content, at least 1; 0 when there is no content. */
 export function readingMinutes(content?: string | null): number {
   if (!content) return 0;

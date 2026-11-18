@@ -1,7 +1,7 @@
 """Roadmap link rules: which `[text](href)` the assistant may emit.
 
-Topic links must name a known topic (`/topic/<slug>` or `/topic/<slug>/<item-slug>`);
-an item slug/id must be a known lesson. Legacy links (`/?topic=<slug>&item=<id>`) are also accepted.
+Lesson links must name a known lesson (`/lessons/<slug>`), and topic links must name
+a known topic (`/topic/<slug>` or legacy `/topic/<slug>/<item-slug>` / `/?topic=<slug>&item=<id>`).
 Any other link (external, anchors) is left alone.
 """
 
@@ -11,6 +11,7 @@ import re
 from typing import Callable, Iterable
 from urllib.parse import unquote
 
+LESSON_URL = re.compile(r"^/lessons/([^/?#]+)")
 TOPIC_URL = re.compile(r"^/topic/([^/?#]+)(?:/([^/?#]+))?")
 LEGACY_TOPIC_URL = re.compile(r"^/\?topic=([^&#]+)")
 LEGACY_ITEM_PARAM = re.compile(r"[?&]item=([^&#]+)")
@@ -22,6 +23,10 @@ def roadmap_link_allowed(valid_slugs: Iterable[str], valid_items: Iterable[str] 
     items = set(valid_items) if valid_items is not None else None
 
     def allow(href: str) -> bool:
+        lesson_match = LESSON_URL.match(href)
+        if lesson_match is not None:
+            return items is None or unquote(lesson_match.group(1)) in items
+
         topic_match = TOPIC_URL.match(href)
         if topic_match is not None:
             if unquote(topic_match.group(1)) not in slugs:

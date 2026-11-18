@@ -70,8 +70,14 @@
         "lib/roadmap/status.ts",
         "lib/roadmap/sections.ts",
         "lib/roadmap/titles.ts",
+        "lib/roadmap/queries.ts",
+        "lib/roadmap/resolveRoadmap.ts",
         "lib/roadmap/rag-reindex.ts",
         "logic/roadmap/roadmapService.ts",
+        "components/roadmap/PublicationHome.tsx",
+        "components/roadmap/TopicEditorialPage.tsx",
+        "components/roadmap/LessonEditorialReader.tsx",
+        "components/roadmap/EditorialHeader.tsx",
         "components/roadmap/RoadmapMap.tsx",
         "components/roadmap/LessonStatus.tsx",
         "components/roadmap/ChecklistItemRow.tsx",
@@ -239,8 +245,19 @@
       "method": "GET",
       "authRequirement": "none",
       "domainId": "roadmap-learning",
-      "summary": "Trang chi tiết bài học của topic (thay thế query ?topic=&item=)",
+      "summary": "Đường dẫn cũ của bài học — chuyển hướng 308 sang /lessons/[lessonSlug]",
       "handler": "app/topic/[topicSlug]/[itemSlug]/page.tsx",
+      "triggersFlow": "N/A"
+    },
+    {
+      "id": "EP_UI_LESSON",
+      "type": "page",
+      "path": "/lessons/[lessonSlug]",
+      "method": "GET",
+      "authRequirement": "none",
+      "domainId": "roadmap-learning",
+      "summary": "Trang đọc chi tiết bài học độc lập Topic (SSR + SEO canonical)",
+      "handler": "app/lessons/[lessonSlug]/page.tsx",
       "triggersFlow": "N/A"
     },
     {
@@ -884,6 +901,7 @@
       "fields": [
         "id",
         "roadmapId",
+        "slug",
         "section",
         "title",
         "description",
@@ -898,9 +916,27 @@
         "roadmap -> Roadmap"
       ],
       "invariants": [
+        "slug là @unique toàn cục trên toàn bộ bảng RoadmapItem (ADR-0013)",
         "@@unique([roadmapId, title]): Tiêu đề bài học là duy nhất trong cùng một Topic",
         "status nhận 1 trong 3 giá trị: 'target', 'learning', 'known' (ADR-0010)",
         "section là chuỗi tự do gom bài theo ADR-0009; null = chung"
+      ]
+    },
+    {
+      "id": "MODEL_SLUG_REDIRECT",
+      "name": "SlugRedirect",
+      "source": "prisma",
+      "table": "SlugRedirect",
+      "domainId": "roadmap-learning",
+      "fields": [
+        "fromSlug",
+        "entity",
+        "targetId",
+        "createdAt"
+      ],
+      "relations": [],
+      "invariants": [
+        "fromSlug là khóa chính lưu slug cũ của Lesson/Topic để chuyển hướng 308 một bước"
       ]
     }
   ],

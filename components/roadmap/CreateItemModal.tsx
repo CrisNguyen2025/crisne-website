@@ -1,19 +1,25 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Sparkles, FileText, AlignLeft } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { SectionField } from './SectionField';
 import { SECTIONS_ENABLED } from './sectionsEnabled';
 
+export interface CreateItemOptions {
+  openEditor?: boolean;
+}
+
 interface CreateItemModalProps {
   isOpen: boolean;
-  /** The topic's sections, offered in the section field */
   sections: string[];
-  /** The section the user opened from; null means no section. */
   targetSection: string | null;
   onClose: () => void;
-  onSubmit: (section: string | null, title: string, description: string) => void;
+  onSubmit: (
+    section: string | null,
+    title: string,
+    description: string,
+    options?: CreateItemOptions
+  ) => void | Promise<void>;
 }
 
 function CreateItemForm({
@@ -25,90 +31,117 @@ function CreateItemForm({
   sections: string[];
   targetSection: string | null;
   onClose: () => void;
-  onSubmit: (section: string | null, title: string, description: string) => void;
+  onSubmit: (
+    section: string | null,
+    title: string,
+    description: string,
+    options?: CreateItemOptions
+  ) => void | Promise<void>;
 }) {
   const [section, setSection] = useState(targetSection ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitForm = async (openEditor: boolean) => {
     if (!title.trim()) {
       setError('Nhập tên bài.');
       return;
     }
-    if (!description.trim()) {
-      setError('Nhập mô tả ngắn cho bài này.');
-      return;
+    try {
+      setIsSubmitting(true);
+      setError('');
+      await onSubmit(
+        SECTIONS_ENABLED ? section.trim() || null : null,
+        title.trim(),
+        description.trim(),
+        { openEditor }
+      );
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thêm được bài học.');
+    } finally {
+      setIsSubmitting(false);
     }
-    onSubmit(SECTIONS_ENABLED ? section.trim() || null : null, title.trim(), description.trim());
-    onClose();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitForm(false);
   };
 
   return (
     <Dialog
       open
-      onClose={onClose}
-      title="Thêm bài"
+      onClose={isSubmitting ? () => {} : onClose}
+      title="Thêm bài học"
+      className="roadmap-theme"
       description={
         SECTIONS_ENABLED ? (
           <span className="mt-0.5 truncate text-xs text-muted-foreground">
-            Mục: <span className="font-semibold text-primary">{section.trim() || 'Chung'}</span>
+            Mục: <span className="font-medium text-foreground">{section.trim() || 'Chung'}</span>
           </span>
         ) : undefined
       }
-      icon={<Sparkles className="size-4" />}
       footer={
         <>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
           >
             Hủy
           </button>
           <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => void submitForm(true)}
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 cursor-pointer"
+          >
+            Tạo & viết nội dung
+          </button>
+          <button
             type="submit"
             form="create-item-form"
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+            disabled={isSubmitting}
+            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
           >
-            Thêm bài
+            {isSubmitting ? 'Đang thêm…' : 'Thêm bài'}
           </button>
         </>
       }
     >
       <form id="create-item-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
         {error && (
-          <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">{error}</div>
+          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
+            {error}
+          </div>
         )}
 
         {SECTIONS_ENABLED && <SectionField value={section} onChange={setSection} sections={sections} />}
 
-        <div className="space-y-1">
-          <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-            <FileText className="size-3.5 text-primary" /> Tên bài *
-          </label>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-foreground">Tên bài *</label>
           <input
             type="text"
             autoFocus
             placeholder="ví dụ: Speculative Decoding, GraphRAG…"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-xs"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:border-foreground/50 focus:outline-none"
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-            <AlignLeft className="size-3.5 text-primary" /> Mô tả *
-          </label>
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-foreground">Mô tả</label>
           <textarea
-            placeholder="Giải thích ngắn về khái niệm này và cách dùng…"
+            placeholder="Tóm tắt ngắn (tuỳ chọn)…"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground resize-none leading-relaxed text-xs"
+            rows={3}
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground focus:border-foreground/50 focus:outline-none"
           />
         </div>
       </form>
@@ -116,7 +149,13 @@ function CreateItemForm({
   );
 }
 
-export function CreateItemModal({ isOpen, sections, targetSection, onClose, onSubmit }: CreateItemModalProps) {
+export function CreateItemModal({
+  isOpen,
+  sections,
+  targetSection,
+  onClose,
+  onSubmit,
+}: CreateItemModalProps) {
   if (!isOpen) return null;
   return (
     <CreateItemForm

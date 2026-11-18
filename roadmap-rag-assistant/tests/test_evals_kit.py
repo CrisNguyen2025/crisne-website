@@ -193,3 +193,27 @@ def test_acl_guard_records_sections_the_caller_may_not_read():
     assert [(leak["via"], leak["section_id"]) for leak in guard.leaks] == [
         ("retrieve", "staff-only"), ("answer", "staff-only"),
     ]
+
+
+def test_acl_guard_checks_retrieved_contexts_on_answer():
+    acl = {"public": ["everyone"], "staff-only": ["staff"]}
+    target = FakeTarget(answer=Answer("x", "answer", ["public"], retrieved=["public", "staff-only"]))
+    guard = AclGuard(target, acl)
+    guard.sample_id = "x-002"
+    guard.answer("q", [], run_as="customer")
+    assert guard.leaks == [{"id": "x-002", "section_id": "staff-only", "run_as": "customer", "via": "answer_context"}]
+
+
+def test_score_answer_reports_citation_precision_and_invalid_citations():
+    target = FakeTarget(answer=Answer("Hủy trước 24 giờ", "answer", ["cancel", "extra"], invalid_citations=2))
+    sample = _sample(behavior="answer", facts=["24 giờ"], contexts=[{"section_id": "cancel"}])
+    row = score_answer(sample, target, 5, None)
+    assert row["passed"] is True
+    assert row["citation_precision"] == 0.5
+    assert row["invalid_citations"] == 2
+
+    clean_row = {"scorer": "answer", "tags": [], "passed": True, "citation_precision": 1.0, "invalid_citations": 0}
+    summary = metrics.summarize([{**row, "scorer": "answer", "tags": []}, clean_row], 5)["metrics"]["answer"]
+    assert summary["accuracy"] == 1.0
+    assert summary["citation_precision"] == 0.75
+    assert summary["invalid_citation_rate"] == 0.5

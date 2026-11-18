@@ -69,7 +69,7 @@ async function getRoadmapRoutes(): Promise<MetadataRoute.Sitemap> {
       for (const item of rm.items) {
         if (item.slug) {
           routes.push({
-            url: `${SITE_URL}/topic/${rm.slug}/${item.slug}`,
+            url: `${SITE_URL}/lessons/${item.slug}`,
             lastModified: item.updatedAt,
             changeFrequency: "weekly",
             priority: 0.7,

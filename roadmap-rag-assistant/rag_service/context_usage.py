@@ -50,6 +50,7 @@ _QUERY = re.compile(r"(?:^[^\n]*\n)?^<user_query>$.*?^</user_query>$", _FLAGS)
 
 # What the last answer of each thread actually sent, for the "last answer" section
 _last_turns: BoundedStore[dict] = BoundedStore()
+_last_diagnostics: BoundedStore[dict] = BoundedStore()
 
 
 def context_window(model: str) -> int:
@@ -100,6 +101,21 @@ def record_last_turn(
     }
     _last_turns.set(thread_id, turn)
     return turn
+
+
+def record_turn_diagnostics(
+    thread_id: str,
+    *,
+    document_ids: Sequence[str] = (),
+    invalid_citations: int = 0,
+) -> dict[str, Any]:
+    data = {"document_ids": list(document_ids), "invalid_citations": int(invalid_citations)}
+    _last_diagnostics.set(thread_id, data)
+    return data
+
+
+def last_turn_diagnostics(thread_id: str) -> Optional[dict[str, Any]]:
+    return _last_diagnostics.get(thread_id)
 
 
 def conversation_context(

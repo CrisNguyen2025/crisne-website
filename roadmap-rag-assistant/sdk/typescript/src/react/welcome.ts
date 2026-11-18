@@ -16,13 +16,14 @@ export function getWelcomeSuggestions(context?: PageContext, _canWrite = false):
   // Read-only and the same for everyone: no chip writes or names a subject. The widget does not know which
   // topics and lessons exist; the help reply does (the server builds its examples from the live roadmap),
   // so it is one tap away, writing commands included for the owner.
-  const topic = context?.roadmapSlug;
+  // A topic page names the topic by "này": the server resolves it from the page context, so no slug shows in the chat
+  const hasTopic = Boolean(context?.roadmapSlug);
   return [
     {
       label: 'Xem lộ trình',
-      prompt: topic ? `Topic ${topic} có những layer nào?` : 'Có những lộ trình nào trên website?',
+      prompt: hasTopic ? 'Topic này có những mục nào?' : 'Có những lộ trình nào trên website?',
     },
-    { label: 'Tra cứu & gợi ý', prompt: 'Bạn làm được gì?' },
+    { label: 'Abot làm được gì?', prompt: 'Bạn làm được gì?' },
   ];
 }
 

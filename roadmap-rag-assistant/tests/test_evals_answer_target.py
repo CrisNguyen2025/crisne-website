@@ -210,3 +210,53 @@ def test_fallback_answers_are_not_cached(tmp_path, monkeypatch):
     with _pytest.raises(TargetUnavailable):
         target.answer("tôi tên gì?", [])
     assert not cache_file.exists()
+
+
+def test_transform_option_controls_and_restores_query_transform(monkeypatch):
+    from rag_service.config import settings
+
+    with pytest.raises(ValueError):
+        build_target(transform="invalid")
+
+    monkeypatch.setattr(settings, "rag_query_transform", True)
+    target = build_target(mode="fts", answer="llm", cache="off", transform="off")
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+    seen = []
+
+    async def fake_collect(text, thread_id):
+        seen.append(settings.rag_query_transform)
+        return [{"type": "step", "id": "answer", "status": "done", "mode": "llm"}, {"type": "token", "delta": "ok"}]
+
+    monkeypatch.setattr(target, "_collect", fake_collect)
+    target.answer("bài đó là gì?", [])
+    assert seen == [False]
+    assert settings.rag_query_transform is True
+
+
+def test_answer_records_retrieved_documents_and_invalid_citations(tmp_path, monkeypatch):
+    import evals.target as target_mod
+    from rag_service.context_usage import record_turn_diagnostics
+
+    doc = {"doc_id": "ops/docker", "source_id": "d1", "title": "Docker", "sections": [{"section_id": "ops/docker", "text": "x"}]}
+    monkeypatch.setattr(RoadmapTarget, "_load", lambda self: ([], [doc]))
+    monkeypatch.setattr(target_mod, "CACHE_FILE", tmp_path / "answers.json")
+
+    target = RoadmapTarget(mode="fts", answer="llm", cache="on")
+    target._get_agent = lambda: None
+    target._loop = asyncio.new_event_loop()
+
+    async def fake_collect(text, thread_id):
+        record_turn_diagnostics(thread_id, document_ids=["d1"], invalid_citations=2)
+        return [
+            {"type": "step", "id": "answer", "status": "done", "mode": "llm"},
+            {"type": "token", "delta": "Docker là container."},
+            {"type": "metadata", "sources": [{"id": "d1", "cited": True}]},
+        ]
+
+    monkeypatch.setattr(target, "_collect", fake_collect)
+    first = target.answer("docker?", [])
+    second = target.answer("docker?", [])
+    assert first.retrieved == ["ops/docker"]
+    assert first.invalid_citations == 2
+    assert second == first

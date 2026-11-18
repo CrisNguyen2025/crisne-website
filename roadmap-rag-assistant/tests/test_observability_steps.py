@@ -12,6 +12,7 @@ from rag_service import observability
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.observability import end_step_on_error, traced_turn
+from rag_service.steps import step_event
 
 
 class FakeObservation:
@@ -117,3 +118,41 @@ def test_tracing_turns_on_once_the_keys_are_loaded(monkeypatch, capsys):
     monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk")
     assert observability.get_langfuse() == "client"
     assert observability.get_langfuse() == "client" and len(created) == 1
+
+
+def test_usage_from_langchain_includes_cache_read_tokens():
+    msg_with_cache = type("Msg", (), {
+        "usage_metadata": {
+            "input_tokens": 100,
+            "output_tokens": 20,
+            "total_tokens": 120,
+            "input_token_details": {"cache_read": 80},
+        }
+    })()
+    assert observability.usage_from_langchain(msg_with_cache) == {
+        "input": 100,
+        "output": 20,
+        "total": 120,
+        "cache_read_input_tokens": 80,
+    }
+
+    msg_plain = type("Msg", (), {"usage_metadata": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}})()
+    assert observability.usage_from_langchain(msg_plain) == {"input": 10, "output": 5, "total": 15}
+
+
+def test_traced_turn_records_answer_mode_and_gate_dropped(monkeypatch):
+    langfuse = FakeLangfuse()
+    monkeypatch.setattr(observability, "get_langfuse", lambda: langfuse)
+
+    async def events():
+        yield step_event("retrieve", "retrieval", "done", count=1, before_gate=4)
+        yield step_event("answer", "generation", "done", mode="no_match")
+        yield {"type": "token", "delta": "Chưa tìm thấy."}
+
+    async def run():
+        return [ev async for ev in traced_turn(events(), message="q", session_id="s")]
+
+    asyncio.run(run())
+    root = langfuse.observations[0]
+    assert root.updates["metadata"]["answer_mode"] == "no_match"
+    assert root.updates["metadata"]["gate_dropped"] == 3

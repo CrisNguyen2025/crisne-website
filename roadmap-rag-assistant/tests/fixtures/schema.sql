@@ -15,7 +15,7 @@ CREATE TABLE "Roadmap" (
 CREATE TABLE "RoadmapItem" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "roadmapId" TEXT NOT NULL,
-    "slug" TEXT NOT NULL DEFAULT '',
+    "slug" TEXT NOT NULL,
     "section" TEXT,
     "title" TEXT NOT NULL,
     "description" TEXT,
@@ -26,6 +26,14 @@ CREATE TABLE "RoadmapItem" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "RoadmapItem_roadmapId_fkey" FOREIGN KEY ("roadmapId") REFERENCES "Roadmap" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "SlugRedirect" (
+    "fromSlug" TEXT NOT NULL PRIMARY KEY,
+    "entity" TEXT NOT NULL,
+    "targetId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -49,13 +57,16 @@ CREATE TABLE "ThreadState" (
 CREATE UNIQUE INDEX "Roadmap_slug_key" ON "Roadmap"("slug");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "RoadmapItem_slug_key" ON "RoadmapItem"("slug");
+
+-- CreateIndex
 CREATE INDEX "RoadmapItem_roadmapId_idx" ON "RoadmapItem"("roadmapId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug");
+CREATE INDEX "SlugRedirect_entity_targetId_idx" ON "SlugRedirect"("entity", "targetId");
 
 -- CreateIndex
 CREATE INDEX "ThreadMessage_threadId_idx" ON "ThreadMessage"("threadId");

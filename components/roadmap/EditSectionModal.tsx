@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Pencil } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 
 interface EditSectionModalProps {
@@ -40,41 +39,41 @@ function EditSectionForm({
       open
       onClose={onClose}
       title="Đổi tên mục"
-      description="Mọi bài trong mục sẽ chuyển sang tên mới"
-      icon={<Pencil className="size-4 text-amber-600 dark:text-amber-400" />}
+      className="roadmap-theme"
+      description="Mọi bài học trong mục sẽ chuyển sang tên mới."
       footer={
         <>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-medium transition-colors cursor-pointer"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
           >
             Hủy
           </button>
           <button
             type="submit"
             form="edit-section-form"
-            className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
           >
             Lưu
           </button>
         </>
       }
     >
-      <form id="edit-section-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
+      <form id="edit-section-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
         {error && (
-          <div className="text-xs text-rose-500 bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">{error}</div>
+          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
+            {error}
+          </div>
         )}
         <div className="space-y-1.5">
-          <label className="font-semibold text-muted-foreground flex items-center gap-1.5">
-            <Pencil className="size-3.5 text-primary" /> Tên mục *
-          </label>
+          <label className="block text-xs font-medium text-foreground">Tên mục *</label>
           <input
             type="text"
             autoFocus
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 rounded-xl bg-background border border-border/70 focus:outline-none focus:ring-1 focus:ring-primary text-foreground text-xs"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:border-foreground/50 focus:outline-none"
           />
         </div>
       </form>

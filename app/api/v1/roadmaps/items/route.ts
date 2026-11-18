@@ -5,7 +5,7 @@ import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { DEFAULT_LESSON_STATUS, LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
-import { slugify } from '@/lib/utils';
+import { allocateGlobalLessonSlug } from '@/lib/utils';
 
 // POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
@@ -35,14 +35,19 @@ export async function POST(req: NextRequest) {
       return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, roadmapSlug: roadmap.slug });
     }
 
-    const baseSlug = slugify(title.trim()) || 'lesson';
-    const existingSlugs = new Set(roadmap.items.map((i) => i.slug).filter(Boolean));
-    let itemSlug = baseSlug;
-    let counter = 2;
-    while (existingSlugs.has(itemSlug)) {
-      itemSlug = `${baseSlug}-${counter}`;
-      counter++;
-    }
+    const allItems = (await prisma.roadmapItem.findMany?.({ select: { slug: true } })) ?? [];
+    const redirects =
+      (await prisma.slugRedirect?.findMany?.({
+        where: { entity: 'lesson' },
+        select: { fromSlug: true },
+      })) ?? [];
+    const topicSlugs = new Set<string>(roadmap.items.map((i) => i.slug).filter(Boolean));
+    const existingSlugs = new Set<string>([
+      ...topicSlugs,
+      ...allItems.map((i) => i.slug).filter(Boolean),
+      ...redirects.map((r) => r.fromSlug).filter(Boolean),
+    ]);
+    const itemSlug = allocateGlobalLessonSlug(title.trim(), existingSlugs, roadmap.slug, topicSlugs);
 
     const sectionName = sectionSpelling(roadmap.items.map((i) => i.section), section);
     const order = roadmap.items.reduce((max, i) => Math.max(max, i.order), 0) + 1;

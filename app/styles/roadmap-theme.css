@@ -1,0 +1,166 @@
+html:has(.roadmap-theme) {
+  scroll-behavior: auto;
+}
+
+.roadmap-theme {
+  --background: oklch(0.986 0.002 250);
+  --foreground: oklch(0.16 0.004 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.004 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.004 250);
+  --primary: oklch(0.22 0.006 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.958 0.003 250);
+  --secondary-foreground: oklch(0.2 0.005 250);
+  --muted: oklch(0.958 0.003 250);
+  --muted-foreground: oklch(0.47 0.008 250);
+  --accent: oklch(0.958 0.003 250);
+  --accent-foreground: oklch(0.16 0.004 250);
+  --border: oklch(0.918 0.003 250);
+  --input: oklch(0.918 0.003 250);
+  --ring: oklch(0.22 0.006 250);
+  --destructive: oklch(0.55 0.2 27);
+  --radius: 0.5rem;
+
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+
+  color: var(--foreground);
+  background-color: var(--background);
+}
+
+.dark .roadmap-theme {
+  --background: oklch(0.138 0.004 250);
+  --foreground: oklch(0.93 0.003 250);
+  --card: oklch(0.172 0.005 250);
+  --card-foreground: oklch(0.93 0.003 250);
+  --popover: oklch(0.172 0.005 250);
+  --popover-foreground: oklch(0.93 0.003 250);
+  --primary: oklch(0.92 0.003 250);
+  --primary-foreground: oklch(0.15 0.004 250);
+  --secondary: oklch(0.21 0.005 250);
+  --secondary-foreground: oklch(0.93 0.003 250);
+  --muted: oklch(0.21 0.005 250);
+  --muted-foreground: oklch(0.64 0.006 250);
+  --accent: oklch(0.21 0.005 250);
+  --accent-foreground: oklch(0.93 0.003 250);
+  --border: oklch(1 0 0 / 8.5%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.92 0.003 250);
+  --destructive: oklch(0.7 0.18 24);
+
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}
+
+.roadmap-theme .editorial-prose {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.75;
+  max-width: 65ch;
+  color: color-mix(in oklch, var(--foreground) 90%, transparent);
+}
+
+.roadmap-theme .editorial-prose h2,
+.roadmap-theme .editorial-prose h3,
+.roadmap-theme .editorial-prose h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+
+.roadmap-theme .editorial-prose h2 {
+  font-size: 1.375rem;
+  line-height: 1.35;
+}
+
+.roadmap-theme .editorial-prose h3 {
+  font-size: 1.125rem;
+  line-height: 1.4;
+}
+
+.roadmap-theme .editorial-prose a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--muted-foreground);
+  text-decoration-thickness: 0.0625rem;
+  text-underline-offset: 0.2em;
+}
+
+.roadmap-theme .editorial-prose a:hover {
+  text-decoration-color: var(--foreground);
+}
+
+.roadmap-theme .editorial-prose blockquote {
+  border-left: 0.125rem solid var(--border);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--muted-foreground);
+}
+
+.roadmap-theme .editorial-prose pre {
+  background: var(--muted);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.875rem 1rem;
+  font-family: var(--font-geist-mono);
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-x: auto;
+}
+
+.roadmap-theme .editorial-prose :not(pre) > code {
+  font-family: var(--font-geist-mono);
+  font-size: 0.875em;
+  background: var(--muted);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+}
+
+.roadmap-theme .editorial-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.roadmap-theme .editorial-prose th,
+.roadmap-theme .editorial-prose td {
+  border-bottom: 0.0625rem solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.roadmap-theme .editorial-prose th {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.roadmap-theme .editorial-prose ul,
+.roadmap-theme .editorial-prose ol {
+  padding-left: 1.35rem;
+}
+
+.roadmap-theme .editorial-prose ul {
+  list-style-type: disc;
+}
+
+.roadmap-theme .editorial-prose ol {
+  list-style-type: decimal;
+}

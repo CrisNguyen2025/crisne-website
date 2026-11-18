@@ -31,14 +31,23 @@ loadEnv();
 import { prisma } from "../lib/prisma";
 import { INITIAL_ROADMAP_DATA, type SeedLayer } from "../lib/roadmap/data";
 import { sectionName } from "../scripts/lib/flatten-sections";
-import { uniqueSlug } from "../lib/utils";
+import { allocateGlobalLessonSlug } from "../lib/utils";
 
 /** Writes the lessons of a topic in page order, each under its section (ADR-0009). */
-async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
+async function seedLayers(roadmapId: string, topicSlug: string, layers: SeedLayer[]) {
   let order = 0;
-  const existing = await prisma.roadmapItem.findMany({ where: { roadmapId }, select: { id: true, slug: true } });
-  const existingIds = new Set(existing.map((i) => i.id));
+  const existing = await prisma.roadmapItem.findMany({ select: { id: true, roadmapId: true, slug: true } });
+  const existingById = new Map(existing.map((i) => [i.id, i.slug]));
   const usedSlugs = new Set(existing.map((i) => i.slug).filter(Boolean));
+  const topicUsedSlugs = new Map<string, Set<string>>();
+  for (const row of existing) {
+    if (!row.slug) continue;
+    const set = topicUsedSlugs.get(row.roadmapId) ?? new Set<string>();
+    set.add(row.slug);
+    topicUsedSlugs.set(row.roadmapId, set);
+  }
+  const currentTopicUsed = topicUsedSlugs.get(roadmapId) ?? new Set<string>();
+  topicUsedSlugs.set(roadmapId, currentTopicUsed);
   for (const layer of layers) {
     for (const group of layer.groups) {
       const section = sectionName(
@@ -57,11 +66,13 @@ async function seedLayers(roadmapId: string, layers: SeedLayer[]) {
           order,
         };
         // Slug is set once on create and never changed on update (D2)
-        const slug = existingIds.has(item.id) ? undefined : uniqueSlug(item.title, usedSlugs);
+        const slug =
+          existingById.get(item.id) ||
+          allocateGlobalLessonSlug(item.title, usedSlugs, topicSlug, currentTopicUsed);
         await prisma.roadmapItem.upsert({
           where: { id: item.id },
           update: data,
-          create: { id: item.id, ...(slug ? { slug } : {}), ...data },
+          create: { id: item.id, slug, ...data },
         });
       }
     }
@@ -89,7 +100,7 @@ async function main() {
     },
   });
 
-  await seedLayers(aiRoadmap.id, INITIAL_ROADMAP_DATA);
+  await seedLayers(aiRoadmap.id, aiRoadmap.slug, INITIAL_ROADMAP_DATA);
   console.log(`✅ Seeded AI Architecture Roadmap with ${INITIAL_ROADMAP_DATA.length} layers`);
 
   // 2. Seed Demo Roadmap 2: Backend Engineering Roadmap
@@ -179,7 +190,7 @@ async function main() {
     },
   ];
 
-  await seedLayers(beRoadmap.id, beLayers);
+  await seedLayers(beRoadmap.id, beRoadmap.slug, beLayers);
   console.log(`✅ Seeded Backend Roadmap with ${beLayers.length} layers`);
 }
 

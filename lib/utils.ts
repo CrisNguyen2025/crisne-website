@@ -36,3 +36,35 @@ export function uniqueSlug(title: string, used: Set<string>): string {
   return slug;
 }
 
+export function allocateGlobalLessonSlug(
+  title: string,
+  used: Set<string>,
+  topicSlug?: string,
+  topicUsed?: Set<string>,
+): string {
+  const base = slugify(title) || "lesson";
+  if (!used.has(base)) {
+    used.add(base);
+    topicUsed?.add(base);
+    return base;
+  }
+  const takenInSameTopic = topicUsed?.has(base) ?? false;
+  const cleanTopic = topicSlug ? slugify(topicSlug) : "";
+  if (cleanTopic && !takenInSameTopic) {
+    const withTopic = `${base}-${cleanTopic}`;
+    if (!used.has(withTopic)) {
+      used.add(withTopic);
+      topicUsed?.add(withTopic);
+      return withTopic;
+    }
+  }
+  let n = 2;
+  while (used.has(`${base}-${n}`)) {
+    n += 1;
+  }
+  const candidate = `${base}-${n}`;
+  used.add(candidate);
+  topicUsed?.add(candidate);
+  return candidate;
+}
+

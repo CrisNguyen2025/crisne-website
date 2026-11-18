@@ -19,8 +19,8 @@ export function ConfirmDeleteModal({
   isOpen,
   title,
   description,
-  confirmText = 'Delete',
-  cancelText = 'Cancel',
+  confirmText = 'Xoá',
+  cancelText = 'Hủy',
   isLoading = false,
   onClose,
   onConfirm,
@@ -31,14 +31,15 @@ export function ConfirmDeleteModal({
       onClose={isLoading ? () => {} : onClose}
       title={title}
       description={description}
-      icon={<AlertTriangle className="size-5 text-rose-500" />}
+      className="roadmap-theme"
+      icon={<AlertTriangle className="size-4 text-destructive" />}
       footer={
         <>
           <button
             type="button"
             disabled={isLoading}
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer disabled:opacity-50"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
           >
             {cancelText}
           </button>
@@ -46,12 +47,12 @@ export function ConfirmDeleteModal({
             type="button"
             disabled={isLoading}
             onClick={onConfirm}
-            className="px-4 py-2 rounded-xl bg-destructive hover:bg-destructive/90 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60 cursor-pointer"
           >
             {isLoading ? (
               <>
-                <div className="size-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                <span>Processing...</span>
+                <span className="size-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <span>Đang xử lý…</span>
               </>
             ) : (
               confirmText
@@ -60,9 +61,7 @@ export function ConfirmDeleteModal({
         </>
       }
     >
-      <div className="text-xs text-muted-foreground">
-        This action cannot be undone. Please confirm before proceeding.
-      </div>
+      <p className="text-xs text-muted-foreground">Hành động này không thể hoàn tác.</p>
     </Dialog>
   );
 }

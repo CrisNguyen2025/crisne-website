@@ -207,13 +207,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
     setIsReaderOpen(true);
     const found = items.find((i) => i.id === id);
     const itemIdentifier = found?.slug || (found ? slugify(found.title) : id);
-    const currentTopicSlug = topic || roadmapMeta?.slug;
-    if (currentTopicSlug) {
-      const sectionQuery = sectionParam ? `?section=${encodeURIComponent(sectionParam)}` : "";
-      router.push(`/topic/${currentTopicSlug}/${itemIdentifier}${sectionQuery}`);
-    } else {
-      setQueryItem(itemIdentifier);
-    }
+    router.push(`/lessons/${itemIdentifier}`);
   };
 
   const handleCreateRoadmap = async (payload: CreateRoadmapDto) => {
@@ -256,7 +250,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
       : undefined;
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row bg-background overflow-hidden">
+    <div className="roadmap-theme flex h-dvh flex-col md:flex-row bg-background overflow-hidden">
       {/* Global loading overlay */}
       <GlobalPageLoader />
 

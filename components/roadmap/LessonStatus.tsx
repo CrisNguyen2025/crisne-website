@@ -14,9 +14,9 @@ const STATUS_ICON: Record<LessonStatus, React.ComponentType<{ className?: string
 };
 
 const STATUS_TONE: Record<LessonStatus, string> = {
-  target: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  learning: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  known: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  target: 'border-[var(--status-target-border)] bg-[var(--status-target-bg)] text-[var(--status-target)]',
+  learning: 'border-[var(--status-learning-border)] bg-[var(--status-learning-bg)] text-[var(--status-learning)]',
+  known: 'border-[var(--status-known-border)] bg-[var(--status-known-bg)] text-[var(--status-known)]',
 };
 
 interface LessonStatusBadgeProps {

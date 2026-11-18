@@ -65,10 +65,14 @@ class JudgeConfigError(RuntimeError):
 class RoadmapTarget:
     name = "roadmap"
     def __init__(self, mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
-                 judge: str = "off", judge_provider: str = "", judge_model: str = "", rerank: str = "off"):
+                 judge: str = "off", judge_provider: str = "", judge_model: str = "", rerank: str = "off",
+                 transform: str = "on"):
         # rerank=llm reorders retrieval with the chat model, as /chat does with RAG_RERANK=true
         if rerank not in ANSWER_MODES:
             raise ValueError(f"rerank must be one of {ANSWER_MODES}, got {rerank!r}")
+        if transform not in ("on", "off"):
+            raise ValueError(f"transform must be 'on' or 'off', got {transform!r}")
+        self.transform = transform == "on"
         self.rerank = rerank == "llm"
         self._rerank_llm = None
         if cache not in ("on", "off"):
@@ -231,6 +235,7 @@ class RoadmapTarget:
 
     def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer:
         from rag_service.auth import current_actor
+        from rag_service.context_usage import last_turn_diagnostics
         from rag_service.core.augmentation.history import history_store
         from rag_service.pii import mask_pii
         from rag_service.state import session_store
@@ -239,7 +244,13 @@ class RoadmapTarget:
         if self._cache_on:
             hit = self._load_cache().get(key)
             if hit is not None:
-                return Answer(text=hit["text"], behavior=hit["behavior"], citations=hit["citations"])
+                return Answer(
+                    text=hit["text"],
+                    behavior=hit["behavior"],
+                    citations=hit["citations"],
+                    retrieved=hit.get("retrieved", []),
+                    invalid_citations=hit.get("invalid_citations", 0),
+                )
 
         self._get_agent()
         thread_id = f"eval-{uuid.uuid4()}"
@@ -249,9 +260,12 @@ class RoadmapTarget:
             history_store.append(thread_id, turn["role"], mask_pii(turn["content"]))
         # Visitors cannot write, so an eval can never change the database
         token = current_actor.set("owner" if run_as == "owner" else "visitor")
+        prev_transform = settings.rag_query_transform
+        settings.rag_query_transform = self.transform
         try:
             events = self._loop.run_until_complete(self._collect(text, thread_id))
         finally:
+            settings.rag_query_transform = prev_transform
             current_actor.reset(token)
             session_store.clear(thread_id)
 
@@ -262,7 +276,16 @@ class RoadmapTarget:
         reason = steps.get("answer", {}).get("fallback_reason")
         if reason in ("rate_limited", "llm_error"):
             raise TargetUnavailable(reason)
-        answer_obj = Answer(text=reply, behavior=self._behavior(reply, steps), citations=self._citations(events))
+        diag = last_turn_diagnostics(thread_id) or {}
+        doc_ids = {doc["source_id"]: doc["doc_id"] for doc in self._load()[1]}
+        retrieved = [doc_ids[i] for i in diag.get("document_ids", []) if i in doc_ids]
+        answer_obj = Answer(
+            text=reply,
+            behavior=self._behavior(reply, steps),
+            citations=self._citations(events),
+            retrieved=retrieved,
+            invalid_citations=int(diag.get("invalid_citations", 0)),
+        )
         if self._cache_on:
             self._store_cache(key, answer_obj)
         return answer_obj
@@ -270,7 +293,9 @@ class RoadmapTarget:
     def _cache_key(self, text: str, history: list[dict]) -> str:
         """Model, code, corpus and the exact question: change any of them and the answer is recomputed."""
         payload = {
+            "schema": 2,
             "model": settings.llm_model,
+            "transform": self.transform,
             "code": _code_fingerprint(),
             "corpus": self.corpus_fingerprint()["sha256"],
             "text": text,
@@ -285,7 +310,13 @@ class RoadmapTarget:
 
     def _store_cache(self, key: str, answer: Answer) -> None:
         cache = self._load_cache()
-        cache[key] = {"text": answer.text, "behavior": answer.behavior, "citations": answer.citations}
+        cache[key] = {
+            "text": answer.text,
+            "behavior": answer.behavior,
+            "citations": answer.citations,
+            "retrieved": answer.retrieved,
+            "invalid_citations": answer.invalid_citations,
+        }
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
 
@@ -321,7 +352,7 @@ class RoadmapTarget:
             if section_id in sections:
                 doc, text = sections[section_id]
                 meta = doc.get("metadata", {})
-                where = ", ".join(str(meta[key]) for key in ("topic", "layer_title", "group_title") if meta.get(key))
+                where = ", ".join(str(meta[key]) for key in ("topic", "section", "layer_title", "group_title") if meta.get(key))
                 texts.append(f"{doc['title']} ({where}): {text}" if where else f"{doc['title']}: {text}")
         return texts
 
@@ -427,6 +458,7 @@ class RoadmapTarget:
 
 def build_target(mode: str = "hybrid", answer: str = "off", cache: str = "on", gate: str = "off",
                  judge: str = "off", judge_provider: str = "", judge_model: str = "",
-                 rerank: str = "off") -> RoadmapTarget:
+                 rerank: str = "off", transform: str = "on") -> RoadmapTarget:
     return RoadmapTarget(mode=mode, answer=answer, cache=cache, gate=gate,
-                         judge=judge, judge_provider=judge_provider, judge_model=judge_model, rerank=rerank)
+                         judge=judge, judge_provider=judge_provider, judge_model=judge_model,
+                         rerank=rerank, transform=transform)

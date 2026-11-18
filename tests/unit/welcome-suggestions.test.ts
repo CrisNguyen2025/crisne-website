@@ -12,7 +12,7 @@ describe("welcome suggestions", () => {
       for (const { prompt } of suggestions) {
         expect(prompt).not.toMatch(/^Tạo |Mock/);
       }
-      expect(suggestions[0].prompt).toBe("Topic backend có những layer nào?");
+      expect(suggestions[0].prompt).toBe("Topic này có những mục nào?");
     }
   });
 

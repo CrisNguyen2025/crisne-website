@@ -21,7 +21,7 @@ from typing import Any, AsyncGenerator
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
-from rag_service.context_usage import record_last_turn
+from rag_service.context_usage import record_last_turn, record_turn_diagnostics
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
@@ -202,6 +202,11 @@ class GenerationPipeline:
                 for d in documents
             ],
             dropped_documents=sections["dropped_documents"],
+        )
+        record_turn_diagnostics(
+            req.thread_id,
+            document_ids=[d.id for d in documents],
+            invalid_citations=(len(cite.invalid) if cite else 0) + len(links.removed),
         )
         yield metadata_event(  # S5
             req.mode,

@@ -86,3 +86,33 @@ async def test_failed_confirm_leaves_the_database_unchanged(db, owner_headers):
     )
     assert result["success"] is False
     assert _rows(db, "SELECT count(*) FROM RoadmapItem") == before
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_preview_and_confirm_writes_lesson_to_database(db, owner_headers, catalog_topics):
+    topic = await _confirm(owner_headers, "outcome-e2e-topic", _action(ActionType.CREATE, EntityLevel.TOPIC, None, "Frontend"))
+    assert topic["success"] is True
+    catalog_topics("frontend")
+
+    thread_id = "outcome-e2e-lesson"
+    session_store.clear(thread_id)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
+        stream_res = await client.post(
+            "/chat/stream",
+            json={"message": "thêm bài React Hooks vào topic Frontend", "thread_id": thread_id},
+        )
+        assert stream_res.status_code == 200
+        pending = session_store.get_or_create(thread_id).pending_confirmation
+        assert pending is not None
+        assert pending.action == ActionType.CREATE
+        assert pending.entity_level == EntityLevel.ITEM
+        assert pending.target_parent_identifier == "frontend"
+        assert [e.title for e in pending.entities] == ["React Hooks"]
+        assert _rows(db, "SELECT title FROM RoadmapItem") == []
+
+        confirm_res = (await client.post("/chat/confirm", json={"thread_id": thread_id})).json()
+    assert confirm_res["success"] is True
+    assert _rows(
+        db, "SELECT i.title FROM RoadmapItem i JOIN Roadmap r ON r.id = i.roadmapId WHERE r.slug = ?", "frontend"
+    ) == [("React Hooks",)]
