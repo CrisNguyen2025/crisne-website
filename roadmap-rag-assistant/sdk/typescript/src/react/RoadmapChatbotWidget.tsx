@@ -18,6 +18,7 @@ import { useVisualViewportBox } from "./utils/useVisualViewportBox";
 import { copyText } from "./utils/clipboard";
 import { useDrawerMotion } from "./utils/useDrawerMotion";
 import { useHeaderFlip } from "./utils/useHeaderFlip";
+import { useDesktopGrowHeight } from "./utils/useDesktopGrowHeight";
 import { WELCOME_MESSAGE_ID } from "./welcome";
 import { MessageList } from "./components/MessageList";
 import { useFeedback, type VoteDetail } from "./useFeedback";
@@ -215,6 +216,7 @@ export function RoadmapChatbotWidget({
   };
 
   const isAtBottomRef = useRef(true);
+  const autoFollowRef = useRef(false);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
 
   // "Stick to bottom": a 1px sentinel after the last message tells us whether the reader is
@@ -244,102 +246,58 @@ export function RoadmapChatbotWidget({
   }, [isOpen]);
 
   const rafIdRef = useRef<number | null>(null);
-
-  // Jump straight to the end on open
+  const isStreamingRef = useRef(isStreaming);
   useEffect(() => {
-    if (isOpen && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      isAtBottomRef.current = true;
-    }
-  }, [isOpen]);
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
 
-  // Cancel lerp when user manually scrolls up
-  useEffect(() => {
+  const isInitStage =
+    messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
+
+  const scrollGlideRef = useRef<() => void>(() => {});
+  const { contentRef, isSubCeilingRef } = useDesktopGrowHeight({
+    isOpen,
+    isInitStage,
+    isStreaming,
+    offsetY,
+    containerRef,
+    scrollRef,
+    inputRef,
+    onReachCeiling: () => scrollGlideRef.current(),
+  });
+
+  const startScrollGlide = useCallback(() => {
     const el = scrollRef.current;
-    if (!isOpen || !el) return;
-
-    let touchStartY = 0;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        isAtBottomRef.current = false;
-        if (rafIdRef.current !== null) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
-        }
-      }
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      const deltaY = e.touches[0].clientY - touchStartY;
-      if (deltaY > 10) {
-        // Dragging down scrolls content up
-        isAtBottomRef.current = false;
-        if (rafIdRef.current !== null) {
-          cancelAnimationFrame(rafIdRef.current);
-          rafIdRef.current = null;
-        }
-      }
-    };
-
-    el.addEventListener("wheel", handleWheel, { passive: true });
-    el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMove, { passive: true });
-
-    return () => {
-      el.removeEventListener("wheel", handleWheel);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-    };
-  }, [isOpen]);
-
-  const scrollToBottom = () => {
-    // Jump straight to the end, like Claude Code: no animated glide. The observer hides the
-    // button once the sentinel is in view.
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
+    if (!el || !isAtBottomRef.current || isSubCeilingRef.current) {
+      autoFollowRef.current = false;
+      return;
     }
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-      isAtBottomRef.current = true;
-    }
-  };
 
-  // Follow new content while the reader is at the end. Lerp over ~150-180ms so new elements
-  // (like 50px snippet cards) slide into view smoothly instead of snapping in a single frame.
-  useEffect(() => {
-    if (!isOpen || !scrollRef.current || !isAtBottomRef.current) return;
-
-    const el = scrollRef.current;
     const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll <= el.scrollTop) return;
+    if (maxScroll <= el.scrollTop) {
+      autoFollowRef.current = isStreamingRef.current;
+      return;
+    }
 
-    const prefersReducedMotion =
+    const reducedMotion =
       typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    if (prefersReducedMotion) {
+    if (reducedMotion) {
       el.scrollTop = maxScroll;
+      autoFollowRef.current = isStreamingRef.current;
       return;
     }
 
     if (rafIdRef.current !== null) return;
+    autoFollowRef.current = true;
 
     let lastTime = performance.now();
     const tick = (now: number) => {
       const container = scrollRef.current;
-      if (!container || !isAtBottomRef.current) {
+      if (!container || !isAtBottomRef.current || isSubCeilingRef.current) {
         rafIdRef.current = null;
+        autoFollowRef.current = false;
         return;
       }
       const target = container.scrollHeight - container.clientHeight;
@@ -349,12 +307,13 @@ export function RoadmapChatbotWidget({
       if (dist <= 0.5) {
         container.scrollTop = target;
         rafIdRef.current = null;
+        autoFollowRef.current =
+          isStreamingRef.current && isAtBottomRef.current;
         return;
       }
 
       const dt = Math.min(now - lastTime, 100);
       lastTime = now;
-
       // Exponential damping towards target (settles ~95% in ~160ms, tau = 55ms)
       const factor = 1 - Math.exp(-dt / 55);
       const step = Math.max(1, dist * factor);
@@ -364,65 +323,145 @@ export function RoadmapChatbotWidget({
         rafIdRef.current = requestAnimationFrame(tick);
       } else {
         rafIdRef.current = null;
+        autoFollowRef.current =
+          isStreamingRef.current && isAtBottomRef.current;
       }
     };
 
     rafIdRef.current = requestAnimationFrame(tick);
-  }, [messages, isOpen, isStreaming, activeTool]);
+  }, [isSubCeilingRef]);
+
+  useEffect(() => {
+    scrollGlideRef.current = startScrollGlide;
+  }, [startScrollGlide]);
+
+  // Jump straight to the end on open once content exceeds the ceiling
+  useEffect(() => {
+    if (isOpen && scrollRef.current) {
+      if (!isSubCeilingRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }
+      isAtBottomRef.current = true;
+      autoFollowRef.current = false;
+    }
+  }, [isOpen, isSubCeilingRef]);
+
+  const disengageFollow = useCallback(() => {
+    isAtBottomRef.current = false;
+    autoFollowRef.current = false;
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  }, []);
+
+  // Cancel lerp when user manually scrolls up
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!isOpen || !el) return;
+
+    let touchStartY = 0;
+    let lastScrollTop = el.scrollTop;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0 && !isSubCeilingRef.current) disengageFollow();
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      const deltaY = e.touches[0].clientY - touchStartY;
+      if (deltaY > 10 && !isSubCeilingRef.current) {
+        disengageFollow();
+      }
+    };
+
+    const handleScroll = () => {
+      const curr = el.scrollTop;
+      if (
+        curr < lastScrollTop - 2 &&
+        rafIdRef.current === null &&
+        !isSubCeilingRef.current
+      ) {
+        disengageFollow();
+      }
+      lastScrollTop = curr;
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
+    el.addEventListener("scroll", handleScroll, { passive: true });
+
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
+      el.removeEventListener("scroll", handleScroll);
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      autoFollowRef.current = false;
+    };
+  }, [isOpen, disengageFollow, isSubCeilingRef]);
+
+  const scrollToBottom = () => {
+    // Jump straight to the end, like Claude Code: no animated glide. The observer hides the
+    // button once the sentinel is in view.
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    autoFollowRef.current = isStreaming;
+    const el = scrollRef.current;
+    if (el) {
+      if (!isSubCeilingRef.current) {
+        el.scrollTop = el.scrollHeight;
+      }
+      isAtBottomRef.current = true;
+    }
+  };
+
+  // Follow new content while the reader is at the end (once panel has reached ceiling).
+  useEffect(() => {
+    if (
+      !isOpen ||
+      !scrollRef.current ||
+      !isAtBottomRef.current ||
+      isSubCeilingRef.current
+    ) {
+      return;
+    }
+    startScrollGlide();
+  }, [messages, isOpen, isStreaming, activeTool, startScrollGlide, isSubCeilingRef]);
 
   // When reply finishes streaming, guarantee the message list cleanly glides
   // all the way to the true bottom so late-mounted elements (action toolbar, citations)
   // never leave the view stranded ~118px above the end.
   useEffect(() => {
-    if (!isOpen || isStreaming || !isAtBottomRef.current) return;
+    if (!isOpen || !isAtBottomRef.current || isSubCeilingRef.current) {
+      autoFollowRef.current = false;
+      return;
+    }
+    if (isStreaming) {
+      autoFollowRef.current = true;
+      return;
+    }
 
+    autoFollowRef.current = true;
     const frame = requestAnimationFrame(() => {
-      const container = scrollRef.current;
-      if (!container || !isAtBottomRef.current) return;
-
-      const max = container.scrollHeight - container.clientHeight;
-      if (max <= container.scrollTop) return;
-
       if (rafIdRef.current !== null) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-
-      let lastTime = performance.now();
-      const settleTick = (now: number) => {
-        const el = scrollRef.current;
-        if (!el || !isAtBottomRef.current) {
-          rafIdRef.current = null;
-          return;
-        }
-        const target = el.scrollHeight - el.clientHeight;
-        const curr = el.scrollTop;
-        const dist = target - curr;
-
-        if (dist <= 0.5) {
-          el.scrollTop = target;
-          rafIdRef.current = null;
-          return;
-        }
-
-        const dt = Math.min(now - lastTime, 100);
-        lastTime = now;
-        const factor = 1 - Math.exp(-dt / 55);
-        const step = Math.max(1, dist * factor);
-        el.scrollTop = Math.min(target, curr + step);
-
-        if (el.scrollTop < target && isAtBottomRef.current) {
-          rafIdRef.current = requestAnimationFrame(settleTick);
-        } else {
-          rafIdRef.current = null;
-        }
-      };
-
-      rafIdRef.current = requestAnimationFrame(settleTick);
+      startScrollGlide();
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isStreaming, isOpen, messages]);
+  }, [isStreaming, isOpen, messages, startScrollGlide, isSubCeilingRef]);
 
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
@@ -449,8 +488,6 @@ export function RoadmapChatbotWidget({
     return styles;
   }, [position, offsetX, offsetY, zIndex]);
 
-  const isInitStage =
-    messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
   const {
     headerMascotRef,
     headerTextRef,
@@ -458,7 +495,6 @@ export function RoadmapChatbotWidget({
     heroTextRef,
     heroChipsRef,
     captureBeforeSend,
-    captureBeforeReset,
   } = useHeaderFlip(isInitStage, scrollRef);
 
   const toggleToolExpand = (id: string) => {
@@ -489,7 +525,8 @@ export function RoadmapChatbotWidget({
 
     // 3. Send message
     isAtBottomRef.current = true;
-    if (scrollRef.current) {
+    autoFollowRef.current = !isSubCeilingRef.current;
+    if (scrollRef.current && !isSubCeilingRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
     sendMessage(val);
@@ -547,17 +584,15 @@ export function RoadmapChatbotWidget({
       {isOpen && (
         <div
           ref={containerRef}
+          data-abot-overlay-root=""
           style={{ ...WIDGET_THEME_VARS, ...keyboardBox }}
-          className="pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[720px] md:max-h-[calc(100vh-3rem)] md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95"
+          className="pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[480px] md:max-h-[calc(100dvh-3rem)] md:w-[400px] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95"
         >
           {/* ── Header ── */}
           <ChatHeader
             activityState={activityState}
             canWrite={canWrite}
-            clearMessages={() => {
-              captureBeforeReset();
-              clearMessages();
-            }}
+            clearMessages={clearMessages}
             copiedConvId={copiedConvId}
             hideBrand={isInitStage}
             mascotRef={headerMascotRef}
@@ -598,8 +633,11 @@ export function RoadmapChatbotWidget({
             handleRunCode={handleRunCode}
             toggleToolExpand={toggleToolExpand}
             scrollRef={scrollRef}
+            contentRef={contentRef}
             bottomSentinelRef={bottomSentinelRef}
+            autoFollowRef={autoFollowRef}
             scrollToBottom={scrollToBottom}
+            onBeforeJump={disengageFollow}
           />
 
           {feedbackNotice && (

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from "react";
-import { CheckIcon, CopyIcon, PlayIcon } from "../icons";
+import { ArrowDownIcon, CheckIcon, CopyIcon, PlayIcon } from "../icons";
 import { isRunnableSnippet } from "../utils/snippets";
 import { copyText } from "../utils/clipboard";
 
@@ -15,6 +15,12 @@ export interface CodeBlockProps {
   onRun?: (code: string) => void;
   /** Snippet currently being run; the matching snippet shows a spinner and the rest are disabled */
   runningCode?: string | null;
+  /** Disables running un-executed snippets while another message turn is loading */
+  isBusy?: boolean;
+  /** Executed user message id for this snippet when it already ran after the host message */
+  executedMessageId?: string | null;
+  /** Scrolls to the executed user message instead of re-sending the prompt */
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 const LANGUAGE_LABELS: Record<string, string> = {
@@ -83,109 +89,85 @@ const TYPES = new Set([
   "record", "map", "set", "promise", "i32", "i64", "u32", "u64", "f32", "f64"
 ]);
 
-/**
- * Tokenize a single line of source code into syntax-highlighted React elements.
- */
-function highlightCodeLine(line: string, lineIndex: number): React.ReactNode {
-  if (!line) {
-    return <span key={`empty-${lineIndex}`}>{"\n"}</span>;
+const TOKEN_REGEX =
+  /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`)|(\/\/[^\n]*|#[^\n]*|--[^\n]*)|(\b0x[0-9a-fA-F]+\b|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(\b[a-zA-Z_$][a-zA-Z0-9_$]*\b)/g;
+
+const HAS_HTML_SPECIAL = /[&<>"']/;
+const HTML_ESCAPE_RE = /[&<>"']/g;
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#x27;",
+};
+
+function escapeHtml(text: string): string {
+  return HAS_HTML_SPECIAL.test(text) ? text.replace(HTML_ESCAPE_RE, (ch) => HTML_ESCAPES[ch]) : text;
+}
+
+function isFunctionCall(source: string, afterWord: number): boolean {
+  let i = afterWord;
+  while (i < source.length) {
+    const ch = source.charCodeAt(i);
+    if (ch !== 32 && ch !== 9) {
+      return ch === 40;
+    }
+    i++;
+  }
+  return false;
+}
+
+function highlightCodeHtml(code: string): string {
+  if (!code) {
+    return "\n";
   }
 
-  // Matches:
-  // 1: Strings ("...", '...', `...`)
-  // 2: Comments (//..., #..., --...)
-  // 3: Numbers (integer, float, scientific, hex)
-  // 4: Identifiers (words)
-  // 5: Operators and punctuation
-  const tokenRegex =
-    /("(?:\\[\s\S]|[^"\\])*"|'(?:\\[\s\S]|[^'\\])*'|`(?:\\[\s\S]|[^`\\])*`)|(\/\/[^\n]*|#[^\n]*|--[^\n]*)|(\b0x[0-9a-fA-F]+\b|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)|(\b[a-zA-Z_$][a-zA-Z0-9_$]*\b)|([^\s\w]+)/g;
-
-  const elements: React.ReactNode[] = [];
-  let lastIndex = 0;
+  TOKEN_REGEX.lastIndex = 0;
+  const chunks: string[] = [];
+  let plainStart = 0;
   let tokenMatch: RegExpExecArray | null;
 
-  while ((tokenMatch = tokenRegex.exec(line)) !== null) {
+  while ((tokenMatch = TOKEN_REGEX.exec(code)) !== null) {
     const matchIndex = tokenMatch.index;
-
-    // Preserve whitespace preceding the token
-    if (matchIndex > lastIndex) {
-      elements.push(line.slice(lastIndex, matchIndex));
-    }
-
-    const [raw, str, comment, num, word, op] = tokenMatch;
-    const tokenKey = `${lineIndex}-${matchIndex}`;
+    const [raw, str, comment, num, word] = tokenMatch;
+    let className: string | null = null;
 
     if (str !== undefined) {
-      elements.push(
-        <span key={tokenKey} className="text-emerald-600 dark:text-emerald-400">
-          {str}
-        </span>
-      );
+      className = "text-emerald-600 dark:text-emerald-400";
     } else if (comment !== undefined) {
-      elements.push(
-        <span key={tokenKey} className="text-muted-foreground/60 italic">
-          {comment}
-        </span>
-      );
+      className = "text-muted-foreground/60 italic";
     } else if (num !== undefined) {
-      elements.push(
-        <span key={tokenKey} className="text-amber-600 dark:text-amber-400">
-          {num}
-        </span>
-      );
+      className = "text-amber-600 dark:text-amber-400";
     } else if (word !== undefined) {
       const lower = word.toLowerCase();
-      // Lookahead in line for function call: next non-space is '('
-      const remainingLine = line.slice(matchIndex + word.length);
-      const isFunction = /^\s*\(/.test(remainingLine);
-
       if (KEYWORDS.has(lower)) {
-        elements.push(
-          <span key={tokenKey} className="font-medium text-purple-600 dark:text-purple-400">
-            {word}
-          </span>
-        );
+        className = "font-medium text-purple-600 dark:text-purple-400";
       } else if (BOOLEANS_AND_NILS.has(lower)) {
-        elements.push(
-          <span key={tokenKey} className="text-rose-600 dark:text-rose-400">
-            {word}
-          </span>
-        );
+        className = "text-rose-600 dark:text-rose-400";
       } else if (TYPES.has(lower)) {
-        elements.push(
-          <span key={tokenKey} className="text-blue-600 dark:text-blue-400">
-            {word}
-          </span>
-        );
-      } else if (isFunction) {
-        elements.push(
-          <span key={tokenKey} className="text-sky-600 dark:text-sky-400">
-            {word}
-          </span>
-        );
-      } else {
-        elements.push(
-          <span key={tokenKey} className="text-foreground">
-            {word}
-          </span>
-        );
+        className = "text-blue-600 dark:text-blue-400";
+      } else if (isFunctionCall(code, matchIndex + word.length)) {
+        className = "text-sky-600 dark:text-sky-400";
       }
-    } else if (op !== undefined) {
-      elements.push(
-        <span key={tokenKey} className="text-foreground/70">
-          {op}
-        </span>
-      );
     }
 
-    lastIndex = matchIndex + raw.length;
+    if (className !== null) {
+      if (matchIndex > plainStart) {
+        chunks.push(escapeHtml(code.slice(plainStart, matchIndex)));
+      }
+      chunks.push(`<span class="${className}">${escapeHtml(raw)}</span>`);
+      plainStart = matchIndex + raw.length;
+    }
   }
 
-  if (lastIndex < line.length) {
-    elements.push(line.slice(lastIndex));
+  if (plainStart === 0) {
+    return escapeHtml(code);
   }
-
-  return <React.Fragment key={lineIndex}>{elements}</React.Fragment>;
+  if (plainStart < code.length) {
+    chunks.push(escapeHtml(code.slice(plainStart)));
+  }
+  return chunks.join("");
 }
 
 export function CodeBlock({
@@ -195,6 +177,9 @@ export function CodeBlock({
   showLineNumbers = true,
   onRun,
   runningCode = null,
+  isBusy: isBusyProp = false,
+  executedMessageId = null,
+  onJumpToMessage,
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
 
@@ -212,8 +197,25 @@ export function CodeBlock({
 
   const cleanCode = code.replace(/\s+$/, "");
   const isMultiLine = cleanCode.includes("\n");
-  const lines = useMemo(() => code.split("\n"), [code]);
   const normalizedLang = lang.trim().toLowerCase();
+  const isCompactSnippet = (!lang || normalizedLang === "text") && !isMultiLine;
+  const shouldShowLineNumbers = showLineNumbers && isMultiLine;
+  const lineNumbersHtml = useMemo(() => {
+    if (!shouldShowLineNumbers || isCompactSnippet) return "";
+    let count = 1;
+    for (let i = 0; i < code.length; i++) {
+      if (code.charCodeAt(i) === 10) count++;
+    }
+    let html = "";
+    for (let i = 1; i <= count; i++) {
+      html += `<span>${i}</span>`;
+    }
+    return html;
+  }, [code, shouldShowLineNumbers, isCompactSnippet]);
+  const highlightedHtml = useMemo(
+    () => (isCompactSnippet ? "" : highlightCodeHtml(code)),
+    [code, isCompactSnippet]
+  );
   const displayBadge =
     LANGUAGE_LABELS[normalizedLang] ||
     (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : "Code");
@@ -222,8 +224,10 @@ export function CodeBlock({
   if ((!lang || normalizedLang === "text") && !isMultiLine) {
     const snippet = code.trim();
     const isRunning = runningCode !== null && runningCode === snippet;
-    const isBusy = runningCode !== null;
-    const isRunnable = onRun && isRunnableSnippet(snippet);
+    const isBusy = isBusyProp || runningCode !== null;
+    const isRunnable = Boolean(onRun) && isRunnableSnippet(snippet);
+    const isExecuted =
+      isRunnable && Boolean(executedMessageId && onJumpToMessage) && !isRunning;
     return (
       // Smooth height growth on stream mount: expands 0fr -> 1fr so the +58px jump is eliminated,
       // while streaming text flows in with a caret and buttons reveal once the fence closes.
@@ -233,7 +237,11 @@ export function CodeBlock({
         }`}
       >
         <div className="min-w-0 max-w-full overflow-hidden">
-          <div className="flex min-h-[50px] min-w-0 max-w-full items-center gap-2 rounded-lg border border-border bg-background py-1.5 pl-3 pr-1.5 shadow-xs">
+          <div
+            className={`flex min-h-[50px] min-w-0 max-w-full items-center gap-2 rounded-lg border bg-background py-1.5 pl-3 pr-1.5 shadow-xs transition-colors ${
+              isExecuted ? "border-[#3F7D58]/35" : "border-border"
+            }`}
+          >
             {/* Text streams directly inside; caret indicates live generation without layout jumps */}
             <code className="min-w-0 flex-1 whitespace-pre-wrap break-words font-sans text-sm md:text-[13px] text-foreground">
               {code}
@@ -251,23 +259,37 @@ export function CodeBlock({
               }`}
               aria-hidden={open}
             >
-              {isRunnable && (
+              {isExecuted ? (
                 <button
                   type="button"
-                  onClick={() => onRun(snippet)}
-                  disabled={isBusy || open}
+                  onClick={() => onJumpToMessage?.(executedMessageId!)}
+                  disabled={open}
                   tabIndex={open ? -1 : 0}
-                  aria-label={isRunning ? "Đang gửi" : "Gửi"}
-                  aria-busy={isRunning}
-                  title={isRunning ? "Đang gửi" : "Gửi"}
-                  className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  aria-label="Đã gửi — Đi tới câu hỏi"
+                  title="Đã gửi — Đi tới câu hỏi"
+                  className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md bg-[#E6F1EA] p-1.5 text-[#3F7D58] transition-colors hover:bg-[#D5E8DC] cursor-pointer disabled:pointer-events-none"
                 >
-                  {isRunning ? (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <PlayIcon className="h-3.5 w-3.5" />
-                  )}
+                  <ArrowDownIcon className="h-3.5 w-3.5" />
                 </button>
+              ) : (
+                isRunnable && (
+                  <button
+                    type="button"
+                    onClick={() => onRun?.(snippet)}
+                    disabled={isBusy || open}
+                    tabIndex={open ? -1 : 0}
+                    aria-label={isRunning ? "Đang gửi" : "Gửi"}
+                    aria-busy={isRunning}
+                    title={isRunning ? "Đang gửi" : "Gửi"}
+                    className="flex min-h-[36px] min-w-[36px] shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  >
+                    {isRunning ? (
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <PlayIcon className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )
               )}
               <button
                 type="button"
@@ -291,11 +313,8 @@ export function CodeBlock({
     );
   }
 
-  const shouldShowLineNumbers = showLineNumbers && isMultiLine;
-
   return (
     <div className="my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-border/80 bg-muted/40 shadow-xs">
-      {/* Header bar with badge and 1-click copy */}
       <div className="flex items-center justify-between border-b border-border/70 bg-muted/70 px-3.5 py-1.5 text-xs">
         <span className="font-mono text-[11px] font-medium text-muted-foreground">
           {displayBadge}
@@ -322,21 +341,19 @@ export function CodeBlock({
         </button>
       </div>
 
-      {/* Code body with optional line numbers and syntax styling */}
       <pre className="max-w-full overflow-x-auto p-3.5 font-mono text-xs leading-relaxed touch-pan-x">
-        <code className="block w-max min-w-full font-mono">
-          {lines.map((line, idx) => (
-            <div key={idx} className="flex">
-              {shouldShowLineNumbers && (
-                <span className="select-none pr-3 text-right tabular-nums text-muted-foreground/40 text-[11px] font-mono shrink-0 w-8">
-                  {idx + 1}
-                </span>
-              )}
-              <span className="flex-1 whitespace-pre">
-                {highlightCodeLine(line, idx)}
-              </span>
-            </div>
-          ))}
+        <code className="flex w-max min-w-full font-mono text-foreground">
+          {shouldShowLineNumbers && (
+            <span
+              aria-hidden="true"
+              className="flex flex-col select-none pr-3 text-right tabular-nums text-muted-foreground/40 text-xs leading-relaxed font-mono shrink-0 w-8"
+              dangerouslySetInnerHTML={{ __html: lineNumbersHtml }}
+            />
+          )}
+          <span
+            className="min-w-0 flex-1 whitespace-pre"
+            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+          />
         </code>
       </pre>
     </div>

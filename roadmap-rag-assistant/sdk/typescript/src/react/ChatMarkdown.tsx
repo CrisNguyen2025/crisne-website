@@ -326,7 +326,156 @@ function isTableLine(lines: string[], idx: number): boolean {
 // ── Inline Renderer ────────────────────────────────────────────────────────
 
 const INLINE =
-  /(`[^`\n]+`)|(\*\*(.*?)\*\*)|(\[([^\]\n]+)\]\(([^)\s]+)\))|((?<!\$)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\$))|(\*([^*\s][^*\n]*?)\*)|((?<![\w])_([^_\n]+)_(?![\w]))|(==([^=\n]+)==)/g;
+  /(`[^`\n]+`)|(\*\*\*([^*\n]+?)\*\*\*)|(\*\*(.*?)\*\*)|(!\[([^\]\n]*)\]\(([^)\s]+)\))|(\[([^\]\n]+)\]\(([^)\s]+)\))|((?<!\$)\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\$))|(\*([^*\s][^*\n]*?)\*)|((?<![\w])_([^_\n]+)_(?![\w]))|(==([^=\n]+)==)|(~~([^~\n]+)~~)|(\\([\\`*_{}[\]()#+\-.!~|$]))/g;
+
+type InlineVisitor<T> = {
+  plain: (text: string) => T;
+  code: (code: string) => T;
+  boldItalic: (inner: string) => T;
+  bold: (inner: string) => T;
+  image: (alt: string, href: string, raw: string) => T;
+  link: (label: string, href: string) => T;
+  math: (formula: string) => T;
+  italic: (inner: string) => T;
+  highlight: (inner: string) => T;
+  strike: (inner: string, raw: string) => T;
+  escape: (char: string, raw: string) => T;
+};
+
+function scanInline<T>(text: string, visitor: InlineVisitor<T>): T[] {
+  const out: T[] = [];
+  let last = 0;
+  const re = new RegExp(INLINE.source, "g");
+
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > last) {
+      const chunk = text.slice(last, m.index).replace(STRAY_MARK_RE, "");
+      if (chunk) out.push(visitor.plain(chunk));
+    }
+
+    if (m[1]) {
+      out.push(visitor.code(m[1].slice(1, -1)));
+    } else if (m[2] !== undefined) {
+      out.push(visitor.boldItalic(m[3]));
+    } else if (m[4] !== undefined) {
+      out.push(visitor.bold(m[5]));
+    } else if (m[6]) {
+      out.push(visitor.image(m[7], m[8], m[6]));
+    } else if (m[9]) {
+      out.push(visitor.link(m[10], m[11]));
+    } else if (m[12] !== undefined) {
+      out.push(visitor.math(m[13]));
+    } else if (m[14] || m[16]) {
+      out.push(visitor.italic(m[15] ?? m[17]));
+    } else if (m[18]) {
+      out.push(visitor.highlight(m[19]));
+    } else if (m[20]) {
+      out.push(visitor.strike(m[21], m[20]));
+    } else if (m[22]) {
+      out.push(visitor.escape(m[23], m[22]));
+    }
+
+    last = m.index + m[0].length;
+  }
+
+  if (last < text.length) {
+    const chunk = text.slice(last).replace(STRAY_MARK_RE, "");
+    if (chunk) out.push(visitor.plain(chunk));
+  }
+
+  return out;
+}
+
+const MAX_INLINE_DEPTH = 20;
+
+export function stripInlineMarkdown(text: string, depth = 0): string {
+  if (!text || depth > MAX_INLINE_DEPTH) {
+    return text.replace(STRAY_MARK_RE, "");
+  }
+
+  return scanInline(text, {
+    plain: (chunk) => chunk,
+    code: (code) => code,
+    boldItalic: (inner) => stripInlineMarkdown(inner, depth + 1),
+    bold: (inner) => stripInlineMarkdown(inner, depth + 1),
+    image: (alt) => stripInlineMarkdown(alt, depth + 1),
+    link: (label) => stripInlineMarkdown(label, depth + 1),
+    math: (formula) => formula,
+    italic: (inner) => stripInlineMarkdown(inner, depth + 1),
+    highlight: (inner) => stripInlineMarkdown(inner, depth + 1),
+    strike: (inner) => stripInlineMarkdown(inner, depth + 1),
+    escape: (char) => char,
+  }).join("");
+}
+
+const ALERT_PLAIN_TITLES: Record<CalloutType, string> = {
+  note: "Note",
+  tip: "Tip",
+  important: "Important",
+  warning: "Warning",
+  caution: "Caution",
+};
+
+function formatListPlainText(items: ListItem[], depth = 0): string[] {
+  const indent = "  ".repeat(depth);
+  const lines: string[] = [];
+  for (const item of items) {
+    const marker =
+      item.checked !== undefined
+        ? item.checked
+          ? "☑ "
+          : "☐ "
+        : item.ordered
+          ? `${item.num}. `
+          : "• ";
+    lines.push(`${indent}${marker}${stripInlineMarkdown(item.text).trim()}`.trimEnd());
+    if (item.children.length > 0) {
+      lines.push(...formatListPlainText(item.children, depth + 1));
+    }
+  }
+  return lines;
+}
+
+function blockToPlainText(block: Block): string {
+  switch (block.kind) {
+    case "heading":
+      return stripInlineMarkdown(block.text).trim();
+    case "paragraph":
+      return block.lines.map((line) => stripInlineMarkdown(line).trimEnd()).join("\n").trim();
+    case "list":
+      return formatListPlainText(block.items).join("\n");
+    case "code":
+      return block.code.replace(/\s+$/, "");
+    case "quote":
+      return block.lines.map((line) => stripInlineMarkdown(line).trimEnd()).join("\n").trim();
+    case "alert": {
+      const title = block.title?.trim()
+        ? stripInlineMarkdown(block.title).trim()
+        : ALERT_PLAIN_TITLES[block.alertType] || ALERT_PLAIN_TITLES.note;
+      const body = block.lines.map((line) => stripInlineMarkdown(line).trimEnd()).join("\n").trim();
+      return body ? `${title}:\n${body}` : title;
+    }
+    case "table": {
+      const header = block.headers.map((h) => stripInlineMarkdown(h).trim()).join("\t");
+      const rows = block.rows.map((row) =>
+        row.map((cell) => stripInlineMarkdown(cell).trim()).join("\t")
+      );
+      return [header, ...rows].filter((row) => row.trim().length > 0).join("\n");
+    }
+    case "math":
+      return block.math.trim();
+    case "rule":
+      return "";
+  }
+}
+
+export function markdownToPlainText(content: string): string {
+  if (!content.trim()) return "";
+  return parseBlocks(content)
+    .map(blockToPlainText)
+    .filter((part) => part.length > 0)
+    .join("\n\n");
+}
 
 /** The claims of one answer: the source ids of claim i at index i (see markClaims). */
 const CitationContext = React.createContext<string[][]>([]);
@@ -390,7 +539,7 @@ function SourceChips({ sources }: { sources: ChatSource[] }) {
     else if (root.dataset.activeSource === id) highlightClaims(root, null);
   };
   return (
-    <span ref={ref}>
+    <span ref={ref} data-source-chips="">
       {sources.map((source) => (
         <CitationChip
           key={source.id}
@@ -478,78 +627,73 @@ function MathView({
 }
 
 export function renderInline(text: string): React.ReactNode[] {
-  // Claim marks only mean something on a line InlineLine renders; anywhere else they are dropped
-  const plain = (start: number, end: number) => [text.slice(start, end).replace(STRAY_MARK_RE, "")];
-  const out: React.ReactNode[] = [];
-  let last = 0;
   let key = 0;
 
-  const re = new RegExp(INLINE.source, "g");
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    if (m.index > last) out.push(...plain(last, m.index));
+  const renderLinkNode = (label: string, href: string): React.ReactNode => {
+    const link = safeHref(href);
+    return link ? (
+      <a
+        key={key++}
+        href={link.href}
+        {...(link.external
+          ? { target: "_blank", rel: "noopener noreferrer" }
+          : {})}
+        className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition-colors hover:decoration-blue-600 dark:text-blue-400 dark:decoration-blue-400/40 dark:hover:decoration-blue-400"
+      >
+        {label}
+      </a>
+    ) : (
+      label
+    );
+  };
 
-    if (m[1]) {
-      // Inline code `...`
-      out.push(
-        <code
-          key={key++}
-          className="rounded border border-border/60 bg-muted px-1 py-px font-mono text-[0.9em] text-rose-600 dark:text-rose-400"
-        >
-          {m[1].slice(1, -1)}
-        </code>
-      );
-    } else if (m[2] !== undefined) {
-      // Bold **...**
-      out.push(
-        <strong key={key++} className="font-semibold text-foreground">
-          {renderInline(m[3])}
-        </strong>
-      );
-    } else if (m[4]) {
-      // Link [text](url)
-      const link = safeHref(m[6]);
-      out.push(
-        link ? (
-          <a
-            key={key++}
-            href={link.href}
-            {...(link.external
-              ? { target: "_blank", rel: "noopener noreferrer" }
-              : {})}
-            className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition-colors hover:decoration-blue-600 dark:text-blue-400 dark:decoration-blue-400/40 dark:hover:decoration-blue-400"
-          >
-            {m[5]}
-          </a>
-        ) : (
-          m[5]
-        )
-      );
-    } else if (m[7] !== undefined) {
-      // Inline math $...$
-      out.push(<MathView key={key++} math={m[8]} display={false} />);
-    } else if (m[9] || m[11]) {
-      // Italic *...* or _..._
-      out.push(
-        <em key={key++} className="italic">
-          {renderInline(m[10] ?? m[12])}
-        </em>
-      );
-    } else if (m[13]) {
-      // Highlight ==...==
-      out.push(
-        <mark
-          key={key++}
-          className="rounded-sm bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/30"
-        >
-          {renderInline(m[14])}
-        </mark>
-      );
-    }
-    last = m.index + m[0].length;
-  }
-
-  if (last < text.length) out.push(...plain(last, text.length));
-  return out;
+  // Claim marks only mean something on a line InlineLine renders; anywhere else they are dropped
+  return scanInline<React.ReactNode>(text, {
+    plain: (chunk) => chunk,
+    code: (code) => (
+      <code
+        key={key++}
+        className="rounded border border-border/60 bg-muted px-1 py-px font-mono text-[0.9em] text-rose-600 dark:text-rose-400"
+      >
+        {code}
+      </code>
+    ),
+    boldItalic: (inner) => (
+      <strong key={key++} className="font-semibold text-foreground">
+        <em className="italic">{renderInline(inner)}</em>
+      </strong>
+    ),
+    bold: (inner) => (
+      <strong key={key++} className="font-semibold text-foreground">
+        {renderInline(inner)}
+      </strong>
+    ),
+    image: (alt, href, raw) =>
+      alt ? (
+        <React.Fragment key={key++}>
+          !{renderLinkNode(alt, href)}
+        </React.Fragment>
+      ) : (
+        raw
+      ),
+    link: (label, href) => renderLinkNode(label, href),
+    math: (formula) => <MathView key={key++} math={formula} display={false} />,
+    italic: (inner) => (
+      <em key={key++} className="italic">
+        {renderInline(inner)}
+      </em>
+    ),
+    highlight: (inner) => (
+      <mark
+        key={key++}
+        className="rounded-sm bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/30"
+      >
+        {renderInline(inner)}
+      </mark>
+    ),
+    strike: (_inner, raw) => raw,
+    escape: (_char, raw) => raw,
+  });
 }
 
 // ── Typographic Headings ──────────────────────────────────────────────────
@@ -676,11 +820,17 @@ function BlockView({
   trailing,
   onRun,
   runningCode,
+  isBusy,
+  executedMessageId,
+  onJumpToMessage,
 }: {
   block: Block;
   trailing?: React.ReactNode;
   onRun?: (code: string) => void;
   runningCode?: string | null;
+  isBusy?: boolean;
+  executedMessageId?: string | null;
+  onJumpToMessage?: (messageId: string) => void;
 }) {
   switch (block.kind) {
     case "heading":
@@ -719,6 +869,9 @@ function BlockView({
           open={block.open}
           onRun={onRun}
           runningCode={runningCode}
+          isBusy={isBusy}
+          executedMessageId={executedMessageId}
+          onJumpToMessage={onJumpToMessage}
           showLineNumbers={true}
         />
       );
@@ -790,12 +943,18 @@ function areBlocksEqual(
     trailing?: React.ReactNode;
     onRun?: (code: string) => void;
     runningCode?: string | null;
+    isBusy?: boolean;
+    executedMessageId?: string | null;
+    onJumpToMessage?: (messageId: string) => void;
   },
   next: {
     block: Block;
     trailing?: React.ReactNode;
     onRun?: (code: string) => void;
     runningCode?: string | null;
+    isBusy?: boolean;
+    executedMessageId?: string | null;
+    onJumpToMessage?: (messageId: string) => void;
   }
 ): boolean {
   if (prev.trailing !== next.trailing) return false;
@@ -805,6 +964,14 @@ function areBlocksEqual(
   const b1 = prev.block;
   const b2 = next.block;
   if (b1.kind !== b2.kind) return false;
+  if (
+    b1.kind === "code" &&
+    (prev.isBusy !== next.isBusy ||
+      prev.executedMessageId !== next.executedMessageId ||
+      prev.onJumpToMessage !== next.onJumpToMessage)
+  ) {
+    return false;
+  }
 
   switch (b1.kind) {
     case "paragraph": {
@@ -904,6 +1071,12 @@ export interface ChatMarkdownProps {
   onRun?: (code: string) => void;
   /** Snippet currently running, so its run button shows a spinner */
   runningCode?: string | null;
+  /** Disables runnable snippets when another turn is currently loading */
+  isBusy?: boolean;
+  /** Map of trimmed snippet text -> executed user message id for this message */
+  executedPrompts?: Record<string, string>;
+  /** Scrolls to the executed user message when an executed snippet is clicked */
+  onJumpToMessage?: (messageId: string) => void;
   /** Claims in `content` and their sources; each claim gets a chip with its `sources` */
   citations?: ChatCitation[];
   sources?: ChatSource[];
@@ -937,6 +1110,9 @@ export function ChatMarkdown({
   className = "",
   onRun,
   runningCode = null,
+  isBusy = false,
+  executedPrompts,
+  onJumpToMessage,
   citations,
   sources,
 }: ChatMarkdownProps) {
@@ -965,12 +1141,21 @@ export function ChatMarkdown({
     </>
   ) : undefined;
   const blockViews = blocks.map((block, idx) => {
+    const executedMessageId =
+      block.kind === "code" &&
+      executedPrompts &&
+      isOneLineSnippet(block.code, block.lang)
+        ? executedPrompts[block.code.trim()] ?? null
+        : null;
     return (
       <MemoizedBlockView
         key={idx}
         block={block}
         onRun={onRun}
         runningCode={runningCode}
+        isBusy={isBusy}
+        executedMessageId={executedMessageId}
+        onJumpToMessage={onJumpToMessage}
         trailing={idx === blocks.length - 1 && caretInline ? tail : undefined}
       />
     );

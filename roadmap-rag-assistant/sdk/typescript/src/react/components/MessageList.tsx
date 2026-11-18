@@ -8,7 +8,7 @@ import {
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "../icons";
-import { ChatMarkdown } from "../ChatMarkdown";
+import { ChatMarkdown, markdownToPlainText } from "../ChatMarkdown";
 import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
 import {
@@ -20,6 +20,7 @@ import {
 import { PulsatingDots } from "./PulsatingDots";
 import { ChangeReviewCard } from "./ChangeReviewCard";
 import { AbotMascot, type MascotState } from "./AbotMascot";
+import { findExecutedPromptTargets } from "../utils/snippets";
 import { WELCOME_MESSAGE_ID } from "../welcome";
 import type { ChatMessage } from "../types";
 
@@ -47,8 +48,12 @@ export interface MessageListProps {
   handleRunCode: (code: string) => void;
   toggleToolExpand: (id: string) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  contentRef?: React.RefObject<HTMLDivElement | null>;
   bottomSentinelRef: React.RefObject<HTMLDivElement | null>;
+  autoFollowRef?: React.RefObject<boolean>;
   scrollToBottom: () => void;
+  /** Called before programmatic scroll away from the bottom so auto-follow disengages */
+  onBeforeJump?: () => void;
 }
 
 /**
@@ -59,42 +64,82 @@ export interface MessageListProps {
 function ScrollBottomButton({
   scrollRef,
   bottomSentinelRef,
+  autoFollowRef,
   isLoading,
   scrollToBottom,
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   bottomSentinelRef: React.RefObject<HTMLDivElement | null>;
+  autoFollowRef?: React.RefObject<boolean>;
   isLoading: boolean;
   scrollToBottom: () => void;
 }) {
   const [visible, setVisible] = React.useState(false);
+  const sentinelOutRef = React.useRef(false);
 
   React.useEffect(() => {
     const root = scrollRef.current;
     const sentinel = bottomSentinelRef.current;
     if (!root || !sentinel || typeof IntersectionObserver === "undefined") return;
-    // The sentinel sits above the list's bottom padding (pb-2, 8px). The root is trimmed by 4px,
-    // so the sentinel stays clearly inside it at the very end (edge-touching is unreliable on
-    // Android, which left the arrow showing) and the button hides on arrival.
     const observer = new IntersectionObserver(
-      ([entry]) => setVisible(!entry.isIntersecting),
-      { root, rootMargin: "0px 0px -4px 0px" }
+      ([entry]) => {
+        const isOut = !entry.isIntersecting;
+        sentinelOutRef.current = isOut;
+        if (!isOut || root.dataset.subCeiling === "true") {
+          setVisible(false);
+        } else if (!autoFollowRef?.current) {
+          setVisible(true);
+        }
+      },
+      { root, rootMargin: "0px 0px 24px 0px" }
     );
     observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [scrollRef, bottomSentinelRef]);
+
+    const handleScroll = () => {
+      if (
+        sentinelOutRef.current &&
+        !autoFollowRef?.current &&
+        root.dataset.subCeiling !== "true"
+      ) {
+        setVisible(true);
+      }
+    };
+    const handleWheel = (e: WheelEvent) => {
+      if (
+        e.deltaY < 0 &&
+        sentinelOutRef.current &&
+        root.dataset.subCeiling !== "true"
+      ) {
+        setVisible(true);
+      }
+    };
+
+    root.addEventListener("scroll", handleScroll, { passive: true });
+    root.addEventListener("wheel", handleWheel, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      root.removeEventListener("scroll", handleScroll);
+      root.removeEventListener("wheel", handleWheel);
+    };
+  }, [scrollRef, bottomSentinelRef, autoFollowRef]);
 
   return (
     <button
       type="button"
-      onClick={scrollToBottom}
+      onClick={() => {
+        setVisible(false);
+        scrollToBottom();
+      }}
       tabIndex={visible ? 0 : -1}
       aria-hidden={!visible}
       aria-label={
         isLoading ? "Đang trả lời — cuộn xuống để xem" : "Cuộn xuống cuối"
       }
-      className={`absolute bottom-2 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_2px_8px_rgb(0_0_0_/_0.08)] transition-[opacity,transform,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-[#F4F3F0] active:scale-95 ${
-        visible ? "opacity-100" : "pointer-events-none opacity-0"
+      className={`absolute bottom-2 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 cursor-pointer items-center justify-center rounded-full border border-[#E6E4DF] bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_2px_8px_rgb(0_0_0_/_0.08)] transition-[opacity,transform,background-color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none hover:bg-[#F4F3F0] active:scale-95 ${
+        visible
+          ? "translate-y-0 scale-100 opacity-100"
+          : "pointer-events-none translate-y-2 scale-90 opacity-0"
       }`}
     >
       {isLoading ? (
@@ -114,7 +159,9 @@ type MessageHandlers = Pick<
   | "handleFeedback"
   | "handleRunCode"
   | "toggleToolExpand"
->;
+> & {
+  jumpToMessage: (messageId: string) => void;
+};
 
 interface MessageItemProps
   extends Pick<
@@ -123,7 +170,45 @@ interface MessageItemProps
   > {
   msg: ChatMessage;
   isLast: boolean;
+  isHighlighted?: boolean;
+  executedPrompts?: Record<string, string>;
   handlers: MessageHandlers;
+}
+
+function areStringRecordsEqual(
+  a?: Record<string, string>,
+  b?: Record<string, string>
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
+
+function areMessageItemPropsEqual(
+  prev: MessageItemProps,
+  next: MessageItemProps
+): boolean {
+  return (
+    prev.msg === next.msg &&
+    prev.isLast === next.isLast &&
+    prev.isLoading === next.isLoading &&
+    prev.isStreaming === next.isStreaming &&
+    prev.runningCode === next.runningCode &&
+    prev.expandedTools === next.expandedTools &&
+    prev.feedback === next.feedback &&
+    prev.copiedId === next.copiedId &&
+    prev.canWrite === next.canWrite &&
+    prev.showFeedback === next.showFeedback &&
+    prev.isHighlighted === next.isHighlighted &&
+    prev.handlers === next.handlers &&
+    areStringRecordsEqual(prev.executedPrompts, next.executedPrompts)
+  );
 }
 
 /**
@@ -141,10 +226,19 @@ const MessageItem = React.memo(function MessageItem({
   copiedId,
   canWrite,
   showFeedback,
+  isHighlighted = false,
+  executedPrompts,
   handlers,
 }: MessageItemProps) {
-  const { sendMessage, retry, copyMessage, handleFeedback, handleRunCode, toggleToolExpand } =
-    handlers;
+  const {
+    sendMessage,
+    retry,
+    copyMessage,
+    handleFeedback,
+    handleRunCode,
+    toggleToolExpand,
+    jumpToMessage,
+  } = handlers;
 
   const isUser = msg.role === "user";
   const timeStr = formatTime(msg.timestamp);
@@ -153,8 +247,18 @@ const MessageItem = React.memo(function MessageItem({
 
   if (isUser) {
     return (
-      <div key={msg.id} className="group flex flex-col items-end gap-1">
-        <div className="relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-[#F4F3F0] px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C]">
+      <div
+        key={msg.id}
+        data-message-id={msg.id}
+        className="group flex flex-col items-end gap-1"
+      >
+        <div
+          className={`relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C] transition-[background-color,box-shadow] duration-300 ${
+            isHighlighted
+              ? "bg-[#E6F1EA] ring-2 ring-[#3F7D58]/45"
+              : "bg-[#F4F3F0]"
+          }`}
+        >
           {msg.content}
         </div>
         <div className="flex items-center gap-1.5 pr-1 text-xs text-[#5E5B55]">
@@ -236,6 +340,9 @@ const MessageItem = React.memo(function MessageItem({
             streaming={isLive}
             onRun={handleRunCode}
             runningCode={isLoading ? runningCode : null}
+            isBusy={isLoading}
+            executedPrompts={executedPrompts}
+            onJumpToMessage={jumpToMessage}
             citations={isLive ? undefined : msg.citations}
             sources={isLive ? undefined : msg.sources}
             className="[&>:last-child]:!mb-0"
@@ -336,7 +443,7 @@ const MessageItem = React.memo(function MessageItem({
           )}
           <button
             type="button"
-            onClick={() => copyMessage(msg.id, msg.content)}
+            onClick={() => copyMessage(msg.id, markdownToPlainText(msg.content))}
             title="Sao chép"
             aria-label="Sao chép câu trả lời"
             className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
@@ -409,7 +516,7 @@ const MessageItem = React.memo(function MessageItem({
       )}
     </div>
   );
-});
+}, areMessageItemPropsEqual);
 
 export function MessageList({
   activityState = "idle",
@@ -433,23 +540,51 @@ export function MessageList({
   handleRunCode,
   toggleToolExpand,
   scrollRef,
+  contentRef,
   bottomSentinelRef,
+  autoFollowRef,
   scrollToBottom,
+  onBeforeJump,
 }: MessageListProps) {
   const showWelcomeStage =
     messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
-  const visibleMessages = showWelcomeStage
-    ? []
-    : messages.filter((m) => m.id !== WELCOME_MESSAGE_ID);
+  const visibleMessages = React.useMemo(
+    () =>
+      showWelcomeStage
+        ? []
+        : messages.filter((m) => m.id !== WELCOME_MESSAGE_ID),
+    [messages, showWelcomeStage]
+  );
+
+  const executedTargetsByMsg = React.useMemo(
+    () => findExecutedPromptTargets(visibleMessages),
+    [visibleMessages]
+  );
+
+  const [highlightedId, setHighlightedId] = React.useState<string | null>(null);
+  const highlightTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  React.useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current !== null) {
+        clearTimeout(highlightTimerRef.current);
+      }
+    };
+  }, []);
+
   // The host recreates these on every render (`retry` changes with each streamed frame), which
   // would defeat MessageItem's memo. Stable wrappers call the latest ones instead.
-  const latestHandlers = React.useRef<MessageHandlers>({
+  const latestHandlers = React.useRef<
+    Omit<MessageHandlers, "jumpToMessage"> & { onBeforeJump?: () => void }
+  >({
     sendMessage,
     retry,
     copyMessage,
     handleFeedback,
     handleRunCode,
     toggleToolExpand,
+    onBeforeJump,
   });
   React.useLayoutEffect(() => {
     latestHandlers.current = {
@@ -459,8 +594,50 @@ export function MessageList({
       handleFeedback,
       handleRunCode,
       toggleToolExpand,
+      onBeforeJump,
     };
   });
+
+  const jumpToMessage = React.useCallback(
+    (messageId: string) => {
+      latestHandlers.current.onBeforeJump?.();
+      const container = scrollRef.current;
+      if (container) {
+        const target = Array.from(
+          container.querySelectorAll<HTMLElement>("[data-message-id]")
+        ).find((el) => el.dataset.messageId === messageId);
+        if (target) {
+          const containerRect = container.getBoundingClientRect();
+          const targetRect = target.getBoundingClientRect();
+          const top = Math.max(
+            0,
+            container.scrollTop + (targetRect.top - containerRect.top) - 16
+          );
+          const prefersReducedMotion =
+            typeof window !== "undefined" &&
+            window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+          if (typeof container.scrollTo === "function") {
+            container.scrollTo({
+              top,
+              behavior: prefersReducedMotion ? "auto" : "smooth",
+            });
+          } else {
+            container.scrollTop = top;
+          }
+        }
+      }
+      setHighlightedId(messageId);
+      if (highlightTimerRef.current !== null) {
+        clearTimeout(highlightTimerRef.current);
+      }
+      highlightTimerRef.current = setTimeout(() => {
+        setHighlightedId(null);
+        highlightTimerRef.current = null;
+      }, 1600);
+    },
+    [scrollRef]
+  );
+
   const handlers = React.useMemo<MessageHandlers>(
     () => ({
       sendMessage: (text) => latestHandlers.current.sendMessage(text),
@@ -469,34 +646,40 @@ export function MessageList({
       handleFeedback: (id, val) => latestHandlers.current.handleFeedback(id, val),
       handleRunCode: (code) => latestHandlers.current.handleRunCode(code),
       toggleToolExpand: (id) => latestHandlers.current.toggleToolExpand(id),
+      jumpToMessage,
     }),
-    []
+    [jumpToMessage]
   );
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
-        className="flex-1 space-y-6 overflow-y-auto px-4 pt-5 pb-2 overscroll-contain touch-pan-y [scrollbar-color:#E6E4DF_transparent] [scrollbar-width:thin]"
+        data-abot-scroll-root=""
+        className={
+          showWelcomeStage
+            ? "flex flex-1 flex-col overflow-hidden px-4"
+            : "flex-1 overflow-x-hidden overflow-y-auto px-4 overscroll-contain touch-pan-y [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#E6E4DF_transparent] data-[sub-ceiling=true]:[scrollbar-color:transparent_transparent]"
+        }
       >
         {showWelcomeStage ? (
-          <div className="flex h-full min-h-[280px] flex-col items-center justify-center pb-6 text-center">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-4 text-center">
             <div
               ref={heroMascotRef}
-              className="mb-3 flex items-center justify-center"
+              className="mb-3.5 flex items-center justify-center"
             >
               <AbotMascot
-                size={92}
+                size={116}
                 state={activityState}
                 showShadow
                 enablePoke
               />
             </div>
             <div ref={heroTextRef} className="max-w-[300px]">
-              <h3 className="text-[21px] font-semibold tracking-tight text-[#1F1E1C]">
+              <h3 className="text-[22px] font-semibold tracking-tight text-[#1F1E1C]">
                 Xin chào, mình là {title}
               </h3>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#5E5B55]">
+              <p className="mt-1.5 text-[14px] leading-relaxed text-[#5E5B55]">
                 Trợ lý quản trị lộ trình học tập và tra cứu kiến thức cá nhân.
               </p>
             </div>
@@ -521,22 +704,26 @@ export function MessageList({
             )}
           </div>
         ) : (
-          visibleMessages.map((msg, idx) => (
-            <MessageItem
-              key={msg.id}
-              msg={msg}
-              isLast={idx === visibleMessages.length - 1}
-              isLoading={isLoading}
-              isStreaming={isStreaming}
-              runningCode={runningCode}
-              expandedTools={expandedTools}
-              feedback={feedback}
-              copiedId={copiedId}
-              canWrite={canWrite}
-              showFeedback={showFeedback}
-              handlers={handlers}
-            />
-          ))
+          <div ref={contentRef} className="space-y-6 pt-5 pb-2">
+            {visibleMessages.map((msg, idx) => (
+              <MessageItem
+                key={msg.id}
+                msg={msg}
+                isLast={idx === visibleMessages.length - 1}
+                isLoading={isLoading}
+                isStreaming={isStreaming}
+                runningCode={runningCode}
+                expandedTools={expandedTools}
+                feedback={feedback}
+                copiedId={copiedId}
+                canWrite={canWrite}
+                showFeedback={showFeedback}
+                isHighlighted={highlightedId === msg.id}
+                executedPrompts={executedTargetsByMsg.get(msg.id)}
+                handlers={handlers}
+              />
+            ))}
+          </div>
         )}
         <div
           ref={bottomSentinelRef}
@@ -545,12 +732,15 @@ export function MessageList({
         />
       </div>
 
-      <ScrollBottomButton
-        scrollRef={scrollRef}
-        bottomSentinelRef={bottomSentinelRef}
-        isLoading={isLoading}
-        scrollToBottom={scrollToBottom}
-      />
+      {!showWelcomeStage && (
+        <ScrollBottomButton
+          scrollRef={scrollRef}
+          bottomSentinelRef={bottomSentinelRef}
+          autoFollowRef={autoFollowRef}
+          isLoading={isLoading}
+          scrollToBottom={scrollToBottom}
+        />
+      )}
     </div>
   );
 }

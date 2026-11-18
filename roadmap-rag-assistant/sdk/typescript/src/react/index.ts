@@ -14,7 +14,14 @@ export type {
 } from './types';
 
 // Rich Markdown Engine & Components
-export { ChatMarkdown, parseBlocks, renderInline, StreamingCaret } from './ChatMarkdown';
+export {
+  ChatMarkdown,
+  markdownToPlainText,
+  parseBlocks,
+  renderInline,
+  StreamingCaret,
+  stripInlineMarkdown,
+} from './ChatMarkdown';
 export type { ChatMarkdownProps, Block, ListItem } from './ChatMarkdown';
 export { CodeBlock } from './components/CodeBlock';
 export type { CodeBlockProps } from './components/CodeBlock';

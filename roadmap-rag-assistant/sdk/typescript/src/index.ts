@@ -45,9 +45,11 @@ export type {
 // Rich Markdown Engine & Components
 export {
   ChatMarkdown,
+  markdownToPlainText,
   parseBlocks,
   renderInline,
   StreamingCaret,
+  stripInlineMarkdown,
 } from './react/ChatMarkdown';
 export type { ChatMarkdownProps, Block, ListItem } from './react/ChatMarkdown';
 export { CodeBlock } from './react/components/CodeBlock';

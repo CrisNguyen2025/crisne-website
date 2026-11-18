@@ -239,16 +239,23 @@ describe("RoadmapChatbotWidget", () => {
       expect(screen.queryByText(/Xin chào, mình là Abot/)).toBeNull();
     });
 
-    it("reacts to clicks in init hero stage with happy and playful wink moods", () => {
+    it("cycles through cool brow-raise, joy, and AI insight moods on click", () => {
       const { container } = openWidget(false);
-      const heroSvg = container.querySelector('svg[width="92"]') as SVGSVGElement;
+      const scrollRoot = container.querySelector("[data-abot-scroll-root]") as HTMLElement;
+      expect(scrollRoot.className).toContain("overflow-hidden");
+      expect(scrollRoot.className).not.toContain("overflow-y-auto");
+
+      const heroSvg = container.querySelector('svg[width="116"]') as SVGSVGElement;
       expect(heroSvg).toBeTruthy();
+
+      fireEvent.click(heroSvg);
+      expect(heroSvg.querySelectorAll("ellipse")).toHaveLength(2);
 
       fireEvent.click(heroSvg);
       expect(heroSvg.querySelectorAll("ellipse")).toHaveLength(4);
 
       fireEvent.click(heroSvg);
-      expect(heroSvg.querySelectorAll("ellipse")).toHaveLength(3);
+      expect(heroSvg.querySelectorAll('circle[stroke-dasharray="4 2.5"]')).toHaveLength(2);
     });
   });
 });
