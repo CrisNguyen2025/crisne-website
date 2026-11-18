@@ -15,6 +15,7 @@ function ChatbotInner() {
   return (
     <RoadmapAssistantChatbot
       position="bottom-right"
+      zIndex={60}
       className="max-md:!bottom-[calc(1.25rem+env(safe-area-inset-bottom))]"
     />
   );

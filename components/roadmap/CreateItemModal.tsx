@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { sectionSpelling } from '@/lib/roadmap/sections';
 import { Dialog } from '@/components/ui/dialog';
 import { SectionField } from './SectionField';
 import { SECTIONS_ENABLED } from './sectionsEnabled';
@@ -53,7 +54,7 @@ function CreateItemForm({
       setIsSubmitting(true);
       setError('');
       await onSubmit(
-        SECTIONS_ENABLED ? section.trim() || null : null,
+        SECTIONS_ENABLED ? sectionSpelling(sections, section) : null,
         title.trim(),
         description.trim(),
         { openEditor }
@@ -80,7 +81,10 @@ function CreateItemForm({
       description={
         SECTIONS_ENABLED ? (
           <span className="mt-0.5 truncate text-xs text-muted-foreground">
-            Mục: <span className="font-medium text-foreground">{section.trim() || 'Chung'}</span>
+            Mục:{' '}
+            <span className="font-medium text-foreground">
+              {sectionSpelling(sections, section) ?? 'Chung'}
+            </span>
           </span>
         ) : undefined
       }

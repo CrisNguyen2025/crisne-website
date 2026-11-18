@@ -290,6 +290,7 @@ class HybridRagEngine:
                 lines.append(
                     f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/topic/{doc.topic_slug})\n"
                     + (f"- **Mô tả:** {doc.description}\n" if doc.description else "")
+                    + (f"- **Cấu trúc lộ trình:** {doc.content_text}\n" if doc.content_text else "")
                 )
 
         return "\n".join(lines)

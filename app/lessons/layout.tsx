@@ -1,10 +1,12 @@
-import React from 'react';
-import { EditorialHeader } from '@/components/roadmap/EditorialHeader';
+import React from "react";
 
-export default function LessonsLayout({ children }: { children: React.ReactNode }) {
+export default function LessonsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <div className="roadmap-theme min-h-dvh bg-background text-foreground flex flex-col">
-      <EditorialHeader />
       {children}
     </div>
   );

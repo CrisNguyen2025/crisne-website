@@ -31,9 +31,10 @@ function isCurrentClient(client: PrismaClient) {
   const delegates = client as PrismaClient & {
     roadmap?: unknown;
     roadmapItem?: unknown;
+    slugRedirect?: unknown;
   };
 
-  return Boolean(delegates.roadmap && delegates.roadmapItem);
+  return Boolean(delegates.roadmap && delegates.roadmapItem && delegates.slugRedirect);
 }
 
 export const prisma =

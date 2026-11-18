@@ -75,3 +75,31 @@ def test_mock_adapter_replaces_the_offline_default(mock_adapter):
     from rag_service.tools import get_adapter
 
     assert get_adapter() is mock_adapter
+
+
+@pytest.mark.asyncio
+async def test_sqlite_adapter_update_item_persists_status_and_timestamp(tmp_path, write_grant):
+    from pathlib import Path
+    import sqlite3
+
+    db_path = tmp_path / "adapter_status.db"
+    schema_sql = (Path(__file__).resolve().parent / "fixtures" / "schema.sql").read_text(encoding="utf-8")
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(schema_sql)
+
+    adapter = SqliteAdapter(str(db_path))
+    await adapter.create_topic("Backend", "Core backend")
+    created = await adapter.create_item("backend", "DB", "Indexing", "B-Tree")
+    item_id = created["id"]
+
+    updated = await adapter.update_item(item_id, status="learning")
+    assert updated["status"] == "learning"
+    assert updated["statusUpdatedAt"]
+
+    first_ts = updated["statusUpdatedAt"]
+    unchanged = await adapter.update_item(item_id, status="learning")
+    assert unchanged["status"] == "learning"
+    assert unchanged["statusUpdatedAt"] == first_ts
+
+    with pytest.raises(ValueError, match="Invalid lesson status"):
+        await adapter.update_item(item_id, status="mastered")

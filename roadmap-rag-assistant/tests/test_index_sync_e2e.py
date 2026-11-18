@@ -141,3 +141,46 @@ async def test_roadmap_index_sync_full_lifecycle(sync_env):
     assert err_status["synced"] is True
     assert err_status["current"] is False
     assert err_status["documents"] == docs_count_before
+
+
+@pytest.mark.asyncio
+async def test_topic_document_includes_section_overview_and_renders_context():
+    from rag_service.domains.roadmap.profile import _roadmap_document
+
+    adapter = MockRoadmapAdapter([
+        {
+            "id": "topic-ai",
+            "slug": "ai",
+            "title": "AI Engineering",
+            "description": None,
+            "items": [
+                {"id": "i1", "title": "Chunking", "section": "RAG", "description": "", "content": ""},
+                {"id": "i2", "title": "BM25", "section": "rag", "description": "", "content": ""},
+                {"id": "i3", "title": "Intro", "section": None, "description": "", "content": ""},
+            ],
+        },
+        {
+            "id": "topic-empty",
+            "slug": "empty",
+            "title": "Empty",
+            "description": "",
+            "items": [],
+        },
+    ])
+    worker = DatabaseIngestionWorker(adapter=adapter)
+    docs = await worker.ingest_all()
+    by_id = {d.id: d for d in docs}
+
+    ai_doc = by_id["topic-ai"]
+    assert ai_doc.description == ""
+    assert "None" not in ai_doc.searchable_text
+    assert ai_doc.content_text == "Tổng số bài: 3 bài học. Các mục: RAG (2 bài), Chung (1 bài)."
+    assert ai_doc.content_text in ai_doc.searchable_text
+    assert by_id["topic-empty"].content_text == ""
+
+    ctx_doc = _roadmap_document(ai_doc, 1.0)
+    assert "Cấu trúc lộ trình: Tổng số bài: 3 bài học. Các mục: RAG (2 bài), Chung (1 bài)." in ctx_doc.body
+
+    engine = MiniRagEngine()
+    rendered = engine.format_knowledge_context([(ai_doc, 1.0)])
+    assert "**Cấu trúc lộ trình:** Tổng số bài: 3 bài học. Các mục: RAG (2 bài), Chung (1 bài)." in rendered

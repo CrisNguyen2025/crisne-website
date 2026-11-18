@@ -1,3 +1,4 @@
+import type { ChecklistItem, SectionGroup } from './types';
 import { normalizeTitle } from './titles';
 
 /**
@@ -20,4 +21,14 @@ export function sectionsInOrder(items: { section: string | null }[]): (string | 
     if (!seen.has(key)) seen.set(key, item.section);
   }
   return [...seen.values()];
+}
+
+export function groupBySection(items: ChecklistItem[], sections: (string | null)[]): SectionGroup[] {
+  return sections.map((section) => {
+    const sectionKey = section ? normalizeTitle(section) : '';
+    return {
+      section,
+      items: items.filter((item) => (item.section ? normalizeTitle(item.section) : '') === sectionKey),
+    };
+  });
 }

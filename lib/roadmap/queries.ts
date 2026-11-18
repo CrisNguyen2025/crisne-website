@@ -5,7 +5,7 @@ import {
   withHeadingIds,
   type ContentHeading,
 } from '@/lib/roadmap/content-utils';
-import { sectionsInOrder } from '@/lib/roadmap/sections';
+import { groupBySection, sectionsInOrder } from '@/lib/roadmap/sections';
 import type { ChecklistItem, RoadmapMeta, SectionGroup } from '@/lib/roadmap/types';
 
 export interface PublicationTopicSummary extends RoadmapMeta {
@@ -50,13 +50,6 @@ export interface LessonPageData {
   allTopics: RoadmapMeta[];
 }
 
-function groupBySection(items: ChecklistItem[], sections: (string | null)[]): SectionGroup[] {
-  return sections.map((section) => ({
-    section,
-    items: items.filter((item) => (item.section ?? null) === section),
-  }));
-}
-
 export async function getAllTopicsMeta(): Promise<RoadmapMeta[]> {
   const rows = await prisma.roadmap.findMany({
     orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
@@ -68,6 +61,10 @@ export async function getAllTopicsMeta(): Promise<RoadmapMeta[]> {
       icon: true,
       order: true,
       isLocked: true,
+      items: {
+        orderBy: { order: 'asc' },
+        select: { section: true },
+      },
     },
   });
   return rows.map((r) => ({
@@ -78,6 +75,7 @@ export async function getAllTopicsMeta(): Promise<RoadmapMeta[]> {
     icon: r.icon,
     order: r.order,
     isLocked: Boolean(r.isLocked),
+    sectionNames: sectionsInOrder(r.items ?? []).filter((s): s is string => s !== null),
   }));
 }
 

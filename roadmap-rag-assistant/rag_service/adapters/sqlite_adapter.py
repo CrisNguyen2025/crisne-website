@@ -291,6 +291,14 @@ class SqliteAdapter:
                 others = [s.get("section") for s in siblings if s["id"] != item_id]
                 sets.append("section = ?")
                 args.append(resolve_section(others, kwargs["section"]))  # type: ignore[arg-type]
+            if kwargs.get("status") is not None:
+                status = str(kwargs["status"]).strip().lower()
+                if status not in ("known", "learning", "target"):
+                    raise ValueError(f"Invalid lesson status '{status}'")
+                current_status = (current["status"] or "known") if "status" in current.keys() else "known"
+                if status != current_status:
+                    sets.extend(["status = ?", "statusUpdatedAt = ?"])
+                    args.extend([status, _now_iso()])
             await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))
             await db.commit()
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))

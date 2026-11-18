@@ -13,7 +13,16 @@ from types import SimpleNamespace
 
 from rag_service.auth import set_actor
 from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
-from rag_service.domains.roadmap.lesson_content import lesson_slugs, markdown_to_html, parse_content_request
+from rag_service.domains.roadmap.lesson_content import (
+    detect_template_kind,
+    extract_html_outline,
+    is_template_placeholder_only,
+    lesson_slugs,
+    markdown_to_html,
+    merge_h2_section,
+    parse_content_request,
+    validate_lesson_draft,
+)
 from rag_service.state import session_store
 
 TOPICS = [
@@ -172,3 +181,133 @@ def test_vague_change_names_the_page_topic_not_the_threads_last(mock_adapter):
     text, _ = _turn(NextGenRoadmapAgent(llm_model=None), "thêm nội dung cho topic này", thread,
                     context={"roadmapSlug": "frontend"})
     assert "Bạn muốn thêm gì vào topic **Frontend**" in text and "UI/UX Design" not in text
+
+
+def test_draft_prompt_includes_topic_description_when_present(mock_adapter):
+    set_actor("owner")
+    _setup(mock_adapter, {**FRONTEND, "description": "Lộ trình giao diện web với React và Next.js"})
+    llm = FakeLLM()
+    _turn(NextGenRoadmapAgent(llm_model=llm), "thêm nội dung cho bài viết mặc định", f"s-{uuid.uuid4()}",
+          context={"roadmapSlug": "frontend"})
+    assert "Mô tả topic: Lộ trình giao diện web với React và Next.js" in llm.prompts[0]
+
+    _setup(mock_adapter, FRONTEND)
+    llm_no_desc = FakeLLM()
+    _turn(NextGenRoadmapAgent(llm_model=llm_no_desc), "thêm nội dung cho bài viết mặc định", f"s-{uuid.uuid4()}",
+          context={"roadmapSlug": "frontend"})
+    assert "Mô tả topic:" not in llm_no_desc.prompts[0]
+
+
+def test_this_lesson_matches_disambiguated_item_slug(mock_adapter):
+    set_actor("owner")
+    topic_with_slug = {
+        **FRONTEND,
+        "items": [{"id": "l-2", "slug": "caching-frontend", "title": "Caching", "section": None, "description": "", "content": ""}],
+    }
+    _setup(mock_adapter, topic_with_slug)
+    text, _ = _turn(
+        NextGenRoadmapAgent(llm_model=FakeLLM()),
+        "viết nội dung chi tiết cho bài này",
+        f"s-{uuid.uuid4()}",
+        context={"roadmapSlug": "frontend", "itemId": "caching-frontend"},
+    )
+    assert "NHÁP NỘI DUNG" in text and "Caching" in text
+    assert "On this page dự kiến:" in text and "Giá trị mặc định" in text
+
+
+def test_aci_template_detection_outline_and_validation():
+    assert detect_template_kind("so sánh Redis vs Memcached") == "comparison"
+    assert detect_template_kind("hướng dẫn triển khai Docker bước đầu") == "implementation"
+    assert detect_template_kind("thêm nội dung cho bài Caching") == "standard"
+
+    outline = extract_html_outline("<h1>Ignored</h1><h2>Tổng quan</h2><h3>Chi tiết</h3><h4>Ignored</h4>")
+    assert outline == [(2, "Tổng quan"), (3, "Chi tiết")]
+
+    assert validate_lesson_draft("<p>Không có heading</p>")[0] is False
+    assert validate_lesson_draft("<h2>Mục 1</h2><p>TODO: viết sau</p>")[0] is False
+    assert validate_lesson_draft("<h2>Mục 1</h2><p>Nội dung đầy đủ.</p>") == (True, None)
+
+
+def test_aci_output_guard_retries_once_when_first_draft_fails_validation(mock_adapter):
+    set_actor("owner")
+    _setup(mock_adapter)
+
+    class RetryLLM:
+        def __init__(self) -> None:
+            self.prompts: list[str] = []
+
+        async def ainvoke(self, prompt):
+            self.prompts.append(prompt)
+            if len(self.prompts) == 1:
+                return SimpleNamespace(content="Đoạn văn thiếu heading")
+            return SimpleNamespace(content="## Tổng quan & Bài toán\n\nGiải thích rõ ràng.")
+
+    llm = RetryLLM()
+    text, _ = _turn(
+        NextGenRoadmapAgent(llm_model=llm),
+        "thêm nội dung chi tiết cho bài viết mặc định",
+        f"s-{uuid.uuid4()}",
+        context={"roadmapSlug": "frontend"},
+    )
+    assert len(llm.prompts) == 2
+    assert "LƯU Ý SỬA LỖI LẦN TRƯỚC" in llm.prompts[1]
+    assert "NHÁP NỘI DUNG" in text and "Tổng quan & Bài toán" in text
+
+
+def test_aci_output_guard_blocks_invalid_draft_after_retry(mock_adapter):
+    set_actor("owner")
+    _setup(mock_adapter)
+    thread = f"s-{uuid.uuid4()}"
+    text, _ = _turn(
+        NextGenRoadmapAgent(llm_model=FakeLLM("TODO: chưa viết")),
+        "thêm nội dung chi tiết cho bài viết mặc định",
+        thread,
+        context={"roadmapSlug": "frontend"},
+    )
+    assert "chưa tạo được bản nháp đạt chuẩn" in text
+    assert session_store.get_or_create(thread).pending_content_draft is None
+    mock_adapter.update_item_content.assert_not_awaited()
+
+
+def test_aci_fill_h2_section_replaces_only_targeted_section(mock_adapter):
+    set_actor("owner")
+    existing = (
+        "<h2>Tổng quan &amp; Bài toán</h2><p>Giữ nguyên phần này.</p>"
+        "<h2>Ví dụ &amp; Áp dụng thực tế</h2><p>Đang trống.</p>"
+        "<h2>Lưu ý &amp; Trade-off</h2><p>Giữ phần cuối.</p>"
+    )
+    with_sections = {**FRONTEND, "items": [{**FRONTEND["items"][0], "content": existing}]}
+    _setup(mock_adapter, with_sections)
+    llm = FakeLLM("## Ví dụ & Áp dụng thực tế\n\nVí dụ Redis cache thực tế.")
+    agent, thread = NextGenRoadmapAgent(llm_model=llm), f"s-{uuid.uuid4()}"
+
+    req = parse_content_request("điền mục Ví dụ & Áp dụng thực tế cho bài này")
+    assert req is not None and req.target_h2 == "Ví dụ & Áp dụng thực tế"
+
+    text, _ = _turn(agent, "điền mục Ví dụ & Áp dụng thực tế cho bài này", thread,
+                    context={"roadmapSlug": "frontend", "itemId": "l-1"})
+    assert 'Điền mục "Ví dụ & Áp dụng thực tế"' in text
+    _turn(agent, "ok", thread)
+    _, saved_html = mock_adapter.update_item_content.await_args.args
+    assert "Giữ nguyên phần này." in saved_html
+    assert "Ví dụ Redis cache thực tế." in saved_html
+    assert "Đang trống." not in saved_html
+    assert "Giữ phần cuối." in saved_html
+
+
+def test_aci_replaces_template_placeholder_only_content(mock_adapter):
+    set_actor("owner")
+    placeholder_html = (
+        "<h2>Tổng quan &amp; Bài toán</h2>"
+        "<p>Khái niệm này giải quyết vấn đề gì và nằm ở đâu trong bức tranh tổng thể?</p>"
+    )
+    assert is_template_placeholder_only(placeholder_html) is True
+    assert merge_h2_section("", "Mục A", "<p>Body</p>") == "<h2>Mục A</h2><p>Body</p>"
+
+    with_placeholder = {**FRONTEND, "items": [{**FRONTEND["items"][0], "content": placeholder_html}]}
+    _setup(mock_adapter, with_placeholder)
+    agent, thread = NextGenRoadmapAgent(llm_model=FakeLLM("## Tổng quan & Bài toán\n\nNội dung thật.")), f"s-{uuid.uuid4()}"
+    _turn(agent, "thêm nội dung cho bài viết mặc định", thread, context={"roadmapSlug": "frontend"})
+    _turn(agent, "ok", thread)
+    _, saved_html = mock_adapter.update_item_content.await_args.args
+    assert saved_html == "<h2>Tổng quan &amp; Bài toán</h2><p>Nội dung thật.</p>"

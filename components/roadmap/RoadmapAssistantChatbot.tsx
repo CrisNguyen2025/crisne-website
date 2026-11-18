@@ -2,6 +2,7 @@
 
 import {
   getRoadmapPageContext,
+  isRoadmapWriteTool,
   ROADMAP_ASSISTANT_BASE_URL,
   runWebMcpCommand,
 } from "@/logic/roadmap/roadmapAssistantService";
@@ -81,14 +82,7 @@ export function RoadmapAssistantChatbot({
       onToolExecuted(toolName, result);
     }
 
-    // If a tool modified data, dispatch a window event for real-time roadmap updates
-    if (
-      typeof window !== "undefined" &&
-      (toolName.startsWith("create_") ||
-        toolName.startsWith("update_") ||
-        toolName.startsWith("delete_") ||
-        toolName.startsWith("generate_"))
-    ) {
+    if (typeof window !== "undefined" && isRoadmapWriteTool(toolName)) {
       window.dispatchEvent(
         new CustomEvent("roadmap:updated", {
           detail: { toolName, result },

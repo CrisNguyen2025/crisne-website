@@ -30,7 +30,7 @@ vi.mock('@/lib/roadmap/rag-reindex', () => ({ notifyRoadmapChanged: notifyMock }
 
 import { PATCH } from '@/app/api/v1/roadmaps/items/[id]/route';
 import { resolveLessonGlobal } from '@/lib/roadmap/resolveRoadmap';
-import { getRoadmapPageContext } from '@/logic/roadmap/roadmapAssistantService';
+import { getRoadmapPageContext, isRoadmapWriteTool } from '@/logic/roadmap/roadmapAssistantService';
 
 const currentItem = {
   id: 'item-1',
@@ -172,6 +172,93 @@ describe('PATCH /api/v1/roadmaps/items/[id] slug, redirect, and topic move', () 
       roadmapSlug: 'ai-architecture',
       itemId: 'hybrid-search',
       section: 'Retrieval',
+    });
+  });
+
+  it('isRoadmapWriteTool covers bulk import and section rename while excluding read/draft tools', () => {
+    for (const writeTool of [
+      'create_item',
+      'update_item',
+      'update_item_content',
+      'delete_item',
+      'reorder_items',
+      'rename_section',
+      'import_items_from_text',
+    ]) {
+      expect(isRoadmapWriteTool(writeTool)).toBe(true);
+    }
+
+    for (const nonWriteTool of [
+      'list_topics',
+      'list_sections',
+      'get_lesson_status',
+      'draft_item_content',
+      'search_live_knowledge',
+    ]) {
+      expect(isRoadmapWriteTool(nonWriteTool)).toBe(false);
+    }
+  });
+
+  it('runs slug update + redirect writes inside prisma.$transaction and aborts before reindex on failure', async () => {
+    const txSpy = vi.fn(async (fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock));
+    (prismaMock as Record<string, unknown>).$transaction = txSpy;
+
+    try {
+      prismaMock.roadmapItem.findUnique
+        .mockResolvedValueOnce({ ...currentItem })
+        .mockResolvedValueOnce(null);
+
+      const okRes = await PATCH(patch({ slug: 'knowledge-base' }), context);
+      expect(okRes.status).toBe(200);
+      expect(txSpy).toHaveBeenCalledOnce();
+      expect(notifyMock).toHaveBeenCalledOnce();
+
+      vi.clearAllMocks();
+      prismaMock.roadmapItem.findUnique
+        .mockResolvedValueOnce({ ...currentItem })
+        .mockResolvedValueOnce(null);
+      prismaMock.roadmapItem.update.mockResolvedValueOnce({ ...currentItem, slug: 'knowledge-base' });
+      prismaMock.slugRedirect.upsert.mockRejectedValueOnce(
+        Object.assign(new Error('The table `main.SlugRedirect` does not exist'), { code: 'P2021' })
+      );
+
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const failRes = await PATCH(patch({ slug: 'knowledge-base' }), context);
+      errSpy.mockRestore();
+
+      expect(failRes.status).toBe(500);
+      expect(txSpy).toHaveBeenCalledOnce();
+      expect(notifyMock).not.toHaveBeenCalled();
+    } finally {
+      delete (prismaMock as Record<string, unknown>).$transaction;
+    }
+  });
+
+  it('returns 400 on blank/invalid slug and 409 on P2002 unique constraint race', async () => {
+    const blankRes = await PATCH(patch({ slug: '   ' }), context);
+    expect(blankRes.status).toBe(400);
+
+    const symbolsRes = await PATCH(patch({ slug: '???' }), context);
+    expect(symbolsRes.status).toBe(400);
+
+    prismaMock.roadmapItem.findUnique
+      .mockResolvedValueOnce({ ...currentItem })
+      .mockResolvedValueOnce(null);
+    prismaMock.roadmapItem.update.mockRejectedValueOnce(
+      Object.assign(new Error('Unique constraint failed on the fields: (`slug`)'), { code: 'P2002' })
+    );
+
+    const raceRes = await PATCH(patch({ slug: 'race-slug' }), context);
+    expect(raceRes.status).toBe(409);
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it('updates title when only capitalization changes on the same lesson', async () => {
+    const res = await PATCH(patch({ title: 'old title' }), context);
+    expect(res.status).toBe(200);
+    expect(prismaMock.roadmapItem.update).toHaveBeenCalledWith({
+      where: { id: 'item-1' },
+      data: { title: 'old title' },
     });
   });
 });

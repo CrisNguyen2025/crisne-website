@@ -9,11 +9,13 @@ Provides pure sorting/filtering functions for:
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional, Sequence
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap.lesson_content import matches_page_item
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.policy import KNOWN_CUE, REVIEW_CUE, asks_next_lesson
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
@@ -244,25 +246,33 @@ def parse_status_change_request(text: str) -> Optional[StatusChangeRequest]:
 # ── LessonStatusCommands Mixin ─────────────────────────────────────────────
 
 
+async def _all_owner_items(adapter: Any) -> list[dict]:
+    """Every lesson across all topics with its Owner status preserved (never /full-export, ADR-0010)."""
+    topics = [t for t in (await adapter.list_topics() or []) if t.get("slug")]
+    details = await asyncio.gather(*(adapter.get_topic(t["slug"]) for t in topics))
+    all_items: list[dict] = []
+    for t, detail in zip(topics, details):
+        if not detail:
+            continue
+        for it in detail.get("items") or []:
+            all_items.append({
+                **it,
+                "topic_title": detail.get("title") or t.get("title"),
+                "topic_slug": detail.get("slug") or t.get("slug"),
+            })
+    return all_items
+
+
 class LessonStatusCommands:
     async def _resolve_target_topic(
         self, topic_hint: Optional[str], content: str, page_context, session_ctx
     ) -> Optional[dict]:
         """Find the topic for status queries/commands."""
         adapter = get_adapter()
-        page_slug = (page_context or {}).get("roadmapSlug")
-        if page_slug:
-            try:
-                top = await adapter.get_topic(page_slug)
-                if top:
-                    return top
-            except Exception:
-                pass
-
         candidates = [topic_hint] if topic_hint else []
         candidates += [
             await topic_named_in_message(content),
-            page_slug,
+            (page_context or {}).get("roadmapSlug"),
             session_ctx.active_topic_slug,
         ]
         for ref in candidates:
@@ -321,7 +331,7 @@ class LessonStatusCommands:
             else:
                 current_item_id = (page_context or {}).get("itemId")
                 if current_item_id:
-                    lesson = next((i for i in items if i.get("id") == current_item_id), None)
+                    lesson = next((i for i in items if matches_page_item(i, current_item_id)), None)
 
             if not lesson:
                 msg = f"Không tìm thấy bài '{req.lesson}' trong topic '{topic.get('title')}'" if req.lesson else "Chưa xác định được bài học cần đổi trạng thái"
@@ -405,15 +415,7 @@ class LessonStatusCommands:
                 learning, target = filter_and_sort_next_lessons(items)
                 reply = format_what_i_know_reply(known, topic.get("title") or topic.get("slug"), learning, target)
             else:
-                # If no specific topic, summarize across all topics
-                all_topics = await adapter.export_full_hierarchy()
-                all_items = []
-                for t in all_topics:
-                    for it in t.get("items") or []:
-                        it_copy = dict(it)
-                        it_copy["topic_title"] = t.get("title")
-                        it_copy["topic_slug"] = t.get("slug")
-                        all_items.append(it_copy)
+                all_items = await _all_owner_items(adapter)
                 known = filter_known_lessons(all_items)
                 learning, target = filter_and_sort_next_lessons(all_items)
                 reply = format_what_i_know_reply(known, "toàn bộ kho kiến thức", learning, target)
@@ -432,14 +434,7 @@ class LessonStatusCommands:
                 sorted_review = filter_and_sort_review_lessons(items)
                 reply = format_review_reply(sorted_review, topic.get("title"))
             else:
-                all_topics = await adapter.export_full_hierarchy()
-                all_items = []
-                for t in all_topics:
-                    for it in t.get("items") or []:
-                        it_copy = dict(it)
-                        it_copy["topic_title"] = t.get("title")
-                        it_copy["topic_slug"] = t.get("slug")
-                        all_items.append(it_copy)
+                all_items = await _all_owner_items(adapter)
                 sorted_review = filter_and_sort_review_lessons(all_items)
                 reply = format_review_reply(sorted_review)
 
@@ -457,14 +452,7 @@ class LessonStatusCommands:
                 learning, target = filter_and_sort_next_lessons(items)
                 reply = format_next_learning_reply(learning, target, topic.get("title"))
             else:
-                all_topics = await adapter.export_full_hierarchy()
-                all_items = []
-                for t in all_topics:
-                    for it in t.get("items") or []:
-                        it_copy = dict(it)
-                        it_copy["topic_title"] = t.get("title")
-                        it_copy["topic_slug"] = t.get("slug")
-                        all_items.append(it_copy)
+                all_items = await _all_owner_items(adapter)
                 learning, target = filter_and_sort_next_lessons(all_items)
                 reply = format_next_learning_reply(learning, target)
 

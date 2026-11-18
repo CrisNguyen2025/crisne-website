@@ -13,7 +13,7 @@ A lesson belongs to a topic and may name a section (mục) of it. Tools:
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 from langchain.tools import tool
 from pydantic import BaseModel, Field
@@ -84,12 +84,41 @@ class RenameSectionInput(BaseModel):
     to_name: str = Field(description="Tên mục mới; trùng mục có sẵn thì hai mục được gộp")
 
 
+class DraftLessonContentInput(BaseModel):
+    """Structured ACI contract for drafting a lesson body aligned with `On this page`."""
+
+    topic_slug: str = Field(description="Slug của Topic (ưu tiên lấy từ page_context, không tự đoán).")
+    lesson_ref: str = Field(
+        description="ID, slug hoặc tên chính xác của Lesson (lấy từ page_context khi user nói 'bài này')."
+    )
+    template_kind: Literal["standard", "comparison", "implementation"] = Field(
+        default="standard",
+        description="Khung H2 chuẩn dùng để dựng bài và mục lục On this page.",
+    )
+    write_mode: Literal["create_or_replace_empty", "append", "fill_h2_section"] = Field(
+        default="create_or_replace_empty",
+        description="create_or_replace_empty cho bài rỗng/chỉ có khung; append khi đã có bài thật; fill_h2_section để điền 1 mục H2.",
+    )
+    target_h2: Optional[str] = Field(
+        default=None,
+        description="Tên mục H2 cần điền khi write_mode='fill_h2_section'.",
+    )
+
+
 class UpdateItemContentInput(BaseModel):
-    """Input for adding a body to a lesson."""
+    """Input for writing or updating a lesson body."""
 
     topic: str = Field(description="Slug của topic chứa bài")
     item_id: str = Field(description="ID của bài")
-    html: str = Field(description="Nội dung (HTML) thêm vào cuối bài")
+    html: str = Field(description="Nội dung (HTML) đã được Preview và Owner xác nhận")
+    write_mode: Literal["append", "create_or_replace_empty", "fill_h2_section"] = Field(
+        default="append",
+        description="Chế độ ghi nội dung: append (nối cuối), create_or_replace_empty (ghi mới nếu rỗng), fill_h2_section (thay đúng 1 mục H2).",
+    )
+    target_h2: Optional[str] = Field(
+        default=None,
+        description="Tên mục H2 mục tiêu khi write_mode='fill_h2_section'.",
+    )
 
 
 class DeleteItemInput(BaseModel):
@@ -251,11 +280,18 @@ async def rename_section(topic: str, from_name: str, to_name: str) -> str:
 
 
 @tool(args_schema=UpdateItemContentInput)
-async def update_item_content(topic: str, item_id: str, html: str) -> str:
-    """Thêm nội dung vào cuối một bài học; nội dung đang có được giữ nguyên.
+async def update_item_content(
+    topic: str,
+    item_id: str,
+    html: str,
+    write_mode: str = "append",
+    target_h2: Optional[str] = None,
+) -> str:
+    """Ghi nội dung vào một bài học theo `write_mode` sau khi Owner xác nhận bản nháp.
 
     Chỉ chạy sau khi Owner xác nhận bản nháp (lesson_content.py).
     """
+    from rag_service.domains.roadmap.lesson_content import is_template_placeholder_only, merge_h2_section
     from rag_service.tools import get_adapter
 
     adapter = get_adapter()
@@ -265,7 +301,13 @@ async def update_item_content(topic: str, item_id: str, html: str) -> str:
         return f"❌ Không tìm thấy bài này trong topic '{topic}' nên mình chưa ghi gì."
     # Read at confirm time, so an edit made on the page while the preview waited is kept
     existing = (lesson.get("content") or "").strip()
-    await adapter.update_item_content(item_id, f"{existing}\n{html}" if existing else html)
+    if write_mode == "fill_h2_section" and target_h2:
+        next_html = merge_h2_section(existing, target_h2, html)
+    elif write_mode == "create_or_replace_empty" and (not existing or is_template_placeholder_only(existing)):
+        next_html = html
+    else:
+        next_html = f"{existing}\n{html}" if existing else html
+    await adapter.update_item_content(item_id, next_html)
     return f"✅ Đã thêm nội dung vào bài '{lesson.get('title') or item_id}'"
 
 

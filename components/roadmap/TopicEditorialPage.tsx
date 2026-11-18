@@ -1,97 +1,82 @@
-'use client';
+"use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { FolderPlus, Pencil, Plus, Trash2 } from 'lucide-react';
-import type { ChecklistItem, RoadmapMeta, SectionGroup } from '@/lib/roadmap/types';
-import type { LessonStatus } from '@/lib/roadmap/status';
-import {
-  getCachedOwnerStatuses,
-  invalidateCachedOwnerStatuses,
-  setCachedOwnerStatuses,
-} from '@/lib/roadmap/owner-status-cache';
-import { markPendingLessonWrite } from '@/lib/roadmap/pending-write';
-import { splitSectionLabel } from '@/lib/roadmap/section-label';
-import { cn } from '@/lib/utils';
-import { useCanWrite } from '@/hooks/use-can-write';
-import { useToast } from '@/components/ui/toast';
-import { ActionMenu } from '@/components/ui/action-menu';
-import * as roadmapService from '@/logic/roadmap/roadmapService';
-import { RoadmapMap } from './RoadmapMap';
-import { CreateItemModal, type CreateItemOptions } from './CreateItemModal';
-import { EditTopicModal } from './EditTopicModal';
-import { EditSectionModal } from './EditSectionModal';
-import { SECTIONS_ENABLED } from './sectionsEnabled';
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Plus, ArrowUpDown, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { markPendingLessonWrite } from "@/lib/roadmap/pending-write";
+import { splitSectionLabel } from "@/lib/roadmap/section-label";
+import { groupBySection } from "@/lib/roadmap/sections";
+import type { LessonStatus } from "@/lib/roadmap/status";
+import type {
+  ChecklistItem,
+  RoadmapMeta,
+  SectionGroup,
+} from "@/lib/roadmap/types";
+import { useCanWrite } from "@/hooks/use-can-write";
+import { ActionMenu } from "@/components/ui/action-menu";
+import { useToast } from "@/components/ui/toast";
+import * as roadmapService from "@/logic/roadmap/roadmapService";
+import { cn } from "@/lib/utils";
+import { CreateItemModal, type CreateItemOptions } from "./CreateItemModal";
+import { EditSectionModal } from "./EditSectionModal";
+import { EditTopicModal } from "./EditTopicModal";
+import { LectureShell } from "./LectureShell";
+import { LessonStatusBadge } from "./LessonStatus";
+import { RoadmapMap } from "./RoadmapMap";
+import { SECTIONS_ENABLED } from "./sectionsEnabled";
+import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
 interface TopicEditorialPageProps {
   topic: RoadmapMeta & { updatedAt: string };
   initialItems: ChecklistItem[];
   initialSections: (string | null)[];
-  initialSelectedSection?: string | null | 'all';
+  initialSelectedSection?: string | null | "all";
 }
+
+const STATUS_DOT: Record<LessonStatus, string> = {
+  target: "bg-[var(--status-target)]",
+  learning: "bg-[var(--status-learning)]",
+  known: "",
+};
 
 export function TopicEditorialPage({
   topic,
   initialItems,
   initialSections,
-  initialSelectedSection = 'all',
+  initialSelectedSection = "all",
 }: TopicEditorialPageProps) {
   const router = useRouter();
   const { toast } = useToast();
   const canWrite = useCanWrite();
-  const [ownerStatusById, setOwnerStatusById] = useState<Record<string, LessonStatus>>(
-    () => getCachedOwnerStatuses(topic.slug) ?? {}
+  const { ownerStatusById, invalidateStatuses } = useTopicOwnerStatuses(
+    topic.slug,
+    canWrite
   );
-  const [selectedSection, setSelectedSection] = useState<string | null | 'all'>(
-    initialSelectedSection
-  );
+
   const [optimisticOrder, setOptimisticOrder] = useState<{
     baseKey: string;
     items: ChecklistItem[];
   } | null>(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const [isCreateItemOpen, setIsCreateItemOpen] = useState(false);
   const [targetSection, setTargetSection] = useState<string | null>(null);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
   const [renamingSection, setRenamingSection] = useState<string | null>(null);
 
-  const loadOwnerStatuses = useCallback(() => {
-    if (!canWrite) return;
-    roadmapService
-      .fetchRoadmapBySlug(topic.slug, { mode: 'outline' })
-      .then((data) => {
-        const next: Record<string, LessonStatus> = {};
-        for (const it of data.items) {
-          if (it.status) next[it.id] = it.status;
-        }
-        setCachedOwnerStatuses(topic.slug, next);
-        setOwnerStatusById(next);
-      })
-      .catch(() => {});
-  }, [canWrite, topic.slug]);
-
-  useEffect(() => {
-    loadOwnerStatuses();
-  }, [loadOwnerStatuses]);
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      invalidateCachedOwnerStatuses(topic.slug);
-      router.refresh();
-      loadOwnerStatuses();
-    };
-    window.addEventListener('roadmap:updated', handleUpdate);
-    return () => window.removeEventListener('roadmap:updated', handleUpdate);
-  }, [router, loadOwnerStatuses, topic.slug]);
-
   const baseKey = useMemo(
-    () => initialItems.map((it) => `${it.id}:${it.section ?? ''}:${it.order}`).join('|'),
+    () =>
+      initialItems
+        .map((it) => `${it.id}:${it.section ?? ""}:${it.order}`)
+        .join("|"),
     [initialItems]
   );
 
   const items = useMemo<ChecklistItem[]>(() => {
     const sourceItems =
-      optimisticOrder && optimisticOrder.baseKey === baseKey ? optimisticOrder.items : initialItems;
+      optimisticOrder && optimisticOrder.baseKey === baseKey
+        ? optimisticOrder.items
+        : initialItems;
     if (!canWrite) return sourceItems;
     return sourceItems.map((it) =>
       ownerStatusById[it.id] ? { ...it, status: ownerStatusById[it.id] } : it
@@ -103,48 +88,60 @@ export function TopicEditorialPage({
     [initialSections]
   );
 
-  const activeSection =
-    selectedSection === 'all' || initialSections.includes(selectedSection)
-      ? selectedSection
-      : 'all';
-
-  const allSectionGroups = useMemo<SectionGroup[]>(() => {
+  const siblingGroups = useMemo<SectionGroup[]>(() => {
     if (!SECTIONS_ENABLED) {
       return [{ section: null, items }];
     }
-    return initialSections.map((sec) => ({
-      section: sec,
-      items: items.filter((it) => (it.section ?? null) === sec),
-    }));
-  }, [initialSections, items]);
+    return groupBySection(items, initialSections);
+  }, [items, initialSections]);
 
-  const visibleSectionGroups = useMemo<SectionGroup[]>(() => {
-    if (!SECTIONS_ENABLED || activeSection === 'all') {
-      return allSectionGroups;
-    }
-    return allSectionGroups.filter((g) => g.section === activeSection);
-  }, [allSectionGroups, activeSection]);
+  const flatLessons = useMemo(
+    () => siblingGroups.flatMap((g) => g.items),
+    [siblingGroups]
+  );
+  const firstLesson = flatLessons[0];
 
   const ownerTotals = useMemo(() => {
     let learning = 0;
     let target = 0;
     for (const it of items) {
-      if (it.status === 'learning') learning += 1;
-      else if (it.status === 'target') target += 1;
+      if (it.status === "learning") learning += 1;
+      else if (it.status === "target") target += 1;
     }
     return { learning, target };
   }, [items]);
 
-  const handleSelectSection = (next: string | null | 'all') => {
-    setSelectedSection(next);
-    const url = new URL(window.location.href);
-    if (next === 'all' || next === null) {
-      url.searchParams.delete('section');
-    } else {
-      url.searchParams.set('section', next);
+  const focusItems = useMemo(() => {
+    if (!canWrite) return [];
+    const learning = flatLessons.filter((it) => it.status === "learning");
+    const target = flatLessons.filter((it) => it.status === "target");
+    return [...learning, ...target].slice(0, 6);
+  }, [canWrite, flatLessons]);
+
+  const isSingleUnscopedGroup =
+    siblingGroups.length === 1 && siblingGroups[0].section === null;
+
+  useEffect(() => {
+    if (!initialSelectedSection || initialSelectedSection === "all") return;
+    const idx = siblingGroups.findIndex(
+      (g) => g.section === initialSelectedSection
+    );
+    if (idx < 0) return;
+    const el = document.getElementById(`sec-${idx + 1}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-    window.history.replaceState(null, '', `${url.pathname}${url.search}`);
-  };
+  }, [initialSelectedSection, siblingGroups]);
+
+  const defaultOpenSectionKey = useMemo(() => {
+    if (initialSelectedSection !== "all") {
+      return initialSelectedSection ?? "__none__";
+    }
+    if (namedSections.length > 0) {
+      return namedSections[0];
+    }
+    return siblingGroups[0]?.section ?? "__none__";
+  }, [initialSelectedSection, namedSections, siblingGroups]);
 
   const handleCreateItem = async (
     section: string | null,
@@ -159,225 +156,214 @@ export function TopicEditorialPage({
         title,
         description,
       });
-      invalidateCachedOwnerStatuses(topic.slug);
-      window.dispatchEvent(new CustomEvent('roadmap:updated'));
+      invalidateStatuses();
+      window.dispatchEvent(new CustomEvent("roadmap:updated"));
       if (options?.openEditor && item?.slug) {
         markPendingLessonWrite(item.slug);
         router.push(`/lessons/${item.slug}`);
         return;
       }
-      toast(`Đã thêm bài "${title}"`, 'success');
+      toast(`Đã thêm bài "${title}"`, "success");
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Không thêm được bài học.', 'error');
+      toast(
+        err instanceof Error ? err.message : "Không thêm được bài học.",
+        "error"
+      );
     }
   };
 
-  const handleReorderSection = async (section: string | null, reordered: ChecklistItem[]) => {
+  const handleReorderSection = async (
+    section: string | null,
+    reordered: ChecklistItem[]
+  ) => {
     const nextItems = SECTIONS_ENABLED
-      ? allSectionGroups.flatMap((g) => (g.section === section ? reordered : g.items))
+      ? siblingGroups.flatMap((g) =>
+          g.section === section ? reordered : g.items
+        )
       : reordered;
     setOptimisticOrder({ baseKey, items: nextItems });
     try {
       await roadmapService.reorderItems({
         orderedItemIds: nextItems.map((it) => it.id),
       });
-      window.dispatchEvent(new CustomEvent('roadmap:updated'));
+      window.dispatchEvent(new CustomEvent("roadmap:updated"));
     } catch {
       setOptimisticOrder(null);
-      toast('Không sắp xếp lại được bài học.', 'error');
+      toast("Không sắp xếp lại được bài học.", "error");
     }
   };
 
   const handleEditTopic = async (title: string, description?: string) => {
-    await roadmapService.updateRoadmapBySlug(topic.slug, { title, description });
-    toast('Đã cập nhật Topic', 'success');
-    window.dispatchEvent(new CustomEvent('roadmap:updated'));
+    await roadmapService.updateRoadmapBySlug(topic.slug, {
+      title,
+      description,
+    });
+    toast("Đã cập nhật Topic", "success");
+    window.dispatchEvent(new CustomEvent("roadmap:updated"));
   };
 
   const handleDeleteTopic = async () => {
     try {
       await roadmapService.deleteRoadmapBySlug(topic.slug);
-      invalidateCachedOwnerStatuses(topic.slug);
-      toast(`Đã xoá topic "${topic.title}"`, 'success');
-      router.push('/');
+      invalidateStatuses();
+      toast(`Đã xoá topic "${topic.title}"`, "success");
+      router.push("/");
       router.refresh();
     } catch {
-      toast('Không xoá được topic.', 'error');
+      toast("Không xoá được topic.", "error");
     }
   };
 
   const handleRenameSection = async (from: string, to: string) => {
     try {
       await roadmapService.renameSection(topic.slug, { from, to });
-      if (activeSection === from) {
-        handleSelectSection(to);
-      }
-      toast(`Đã đổi tên mục thành "${to}"`, 'success');
-      window.dispatchEvent(new CustomEvent('roadmap:updated'));
+      toast(`Đã đổi tên mục thành "${to}"`, "success");
+      window.dispatchEvent(new CustomEvent("roadmap:updated"));
     } catch {
-      toast('Không đổi tên được mục.', 'error');
+      toast("Không đổi tên được mục.", "error");
     }
   };
 
   const handleDissolveSection = async (section: string) => {
     try {
       await roadmapService.dissolveSection(topic.slug, section);
-      if (activeSection === section) {
-        handleSelectSection('all');
-      }
-      toast(`Đã bỏ mục "${section}"`, 'success');
-      window.dispatchEvent(new CustomEvent('roadmap:updated'));
+      toast(`Đã bỏ mục "${section}"`, "success");
+      window.dispatchEvent(new CustomEvent("roadmap:updated"));
     } catch {
-      toast('Không bỏ được mục.', 'error');
+      toast("Không bỏ được mục.", "error");
     }
   };
 
-  return (
-    <main
-      id="main-content"
-      className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-24 sm:px-6 sm:pb-16"
-    >
-      <Link
-        href="/"
-        prefetch={true}
-        className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        ← Topics
-      </Link>
+  const topicActionsMenu = canWrite ? (
+    <ActionMenu
+      label="Thao tác topic"
+      items={[
+        {
+          label: "Thêm bài học",
+          icon: FolderPlus,
+          onSelect: () => {
+            setTargetSection(null);
+            setIsCreateItemOpen(true);
+          },
+        },
+        {
+          label: "Sửa thông tin topic",
+          icon: Pencil,
+          onSelect: () => setIsEditTopicOpen(true),
+        },
+        {
+          label: "Xoá topic",
+          icon: Trash2,
+          danger: true,
+          confirm: {
+            title: `Xoá "${topic.title}"?`,
+            description: "Mọi bài học trong topic này cũng bị xoá.",
+            confirmLabel: "Xoá topic",
+          },
+          onSelect: handleDeleteTopic,
+        },
+      ]}
+    />
+  ) : null;
 
-      <div className="mt-2.5 flex items-start justify-between gap-4 border-b border-border/80 pb-6">
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground text-balance sm:text-3xl">
+  return (
+    <>
+      <LectureShell
+        topic={topic}
+        siblingGroups={siblingGroups}
+        activeView="summary"
+        defaultOpenSectionKey={defaultOpenSectionKey}
+        canWrite={canWrite}
+        ownerStatusById={ownerStatusById}
+        headings={[]}
+        showTocRail={false}
+        sidebarHeaderAction={topicActionsMenu}
+        nextLink={
+          !isReorderMode && firstLesson
+            ? {
+                href: `/lessons/${firstLesson.slug || firstLesson.id}`,
+                label: "Trang sau",
+                title: firstLesson.title,
+              }
+            : undefined
+        }
+      >
+        <header>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums text-muted-foreground">
+              <span>{items.length} bài học</span>
+              {SECTIONS_ENABLED && namedSections.length > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{namedSections.length} mục</span>
+                </>
+              )}
+              {canWrite && ownerTotals.learning > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-[var(--status-learning)]">
+                    {ownerTotals.learning} đang học
+                  </span>
+                </>
+              )}
+              {canWrite && ownerTotals.target > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-[var(--status-target)]">
+                    {ownerTotals.target} mục tiêu
+                  </span>
+                </>
+              )}
+            </div>
+
+            {canWrite && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {items.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsReorderMode((v) => !v)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer",
+                      isReorderMode
+                        ? "border-[var(--editorial-accent)] bg-[var(--editorial-accent-soft)] text-[var(--editorial-accent)]"
+                        : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                    )}
+                  >
+                    <ArrowUpDown className="size-3" />
+                    <span>{isReorderMode ? "Xong sắp xếp" : "Sắp xếp"}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetSection(null);
+                    setIsCreateItemOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+                >
+                  <Plus className="size-3" />
+                  <span>Thêm bài</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <h1 className="mt-4 font-display text-[2rem] font-normal leading-[1.15] tracking-[-0.02em] text-foreground text-balance sm:text-[2.625rem] lg:text-[3rem]">
             {topic.title}
           </h1>
+
           {topic.description && (
-            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-4 text-[1.0625rem] leading-relaxed text-muted-foreground">
               {topic.description}
             </p>
           )}
-          <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs tabular-nums text-muted-foreground">
-            <span>{items.length} bài học</span>
-            {canWrite && ownerTotals.learning > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-[var(--status-learning)]">
-                  {ownerTotals.learning} đang học
-                </span>
-              </>
-            )}
-            {canWrite && ownerTotals.target > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-[var(--status-target)]">
-                  {ownerTotals.target} mục tiêu
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+        </header>
 
-        {canWrite && (
-          <ActionMenu
-            label="Thao tác topic"
-            items={[
-              {
-                label: 'Thêm bài học',
-                icon: FolderPlus,
-                onSelect: () => {
-                  setTargetSection(activeSection === 'all' ? null : activeSection);
-                  setIsCreateItemOpen(true);
-                },
-              },
-              {
-                label: 'Sửa thông tin topic',
-                icon: Pencil,
-                onSelect: () => setIsEditTopicOpen(true),
-              },
-              {
-                label: 'Xoá topic',
-                icon: Trash2,
-                danger: true,
-                confirm: {
-                  title: `Xoá "${topic.title}"?`,
-                  description: 'Mọi bài học trong topic này cũng bị xoá.',
-                  confirmLabel: 'Xoá topic',
-                },
-                onSelect: handleDeleteTopic,
-              },
-            ]}
-          />
-        )}
-      </div>
-
-      {SECTIONS_ENABLED && namedSections.length >= 2 && (
-        <div
-          role="tablist"
-          aria-label="Lọc theo mục"
-          className="mt-4 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeSection === 'all'}
-            onClick={() => handleSelectSection('all')}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-[border-color,background-color,color,transform] duration-150 active:scale-[0.98] cursor-pointer',
-              activeSection === 'all'
-                ? 'border-foreground bg-foreground font-medium text-background'
-                : 'border-border/90 bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground'
-            )}
-          >
-            <span>Tất cả</span>
-            <span
-              className={cn(
-                'tabular-nums text-[0.6875rem]',
-                activeSection === 'all' ? 'text-background/75' : 'text-muted-foreground/75'
-              )}
-            >
-              {items.length}
-            </span>
-          </button>
-
-          {initialSections.map((sec) => {
-            const key = sec ?? '__none__';
-            const isSelected = activeSection === sec;
-            const { primary, sub } = splitSectionLabel(sec);
-            return (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={isSelected}
-                onClick={() => handleSelectSection(sec)}
-                title={sec ?? 'Chung'}
-                className={cn(
-                  'inline-flex max-w-[16rem] shrink-0 items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition-[border-color,background-color,color,transform] duration-150 active:scale-[0.98] cursor-pointer',
-                  isSelected
-                    ? 'border-foreground bg-foreground font-medium text-background'
-                    : 'border-border/90 bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground'
-                )}
-              >
-                <span className="truncate">{primary}</span>
-                {sub && (
-                  <span
-                    className={cn(
-                      'shrink-0 text-[0.6875rem]',
-                      isSelected ? 'text-background/75' : 'text-muted-foreground/75'
-                    )}
-                  >
-                    · {sub}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="mt-5">
         {items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
-            <p className="text-sm text-muted-foreground">Topic này chưa có bài học nào.</p>
+          <div className="mt-10 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Topic này chưa có bài học nào.
+            </p>
             {canWrite && (
               <button
                 type="button"
@@ -388,28 +374,205 @@ export function TopicEditorialPage({
                 className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
               >
                 <Plus className="size-3.5" />
-                Thêm bài đầu tiên
+                <span>Thêm bài đầu tiên</span>
               </button>
             )}
           </div>
+        ) : isReorderMode && canWrite ? (
+          <div className="mt-8">
+            <RoadmapMap
+              embedded
+              sectionGroups={siblingGroups}
+              currentRoadmap={topic}
+              stats={{ total: items.length }}
+              canWrite={canWrite}
+              isLocked={Boolean(topic.isLocked)}
+              onOpenCreateItem={(sec) => {
+                setTargetSection(sec);
+                setIsCreateItemOpen(true);
+              }}
+              onRenameSection={setRenamingSection}
+              onDissolveSection={handleDissolveSection}
+              onReorderSection={handleReorderSection}
+            />
+          </div>
         ) : (
-          <RoadmapMap
-            embedded
-            sectionGroups={visibleSectionGroups}
-            currentRoadmap={topic}
-            stats={{ total: items.length }}
-            canWrite={canWrite}
-            isLocked={Boolean(topic.isLocked)}
-            onOpenCreateItem={(sec) => {
-              setTargetSection(sec);
-              setIsCreateItemOpen(true);
-            }}
-            onRenameSection={setRenamingSection}
-            onDissolveSection={handleDissolveSection}
-            onReorderSection={handleReorderSection}
-          />
+          <div className="mt-8 space-y-10">
+            {focusItems.length > 0 && (
+              <section aria-labelledby="h-focus">
+                <h2
+                  id="h-focus"
+                  className="scroll-mt-16 border-t border-border pt-6 font-display text-[1.5rem] font-normal leading-snug tracking-[-0.015em] text-foreground sm:text-[1.75rem]"
+                >
+                  Đang theo dõi
+                </h2>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {focusItems.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/lessons/${item.slug || item.id}`}
+                      prefetch={true}
+                      className="group flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-[var(--editorial-accent)]"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          {item.status && (
+                            <LessonStatusBadge status={item.status} />
+                          )}
+                          {item.section && (
+                            <span className="truncate text-[0.6875rem] text-muted-foreground">
+                              {splitSectionLabel(item.section).primary}
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="mt-2.5 text-sm font-semibold leading-snug text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
+                          {item.title}
+                        </h3>
+                        {item.description && (
+                          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section aria-labelledby="h-curriculum">
+              <h2
+                id="h-curriculum"
+                className="scroll-mt-16 border-t border-border pt-6 font-display text-[1.5rem] font-normal leading-snug tracking-[-0.015em] text-foreground sm:text-[1.75rem]"
+              >
+                Nội dung lộ trình
+              </h2>
+
+              {isSingleUnscopedGroup ? (
+                <ul className="mt-4 space-y-3">
+                  {siblingGroups[0].items.map((item) => {
+                    const dotClass =
+                      canWrite && item.status && item.status !== "known"
+                        ? STATUS_DOT[item.status]
+                        : "";
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex items-baseline gap-2.5 text-sm leading-relaxed"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "mt-2 size-1.5 shrink-0 rounded-full",
+                            dotClass || "bg-[var(--editorial-accent)]"
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <Link
+                            href={`/lessons/${item.slug || item.id}`}
+                            prefetch={true}
+                            className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
+                          >
+                            {item.title}
+                          </Link>
+                          {item.description && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              — {item.description}
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="mt-5 space-y-8">
+                  {siblingGroups.map((group, idx) => {
+                    const { primary, sub } = splitSectionLabel(group.section);
+                    return (
+                      <section
+                        key={group.section ?? "__none__"}
+                        aria-labelledby={`sec-${idx + 1}`}
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3
+                            id={`sec-${idx + 1}`}
+                            className="scroll-mt-16 text-base font-semibold tracking-tight text-foreground"
+                          >
+                            <span>{primary}</span>
+                            {sub && (
+                              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                                · {sub}
+                              </span>
+                            )}
+                          </h3>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="text-xs tabular-nums text-muted-foreground">
+                              {group.items.length} bài
+                            </span>
+                            {canWrite && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTargetSection(group.section);
+                                  setIsCreateItemOpen(true);
+                                }}
+                                aria-label={`Thêm bài vào ${primary}`}
+                                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+                              >
+                                <Plus className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <ul className="mt-3 space-y-2.5">
+                          {group.items.map((item) => {
+                            const dotClass =
+                              canWrite && item.status && item.status !== "known"
+                                ? STATUS_DOT[item.status]
+                                : "";
+                            return (
+                              <li
+                                key={item.id}
+                                className="flex items-baseline gap-2.5 text-sm leading-relaxed"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "mt-2 size-1.5 shrink-0 rounded-full",
+                                    dotClass || "bg-[var(--editorial-accent)]"
+                                  )}
+                                />
+                                <div className="min-w-0">
+                                  <Link
+                                    href={`/lessons/${item.slug || item.id}`}
+                                    prefetch={true}
+                                    className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
+                                  >
+                                    {item.title}
+                                  </Link>
+                                  {item.description && (
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      — {item.description}
+                                    </span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
         )}
-      </div>
+      </LectureShell>
 
       <CreateItemModal
         isOpen={isCreateItemOpen}
@@ -432,6 +595,6 @@ export function TopicEditorialPage({
         onClose={() => setRenamingSection(null)}
         onSubmit={handleRenameSection}
       />
-    </main>
+    </>
   );
 }

@@ -289,3 +289,70 @@ async def test_alternate_phrasing_status_change_does_not_patch_without_ok(mock_a
     # Crucial invariant: never call update_item immediately without user confirmation ("ok")
     mock_adapter.update_item.assert_not_called()
 
+
+@pytest.mark.asyncio
+async def test_owner_status_change_this_lesson_matches_flat_lesson_slug(mock_adapter, owner_headers):
+    """Standing on /lessons/[lessonSlug] sends itemId=lesson.slug; 'bài này' resolves via item.slug."""
+    mock_adapter.get_topic.return_value = {
+        "id": "t1",
+        "slug": "ai-engineering",
+        "title": "AI Engineering",
+        "items": [
+            {"id": "item-101", "slug": "custom-disambiguated-slug", "title": "Caching", "status": "target"},
+        ],
+    }
+    mock_adapter.update_item.return_value = {"id": "item-101", "title": "Caching", "status": "learning"}
+    thread_id = "flat-slug-status-thread"
+
+    preview_resp = await _stream(
+        "đánh dấu bài này là đang học",
+        owner_headers,
+        thread_id=thread_id,
+        context={"roadmapSlug": "ai-engineering", "itemId": "custom-disambiguated-slug"},
+    )
+    assert "Caching" in preview_resp and "Mục tiêu" in preview_resp and "Đang học" in preview_resp
+    mock_adapter.update_item.assert_not_called()
+
+    confirm_resp = await _stream("ok", owner_headers, thread_id=thread_id)
+    assert "✅" in confirm_resp
+    mock_adapter.update_item.assert_called_once_with("item-101", status="learning")
+
+
+@pytest.mark.asyncio
+async def test_owner_global_status_queries_preserve_statuses_without_full_export(mock_adapter, owner_headers):
+    """Global status queries (a/b/c) read list_topics + get_topic instead of public export_full_hierarchy."""
+    mock_adapter.list_topics.return_value = [
+        {"id": "t1", "slug": "ai", "title": "AI"},
+        {"id": "t2", "slug": "be", "title": "Backend"},
+    ]
+    by_slug = {
+        "ai": {
+            "id": "t1",
+            "slug": "ai",
+            "title": "AI",
+            "items": [{"id": "i1", "title": "Chunking", "status": "learning"}],
+        },
+        "be": {
+            "id": "t2",
+            "slug": "be",
+            "title": "Backend",
+            "items": [
+                {"id": "i2", "title": "B-Tree Index", "status": "target"},
+                {"id": "i3", "title": "Transactions", "status": "known", "statusUpdatedAt": "2026-08-01T00:00:00Z"},
+            ],
+        },
+    }
+    mock_adapter.get_topic.side_effect = lambda slug: by_slug.get(slug)
+
+    next_resp = await _stream("nên học gì tiếp", owner_headers, thread_id="global-next")
+    assert "Chunking" in next_resp and "B-Tree Index" in next_resp
+    assert next_resp.index("Chunking") < next_resp.index("B-Tree Index")
+    assert "Transactions" not in next_resp
+
+    review_resp = await _stream("bài nào cần ôn lại", owner_headers, thread_id="global-review")
+    assert "Transactions" in review_resp and "Chunking" not in review_resp
+
+    know_resp = await _stream("tôi đã nắm được những bài nào rồi", owner_headers, thread_id="global-know")
+    assert "Transactions" in know_resp and "Chunking" in know_resp and "B-Tree Index" in know_resp
+    mock_adapter.export_full_hierarchy.assert_not_called()
+

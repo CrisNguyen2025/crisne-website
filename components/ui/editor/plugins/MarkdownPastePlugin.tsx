@@ -44,7 +44,16 @@ export function MarkdownPastePlugin() {
             const line = lines[i];
             const trimmed = line.trim();
 
-            // 1. Heading 2 (## Header)
+            // 1. Heading 3 (### Header)
+            if (line.startsWith('### ')) {
+              const headingNode = $createHeadingNode('h3');
+              headingNode.append($createTextNode(line.substring(4).trim()));
+              nodesToInsert.push(headingNode);
+              i++;
+              continue;
+            }
+
+            // 2. Heading 2 (## Header)
             if (line.startsWith('## ')) {
               const headingNode = $createHeadingNode('h2');
               headingNode.append($createTextNode(line.substring(3).trim()));
@@ -52,8 +61,8 @@ export function MarkdownPastePlugin() {
               i++;
               continue;
             }
-            
-            // 2. Heading 1 (# Header)
+
+            // 3. Heading 1 (# Header)
             if (line.startsWith('# ')) {
               const headingNode = $createHeadingNode('h1');
               headingNode.append($createTextNode(line.substring(2).trim()));
@@ -108,7 +117,7 @@ export function MarkdownPastePlugin() {
                 const currentTrimmed = currentLine.trim();
 
                 // Stop conditions for code blocks
-                if (currentLine.startsWith('## ') || currentLine.startsWith('# ')) {
+                if (currentLine.startsWith('### ') || currentLine.startsWith('## ') || currentLine.startsWith('# ')) {
                   break;
                 }
                 

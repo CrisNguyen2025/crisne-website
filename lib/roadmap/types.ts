@@ -41,6 +41,7 @@ export interface RoadmapMeta {
   icon?: string | null;
   order: number;
   isLocked?: boolean;
+  sectionNames?: string[];
 }
 
 /** A topic with its lessons, in page order. `sections` lists the sections in the order they first appear. */

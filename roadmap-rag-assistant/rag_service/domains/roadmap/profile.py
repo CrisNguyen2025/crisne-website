@@ -36,6 +36,8 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
         lines.append(f"Mục: {doc.section or 'Chung'}")
     if doc.description:
         lines.append(f"Mô tả: {doc.description}")
+    if doc.doc_type == "topic" and doc.content_text:
+        lines.append(f"Cấu trúc lộ trình: {doc.content_text}")
     if doc.doc_type == "item" and doc.content_text:
         lines.append(f"Nội dung tóm tắt: {doc.content_text[:300]}...")
     if doc.doc_type == "item" and not doc.description and not doc.content_text:

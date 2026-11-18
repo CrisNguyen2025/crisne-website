@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Check, Edit3, AlignLeft, Link2, Layers } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { X, Check, Edit3, AlignLeft, Link2, Layers, RefreshCw } from 'lucide-react';
+import { sectionSpelling } from '@/lib/roadmap/sections';
+import { normalizeTitle } from '@/lib/roadmap/titles';
 import { ChecklistItem, RoadmapMeta } from '@/lib/roadmap/types';
 import { SectionField } from './SectionField';
 import { Sheet } from '@/components/ui/sheet';
@@ -45,13 +47,45 @@ function EditItemInfoForm({
   onSubmit: EditItemInfoDrawerProps['onSubmit'];
 }) {
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const topicFieldId = useId();
+  const titleFieldId = useId();
+  const slugFieldId = useId();
+  const descriptionFieldId = useId();
+
+  const initialTopicSlug = currentTopicSlug ?? item.roadmapSlug ?? '';
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description);
   const [section, setSection] = useState(item.section ?? '');
-  const [topicSlug, setTopicSlug] = useState(currentTopicSlug ?? item.roadmapSlug ?? '');
+  const [topicSlug, setTopicSlug] = useState(initialTopicSlug);
   const [slug, setSlug] = useState(item.slug);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const selectedTopic = topics?.find((t) => t.slug === topicSlug);
+  const activeSections =
+    selectedTopic?.sectionNames ?? (topicSlug === initialTopicSlug ? sections : []);
+
+  const rawSlug = slug.trim();
+  const normalizedSlug = slugify(rawSlug);
+  const titleSuggestedSlug = slugify(title);
+
+  const handleTopicChange = (nextTopicSlug: string) => {
+    setTopicSlug(nextTopicSlug);
+    const nextTopic = topics?.find((t) => t.slug === nextTopicSlug);
+    const nextTopicSections =
+      nextTopic?.sectionNames ?? (nextTopicSlug === initialTopicSlug ? sections : []);
+    const matchedInTarget = section.trim()
+      ? nextTopicSections.find((s) => normalizeTitle(s) === normalizeTitle(section))
+      : undefined;
+
+    if (matchedInTarget) {
+      setSection(matchedInTarget);
+    } else if (nextTopicSlug === initialTopicSlug && !section.trim() && item.section) {
+      setSection(item.section);
+    } else if (nextTopicSlug !== initialTopicSlug) {
+      setSection('');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,15 +94,19 @@ function EditItemInfoForm({
       return;
     }
 
-    const normalizedSlug = slugify(slug.trim());
-    if (slug.trim() && !normalizedSlug) {
+    if (!rawSlug) {
+      setError('Slug URL không được để trống. Nhập slug hoặc bấm "Đồng bộ từ tiêu đề".');
+      return;
+    }
+
+    if (!normalizedSlug) {
       setError('Slug URL không hợp lệ.');
       return;
     }
 
-    const nextSection = section.trim() || null;
+    const nextSection = sectionSpelling(activeSections, section);
     const sectionChanged = nextSection !== (item.section ?? null);
-    const topicChanged = Boolean(topicSlug && currentTopicSlug && topicSlug !== currentTopicSlug);
+    const topicChanged = Boolean(topicSlug && initialTopicSlug && topicSlug !== initialTopicSlug);
     const slugChanged = Boolean(normalizedSlug && normalizedSlug !== item.slug);
 
     const options: EditItemInfoSubmitOptions | undefined =
@@ -86,7 +124,7 @@ function EditItemInfoForm({
         item.id,
         title.trim(),
         description.trim(),
-        sectionChanged ? nextSection : undefined,
+        sectionChanged || topicChanged ? nextSection : undefined,
         options
       );
       onClose();
@@ -103,9 +141,9 @@ function EditItemInfoForm({
       onClose={onClose}
       side={isMobile ? 'bottom' : 'right'}
       label="Edit lesson"
-      className={isMobile ? 'roadmap-theme max-h-[90dvh]' : 'roadmap-theme sm:max-w-md md:max-w-[440px]'}
+      className={isMobile ? 'roadmap-theme max-h-[90dvh]' : 'roadmap-theme sm:max-w-md md:max-w-[27.5rem]'}
     >
-      <div className="px-5 py-3.5 border-b border-border bg-muted/20 flex items-center justify-between shrink-0 min-h-[57px]">
+      <div className="px-5 py-3.5 border-b border-border bg-muted/20 flex items-center justify-between shrink-0 min-h-[3.5625rem]">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
             <Edit3 className="size-4" />
@@ -136,13 +174,17 @@ function EditItemInfoForm({
 
         {topics && topics.length > 0 && (
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <label
+              htmlFor={topicFieldId}
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"
+            >
               <Layers className="size-3.5 text-primary" />
               <span>Topic</span>
             </label>
             <select
+              id={topicFieldId}
               value={topicSlug}
-              onChange={(e) => setTopicSlug(e.target.value)}
+              onChange={(e) => handleTopicChange(e.target.value)}
               className="w-full text-sm px-3 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none text-foreground"
             >
               {topics.map((t) => (
@@ -154,13 +196,17 @@ function EditItemInfoForm({
           </div>
         )}
 
-        <SectionField value={section} onChange={setSection} sections={sections} />
+        <SectionField value={section} onChange={setSection} sections={activeSections} />
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <label
+            htmlFor={titleFieldId}
+            className="text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+          >
             Tiêu đề
           </label>
           <input
+            id={titleFieldId}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -171,28 +217,70 @@ function EditItemInfoForm({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Link2 className="size-3.5 text-primary" />
-            <span>Slug URL</span>
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor={slugFieldId}
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"
+            >
+              <Link2 className="size-3.5 text-primary" />
+              <span>Slug URL</span>
+            </label>
+            <button
+              type="button"
+              disabled={!titleSuggestedSlug}
+              onClick={() => {
+                if (titleSuggestedSlug) {
+                  setSlug(titleSuggestedSlug);
+                  if (error) setError('');
+                }
+              }}
+              className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <RefreshCw className="size-3" />
+              <span>Đồng bộ từ tiêu đề</span>
+            </button>
+          </div>
           <input
+            id={slugFieldId}
             type="text"
             value={slug}
-            onChange={(e) => setSlug(e.target.value)}
+            onChange={(e) => {
+              setSlug(e.target.value);
+              if (error) setError('');
+            }}
             placeholder="attention-mechanism"
             className="w-full text-xs font-mono px-3.5 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground transition-colors"
           />
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Để nguyên để giữ ổn định link SEO; nếu đổi, hệ thống tự chuyển hướng 308 từ link cũ.
-          </p>
+          {!rawSlug ? (
+            <p className="text-[0.6875rem] text-destructive leading-relaxed">
+              Slug URL đang để trống — nhập slug hoặc bấm &ldquo;Đồng bộ từ tiêu đề&rdquo;.
+            </p>
+          ) : !normalizedSlug ? (
+            <p className="text-[0.6875rem] text-destructive leading-relaxed">
+              Slug URL không hợp lệ (cần chứa chữ cái hoặc chữ số).
+            </p>
+          ) : (
+            <div className="space-y-0.5 text-[0.6875rem] leading-relaxed">
+              <p className="font-mono text-foreground/85 break-all">/lessons/{normalizedSlug}</p>
+              <p className="text-muted-foreground">
+                {normalizedSlug !== item.slug
+                  ? `Tự động chuyển hướng 308 từ /lessons/${item.slug}.`
+                  : 'Giữ nguyên để ổn định link SEO.'}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <label
+            htmlFor={descriptionFieldId}
+            className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"
+          >
             <AlignLeft className="size-3.5 text-primary" />
             <span>Mô tả ngắn</span>
           </label>
           <textarea
+            id={descriptionFieldId}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}

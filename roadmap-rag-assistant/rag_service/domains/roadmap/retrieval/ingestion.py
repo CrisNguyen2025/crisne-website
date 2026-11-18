@@ -40,6 +40,20 @@ def strip_html(html_str: Optional[str]) -> str:
     return text.strip()
 
 
+def _format_topic_overview(topic: dict) -> str:
+    """Summarize a topic's lesson count and section breakdown from its items."""
+    items = topic.get("items") or []
+    if not items:
+        return ""
+    from rag_service.domains.roadmap.sections import GENERAL_SECTION, section_counts
+
+    counts = section_counts(topic)
+    if not any(name for name, _ in counts):
+        return f"Tổng số bài: {len(items)} bài học (chưa chia mục)."
+    parts = ", ".join(f"{name or GENERAL_SECTION} ({n} bài)" for name, n in counts)
+    return f"Tổng số bài: {len(items)} bài học. Các mục: {parts}."
+
+
 class DatabaseIngestionWorker:
     """Syncs live data from Prisma SQLite / HTTP adapter into KnowledgeDocuments."""
 
@@ -65,10 +79,13 @@ class DatabaseIngestionWorker:
         for full_topic in full_topics:
             slug = full_topic.get("slug", "")
             topic_title = full_topic.get("title", "")
-            topic_desc = full_topic.get("description", "")
+            topic_desc = (full_topic.get("description") or "").strip()
+            topic_overview = _format_topic_overview(full_topic)
 
             # 1. Topic document
-            topic_search_text = f"Lộ trình Chủ đề Topic: {topic_title}. {topic_desc}".strip()
+            topic_search_text = " ".join(
+                part for part in (f"Lộ trình Chủ đề Topic: {topic_title}.", topic_desc, topic_overview) if part
+            )
             docs.append(
                 KnowledgeDocument(
                     id=full_topic.get("id", slug),
@@ -77,6 +94,7 @@ class DatabaseIngestionWorker:
                     topic_slug=slug,
                     topic_title=topic_title,
                     description=topic_desc,
+                    content_text=topic_overview[:1500],
                     searchable_text=topic_search_text,
                 )
             )
@@ -85,7 +103,7 @@ class DatabaseIngestionWorker:
             for item in full_topic.get("items", []):
                 item_id = item.get("id", "")
                 item_title = item.get("title", "")
-                item_desc = item.get("description", "")
+                item_desc = (item.get("description") or "").strip()
                 section = item.get("section") or None
                 clean_content = strip_html(item.get("content", ""))
 

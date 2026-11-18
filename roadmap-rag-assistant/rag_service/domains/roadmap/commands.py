@@ -100,7 +100,13 @@ class RoadmapCommands:
                     async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                         yield ev
                 else:
-                    args = {"topic": draft["topic"], "item_id": draft["item_id"], "html": draft["html"]}
+                    args = {
+                        "topic": draft["topic"],
+                        "item_id": draft["item_id"],
+                        "html": draft["html"],
+                        "write_mode": draft.get("write_mode", "append"),
+                        "target_h2": draft.get("target_h2"),
+                    }
                     yield {"type": "tool_start", "name": "update_item_content",
                            "args": {"topic": draft["topic"], "item_id": draft["item_id"], "confirmed": True}}
                     try:

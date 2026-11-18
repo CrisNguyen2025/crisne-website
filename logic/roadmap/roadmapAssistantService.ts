@@ -19,6 +19,12 @@ export const roadmapChatClient = new RoadmapChatClient({
 
 export type { ChatResponse, ToolCallResult };
 
+const ROADMAP_WRITE_TOOL_RE = /^(create|update|delete|generate|reorder|rename)_|^import_items_from_text$/;
+
+export function isRoadmapWriteTool(toolName: string): boolean {
+  return ROADMAP_WRITE_TOOL_RE.test(toolName);
+}
+
 /**
  * Run one WebMCP tool for a "/webmcp <request>" message.
  * The server only picks the tool; this browser executes it, so writes stay in the user's session.
@@ -48,7 +54,7 @@ export async function runWebMcpCommand(request: string): Promise<string> {
   }
 
   const result = await ctx.executeTool(tool, plan.args);
-  if (/^(create|update|reorder)_/.test(plan.tool)) {
+  if (isRoadmapWriteTool(plan.tool)) {
     window.dispatchEvent(new CustomEvent('roadmap:updated'));
   }
   const body = typeof result === 'string' ? result : JSON.stringify(result, null, 2);

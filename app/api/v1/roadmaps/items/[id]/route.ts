@@ -62,15 +62,16 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (duplicate) {
         return duplicateResponse('item', { id: duplicate.id, title: duplicate.title });
       }
-      if (title !== undefined && typeof title === 'string' && title.trim() && normalizeTitle(title) !== normalizeTitle(current.title)) {
-        data.title = title.trim();
-      }
       if (movingTopic) {
         data.roadmapId = targetRoadmapId;
         data.order = siblings.reduce((max, s) => Math.max(max, s.order ?? 0), 0) + 1;
         const targetSectionInput = section !== undefined ? section : current.section;
         data.section = sectionSpelling(siblings.map((s) => s.section), targetSectionInput);
       }
+    }
+
+    if (title !== undefined && typeof title === 'string' && title.trim() && title.trim() !== current.title) {
+      data.title = title.trim();
     }
 
     if (description !== undefined) data.description = description;
@@ -106,18 +107,26 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       data.statusUpdatedAt = new Date();
     }
 
-    const updated = await prisma.roadmapItem.update({ where: { id }, data });
+    type WriteTx = Pick<typeof prisma, 'roadmapItem' | 'slugRedirect'>;
+    const applyUpdate = async (tx: WriteTx) => {
+      const item = await tx.roadmapItem.update({ where: { id }, data });
+      if (previousSlugToRedirect && data.slug) {
+        await tx.slugRedirect?.upsert?.({
+          where: { fromSlug: previousSlugToRedirect },
+          update: { targetId: id, entity: 'lesson' },
+          create: { fromSlug: previousSlugToRedirect, entity: 'lesson', targetId: id },
+        });
+        await tx.slugRedirect?.deleteMany?.({
+          where: { fromSlug: data.slug },
+        });
+      }
+      return item;
+    };
 
-    if (previousSlugToRedirect && data.slug) {
-      await prisma.slugRedirect?.upsert?.({
-        where: { fromSlug: previousSlugToRedirect },
-        update: { targetId: id, entity: 'lesson' },
-        create: { fromSlug: previousSlugToRedirect, entity: 'lesson', targetId: id },
-      });
-      await prisma.slugRedirect?.deleteMany?.({
-        where: { fromSlug: data.slug },
-      });
-    }
+    const updated =
+      previousSlugToRedirect && data.slug && typeof prisma.$transaction === 'function'
+        ? await prisma.$transaction((tx) => applyUpdate(tx))
+        : await applyUpdate(prisma);
 
     const hasIndexedChanges =
       data.title !== undefined ||
@@ -137,6 +146,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ item: updated });
   } catch (error) {
+    if ((error as { code?: string } | null)?.code === 'P2002') {
+      return NextResponse.json({ error: 'Slug already in use' }, { status: 409 });
+    }
     console.error('[API PATCH /api/v1/roadmaps/items/[id]] Error:', error);
     return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
   }
@@ -149,10 +161,19 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    await prisma.roadmapItem.delete({ where: { id } });
-    await prisma.slugRedirect?.deleteMany?.({
-      where: { entity: 'lesson', targetId: id },
-    });
+    type DeleteTx = Pick<typeof prisma, 'roadmapItem' | 'slugRedirect'>;
+    const applyDelete = async (tx: DeleteTx) => {
+      await tx.roadmapItem.delete({ where: { id } });
+      await tx.slugRedirect?.deleteMany?.({
+        where: { entity: 'lesson', targetId: id },
+      });
+    };
+
+    if (typeof prisma.$transaction === 'function') {
+      await prisma.$transaction((tx) => applyDelete(tx));
+    } else {
+      await applyDelete(prisma);
+    }
 
     notifyRoadmapChanged();
     return NextResponse.json({ success: true });

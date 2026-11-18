@@ -8,7 +8,9 @@ import {
   FileText,
   Keyboard,
   Clock,
+  ListTree,
 } from 'lucide-react';
+import { DEFAULT_LESSON_TEMPLATE_HTML } from '@/lib/roadmap/lesson-template';
 import { ChecklistItem } from '@/lib/roadmap/types';
 import { Sheet } from '@/components/ui/sheet';
 import { useMediaQuery, MOBILE_VIEWPORT_QUERY } from '@/hooks/use-media-query';
@@ -28,26 +30,32 @@ const Editor = dynamic(() => import('@/components/ui/editor/Editor'), {
 interface EditItemContentDrawerProps {
   isOpen: boolean;
   item: ChecklistItem | null;
+  initialDraftContent?: string;
   onClose: () => void;
   onSubmit: (id: string, content: string) => Promise<void> | void;
 }
 
 function EditItemContentForm({
   item,
+  initialDraftContent,
   onClose,
   onSubmit,
 }: {
   item: ChecklistItem;
+  initialDraftContent?: string;
   onClose: () => void;
   onSubmit: (id: string, content: string) => Promise<void> | void;
 }) {
+  const seedValue = item.content || initialDraftContent || '';
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [editorSeedVersion, setEditorSeedVersion] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [content, setContent] = useState(() => item.content || '');
+  const [content, setContent] = useState(() => seedValue);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-  const contentRef = useRef(item.content || '');
-  const initialContentRef = useRef(item.content || '');
+  const contentRef = useRef(seedValue);
+  const initialContentRef = useRef(seedValue);
+  const baselineNormalizedRef = useRef(!seedValue);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -57,6 +65,10 @@ function EditItemContentForm({
   }, []);
 
   const handleContentChange = useCallback((val: string) => {
+    if (!baselineNormalizedRef.current) {
+      baselineNormalizedRef.current = true;
+      initialContentRef.current = val;
+    }
     contentRef.current = val;
     setContent(val);
   }, []);
@@ -142,7 +154,27 @@ function EditItemContentForm({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!content.trim() && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                  baselineNormalizedRef.current = false;
+                  contentRef.current = DEFAULT_LESSON_TEMPLATE_HTML;
+                  initialContentRef.current = DEFAULT_LESSON_TEMPLATE_HTML;
+                  setContent(DEFAULT_LESSON_TEMPLATE_HTML);
+                  setEditorSeedVersion((v) => v + 1);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted cursor-pointer"
+              >
+                <ListTree className="size-3.5" />
+                <span>Chèn mẫu</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={attemptClose}
@@ -160,6 +192,7 @@ function EditItemContentForm({
           <div className="flex-1 flex flex-col p-4 md:p-5 min-h-0">
             {isEditorReady ? (
               <Editor
+                key={editorSeedVersion}
                 value={content}
                 onChange={handleContentChange}
                 namespace="RoadmapItemContentDrawerEditor"
@@ -252,9 +285,18 @@ function EditItemContentForm({
 export function EditItemContentDrawer({
   isOpen,
   item,
+  initialDraftContent,
   onClose,
   onSubmit,
 }: EditItemContentDrawerProps) {
   if (!isOpen || !item) return null;
-  return <EditItemContentForm key={item.id} item={item} onClose={onClose} onSubmit={onSubmit} />;
+  return (
+    <EditItemContentForm
+      key={`${item.id}:${initialDraftContent ? 'draft' : 'plain'}`}
+      item={item}
+      initialDraftContent={initialDraftContent}
+      onClose={onClose}
+      onSubmit={onSubmit}
+    />
+  );
 }
