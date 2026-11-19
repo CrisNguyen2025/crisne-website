@@ -317,7 +317,6 @@ export function TopicEditorialPage({
         ownerStatusById={ownerStatusById}
         headings={[]}
         rail={focusRail}
-        sidebarHeaderAction={topicActionsMenu}
         nextLink={
           !isReorderMode && firstLesson
             ? {
@@ -387,6 +386,7 @@ export function TopicEditorialPage({
                   <Plus className="size-3" />
                   <span>Thêm bài</span>
                 </button>
+                {topicActionsMenu}
               </div>
             )}
           </div>

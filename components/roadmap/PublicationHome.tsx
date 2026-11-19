@@ -12,7 +12,6 @@ import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import type { CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
-import { ThemeToggle } from "@/components/theme-toggle";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { AbotMascot } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/AbotMascot";
 import { CreateTopicModal } from "./CreateTopicModal";
@@ -73,8 +72,8 @@ export function PublicationHome({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {canWrite && (
+          {canWrite && (
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setIsCreateTopicOpen(true)}
@@ -83,9 +82,8 @@ export function PublicationHome({
                 <Plus className="size-3.5" />
                 <span>Tạo topic</span>
               </button>
-            )}
-            <ThemeToggle className="size-9 rounded-lg border border-border bg-card hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
-          </div>
+            </div>
+          )}
         </header>
 
         <section className="mt-10" aria-labelledby="topics-heading">

@@ -11,7 +11,6 @@ import type {
   RoadmapMeta,
   SectionGroup,
 } from "@/lib/roadmap/types";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
@@ -407,74 +406,64 @@ export function LectureShell({
     </nav>
   );
 
+  const totalLessonsCount = siblingGroups.reduce(
+    (acc, g) => acc + g.items.length,
+    0
+  );
+
   const renderSidebarHeader = (onClose?: () => void) => (
     <div className="shrink-0 border-b border-border/80 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
-        {onClose ? (
-          <>
-            <Link
-              href="/"
-              prefetch={true}
+        <Link
+          href="/"
+          prefetch={true}
+          onClick={onClose}
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
+        >
+          <span aria-hidden="true">←</span>
+          <span>Topics</span>
+        </Link>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium shrink-0">
+            {totalLessonsCount} bài
+          </span>
+          {onClose && (
+            <button
+              type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
+              aria-label="Đóng danh sách bài học"
+              className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
             >
-              ← Topics
-            </Link>
-            <div className="flex items-center gap-1">
-              <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Đóng danh sách bài học"
-                className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <Link
-              href={topicPath(topic.slug)}
-              prefetch={true}
-              className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              title={topic.title}
-            >
-              {topic.title}
-            </Link>
-            <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium shrink-0">
-              {siblingGroups.reduce((acc, g) => acc + g.items.length, 0)} bài
-            </span>
-          </>
-        )}
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {onClose && (
-        <div className="mt-3 flex items-start justify-between gap-2">
-          <Link
-            href={topicPath(topic.slug)}
-            prefetch={true}
-            onClick={onClose}
-            className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
-          >
-            {topic.title}
-          </Link>
-          {sidebarHeaderAction}
-        </div>
-      )}
+      <div className="mt-2.5 flex items-center">
+        <Link
+          href={topicPath(topic.slug)}
+          prefetch={true}
+          onClick={onClose}
+          className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-foreground/90 transition-colors hover:text-[var(--editorial-accent)]"
+          title={topic.title}
+        >
+          {topic.title}
+        </Link>
+      </div>
     </div>
   );
 
   return (
     <div className="flex min-h-dvh w-full flex-col">
-      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md lg:hidden">
+        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
               aria-label="Mở danh sách bài học"
-              className="inline-flex lg:hidden min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] cursor-pointer"
+              className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] cursor-pointer"
             >
               <List className="size-3.5" />
               <span>Bài học</span>
@@ -502,25 +491,22 @@ export function LectureShell({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <div className="lg:hidden">
-              <MobileTocDropdown
-                headings={headings}
-                activeHeadingId={activeHeadingId}
-                onJump={jumpToHeading}
-              />
-            </div>
+            <MobileTocDropdown
+              headings={headings}
+              activeHeadingId={activeHeadingId}
+              onJump={jumpToHeading}
+            />
             {sidebarHeaderAction}
-            <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
           </div>
         </div>
       </header>
 
       <div className="w-full flex-1 overflow-x-clip">
-        <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-[90.5rem]">
+        <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] lg:min-h-dvh w-full max-w-[90.5rem]">
           <aside
             ref={syllabusAsideRef}
             onScroll={persistSyllabusScroll}
-            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']"
+            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-0 h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']"
           >
             {renderSidebarHeader()}
             <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">
