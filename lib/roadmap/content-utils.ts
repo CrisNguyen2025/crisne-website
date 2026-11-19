@@ -17,6 +17,11 @@ export function contentToHtml(content: string): string {
       .join('');
   }
 
+  // Collapse nested <pre><pre>...</pre></pre> from legacy Lexical round-trips
+  while (/<pre\b([^>]*)>\s*<pre\b[^>]*>([\s\S]*?)<\/pre>\s*<\/pre>/i.test(html)) {
+    html = html.replace(/<pre\b([^>]*)>\s*<pre\b[^>]*>([\s\S]*?)<\/pre>\s*<\/pre>/gi, '<pre$1>$2</pre>');
+  }
+
   // Transform blockquotes with data-callout-type attribute or [!type] markers
   html = html.replace(
     /<blockquote([^>]*)>([\s\S]*?)<\/blockquote>/gi,
@@ -33,8 +38,8 @@ export function contentToHtml(content: string): string {
       }
 
       if (type) {
-        // Clean all duplicate or lingering markers like [!error]
-        const cleanInner = inner.replace(/(?:<[^>]+>)*\s*\[!(?:success|info|warning|error)\]\s*/gi, '');
+        // Clean all duplicate or lingering markers like [!error] while preserving opening tags
+        const cleanInner = inner.replace(/((?:<[^>]+>)*)\s*\[!(?:success|info|warning|error)\]\s*/gi, '$1');
         return `<div class="callout callout-${type}"><div class="callout-content">${cleanInner}</div></div>`;
       }
       return `<blockquote${attrs}>${inner}</blockquote>`;
@@ -151,11 +156,25 @@ export function plainTextExcerpt(content?: string | null, maxLength = 160): stri
   return `${text.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+export interface ContentStats {
+  words: number;
+  characters: number;
+  readingMinutes: number;
+}
+
+export function contentStats(content?: string | null): ContentStats {
+  if (!content) return { words: 0, characters: 0, readingMinutes: 0 };
+  const text = plainText(content);
+  if (!text) return { words: 0, characters: 0, readingMinutes: 0 };
+  const words = text.split(' ').filter(Boolean).length;
+  const characters = text.length;
+  const mins = words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
+  return { words, characters, readingMinutes: mins };
+}
+
 /** Minutes to read a lesson's content, at least 1; 0 when there is no content. */
 export function readingMinutes(content?: string | null): number {
-  if (!content) return 0;
-  const words = plainText(content).split(' ').filter(Boolean).length;
-  return words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
+  return contentStats(content).readingMinutes;
 }
 
 /** Anchor slug of a heading's text (ADR-0014): no Vietnamese diacritics, lowercase, kebab-case. */

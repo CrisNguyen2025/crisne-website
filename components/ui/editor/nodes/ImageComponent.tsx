@@ -70,14 +70,12 @@ function LazyImage({
   src,
   width,
   height,
-  maxWidth,
   onError,
 }: Readonly<{
   altText: string;
   className: string | null;
   height: 'inherit' | number;
   imageRef: { current: null | HTMLImageElement };
-  maxWidth: number;
   src: string;
   width: 'inherit' | number;
   onError: () => void;
@@ -114,7 +112,7 @@ function LazyImage({
 
     const naturalWidth = status.width || 800;
     const naturalHeight = status.height || 450;
-    const maxBoundWidth = typeof maxWidth === 'number' && maxWidth > 0 ? maxWidth : 420;
+    const maxBoundWidth = 420;
     const maxBoundHeight = 320;
 
     let finalWidth = naturalWidth;
@@ -463,7 +461,6 @@ export default function ImageComponent({
               imageRef={imageRef}
               width={width}
               height={height}
-              maxWidth={maxWidth}
               onError={() => setIsLoadError(true)}
             />
           )}

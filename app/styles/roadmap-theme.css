@@ -102,6 +102,10 @@ html:has(.roadmap-theme) {
   margin-bottom: 0.875rem !important;
 }
 
+.roadmap-theme .editorial-prose > :is(h1, h2, h3, h4):first-child {
+  margin-top: 0 !important;
+}
+
 .roadmap-theme .editorial-prose > h2:first-child {
   border-top: none;
   padding-top: 0;
@@ -122,6 +126,13 @@ html:has(.roadmap-theme) {
   line-height: 1.4;
   margin-top: 1.75rem !important;
   margin-bottom: 0.625rem !important;
+}
+
+.roadmap-theme .editorial-prose h4 {
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  margin-top: 1.25rem !important;
+  margin-bottom: 0.5rem !important;
 }
 
 .roadmap-theme .editorial-prose a {
@@ -147,10 +158,14 @@ html:has(.roadmap-theme) {
   border-radius: 0 0.5rem 0.5rem 0;
   padding: 0.75rem 1.25rem;
   color: var(--foreground);
+  font-style: italic;
 }
 
-.roadmap-theme .editorial-prose pre {
+.roadmap-theme .editorial-prose pre,
+.roadmap-theme .editorial-prose code.block {
+  display: block;
   background: var(--card);
+  color: var(--foreground);
   border: 0.0625rem solid var(--border);
   border-radius: 0.5rem;
   padding: 0.875rem 1rem;
@@ -158,9 +173,11 @@ html:has(.roadmap-theme) {
   font-size: 0.875rem;
   line-height: 1.65;
   overflow-x: auto;
+  white-space: pre-wrap;
+  tab-size: 4;
 }
 
-.roadmap-theme .editorial-prose :not(pre) > code {
+.roadmap-theme .editorial-prose :not(pre) > code:not(.block) {
   font-family: var(--font-geist-mono);
   font-size: 0.875em;
   background: var(--muted);

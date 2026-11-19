@@ -4,6 +4,44 @@ import { $getRoot, $createParagraphNode } from 'lexical';
 import { useEffect, useRef } from 'react';
 import { checkEmptyHtml } from '../../utils/checkEmptyHtml';
 
+export function normalizeImportedDom(dom: Document): void {
+  const preElements = Array.from(dom.querySelectorAll('pre'));
+  for (const pre of preElements) {
+    while (true) {
+      const meaningfulChildren = Array.from(pre.childNodes).filter(
+        (node) => !(node.nodeType === 3 && !(node.textContent || '').trim()),
+      );
+      if (meaningfulChildren.length !== 1 || meaningfulChildren[0].nodeType !== 1) {
+        break;
+      }
+      const inner = meaningfulChildren[0] as HTMLElement;
+      const tag = inner.tagName.toUpperCase();
+      if (tag !== 'CODE' && tag !== 'PRE') {
+        break;
+      }
+
+      const lang =
+        inner.getAttribute('data-language') ||
+        inner.getAttribute('data-highlight-language') ||
+        inner.getAttribute('class')?.match(/language-([\w-]+)/i)?.[1];
+      if (lang && !pre.getAttribute('data-language')) {
+        pre.setAttribute('data-language', lang);
+        pre.setAttribute('data-highlight-language', lang);
+      }
+
+      for (const sibling of Array.from(pre.childNodes)) {
+        if (sibling !== inner) {
+          pre.removeChild(sibling);
+        }
+      }
+      while (inner.firstChild) {
+        pre.insertBefore(inner.firstChild, inner);
+      }
+      inner.remove();
+    }
+  }
+}
+
 export function SetContentPlugin({ value }: { value?: string }) {
   const [editor] = useLexicalComposerContext();
   const isInitializedRef = useRef<boolean>(false);
@@ -45,6 +83,7 @@ export function SetContentPlugin({ value }: { value?: string }) {
       editor.update(() => {
         const parser = new DOMParser();
         const dom = parser.parseFromString(value || '', 'text/html');
+        normalizeImportedDom(dom);
         const nodes = $generateNodesFromDOM(editor, dom);
 
         const root = $getRoot();

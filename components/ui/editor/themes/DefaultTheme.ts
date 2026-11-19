@@ -1,6 +1,6 @@
 export const defaultTheme = {
-  paragraph: 'text-foreground mb-2',
-  quote: 'border-border text-text-subtle my-3 border-l-4 pl-4 italic',
+  paragraph: 'mb-2',
+  quote: 'border-border my-3 border-l-4 pl-4 italic',
   heading: {
     h1: 'text-foreground mt-6 mb-3 text-3xl font-bold tracking-tight',
     h2: 'text-foreground mt-5 mb-2.5 text-2xl font-bold tracking-tight',
@@ -13,8 +13,8 @@ export const defaultTheme = {
     nested: {
       listitem: 'list-none',
     },
-    ol: 'list-decimal ml-5 mb-2',
-    ul: 'list-disc ml-5 mb-2',
+    ol: 'list-decimal mb-2',
+    ul: 'list-disc mb-2',
     listitem: 'mb-1',
   },
   table: 'editor-table',
@@ -28,11 +28,11 @@ export const defaultTheme = {
     italic: 'editor-text-italic',
     underline: 'underline',
     strikethrough: 'line-through',
-    code: 'bg-surface-muted text-foreground rounded px-1 py-0.5 font-mono text-sm',
+    code: 'bg-muted text-foreground border border-border rounded px-1.5 py-0.5 font-mono text-[0.875em]',
     lowercase: 'lowercase',
     uppercase: 'uppercase',
     capitalize: 'capitalize',
   },
-  code: 'bg-surface-muted text-foreground my-3 block rounded-lg p-3 font-mono text-sm',
+  code: 'bg-card text-foreground border border-border my-3 block rounded-lg p-3.5 font-mono text-sm',
   image: 'editor-image',
 };

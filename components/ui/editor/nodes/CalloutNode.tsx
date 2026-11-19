@@ -1,11 +1,14 @@
 import {
   $applyNodeReplacement,
+  $createLineBreakNode,
   $createParagraphNode,
+  $isElementNode,
+  $isLineBreakNode,
+  $isParagraphNode,
   $isTextNode,
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
-  EditorConfig,
   ElementNode,
   LexicalNode,
   NodeKey,
@@ -13,6 +16,7 @@ import {
   RangeSelection,
   SerializedElementNode,
   Spread,
+  TextNode,
 } from 'lexical';
 
 export type CalloutType = 'success' | 'info' | 'warning' | 'error';
@@ -24,12 +28,32 @@ export type SerializedCalloutNode = Spread<
   SerializedElementNode
 >;
 
-const CALLOUT_COLORS: Record<CalloutType, { border: string; bg: string }> = {
-  info: { border: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.08)' },
-  success: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.08)' },
-  warning: { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)' },
-  error: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)' },
-};
+const VALID_CALLOUT_TYPES: ReadonlyArray<CalloutType> = ['success', 'info', 'warning', 'error'];
+
+function extractCalloutType(element: HTMLElement): CalloutType | null {
+  const attrType = element.getAttribute('data-callout-type')?.toLowerCase();
+  if (attrType && VALID_CALLOUT_TYPES.includes(attrType as CalloutType)) {
+    return attrType as CalloutType;
+  }
+
+  const classMatch = element.className?.match(/\b(?:editor-)?callout-(success|info|warning|error)\b/i);
+  if (classMatch) {
+    return classMatch[1].toLowerCase() as CalloutType;
+  }
+
+  if (element.tagName === 'BLOCKQUOTE') {
+    const markerMatch = (element.textContent || '').match(/^\s*\[!(success|info|warning|error)\]/i);
+    if (markerMatch) {
+      return markerMatch[1].toLowerCase() as CalloutType;
+    }
+  }
+
+  return null;
+}
+
+function getCalloutClassName(type: CalloutType): string {
+  return `callout callout-${type} editor-callout editor-callout-${type}`;
+}
 
 export class CalloutNode extends ElementNode {
   __calloutType: CalloutType;
@@ -56,26 +80,17 @@ export class CalloutNode extends ElementNode {
     writable.__calloutType = type;
   }
 
-  createDOM(_config: EditorConfig): HTMLElement {
+  createDOM(): HTMLElement {
     const dom = document.createElement('div');
-    const colors = CALLOUT_COLORS[this.__calloutType];
-    dom.className = `editor-callout editor-callout-${this.__calloutType}`;
-    dom.style.cssText = `
-      position: relative;
-      margin: 1rem 0;
-      padding: 0.875rem 1.25rem;
-      border: none;
-      border-left: 4px solid ${colors.border};
-      border-radius: 0 8px 8px 0;
-      background: ${colors.bg};
-      line-height: 1.65;
-      font-size: 0.9375rem;
-    `;
+    dom.className = getCalloutClassName(this.__calloutType);
     return dom;
   }
 
-  updateDOM(prevNode: CalloutNode): boolean {
-    return prevNode.__calloutType !== this.__calloutType;
+  updateDOM(prevNode: CalloutNode, dom: HTMLElement): boolean {
+    if (prevNode.__calloutType !== this.__calloutType) {
+      dom.className = getCalloutClassName(this.__calloutType);
+    }
+    return false;
   }
 
   exportDOM(): DOMExportOutput {
@@ -89,11 +104,23 @@ export class CalloutNode extends ElementNode {
     return {
       blockquote: (node: Node) => {
         const element = node as HTMLElement;
-        const calloutType = element.getAttribute('data-callout-type') as CalloutType | null;
-        const textContent = element.textContent || '';
-        const hasMarker = /^\s*\[!(success|info|warning|error)\]/i.test(textContent);
-
-        if ((calloutType && ['success', 'info', 'warning', 'error'].includes(calloutType)) || hasMarker) {
+        if (extractCalloutType(element)) {
+          return {
+            conversion: convertCalloutElement,
+            priority: 2,
+          };
+        }
+        return null;
+      },
+      div: (node: Node) => {
+        const element = node as HTMLElement;
+        if (element.classList.contains('callout-content') && element.closest('.callout')) {
+          return {
+            conversion: () => ({ node: null }),
+            priority: 2,
+          };
+        }
+        if (extractCalloutType(element)) {
           return {
             conversion: convertCalloutElement,
             priority: 2,
@@ -137,31 +164,60 @@ export class CalloutNode extends ElementNode {
   }
 }
 
-function convertCalloutElement(domNode: Node): DOMConversionOutput {
-  const element = domNode as HTMLElement;
-  let calloutType = element.getAttribute('data-callout-type') as CalloutType | null;
-  if (!calloutType) {
-    const match = element.textContent?.match(/^\s*\[!(success|info|warning|error)\]/i);
-    if (match) {
-      calloutType = match[1].toLowerCase() as CalloutType;
+function findFirstTextNode(nodes: LexicalNode[]): TextNode | null {
+  for (const node of nodes) {
+    if ($isTextNode(node)) {
+      return node;
+    }
+    if ($isElementNode(node)) {
+      const nested = findFirstTextNode(node.getChildren());
+      if (nested) return nested;
     }
   }
-  const node = $createCalloutNode(calloutType || 'info');
+  return null;
+}
+
+function flattenToInlineNodes(nodes: LexicalNode[]): LexicalNode[] {
+  const flattened: LexicalNode[] = [];
+  for (const child of nodes) {
+    if ($isParagraphNode(child) || ($isElementNode(child) && !child.isInline())) {
+      const nested = flattenToInlineNodes(child.getChildren());
+      if (flattened.length > 0 && nested.length > 0) {
+        flattened.push($createLineBreakNode());
+      }
+      flattened.push(...nested);
+    } else {
+      flattened.push(child);
+    }
+  }
+  return flattened;
+}
+
+function convertCalloutElement(domNode: Node): DOMConversionOutput {
+  const element = domNode as HTMLElement;
+  const calloutType = extractCalloutType(element) || 'info';
+  const node = $createCalloutNode(calloutType);
   return {
     node,
     after: (childLexicalNodes) => {
-      // Strip any lingering [!type] marker from the text
-      if (childLexicalNodes.length > 0) {
-        const first = childLexicalNodes[0];
-        if ($isTextNode(first)) {
-          const text = first.getTextContent();
-          const clean = text.replace(/^\s*(?:\[!(?:success|info|warning|error)\]\s*)+/gi, '');
-          if (clean !== text) {
-            first.setTextContent(clean);
+      const flattened = flattenToInlineNodes(childLexicalNodes);
+
+      const firstText = findFirstTextNode(flattened);
+      if (firstText) {
+        const text = firstText.getTextContent();
+        const clean = text.replace(/^\s*(?:\[!(?:success|info|warning|error)\]\s*)+/gi, '');
+        if (clean !== text) {
+          if (clean === '' && flattened[0] === firstText) {
+            flattened.shift();
+            if ($isLineBreakNode(flattened[0])) {
+              flattened.shift();
+            }
+          } else {
+            firstText.setTextContent(clean);
           }
         }
       }
-      return childLexicalNodes;
+      return flattened;
     },
   };
 }

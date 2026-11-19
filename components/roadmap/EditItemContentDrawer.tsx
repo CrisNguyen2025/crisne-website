@@ -10,6 +10,7 @@ import {
   Clock,
   ListTree,
 } from 'lucide-react';
+import { contentStats } from '@/lib/roadmap/content-utils';
 import { DEFAULT_LESSON_TEMPLATE_HTML } from '@/lib/roadmap/lesson-template';
 import { ChecklistItem } from '@/lib/roadmap/types';
 import { Sheet } from '@/components/ui/sheet';
@@ -117,15 +118,7 @@ function EditItemContentForm({
   }, [attemptClose, handleSave, showDiscardConfirm]);
 
   const stats = useMemo(() => {
-    if (!content) return { words: 0, characters: 0, readTimeMinutes: 0 };
-    const plainText = content
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!plainText) return { words: 0, characters: 0, readTimeMinutes: 0 };
-    const words = plainText.split(' ').filter(Boolean).length;
-    const characters = plainText.length;
-    const readTimeMinutes = Math.max(1, Math.ceil(words / 200));
+    const { words, characters, readingMinutes: readTimeMinutes } = contentStats(content);
     return { words, characters, readTimeMinutes };
   }, [content]);
 
@@ -199,7 +192,7 @@ function EditItemContentForm({
                 showTopbar={false}
                 fillHeight={true}
                 placeholder="Write document content here (supports Headings, Code, Callout, Tables, Lists)..."
-                contentEditableClassName="py-2 transition-all duration-200 outline-none min-h-[480px] max-w-full px-3"
+                contentEditableClassName="post-content-view editorial-prose prose dark:prose-invert max-w-none py-2 transition-all duration-200 outline-none min-h-[480px] px-3"
               />
             ) : (
               <div className="flex-1 w-full h-full flex flex-col items-center justify-center text-muted-foreground gap-3 bg-muted/5 p-8 rounded-xl border border-border/50">

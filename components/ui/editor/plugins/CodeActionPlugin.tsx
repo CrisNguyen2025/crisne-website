@@ -1,6 +1,5 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { 
-  $getNearestNodeFromDOMNode, 
   $getSelection, 
   $isRangeSelection, 
   $createParagraphNode,
@@ -8,6 +7,7 @@ import {
   $findMatchingParent,
   $isElementNode,
   ElementNode,
+  LexicalNode,
   COMMAND_PRIORITY_CRITICAL,
   SELECT_ALL_COMMAND
 } from 'lexical';
@@ -40,9 +40,9 @@ export function CodeActionPlugin() {
       font-size: 11px;
       font-weight: 600;
       font-family: ui-monospace, monospace;
-      color: #9ca3af;
-      background: #111111;
-      border: 1px solid rgba(75,85,99,0.5);
+      color: var(--muted-foreground);
+      background: var(--muted);
+      border: 1px solid var(--border);
       border-radius: 6px;
       cursor: pointer;
       transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -123,9 +123,9 @@ export function CodeActionPlugin() {
         copyBtn.style.borderColor = '#16a34a';
         setTimeout(() => {
           copyBtn.textContent = 'Copy';
-          copyBtn.style.color = '#9ca3af';
-          copyBtn.style.background = '#111111';
-          copyBtn.style.borderColor = 'rgba(75,85,99,0.5)';
+          copyBtn.style.color = 'var(--muted-foreground)';
+          copyBtn.style.background = 'var(--muted)';
+          copyBtn.style.borderColor = 'var(--border)';
         }, 2000);
       });
     });
@@ -170,9 +170,9 @@ export function CodeActionPlugin() {
             } else {
               const topLevelElements = new Set<ElementNode>();
               selectedNodes.forEach(node => {
-                let parent: any = node;
+                let parent: LexicalNode | null = node;
                 while (parent) {
-                  const parentNode = parent.getParent();
+                  const parentNode: ElementNode | null = parent.getParent();
                   if (parentNode === null || parentNode.getKey() === 'root') {
                     break;
                   }

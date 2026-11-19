@@ -649,7 +649,7 @@
       "name": "Chỉnh sửa nội dung chi tiết bài học với Lexical Editor",
       "domainId": "roadmap-learning",
       "actor": "Owner",
-      "trigger": "Owner bấm 'Sửa nội dung' trên DetailPanel, mở EditItemContentDrawer",
+      "trigger": "Owner bấm 'Nội dung' / 'Thêm nội dung' trên LessonEditorialReader, mở EditItemContentDrawer",
       "preconditions": [
         "Quyền ghi Owner",
         "Lexical editor tuần tự hóa nội dung sang chuỗi HTML hợp lệ"

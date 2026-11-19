@@ -75,17 +75,33 @@ vi.mock("@/components/roadmap/RoadmapMap", () => ({
   RoadmapMap: () => <div data-testid="roadmap-map-reorder" />,
 }));
 
+let mockDrawerSavePayload = "";
+
 vi.mock("@/components/roadmap/EditItemContentDrawer", () => ({
   EditItemContentDrawer: ({
     isOpen,
+    item,
     initialDraftContent,
+    onSubmit,
   }: {
     isOpen: boolean;
+    item?: { id: string } | null;
     initialDraftContent?: string;
+    onSubmit?: (id: string, content: string) => Promise<void> | void;
   }) =>
     isOpen ? (
       <div data-testid="mock-content-drawer">
         {initialDraftContent ?? "blank"}
+        {item && onSubmit && (
+          <button
+            type="button"
+            onClick={() => {
+              void onSubmit(item.id, mockDrawerSavePayload);
+            }}
+          >
+            Mock Save Content
+          </button>
+        )}
       </div>
     ) : null,
 }));
@@ -508,5 +524,60 @@ describe("LectureShell & editorial pages", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("updates readingMinutes and TOC headings immediately after saving content, then adopts server updates", async () => {
+    mockUseCanWrite.mockReturnValue(true);
+    const updateItemContent = vi.mocked(roadmapService.updateItemContent);
+    updateItemContent.mockReset();
+    updateItemContent.mockResolvedValue(undefined as never);
+
+    const longBody = Array(600).fill("token").join(" ");
+    mockDrawerSavePayload = `<h2>Mục lục mới</h2><p>${longBody}</p>`;
+
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const view = render(
+      <LessonEditorialReader
+        lesson={ITEMS[0]}
+        processedHtml='<h2 id="cu">Mục lục cũ</h2><p>Ngắn</p>'
+        headings={[{ id: "cu", text: "Mục lục cũ", level: 2 }]}
+        topic={TOPIC}
+        siblingGroups={groups}
+        allTopics={[TOPIC]}
+      />
+    );
+
+    expect(screen.getByText(/4 phút ·/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Nội dung" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mock Save Content" }));
+    });
+
+    expect(updateItemContent).toHaveBeenCalledWith({
+      id: ITEMS[0].id,
+      content: mockDrawerSavePayload,
+    });
+    expect(screen.getByText(/3 phút ·/)).toBeTruthy();
+    expect(screen.getAllByText("Mục lục mới").length).toBeGreaterThanOrEqual(1);
+
+    view.rerender(
+      <LessonEditorialReader
+        lesson={{
+          ...ITEMS[0],
+          readingMinutes: 5,
+          updatedAt: "2026-11-19T00:00:00.000Z",
+          content: '<h2 id="server">Từ server</h2><p>Đã đồng bộ</p>',
+        }}
+        processedHtml='<h2 id="server">Từ server</h2><p>Đã đồng bộ</p>'
+        headings={[{ id: "server", text: "Từ server", level: 2 }]}
+        topic={TOPIC}
+        siblingGroups={groups}
+        allTopics={[TOPIC]}
+      />
+    );
+
+    expect(screen.getByText(/5 phút ·/)).toBeTruthy();
+    expect(screen.getAllByText("Từ server").length).toBeGreaterThanOrEqual(1);
   });
 });

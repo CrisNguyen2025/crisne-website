@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Edit3, Info, ListTree, Trash2 } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
-import { contentToHtml, withHeadingIds } from "@/lib/roadmap/content-utils";
+import {
+  contentToHtml,
+  readingMinutes,
+  withHeadingIds,
+} from "@/lib/roadmap/content-utils";
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { DEFAULT_LESSON_TEMPLATE_HTML } from "@/lib/roadmap/lesson-template";
@@ -88,6 +92,7 @@ export function LessonEditorialReader({
   const [optimisticContent, setOptimisticContent] = useState<{
     lessonId: string;
     raw: string;
+    basedOnUpdatedAt: string;
   } | null>(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [allImages, setAllImages] = useState<string[]>([]);
@@ -98,7 +103,11 @@ export function LessonEditorialReader({
   }, [lesson.slug]);
 
   const rendered = useMemo(() => {
-    if (optimisticContent && optimisticContent.lessonId === lesson.id) {
+    if (
+      optimisticContent &&
+      optimisticContent.lessonId === lesson.id &&
+      optimisticContent.basedOnUpdatedAt === lesson.updatedAt
+    ) {
       const rawHtml = optimisticContent.raw
         ? contentToHtml(optimisticContent.raw)
         : "";
@@ -107,10 +116,24 @@ export function LessonEditorialReader({
         html,
         headings: nextHeadings,
         rawContent: optimisticContent.raw,
+        readingMinutes: readingMinutes(optimisticContent.raw),
       };
     }
-    return { html: processedHtml, headings, rawContent: lesson.content };
-  }, [optimisticContent, lesson.id, lesson.content, processedHtml, headings]);
+    return {
+      html: processedHtml,
+      headings,
+      rawContent: lesson.content,
+      readingMinutes: lesson.readingMinutes ?? readingMinutes(lesson.content),
+    };
+  }, [
+    optimisticContent,
+    lesson.id,
+    lesson.updatedAt,
+    lesson.content,
+    lesson.readingMinutes,
+    processedHtml,
+    headings,
+  ]);
 
   const sectionNames = useMemo(
     () =>
@@ -216,7 +239,11 @@ export function LessonEditorialReader({
 
   const handleSaveContent = async (id: string, nextContent: string) => {
     await roadmapService.updateItemContent({ id, content: nextContent });
-    setOptimisticContent({ lessonId: id, raw: nextContent });
+    setOptimisticContent({
+      lessonId: id,
+      raw: nextContent,
+      basedOnUpdatedAt: lesson.updatedAt,
+    });
     toast("Đã lưu nội dung bài học", "success");
     window.dispatchEvent(new CustomEvent("roadmap:updated"));
   };
@@ -398,8 +425,8 @@ export function LessonEditorialReader({
           </h1>
 
           <p className="mt-2.5 text-xs tabular-nums text-muted-foreground">
-            {lesson.readingMinutes && lesson.readingMinutes > 0
-              ? `${lesson.readingMinutes} phút · `
+            {rendered.readingMinutes && rendered.readingMinutes > 0
+              ? `${rendered.readingMinutes} phút · `
               : ""}
             {formatFriendlyTime(lesson.updatedAt)}
           </p>

@@ -53,7 +53,7 @@
   align-items: center;
   justify-content: center;
   color: var(--primary);
-  background: var(--info-bg);
+  background: var(--muted);
 }
 
 .editor-topbar-title {
@@ -81,7 +81,7 @@
 }
 
 .editor-fullscreen-button:hover {
-  background: var(--surface-muted);
+  background: var(--muted);
   border-color: var(--border);
 }
 
@@ -119,7 +119,7 @@
 .editor-toolbar-button {
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-subtle);
+  color: var(--muted-foreground);
   border-radius: 6px;
   padding: 5px;
   display: inline-flex;
@@ -131,13 +131,13 @@
 
 .editor-toolbar-button:hover {
   color: var(--foreground);
-  background: var(--surface-muted);
+  background: var(--muted);
   border-color: transparent;
 }
 
 .editor-toolbar-button-active {
   color: var(--primary);
-  background: var(--info-bg);
+  background: var(--muted);
   border-color: transparent;
 }
 
@@ -160,6 +160,14 @@
   border-radius: 0 0 12px 12px;
   background: transparent;
   overflow: auto;
+}
+
+.editor-canvas .post-content-view {
+  overflow-x: visible;
+}
+
+.editor-canvas .editorial-prose {
+  max-width: none;
 }
 
 .editor-shell .editor-container.tree-view {
@@ -204,11 +212,16 @@
 
 .editor-shell .editor-image img {
   max-width: 100%;
-  cursor: default;
+  cursor: default !important;
+  margin: 0 !important;
+}
+
+.editor-shell .editor-image img:hover {
+  opacity: 1;
 }
 
 .editor-shell .editor-image img.focused {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--ring);
   user-select: none;
 }
 
@@ -234,7 +247,7 @@
   padding: 0;
   margin: 0;
   border-top: 1px solid var(--border);
-  background-color: color-mix(in srgb, var(--surface-subtle) 95%, transparent);
+  background-color: color-mix(in srgb, var(--muted) 95%, transparent);
   min-width: 100px;
   color: var(--foreground);
   overflow: hidden;
@@ -251,9 +264,9 @@
   margin: 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 5px;
-  background-color: color-mix(in srgb, var(--overlay) 70%, transparent);
+  background-color: color-mix(in srgb, var(--foreground) 70%, transparent);
   min-width: 100px;
-  color: var(--inverse-foreground);
+  color: var(--background);
   cursor: pointer;
   user-select: none;
 }
@@ -279,7 +292,7 @@
 }
 
 .editor-shell .editor-image .image-edit-button:hover {
-  background-color: var(--info-bg);
+  background-color: var(--muted);
 }
 
 .editor-shell .editor-image .image-resizer {
@@ -287,8 +300,8 @@
   width: 7px;
   height: 7px;
   position: absolute;
-  background-color: var(--focus);
-  border: 1px solid var(--inverse-foreground);
+  background-color: var(--ring);
+  border: 1px solid var(--background);
   z-index: 100;
 }
 
@@ -347,12 +360,18 @@
 /* Force list markers in editor even if global reset removes them */
 .editor-canvas ul,
 .editor-canvas ol {
-  padding-left: 1.25rem !important;
-  margin: 0.25rem 0 !important;
+  padding-left: 1.35rem !important;
+  margin-top: 0 !important;
+  margin-bottom: 0.5rem !important;
+  margin-left: 0 !important;
 }
 
 .editor-canvas ul {
   list-style: disc !important;
+}
+
+.roadmap-theme .editor-canvas ul > li::marker {
+  color: var(--editorial-accent);
 }
 
 .editor-canvas ol {
@@ -376,6 +395,10 @@
   text-align: left;
 }
 
+.editor-table-scroll .editor-table {
+  margin: 0 !important;
+}
+
 .editor-table-cell {
   min-width: 9rem;
   padding: 0.75rem 0.875rem;
@@ -386,7 +409,7 @@
 
 .editor-table-cell-header {
   font-weight: 600;
-  background: var(--surface-muted);
+  background: var(--muted);
   color: var(--foreground);
 }
 
@@ -395,7 +418,8 @@
 }
 
 .editor-canvas li {
-  margin: 0.125rem 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0.25rem !important;
 }
 
 /* Ensure links always look like links in content */
@@ -405,6 +429,14 @@
   text-decoration-line: underline !important;
   text-underline-offset: 2px;
   text-decoration-thickness: 1.5px;
+}
+
+.roadmap-theme .editor-canvas a,
+.roadmap-theme .editor-canvas .editor-link {
+  color: var(--editorial-accent) !important;
+  text-decoration-color: color-mix(in srgb, var(--editorial-accent) 40%, transparent) !important;
+  text-decoration-thickness: 0.0625rem !important;
+  text-underline-offset: 0.2em !important;
 }
 
 /* Floating link panel */
@@ -458,26 +490,26 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: var(--text-subtle);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 
 .editor-link-action:hover {
-  background: var(--surface-muted);
+  background: var(--muted);
   border-color: var(--border);
   color: var(--foreground);
 }
 
 .editor-link-action-primary {
   color: var(--primary);
-  background: var(--info-bg);
-  border-color: color-mix(in srgb, var(--focus) 50%, var(--border));
+  background: var(--muted);
+  border-color: color-mix(in srgb, var(--ring) 50%, var(--border));
 }
 
 .editor-link-action-danger:hover {
-  color: var(--error);
-  background: var(--error-bg);
-  border-color: color-mix(in srgb, var(--error) 35%, var(--border));
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  border-color: color-mix(in srgb, var(--destructive) 35%, var(--border));
 }
 
 .editor-link-edit-row {
@@ -498,8 +530,8 @@
 }
 
 .editor-link-input:focus {
-  border-color: color-mix(in srgb, var(--focus) 50%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 14%, transparent);
+  border-color: color-mix(in srgb, var(--ring) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 14%, transparent);
 }
 
 .editor-link-copied {
@@ -507,54 +539,50 @@
   right: 10px;
   top: -10px;
   font-size: 11px;
-  color: var(--success);
-  background: var(--success-bg);
-  border: 1px solid color-mix(in srgb, var(--success) 35%, var(--border));
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid color-mix(in srgb, #10b981 35%, var(--border));
   border-radius: 999px;
   padding: 2px 8px;
 }
 
 /* ---------------------------------------------------------------------------
- * Callout Blocks (blockquote with [!type] marker)
+ * Blockquotes & Code Blocks — Editorial parity
  * --------------------------------------------------------------------------- */
 
-.editor-canvas blockquote {
+.editor-canvas blockquote:not(.callout) {
   position: relative;
-  margin: 0.5rem 0;
-  padding: 0.75rem 1rem 0.75rem 1.25rem;
-  border: 1.5px solid #3b82f6;
-  border-left: 4px solid #3b82f6;
-  border-radius: 10px;
-  background: rgba(59, 130, 246, 0.06);
-  font-style: normal;
+  margin: 0.75rem 0;
+  padding: 0.75rem 1.25rem;
+  border: 0;
+  border-left: 0.25rem solid var(--editorial-accent, var(--primary));
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--editorial-accent-soft, color-mix(in srgb, var(--primary) 8%, transparent));
+  color: var(--foreground);
+  font-style: italic;
 }
 
-/* Hide [!type] markers visually but keep for export */
-.editor-canvas blockquote [data-lexical-text="true"] {
-  /* Markers will be hidden via JS transform */
-}
-
-/* Dark premium code block */
+/* Editorial code block */
 .editor-canvas code.block {
   display: block !important;
   position: relative !important;
-  background: #1e1e1e !important;
-  color: #ffffff !important;
-  font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 0.875rem !important;
-  line-height: 1.6 !important;
-  padding: 16px 20px !important;
-  border-radius: 6px !important;
-  border: none !important;
-  margin: 12px 0 !important;
+  line-height: 1.65 !important;
+  padding: 0.875rem 1rem !important;
+  border-radius: 0.5rem !important;
+  border: 0.0625rem solid var(--border) !important;
+  margin: 0.75rem 0 !important;
   white-space: pre-wrap !important;
   overflow-x: auto !important;
   tab-size: 4 !important;
 }
 
-/* Force all child text nodes inside code block to be visible and white */
+/* Keep child text nodes inheriting the theme foreground inside code block */
 .editor-canvas code.block * {
-  color: #ffffff !important;
+  color: inherit !important;
   background: transparent !important;
   background-color: transparent !important;
   box-shadow: none !important;
@@ -568,9 +596,9 @@
 /* Hover style overrides for portal code action buttons */
 .editor-code-btn-copy:hover,
 .editor-code-btn-revert:hover {
-  color: #ffffff !important;
-  background: #222222 !important;
-  border-color: rgba(255, 255, 255, 0.8) !important;
+  color: var(--foreground) !important;
+  background: var(--accent) !important;
+  border-color: var(--border) !important;
 }
 
 /* Header toolbar layout style override */
