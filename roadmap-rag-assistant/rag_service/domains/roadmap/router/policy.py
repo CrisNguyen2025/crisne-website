@@ -350,6 +350,9 @@ LIST_SECTIONS = re.compile(
 CUD_VERB_WORDS = [
     "tạo", "thêm", "xóa", "xoá", "bỏ bớt", "gỡ bỏ", "sửa", "đổi tên", "cập nhật", "hủy", "huỷ", "chuyển", "di chuyển",
     "create", "add", "delete", "remove", "update", "rename", "make", "new", "move",
+    # D1: "điều chỉnh" only when paired with a roadmap noun to avoid trapping questions like "điều chỉnh learning rate là gì"
+    "điều chỉnh topic", "điều chỉnh bài", "điều chỉnh bài học", "điều chỉnh mục",
+    "điều chỉnh layer", "điều chỉnh section", "điều chỉnh lộ trình", "điều chỉnh chủ đề",
 ]
 CUD_VERBS = [fold(v) for v in CUD_VERB_WORDS]
 # P8: a change whose content is a vague noun ("tạo thông tin cho topic", "thêm nội dung", "bổ sung info") names no
@@ -375,7 +378,7 @@ DESCRIPTION_UPDATE_FOLDED = re.compile(r"\b(?:sua|cap\s+nhat|doi|thay\s+doi|bo\s
 # own verbs: a preview never shows a delete for "khỏi tạo topic X" (write_gate.gate_action).
 ACTION_VERBS = {
     "create": ("tao", "them", "add", "create", "make", "new", "lap"),
-    "update": ("sua", "doi", "cap nhat", "update", "rename", "chuyen", "di chuyen", "move", "edit"),
+    "update": ("sua", "doi", "cap nhat", "update", "rename", "chuyen", "di chuyen", "move", "edit", "dieu chinh"),
     "delete": ("xoa", "bo bot", "go bo", "huy", "delete", "remove"),
 }
 # A change verb right before a roadmap noun: "tạo lộ trình Docker từ đầu" creates a topic, it is not a plan request
@@ -438,9 +441,30 @@ WRITE_BLOCKER_PATTERNS = {
     "past_report": rf"\b(?:đã|vừa|mới|hôm\s+qua)\b(?:\s+\w+){{0,2}}\s+(?:{_VERBS_ACC})\b|\bai\s+đã\b"
                    rf"|(?:{_VERBS_ACC})\b.*\brồi\s*$",
 }
-# Questions about command syntax ("cú pháp tạo topic", "lệnh xóa bài là gì"): answered with the help card
-SYNTAX_QUESTION = re.compile(r"\b(?:cú\s+pháp|lệnh\s+\w+(?:\s+\w+)?\s+là\s+gì|có\s+giới\s+hạn)\b")
-SYNTAX_QUESTION_FOLDED = re.compile(r"\b(?:cu\s+phap|lenh\s+\w+(?:\s+\w+)?\s+la\s+gi|co\s+gioi\s+han)\b")
+# Capability questions without a specific entity ("có thể edit được k", "có thể xóa được không",
+# "có thể edit bài học được không"): answered with the help card / capability reply.
+CAPABILITY_NO_OBJECT = (
+    r"(?<!\bbạn\s)(?<!\bban\s)\b(?:có\s+thể|được\s+phép)\s+"
+    r"(?:sửa|xoá|xóa|thêm|tạo|đổi\s+tên|điều\s+chỉnh|edit)\b"
+    r"(?:\s+(?:bài(?:\s+học)?|topic|mục|layer|section|lộ\s+trình|chủ\s+đề))?"
+    r"(?:\s+được)?\s+(?:không|ko|k)\s*[?!.]*$"
+)
+CAPABILITY_NO_OBJECT_FOLDED = (
+    r"(?<!\bban\s)\b(?:co\s+the|duoc\s+phep)\s+"
+    r"(?:sua|xoa|them|tao|doi\s+ten|dieu\s+chinh|edit)\b"
+    r"(?:\s+(?:bai(?:\s+hoc)?|topic|muc|layer|section|lo\s+trinh|chu\s+de))?"
+    r"(?:\s+duoc)?\s+(?:khong|ko|k)\s*[?!.]*$"
+)
+
+# Questions about command syntax ("cú pháp tạo topic", "lệnh xóa bài là gì") or assistant capability:
+SYNTAX_QUESTION = re.compile(
+    rf"\b(?:cú\s+pháp|lệnh\s+\w+(?:\s+\w+)?\s+là\s+gì|có\s+giới\s+hạn)\b|{CAPABILITY_NO_OBJECT}",
+    re.IGNORECASE,
+)
+SYNTAX_QUESTION_FOLDED = re.compile(
+    rf"\b(?:cu\s+phap|lenh\s+\w+(?:\s+\w+)?\s+la\s+gi|co\s+gioi\s+han)\b|{CAPABILITY_NO_OBJECT_FOLDED}",
+    re.IGNORECASE,
+)
 WRITE_BLOCKERS = {name: re.compile(p, re.IGNORECASE) for name, p in WRITE_BLOCKER_PATTERNS.items()}
 # Folded twins. fold() lowercases, so these patterns use only lowercase escapes (\b \s \w), never \S or \W
 WRITE_BLOCKERS_FOLDED = {name: re.compile(fold(p)) for name, p in WRITE_BLOCKER_PATTERNS.items()}

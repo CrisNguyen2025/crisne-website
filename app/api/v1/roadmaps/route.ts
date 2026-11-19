@@ -4,6 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { isReservedTopicSlug } from '@/lib/roadmap/paths';
+import { slugify } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -48,12 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
     }
 
-    const baseSlug = title
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || `topic-${Date.now()}`;
+    const baseSlug = slugify(title) || `topic-${Date.now()}`;
     // A Topic lives at /[slug] (ADR-0014), so it must not take a path the app already uses
     const slug = isReservedTopicSlug(baseSlug) ? `${baseSlug}-topic` : baseSlug;
 

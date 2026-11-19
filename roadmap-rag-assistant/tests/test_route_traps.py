@@ -360,3 +360,62 @@ def test_attributive_time_word_is_not_a_report():
 
     assert polarity_of("thêm layer Basics cho topic vừa tạo").value == "affirm"
     assert polarity_of("mình vừa tạo topic X rồi").value == "report"
+
+
+def test_d1_and_d2_traps_and_change_boundaries():
+    router = IntentRouter()
+    # Trap 1: "điều chỉnh" without roadmap noun stays knowledge question
+    d_lr = router.decide("điều chỉnh learning rate là gì")
+    assert d_lr.intent == IntentType.KNOWLEDGE_QUERY
+    assert d_lr.write == "none"
+
+    # Trap 2: "chỉnh sửa" without roadmap noun stays knowledge question
+    d_prompt = router.decide("chỉnh sửa prompt như thế nào")
+    assert d_prompt.intent == IntentType.KNOWLEDGE_QUERY
+    assert d_prompt.write == "none"
+
+    # Polite create with specific entity stays change request (preview)
+    d_create = router.decide("có thể tạo topic Kafka được không")
+    assert d_create.intent == IntentType.ROADMAP_CUD
+    assert d_create.write == "confirm"
+
+    # Command with "điều chỉnh" and roadmap noun is CUD
+    d_cud = router.decide("điều chỉnh topic Backend thành Be")
+    assert d_cud.intent == IntentType.ROADMAP_CUD
+    assert d_cud.write == "allow"
+
+
+from rag_service.auth import set_actor  # noqa: E402
+from rag_service.domains.roadmap.router.grounding import UPDATE_NOT_SUPPORTED_REPLY  # noqa: E402
+
+
+def _reply(text: str, thread_id: str) -> tuple[str, list[dict]]:
+    async def run():
+        out = []
+        async for ev in NextGenRoadmapAgent(llm_model=None).astream_events(
+            {"messages": [{"role": "user", "content": text}], "fast": True},
+            config={"configurable": {"thread_id": thread_id}},
+        ):
+            out.append(ev)
+        return out
+
+    events = asyncio.run(run())
+    return "".join(e.get("delta", "") for e in events if e.get("type") == "token"), events
+
+
+@pytest.mark.parametrize("text", ["điều chỉnh topic Backend thành Be", "chỉnh sửa topic Backend thành Be"])
+def test_adjust_topic_is_answered_as_an_unsupported_update(text):
+    # 2026-11-19, live: routed to the change path, then the deterministic extractor read "điều chỉnh" as a create
+    # and the owner got "Mình chưa chắc bạn muốn thay đổi gì" instead of how to edit the topic.
+    set_actor("owner")
+    reply, events = _reply(text, f"trap-adjust-{text}")
+    assert reply.startswith(UPDATE_NOT_SUPPORTED_REPLY.split(".")[0])
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]
+
+
+@pytest.mark.parametrize("text", ["Có thể Edit được k", "Có thể xóa được không", "Có thể Edit bài học được không"])
+def test_capability_question_without_object_gets_the_help_card_not_a_search(text):
+    set_actor("owner")
+    reply, events = _reply(text, f"trap-capability-{text}")
+    assert "Roadmap chưa có bài học về" not in reply
+    assert not [e for e in events if e.get("type") in ("tool_start", "action_preview")]

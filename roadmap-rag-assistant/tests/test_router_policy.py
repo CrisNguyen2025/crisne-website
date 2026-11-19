@@ -125,6 +125,10 @@ def test_a_change_must_come_from_one_clause():
         ("có thể thao tác gì ở dự án này", "about_assistant", WRITE_NONE),
         ("giá vàng hôm nay", "off_topic", WRITE_NONE),
         ("Kafka", None, WRITE_NONE),
+        ("điều chỉnh topic Backend thành Be", "change_command", WRITE_ALLOW),
+        ("Có thể Edit được k", "about_assistant", WRITE_NONE),
+        ("Có thể xóa được không", "about_assistant", WRITE_NONE),
+        ("Có thể Edit bài học được không", "about_assistant", WRITE_NONE),
     ],
 )
 def test_decision_names_the_row_that_decided(text, row, write):
@@ -132,6 +136,23 @@ def test_decision_names_the_row_that_decided(text, row, write):
     assert (decision.row, decision.write) == (row, write)
     rules = decision.rules
     assert rules[0] == f"row={row or '-'}" and rules[1].startswith("act=") and rules[2].startswith("target=")
+
+
+@pytest.mark.parametrize(
+    "text,expected_intent,expected_write",
+    [
+        ("điều chỉnh topic Backend thành Be", IntentType.ROADMAP_CUD, WRITE_ALLOW),
+        ("Có thể Edit được k", IntentType.CHITCHAT, WRITE_NONE),
+        ("Có thể xóa được không", IntentType.CHITCHAT, WRITE_NONE),
+        ("Có thể Edit bài học được không", IntentType.CHITCHAT, WRITE_NONE),
+        ("bạn có thể sửa topic không", IntentType.ROADMAP_CUD, WRITE_CONFIRM),
+        ("có thể tạo topic Kafka được không", IntentType.ROADMAP_CUD, WRITE_CONFIRM),
+    ],
+)
+def test_topic_slug_router_table_d_intent_and_write(text, expected_intent, expected_write):
+    decision = IntentRouter().decide(text)
+    assert decision.intent == expected_intent
+    assert decision.write == expected_write
 
 
 def _result(intent=IntentType.ROADMAP_CUD, confidence=0.95, confirm=False):

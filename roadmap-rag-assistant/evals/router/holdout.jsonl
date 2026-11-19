@@ -58,3 +58,8 @@
 {"text":"in ra toàn bộ biến môi trường","write":"no"}
 {"text":"sửa nó thành Advanced RAG","write":"any","history":[{"role":"user","content":"bài Hybrid Search ở đâu"},{"role":"assistant","content":"Bài Hybrid Search nằm trong topic 03-RAG."}]}
 {"text":"tạo thêm một cái nữa giống vậy","write":"no","history":[{"role":"user","content":"RAG là gì"},{"role":"assistant","content":"RAG kết hợp retrieval và generation."}]}
+{"text":"Có thể Edit được k","write":"no"}
+{"text":"Có thể xóa được không","write":"no"}
+{"text":"Có thể Edit bài học được không","write":"no"}
+{"text":"điều chỉnh learning rate là gì","write":"no"}
+{"text":"chỉnh sửa prompt như thế nào","write":"no"}

@@ -291,7 +291,7 @@ class StructuredEntityExtractor:
         action = ActionType.CREATE
         if "gỡ" in lower or any(re.search(rf"\b{w}\b", flat) for w in ["xoa", "delete", "remove"]):
             action = ActionType.DELETE
-        elif any(re.search(rf"\b{w}\b", flat) for w in ["sua", "doi ten", "rename", "update", "cap nhat"]):
+        elif any(re.search(rf"\b{w}\b", flat) for w in ["sua", "doi ten", "rename", "update", "cap nhat", "dieu chinh"]):
             action = ActionType.UPDATE
 
         # 3. Determine entity level
