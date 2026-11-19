@@ -15,6 +15,7 @@ import os
 import re
 import sqlite3
 import time
+import unicodedata
 from collections import OrderedDict
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
@@ -48,9 +49,13 @@ FTS_STOPWORDS = {
 # Documents this short are matched by name only (see the domain's thin rule)
 
 
+def _nfc(text: str) -> str:
+    return unicodedata.normalize("NFC", text) if text else ""
+
+
 def _embedding_key(text: str) -> str:
     """Cache key covers both the text and the model, so switching models invalidates old vectors."""
-    return hashlib.sha1(f"{EMBEDDING_MODEL}\n{text[:1000]}".encode("utf-8")).hexdigest()
+    return hashlib.sha1(f"{EMBEDDING_MODEL}\n{_nfc(text)[:1000]}".encode("utf-8")).hexdigest()
 
 
 def _load_embedding_cache() -> dict:
@@ -253,7 +258,7 @@ class HybridVectorStore:
                 placeholders = ", ".join("?" * (len(self._fields) + 1))
                 conn.execute(
                     f"INSERT INTO fts_docs (id, {', '.join(self._fields)}) VALUES ({placeholders})",
-                    (d.id, *(getattr(d, f) or "" for f in self._fields)),
+                    (d.id, *(_nfc(str(getattr(d, f) or "")) for f in self._fields)),
                 )
 
         cache = _load_embedding_cache()
@@ -290,7 +295,7 @@ class HybridVectorStore:
         for doc_id, doc in list(self._docs_map.items()):
             if doc_id not in self._vectors:
                 key = _embedding_key(doc.searchable_text)
-                missing.append((doc_id, key, doc.searchable_text[:1000]))
+                missing.append((doc_id, key, _nfc(doc.searchable_text)[:1000]))
 
         if not missing:
             return 0
@@ -325,6 +330,7 @@ class HybridVectorStore:
 
     def search_fts(self, query: str, limit: int = 10) -> List[Tuple[Any, float]]:
         """Search via SQLite FTS5 BM25 ranking."""
+        query = _nfc(query)
         all_tokens = re.findall(r"\w+", query.lower())
         # Keep stopwords only when the query has nothing else (e.g. a one-word query).
         tokens = [t for t in all_tokens if t not in FTS_STOPWORDS] or all_tokens
@@ -377,6 +383,7 @@ class HybridVectorStore:
         if not self._vectors:
             _flag_degraded("no document vectors")
             return None
+        query = _nfc(query)
         q_emb = _QUERY_VECTORS.get(query)
         hit = q_emb is not None
         if q_emb is None:

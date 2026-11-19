@@ -112,3 +112,22 @@ def test_standalone_store_embeds_missing_documents(monkeypatch, tmp_path):
     for doc in DOCS:
         assert doc.id in store._vectors
 
+
+def test_symmetric_nfc_normalization_for_fts_and_vectors():
+    import unicodedata
+
+    nfd_title = unicodedata.normalize("NFD", "Kiến trúc tiếng Việt")
+    nfd_body = unicodedata.normalize("NFD", "Bài học về tối ưu ngữ cảnh tiếng Việt")
+    nfc_query = unicodedata.normalize("NFC", "tiếng Việt")
+    nfd_query = unicodedata.normalize("NFD", "kiến trúc")
+
+    store = roadmap_store()
+    store._get_embedder = lambda: None
+    store.index_documents([_doc("vi", nfd_title, nfd_body)])
+
+    assert [d.id for d, _ in store.search_fts(nfc_query)] == ["vi"]
+    assert [d.id for d, _ in store.search_fts(nfd_query)] == ["vi"]
+
+    nfd_off_topic = unicodedata.normalize("NFD", "phở bò")
+    assert _store().hybrid_search(nfd_off_topic) == []
+

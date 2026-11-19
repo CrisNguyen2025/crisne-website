@@ -25,7 +25,13 @@ from rag_service.context_usage import record_last_turn, record_turn_diagnostics
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
-from rag_service.core.augmentation.context import GenerationRequest, build_prompt, format_documents, select_documents
+from rag_service.core.augmentation.context import (
+    GenerationRequest,
+    build_prompt,
+    format_documents,
+    reorder_documents,
+    select_documents,
+)
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.faithfulness import unsupported_claims
 from rag_service.core.generation.grounding import FAIL_PATTERNS
@@ -54,7 +60,7 @@ class GenerationPipeline:
     async def astream(self, llm: Any, req: GenerationRequest) -> AsyncGenerator[dict, None]:
         profile = self.profile
         is_rag = req.mode == "rag"
-        documents = select_documents(req, profile) if is_rag else []  # S1
+        documents = reorder_documents(select_documents(req, profile)) if is_rag else []
         prompt = build_prompt(req, profile, documents=documents)
         known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)  # S3

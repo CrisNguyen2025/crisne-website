@@ -56,6 +56,18 @@ def select_documents(req: GenerationRequest, profile: DomainProfile) -> List[Con
     return docs[: profile.max_documents]
 
 
+def reorder_documents(docs: Sequence[ContextDocument]) -> List[ContextDocument]:
+    if len(docs) <= 2:
+        return list(docs)
+    reordered: List[ContextDocument] = []
+    for i, doc in enumerate(reversed(docs)):
+        if i % 2 == 1:
+            reordered.append(doc)
+        else:
+            reordered.insert(0, doc)
+    return reordered
+
+
 def format_documents(docs: List[ContextDocument]) -> str:
     if not docs:
         return "<context>\n</context>"
@@ -99,6 +111,7 @@ def build_prompt(
     if hist := format_history(history.get_recent(req.thread_id, profile.history_turns * 2), profile):
         parts.append(hist)
     if req.mode == "rag":
-        parts.append(format_documents(select_documents(req, profile) if documents is None else documents))
+        docs = reorder_documents(select_documents(req, profile)) if documents is None else documents
+        parts.append(format_documents(docs))
     parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
     return "\n\n".join(parts)

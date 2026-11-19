@@ -13,7 +13,7 @@ from rag_service.core.augmentation.history import history_store
 from rag_service.core.generation.delivery import record_turn
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
-from rag_service.core.augmentation.context import build_prompt, select_documents
+from rag_service.core.augmentation.context import build_prompt, format_documents, reorder_documents, select_documents
 from rag_service.core.generation.guardrails import PiiStreamFilter
 from rag_service.domains.roadmap.retrieval.ingestion import KnowledgeDocument
 
@@ -348,3 +348,49 @@ def test_fixed_text_comes_before_per_request_data():
         system = prompt.split("</system>")[0]
         assert PROFILE.suggestion_format.strip() in system
         assert prompt.endswith("</user_query>")
+
+
+def test_reorder_documents_u_shape():
+    from rag_service.core.augmentation.documents import ContextDocument
+
+    def _cd(i: str, score: float) -> ContextDocument:
+        return ContextDocument(id=i, title=f"T{i}", body=f"B{i}", score=score)
+
+    d1, d2, d3, d4 = _cd("1", 0.9), _cd("2", 0.8), _cd("3", 0.7), _cd("4", 0.6)
+
+    assert reorder_documents([]) == []
+    assert [d.id for d in reorder_documents([d1])] == ["1"]
+    assert [d.id for d in reorder_documents([d1, d2])] == ["1", "2"]
+    assert [d.id for d in reorder_documents([d1, d2, d3])] == ["1", "3", "2"]
+    assert [d.id for d in reorder_documents([d1, d2, d3, d4])] == ["2", "4", "3", "1"]
+
+
+def test_format_documents_preserves_order_and_build_prompt_reorders():
+    from rag_service.core.augmentation.documents import ContextDocument
+    from rag_service.context_usage import last_turn_diagnostics
+
+    def _cd(i: str, score: float) -> ContextDocument:
+        return ContextDocument(id=i, title=f"T{i}", body=f"B{i}", score=score)
+
+    docs = [_cd("1", 0.9), _cd("2", 0.8), _cd("3", 0.7), _cd("4", 0.6)]
+    formatted = format_documents(docs)
+    raw_ids = [line.split('id="')[1].split('"')[0] for line in formatted.splitlines() if line.startswith("<document ")]
+    assert raw_ids == ["1", "2", "3", "4"]
+
+    sources = [(_doc("1"), 0.9), (_doc("2"), 0.8), (_doc("3"), 0.7), (_doc("4"), 0.6)]
+    req = GenerationRequest(mode="rag", query="q", thread_id=f"t-{uuid.uuid4()}", sources=sources)
+    prompt = build_prompt(req, PROFILE)
+    prompt_ids = [line.split('id="')[1].split('"')[0] for line in prompt.splitlines() if line.startswith("<document ")]
+    assert prompt_ids == ["2", "4", "3", "1"]
+
+    llm = RecordingLLM("Ok [[1]]\n<sources>1</sources>")
+    thread = f"t-{uuid.uuid4()}"
+    req_stream = GenerationRequest(mode="rag", query="q", thread_id=thread, sources=sources)
+
+    async def _collect():
+        return [ev async for ev in generation_pipeline.astream(llm, req_stream)]
+
+    asyncio.run(_collect())
+    sent_ids = [line.split('id="')[1].split('"')[0] for line in llm.prompts[0].splitlines() if line.startswith("<document ")]
+    assert sent_ids == ["2", "4", "3", "1"]
+    assert last_turn_diagnostics(thread)["document_ids"] == ["2", "4", "3", "1"]
