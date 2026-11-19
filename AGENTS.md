@@ -35,6 +35,13 @@ Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file
 - **NEVER** run `git clean -fd` or `git reset --hard` without checking `git log` and verifying commits exist.
 - **NEVER** delete untracked files or folders blindly. Always backup or stash before bulk edits.
 
+## 🌿 Git branches
+
+- Nhánh làm việc (`feat/*`, `fix/*`, `chore/*`, `docs/*`, ...) sau khi đã merge vào `main` thì xoá ngay, tránh nhánh rác và conflict về sau.
+- Kiểm tra trước khi xoá: nhánh nằm trong `git branch --merged main`. Xoá local bằng `git branch -d <branch>`, không dùng `-D` (`-d` tự từ chối nếu còn commit chưa merge).
+- Xoá nhánh remote (`git push origin --delete <branch>`) là thao tác push: hỏi user trước. Sau đó chạy `git fetch --prune` để dọn ref `origin/*` đã mất.
+- Không xoá nhánh đang checkout hay nhánh đang có worktree; không đụng `main`.
+
 ## 📐 Conventions
 
 Chỉ ghi quy ước riêng của repo. Quy ước chung của Next.js/React/Tailwind và những gì ESLint đã bắt thì không ghi lại ở đây.
