@@ -7,9 +7,12 @@ when the topic is not known the user is asked for it, never guessed.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import AsyncGenerator, Optional
 
+from rag_service.adapters.errors import DuplicateEntityError, normalize_title
+from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.retrieval.relevance import fold
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
@@ -40,12 +43,18 @@ from rag_service.domains.roadmap.router.write_gate import (
     WriteGate,
     gate_action,
 )
+from rag_service.domains.roadmap.sections import GENERAL_SECTION
 from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import get_adapter
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section, update_item_content
-from rag_service.tools.topic_resolver import resolve_lesson, resolve_topic, topic_named_in_message
+from rag_service.tools.topic_resolver import (
+    describe_unresolved_topic,
+    resolve_lesson,
+    resolve_topic,
+    topic_named_in_message,
+)
 from rag_service.write_grant import write_granted
 
 
@@ -57,6 +66,11 @@ CANCEL_WORDS = ("hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi")
 EDITED_TITLES_REJECTED_REPLY = (
     "Mình chưa áp dụng được tên bạn vừa sửa (tên trống, không hợp lệ, hoặc số lượng không khớp với thao tác đang chờ). "
     "Thao tác vẫn đang chờ: sửa lại tên rồi bấm xác nhận, hoặc bấm hủy."
+)
+
+EDITED_TARGET_REJECTED_REPLY = (
+    "Mình chưa áp dụng được Topic đích bạn vừa sửa (tên trống hoặc không hợp lệ). "
+    "Thao tác vẫn đang chờ: sửa lại Topic đích rồi bấm xác nhận, hoặc bấm hủy."
 )
 
 NOTHING_PENDING_REPLY = (
@@ -112,9 +126,67 @@ class RoadmapCommands:
             ent.title = title
         return edited
 
+    async def _with_edited_target(
+        self, action: StructuredRoadmapAction, target: dict
+    ) -> tuple[Optional[StructuredRoadmapAction], Optional[str]]:
+        """Apply edited topic/section target onto a pending create item action."""
+        if action.action != ActionType.CREATE or action.entity_level != EntityLevel.ITEM:
+            return None, EDITED_TITLES_REJECTED_REPLY
+        edited = action.model_copy(deep=True)
+        if "topic" in target:
+            raw_topic = (target.get("topic") or "").strip()
+            if not raw_topic or raw_topic.lower() in POINTING_WORDS:
+                return None, EDITED_TARGET_REJECTED_REPLY
+            found_topic = await resolve_topic(raw_topic)
+            if found_topic.status == "unavailable":
+                return (
+                    None,
+                    "⚠️ Hiện chưa kiểm tra được Topic đích. Thao tác vẫn đang chờ: thử lại hoặc bấm hủy.",
+                )
+            if found_topic.status != "found" or not found_topic.slug:
+                return (
+                    None,
+                    describe_unresolved_topic(raw_topic, found_topic)
+                    + " Thao tác vẫn đang chờ: sửa lại Topic đích rồi bấm xác nhận, hoặc bấm hủy.",
+                )
+            edited.target_parent_identifier = found_topic.slug
+        if "section" in target:
+            raw_sec = re.sub(r"\s+", " ", (target.get("section") or "")).strip().strip("\"'`“”‘’")
+            next_sec = None if (not raw_sec or raw_sec.lower() == "chung") else raw_sec
+            for ent in edited.entities:
+                ent.section = next_sec
+        return edited, None
+
+    async def _reprompt_pending_preview(
+        self,
+        session_id: str,
+        reply: str,
+        delay: float,
+        *,
+        editable_titles: Optional[list[str]] = None,
+        editable_target: Optional[dict] = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Keep the preview interactive in the widget after rejecting invalid edited fields."""
+        full_reply = reply
+        if "Xác nhận thực hiện" not in full_reply:
+            full_reply += '\n\n👉 Sửa lại rồi bấm **[✅ Xác nhận thực hiện]**, hoặc bấm **[❌ Hủy bỏ]** để hủy.'
+        preview_event: dict = {
+            "type": "action_preview",
+            "action_id": session_id,
+            "preview": full_reply,
+        }
+        if editable_titles:
+            preview_event["editable_titles"] = editable_titles
+        if editable_target:
+            preview_event["editable_target"] = editable_target
+        yield preview_event
+        async for ev in self._stream_text(full_reply, delay):
+            yield ev
+
     async def handle_pending(
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict,
         titles: Optional[list[str]] = None,
+        target: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
         # A previewed lesson body (lesson_content.py): "ok" adds it to the end of the lesson
@@ -160,6 +232,31 @@ class RoadmapCommands:
                     async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                         yield ev
                 else:
+                    if titles is not None:
+                        if len(titles) != 1:
+                            session_ctx.pending_section_rename = rename
+                            async for ev in self._reprompt_pending_preview(
+                                session_id,
+                                EDITED_TITLES_REJECTED_REPLY,
+                                delay,
+                                editable_titles=[rename.get("merge") or rename["to"]],
+                            ):
+                                yield ev
+                            outcome["handled"] = True
+                            return
+                        cleaned_name = re.sub(r"\s+", " ", (titles[0] or "")).strip().strip("\"'`“”‘’")
+                        if not cleaned_name or cleaned_name.lower() in POINTING_WORDS:
+                            session_ctx.pending_section_rename = rename
+                            async for ev in self._reprompt_pending_preview(
+                                session_id,
+                                EDITED_TITLES_REJECTED_REPLY,
+                                delay,
+                                editable_titles=[rename.get("merge") or rename["to"]],
+                            ):
+                                yield ev
+                            outcome["handled"] = True
+                            return
+                        rename["to"] = cleaned_name
                     args = {"topic": rename["topic"], "from_name": rename["from"], "to_name": rename["to"]}
                     yield {"type": "tool_start", "name": "rename_section", "args": {**args, "confirmed": True}}
                     try:
@@ -180,6 +277,103 @@ class RoadmapCommands:
                 return
             # Anything else drops the preview, like a pending create or delete below
             return
+        # A previewed lesson title/section edit (lesson_edit.py): "ok" applies it via adapter.update_item
+        if edit := session_ctx.fresh_pending("pending_lesson_edit"):
+            session_ctx.pending_lesson_edit = None
+            if lower in CONFIRM_WORDS:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                else:
+                    if titles is not None:
+                        if len(titles) != 1:
+                            session_ctx.pending_lesson_edit = edit
+                            async for ev in self._reprompt_pending_preview(
+                                session_id,
+                                EDITED_TITLES_REJECTED_REPLY,
+                                delay,
+                                editable_titles=[edit["new_title"]],
+                                editable_target={"section": edit.get("new_section") or ""},
+                            ):
+                                yield ev
+                            outcome["handled"] = True
+                            return
+                        cleaned_title = self.extractor.clean_title(titles[0])
+                        if not cleaned_title or cleaned_title.lower() in POINTING_WORDS:
+                            session_ctx.pending_lesson_edit = edit
+                            async for ev in self._reprompt_pending_preview(
+                                session_id,
+                                EDITED_TITLES_REJECTED_REPLY,
+                                delay,
+                                editable_titles=[edit["new_title"]],
+                                editable_target={"section": edit.get("new_section") or ""},
+                            ):
+                                yield ev
+                            outcome["handled"] = True
+                            return
+                        edit["new_title"] = cleaned_title
+                    if target is not None and "section" in target:
+                        raw_sec = re.sub(r"\s+", " ", (target.get("section") or "")).strip().strip("\"'`“”‘’")
+                        edit["new_section"] = None if (not raw_sec or raw_sec.lower() == "chung") else raw_sec
+
+                    old_title = edit["old_title"]
+                    old_section = edit.get("old_section")
+                    new_title = edit["new_title"]
+                    new_section = edit.get("new_section")
+
+                    update_kwargs: dict = {}
+                    if new_title != old_title:
+                        update_kwargs["title"] = new_title
+                    if (new_section or None) != (old_section or None) or (
+                        new_section is not None and old_section is not None and new_section != old_section
+                    ):
+                        update_kwargs["section"] = new_section
+
+                    if not update_kwargs:
+                        async for ev in self._stream_text(
+                            f"Bài **{old_title}** đã có đúng tên và mục này rồi nên mình chưa đổi gì.", delay
+                        ):
+                            yield ev
+                        outcome["handled"] = True
+                        return
+
+                    item_id = edit["item_id"]
+                    yield {
+                        "type": "tool_start",
+                        "name": "update_item",
+                        "args": {"item_id": item_id, **update_kwargs, "confirmed": True},
+                    }
+                    try:
+                        with write_granted("confirmed lesson edit"):
+                            res = await get_adapter().update_item(item_id, **update_kwargs)
+                        asyncio.create_task(rag_engine.sync_live_database())
+                        final_title = (res.get("title") if isinstance(res, dict) else None) or new_title
+                        final_sec = (
+                            res.get("section") if isinstance(res, dict) and "section" in res else new_section
+                        ) or GENERAL_SECTION
+                        if "title" in update_kwargs and "section" in update_kwargs:
+                            res_msg = f"✅ Đã cập nhật bài **{old_title}** → **{final_title}** (mục `{final_sec}`)."
+                        elif "title" in update_kwargs:
+                            res_msg = f"✅ Đã đổi tên bài **{old_title}** → **{final_title}**."
+                        else:
+                            res_msg = f"✅ Đã chuyển bài **{final_title}** sang mục `{final_sec}`."
+                        ok = True
+                    except DuplicateEntityError as dup:
+                        ok, res_msg = False, f"ℹ️ Topic đã có bài **{dup.title}**, không đổi tên."
+                    except Exception as exc:
+                        ok, res_msg = False, f"❌ Lỗi khi cập nhật bài học: {exc}"
+                    yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
+                    async for ev in self._stream_text(res_msg, delay):
+                        yield ev
+                outcome["handled"] = True
+                return
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else drops the preview
+            return
         # A previewed lesson status change (lesson_status.py): "ok" applies it via adapter.update_item
         if status_change := session_ctx.fresh_pending("pending_status_change"):
             session_ctx.pending_status_change = None
@@ -198,7 +392,6 @@ class RoadmapCommands:
                     }
                     try:
                         from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
-                        from rag_service.tools import get_adapter
 
                         with write_granted("confirmed lesson status change"):
                             res = await get_adapter().update_item(item_id, status=new_status)
@@ -230,15 +423,61 @@ class RoadmapCommands:
                         yield ev
                     outcome["handled"] = True
                     return
-                if titles:
+                if titles is not None:
                     edited = self._with_edited_titles(pending_act, titles)
                     if edited is None:
-                        # The preview stays pending: the Owner fixes the names and confirms again
-                        async for ev in self._stream_text(EDITED_TITLES_REJECTED_REPLY, delay):
+                        # The preview stays pending: re-emit the preview so the Owner can fix the inputs and confirm again
+                        retry_titles = (
+                            [ent.title for ent in pending_act.entities]
+                            if pending_act.action == ActionType.CREATE
+                            else None
+                        )
+                        retry_target = (
+                            {
+                                "topic": pending_act.target_parent_identifier or "",
+                                "section": (pending_act.entities[0].section if pending_act.entities else None) or "",
+                            }
+                            if pending_act.action == ActionType.CREATE and pending_act.entity_level == EntityLevel.ITEM
+                            else None
+                        )
+                        async for ev in self._reprompt_pending_preview(
+                            session_id,
+                            EDITED_TITLES_REJECTED_REPLY,
+                            delay,
+                            editable_titles=retry_titles,
+                            editable_target=retry_target,
+                        ):
                             yield ev
                         outcome["handled"] = True
                         return
                     pending_act = edited
+                if target is not None:
+                    edited_act, err_msg = await self._with_edited_target(pending_act, target)
+                    if err_msg is not None or edited_act is None:
+                        retry_titles = (
+                            [ent.title for ent in pending_act.entities]
+                            if pending_act.action == ActionType.CREATE
+                            else None
+                        )
+                        retry_target = (
+                            {
+                                "topic": pending_act.target_parent_identifier or "",
+                                "section": (pending_act.entities[0].section if pending_act.entities else None) or "",
+                            }
+                            if pending_act.action == ActionType.CREATE and pending_act.entity_level == EntityLevel.ITEM
+                            else None
+                        )
+                        async for ev in self._reprompt_pending_preview(
+                            session_id,
+                            err_msg or EDITED_TARGET_REJECTED_REPLY,
+                            delay,
+                            editable_titles=retry_titles,
+                            editable_target=retry_target,
+                        ):
+                            yield ev
+                        outcome["handled"] = True
+                        return
+                    pending_act = edited_act
                 session_ctx.pending_confirmation = None
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
@@ -333,8 +572,13 @@ class RoadmapCommands:
             "preview": preview_text,
         }
         if action.action == ActionType.CREATE:
-            # The Owner may correct the names the model read before confirming (sent back as `titles`)
+            # The Owner may correct the names and target the model read before confirming
             preview_event["editable_titles"] = [ent.title for ent in action.entities]
+            if action.entity_level == EntityLevel.ITEM:
+                preview_event["editable_target"] = {
+                    "topic": action.target_parent_identifier or "",
+                    "section": (action.entities[0].section if action.entities else None) or "",
+                }
         yield preview_event
         async for ev in self._stream_text(preview_text, delay):
             yield ev
@@ -465,8 +709,8 @@ class RoadmapCommands:
                 return
             resolved_action.target_parent_identifier = topic_ref
 
-        # Asked politely or on a condition ("có thể thêm ... không", "chưa thì thêm vào"): show it, run on "ok"
-        if gate.mode == WRITE_CONFIRM:
+        # Every create and every polite/conditional change shows a preview card with editable inputs first
+        if gate.mode == WRITE_CONFIRM or resolved_action.action == ActionType.CREATE:
             async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
                 yield ev
             return

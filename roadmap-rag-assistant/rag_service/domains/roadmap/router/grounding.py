@@ -194,10 +194,11 @@ def legacy_level_reply(text: str, known_place: Optional[Callable[[str], bool]] =
     )
 
 
-# The executor runs create and delete only: an update is answered here, never previewed
+# Updates outside lesson rename/section move (e.g. topic updates) are answered here, never previewed
 UPDATE_NOT_SUPPORTED_REPLY = (
-    "Abot chưa sửa được topic hay bài học qua chat. Bạn mở bài đó trên trang Roadmap để sửa trực tiếp. "
-    "Thêm mới hoặc xóa thì Abot làm được, ví dụ:\n\n" + example_blocks("thêm bài … vào topic …", "xóa bài …")
+    "Abot chưa sửa được topic hoặc chuyển bài giữa các topic qua chat. Bạn mở trên trang Roadmap để sửa trực tiếp. "
+    "Đổi tên bài, chuyển mục, thêm mới hoặc xóa thì Abot làm được, ví dụ:\n\n"
+    + example_blocks("đổi tên bài … thành …", "chuyển bài … sang mục …", "thêm bài … vào topic …")
 )
 
 

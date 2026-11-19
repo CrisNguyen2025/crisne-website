@@ -89,8 +89,11 @@ export interface UseRoadmapAssistantChatReturn {
   activeTool: string | null;
   error: string | null;
   conversationId: string;
-  /** `options.titles`: names the Owner edited on a create Preview, sent with the confirming message */
-  sendMessage: (textToSend?: string, options?: { titles?: string[] }) => Promise<void>;
+  /** `options.titles` / `options.target`: fields the Owner edited on a Preview, sent with the confirming message */
+  sendMessage: (
+    textToSend?: string,
+    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+  ) => Promise<void>;
   stopStreaming: () => void;
   /** The conversation's context as last loaded by `refreshContext`. */
   conversationContext: ConversationContextState;
@@ -223,7 +226,10 @@ export function useRoadmapAssistantChat(
   }, []);
 
   const sendMessage = useCallback(
-    async (textToSend?: string, options?: { titles?: string[] }) => {
+    async (
+      textToSend?: string,
+      options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+    ) => {
       const content = (textToSend ?? input).trim();
       if (!content) return;
 
@@ -401,10 +407,18 @@ export function useRoadmapAssistantChat(
             },
 
 
-            onActionPreview: ({ editableTitles }) => {
-              if (!editableTitles?.length) return;
+            onActionPreview: ({ editableTitles, editableTarget }) => {
+              if (!editableTitles?.length && !editableTarget) return;
               setMessages((prev) =>
-                prev.map((msg) => (msg.id === botMsgId ? { ...msg, editableTitles } : msg))
+                prev.map((msg) =>
+                  msg.id === botMsgId
+                    ? {
+                        ...msg,
+                        ...(editableTitles?.length ? { editableTitles } : {}),
+                        ...(editableTarget ? { editableTarget } : {}),
+                      }
+                    : msg
+                )
               );
             },
 
@@ -492,7 +506,8 @@ export function useRoadmapAssistantChat(
           },
           conversationId,
           getContextRef.current?.(),
-          options?.titles
+          options?.titles,
+          options?.target
         );
       } catch (err: unknown) {
         const { text } = friendlyError(err);

@@ -14,10 +14,17 @@ from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
 from rag_service.state import session_store
 
 
-def _turn(text: str, thread_id: str, titles: list[str] | None = None) -> tuple[str, list[dict]]:
-    payload = {"messages": [{"role": "user", "content": text}], "fast": True}
+def _turn(
+    text: str,
+    thread_id: str,
+    titles: list[str] | None = None,
+    target: dict | None = None,
+) -> tuple[str, list[dict]]:
+    payload: dict = {"messages": [{"role": "user", "content": text}], "fast": True}
     if titles is not None:
         payload["titles"] = titles
+    if target is not None:
+        payload["target"] = target
 
     async def run():
         out = []
@@ -101,3 +108,51 @@ def test_titles_never_turn_a_delete_into_a_create(mock_adapter):
     assert "chưa áp dụng được" in reply
     mock_adapter.create_topic.assert_not_awaited()
     mock_adapter.delete_topic.assert_not_awaited()
+
+
+def test_create_lesson_preview_carries_editable_titles_and_target(mock_adapter):
+    set_actor("owner")
+    thread = f"edit-lesson-preview-{uuid.uuid4()}"
+    _, events = _turn("thêm bài Reranking vào topic Test Topic mục RAG", thread)
+    preview = next(e for e in events if e.get("type") == "action_preview")
+    assert preview["editable_titles"] == ["Reranking"]
+    assert preview["editable_target"] == {"topic": "test-topic", "section": "RAG"}
+
+
+def test_confirm_create_lesson_applies_edited_target_topic_and_section(mock_adapter):
+    mock_adapter.list_topics.return_value = [
+        {"id": "t1", "slug": "test-topic", "title": "Test Topic", "_count": {"items": 1}},
+        {"id": "t2", "slug": "ai-engineering", "title": "AI Engineering", "_count": {"items": 0}},
+    ]
+    set_actor("owner")
+    thread = f"edit-target-{uuid.uuid4()}"
+    _turn("thêm bài Reranking vào topic Test Topic mục RAG", thread)
+    _turn("ok", thread, titles=["Cross-Encoder Reranking"], target={"topic": "AI Engineering", "section": "Retrieval"})
+    mock_adapter.create_item.assert_awaited_once()
+    kwargs = mock_adapter.create_item.await_args.kwargs
+    assert kwargs["topic_slug"] == "ai-engineering"
+    assert kwargs["section"] == "Retrieval"
+    assert kwargs["title"] == "Cross-Encoder Reranking"
+
+
+def test_confirm_create_lesson_can_clear_section_via_target(mock_adapter):
+    set_actor("owner")
+    thread = f"clear-sec-{uuid.uuid4()}"
+    _turn("thêm bài Reranking vào topic Test Topic mục RAG", thread)
+    _turn("ok", thread, target={"section": ""})
+    kwargs = mock_adapter.create_item.await_args.kwargs
+    assert kwargs["topic_slug"] == "test-topic"
+    assert kwargs["section"] is None
+
+
+def test_invalid_edited_target_topic_keeps_preview_pending(mock_adapter):
+    set_actor("owner")
+    thread = f"bad-target-{uuid.uuid4()}"
+    _turn("thêm bài Reranking vào topic Test Topic mục RAG", thread)
+    reply, events = _turn("ok", thread, target={"topic": "no-such-topic"})
+    assert "Không tìm thấy topic" in reply and "Xác nhận thực hiện" in reply
+    preview_ev = next(e for e in events if e.get("type") == "action_preview")
+    assert preview_ev["editable_titles"] == ["Reranking"]
+    assert preview_ev["editable_target"] == {"topic": "test-topic", "section": "RAG"}
+    mock_adapter.create_item.assert_not_awaited()
+    assert session_store.get_or_create(thread).pending_confirmation is not None

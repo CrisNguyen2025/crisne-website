@@ -49,6 +49,7 @@ async def _sse_stream_generator(
     context: dict | None = None,
     actor: Actor | None = None,
     titles: list[str] | None = None,
+    target: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """Universal SSE generator that handles both LangChain and FallbackAgent streaming."""
     # The body is streamed after the handler returns: set the caller where the agent runs
@@ -67,8 +68,12 @@ async def _sse_stream_generator(
     trace_id: str | None = None
 
     config = {"configurable": {"thread_id": thread_id}}
-    # Only sent with a confirmation that edits names; other agents never see the key
-    extra_input = {"titles": titles} if titles else {}
+    # Only sent with a confirmation that edits names or target; other agents never see the keys
+    extra_input: dict = {}
+    if titles:
+        extra_input["titles"] = titles
+    if target is not None:
+        extra_input["target"] = target
 
     async def _stream_from_fallback(f_agent: FallbackAgent):
         nonlocal trace_id
@@ -177,7 +182,14 @@ async def _sse_stream_generator(
 async def chat_stream(req: ChatRequest, request: Request):
     """Server-Sent Events (SSE) streaming endpoint for real-time tokens and tool events."""
     return StreamingResponse(
-        _sse_stream_generator(req.message, req.thread_id, req.context, _actor_of(request), req.titles),
+        _sse_stream_generator(
+            req.message,
+            req.thread_id,
+            req.context,
+            _actor_of(request),
+            req.titles,
+            req.target.model_dump(exclude_none=True) if req.target else None,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

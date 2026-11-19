@@ -48,8 +48,10 @@ export interface ChatMessage {
   changes?: ChangeReview[];
   /** Langfuse trace of the reply; feedback on it is scored on this trace. */
   traceId?: string;
-  /** Names of a create Preview the Owner may correct before confirming. */
+  /** Names of a create/edit Preview the Owner may correct before confirming. */
   editableTitles?: string[];
+  /** Target (topic / section) of a Preview the Owner may correct before confirming. */
+  editableTarget?: { topic?: string; section?: string };
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
   suggestions?: { label: string; prompt: string }[];

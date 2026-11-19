@@ -41,7 +41,10 @@ export interface MessageListProps {
   canWrite?: boolean;
   /** The 👍/👎 votes; off when the host takes no feedback */
   showFeedback?: boolean;
-  sendMessage: (textToSend?: string, options?: { titles?: string[] }) => void;
+  sendMessage: (
+    textToSend?: string,
+    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+  ) => void;
   retry: (errorMessageId: string) => void;
   copyMessage: (id: string, text: string) => void;
   handleFeedback: (msgId: string, val: 1 | 0) => void;
@@ -152,31 +155,56 @@ function ScrollBottomButton({
 }
 
 /**
- * Confirm / cancel buttons of a Preview. A create Preview also shows its names as inputs: the model only
- * suggests them, so the Owner corrects them here and the edited names go back with the confirmation.
+ * Confirm / cancel buttons of a Preview. A Preview may carry editable names (`editableTitles`) and target
+ * (`editableTarget`) as inputs so the Owner can correct them manually before confirming.
  */
 function ConfirmActions({
   editableTitles,
+  editableTarget,
   disabled,
   sendMessage,
 }: {
   editableTitles?: string[];
+  editableTarget?: { topic?: string; section?: string };
   disabled: boolean;
   sendMessage: MessageListProps["sendMessage"];
 }) {
   const [draft, setDraft] = React.useState<string[]>(editableTitles ?? []);
+  const [topicDraft, setTopicDraft] = React.useState<string>(editableTarget?.topic ?? "");
+  const [sectionDraft, setSectionDraft] = React.useState<string>(editableTarget?.section ?? "");
   const editable = draft.length > 0;
-  const hasBlank = draft.some((title) => !title.trim());
-  const changed = editable && draft.some((title, i) => title.trim() !== editableTitles?.[i]);
+  const showTopicInput = editableTarget?.topic !== undefined;
+  const showSectionInput = editableTarget?.section !== undefined;
+  const showFieldLabels = showTopicInput || showSectionInput;
+  const hasBlank =
+    draft.some((title) => !title.trim()) || (showTopicInput && !topicDraft.trim());
   const confirm = () => {
     if (disabled || hasBlank) return;
-    sendMessage("ok", changed ? { titles: draft.map((title) => title.trim()) } : undefined);
+    const titlesChanged = editable && draft.some((title, i) => title.trim() !== editableTitles?.[i]);
+    const topicChanged = showTopicInput && topicDraft.trim() !== editableTarget?.topic;
+    const sectionChanged = showSectionInput && sectionDraft.trim() !== (editableTarget?.section ?? "");
+    const payload: { titles?: string[]; target?: { topic?: string; section?: string } } = {};
+    if (titlesChanged) {
+      payload.titles = draft.map((title) => title.trim());
+    }
+    if (topicChanged || sectionChanged) {
+      payload.target = {
+        ...(topicChanged ? { topic: topicDraft.trim() } : {}),
+        ...(sectionChanged ? { section: sectionDraft.trim() } : {}),
+      };
+    }
+    sendMessage("ok", Object.keys(payload).length > 0 ? payload : undefined);
   };
 
   return (
     <>
       {editable && (
         <div className="flex flex-col gap-1.5">
+          {showFieldLabels && (
+            <span className="text-[11px] font-medium text-[#5E5B55]">
+              {draft.length > 1 ? "Tên các mục/bài" : "Tên"}
+            </span>
+          )}
           {draft.map((title, i) => (
             <input
               key={i}
@@ -195,6 +223,52 @@ function ConfirmActions({
               className="w-full rounded-lg border border-[#E6E4DF] bg-white px-3 py-1.5 text-sm text-[#1F1E1C] outline-none focus:border-[#C2410C] disabled:opacity-50"
             />
           ))}
+        </div>
+      )}
+      {showFieldLabels && (
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+          {showTopicInput && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-[#5E5B55]">Topic đích</span>
+              <input
+                type="text"
+                value={topicDraft}
+                maxLength={200}
+                disabled={disabled}
+                aria-label="Topic đích"
+                placeholder="Topic đích"
+                onChange={(e) => setTopicDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    confirm();
+                  }
+                }}
+                className="w-full rounded-lg border border-[#E6E4DF] bg-white px-3 py-1.5 text-sm text-[#1F1E1C] outline-none focus:border-[#C2410C] disabled:opacity-50"
+              />
+            </label>
+          )}
+          {showSectionInput && (
+            <label className={`flex flex-col gap-1 ${showTopicInput ? "" : "sm:col-span-2"}`}>
+              <span className="text-[11px] font-medium text-[#5E5B55]">Mục đích</span>
+              <input
+                type="text"
+                value={sectionDraft}
+                maxLength={200}
+                disabled={disabled}
+                aria-label="Mục đích"
+                placeholder="Mục đích (để trống = Chung)"
+                onChange={(e) => setSectionDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    confirm();
+                  }
+                }}
+                className="w-full rounded-lg border border-[#E6E4DF] bg-white px-3 py-1.5 text-sm text-[#1F1E1C] outline-none focus:border-[#C2410C] disabled:opacity-50"
+              />
+            </label>
+          )}
         </div>
       )}
       <div className="flex items-center gap-2">
@@ -476,6 +550,7 @@ const MessageItem = React.memo(function MessageItem({
           </p>
           <ConfirmActions
             editableTitles={canWrite ? msg.editableTitles : undefined}
+            editableTarget={canWrite ? msg.editableTarget : undefined}
             disabled={isLoading}
             sendMessage={sendMessage}
           />

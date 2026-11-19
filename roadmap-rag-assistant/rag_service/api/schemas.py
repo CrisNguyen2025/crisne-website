@@ -14,6 +14,13 @@ def reject_shared_thread(value: str) -> str:
         raise ValueError("thread_id must identify one conversation; generate one per chat (e.g. a UUID)")
     return value
 
+class PreviewTargetEdit(BaseModel):
+    """Target fields (topic and/or section) the Owner edited on a Preview card."""
+
+    topic: Optional[str] = Field(default=None, max_length=200)
+    section: Optional[str] = Field(default=None, max_length=200)
+
+
 class ChatRequest(BaseModel):
     """POST /chat request body."""
 
@@ -28,6 +35,7 @@ class ChatRequest(BaseModel):
     )
     # Names the Owner edited on a create Preview; applied when this message confirms it (commands.handle_pending)
     titles: Optional[list[Annotated[str, Field(min_length=1, max_length=200)]]] = Field(default=None, max_length=20)
+    target: Optional[PreviewTargetEdit] = Field(default=None)
 
 
 class ContextRequest(BaseModel):

@@ -80,7 +80,7 @@ def test_update_is_answered_before_any_preview(mock_adapter):
     mock_adapter.get_topic.return_value = TOPIC
     set_actor("owner")
     thread = f"update-{uuid.uuid4()}"
-    text, events = _turn(NextGenRoadmapAgent(llm_model=None), "đổi tên bài QA Abot Test thành QA Abot Renamed", thread)
+    text, events = _turn(NextGenRoadmapAgent(llm_model=None), "đổi tên topic Test Topic thành New Topic", thread)
     assert "chưa sửa được" in text
     assert not [e for e in events if e.get("type") in ("action_preview", "tool_start")]
     assert not session_store.get_or_create(thread).pending_confirmation

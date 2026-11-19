@@ -7,13 +7,18 @@ import type { ChatMessage } from "@/roadmap-rag-assistant/sdk/typescript/src/rea
 
 const PREVIEW = '**➕ TẠO MỚI 1 TOPIC**\n- **Danh sách thực thể:**\n  1. **Backend gíup tôi**\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới';
 
-function renderPreview(opts: { editableTitles?: string[]; canWrite?: boolean }) {
+function renderPreview(opts: {
+  editableTitles?: string[];
+  editableTarget?: { topic?: string; section?: string };
+  canWrite?: boolean;
+}) {
   const sendMessage = vi.fn();
   const message: ChatMessage = {
     id: "a1",
     role: "assistant",
     content: PREVIEW,
     editableTitles: opts.editableTitles,
+    editableTarget: opts.editableTarget,
     timestamp: new Date(),
   };
   render(
@@ -79,5 +84,46 @@ describe("Preview with editable names", () => {
     const sendMessage = renderPreview({ editableTitles: ["Backend"] });
     fireEvent.click(screen.getByRole("button", { name: /Hủy bỏ/ }));
     expect(sendMessage).toHaveBeenCalledWith("hủy", undefined);
+  });
+
+  it("renders topic and section target inputs and sends only edited fields", () => {
+    const sendMessage = renderPreview({
+      editableTitles: ["Hybrid Search"],
+      editableTarget: { topic: "ai-engineering", section: "RAG" },
+    });
+    const topicInput = screen.getByRole("textbox", { name: "Topic đích" }) as HTMLInputElement;
+    const sectionInput = screen.getByRole("textbox", { name: "Mục đích" }) as HTMLInputElement;
+    expect(topicInput.value).toBe("ai-engineering");
+    expect(sectionInput.value).toBe("RAG");
+
+    fireEvent.change(topicInput, { target: { value: "  backend  " } });
+    fireEvent.change(sectionInput, { target: { value: "  Retrieval  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Xác nhận thực hiện/ }));
+    expect(sendMessage).toHaveBeenCalledWith("ok", {
+      target: { topic: "backend", section: "Retrieval" },
+    });
+  });
+
+  it("allows clearing section input while disabling confirm when topic input is blank", () => {
+    const sendMessage = renderPreview({
+      editableTitles: ["Hybrid Search"],
+      editableTarget: { topic: "ai-engineering", section: "RAG" },
+    });
+    const topicInput = screen.getByRole("textbox", { name: "Topic đích" });
+    const sectionInput = screen.getByRole("textbox", { name: "Mục đích" });
+    const confirm = screen.getByRole("button", { name: /Xác nhận thực hiện/ }) as HTMLButtonElement;
+
+    fireEvent.change(sectionInput, { target: { value: "" } });
+    expect(confirm.disabled).toBe(false);
+
+    fireEvent.change(topicInput, { target: { value: "   " } });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    fireEvent.change(topicInput, { target: { value: "ai-engineering" } });
+    expect(confirm.disabled).toBe(false);
+    fireEvent.click(confirm);
+    expect(sendMessage).toHaveBeenCalledWith("ok", { target: { section: "" } });
   });
 });

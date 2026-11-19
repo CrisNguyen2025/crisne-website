@@ -43,6 +43,12 @@ export function formatToolDisplayName(name: string): string {
     case 'create_item':
     case 'create_items_batch':
       return 'Thêm Bài học (Item)';
+    case 'update_item':
+      return 'Cập nhật Bài học';
+    case 'update_item_content':
+      return 'Cập nhật Nội dung bài học';
+    case 'rename_section':
+      return 'Đổi tên Mục';
     case 'delete_topic':
     case 'delete_layer':
     case 'delete_group':

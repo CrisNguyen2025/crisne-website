@@ -23,6 +23,7 @@ _PENDING_FIELDS = (
     "pending_section_rename",
     "pending_content_draft",
     "pending_status_change",
+    "pending_lesson_edit",
 )
 
 
@@ -43,6 +44,8 @@ class SessionContext(BaseModel):
     pending_content_draft: Optional[Dict[str, Any]] = None
     # A previewed lesson status change waiting for "ok" (domains/roadmap/lesson_status.py)
     pending_status_change: Optional[Dict[str, Any]] = None
+    # A previewed lesson title/section edit waiting for "ok" (domains/roadmap/lesson_edit.py)
+    pending_lesson_edit: Optional[Dict[str, Any]] = None
     recent_created_entities: List[dict] = Field(default_factory=list)
     # The open Topic was read from Turso (SessionStore.load): once per context, so a thread without one is not read again
     topic_loaded: bool = False

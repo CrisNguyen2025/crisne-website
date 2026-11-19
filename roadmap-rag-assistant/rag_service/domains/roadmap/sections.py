@@ -194,7 +194,12 @@ class SectionCommands:
             f"({source[1]} bài){note}\n\n"
             "👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
         )
-        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview}
+        yield {
+            "type": "action_preview",
+            "action_id": session_ctx.session_id,
+            "preview": preview,
+            "editable_titles": [merge or rename["dst"]],
+        }
         async for ev in self._stream_text(preview, delay):
             yield ev
         # The confirmed rename runs in commands.handle_pending, the decision point that grants writes

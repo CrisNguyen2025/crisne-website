@@ -28,6 +28,7 @@ from rag_service.core.orchestration.sources import SourceDeps, answer_from_sourc
 from rag_service.domains.roadmap.agent_actions import RoadmapAgentActions
 from rag_service.domains.roadmap.commands import RoadmapCommands
 from rag_service.domains.roadmap.lesson_content import LessonContentCommands
+from rag_service.domains.roadmap.lesson_edit import LessonEditCommands
 from rag_service.domains.roadmap.lesson_status import LessonStatusCommands
 from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
@@ -115,7 +116,7 @@ async def _plan_queries(llm, query: str, session_id: str):
 
 
 class NextGenRoadmapAgent(
-    RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonContentCommands, LessonStatusCommands
+    RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonEditCommands, LessonContentCommands, LessonStatusCommands
 ):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -272,6 +273,7 @@ class NextGenRoadmapAgent(
         async for ev in self.handle_pending(
             content=content, lower=lower, session_id=session_id, session_ctx=session_ctx, delay=delay, outcome=outcome,
             titles=input_dict.get("titles"),
+            target=input_dict.get("target"),
         ):
             yield ev
         if outcome["handled"]:
@@ -310,6 +312,14 @@ class NextGenRoadmapAgent(
         #        before the router; listing topics and sections, a read, is answered after it (step 5) ──
         outcome = {"handled": False}
         async for ev in self.handle_section_rename(
+            content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        # ── 1b2. A lesson rename or section move: preview, "ok" applies it (roadmap domain: lesson_edit.py) ──
+        async for ev in self.handle_lesson_edit(
             content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
         ):
             yield ev

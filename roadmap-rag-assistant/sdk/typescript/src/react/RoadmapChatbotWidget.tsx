@@ -501,7 +501,10 @@ export function RoadmapChatbotWidget({
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSend = (textToSend?: string, options?: { titles?: string[] }) => {
+  const handleSend = (
+    textToSend?: string,
+    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+  ) => {
     if (isSendingRef.current) return;
 
     const val = (textToSend ?? input).trim();
