@@ -233,11 +233,22 @@
     {
       "id": "EP_UI_TOPIC",
       "type": "page",
+      "path": "/[topicSlug]",
+      "method": "GET",
+      "authRequirement": "none",
+      "domainId": "roadmap-learning",
+      "summary": "Trang lộ trình của một topic (ADR-0014; slug topic không trùng route gốc, xem lib/roadmap/paths.ts)",
+      "handler": "app/[topicSlug]/page.tsx",
+      "triggersFlow": "N/A"
+    },
+    {
+      "id": "EP_UI_TOPIC_LEGACY",
+      "type": "page",
       "path": "/topic/[topicSlug]",
       "method": "GET",
       "authRequirement": "none",
       "domainId": "roadmap-learning",
-      "summary": "Trang lộ trình của một topic cụ thể (thay thế query ?topic=)",
+      "summary": "Đường dẫn cũ của topic — chuyển hướng 308 sang /[topicSlug], giữ ?section=",
       "handler": "app/topic/[topicSlug]/page.tsx",
       "triggersFlow": "N/A"
     },
@@ -248,18 +259,29 @@
       "method": "GET",
       "authRequirement": "none",
       "domainId": "roadmap-learning",
-      "summary": "Đường dẫn cũ của bài học — chuyển hướng 308 sang /lessons/[lessonSlug]",
+      "summary": "Đường dẫn cũ của bài học — chuyển hướng 308 sang /[topicSlug]/[lessonSlug]",
       "handler": "app/topic/[topicSlug]/[itemSlug]/page.tsx",
       "triggersFlow": "N/A"
     },
     {
       "id": "EP_UI_LESSON",
       "type": "page",
+      "path": "/[topicSlug]/[lessonSlug]",
+      "method": "GET",
+      "authRequirement": "none",
+      "domainId": "roadmap-learning",
+      "summary": "Trang đọc bài học (SSR + SEO canonical, ADR-0014); topicSlug sai hoặc slug cũ thì 308 về URL canonical",
+      "handler": "app/[topicSlug]/[lessonSlug]/page.tsx",
+      "triggersFlow": "N/A"
+    },
+    {
+      "id": "EP_UI_LESSON_LEGACY",
+      "type": "page",
       "path": "/lessons/[lessonSlug]",
       "method": "GET",
       "authRequirement": "none",
       "domainId": "roadmap-learning",
-      "summary": "Trang đọc chi tiết bài học độc lập Topic (SSR + SEO canonical)",
+      "summary": "Đường dẫn cũ của bài học (ADR-0013) — chuyển hướng 308 sang /[topicSlug]/[lessonSlug]",
       "handler": "app/lessons/[lessonSlug]/page.tsx",
       "triggersFlow": "N/A"
     },
@@ -919,7 +941,7 @@
         "roadmap -> Roadmap"
       ],
       "invariants": [
-        "slug là @unique toàn cục trên toàn bộ bảng RoadmapItem (ADR-0013)",
+        "slug là @unique toàn cục trên toàn bộ bảng RoadmapItem (ADR-0013, giữ nguyên ở ADR-0014)",
         "@@unique([roadmapId, title]): Tiêu đề bài học là duy nhất trong cùng một Topic",
         "status nhận 1 trong 3 giá trị: 'target', 'learning', 'known' (ADR-0010)",
         "section là chuỗi tự do gom bài theo ADR-0009; null = chung"

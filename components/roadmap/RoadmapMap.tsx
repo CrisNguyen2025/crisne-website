@@ -25,6 +25,7 @@ import type { ChecklistItem, RoadmapMeta, RoadmapStats, SectionGroup } from '@/l
 import { ActionMenu } from '@/components/ui/action-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { lessonPath } from '@/lib/roadmap/paths';
 import type { LessonStatus } from '@/lib/roadmap/status';
 import { RoadmapView, ViewToggle } from './ViewToggle';
 import { SECTIONS_ENABLED } from './sectionsEnabled';
@@ -55,6 +56,7 @@ const STATUS_DOT: Record<LessonStatus, string> = {
 
 interface MapChipProps {
   item: ChecklistItem;
+  topicSlug: string;
   isActive: boolean;
   onSelectItem?: (id: string) => void;
 }
@@ -80,7 +82,7 @@ function ChipInner({ item }: { item: ChecklistItem }) {
   );
 }
 
-function StaticMapChip({ item, isActive, onSelectItem }: MapChipProps) {
+function StaticMapChip({ item, topicSlug, isActive, onSelectItem }: MapChipProps) {
   const hasBody = Boolean(item.hasContent ?? item.content);
   const className = chipClassName(hasBody, isActive);
 
@@ -99,7 +101,7 @@ function StaticMapChip({ item, isActive, onSelectItem }: MapChipProps) {
 
   return (
     <Link
-      href={`/lessons/${item.slug || item.id}`}
+      href={lessonPath(item.roadmapSlug || topicSlug, item.slug || item.id)}
       prefetch={true}
       title={item.description || item.title}
       className={className}
@@ -111,6 +113,7 @@ function StaticMapChip({ item, isActive, onSelectItem }: MapChipProps) {
 
 function SortableMapChip({
   item,
+  topicSlug,
   isActive,
   onSelectItem,
   suppressClickRef,
@@ -162,7 +165,7 @@ function SortableMapChip({
       style={style}
       {...attributes}
       {...listeners}
-      href={`/lessons/${item.slug || item.id}`}
+      href={lessonPath(item.roadmapSlug || topicSlug, item.slug || item.id)}
       prefetch={true}
       draggable={false}
       onClickCapture={handleClickCapture}
@@ -177,12 +180,14 @@ function SortableMapChip({
 function SortableSectionChips({
   section,
   items,
+  topicSlug,
   activeItemId,
   onSelectItem,
   onReorderSection,
 }: {
   section: string | null;
   items: ChecklistItem[];
+  topicSlug: string;
   activeItemId: string;
   onSelectItem?: (id: string) => void;
   onReorderSection: (section: string | null, reordered: ChecklistItem[]) => void;
@@ -233,6 +238,7 @@ function SortableSectionChips({
             <SortableMapChip
               key={item.id}
               item={item}
+              topicSlug={topicSlug}
               isActive={item.id === activeItemId}
               onSelectItem={onSelectItem}
               suppressClickRef={suppressClickRef}
@@ -266,6 +272,7 @@ export function RoadmapMap({
     ? sectionGroups
     : [{ section: null, items: sectionGroups.flatMap((g) => g.items) }];
   const canReorder = canWrite && !isLocked && !currentRoadmap?.isLocked && Boolean(onReorderSection);
+  const topicSlug = currentRoadmap?.slug ?? '';
 
   return (
     <div className={cn('flex w-full flex-col', !embedded && 'h-full overflow-hidden')}>
@@ -353,6 +360,7 @@ export function RoadmapMap({
                   <SortableSectionChips
                     section={group.section}
                     items={group.items}
+                    topicSlug={topicSlug}
                     activeItemId={activeItemId}
                     onSelectItem={onSelectItem}
                     onReorderSection={onReorderSection}
@@ -366,6 +374,7 @@ export function RoadmapMap({
                       <StaticMapChip
                         key={item.id}
                         item={item}
+                        topicSlug={topicSlug}
                         isActive={item.id === activeItemId}
                         onSelectItem={onSelectItem}
                       />

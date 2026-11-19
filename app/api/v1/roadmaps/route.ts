@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { isReservedTopicSlug } from '@/lib/roadmap/paths';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -53,15 +54,17 @@ export async function POST(req: NextRequest) {
       .replace(/[^\w\s-]/g, '')
       .replace(/[\s_-]+/g, '-')
       .replace(/^-+|-+$/g, '') || `topic-${Date.now()}`;
+    // A Topic lives at /[slug] (ADR-0014), so it must not take a path the app already uses
+    const slug = isReservedTopicSlug(baseSlug) ? `${baseSlug}-topic` : baseSlug;
 
     // Same title (or a title that slugifies the same) means the topic already exists: return it
     const topics = await prisma.roadmap.findMany({ select: { id: true, slug: true, title: true } });
-    const duplicate = findDuplicate(topics, title) ?? topics.find((t) => t.slug === baseSlug);
+    const duplicate = findDuplicate(topics, title) ?? topics.find((t) => t.slug === slug);
     if (duplicate) return duplicateResponse('topic', duplicate);
 
     const createdRoadmap = await prisma.roadmap.create({
       data: {
-        slug: baseSlug,
+        slug,
         title: title.trim(),
         description: typeof description === 'string' ? description.trim() || null : null,
         order: topics.length + 1,

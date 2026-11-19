@@ -11,6 +11,7 @@ import type {
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import type { CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { ThemeToggle } from "@/components/theme-toggle";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { CreateTopicModal } from "./CreateTopicModal";
@@ -44,7 +45,7 @@ export function PublicationHome({
     const { roadmap: created } = await roadmapService.createRoadmap(payload);
     window.dispatchEvent(new CustomEvent("roadmap:updated"));
     if (created?.slug) {
-      router.push(`/topic/${created.slug}`);
+      router.push(topicPath(created.slug));
     }
   };
 
@@ -98,7 +99,7 @@ export function PublicationHome({
               {topics.map((topic) => (
                 <Link
                   key={topic.slug}
-                  href={`/topic/${topic.slug}`}
+                  href={topicPath(topic.slug)}
                   prefetch={true}
                   className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 transition-colors duration-150 hover:border-[var(--editorial-accent)] active:scale-[0.995]"
                 >
@@ -144,7 +145,7 @@ export function PublicationHome({
               {recentLessons.map((lesson) => (
                 <Link
                   key={lesson.id}
-                  href={`/lessons/${lesson.slug}`}
+                  href={lessonPath(lesson.topicSlug, lesson.slug)}
                   prefetch={true}
                   className="group -mx-2 flex flex-col gap-0.5 rounded-lg px-2 py-3 text-sm transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
                 >

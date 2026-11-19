@@ -24,6 +24,7 @@ import {
 } from "@/lib/roadmap/types";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { slugify, cn } from "@/lib/utils";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { useToast } from "@/components/ui/toast";
 
 const VIEW_STORAGE_KEY = "roadmap:view";
@@ -194,7 +195,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
   const handleSelectRoadmap = (slug: string) => {
     setSelectedSection("all");
     setIsReaderOpen(false);
-    router.push(`/topic/${slug}`);
+    router.push(topicPath(slug));
   };
 
   const handleSelectHome = () => {
@@ -207,7 +208,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
     setIsReaderOpen(true);
     const found = items.find((i) => i.id === id);
     const itemIdentifier = found?.slug || (found ? slugify(found.title) : id);
-    router.push(`/lessons/${itemIdentifier}`);
+    router.push(lessonPath(found?.roadmapSlug || topic || "", itemIdentifier));
   };
 
   const handleCreateRoadmap = async (payload: CreateRoadmapDto) => {
@@ -216,7 +217,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
     if (created?.slug) {
       setSelectedSection("all");
       setIsReaderOpen(false);
-      router.push(`/topic/${created.slug}`);
+      router.push(topicPath(created.slug));
     }
   };
 
@@ -229,7 +230,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
       setAvailableRoadmaps(remaining);
       setIsReaderOpen(false);
       if (remaining.length > 0) {
-        router.push(`/topic/${remaining[0].slug}`);
+        router.push(topicPath(remaining[0].slug));
       } else {
         router.push("/");
       }
@@ -397,7 +398,7 @@ export function RoadmapWorkspace({ initialTopic, initialItem }: RoadmapWorkspace
                   setIsReaderOpen(false);
                   if (topic) {
                     const sectionQuery = sectionParam ? `?section=${encodeURIComponent(sectionParam)}` : "";
-                    router.push(`/topic/${topic}${sectionQuery}`);
+                    router.push(`${topicPath(topic)}${sectionQuery}`);
                   } else {
                     setQueryItem(null);
                   }

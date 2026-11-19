@@ -152,10 +152,10 @@ describe('PATCH /api/v1/roadmaps/items/[id] slug, redirect, and topic move', () 
     expect(viaRedirect).toEqual({ kind: 'redirect', toSlug: 'rag-chunking' });
   });
 
-  it('getRoadmapPageContext extracts roadmapSlug, itemId, and section on /lessons/[slug]', () => {
+  it('getRoadmapPageContext extracts roadmapSlug, itemId, and section on /[topicSlug]/[lessonSlug]', () => {
     vi.stubGlobal('window', {
       location: {
-        pathname: '/lessons/hybrid-search',
+        pathname: '/ai-architecture/hybrid-search',
         search: '',
       },
     });

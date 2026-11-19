@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getPosts } from "@/lib/notion";
 import { prisma } from "@/lib/prisma";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 
 export const revalidate = 3600;
 
@@ -61,7 +62,7 @@ async function getRoadmapRoutes(): Promise<MetadataRoute.Sitemap> {
     const routes: MetadataRoute.Sitemap = [];
     for (const rm of roadmaps) {
       routes.push({
-        url: `${SITE_URL}/topic/${rm.slug}`,
+        url: `${SITE_URL}${topicPath(rm.slug)}`,
         lastModified: rm.updatedAt,
         changeFrequency: "weekly",
         priority: 0.8,
@@ -69,7 +70,7 @@ async function getRoadmapRoutes(): Promise<MetadataRoute.Sitemap> {
       for (const item of rm.items) {
         if (item.slug) {
           routes.push({
-            url: `${SITE_URL}/lessons/${item.slug}`,
+            url: `${SITE_URL}${lessonPath(rm.slug, item.slug)}`,
             lastModified: item.updatedAt,
             changeFrequency: "weekly",
             priority: 0.7,

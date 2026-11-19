@@ -18,6 +18,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { cn } from "@/lib/utils";
+import { lessonPath } from "@/lib/roadmap/paths";
 import { CreateItemModal, type CreateItemOptions } from "./CreateItemModal";
 import { EditSectionModal } from "./EditSectionModal";
 import { EditTopicModal } from "./EditTopicModal";
@@ -160,7 +161,7 @@ export function TopicEditorialPage({
       window.dispatchEvent(new CustomEvent("roadmap:updated"));
       if (options?.openEditor && item?.slug) {
         markPendingLessonWrite(item.slug);
-        router.push(`/lessons/${item.slug}`);
+        router.push(lessonPath(topic.slug, item.slug));
         return;
       }
       toast(`Đã thêm bài "${title}"`, "success");
@@ -281,7 +282,7 @@ export function TopicEditorialPage({
         nextLink={
           !isReorderMode && firstLesson
             ? {
-                href: `/lessons/${firstLesson.slug || firstLesson.id}`,
+                href: lessonPath(topic.slug, firstLesson.slug || firstLesson.id),
                 label: "Trang sau",
                 title: firstLesson.title,
               }
@@ -410,7 +411,7 @@ export function TopicEditorialPage({
                   {focusItems.map((item) => (
                     <Link
                       key={item.id}
-                      href={`/lessons/${item.slug || item.id}`}
+                      href={lessonPath(topic.slug, item.slug || item.id)}
                       prefetch={true}
                       className="group flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-[var(--editorial-accent)]"
                     >
@@ -469,7 +470,7 @@ export function TopicEditorialPage({
                         />
                         <div className="min-w-0">
                           <Link
-                            href={`/lessons/${item.slug || item.id}`}
+                            href={lessonPath(topic.slug, item.slug || item.id)}
                             prefetch={true}
                             className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
                           >
@@ -547,7 +548,7 @@ export function TopicEditorialPage({
                                 />
                                 <div className="min-w-0">
                                   <Link
-                                    href={`/lessons/${item.slug || item.id}`}
+                                    href={lessonPath(topic.slug, item.slug || item.id)}
                                     prefetch={true}
                                     className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
                                   >

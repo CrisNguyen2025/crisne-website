@@ -158,16 +158,32 @@ export function readingMinutes(content?: string | null): number {
   return words === 0 ? 0 : Math.max(1, Math.round(words / WORDS_PER_MINUTE));
 }
 
+/** Anchor slug of a heading's text (ADR-0014): no Vietnamese diacritics, lowercase, kebab-case. */
+function headingSlug(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 /**
  * The h2/h3 headings of rendered content, each given an id so a table of contents can link to it.
- * Returns the html with those ids and the headings in order.
+ * The id is the slug of the heading's text, so it stays the same when other headings change;
+ * a repeated slug gets `-2`, `-3`, ... Returns the html with those ids and the headings in order.
  */
 export function withHeadingIds(html: string): { html: string; headings: ContentHeading[] } {
   const headings: ContentHeading[] = [];
+  const usedIds = new Set<string>();
   const out = html.replace(/<h([23])([^>]*)>([\s\S]*?)<\/h\1>/gi, (_m, lvl: string, attrs: string, inner: string) => {
     const text = plainText(inner);
     if (!text) return _m;
-    const id = `h-${headings.length + 1}`;
+    const base = headingSlug(text) || 'section';
+    let id = base;
+    for (let n = 2; usedIds.has(id); n++) id = `${base}-${n}`;
+    usedIds.add(id);
     headings.push({ id, text, level: Number(lvl) as 2 | 3 });
     const cleanAttrs = attrs.replace(/\sid="[^"]*"/i, '');
     return `<h${lvl}${cleanAttrs} id="${id}">${inner}</h${lvl}>`;

@@ -8,6 +8,7 @@
 
 import { RoadmapChatClient } from '@/roadmap-rag-assistant/sdk/typescript/src/client';
 import type { ChatResponse, PageContext, ToolCallResult } from '@/roadmap-rag-assistant/sdk/typescript/src/types';
+import { isReservedTopicSlug } from '@/lib/roadmap/paths';
 
 // Same-origin proxy (app/api/roadmap-assistant): the browser never calls the Python service
 // directly; the proxy decides whether the caller is the owner before forwarding.
@@ -63,31 +64,33 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 }
 
 /**
- * Page the user is viewing, read from the URL or DOM dataset on flat lesson routes.
- * Returns undefined on the server so SSR never reads window.
+ * Page the user is viewing: `/[topicSlug]` or `/[topicSlug]/[lessonSlug]` (ADR-0014), with the
+ * Lesson page's DOM dataset for its Topic and Section. Returns undefined on the server so SSR
+ * never reads window, and on pages that are not a Topic or Lesson (`/notes`, `/portfolio`, ...).
  */
 export function getRoadmapPageContext(): PageContext | undefined {
   if (typeof window === 'undefined') return undefined;
   const params = new URLSearchParams(window.location.search);
   const querySection = params.get('section') || undefined;
-  const pathname = window.location.pathname;
+  const [first, second] = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 
-  const lessonMatch = pathname.match(/^\/lessons\/([^/]+)/);
-  if (lessonMatch) {
-    const contextEl =
-      typeof document !== 'undefined'
-        ? document.querySelector<HTMLElement>('[data-roadmap-context]')
-        : null;
-    const roadmapSlug = contextEl?.dataset.roadmapSlug || undefined;
-    const section = contextEl?.dataset.section || querySection;
-    const itemId = decodeURIComponent(lessonMatch[1]);
-    return { roadmapSlug, itemId, section };
+  if (first && !isReservedTopicSlug(first)) {
+    if (second) {
+      const contextEl =
+        typeof document !== 'undefined'
+          ? document.querySelector<HTMLElement>('[data-roadmap-context]')
+          : null;
+      return {
+        roadmapSlug: contextEl?.dataset.roadmapSlug || first,
+        itemId: second,
+        section: contextEl?.dataset.section || querySection,
+      };
+    }
+    return { roadmapSlug: first, itemId: undefined, section: querySection };
   }
 
-  const topicMatch = pathname.match(/^\/topic\/([^/]+)(?:\/([^/]+))?/);
-  const roadmapSlug = topicMatch ? decodeURIComponent(topicMatch[1]) : params.get('topic') || undefined;
-  const itemId = topicMatch && topicMatch[2] ? decodeURIComponent(topicMatch[2]) : params.get('item') || undefined;
-
+  const roadmapSlug = params.get('topic') || undefined;
+  const itemId = params.get('item') || undefined;
   if (!roadmapSlug && !itemId && !querySection) return undefined;
   return { roadmapSlug, itemId, section: querySection };
 }

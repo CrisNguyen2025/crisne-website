@@ -14,6 +14,7 @@ import type {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import {
   DesktopTocRail,
   MobileTocDropdown,
@@ -289,7 +290,7 @@ export function LectureShell({
         return (
           <li key={sib.id}>
             <Link
-              href={`/lessons/${sib.slug || sib.id}`}
+              href={lessonPath(topic.slug, sib.slug || sib.id)}
               prefetch={true}
               data-lesson-nav-id={sib.id}
               onClick={() =>
@@ -430,7 +431,7 @@ export function LectureShell({
         ) : (
           <>
             <Link
-              href={`/topic/${topic.slug}`}
+              href={topicPath(topic.slug)}
               prefetch={true}
               className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
               title={topic.title}
@@ -447,7 +448,7 @@ export function LectureShell({
       {onClose && (
         <div className="mt-3 flex items-start justify-between gap-2">
           <Link
-            href={`/topic/${topic.slug}`}
+            href={topicPath(topic.slug)}
             prefetch={true}
             onClick={onClose}
             className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
@@ -487,7 +488,7 @@ export function LectureShell({
                 /
               </span>
               <Link
-                href={`/topic/${topic.slug}`}
+                href={topicPath(topic.slug)}
                 prefetch={true}
                 className="truncate font-semibold tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
               >
@@ -517,7 +518,7 @@ export function LectureShell({
           <aside
             ref={syllabusAsideRef}
             onScroll={persistSyllabusScroll}
-            className="hidden lg:flex lg:w-[17.5rem] xl:w-[18.5rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)]"
+            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)]"
           >
             {renderSidebarHeader()}
             <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">

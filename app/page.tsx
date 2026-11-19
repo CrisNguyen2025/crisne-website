@@ -3,6 +3,7 @@ import { permanentRedirect } from 'next/navigation';
 import { findItemBySlug, resolveTopicGlobal } from '@/lib/roadmap/resolveRoadmap';
 import { getPublicationHomeData } from '@/lib/roadmap/queries';
 import { PublicationHome } from '@/components/roadmap/PublicationHome';
+import { lessonPath, topicPath } from '@/lib/roadmap/paths';
 
 // Real-time synchronization handled by PublicationHome via "roadmap:updated"
 
@@ -50,11 +51,11 @@ export default async function Home({ searchParams }: PageProps) {
       if (item && topicRes.kind === 'found') {
         const resolvedItem = await findItemBySlug(topicRes.topic.id, item);
         if (resolvedItem?.slug) {
-          permanentRedirect(`/lessons/${resolvedItem.slug}`);
+          permanentRedirect(lessonPath(topicRes.topic.slug, resolvedItem.slug));
         }
       }
       const query = section ? `?section=${encodeURIComponent(section)}` : '';
-      permanentRedirect(`/topic/${resolvedSlug}${query}`);
+      permanentRedirect(`${topicPath(resolvedSlug)}${query}`);
     }
   }
 
@@ -72,7 +73,7 @@ export default async function Home({ searchParams }: PageProps) {
         '@type': 'ListItem',
         position: index + 1,
         name: t.title,
-        url: `${SITE_URL}/topic/${t.slug}`,
+        url: `${SITE_URL}${topicPath(t.slug)}`,
       })),
     },
   };

@@ -9,6 +9,7 @@ import { SectionField } from './SectionField';
 import { Sheet } from '@/components/ui/sheet';
 import { useMediaQuery, MOBILE_VIEWPORT_QUERY } from '@/hooks/use-media-query';
 import { slugify } from '@/lib/utils';
+import { lessonPath } from '@/lib/roadmap/paths';
 
 export interface EditItemInfoSubmitOptions {
   roadmapSlug?: string;
@@ -261,10 +262,10 @@ function EditItemInfoForm({
             </p>
           ) : (
             <div className="space-y-0.5 text-[0.6875rem] leading-relaxed">
-              <p className="font-mono text-foreground/85 break-all">/lessons/{normalizedSlug}</p>
+              <p className="font-mono text-foreground/85 break-all">{lessonPath(topicSlug, normalizedSlug)}</p>
               <p className="text-muted-foreground">
-                {normalizedSlug !== item.slug
-                  ? `Tự động chuyển hướng 308 từ /lessons/${item.slug}.`
+                {normalizedSlug !== item.slug || topicSlug !== initialTopicSlug
+                  ? `Tự động chuyển hướng 308 từ ${lessonPath(initialTopicSlug, item.slug)}.`
                   : 'Giữ nguyên để ổn định link SEO.'}
               </p>
             </div>

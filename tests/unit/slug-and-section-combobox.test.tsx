@@ -197,7 +197,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
     });
   });
 
-  it('syncs Slug URL from title, previews normalized /lessons/<slug>, and rejects blank Slug URL instead of silently ignoring', async () => {
+  it('syncs Slug URL from title, previews normalized /<topic>/<slug>, and rejects blank Slug URL instead of silently ignoring', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const onClose = vi.fn();
 
@@ -215,7 +215,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
 
     const slugInput = screen.getByLabelText('Slug URL') as HTMLInputElement;
     expect(slugInput.value).toBe('knowledge-base-kb');
-    expect(screen.getByText('/lessons/knowledge-base-kb')).toBeTruthy();
+    expect(screen.getByText('/ai-rag/knowledge-base-kb')).toBeTruthy();
 
     fireEvent.change(slugInput, { target: { value: '   ' } });
     expect(screen.getByText(/Slug URL đang để trống/)).toBeTruthy();
@@ -230,8 +230,8 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
     fireEvent.click(screen.getByRole('button', { name: /Đồng bộ từ tiêu đề/ }));
 
     expect(slugInput.value).toBe('knowledge-base');
-    expect(screen.getByText('/lessons/knowledge-base')).toBeTruthy();
-    expect(screen.getByText(/Tự động chuyển hướng 308 từ \/lessons\/knowledge-base-kb/)).toBeTruthy();
+    expect(screen.getByText('/ai-rag/knowledge-base')).toBeTruthy();
+    expect(screen.getByText(/Tự động chuyển hướng 308 từ \/ai-rag\/knowledge-base-kb/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
     await waitFor(() => {
@@ -325,7 +325,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
 
     await waitFor(() => {
-      expect(routerSpies.replace).toHaveBeenCalledWith('/lessons/knowledge-base');
+      expect(routerSpies.replace).toHaveBeenCalledWith('/ai-rag/knowledge-base');
     });
     expect(routerSpies.refresh).not.toHaveBeenCalled();
 
@@ -344,6 +344,31 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       expect(routerSpies.refresh).toHaveBeenCalledTimes(1);
     });
     expect(routerSpies.replace).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the new Topic URL when LessonEditorialReader moves the lesson without changing its slug', async () => {
+    serviceSpies.updateItemInfo.mockResolvedValueOnce({ item: { ...LESSON_KB } });
+
+    const groups = groupBySection([LESSON_KB], ['Retrieval']);
+    render(
+      <LessonEditorialReader
+        lesson={LESSON_KB}
+        processedHtml="<p>Body</p>"
+        headings={[]}
+        topic={TOPIC_AI}
+        siblingGroups={groups}
+        allTopics={[TOPIC_AI, TOPIC_DB]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa' }));
+    fireEvent.change(screen.getByLabelText('Topic'), { target: { value: 'db-internals' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
+
+    await waitFor(() => {
+      expect(routerSpies.replace).toHaveBeenCalledWith('/db-internals/knowledge-base-kb');
+    });
+    expect(routerSpies.refresh).not.toHaveBeenCalled();
   });
 
   it('highlights exact match over prefix match, ignores IME composition Enter, and handles empty sections', () => {

@@ -307,7 +307,7 @@ describe("LectureShell & editorial pages", () => {
     expect(screen.queryByText("On this page")).toBeNull();
     expect(screen.getByText("Trang sau")).toBeTruthy();
     const nextLink = screen.getByRole("link", { name: /Trang sau/ });
-    expect(nextLink.getAttribute("href")).toBe("/lessons/why-agents-fail");
+    expect(nextLink.getAttribute("href")).toBe("/harness-engineering/why-agents-fail");
     expect(screen.queryByRole("button", { name: /Thêm bài/ })).toBeNull();
   });
 
@@ -338,14 +338,14 @@ describe("LectureShell & editorial pages", () => {
     expect(article?.getAttribute("data-section")).toBe("Nền tảng");
 
     const prevLink = screen.getByRole("link", { name: /Trang trước/ });
-    expect(prevLink.getAttribute("href")).toBe("/topic/harness-engineering");
+    expect(prevLink.getAttribute("href")).toBe("/harness-engineering");
 
     expect(screen.getAllByText("On this page").length).toBeGreaterThanOrEqual(
       1
     );
 
     const nextLink = screen.getByRole("link", { name: /Trang sau/ });
-    expect(nextLink.getAttribute("href")).toBe("/lessons/repo-source-of-truth");
+    expect(nextLink.getAttribute("href")).toBe("/harness-engineering/repo-source-of-truth");
   });
 
   it("renders PublicationHome cleanly without header or footer chrome", () => {

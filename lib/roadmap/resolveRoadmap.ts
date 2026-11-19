@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { Roadmap, RoadmapItem } from '@prisma/client';
+import { lessonPath, topicPath } from '@/lib/roadmap/paths';
 
 export async function findTopic(identifier: string): Promise<Roadmap | null> {
   const roadmap = await prisma.roadmap.findUnique({ where: { slug: identifier } });
@@ -60,6 +61,28 @@ export async function resolveTopicGlobal(identifier: string): Promise<TopicResol
   }
 
   return { kind: 'missing' };
+}
+
+/**
+ * Canonical path of the Lesson that `identifier` (slug, id or old slug) names, following
+ * a redirect so the caller can answer with a single 308; null when there is no such Lesson.
+ */
+export async function findLessonPath(identifier: string): Promise<string | null> {
+  const resolved = await resolveLessonGlobal(identifier);
+  if (resolved.kind === 'found') return lessonPath(resolved.topic.slug, resolved.item.slug);
+  if (resolved.kind === 'redirect') {
+    const target = await resolveLessonGlobal(resolved.toSlug);
+    if (target.kind === 'found') return lessonPath(target.topic.slug, target.item.slug);
+  }
+  return null;
+}
+
+/** Canonical path of the Topic that `identifier` names; null when there is no such Topic. */
+export async function findTopicPath(identifier: string): Promise<string | null> {
+  const resolved = await resolveTopicGlobal(identifier);
+  if (resolved.kind === 'found') return topicPath(resolved.topic.slug);
+  if (resolved.kind === 'redirect') return topicPath(resolved.toSlug);
+  return null;
 }
 
 export async function resolveLessonGlobal(identifier: string): Promise<LessonResolution> {

@@ -1,5 +1,6 @@
 import { notFound, permanentRedirect } from 'next/navigation';
-import { findItemBySlug, findTopic, resolveLessonGlobal } from '@/lib/roadmap/resolveRoadmap';
+import { findItemBySlug, findLessonPath, findTopic } from '@/lib/roadmap/resolveRoadmap';
+import { lessonPath } from '@/lib/roadmap/paths';
 
 interface ItemPageProps {
   params: Promise<{
@@ -8,24 +9,19 @@ interface ItemPageProps {
   }>;
 }
 
+/** Old Lesson URL /topic/[topicSlug]/[itemSlug]: 308 to /[topicSlug]/[lessonSlug] (ADR-0014). */
 export default async function LegacyItemRedirectPage({ params }: ItemPageProps) {
   const { topicSlug, itemSlug } = await params;
 
   const topic = await findTopic(topicSlug);
   if (topic) {
     const item = await findItemBySlug(topic.id, itemSlug);
-    if (item) {
-      permanentRedirect(`/lessons/${item.slug || item.id}`);
+    if (item?.slug) {
+      permanentRedirect(lessonPath(topic.slug, item.slug));
     }
   }
 
-  const globalResolved = await resolveLessonGlobal(itemSlug);
-  if (globalResolved.kind === 'found') {
-    permanentRedirect(`/lessons/${globalResolved.item.slug}`);
-  }
-  if (globalResolved.kind === 'redirect') {
-    permanentRedirect(`/lessons/${globalResolved.toSlug}`);
-  }
-
-  notFound();
+  const path = await findLessonPath(itemSlug);
+  if (!path) notFound();
+  permanentRedirect(path);
 }

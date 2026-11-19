@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0014
 ---
 
 # URL bài học phẳng /lessons/[lessonSlug] và slug duy nhất toàn cục

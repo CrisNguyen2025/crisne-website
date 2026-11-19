@@ -7,6 +7,7 @@ import { Edit3, ListTree, Pencil, Trash2 } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import { contentToHtml, withHeadingIds } from "@/lib/roadmap/content-utils";
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { DEFAULT_LESSON_TEMPLATE_HTML } from "@/lib/roadmap/lesson-template";
 import { invalidateCachedOwnerStatuses } from "@/lib/roadmap/owner-status-cache";
 import {
@@ -154,15 +155,18 @@ export function LessonEditorialReader({
     if (options?.roadmapSlug && options.roadmapSlug !== topic.slug) {
       invalidateCachedOwnerStatuses(options.roadmapSlug);
     }
-    const slugChanged = Boolean(updated?.slug && updated.slug !== lesson.slug);
+    // The URL holds both the Topic and the Lesson slug (ADR-0014), so moving the Lesson changes it too
+    const nextSlug = updated?.slug || lesson.slug;
+    const nextTopicSlug = options?.roadmapSlug || topic.slug;
+    const urlChanged = nextSlug !== lesson.slug || nextTopicSlug !== topic.slug;
     toast("Đã lưu thông tin bài học", "success");
     window.dispatchEvent(
       new CustomEvent("roadmap:updated", {
-        detail: { skipRefresh: slugChanged },
+        detail: { skipRefresh: urlChanged },
       })
     );
-    if (slugChanged && updated?.slug) {
-      router.replace(`/lessons/${updated.slug}`);
+    if (urlChanged) {
+      router.replace(lessonPath(nextTopicSlug, nextSlug));
     }
   };
 
@@ -181,7 +185,7 @@ export function LessonEditorialReader({
       window.dispatchEvent(
         new CustomEvent("roadmap:updated", { detail: { skipRefresh: true } })
       );
-      router.push(`/topic/${topic.slug}`);
+      router.push(topicPath(topic.slug));
     } catch {
       toast("Không xoá được bài học.", "error");
     }
@@ -224,13 +228,13 @@ export function LessonEditorialReader({
         prevLink={
           prevLesson
             ? {
-                href: `/lessons/${prevLesson.slug || prevLesson.id}`,
+                href: lessonPath(topic.slug, prevLesson.slug || prevLesson.id),
                 label: "Trang trước",
                 title: prevLesson.title,
                 onClick: () => handleLessonNavigate(prevLesson.id),
               }
             : {
-                href: `/topic/${topic.slug}`,
+                href: topicPath(topic.slug),
                 label: "Trang trước",
                 title: "Tổng quan",
               }
@@ -238,7 +242,7 @@ export function LessonEditorialReader({
         nextLink={
           nextLesson
             ? {
-                href: `/lessons/${nextLesson.slug || nextLesson.id}`,
+                href: lessonPath(topic.slug, nextLesson.slug || nextLesson.id),
                 label: "Trang sau",
                 title: nextLesson.title,
                 onClick: () => handleLessonNavigate(nextLesson.id),
@@ -252,7 +256,7 @@ export function LessonEditorialReader({
             className="min-w-0 truncate text-xs text-muted-foreground"
           >
             <Link
-              href={`/topic/${topic.slug}`}
+              href={topicPath(topic.slug)}
               prefetch={true}
               className="font-medium transition-colors hover:text-[var(--editorial-accent)]"
             >
@@ -267,7 +271,7 @@ export function LessonEditorialReader({
                   /
                 </span>
                 <Link
-                  href={`/topic/${topic.slug}?section=${encodeURIComponent(lesson.section)}`}
+                  href={`${topicPath(topic.slug)}?section=${encodeURIComponent(lesson.section)}`}
                   prefetch={true}
                   className="transition-colors hover:text-[var(--editorial-accent)]"
                 >
