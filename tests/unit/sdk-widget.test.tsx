@@ -189,7 +189,7 @@ describe("RoadmapChatbotWidget", () => {
         })
       );
       // The new sheet starts empty
-      expect(screen.getByRole("button", { name: "Lạc đề / Chưa đúng trọng tâm" }).className).not.toMatch(/font-medium/);
+      expect(screen.getByRole("button", { name: "Lạc đề / Chưa đúng trọng tâm" }).getAttribute("aria-pressed")).toBe("false");
     });
 
     it("offers no rating for a reply without a trace (tracing off)", async () => {

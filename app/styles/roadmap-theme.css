@@ -1,5 +1,6 @@
 html:has(.roadmap-theme) {
   scroll-behavior: auto;
+  scrollbar-gutter: stable;
 }
 
 .roadmap-theme {

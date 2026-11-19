@@ -74,11 +74,12 @@ export function FeedbackReasonSheet({
                 <button
                   key={opt}
                   type="button"
+                  aria-pressed={isSelected}
                   onClick={() => pickReason(isSelected ? null : opt)}
-                  className={`rounded-md px-3 py-1.5 min-h-[38px] md:min-h-0 text-xs transition-colors cursor-pointer flex items-center justify-center ${
+                  className={`rounded-md border px-3 py-1.5 min-h-[38px] md:min-h-0 text-xs font-medium transition-colors cursor-pointer flex items-center justify-center ${
                     isSelected
-                      ? "border border-[#C2410C] bg-[#FBEDE5] text-[#C2410C] font-medium"
-                      : "border border-[#E6E4DF] bg-[#F4F3F0] text-[#1F1E1C] hover:bg-[#ECEAE5]"
+                      ? "border-[#C2410C] bg-[#FBEDE5] text-[#C2410C]"
+                      : "border-[#E6E4DF] bg-[#F4F3F0] text-[#1F1E1C] hover:bg-[#ECEAE5]"
                   }`}
                 >
                   {opt}

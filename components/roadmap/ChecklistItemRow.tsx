@@ -47,7 +47,7 @@ export function ChecklistItemRow({ item, isActive, isDraggable = false, onSelect
         </span>
       )}
 
-      <span className={cn('min-w-0 flex-1 truncate', isActive && 'font-medium')}>{item.title}</span>
+      <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
 
       {/* Only the Owner receives a status; "known" is the default, so the row marks the other two */}
       {item.status && item.status !== 'known' && <LessonStatusBadge status={item.status} />}

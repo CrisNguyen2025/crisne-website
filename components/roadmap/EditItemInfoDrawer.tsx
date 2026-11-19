@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useId, useState } from 'react';
+import React, { useCallback, useId, useState } from 'react';
 import { X, Check, Edit3, AlignLeft, Link2, Layers, RefreshCw } from 'lucide-react';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { normalizeTitle } from '@/lib/roadmap/titles';
@@ -33,18 +33,22 @@ interface EditItemInfoDrawerProps {
 }
 
 function EditItemInfoForm({
+  isOpen,
   item,
   sections,
   topics,
   currentTopicSlug,
   onClose,
+  onAfterClose,
   onSubmit,
 }: {
+  isOpen: boolean;
   item: ChecklistItem;
   sections: string[];
   topics?: RoadmapMeta[];
   currentTopicSlug?: string;
   onClose: () => void;
+  onAfterClose: () => void;
   onSubmit: EditItemInfoDrawerProps['onSubmit'];
 }) {
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
@@ -138,8 +142,9 @@ function EditItemInfoForm({
 
   return (
     <Sheet
-      open
+      open={isOpen}
       onClose={onClose}
+      onAfterClose={onAfterClose}
       side={isMobile ? 'bottom' : 'right'}
       label="Edit lesson"
       className={isMobile ? 'roadmap-theme max-h-[90dvh]' : 'roadmap-theme sm:max-w-md md:max-w-[27.5rem]'}
@@ -166,7 +171,7 @@ function EditItemInfoForm({
         </button>
       </div>
 
-      <form id="edit-item-info-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+      <form id="edit-item-info-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] p-5 space-y-4 animate-in fade-in duration-200 ease-out">
         {error && (
           <div className="p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             {error}
@@ -322,15 +327,39 @@ export function EditItemInfoDrawer({
   onClose,
   onSubmit,
 }: EditItemInfoDrawerProps) {
-  if (!isOpen || !item) return null;
+  const isActive = isOpen && Boolean(item);
+  const [renderedItem, setRenderedItem] = useState<ChecklistItem | null>(
+    isActive ? item : null
+  );
+  const [wasActive, setWasActive] = useState(isActive);
+  const [sessionId, setSessionId] = useState(0);
+
+  if (isActive !== wasActive) {
+    setWasActive(isActive);
+    if (isActive && item) {
+      setRenderedItem(item);
+      setSessionId((prev) => prev + 1);
+    }
+  } else if (isActive && item && renderedItem !== item) {
+    setRenderedItem(item);
+  }
+
+  const handleAfterClose = useCallback(() => {
+    setRenderedItem(null);
+  }, []);
+
+  if (!renderedItem) return null;
+
   return (
     <EditItemInfoForm
-      key={item.id}
-      item={item}
+      key={`${renderedItem.id}:${sessionId}`}
+      isOpen={isActive}
+      item={renderedItem}
       sections={sections}
       topics={topics}
       currentTopicSlug={currentTopicSlug}
       onClose={onClose}
+      onAfterClose={handleAfterClose}
       onSubmit={onSubmit}
     />
   );

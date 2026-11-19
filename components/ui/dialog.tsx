@@ -5,6 +5,144 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const OVERLAY_INTERACTIVE_SELECTOR =
+  '[aria-modal="true"], [role="listbox"], [role="menu"]';
+const SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+]);
+
+let overlayLockCount = 0;
+let lockedScrollX = 0;
+let lockedScrollY = 0;
+let lastTouchX = 0;
+let lastTouchY = 0;
+
+function isEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function canScrollInDirection(
+  el: HTMLElement,
+  deltaX: number,
+  deltaY: number
+): boolean {
+  const style = window.getComputedStyle(el);
+  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+    const canScrollY =
+      (style.overflowY === "auto" || style.overflowY === "scroll") &&
+      el.scrollHeight > el.clientHeight + 1;
+    if (!canScrollY) return false;
+    if (deltaY < 0) return el.scrollTop > 0;
+    if (deltaY > 0) return el.scrollTop + el.clientHeight < el.scrollHeight - 1;
+    return false;
+  }
+  const canScrollX =
+    (style.overflowX === "auto" || style.overflowX === "scroll") &&
+    el.scrollWidth > el.clientWidth + 1;
+  if (!canScrollX) return false;
+  if (deltaX < 0) return el.scrollLeft > 0;
+  if (deltaX > 0) return el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+  return false;
+}
+
+function hasScrollableOverlayAncestor(
+  target: EventTarget | null,
+  deltaX: number,
+  deltaY: number
+): boolean {
+  if (!(target instanceof Element)) return false;
+  const boundary = target.closest(OVERLAY_INTERACTIVE_SELECTOR);
+  if (!boundary) return false;
+
+  let current: HTMLElement | null =
+    target instanceof HTMLElement ? target : target.parentElement;
+  while (current) {
+    if (canScrollInDirection(current, deltaX, deltaY)) {
+      return true;
+    }
+    if (current === boundary) break;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+function handleOverlayWheel(e: WheelEvent) {
+  if (!hasScrollableOverlayAncestor(e.target, e.deltaX, e.deltaY)) {
+    e.preventDefault();
+  }
+}
+
+function handleOverlayTouchStart(e: TouchEvent) {
+  const touch = e.touches[0];
+  if (!touch) return;
+  lastTouchX = touch.clientX;
+  lastTouchY = touch.clientY;
+}
+
+function handleOverlayTouchMove(e: TouchEvent) {
+  const touch = e.touches[0];
+  if (!touch) return;
+  const deltaX = lastTouchX - touch.clientX;
+  const deltaY = lastTouchY - touch.clientY;
+  lastTouchX = touch.clientX;
+  lastTouchY = touch.clientY;
+  if (!hasScrollableOverlayAncestor(e.target, deltaX, deltaY)) {
+    e.preventDefault();
+  }
+}
+
+function handleOverlayScrollKey(e: KeyboardEvent) {
+  if (!SCROLL_KEYS.has(e.key)) return;
+  if (isEditableElement(e.target)) return;
+  if (e.target instanceof Element && e.target.closest(OVERLAY_INTERACTIVE_SELECTOR)) {
+    return;
+  }
+  e.preventDefault();
+}
+
+function handleOverlayWindowScroll() {
+  if (window.scrollX !== lockedScrollX || window.scrollY !== lockedScrollY) {
+    window.scrollTo({
+      left: lockedScrollX,
+      top: lockedScrollY,
+      behavior: "instant",
+    });
+  }
+}
+
+function lockPageScroll() {
+  if (overlayLockCount === 0) {
+    lockedScrollX = window.scrollX;
+    lockedScrollY = window.scrollY;
+    window.addEventListener("wheel", handleOverlayWheel, { passive: false });
+    window.addEventListener("touchstart", handleOverlayTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleOverlayTouchMove, { passive: false });
+    window.addEventListener("keydown", handleOverlayScrollKey);
+    window.addEventListener("scroll", handleOverlayWindowScroll, { passive: true });
+  }
+  overlayLockCount += 1;
+}
+
+function unlockPageScroll() {
+  overlayLockCount = Math.max(0, overlayLockCount - 1);
+  if (overlayLockCount === 0) {
+    window.removeEventListener("wheel", handleOverlayWheel);
+    window.removeEventListener("touchstart", handleOverlayTouchStart);
+    window.removeEventListener("touchmove", handleOverlayTouchMove);
+    window.removeEventListener("keydown", handleOverlayScrollKey);
+    window.removeEventListener("scroll", handleOverlayWindowScroll);
+  }
+}
+
 /** Close on Escape and lock page scroll while an overlay is open. */
 export function useOverlay(open: boolean, onClose: () => void) {
   useEffect(() => {
@@ -12,11 +150,10 @@ export function useOverlay(open: boolean, onClose: () => void) {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockPageScroll();
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockPageScroll();
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [open, onClose]);
@@ -73,7 +210,7 @@ export function Dialog({ open, onClose, title, description, icon, children, foot
             <X className="size-4" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] px-5 py-4">{children}</div>
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}

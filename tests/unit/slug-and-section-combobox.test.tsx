@@ -57,6 +57,7 @@ vi.mock('@/components/ui/toast', () => ({
 }));
 
 vi.mock('@/components/roadmap/EditItemContentDrawer', () => ({
+  preloadLessonContentEditor: vi.fn(),
   EditItemContentDrawer: () => null,
 }));
 
@@ -319,7 +320,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thông tin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     const slugInput = screen.getByLabelText('Slug URL');
     fireEvent.change(slugInput, { target: { value: 'knowledge-base' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
@@ -335,7 +336,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       item: { ...LESSON_KB, title: 'Knowledge Base Updated' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thông tin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     const titleInput = screen.getByLabelText('Tiêu đề');
     fireEvent.change(titleInput, { target: { value: 'Knowledge Base Updated' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
@@ -361,7 +362,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thông tin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     fireEvent.change(screen.getByLabelText('Topic'), { target: { value: 'db-internals' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
 

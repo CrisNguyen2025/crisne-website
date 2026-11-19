@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Edit3, Info, ListTree, Trash2 } from "lucide-react";
+import { ChevronRight, Edit3, FileText, ListTree, Trash2 } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import {
   contentToHtml,
@@ -35,7 +35,10 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
-import { EditItemContentDrawer } from "./EditItemContentDrawer";
+import {
+  EditItemContentDrawer,
+  preloadLessonContentEditor,
+} from "./EditItemContentDrawer";
 import {
   EditItemInfoDrawer,
   type EditItemInfoSubmitOptions,
@@ -49,6 +52,9 @@ const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
 
 const OWNER_ACTION_CLASS =
   "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer";
+
+const OWNER_EDITOR_ACTION_CLASS =
+  "group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-2xs transition-colors hover:border-[var(--editorial-accent)]/50 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer";
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -314,28 +320,37 @@ export function LessonEditorialReader({
       <div
         className={cn(
           inRail
-            ? "mt-2 flex flex-col gap-0.5 border-t border-border pt-2"
-            : "mt-2 flex items-center gap-1"
+            ? "mt-2.5 flex flex-col gap-1.5 border-t border-border pt-2.5"
+            : "mt-2 flex items-center gap-1.5"
         )}
       >
-        <button
-          type="button"
-          onClick={() => {
-            setDraftSeed(undefined);
-            setIsContentOpen(true);
-          }}
-          className={cn(OWNER_ACTION_CLASS, inRail && "w-full")}
-        >
-          <Edit3 className="size-4" />
-          <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
-        </button>
         <button
           type="button"
           onClick={() => setIsInfoOpen(true)}
           className={cn(OWNER_ACTION_CLASS, inRail && "w-full")}
         >
-          <Info className="size-4" />
-          <span>Thông tin</span>
+          <Edit3 className="size-4 shrink-0" />
+          <span>Sửa bài học</span>
+        </button>
+        <button
+          type="button"
+          onMouseEnter={preloadLessonContentEditor}
+          onFocus={preloadLessonContentEditor}
+          onClick={() => {
+            setDraftSeed(undefined);
+            setIsContentOpen(true);
+          }}
+          className={cn(OWNER_EDITOR_ACTION_CLASS, inRail && "w-full")}
+        >
+          <FileText className="size-4 shrink-0 text-[var(--editorial-accent)]" />
+          <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground/70 transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--editorial-accent)]",
+              inRail && "ml-auto"
+            )}
+          />
         </button>
         {!inRail && <div className="ml-auto">{lessonActionMenu}</div>}
       </div>
@@ -456,6 +471,8 @@ export function LessonEditorialReader({
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
+                    onMouseEnter={preloadLessonContentEditor}
+                    onFocus={preloadLessonContentEditor}
                     onClick={() => {
                       setDraftSeed(DEFAULT_LESSON_TEMPLATE_HTML);
                       setIsContentOpen(true);
@@ -467,6 +484,8 @@ export function LessonEditorialReader({
                   </button>
                   <button
                     type="button"
+                    onMouseEnter={preloadLessonContentEditor}
+                    onFocus={preloadLessonContentEditor}
                     onClick={() => {
                       setDraftSeed(undefined);
                       setIsContentOpen(true);

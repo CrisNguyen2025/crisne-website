@@ -131,20 +131,20 @@ function LectureTocLinks({
               href={`#${h.id}`}
               onClick={(e) => onJump(e, h.id)}
               className={cn(
-                "block leading-snug transition-colors duration-150",
+                "block font-normal leading-snug transition-colors duration-150",
                 isRail
                   ? cn(
                       "-ml-[0.0625rem] border-l-2 py-0.5",
                       h.level === 3 ? "pl-5" : "pl-3.5",
                       isActive
-                        ? "border-[var(--editorial-accent)] font-medium text-[var(--editorial-accent)]"
+                        ? "border-[var(--editorial-accent)] text-[var(--editorial-accent)]"
                         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                     )
                   : cn(
                       "rounded-md py-1 px-2",
                       h.level === 3 && "pl-5",
                       isActive
-                        ? "bg-[var(--editorial-sidebar-active)] font-medium text-[var(--editorial-accent)]"
+                        ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
                         : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
                     )
               )}

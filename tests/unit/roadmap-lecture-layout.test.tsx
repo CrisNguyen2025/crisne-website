@@ -21,6 +21,7 @@ import { PublicationHome } from "@/components/roadmap/PublicationHome";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { TopicEditorialPage } from "@/components/roadmap/TopicEditorialPage";
 import { LessonEditorialReader } from "@/components/roadmap/LessonEditorialReader";
+import { LessonStatusPicker } from "@/components/roadmap/LessonStatus";
 
 const mockUseCanWrite = vi.fn(() => false);
 const mockUseMediaQuery = vi.fn(() => false);
@@ -78,6 +79,7 @@ vi.mock("@/components/roadmap/RoadmapMap", () => ({
 let mockDrawerSavePayload = "";
 
 vi.mock("@/components/roadmap/EditItemContentDrawer", () => ({
+  preloadLessonContentEditor: vi.fn(),
   EditItemContentDrawer: ({
     isOpen,
     item,
@@ -445,7 +447,9 @@ describe("LectureShell & editorial pages", () => {
     const lg = renderLesson();
     const header = lg.container.querySelector("article header");
     expect(header?.firstElementChild?.contains(screen.getByRole("group", { name: "Trạng thái bài học" }))).toBe(true);
-    expect(screen.getAllByRole("button", { name: "Thông tin" })).toHaveLength(1);
+    const editInfoBtn = screen.getByRole("button", { name: "Sửa bài học" });
+    const editContentBtn = screen.getByRole("button", { name: "Nội dung" });
+    expect(editInfoBtn.compareDocumentPosition(editContentBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("extracts H2/H3 outline from DEFAULT_LESSON_TEMPLATE_HTML and lets Owner open editor from template", () => {
@@ -579,5 +583,98 @@ describe("LectureShell & editorial pages", () => {
 
     expect(screen.getByText(/5 phút ·/)).toBeTruthy();
     expect(screen.getAllByText("Từ server").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps constant font-weight and fixed indicator slot across active sidebar and TOC states", () => {
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const headings = [
+      { id: "sec-1", text: "Mục một", level: 2 as const },
+      { id: "sec-2", text: "Mục hai", level: 3 as const },
+    ];
+
+    const { container } = render(
+      <LectureShell
+        topic={TOPIC}
+        siblingGroups={groups}
+        activeView="lesson"
+        activeLessonId={ITEMS[0].id}
+        defaultOpenSectionKey="Nền tảng"
+        canWrite={false}
+        ownerStatusById={{}}
+        headings={headings}
+      >
+        <h2 id="sec-1">Mục một</h2>
+        <h3 id="sec-2">Mục hai</h3>
+      </LectureShell>
+    );
+
+    const thucHanhBtn = screen.getByRole("button", { name: /Thực hành/ });
+    fireEvent.click(thucHanhBtn);
+
+    const activeLessonLink = screen.getByRole("link", { name: ITEMS[0].title });
+    const inactiveLessonLink = screen.getByRole("link", { name: ITEMS[1].title });
+    expect(activeLessonLink.getAttribute("aria-current")).toBe("page");
+    expect(activeLessonLink.className).toContain("font-medium");
+    expect(activeLessonLink.className).not.toContain("font-semibold");
+    expect(inactiveLessonLink.className).toContain("font-medium");
+    expect(inactiveLessonLink.className).not.toContain("font-semibold");
+
+    const nenTangBtn = screen.getByRole("button", { name: /Nền tảng/ });
+    const dotSlot = nenTangBtn.querySelector("span.size-1\\.5");
+    expect(dotSlot).toBeTruthy();
+    expect(dotSlot?.className).toContain("opacity-0");
+    expect(screen.queryByLabelText("Mục đang đọc")).toBeNull();
+
+    fireEvent.click(nenTangBtn);
+    expect(nenTangBtn.getAttribute("aria-expanded")).toBe("false");
+    expect(nenTangBtn.querySelector("span.size-1\\.5")).toBe(dotSlot);
+    expect(dotSlot?.className).toContain("opacity-100");
+    expect(screen.getByLabelText("Mục đang đọc")).toBe(dotSlot);
+
+    const railNav = container.querySelector('nav[aria-label="On this page"]');
+    const inlineDetails = container.querySelector("details");
+    const tocLinks = [
+      ...(railNav?.querySelectorAll("a") ?? []),
+      ...(inlineDetails?.querySelectorAll("a") ?? []),
+    ];
+    expect(tocLinks.length).toBe(4);
+    for (const link of tocLinks) {
+      expect(link.className).toContain("font-normal");
+      expect(link.className).not.toContain("font-medium");
+    }
+  });
+
+  it("keeps constant font-weight and fixed check icon slot in LessonStatusPicker", () => {
+    const onChange = vi.fn();
+    const tabsView = render(
+      <LessonStatusPicker value="target" onChange={onChange} variant="tabs" />
+    );
+    const tabButtons = tabsView.container.querySelectorAll("button");
+    expect(tabButtons.length).toBe(3);
+    for (const btn of tabButtons) {
+      expect(btn.className).toContain("font-medium");
+      expect(btn.className).not.toContain("font-normal");
+    }
+    tabsView.unmount();
+
+    const listView = render(
+      <LessonStatusPicker value="learning" onChange={onChange} variant="list" />
+    );
+    const listButtons = listView.container.querySelectorAll("button");
+    expect(listButtons.length).toBe(3);
+    for (const btn of listButtons) {
+      expect(btn.className).toContain("font-medium");
+      expect(btn.className).not.toContain("font-normal");
+      const checkSvg = btn.querySelector("svg");
+      expect(checkSvg).toBeTruthy();
+      const cls = checkSvg?.getAttribute("class") ?? "";
+      if (btn.getAttribute("aria-pressed") === "true") {
+        expect(cls).toContain("opacity-100");
+        expect(cls).not.toContain("opacity-0");
+      } else {
+        expect(cls).toContain("opacity-0");
+        expect(cls).not.toContain("opacity-100");
+      }
+    }
   });
 });

@@ -107,13 +107,13 @@ export function LessonStatusPicker({
                 'min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm',
                 isActive
                   ? STATUS_LIST_ACTIVE[status]
-                  : 'font-normal text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground',
+                  : 'text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground',
               ],
               variant === 'tabs' && [
                 '-mb-px border-b-2 pb-2 pt-0.5',
                 isActive
                   ? STATUS_TAB_ACTIVE[status]
-                  : 'border-transparent font-normal text-muted-foreground hover:text-foreground',
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
               ]
             )}
           >
@@ -122,7 +122,12 @@ export function LessonStatusPicker({
               <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status])} />
             )}
             <span className={cn(variant === 'list' && 'flex-1')}>{LESSON_STATUS_LABEL[status]}</span>
-            {variant === 'list' && isActive && <Check aria-hidden="true" className="size-4" />}
+            {variant === 'list' && (
+              <Check
+                aria-hidden="true"
+                className={cn('size-4 shrink-0 transition-opacity', isActive ? 'opacity-100' : 'opacity-0')}
+              />
+            )}
           </button>
         );
       })}

@@ -301,9 +301,9 @@ export function LectureShell({
               }
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm leading-snug transition-colors duration-150",
+                "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150",
                 isActive
-                  ? "bg-[var(--editorial-sidebar-active)] font-semibold text-[var(--editorial-accent)]"
+                  ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
                   : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)]"
               )}
             >
@@ -312,7 +312,7 @@ export function LectureShell({
                   className={cn("size-1.5 shrink-0 rounded-full", dotClass)}
                 />
               )}
-              <span className="line-clamp-2 flex-1">{sib.title}</span>
+              <span className="line-clamp-2 min-w-0 flex-1">{sib.title}</span>
             </Link>
           </li>
         );
@@ -367,12 +367,16 @@ export function LectureShell({
                       )}
                     </span>
                     <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
-                      {!isOpen && isCurrentSection && (
-                        <span
-                          aria-label="Mục đang đọc"
-                          className="size-1.5 rounded-full bg-[var(--editorial-accent)]"
-                        />
-                      )}
+                      <span
+                        aria-label={!isOpen && isCurrentSection ? "Mục đang đọc" : undefined}
+                        aria-hidden={isOpen || !isCurrentSection || undefined}
+                        className={cn(
+                          "size-1.5 rounded-full transition-opacity duration-150",
+                          !isOpen && isCurrentSection
+                            ? "bg-[var(--editorial-accent)] opacity-100"
+                            : "opacity-0"
+                        )}
+                      />
                       <span className="text-[0.6875rem] font-normal tabular-nums text-muted-foreground/75">
                         {group.items.length}
                       </span>
