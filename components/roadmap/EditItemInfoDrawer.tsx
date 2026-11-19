@@ -80,9 +80,9 @@ function EditItemInfoForm({
 
     if (matchedInTarget) {
       setSection(matchedInTarget);
-    } else if (nextTopicSlug === initialTopicSlug && !section.trim() && item.section) {
-      setSection(item.section);
-    } else if (nextTopicSlug !== initialTopicSlug) {
+    } else if (nextTopicSlug === initialTopicSlug) {
+      setSection(item.section ?? '');
+    } else {
       setSection('');
     }
   };

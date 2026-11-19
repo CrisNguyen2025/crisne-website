@@ -194,12 +194,9 @@ export function LectureShell({
       }
     } catch {}
 
-    const targetSelector =
-      activeView === "summary"
-        ? "[data-summary-nav]"
-        : activeLessonId
-          ? `[data-lesson-nav-id="${activeLessonId}"]`
-          : null;
+    const targetSelector = activeLessonId
+      ? `[data-lesson-nav-id="${activeLessonId}"]`
+      : null;
     const activeEl = targetSelector
       ? aside.querySelector<HTMLElement>(targetSelector)
       : null;
@@ -321,220 +318,249 @@ export function LectureShell({
 
   const renderSidebarNavigation = (closeDrawer?: () => void) => (
     <nav aria-label="Bài học trong topic" className="space-y-1">
-      <Link
-        href={`/topic/${topic.slug}`}
-        prefetch={true}
-        data-summary-nav
-        onClick={() => {
-          persistSyllabusScroll();
-          closeDrawer?.();
-        }}
-        aria-current={activeView === "summary" ? "page" : undefined}
-        className={cn(
-          "block rounded-lg px-2.5 py-2 text-[0.875rem] leading-snug transition-colors duration-150 lg:py-1.5",
-          activeView === "summary"
-            ? "bg-[var(--editorial-sidebar-active)] font-semibold text-[var(--editorial-accent)]"
-            : "font-medium text-foreground/85 hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)]"
-        )}
-      >
-        Tổng quan
-      </Link>
+      {siblingGroups.length > 0 &&
+        (isSingleUnscopedGroup ? (
+          renderLessonItems(siblingGroups[0].items, "__none__", closeDrawer)
+        ) : (
+          <div className="space-y-1">
+            {siblingGroups.map((group) => {
+              const groupKey = group.section ?? "__none__";
+              const isOpen = isSectionExpanded(
+                sectionOverrides,
+                groupKey,
+                defaultOpenSectionKey
+              );
+              const isCurrentSection =
+                activeView === "lesson" &&
+                defaultOpenSectionKey !== null &&
+                groupKey === defaultOpenSectionKey;
+              const { primary, sub } = splitSectionLabel(group.section);
 
-      {siblingGroups.length > 0 && (
-        <div className="mt-2 border-t border-border/70 pt-2">
-          {isSingleUnscopedGroup ? (
-            renderLessonItems(siblingGroups[0].items, "__none__", closeDrawer)
-          ) : (
-            <div className="space-y-1">
-              {siblingGroups.map((group) => {
-                const groupKey = group.section ?? "__none__";
-                const isOpen = isSectionExpanded(
-                  sectionOverrides,
-                  groupKey,
-                  defaultOpenSectionKey
-                );
-                const isCurrentSection =
-                  activeView === "lesson" &&
-                  defaultOpenSectionKey !== null &&
-                  groupKey === defaultOpenSectionKey;
-                const { primary, sub } = splitSectionLabel(group.section);
-
-                return (
-                  <div key={groupKey}>
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      onClick={(e) =>
-                        handleToggleSection(groupKey, e.currentTarget)
-                      }
-                      className="flex w-full items-start gap-1.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer lg:py-1.5"
-                    >
-                      <ChevronRight
-                        className={cn(
-                          "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
-                          isOpen && "rotate-90 text-foreground"
-                        )}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 block text-[0.8125rem] font-semibold leading-snug text-foreground/90">
-                          {primary}
-                        </span>
-                        {sub && (
-                          <span className="mt-0.5 block text-[0.6875rem] font-normal text-muted-foreground">
-                            {sub}
-                          </span>
-                        )}
-                      </span>
-                      <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
-                        {!isOpen && isCurrentSection && (
-                          <span
-                            aria-label="Mục đang đọc"
-                            className="size-1.5 rounded-full bg-[var(--editorial-accent)]"
-                          />
-                        )}
-                        <span className="text-[0.6875rem] font-normal tabular-nums text-muted-foreground/75">
-                          {group.items.length}
-                        </span>
-                      </span>
-                    </button>
-
-                    <div
-                      inert={!isOpen || undefined}
+              return (
+                <div key={groupKey}>
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={(e) =>
+                      handleToggleSection(groupKey, e.currentTarget)
+                    }
+                    className="flex w-full items-start gap-1.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer lg:py-1.5"
+                  >
+                    <ChevronRight
                       className={cn(
-                        "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
-                        isOpen
-                          ? "grid-rows-[1fr] opacity-100"
-                          : "grid-rows-[0fr] opacity-0"
+                        "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+                        isOpen && "rotate-90 text-foreground"
                       )}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="mt-0.5 ml-2.5 border-l border-border/80 pl-2 pb-1.5">
-                          {renderLessonItems(
-                            group.items,
-                            groupKey,
-                            closeDrawer
-                          )}
-                        </div>
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 block text-[0.8125rem] font-semibold leading-snug text-foreground/90">
+                        {primary}
+                      </span>
+                      {sub && (
+                        <span className="mt-0.5 block text-[0.6875rem] font-normal text-muted-foreground">
+                          {sub}
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 flex shrink-0 items-center gap-1.5">
+                      {!isOpen && isCurrentSection && (
+                        <span
+                          aria-label="Mục đang đọc"
+                          className="size-1.5 rounded-full bg-[var(--editorial-accent)]"
+                        />
+                      )}
+                      <span className="text-[0.6875rem] font-normal tabular-nums text-muted-foreground/75">
+                        {group.items.length}
+                      </span>
+                    </span>
+                  </button>
+
+                  <div
+                    inert={!isOpen || undefined}
+                    className={cn(
+                      "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
+                      isOpen
+                        ? "grid-rows-[1fr] opacity-100"
+                        : "grid-rows-[0fr] opacity-0"
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="mt-0.5 ml-2.5 border-l border-border/80 pl-2 pb-1.5">
+                        {renderLessonItems(
+                          group.items,
+                          groupKey,
+                          closeDrawer
+                        )}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
     </nav>
   );
 
   const renderSidebarHeader = (onClose?: () => void) => (
-    <div className="shrink-0 border-b border-border/80 px-4 pt-5 pb-3.5">
+    <div className="shrink-0 border-b border-border/80 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
-        <Link
-          href="/"
-          prefetch={true}
-          onClick={onClose}
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
-        >
-          ← Topics
-        </Link>
-        <div className="flex items-center gap-1">
-          <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
-          {onClose && (
-            <button
-              type="button"
+        {onClose ? (
+          <>
+            <Link
+              href="/"
+              prefetch={true}
               onClick={onClose}
-              aria-label="Đóng danh sách bài học"
-              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
             >
-              <X className="size-4" />
-            </button>
-          )}
-        </div>
+              ← Topics
+            </Link>
+            <div className="flex items-center gap-1">
+              <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Đóng danh sách bài học"
+                className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Link
+              href={`/topic/${topic.slug}`}
+              prefetch={true}
+              className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              title={topic.title}
+            >
+              {topic.title}
+            </Link>
+            <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium shrink-0">
+              {siblingGroups.reduce((acc, g) => acc + g.items.length, 0)} bài
+            </span>
+          </>
+        )}
       </div>
 
-      <div className="mt-3 flex items-start justify-between gap-2">
-        <Link
-          href={`/topic/${topic.slug}`}
-          prefetch={true}
-          onClick={onClose}
-          className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
-        >
-          {topic.title}
-        </Link>
-        {sidebarHeaderAction}
-      </div>
+      {onClose && (
+        <div className="mt-3 flex items-start justify-between gap-2">
+          <Link
+            href={`/topic/${topic.slug}`}
+            prefetch={true}
+            onClick={onClose}
+            className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
+          >
+            {topic.title}
+          </Link>
+          {sidebarHeaderAction}
+        </div>
+      )}
     </div>
   );
 
   return (
-    <div className="flex min-h-dvh w-full flex-col lg:flex-row">
-      <aside
-        ref={syllabusAsideRef}
-        onScroll={persistSyllabusScroll}
-        className="hidden lg:flex lg:w-[17.5rem] xl:w-[18.5rem] shrink-0 lg:sticky lg:top-0 lg:h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)]"
-      >
-        {renderSidebarHeader()}
-        <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">
-          {renderSidebarNavigation()}
-        </div>
-      </aside>
-
-      <div className="relative flex min-w-0 flex-1 flex-col overflow-x-clip">
-        <div className="lg:hidden sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-md">
-          <div className="relative flex items-center justify-between gap-2 px-3 py-0.5">
+    <div className="flex min-h-dvh w-full flex-col">
+      <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
               aria-label="Mở danh sách bài học"
-              className="inline-flex min-h-[2.75rem] items-center gap-1.5 px-2 text-xs font-medium text-foreground transition-colors hover:text-[var(--editorial-accent)] cursor-pointer"
+              className="inline-flex lg:hidden min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] cursor-pointer"
             >
-              <List className="size-4" />
+              <List className="size-3.5" />
               <span>Bài học</span>
             </button>
 
+            <nav aria-label="Topic navigation" className="flex items-center gap-2 min-w-0 text-xs sm:text-sm">
+              <Link
+                href="/"
+                prefetch={true}
+                className="shrink-0 font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
+              >
+                ← Topics
+              </Link>
+              <span className="text-muted-foreground/40" aria-hidden="true">
+                /
+              </span>
+              <Link
+                href={`/topic/${topic.slug}`}
+                prefetch={true}
+                className="truncate font-semibold tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
+              >
+                {topic.title}
+              </Link>
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {showTocRail && (
-              <MobileTocDropdown
-                headings={headings}
-                activeHeadingId={activeHeadingId}
-                onJump={jumpToHeading}
-              />
+              <div className="lg:hidden">
+                <MobileTocDropdown
+                  headings={headings}
+                  activeHeadingId={activeHeadingId}
+                  onJump={jumpToHeading}
+                />
+              </div>
             )}
+            {sidebarHeaderAction}
+            <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
           </div>
         </div>
+      </header>
 
-        <main
-          id="main-content"
-          className="mx-auto flex w-full max-w-[66rem] flex-1 justify-center gap-10 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-10 lg:px-10 lg:pt-12 lg:pb-28 xl:gap-14"
-        >
-          <article
-            {...articleDataAttributes}
-            className={cn(
-              "min-w-0 w-full max-w-[43rem] transition-opacity duration-150",
-              isTransitioning ? "opacity-65" : "opacity-100"
-            )}
+      <div className="w-full flex-1">
+        <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-[90.5rem]">
+          <aside
+            ref={syllabusAsideRef}
+            onScroll={persistSyllabusScroll}
+            className="hidden lg:flex lg:w-[17.5rem] xl:w-[18.5rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)]"
           >
-            {showTocRail && (
-              <TabletInlineToc
-                headings={headings}
-                activeHeadingId={activeHeadingId}
-                onJump={jumpToHeading}
-              />
-            )}
+            {renderSidebarHeader()}
+            <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">
+              {renderSidebarNavigation()}
+            </div>
+          </aside>
 
-            {children}
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            <main
+              id="main-content"
+              className="flex w-full flex-1 justify-center xl:justify-between gap-8 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 lg:px-10 lg:pt-10 xl:gap-12 xl:px-12"
+            >
+              <article
+                {...articleDataAttributes}
+                className={cn(
+                  "min-w-0 w-full max-w-[48rem] xl:max-w-[50rem] transition-opacity duration-150",
+                  !showTocRail && "mx-auto max-w-[52rem]",
+                  isTransitioning ? "opacity-65" : "opacity-100"
+                )}
+              >
+                {showTocRail && (
+                  <TabletInlineToc
+                    headings={headings}
+                    activeHeadingId={activeHeadingId}
+                    onJump={jumpToHeading}
+                  />
+                )}
 
-            <LecturePager prev={prevLink} next={nextLink} />
-          </article>
+                {children}
 
-          {showTocRail && (
-            <DesktopTocRail
-              headings={headings}
-              activeHeadingId={activeHeadingId}
-              onJump={jumpToHeading}
-            />
-          )}
-        </main>
+                <LecturePager prev={prevLink} next={nextLink} />
+              </article>
+
+              {showTocRail && (
+                <DesktopTocRail
+                  headings={headings}
+                  activeHeadingId={activeHeadingId}
+                  onJump={jumpToHeading}
+                />
+              )}
+            </main>
+          </div>
+        </div>
       </div>
 
       <Sheet

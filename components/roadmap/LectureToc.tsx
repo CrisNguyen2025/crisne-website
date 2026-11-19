@@ -170,10 +170,10 @@ export function DesktopTocRail({
   return (
     <aside
       aria-hidden={headings.length === 0 || undefined}
-      className="hidden xl:block w-[13.5rem] shrink-0"
+      className="hidden xl:block w-[15.75rem] shrink-0"
     >
       {headings.length > 0 && (
-        <div className="sticky top-12 max-h-[calc(100dvh-5rem)] overflow-y-auto no-scrollbar">
+        <div className="sticky top-20 max-h-[calc(100dvh-6.5rem)] overflow-y-auto no-scrollbar">
           <nav aria-label="On this page">
             <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
               On this page

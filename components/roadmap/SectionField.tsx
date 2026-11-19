@@ -114,6 +114,8 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
   }, [clampedActiveIndex, isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (!isOpen) {
@@ -202,10 +204,20 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
             if (!isOpen) openListbox();
           }}
           onChange={(e) => {
-            onChange(e.target.value);
+            const nextVal = e.target.value;
+            onChange(nextVal);
             setIsOpen(true);
             setIsFiltering(true);
-            setActiveIndex(0);
+            const nextCleaned = nextVal.trim().replace(/\s+/g, ' ');
+            const nextNorm = normalizeTitle(nextCleaned);
+            if (!nextNorm) {
+              setActiveIndex(0);
+            } else {
+              const generalOffset = normalizeTitle(GENERAL_LABEL).includes(nextNorm) ? 1 : 0;
+              const matching = sections.filter((s) => normalizeTitle(s).includes(nextNorm));
+              const exactIdx = matching.findIndex((s) => normalizeTitle(s) === nextNorm);
+              setActiveIndex(exactIdx >= 0 ? generalOffset + exactIdx : 0);
+            }
           }}
           onBlur={(e) => {
             if (!rootRef.current?.contains(e.relatedTarget as Node | null)) {

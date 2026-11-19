@@ -233,9 +233,8 @@ describe("LectureShell & editorial pages", () => {
       </LectureShell>
     );
 
-    expect(screen.getByText("Tổng quan").getAttribute("aria-current")).toBe(
-      "page"
-    );
+    expect(screen.queryByRole("link", { name: "Tổng quan" })).toBeNull();
+    expect(screen.getByText(ITEMS[0].title)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Nền tảng/ })).toBeNull();
     expect(screen.getAllByText("On this page").length).toBeGreaterThanOrEqual(
       1

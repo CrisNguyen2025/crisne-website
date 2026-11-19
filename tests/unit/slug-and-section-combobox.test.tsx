@@ -281,6 +281,14 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
     expect(dbOptions).toEqual(['Chung (không thuộc mục riêng)', 'Storage Engine', 'Indexing']);
 
     fireEvent.click(within(listbox).getByRole('option', { name: 'Indexing' }));
+    expect(sectionCombo.value).toBe('Indexing');
+
+    fireEvent.change(topicSelect, { target: { value: 'ai-rag' } });
+    expect(sectionCombo.value).toBe('Retrieval');
+
+    fireEvent.change(topicSelect, { target: { value: 'db-internals' } });
+    fireEvent.focus(sectionCombo);
+    fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'Indexing' }));
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));
 
     await waitFor(() => {
@@ -336,5 +344,29 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       expect(routerSpies.refresh).toHaveBeenCalledTimes(1);
     });
     expect(routerSpies.replace).not.toHaveBeenCalled();
+  });
+
+  it('highlights exact match over prefix match, ignores IME composition Enter, and handles empty sections', () => {
+    const { unmount } = render(
+      <StatefulSectionField initial="" sections={['AI Core', 'Core']} />
+    );
+
+    const input = screen.getByRole('combobox', { name: 'Mục' });
+    fireEvent.change(input, { target: { value: 'core' } });
+
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    expect(screen.getByRole('listbox')).toBeTruthy();
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByTestId('section-value').textContent).toBe('Core');
+    unmount();
+
+    render(<StatefulSectionField initial="" sections={[]} />);
+    const emptyInput = screen.getByRole('combobox', { name: 'Mục' });
+    fireEvent.focus(emptyInput);
+    expect(screen.getByText(/Topic chưa có mục riêng/)).toBeTruthy();
+
+    fireEvent.change(emptyInput, { target: { value: 'Nền tảng' } });
+    expect(screen.getByRole('option', { name: /Tạo mục mới “Nền tảng”/ })).toBeTruthy();
   });
 });
