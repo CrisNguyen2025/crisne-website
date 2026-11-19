@@ -226,6 +226,7 @@ describe("groupBySection & Collapse state helpers", () => {
 
 describe("LectureShell & editorial pages", () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
     mockUseCanWrite.mockReturnValue(false);
     mockUseMediaQuery.mockReturnValue(false);
     globalThis.IntersectionObserver = class IntersectionObserver {
@@ -676,5 +677,60 @@ describe("LectureShell & editorial pages", () => {
         expect(cls).not.toContain("opacity-100");
       }
     }
+  });
+
+  it("preserves open sections and sidebar scroll position when navigating to another section across remounts", () => {
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const firstRender = render(
+      <LectureShell
+        topic={TOPIC}
+        siblingGroups={groups}
+        activeView="lesson"
+        activeLessonId={ITEMS[0].id}
+        defaultOpenSectionKey="Nền tảng"
+        canWrite={false}
+        ownerStatusById={{}}
+        headings={[]}
+      >
+        <p>Lesson 1</p>
+      </LectureShell>
+    );
+
+    const scrollContainer = firstRender.container.querySelector("aside div.overflow-y-auto") as HTMLElement;
+    expect(scrollContainer).toBeTruthy();
+    scrollContainer.scrollTop = 140;
+    fireEvent.scroll(scrollContainer);
+
+    fireEvent.click(screen.getByRole("button", { name: /Thực hành/ }));
+    expect(screen.getByRole("button", { name: /Nền tảng/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: /Thực hành/ }).getAttribute("aria-expanded")).toBe("true");
+
+    const lesson2Link = screen.getByRole("link", { name: ITEMS[1].title });
+    lesson2Link.addEventListener("click", (e) => e.preventDefault(), { once: true });
+    fireEvent.click(lesson2Link);
+    firstRender.unmount();
+
+    const secondRender = render(
+      <LectureShell
+        topic={TOPIC}
+        siblingGroups={groups}
+        activeView="lesson"
+        activeLessonId={ITEMS[1].id}
+        defaultOpenSectionKey="Thực hành"
+        canWrite={false}
+        ownerStatusById={{}}
+        headings={[]}
+      >
+        <p>Lesson 2</p>
+      </LectureShell>
+    );
+
+    expect(screen.getByRole("button", { name: /Nền tảng/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: /Thực hành/ }).getAttribute("aria-expanded")).toBe("true");
+    const restoredScroll = secondRender.container.querySelector("aside div.overflow-y-auto") as HTMLElement;
+    expect(restoredScroll.scrollTop).toBe(140);
+
+    fireEvent.click(screen.getByRole("button", { name: /Nền tảng/ }));
+    expect(screen.getByRole("button", { name: /Nền tảng/ }).getAttribute("aria-expanded")).toBe("false");
   });
 });

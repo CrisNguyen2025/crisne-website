@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ChevronRight, List, X } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
@@ -71,6 +71,67 @@ export function toggleSectionOverride(
     whenDefaultWas: defaultOpenKey,
   };
   return normalized;
+}
+
+export function preserveOpenSectionOverride(
+  overrides: Record<string, SectionOverride>,
+  defaultOpenKey: string | null
+): Record<string, SectionOverride> {
+  if (defaultOpenKey === null || defaultOpenKey in overrides) {
+    return overrides;
+  }
+  return {
+    ...overrides,
+    [defaultOpenKey]: { open: true, whenDefaultWas: defaultOpenKey },
+  };
+}
+
+const EMPTY_SECTION_OVERRIDES: Record<string, SectionOverride> = {};
+const sectionOverridesCache = new Map<string, Record<string, SectionOverride>>();
+const sectionOverrideListeners = new Set<() => void>();
+
+function subscribeSectionOverrides(listener: () => void) {
+  sectionOverrideListeners.add(listener);
+  return () => {
+    sectionOverrideListeners.delete(listener);
+  };
+}
+
+function getSectionOverridesSnapshot(
+  storageKey: string
+): Record<string, SectionOverride> {
+  if (typeof window === "undefined") return EMPTY_SECTION_OVERRIDES;
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) {
+      sectionOverridesCache.delete(storageKey);
+      return EMPTY_SECTION_OVERRIDES;
+    }
+    const cached = sectionOverridesCache.get(storageKey);
+    if (cached && JSON.stringify(cached) === raw) {
+      return cached;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return EMPTY_SECTION_OVERRIDES;
+    const next = parsed as Record<string, SectionOverride>;
+    sectionOverridesCache.set(storageKey, next);
+    return next;
+  } catch {
+    return EMPTY_SECTION_OVERRIDES;
+  }
+}
+
+function setPersistedSectionOverrides(
+  storageKey: string,
+  next: Record<string, SectionOverride>
+) {
+  sectionOverridesCache.set(storageKey, next);
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(next));
+  } catch {}
+  for (const listener of sectionOverrideListeners) {
+    listener();
+  }
 }
 
 export interface LecturePagerLink {
@@ -177,23 +238,26 @@ export function LectureShell({
   children,
 }: LectureShellProps) {
   const scrollStorageKey = `roadmap:syllabus-scroll:${topic.slug}`;
-  const syllabusAsideRef = useRef<HTMLElement>(null);
+  const sectionsStorageKey = `roadmap:syllabus-sections:${topic.slug}`;
+  const syllabusScrollRef = useRef<HTMLDivElement>(null);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [sectionOverrides, setSectionOverrides] = useState<
-    Record<string, SectionOverride>
-  >({});
+  const sectionOverrides = useSyncExternalStore(
+    subscribeSectionOverrides,
+    () => getSectionOverridesSnapshot(sectionsStorageKey),
+    () => EMPTY_SECTION_OVERRIDES
+  );
   const { activeHeadingId, jumpToHeading } = useActiveHeading(headings);
 
   useLayoutEffect(() => {
-    const aside = syllabusAsideRef.current;
-    if (!aside) return;
+    const scrollEl = syllabusScrollRef.current;
+    if (!scrollEl) return;
     try {
       const savedScroll = window.sessionStorage.getItem(scrollStorageKey);
       if (savedScroll !== null) {
         const parsed = Number(savedScroll);
         if (Number.isFinite(parsed) && parsed >= 0) {
-          aside.scrollTop = parsed;
+          scrollEl.scrollTop = parsed;
         }
       }
     } catch {}
@@ -202,20 +266,20 @@ export function LectureShell({
       ? `[data-lesson-nav-id="${activeLessonId}"]`
       : null;
     const activeEl = targetSelector
-      ? aside.querySelector<HTMLElement>(targetSelector)
+      ? scrollEl.querySelector<HTMLElement>(targetSelector)
       : null;
     if (activeEl) {
-      const asideRect = aside.getBoundingClientRect();
+      const containerRect = scrollEl.getBoundingClientRect();
       const itemRect = activeEl.getBoundingClientRect();
       if (
-        itemRect.top < asideRect.top + 24 ||
-        itemRect.bottom > asideRect.bottom - 24
+        itemRect.top < containerRect.top + 24 ||
+        itemRect.bottom > containerRect.bottom - 24
       ) {
         activeEl.scrollIntoView({ block: "nearest" });
         try {
           window.sessionStorage.setItem(
             scrollStorageKey,
-            String(aside.scrollTop)
+            String(scrollEl.scrollTop)
           );
         } catch {}
       }
@@ -223,11 +287,25 @@ export function LectureShell({
   }, [activeView, activeLessonId, scrollStorageKey]);
 
   const persistSyllabusScroll = () => {
-    const aside = syllabusAsideRef.current;
-    if (!aside) return;
+    const scrollEl = syllabusScrollRef.current;
+    if (!scrollEl) return;
     try {
-      window.sessionStorage.setItem(scrollStorageKey, String(aside.scrollTop));
+      window.sessionStorage.setItem(
+        scrollStorageKey,
+        String(scrollEl.scrollTop)
+      );
     } catch {}
+  };
+
+  const persistSidebarState = () => {
+    persistSyllabusScroll();
+    const preserved = preserveOpenSectionOverride(
+      sectionOverrides,
+      defaultOpenSectionKey
+    );
+    if (preserved !== sectionOverrides) {
+      setPersistedSectionOverrides(sectionsStorageKey, preserved);
+    }
   };
 
   const handleToggleSection = (groupKey: string, buttonEl: HTMLElement) => {
@@ -236,21 +314,24 @@ export function LectureShell({
       groupKey,
       defaultOpenSectionKey
     );
-    setSectionOverrides((prev) =>
-      toggleSectionOverride(prev, groupKey, defaultOpenSectionKey)
+    const base = preserveOpenSectionOverride(
+      sectionOverrides,
+      defaultOpenSectionKey
     );
+    const next = toggleSectionOverride(base, groupKey, defaultOpenSectionKey);
+    setPersistedSectionOverrides(sectionsStorageKey, next);
     if (willOpen) {
       window.setTimeout(() => {
-        const aside = syllabusAsideRef.current;
-        if (!aside || !aside.contains(buttonEl)) {
+        const scrollEl = syllabusScrollRef.current;
+        if (!scrollEl || !scrollEl.contains(buttonEl)) {
           buttonEl.scrollIntoView({ block: "nearest" });
           return;
         }
-        const asideRect = aside.getBoundingClientRect();
+        const containerRect = scrollEl.getBoundingClientRect();
         const btnRect = buttonEl.getBoundingClientRect();
         if (
-          btnRect.top < asideRect.top + 8 ||
-          btnRect.bottom > asideRect.bottom - 8
+          btnRect.top < containerRect.top + 8 ||
+          btnRect.bottom > containerRect.bottom - 8
         ) {
           buttonEl.scrollIntoView({ block: "nearest" });
         }
@@ -264,14 +345,18 @@ export function LectureShell({
     closeDrawer?: () => void
   ) => {
     persistSyllabusScroll();
-    setSectionOverrides((prev) => {
-      if (prev[sectionKey]?.open === false) {
-        const next = { ...prev };
-        delete next[sectionKey];
-        return next;
-      }
-      return prev;
-    });
+    const base = preserveOpenSectionOverride(
+      sectionOverrides,
+      defaultOpenSectionKey
+    );
+    let next = base;
+    if (next[sectionKey]?.open === false) {
+      next = { ...next };
+      delete next[sectionKey];
+    }
+    if (next !== sectionOverrides) {
+      setPersistedSectionOverrides(sectionsStorageKey, next);
+    }
     onLessonNavigate?.(lessonId);
     closeDrawer?.();
   };
@@ -507,13 +592,13 @@ export function LectureShell({
 
       <div className="w-full flex-1 overflow-x-clip">
         <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] lg:min-h-dvh w-full max-w-[90.5rem]">
-          <aside
-            ref={syllabusAsideRef}
-            onScroll={persistSyllabusScroll}
-            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-0 h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']"
-          >
+          <aside className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-0 h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']">
             {renderSidebarHeader()}
-            <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">
+            <div
+              ref={syllabusScrollRef}
+              onScroll={persistSyllabusScroll}
+              className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5"
+            >
               {renderSidebarNavigation()}
             </div>
           </aside>
@@ -538,7 +623,30 @@ export function LectureShell({
 
                 {children}
 
-                <LecturePager prev={prevLink} next={nextLink} />
+                <LecturePager
+                  prev={
+                    prevLink
+                      ? {
+                          ...prevLink,
+                          onClick: () => {
+                            persistSidebarState();
+                            prevLink.onClick?.();
+                          },
+                        }
+                      : undefined
+                  }
+                  next={
+                    nextLink
+                      ? {
+                          ...nextLink,
+                          onClick: () => {
+                            persistSidebarState();
+                            nextLink.onClick?.();
+                          },
+                        }
+                      : undefined
+                  }
+                />
               </article>
 
               {rail ? (
