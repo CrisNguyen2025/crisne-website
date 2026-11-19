@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import { ChecklistItem, GetRoadmapResponseDto, RoadmapMeta, SectionGroup } from '@/lib/roadmap/types';
 import * as roadmapService from '@/logic/roadmap/roadmapService';
 import { sectionSpelling } from '@/lib/roadmap/sections';
-import type { LessonStatus } from '@/lib/roadmap/status';
+import { LESSON_STATUS_SAVE_DELAY_MS, type LessonStatus } from '@/lib/roadmap/status';
 import { slugify } from '@/lib/utils';
 
 export type { SectionGroup };
@@ -248,24 +248,50 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
   );
 
   // 4b. Set a lesson's Lesson Status (ADR-0010): shown at once, reloaded from the server if the write fails
+  // The list updates at once; each lesson's API call waits for the clicks to stop and sends the last status
+  const pendingStatusRef = useRef(new Map<string, { status: LessonStatus; timer: number }>());
+
   const changeItemStatus = useCallback(
-    async (id: string, status: LessonStatus) => {
+    (id: string, status: LessonStatus) => {
       const patch = (prev: ChecklistItem[]) =>
         prev.map((item) =>
           item.id === id ? { ...item, status, statusUpdatedAt: dayjs().toISOString() } : item
         );
       setItems(patch);
       syncCache(slug, (curr) => ({ ...curr, items: patch(curr.items) }));
-      try {
-        await roadmapService.updateItemStatus(id, status);
-      } catch (err) {
-        console.error('[useRoadmap] Failed to update lesson status:', err);
-        topicCache.delete(slug);
-        await loadRoadmap(slug);
-      }
+
+      const pending = pendingStatusRef.current;
+      const previous = pending.get(id);
+      if (previous) window.clearTimeout(previous.timer);
+      const timer = window.setTimeout(async () => {
+        pending.delete(id);
+        try {
+          await roadmapService.updateItemStatus(id, status);
+        } catch (err) {
+          console.error('[useRoadmap] Failed to update lesson status:', err);
+          topicCache.delete(slug);
+          await loadRoadmap(slug);
+        }
+      }, LESSON_STATUS_SAVE_DELAY_MS);
+      pending.set(id, { status, timer });
     },
     [slug, loadRoadmap]
   );
+
+  // Leaving the topic inside the delay still saves the last statuses
+  useEffect(() => {
+    const pending = pendingStatusRef.current;
+    return () => {
+      pending.forEach(({ status, timer }, id) => {
+        window.clearTimeout(timer);
+        roadmapService.updateItemStatus(id, status).catch((err) => {
+          console.error('[useRoadmap] Failed to update lesson status:', err);
+          topicCache.delete(slug);
+        });
+      });
+      pending.clear();
+    };
+  }, [slug]);
 
   // 5. Delete a lesson
   const deleteItem = useCallback(

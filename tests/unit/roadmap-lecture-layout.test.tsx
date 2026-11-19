@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withHeadingIds } from "@/lib/roadmap/content-utils";
 import { DEFAULT_LESSON_TEMPLATE_HTML } from "@/lib/roadmap/lesson-template";
@@ -18,6 +18,7 @@ import {
 } from "@/components/roadmap/LectureShell";
 import { computeActiveHeadingId } from "@/components/roadmap/LectureToc";
 import { PublicationHome } from "@/components/roadmap/PublicationHome";
+import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { TopicEditorialPage } from "@/components/roadmap/TopicEditorialPage";
 import { LessonEditorialReader } from "@/components/roadmap/LessonEditorialReader";
 
@@ -419,7 +420,7 @@ describe("LectureShell & editorial pages", () => {
     const lg = renderLesson();
     const header = lg.container.querySelector("article header");
     expect(header?.firstElementChild?.contains(screen.getByRole("group", { name: "Trạng thái bài học" }))).toBe(true);
-    expect(screen.getAllByRole("button", { name: "Sửa" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Thông tin" })).toHaveLength(1);
   });
 
   it("extracts H2/H3 outline from DEFAULT_LESSON_TEMPLATE_HTML and lets Owner open editor from template", () => {
@@ -452,5 +453,51 @@ describe("LectureShell & editorial pages", () => {
 
     const drawer = screen.getByTestId("mock-content-drawer");
     expect(drawer.textContent).toContain("Tổng quan");
+  });
+  it("saves only the last Lesson Status of a burst of clicks, and nothing when it ends where it started", async () => {
+    vi.useFakeTimers();
+    try {
+      mockUseCanWrite.mockReturnValue(true);
+      const updateItemStatus = vi.mocked(roadmapService.updateItemStatus);
+      updateItemStatus.mockReset();
+      updateItemStatus.mockResolvedValue(undefined as never);
+      const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+      render(
+        <LessonEditorialReader
+          lesson={ITEMS[0]}
+          processedHtml="<p>Body</p>"
+          headings={[]}
+          topic={TOPIC}
+          siblingGroups={groups}
+          allTopics={[TOPIC]}
+        />
+      );
+      const pick = (name: string) =>
+        fireEvent.click(screen.getByRole("button", { name }));
+
+      pick("Mục tiêu");
+      pick("Đang học");
+      pick("Mục tiêu");
+      expect(screen.getByRole("button", { name: "Mục tiêu" }).getAttribute("aria-pressed")).toBe("true");
+      expect(updateItemStatus).not.toHaveBeenCalled();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(updateItemStatus).toHaveBeenCalledTimes(1);
+      expect(updateItemStatus).toHaveBeenCalledWith(ITEMS[0].id, "target");
+
+      const pressed = screen
+        .getAllByRole("button", { pressed: true })
+        .find((b) => b.closest('[aria-label="Trạng thái bài học"]'))!
+        .textContent!;
+      pick(pressed === "Đang học" ? "Đã nắm" : "Đang học");
+      pick(pressed);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(updateItemStatus).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

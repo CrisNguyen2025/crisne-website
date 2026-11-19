@@ -6,6 +6,9 @@ export type LessonStatus = (typeof LESSON_STATUSES)[number];
 /** A lesson created without a status is known: the roadmap has held known knowledge so far (ADR-0010). */
 export const DEFAULT_LESSON_STATUS: LessonStatus = 'known';
 
+/** Wait for the Owner to stop clicking before saving a Lesson Status: only the last one is sent. */
+export const LESSON_STATUS_SAVE_DELAY_MS = 600;
+
 export const LESSON_STATUS_LABEL: Record<LessonStatus, string> = {
   target: 'Mục tiêu',
   learning: 'Đang học',

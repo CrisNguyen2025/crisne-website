@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Edit3, ListTree, Pencil, Trash2 } from "lucide-react";
+import { Edit3, Info, ListTree, Trash2 } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import { contentToHtml, withHeadingIds } from "@/lib/roadmap/content-utils";
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
@@ -14,12 +14,17 @@ import {
   clearPendingLessonWrite,
   peekPendingLessonWrite,
 } from "@/lib/roadmap/pending-write";
-import { DEFAULT_LESSON_STATUS, type LessonStatus } from "@/lib/roadmap/status";
+import {
+  DEFAULT_LESSON_STATUS,
+  LESSON_STATUS_SAVE_DELAY_MS,
+  type LessonStatus,
+} from "@/lib/roadmap/status";
 import type {
   ChecklistItem,
   RoadmapMeta,
   SectionGroup,
 } from "@/lib/roadmap/types";
+import { cn } from "@/lib/utils";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -37,6 +42,9 @@ import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
 /** Tailwind `xl`: "On this page" moves to the right rail */
 const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
+
+const OWNER_ACTION_CLASS =
+  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer";
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -121,6 +129,12 @@ export function LessonEditorialReader({
     pendingNav.fromId === lesson.id &&
     pendingNav.targetId !== lesson.id
   );
+  const pendingStatusRef = useRef<{
+    lessonId: string;
+    status: LessonStatus;
+    saved: LessonStatus;
+    timer: number;
+  } | null>(null);
   const currentStatus: LessonStatus =
     ownerStatusById[lesson.id] ?? DEFAULT_LESSON_STATUS;
 
@@ -130,17 +144,42 @@ export function LessonEditorialReader({
     }
   };
 
-  const handleChangeStatus = async (status: LessonStatus) => {
-    const previous = currentStatus;
-    setOptimisticStatus(lesson.id, status);
-    try {
-      await roadmapService.updateItemStatus(lesson.id, status);
-      toast("Đã cập nhật trạng thái bài học", "success");
-    } catch {
-      setOptimisticStatus(lesson.id, previous);
-      toast("Không cập nhật được trạng thái.", "error");
-    }
+  // The picker updates at once; the API gets only the last status of a burst of clicks
+  const handleChangeStatus = (status: LessonStatus) => {
+    const pending = pendingStatusRef.current;
+    if (pending) window.clearTimeout(pending.timer);
+    const saved =
+      pending?.lessonId === lesson.id ? pending.saved : currentStatus;
+    const lessonId = lesson.id;
+    setOptimisticStatus(lessonId, status);
+
+    const timer = window.setTimeout(async () => {
+      pendingStatusRef.current = null;
+      if (status === saved) return;
+      try {
+        await roadmapService.updateItemStatus(lessonId, status);
+        toast("Đã cập nhật trạng thái bài học", "success");
+      } catch {
+        setOptimisticStatus(lessonId, saved);
+        toast("Không cập nhật được trạng thái.", "error");
+      }
+    }, LESSON_STATUS_SAVE_DELAY_MS);
+    pendingStatusRef.current = { lessonId, status, saved, timer };
   };
+
+  // Leaving the lesson inside the delay still saves the last status
+  useEffect(() => {
+    return () => {
+      const pending = pendingStatusRef.current;
+      if (!pending) return;
+      window.clearTimeout(pending.timer);
+      pendingStatusRef.current = null;
+      if (pending.status === pending.saved) return;
+      roadmapService
+        .updateItemStatus(pending.lessonId, pending.status)
+        .catch(() => invalidateCachedOwnerStatuses(topic.slug));
+    };
+  }, [lesson.id, topic.slug]);
 
   const handleSaveInfo = async (
     id: string,
@@ -213,50 +252,60 @@ export function LessonEditorialReader({
 
   // Owner controls sit right under "On this page": in the right rail on xl, at the top of the article below it
   const renderOwnerControls = (inRail: boolean) => (
-    <div
-      className={
-        inRail
-          ? "flex flex-col items-start gap-3"
-          : "mb-5 flex flex-wrap items-center justify-between gap-2 border-y border-border py-2.5"
-      }
-    >
-      <LessonStatusPicker value={currentStatus} onChange={handleChangeStatus} />
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setIsInfoOpen(true)}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground cursor-pointer"
-        >
-          <Pencil className="size-3" />
-          <span>Sửa</span>
-        </button>
+    <div className={inRail ? "w-full" : "mb-5"}>
+      {inRail && (
+        <p className="mb-1.5 px-2 text-[0.6875rem] text-muted-foreground">
+          Trạng thái
+        </p>
+      )}
+      <LessonStatusPicker
+        value={currentStatus}
+        onChange={handleChangeStatus}
+        variant={inRail ? "list" : "tabs"}
+      />
+      <div
+        className={cn(
+          "flex items-center gap-1",
+          inRail ? "mt-2 border-t border-border pt-2" : "mt-2"
+        )}
+      >
         <button
           type="button"
           onClick={() => {
             setDraftSeed(undefined);
             setIsContentOpen(true);
           }}
-          className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+          className={OWNER_ACTION_CLASS}
         >
-          <Edit3 className="size-3" />
+          <Edit3 className="size-3.5" />
           <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
         </button>
-        <ActionMenu
-          label="Thao tác bài học"
-          items={[
-            {
-              label: "Xoá bài học",
-              icon: Trash2,
-              danger: true,
-              confirm: {
-                title: "Xoá bài học này?",
-                description: "Hành động này không thể hoàn tác.",
-                confirmLabel: "Xoá",
+        <button
+          type="button"
+          onClick={() => setIsInfoOpen(true)}
+          className={OWNER_ACTION_CLASS}
+        >
+          <Info className="size-3.5" />
+          <span>Thông tin</span>
+        </button>
+        <div className="ml-auto">
+          <ActionMenu
+            label="Thao tác bài học"
+            items={[
+              {
+                label: "Xoá bài học",
+                icon: Trash2,
+                danger: true,
+                confirm: {
+                  title: "Xoá bài học này?",
+                  description: "Hành động này không thể hoàn tác.",
+                  confirmLabel: "Xoá",
+                },
+                onSelect: handleDeleteLesson,
               },
-              onSelect: handleDeleteLesson,
-            },
-          ]}
-        />
+            ]}
+          />
+        </div>
       </div>
     </div>
   );
