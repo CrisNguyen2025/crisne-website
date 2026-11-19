@@ -22,6 +22,7 @@ import { TopicEditorialPage } from "@/components/roadmap/TopicEditorialPage";
 import { LessonEditorialReader } from "@/components/roadmap/LessonEditorialReader";
 
 const mockUseCanWrite = vi.fn(() => false);
+const mockUseMediaQuery = vi.fn(() => false);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -52,6 +53,11 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/hooks/use-can-write", () => ({
   useCanWrite: () => mockUseCanWrite(),
+}));
+
+vi.mock("@/hooks/use-media-query", () => ({
+  MOBILE_VIEWPORT_QUERY: "(max-width: 767px)",
+  useMediaQuery: () => mockUseMediaQuery(),
 }));
 
 vi.mock("@/components/theme-toggle", () => ({
@@ -202,6 +208,7 @@ describe("groupBySection & Collapse state helpers", () => {
 describe("LectureShell & editorial pages", () => {
   beforeEach(() => {
     mockUseCanWrite.mockReturnValue(false);
+    mockUseMediaQuery.mockReturnValue(false);
     globalThis.IntersectionObserver = class IntersectionObserver {
       observe = vi.fn();
       unobserve = vi.fn();
@@ -382,6 +389,37 @@ describe("LectureShell & editorial pages", () => {
     expect(screen.getByText("1 topics · 2 bài học")).toBeTruthy();
     expect(container.querySelector("footer")).toBeNull();
     expect(container.querySelector("nav")).toBeNull();
+  });
+
+  it("puts the Owner controls under On this page: right rail on xl, top of the article below xl", () => {
+    mockUseCanWrite.mockReturnValue(true);
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const renderLesson = () =>
+      render(
+        <LessonEditorialReader
+          lesson={ITEMS[0]}
+          processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
+          headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+          topic={TOPIC}
+          siblingGroups={groups}
+          allTopics={[TOPIC]}
+        />
+      );
+
+    mockUseMediaQuery.mockReturnValue(true);
+    const xl = renderLesson();
+    const toc = xl.container.querySelector('nav[aria-label="On this page"]');
+    const status = screen.getByRole("group", { name: "Trạng thái bài học" });
+    expect(toc?.closest("aside")).toBe(status.closest("aside"));
+    expect(toc!.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(xl.container.querySelector("article header [role=group]")).toBeNull();
+    xl.unmount();
+
+    mockUseMediaQuery.mockReturnValue(false);
+    const lg = renderLesson();
+    const header = lg.container.querySelector("article header");
+    expect(header?.firstElementChild?.contains(screen.getByRole("group", { name: "Trạng thái bài học" }))).toBe(true);
+    expect(screen.getAllByRole("button", { name: "Sửa" })).toHaveLength(1);
   });
 
   it("extracts H2/H3 outline from DEFAULT_LESSON_TEMPLATE_HTML and lets Owner open editor from template", () => {

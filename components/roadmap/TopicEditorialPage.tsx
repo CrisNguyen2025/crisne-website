@@ -267,6 +267,45 @@ export function TopicEditorialPage({
     />
   ) : null;
 
+  const focusRail =
+    !isReorderMode && focusItems.length > 0 ? (
+      <nav aria-label="Đang theo dõi">
+        <div className="flex items-center gap-2">
+          <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
+            Đang theo dõi 👀
+          </p>
+        </div>
+        <ul className="mt-3 space-y-2.5">
+          {focusItems.map((item) => (
+            <li key={item.id}>
+              <Link
+                href={lessonPath(topic.slug, item.slug || item.id)}
+                prefetch={true}
+                className="group block rounded-xl border border-border bg-card p-3 transition-colors duration-150 hover:border-[var(--editorial-accent)] hover:shadow-xs"
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  {item.status && <LessonStatusBadge status={item.status} />}
+                  {item.section && (
+                    <span className="truncate text-[0.6875rem] text-muted-foreground">
+                      {splitSectionLabel(item.section).primary}
+                    </span>
+                  )}
+                </div>
+                <h3 className="mt-2 text-xs font-semibold leading-snug text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
+                  {item.title}
+                </h3>
+                {item.description && (
+                  <p className="mt-1 line-clamp-2 text-[0.6875rem] leading-relaxed text-muted-foreground">
+                    {item.description}
+                  </p>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    ) : undefined;
+
   return (
     <>
       <LectureShell
@@ -277,11 +316,15 @@ export function TopicEditorialPage({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={[]}
+        rail={focusRail}
         sidebarHeaderAction={topicActionsMenu}
         nextLink={
           !isReorderMode && firstLesson
             ? {
-                href: lessonPath(topic.slug, firstLesson.slug || firstLesson.id),
+                href: lessonPath(
+                  topic.slug,
+                  firstLesson.slug || firstLesson.id
+                ),
                 label: "Trang sau",
                 title: firstLesson.title,
               }
@@ -399,13 +442,16 @@ export function TopicEditorialPage({
         ) : (
           <div className="mt-8 space-y-10">
             {focusItems.length > 0 && (
-              <section aria-labelledby="h-focus">
-                <h2
-                  id="h-focus"
-                  className="scroll-mt-16 border-t border-border pt-6 font-display text-[1.5rem] font-normal leading-snug tracking-[-0.015em] text-foreground sm:text-[1.75rem]"
-                >
-                  Đang theo dõi
-                </h2>
+              <section aria-labelledby="h-focus" className="xl:hidden">
+                <div className="flex items-center gap-2 border-t border-border pt-6">
+                  <h2
+                    id="h-focus"
+                    className="scroll-mt-16 font-display text-[1.5rem] font-normal leading-snug tracking-[-0.015em] text-foreground sm:text-[1.75rem]"
+                  >
+                    Đang theo dõi
+                  </h2>
+                  <LessonStatusBadge status="target" />
+                </div>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {focusItems.map((item) => (
                     <Link
@@ -547,7 +593,10 @@ export function TopicEditorialPage({
                                 />
                                 <div className="min-w-0">
                                   <Link
-                                    href={lessonPath(topic.slug, item.slug || item.id)}
+                                    href={lessonPath(
+                                      topic.slug,
+                                      item.slug || item.id
+                                    )}
                                     prefetch={true}
                                     className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
                                   >

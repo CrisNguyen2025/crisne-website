@@ -140,6 +140,10 @@ interface LectureShellProps {
   canWrite: boolean;
   ownerStatusById: Record<string, LessonStatus>;
   headings: ContentHeading[];
+  /** Right rail on xl screens in place of "On this page", e.g. a Topic's lessons in focus */
+  rail?: React.ReactNode;
+  /** Shown under "On this page" in the xl right rail, e.g. a Lesson's Owner controls */
+  railFooter?: React.ReactNode;
   sidebarHeaderAction?: React.ReactNode;
   isTransitioning?: boolean;
   articleDataAttributes?: {
@@ -163,6 +167,8 @@ export function LectureShell({
   canWrite,
   ownerStatusById,
   headings,
+  rail,
+  railFooter,
   sidebarHeaderAction,
   isTransitioning = false,
   articleDataAttributes,
@@ -545,11 +551,20 @@ export function LectureShell({
                 <LecturePager prev={prevLink} next={nextLink} />
               </article>
 
-              <DesktopTocRail
-                headings={headings}
-                activeHeadingId={activeHeadingId}
-                onJump={jumpToHeading}
-              />
+              {rail ? (
+                <aside className="hidden xl:block w-[15.75rem] shrink-0">
+                  <div className="sticky top-20 max-h-[calc(100dvh-6.5rem)] overflow-y-auto no-scrollbar">
+                    {rail}
+                  </div>
+                </aside>
+              ) : (
+                <DesktopTocRail
+                  headings={headings}
+                  activeHeadingId={activeHeadingId}
+                  onJump={jumpToHeading}
+                  footer={railFooter}
+                />
+              )}
             </main>
           </div>
         </div>

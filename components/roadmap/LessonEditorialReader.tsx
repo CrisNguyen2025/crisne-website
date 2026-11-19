@@ -21,6 +21,7 @@ import type {
   SectionGroup,
 } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { useToast } from "@/components/ui/toast";
@@ -33,6 +34,9 @@ import {
 import { LectureShell } from "./LectureShell";
 import { LessonStatusPicker } from "./LessonStatus";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
+
+/** Tailwind `xl`: "On this page" moves to the right rail */
+const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -58,6 +62,7 @@ export function LessonEditorialReader({
   const router = useRouter();
   const { toast } = useToast();
   const canWrite = useCanWrite();
+  const isXl = useMediaQuery(XL_VIEWPORT_QUERY);
   const { ownerStatusById, setOptimisticStatus, invalidateStatuses } =
     useTopicOwnerStatuses(topic.slug, canWrite);
 
@@ -206,6 +211,56 @@ export function LessonEditorialReader({
     }
   };
 
+  // Owner controls sit right under "On this page": in the right rail on xl, at the top of the article below it
+  const renderOwnerControls = (inRail: boolean) => (
+    <div
+      className={
+        inRail
+          ? "flex flex-col items-start gap-3"
+          : "mb-5 flex flex-wrap items-center justify-between gap-2 border-y border-border py-2.5"
+      }
+    >
+      <LessonStatusPicker value={currentStatus} onChange={handleChangeStatus} />
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setIsInfoOpen(true)}
+          className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground cursor-pointer"
+        >
+          <Pencil className="size-3" />
+          <span>Sửa</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setDraftSeed(undefined);
+            setIsContentOpen(true);
+          }}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+        >
+          <Edit3 className="size-3" />
+          <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
+        </button>
+        <ActionMenu
+          label="Thao tác bài học"
+          items={[
+            {
+              label: "Xoá bài học",
+              icon: Trash2,
+              danger: true,
+              confirm: {
+                title: "Xoá bài học này?",
+                description: "Hành động này không thể hoàn tác.",
+                confirmLabel: "Xoá",
+              },
+              onSelect: handleDeleteLesson,
+            },
+          ]}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <>
       <LectureShell
@@ -217,6 +272,7 @@ export function LessonEditorialReader({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={rendered.headings}
+        railFooter={canWrite && isXl ? renderOwnerControls(true) : undefined}
         isTransitioning={isTransitioning}
         articleDataAttributes={{
           "data-roadmap-context": true,
@@ -251,6 +307,8 @@ export function LessonEditorialReader({
         }
       >
         <header>
+          {canWrite && !isXl && renderOwnerControls(false)}
+
           <nav
             aria-label="Breadcrumb"
             className="min-w-0 truncate text-xs text-muted-foreground"
@@ -291,52 +349,6 @@ export function LessonEditorialReader({
               : ""}
             {formatFriendlyTime(lesson.updatedAt)}
           </p>
-
-          {canWrite && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-y border-border py-2.5">
-              <LessonStatusPicker
-                value={currentStatus}
-                onChange={handleChangeStatus}
-              />
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsInfoOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground cursor-pointer"
-                >
-                  <Pencil className="size-3" />
-                  <span>Sửa</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftSeed(undefined);
-                    setIsContentOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
-                >
-                  <Edit3 className="size-3" />
-                  <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
-                </button>
-                <ActionMenu
-                  label="Thao tác bài học"
-                  items={[
-                    {
-                      label: "Xoá bài học",
-                      icon: Trash2,
-                      danger: true,
-                      confirm: {
-                        title: "Xoá bài học này?",
-                        description: "Hành động này không thể hoàn tác.",
-                        confirmLabel: "Xoá",
-                      },
-                      onSelect: handleDeleteLesson,
-                    },
-                  ]}
-                />
-              </div>
-            </div>
-          )}
 
           {lesson.description && (
             <p className="mt-5 text-[1.0625rem] leading-relaxed text-muted-foreground">

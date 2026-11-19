@@ -162,29 +162,49 @@ export function DesktopTocRail({
   headings,
   activeHeadingId,
   onJump,
+  footer,
 }: {
   headings: ContentHeading[];
   activeHeadingId: string;
   onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
+  /** Shown under "On this page", set apart by a divider line */
+  footer?: React.ReactNode;
 }) {
+  const hasHeadings = headings.length > 0;
   return (
     <aside
-      aria-hidden={headings.length === 0 || undefined}
+      aria-hidden={(!hasHeadings && !footer) || undefined}
       className="hidden xl:block w-[15.75rem] shrink-0"
     >
-      {headings.length > 0 && (
-        <div className="sticky top-20 max-h-[calc(100dvh-6.5rem)] overflow-y-auto no-scrollbar">
-          <nav aria-label="On this page">
-            <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              On this page
-            </p>
-            <LectureTocLinks
-              headings={headings}
-              activeHeadingId={activeHeadingId}
-              onJump={onJump}
-              variant="rail"
-            />
-          </nav>
+      {(hasHeadings || footer) && (
+        // Only the TOC scrolls: a footer outside the scroll box lets its popovers (⋯ menu) overflow the rail
+        <div className="sticky top-20 flex max-h-[calc(100dvh-6.5rem)] flex-col">
+          {hasHeadings && (
+            <nav
+              aria-label="On this page"
+              className="min-h-0 overflow-y-auto no-scrollbar"
+            >
+              <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
+                On this page
+              </p>
+              <LectureTocLinks
+                headings={headings}
+                activeHeadingId={activeHeadingId}
+                onJump={onJump}
+                variant="rail"
+              />
+            </nav>
+          )}
+          {footer && (
+            <div
+              className={cn(
+                "shrink-0",
+                hasHeadings && "mt-5 border-t border-border pt-5"
+              )}
+            >
+              {footer}
+            </div>
+          )}
         </div>
       )}
     </aside>

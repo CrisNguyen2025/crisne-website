@@ -95,7 +95,7 @@ export function PublicationHome({
               </p>
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {topics.map((topic) => (
                 <Link
                   key={topic.slug}
@@ -105,7 +105,7 @@ export function PublicationHome({
                 >
                   <div>
                     <div className="flex items-baseline justify-between gap-3">
-                      <h3 className="text-[0.9375rem] font-semibold tracking-tight text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
+                      <h3 className="line-clamp-2 text-[0.9375rem] font-semibold tracking-tight text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
                         {topic.title}
                       </h3>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -118,11 +118,9 @@ export function PublicationHome({
                       </p>
                     )}
                   </div>
-                  {topic.sectionNames.length > 0 && (
-                    <p className="mt-4 text-[0.6875rem] tabular-nums text-muted-foreground/80">
-                      {topic.sectionNames.length} mục
-                    </p>
-                  )}
+                  <p className="mt-4 text-[0.6875rem] tabular-nums text-muted-foreground/80">
+                    {topic.sectionNames.length} mục
+                  </p>
                 </Link>
               ))}
             </div>
