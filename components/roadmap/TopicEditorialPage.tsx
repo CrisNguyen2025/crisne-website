@@ -277,7 +277,6 @@ export function TopicEditorialPage({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={[]}
-        showTocRail={false}
         sidebarHeaderAction={topicActionsMenu}
         nextLink={
           !isReorderMode && firstLesson

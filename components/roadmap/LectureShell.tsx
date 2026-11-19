@@ -140,7 +140,6 @@ interface LectureShellProps {
   canWrite: boolean;
   ownerStatusById: Record<string, LessonStatus>;
   headings: ContentHeading[];
-  showTocRail?: boolean;
   sidebarHeaderAction?: React.ReactNode;
   isTransitioning?: boolean;
   articleDataAttributes?: {
@@ -164,7 +163,6 @@ export function LectureShell({
   canWrite,
   ownerStatusById,
   headings,
-  showTocRail = true,
   sidebarHeaderAction,
   isTransitioning = false,
   articleDataAttributes,
@@ -498,15 +496,13 @@ export function LectureShell({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {showTocRail && (
-              <div className="lg:hidden">
-                <MobileTocDropdown
-                  headings={headings}
-                  activeHeadingId={activeHeadingId}
-                  onJump={jumpToHeading}
-                />
-              </div>
-            )}
+            <div className="lg:hidden">
+              <MobileTocDropdown
+                headings={headings}
+                activeHeadingId={activeHeadingId}
+                onJump={jumpToHeading}
+              />
+            </div>
             {sidebarHeaderAction}
             <ThemeToggle className="size-8 rounded-lg border border-border/70 bg-background/50 hover:bg-[var(--editorial-sidebar-hover)] [&_svg]:size-4" />
           </div>
@@ -535,30 +531,25 @@ export function LectureShell({
                 {...articleDataAttributes}
                 className={cn(
                   "min-w-0 w-full max-w-[48rem] xl:max-w-[50rem] transition-opacity duration-150",
-                  !showTocRail && "mx-auto max-w-[52rem]",
                   isTransitioning ? "opacity-65" : "opacity-100"
                 )}
               >
-                {showTocRail && (
-                  <TabletInlineToc
-                    headings={headings}
-                    activeHeadingId={activeHeadingId}
-                    onJump={jumpToHeading}
-                  />
-                )}
+                <TabletInlineToc
+                  headings={headings}
+                  activeHeadingId={activeHeadingId}
+                  onJump={jumpToHeading}
+                />
 
                 {children}
 
                 <LecturePager prev={prevLink} next={nextLink} />
               </article>
 
-              {showTocRail && (
-                <DesktopTocRail
-                  headings={headings}
-                  activeHeadingId={activeHeadingId}
-                  onJump={jumpToHeading}
-                />
-              )}
+              <DesktopTocRail
+                headings={headings}
+                activeHeadingId={activeHeadingId}
+                onJump={jumpToHeading}
+              />
             </main>
           </div>
         </div>
