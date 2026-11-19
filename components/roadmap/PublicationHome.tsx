@@ -14,6 +14,7 @@ import { useCanWrite } from "@/hooks/use-can-write";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { ThemeToggle } from "@/components/theme-toggle";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
+import { AbotMascot } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/AbotMascot";
 import { CreateTopicModal } from "./CreateTopicModal";
 
 interface PublicationHomeProps {
@@ -56,13 +57,20 @@ export function PublicationHome({
         className="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-14 lg:pb-20"
       >
         <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-8">
-          <div className="min-w-0">
-            <h1 className="font-display text-[2.25rem] font-normal leading-[1.12] tracking-[-0.02em] text-foreground sm:text-[2.75rem]">
-              Crisne
-            </h1>
-            <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-              {topics.length} topics · {totalLessons} bài học
-            </p>
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+            <AbotMascot
+              size={72}
+              enablePoke
+              className="size-16 sm:size-[4.5rem]"
+            />
+            <div className="min-w-0">
+              <h1 className="font-display text-[2.25rem] font-normal leading-[1.12] tracking-[-0.02em] text-foreground sm:text-[2.75rem]">
+                Crisne
+              </h1>
+              <p className="mt-2 text-sm tabular-nums text-muted-foreground">
+                {topics.length} topics · {totalLessons} bài học
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

@@ -302,7 +302,7 @@ export function LectureShell({
               }
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[0.84375rem] leading-snug transition-colors duration-150 lg:py-1.5",
+                "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm leading-snug transition-colors duration-150",
                 isActive
                   ? "bg-[var(--editorial-sidebar-active)] font-semibold text-[var(--editorial-accent)]"
                   : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)]"
@@ -349,7 +349,7 @@ export function LectureShell({
                     onClick={(e) =>
                       handleToggleSection(groupKey, e.currentTarget)
                     }
-                    className="flex w-full items-start gap-1.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer lg:py-1.5"
+                    className="flex min-h-9 w-full items-start gap-1.5 rounded-lg px-2 py-2 text-left transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer"
                   >
                     <ChevronRight
                       className={cn(
@@ -358,7 +358,7 @@ export function LectureShell({
                       )}
                     />
                     <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 block text-[0.8125rem] font-semibold leading-snug text-foreground/90">
+                      <span className="line-clamp-2 block text-sm font-semibold leading-snug text-foreground/90">
                         {primary}
                       </span>
                       {sub && (
@@ -515,12 +515,12 @@ export function LectureShell({
         </div>
       </header>
 
-      <div className="w-full flex-1">
+      <div className="w-full flex-1 overflow-x-clip">
         <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-[90.5rem]">
           <aside
             ref={syllabusAsideRef}
             onScroll={persistSyllabusScroll}
-            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)]"
+            className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-14 h-[calc(100dvh-3.5rem)] flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']"
           >
             {renderSidebarHeader()}
             <div className="flex-1 overflow-y-auto no-scrollbar px-3 py-3.5">

@@ -384,9 +384,18 @@ describe("LectureShell & editorial pages", () => {
       />
     );
 
+    const heading = screen.getByRole("heading", { level: 1, name: "Crisne" });
+    expect(heading).toBeTruthy();
+    const header = container.querySelector("header");
+    const mascot = header?.querySelector("svg[aria-hidden='true']");
+    expect(mascot).toBeTruthy();
     expect(
-      screen.getByRole("heading", { level: 1, name: "Crisne" })
-    ).toBeTruthy();
+      Boolean(
+        mascot &&
+          mascot.compareDocumentPosition(heading) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+      )
+    ).toBe(true);
     expect(screen.getByText("1 topics · 2 bài học")).toBeTruthy();
     expect(container.querySelector("footer")).toBeNull();
     expect(container.querySelector("nav")).toBeNull();

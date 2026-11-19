@@ -44,7 +44,7 @@ import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
 
 const OWNER_ACTION_CLASS =
-  "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer";
+  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer";
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -251,12 +251,33 @@ export function LessonEditorialReader({
   };
 
   // Owner controls sit right under "On this page": in the right rail on xl, at the top of the article below it
+  const lessonActionMenu = (
+    <ActionMenu
+      label="Thao tác bài học"
+      items={[
+        {
+          label: "Xoá bài học",
+          icon: Trash2,
+          danger: true,
+          confirm: {
+            title: "Xoá bài học này?",
+            description: "Hành động này không thể hoàn tác.",
+            confirmLabel: "Xoá",
+          },
+          onSelect: handleDeleteLesson,
+        },
+      ]}
+    />
+  );
+
+  // In the narrow rail, actions stack as full-width rows and the "…" menu moves to the heading row
   const renderOwnerControls = (inRail: boolean) => (
     <div className={inRail ? "w-full" : "mb-5"}>
       {inRail && (
-        <p className="mb-1.5 px-2 text-[0.6875rem] text-muted-foreground">
-          Trạng thái
-        </p>
+        <div className="mb-1.5 flex items-center justify-between pl-2.5">
+          <p className="text-[0.6875rem] text-muted-foreground">Trạng thái</p>
+          {lessonActionMenu}
+        </div>
       )}
       <LessonStatusPicker
         value={currentStatus}
@@ -265,8 +286,9 @@ export function LessonEditorialReader({
       />
       <div
         className={cn(
-          "flex items-center gap-1",
-          inRail ? "mt-2 border-t border-border pt-2" : "mt-2"
+          inRail
+            ? "mt-2 flex flex-col gap-0.5 border-t border-border pt-2"
+            : "mt-2 flex items-center gap-1"
         )}
       >
         <button
@@ -275,37 +297,20 @@ export function LessonEditorialReader({
             setDraftSeed(undefined);
             setIsContentOpen(true);
           }}
-          className={OWNER_ACTION_CLASS}
+          className={cn(OWNER_ACTION_CLASS, inRail && "w-full")}
         >
-          <Edit3 className="size-3.5" />
+          <Edit3 className="size-4" />
           <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
         </button>
         <button
           type="button"
           onClick={() => setIsInfoOpen(true)}
-          className={OWNER_ACTION_CLASS}
+          className={cn(OWNER_ACTION_CLASS, inRail && "w-full")}
         >
-          <Info className="size-3.5" />
+          <Info className="size-4" />
           <span>Thông tin</span>
         </button>
-        <div className="ml-auto">
-          <ActionMenu
-            label="Thao tác bài học"
-            items={[
-              {
-                label: "Xoá bài học",
-                icon: Trash2,
-                danger: true,
-                confirm: {
-                  title: "Xoá bài học này?",
-                  description: "Hành động này không thể hoàn tác.",
-                  confirmLabel: "Xoá",
-                },
-                onSelect: handleDeleteLesson,
-              },
-            ]}
-          />
-        </div>
+        {!inRail && <div className="ml-auto">{lessonActionMenu}</div>}
       </div>
     </div>
   );
@@ -428,9 +433,9 @@ export function LessonEditorialReader({
                       setDraftSeed(DEFAULT_LESSON_TEMPLATE_HTML);
                       setIsContentOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
                   >
-                    <ListTree className="size-3.5" />
+                    <ListTree className="size-4" />
                     <span>Soạn từ mẫu chuẩn</span>
                   </button>
                   <button
@@ -439,9 +444,9 @@ export function LessonEditorialReader({
                       setDraftSeed(undefined);
                       setIsContentOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-muted cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-muted cursor-pointer"
                   >
-                    <Edit3 className="size-3.5" />
+                    <Edit3 className="size-4" />
                     <span>Soạn tự do</span>
                   </button>
                 </div>

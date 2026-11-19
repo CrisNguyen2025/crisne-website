@@ -104,7 +104,7 @@ export function LessonStatusPicker({
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
               ],
               variant === 'list' && [
-                'w-full gap-2.5 rounded-lg px-2 py-1.5 text-left',
+                'min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm',
                 isActive
                   ? STATUS_LIST_ACTIVE[status]
                   : 'font-normal text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground',
@@ -122,7 +122,7 @@ export function LessonStatusPicker({
               <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', STATUS_DOT[status])} />
             )}
             <span className={cn(variant === 'list' && 'flex-1')}>{LESSON_STATUS_LABEL[status]}</span>
-            {variant === 'list' && isActive && <Check aria-hidden="true" className="size-3.5" />}
+            {variant === 'list' && isActive && <Check aria-hidden="true" className="size-4" />}
           </button>
         );
       })}
