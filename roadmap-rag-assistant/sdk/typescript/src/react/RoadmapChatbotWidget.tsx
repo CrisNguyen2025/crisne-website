@@ -501,7 +501,7 @@ export function RoadmapChatbotWidget({
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = (textToSend?: string, options?: { titles?: string[] }) => {
     if (isSendingRef.current) return;
 
     const val = (textToSend ?? input).trim();
@@ -529,7 +529,7 @@ export function RoadmapChatbotWidget({
     if (scrollRef.current && !isSubCeilingRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-    sendMessage(val);
+    sendMessage(val, options);
 
     // 4. Re-ensure focus on next animation frame
     requestAnimationFrame(() => {

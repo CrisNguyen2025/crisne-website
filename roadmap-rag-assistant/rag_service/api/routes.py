@@ -44,7 +44,11 @@ def _actor_of(request: Request) -> Actor:
 
 
 async def _sse_stream_generator(
-    message: str, thread_id: str, context: dict | None = None, actor: Actor | None = None
+    message: str,
+    thread_id: str,
+    context: dict | None = None,
+    actor: Actor | None = None,
+    titles: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Universal SSE generator that handles both LangChain and FallbackAgent streaming."""
     # The body is streamed after the handler returns: set the caller where the agent runs
@@ -63,11 +67,13 @@ async def _sse_stream_generator(
     trace_id: str | None = None
 
     config = {"configurable": {"thread_id": thread_id}}
+    # Only sent with a confirmation that edits names; other agents never see the key
+    extra_input = {"titles": titles} if titles else {}
 
     async def _stream_from_fallback(f_agent: FallbackAgent):
         nonlocal trace_id
         async for ev in f_agent.astream_events(
-            {"messages": [{"role": "user", "content": message}], "context": context},
+            {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
             config=config,
         ):
             ev_type = ev.get("type")
@@ -93,6 +99,9 @@ async def _sse_stream_generator(
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 changes.append(payload)
                 yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            elif ev_type == "action_preview":
+                payload = {k: v for k, v in ev.items() if k != "type"}
+                yield f"event: action_preview\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
                 metadata.update({k: v for k, v in ev.items() if k != "type"})
             elif ev_type == "trace":
@@ -108,7 +117,7 @@ async def _sse_stream_generator(
             # LangGraph / LangChain Gemini Agent
             try:
                 async for event in agent.astream_events(
-                    {"messages": [{"role": "user", "content": message}], "context": context},
+                    {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
                     config=config,
                     version="v2",
                 ):
@@ -168,7 +177,7 @@ async def _sse_stream_generator(
 async def chat_stream(req: ChatRequest, request: Request):
     """Server-Sent Events (SSE) streaming endpoint for real-time tokens and tool events."""
     return StreamingResponse(
-        _sse_stream_generator(req.message, req.thread_id, req.context, _actor_of(request)),
+        _sse_stream_generator(req.message, req.thread_id, req.context, _actor_of(request), req.titles),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

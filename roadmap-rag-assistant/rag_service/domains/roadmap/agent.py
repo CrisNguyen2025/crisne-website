@@ -271,6 +271,7 @@ class NextGenRoadmapAgent(
         outcome = {"handled": False}
         async for ev in self.handle_pending(
             content=content, lower=lower, session_id=session_id, session_ctx=session_ctx, delay=delay, outcome=outcome,
+            titles=input_dict.get("titles"),
         ):
             yield ev
         if outcome["handled"]:

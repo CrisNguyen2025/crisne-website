@@ -54,11 +54,14 @@ def expand_teencode(text: str) -> str:
 
 import re
 
+# "giúp" as typed: the tone mark often lands on the wrong vowel ("gíup") or is missing ("giup"); "giùm"/"gium" likewise
+_GIUP = r"(?:g(?:iú|íu|iu)p|giùm|gium)"
+
 PREFIX_FILLER_REGEX = re.compile(
     r"^(?:(?:"
     r"bạn\s+ơi|anh\s+ơi|chị\s+ơi|em\s+ơi|admin\s+ơi|bot\s+ơi"
     r"|làm\s+ơn|vui\s+lòng|hãy|nhờ\s+bạn|nhờ\s+bot"
-    r"|(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị)"
+    r"|(?:" + _GIUP + r"|hộ|cho)\s+(?:tôi|mình|em|anh|chị)"
     r"|please|kindly|(?:can|could|would)\s+you"
     r")[\s,]+)+",
     re.IGNORECASE,
@@ -66,7 +69,7 @@ PREFIX_FILLER_REGEX = re.compile(
 
 SUFFIX_FILLER_REGEX = re.compile(
     r"(?:\s+(?:"
-    r"(?:giúp|hộ|cho|giùm)\s+(?:tôi|mình|em|anh|chị|tao)"
+    r"(?:" + _GIUP + r"|hộ|cho)\s+(?:tôi|mình|em|anh|chị|tao)"
     r"|với\s+(?:nhé|nha|nhé\s+bạn|nha\s+bạn|bạn\s+ơi|bạn)"
     r"|với"
     r"|nhé\s+bạn(?:\s+ơi)?|nha\s+bạn(?:\s+ơi)?|đi\s+bạn(?:\s+ơi)?"

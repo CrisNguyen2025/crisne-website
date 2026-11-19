@@ -36,6 +36,7 @@ from rag_service.domains.roadmap.router.write_gate import (
     BULK_DELETE_REQUEST,
     QUESTION_AS_TITLE,
     TARGET_MISSING,
+    POINTING_WORDS,
     WriteGate,
     gate_action,
 )
@@ -52,6 +53,12 @@ CONFIRM_WORDS = ("ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "ti
 CANCEL_WORDS = ("hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi")
 
 # A confirmation with no preview waiting: answered here, so the LLM never replies as if a change had run
+# Titles the Owner edited on a Preview that cannot be applied (see _with_edited_titles)
+EDITED_TITLES_REJECTED_REPLY = (
+    "Mình chưa áp dụng được tên bạn vừa sửa (tên trống, không hợp lệ, hoặc số lượng không khớp với thao tác đang chờ). "
+    "Thao tác vẫn đang chờ: sửa lại tên rồi bấm xác nhận, hoặc bấm hủy."
+)
+
 NOTHING_PENDING_REPLY = (
     "Không có thao tác nào đang chờ xác nhận nên mình chưa thay đổi gì. "
     "Nếu bạn muốn thay đổi, hãy gửi lại lệnh, ví dụ:\n\n" + example_blocks("thêm bài … vào topic …", "xóa bài …")
@@ -88,8 +95,26 @@ class RoadmapCommands:
         # (2026-11-05, live: it went to the router and was answered as a missing topic)
         return u.has_object or len(first.split()) <= 2
 
+    def _with_edited_titles(
+        self, action: StructuredRoadmapAction, titles: list[str]
+    ) -> Optional[StructuredRoadmapAction]:
+        """The pending create with the Owner's edited titles; None when they cannot be applied.
+
+        Only titles change: action, level and parent stay as previewed, so an edit cannot turn a create into a delete.
+        """
+        if action.action != ActionType.CREATE or len(titles) != len(action.entities):
+            return None
+        edited = action.model_copy(deep=True)
+        for ent, raw in zip(edited.entities, titles):
+            title = self.extractor.clean_title(raw)
+            if not title or title.lower() in POINTING_WORDS:
+                return None
+            ent.title = title
+        return edited
+
     async def handle_pending(
-        self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict
+        self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict,
+        titles: Optional[list[str]] = None,
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
         # A previewed lesson body (lesson_content.py): "ok" adds it to the end of the lesson
@@ -199,12 +224,22 @@ class RoadmapCommands:
         if session_ctx.fresh_pending("pending_confirmation"):
             if lower in CONFIRM_WORDS:
                 pending_act = session_ctx.pending_confirmation
-                session_ctx.pending_confirmation = None
                 if not is_owner():
+                    session_ctx.pending_confirmation = None
                     async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                         yield ev
                     outcome["handled"] = True
                     return
+                if titles:
+                    edited = self._with_edited_titles(pending_act, titles)
+                    if edited is None:
+                        # The preview stays pending: the Owner fixes the names and confirms again
+                        async for ev in self._stream_text(EDITED_TITLES_REJECTED_REPLY, delay):
+                            yield ev
+                        outcome["handled"] = True
+                        return
+                    pending_act = edited
+                session_ctx.pending_confirmation = None
                 tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
                 yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
                 changes = ChangeSet.of(pending_act)
@@ -292,11 +327,15 @@ class RoadmapCommands:
         session_ctx.pending_confirmation = action
         preview_text = DryRunValidator.format_preview_card(action, note=note, snapshot=snapshot)
         preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-        yield {
+        preview_event = {
             "type": "action_preview",
             "action_id": session_id,
             "preview": preview_text,
         }
+        if action.action == ActionType.CREATE:
+            # The Owner may correct the names the model read before confirming (sent back as `titles`)
+            preview_event["editable_titles"] = [ent.title for ent in action.entities]
+        yield preview_event
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 

@@ -219,6 +219,10 @@ class StructuredEntityExtractor:
             res.target_parent_identifier = default_parent
         return res
 
+    def clean_title(self, title: str) -> str:
+        """A title typed or edited by the Owner, cleaned like one the extractor read."""
+        return self._sanitize_title(title)
+
     def _sanitize_title(self, title: str) -> str:
         """Strip verbs and entity words from title strictly, while preserving numbered names like 'Bài 1'."""
         cleaned = normalize_vietnamese(title).strip()
@@ -228,7 +232,7 @@ class StructuredEntityExtractor:
 
         # Always strip action verbs at start (including pleasantry wrappers like 'xóa giúp mình')
         cleaned = re.sub(
-            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|gỡ|hủy|huỷ|create|add|delete|remove|new|make)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?",
+            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|gỡ|hủy|huỷ|create|add|delete|remove|new|make)\s+(?:(?:g(?:iú|íu|iu)p|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?",
             "",
             cleaned,
             flags=re.IGNORECASE,
@@ -385,7 +389,7 @@ class StructuredEntityExtractor:
         clause = clean_conversational_fillers(clause)
 
         clause = re.sub(
-            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:giúp|giup|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:(?:a|an|new)\s+)*(?:topics?c*|items?m*|chủ\s+đề|chu\s+de|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about|called|named)\s+)?",
+            r"^(?:tạo|tao|thêm|them|xóa|xoá|xoa|sửa|sua|đổi tên|doi ten|cập nhật|cap nhat|create|add|delete|remove)\s+(?:(?:g(?:iú|íu|iu)p|hộ|ho|cho|giùm|gium)\s+(?:tôi|mình|em|anh|chị)\s+)?(?:\d+\s+)?(?:(?:a|an|new)\s+)*(?:topics?c*|items?m*|chủ\s+đề|chu\s+de|bài(?:\s+học)?|bai(?:\s+hoc)?|roadmaps?|lessons?)?\s*(?:(?:về|about|called|named)\s+)?",
             "",
             clause.strip(),
             flags=re.IGNORECASE,

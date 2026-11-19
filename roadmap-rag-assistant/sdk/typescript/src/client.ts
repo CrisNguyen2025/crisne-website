@@ -42,6 +42,8 @@ export interface StreamCallbacks {
   onToolEnd?: (name: string, result: string, isError: boolean) => void;
   onStep?: (step: AssistantStepEvent) => void;
   onChangeReview?: (change: ChangeReview) => void;
+  /** A change waiting for the Owner's confirmation; `editableTitles` are the names the Owner may correct first */
+  onActionPreview?: (preview: { editableTitles?: string[] }) => void;
   /** Langfuse trace of the turn, sent before the reply (also repeated on `done` as `traceId`) */
   onTrace?: (traceId: string) => void;
   onDone?: (response: ChatResponse) => void;
@@ -75,7 +77,8 @@ export class RoadmapChatClient {
     message: string,
     callbacks: StreamCallbacks,
     threadId: string = 'default',
-    context?: PageContext
+    context?: PageContext,
+    titles?: string[]
   ): AbortController {
     const controller = new AbortController();
 
@@ -98,7 +101,7 @@ export class RoadmapChatClient {
         const resp = await fetch(`${this.baseUrl}/chat/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, thread_id: threadId, context }),
+          body: JSON.stringify({ message, thread_id: threadId, context, ...(titles?.length ? { titles } : {}) }),
           signal: controller.signal,
         });
 
@@ -239,6 +242,12 @@ export class RoadmapChatClient {
                   callbacks.onStep?.(data as AssistantStepEvent);
                 } else if (currentEvent === 'change_review') {
                   callbacks.onChangeReview?.(data as ChangeReview);
+                } else if (currentEvent === 'action_preview') {
+                  callbacks.onActionPreview?.({
+                    editableTitles: Array.isArray(data.editable_titles)
+                      ? data.editable_titles.filter((t: unknown): t is string => typeof t === 'string')
+                      : undefined,
+                  });
                 } else if (currentEvent === 'trace') {
                   if (typeof data.trace_id === 'string') callbacks.onTrace?.(data.trace_id);
                 } else if (currentEvent === 'done') {

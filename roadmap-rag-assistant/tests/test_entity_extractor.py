@@ -82,3 +82,24 @@ async def test_topic_with_section_in_name_is_not_read_as_section():
     assert [e.title for e in res3.entities] == ["Prompt Basics"]
     assert res3.entities[0].section is None
 
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Backend giúp tôi", "Backend"),
+        ("Backend gíup tôi", "Backend"),  # tone mark on the wrong vowel
+        ("Backend giup tôi", "Backend"),  # no tone mark
+        ("Backend gium mình", "Backend"),
+        ("gíup tôi Backend", "Backend"),
+        ("Giúp việc nhà", "Giúp việc nhà"),  # a real name: no tôi/mình after it
+    ],
+)
+def test_sanitize_title_drops_help_filler_however_it_is_typed(raw, expected):
+    assert StructuredEntityExtractor(None)._sanitize_title(raw) == expected
+
+
+@pytest.mark.asyncio
+async def test_create_topic_with_mistyped_help_filler_keeps_a_clean_title():
+    res = await StructuredEntityExtractor(None).aextract("tạo thêm topic Backend gíup tôi")
+    assert [e.title for e in res.entities] == ["Backend"]

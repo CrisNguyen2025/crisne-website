@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import field_validator, BaseModel, Field
 
@@ -26,6 +26,8 @@ class ChatRequest(BaseModel):
         default=None,
         description="Page context from the web client: roadmapSlug, layerId, itemId",
     )
+    # Names the Owner edited on a create Preview; applied when this message confirms it (commands.handle_pending)
+    titles: Optional[list[Annotated[str, Field(min_length=1, max_length=200)]]] = Field(default=None, max_length=20)
 
 
 class ContextRequest(BaseModel):

@@ -41,7 +41,7 @@ export interface MessageListProps {
   canWrite?: boolean;
   /** The 👍/👎 votes; off when the host takes no feedback */
   showFeedback?: boolean;
-  sendMessage: (textToSend?: string) => void;
+  sendMessage: (textToSend?: string, options?: { titles?: string[] }) => void;
   retry: (errorMessageId: string) => void;
   copyMessage: (id: string, text: string) => void;
   handleFeedback: (msgId: string, val: 1 | 0) => void;
@@ -148,6 +148,76 @@ function ScrollBottomButton({
         <ArrowDownIcon className="h-3.5 w-3.5" />
       )}
     </button>
+  );
+}
+
+/**
+ * Confirm / cancel buttons of a Preview. A create Preview also shows its names as inputs: the model only
+ * suggests them, so the Owner corrects them here and the edited names go back with the confirmation.
+ */
+function ConfirmActions({
+  editableTitles,
+  disabled,
+  sendMessage,
+}: {
+  editableTitles?: string[];
+  disabled: boolean;
+  sendMessage: MessageListProps["sendMessage"];
+}) {
+  const [draft, setDraft] = React.useState<string[]>(editableTitles ?? []);
+  const editable = draft.length > 0;
+  const hasBlank = draft.some((title) => !title.trim());
+  const changed = editable && draft.some((title, i) => title.trim() !== editableTitles?.[i]);
+  const confirm = () => {
+    if (disabled || hasBlank) return;
+    sendMessage("ok", changed ? { titles: draft.map((title) => title.trim()) } : undefined);
+  };
+
+  return (
+    <>
+      {editable && (
+        <div className="flex flex-col gap-1.5">
+          {draft.map((title, i) => (
+            <input
+              key={i}
+              type="text"
+              value={title}
+              maxLength={200}
+              disabled={disabled}
+              aria-label={draft.length > 1 ? `Tên ${i + 1}` : "Tên"}
+              onChange={(e) => setDraft((prev) => prev.map((t, j) => (j === i ? e.target.value : t)))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  confirm();
+                }
+              }}
+              className="w-full rounded-lg border border-[#E6E4DF] bg-white px-3 py-1.5 text-sm text-[#1F1E1C] outline-none focus:border-[#C2410C] disabled:opacity-50"
+            />
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={disabled || hasBlank}
+          className="flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+        >
+          <CheckCircleIcon className="h-3.5 w-3.5" />
+          <span>Xác nhận thực hiện</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => sendMessage("hủy")}
+          disabled={disabled}
+          className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
+        >
+          <CloseIcon className="h-3.5 w-3.5" />
+          <span>Hủy bỏ</span>
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -404,26 +474,11 @@ const MessageItem = React.memo(function MessageItem({
           <p className="text-xs text-[#5E5B55]">
             Đang chờ bạn xác nhận
           </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => sendMessage("ok")}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 rounded-lg bg-[#C2410C] px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
-            >
-              <CheckCircleIcon className="h-3.5 w-3.5" />
-              <span>Xác nhận thực hiện</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => sendMessage("hủy")}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:bg-[#ECEAE5] disabled:opacity-50 cursor-pointer"
-            >
-              <CloseIcon className="h-3.5 w-3.5" />
-              <span>Hủy bỏ</span>
-            </button>
-          </div>
+          <ConfirmActions
+            editableTitles={canWrite ? msg.editableTitles : undefined}
+            disabled={isLoading}
+            sendMessage={sendMessage}
+          />
         </div>
       )}
 
@@ -640,7 +695,7 @@ export function MessageList({
 
   const handlers = React.useMemo<MessageHandlers>(
     () => ({
-      sendMessage: (text) => latestHandlers.current.sendMessage(text),
+      sendMessage: (text, options) => latestHandlers.current.sendMessage(text, options),
       retry: (id) => latestHandlers.current.retry(id),
       copyMessage: (id, text) => latestHandlers.current.copyMessage(id, text),
       handleFeedback: (id, val) => latestHandlers.current.handleFeedback(id, val),
