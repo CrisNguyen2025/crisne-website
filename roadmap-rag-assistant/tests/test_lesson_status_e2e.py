@@ -292,7 +292,7 @@ async def test_alternate_phrasing_status_change_does_not_patch_without_ok(mock_a
 
 @pytest.mark.asyncio
 async def test_owner_status_change_this_lesson_matches_flat_lesson_slug(mock_adapter, owner_headers):
-    """Standing on /lessons/[lessonSlug] sends itemId=lesson.slug; 'bài này' resolves via item.slug."""
+    """Standing on /[topicSlug]/[lessonSlug] sends itemId=lesson.slug; 'bài này' resolves via item.slug."""
     mock_adapter.get_topic.return_value = {
         "id": "t1",
         "slug": "ai-engineering",

@@ -1,8 +1,10 @@
 """Roadmap link rules: which `[text](href)` the assistant may emit.
 
-Lesson links must name a known lesson (`/lessons/<slug>`), and topic links must name
-a known topic (`/topic/<slug>` or legacy `/topic/<slug>/<item-slug>` / `/?topic=<slug>&item=<id>`).
-Any other link (external, anchors) is left alone.
+Canonical paths (ADR-0014): a topic is `/<topic>`, a lesson `/<topic>/<lesson>`, optionally with
+`#heading`. Both slugs must be known. Old paths still 308 to the canonical ones, so they are still
+checked the same way: `/lessons/<lesson>`, `/topic/<topic>[/<lesson>]`, `/?topic=<topic>&item=<id>`.
+Any other link (external, anchors, app pages under RESERVED_TOPIC_SLUGS, files like `/og-image.png`)
+is left alone.
 """
 
 from __future__ import annotations
@@ -11,6 +13,10 @@ import re
 from typing import Callable, Iterable
 from urllib.parse import unquote
 
+# First path segments the app already uses; same list as RESERVED_TOPIC_SLUGS in lib/roadmap/paths.ts
+RESERVED_TOPIC_SLUGS = frozenset({"api", "lessons", "topic", "notes", "portfolio", "login", "_next"})
+
+ROADMAP_URL = re.compile(r"^/([^/?#.]+)(?:/([^/?#]+))?(?=$|[/?#])")
 LESSON_URL = re.compile(r"^/lessons/([^/?#]+)")
 TOPIC_URL = re.compile(r"^/topic/([^/?#]+)(?:/([^/?#]+))?")
 LEGACY_TOPIC_URL = re.compile(r"^/\?topic=([^&#]+)")
@@ -22,6 +28,11 @@ def roadmap_link_allowed(valid_slugs: Iterable[str], valid_items: Iterable[str] 
     slugs = set(valid_slugs)
     items = set(valid_items) if valid_items is not None else None
 
+    def topic_and_item_known(topic: str, item: str | None) -> bool:
+        if unquote(topic) not in slugs:
+            return False
+        return items is None or item is None or unquote(item) in items
+
     def allow(href: str) -> bool:
         lesson_match = LESSON_URL.match(href)
         if lesson_match is not None:
@@ -29,17 +40,16 @@ def roadmap_link_allowed(valid_slugs: Iterable[str], valid_items: Iterable[str] 
 
         topic_match = TOPIC_URL.match(href)
         if topic_match is not None:
-            if unquote(topic_match.group(1)) not in slugs:
-                return False
-            item_slug = topic_match.group(2)
-            return items is None or item_slug is None or unquote(item_slug) in items
+            return topic_and_item_known(topic_match.group(1), topic_match.group(2))
 
         legacy = LEGACY_TOPIC_URL.match(href)
         if legacy is not None:
-            if unquote(legacy.group(1)) not in slugs:
-                return False
             item = LEGACY_ITEM_PARAM.search(href)
-            return items is None or item is None or unquote(item.group(1)) in items
+            return topic_and_item_known(legacy.group(1), item.group(1) if item else None)
+
+        canonical = ROADMAP_URL.match(href)
+        if canonical is not None and unquote(canonical.group(1)).lower() not in RESERVED_TOPIC_SLUGS:
+            return topic_and_item_known(canonical.group(1), canonical.group(2))
 
         return True
 

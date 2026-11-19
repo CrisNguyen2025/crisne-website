@@ -2,7 +2,7 @@
 
 PROMPT_SUGGESTION_FORMAT = """
 **Định dạng prompt mẫu (bắt buộc)**: Khi gợi ý prompt mẫu cho người dùng, đặt MỖI prompt trong một code block riêng (```text ... ```) để có nút sao chép. KHÔNG đặt prompt trong bảng hay trong dấu ngoặc kép. Đặt tiêu đề/link lộ trình ở dòng ngay phía trên code block, ví dụ:
-**Backend** — [/topic/be](/topic/be)
+**Backend** — [/be](/be)
 ```text
 Hướng dẫn chi tiết các bước xây dựng một API RESTful bằng Node.js/Express.
 ```
@@ -13,7 +13,7 @@ Trả lời mẫu (làm đúng định dạng này):
 
 Dưới đây là vài prompt mẫu, bấm **Chép** để sao chép:
 
-### Backend — [/topic/be](/topic/be)
+### Backend — [/be](/be)
 ```text
 Hướng dẫn chi tiết các bước xây dựng một API RESTful bằng Node.js/Express.
 ```
@@ -21,7 +21,7 @@ Hướng dẫn chi tiết các bước xây dựng một API RESTful bằng Node
 So sánh kiến trúc microservice và monolith trong phát triển backend.
 ```
 
-### AAA — [/topic/aaa](/topic/aaa)
+### AAA — [/aaa](/aaa)
 ```text
 Giới thiệu tổng quan lộ trình AAA và các kỹ năng cần nắm.
 ```

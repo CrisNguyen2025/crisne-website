@@ -44,11 +44,15 @@ def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
 
 
 def knowledge_href(doc: KnowledgeDocument) -> str:
-    """Page link for a retrieved document: items open the flat lesson path (/lessons/[item_slug])."""
+    """Page link for a retrieved document (ADR-0014): a lesson is /[topic_slug]/[item_slug], a topic /[topic_slug].
+
+    Like lessonPath in lib/roadmap/paths.ts, a lesson without a topic slug falls back to /lessons/[item_slug],
+    which 308s to the canonical path.
+    """
     if doc.doc_type == "item" and (doc.item_slug or doc.id):
         item_slug = doc.item_slug or doc.id
-        return f"/lessons/{item_slug}"
-    return f"/topic/{doc.topic_slug}"
+        return f"/{doc.topic_slug}/{item_slug}" if doc.topic_slug else f"/lessons/{item_slug}"
+    return f"/{doc.topic_slug}"
 
 
 class HybridRagEngine:
@@ -190,7 +194,7 @@ class HybridRagEngine:
         return {d.id for d in self._vector_store._docs_map.values() if d.doc_type == "item"}
 
     def known_item_slugs(self) -> set[str]:
-        """Slugs of every item in the current index (valid targets for `/lessons/` links)."""
+        """Slugs of every item in the current index (valid lesson targets: `/<topic>/<lesson>`, `/lessons/<lesson>`)."""
         return {d.item_slug for d in self._vector_store._docs_map.values() if d.doc_type == "item" and d.item_slug}
 
     def title_vocabulary(self) -> set[str]:
@@ -267,7 +271,7 @@ class HybridRagEngine:
         return self._vocabulary
 
     def known_topic_slugs(self) -> set[str]:
-        """Slugs of every roadmap in the current index (valid targets for `/topic/` links)."""
+        """Slugs of every roadmap in the current index (valid topic targets: `/<topic>`, `/topic/<topic>`)."""
         return {d.topic_slug for d in self._vector_store._docs_map.values() if d.topic_slug}
 
     def format_knowledge_context(self, matches: List[Tuple[KnowledgeDocument, float]]) -> str:
@@ -288,7 +292,7 @@ class HybridRagEngine:
                     lines.append(f"- **Nội dung tóm tắt:** {doc.content_text[:300]}...")
             elif doc.doc_type == "topic":
                 lines.append(
-                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}](/topic/{doc.topic_slug})\n"
+                    f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}]({knowledge_href(doc)})\n"
                     + (f"- **Mô tả:** {doc.description}\n" if doc.description else "")
                     + (f"- **Cấu trúc lộ trình:** {doc.content_text}\n" if doc.content_text else "")
                 )

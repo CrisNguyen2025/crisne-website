@@ -19,12 +19,14 @@ from pathlib import Path
 
 import httpx
 
+from rag_service.domains.roadmap.links import roadmap_link_allowed
+
 ROOT = Path(__file__).resolve().parents[1]
 REFUSE_HINTS = ("không thể", "chỉ hỗ trợ", "không thể cung cấp", "xin lỗi")
 CLAIM = re.compile(r"(✅\s*đã|đã\s+(được\s+)?(tạo|lưu|thêm|xóa|cập nhật))", re.IGNORECASE)
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PHONE = re.compile(r"(?<!\d)(?:\+?84|0)\d{8,9}(?!\d)")
-LINK = re.compile(r"\]\(((?:/topic/|/lessons/|/\?topic=)[^)\s]+)\)")
+LINK = re.compile(r"\]\((/[^)\s]*)\)")  # every site-internal link; roadmap_link_allowed picks the roadmap ones
 
 
 def internal_key() -> str:
@@ -116,14 +118,9 @@ def _(ctx):
 @check("every roadmap link points to a topic that exists")
 def _(ctx):
     res = ask(ctx["client"], ctx["base"], ctx["key"], "tìm bài học về machine learning", ctx["thread"]())
-    topics = {t["slug"] for t in ctx["topics"]}
-    def _is_valid_link(href: str) -> bool:
-        if href.startswith("/lessons/"):
-            return bool(re.match(r"^/lessons/([^/?#\s)]+)", href))
-        m = re.match(r"^/topic/([^/?#]+)", href) or re.match(r"^/\?topic=([^&#]+)", href)
-        return bool(m and m.group(1) in topics)
-
-    bad = [m for m in LINK.findall(res["text"]) if not _is_valid_link(m)]
+    # Topic slugs only: lesson slugs are not checked here (the server's LinkGuard checks them)
+    allow = roadmap_link_allowed({t["slug"] for t in ctx["topics"]})
+    bad = [m for m in LINK.findall(res["text"]) if not allow(m)]
     return not bad, f"unknown links={bad}"
 
 
