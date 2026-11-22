@@ -24,12 +24,14 @@ const MAX_CONTENT_LENGTH = 300;
 export interface OwnerMemorySheetProps {
   baseUrl: string;
   currentTopicSlug?: string;
+  onPendingCountChange?: (count: number) => void;
   onClose: () => void;
 }
 
 export function OwnerMemorySheet({
   baseUrl,
   currentTopicSlug,
+  onPendingCountChange,
   onClose,
 }: OwnerMemorySheetProps) {
   const {
@@ -54,6 +56,12 @@ export function OwnerMemorySheet({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      onPendingCountChange?.(pendingItems.length);
+    }
+  }, [isLoading, pendingItems.length, onPendingCountChange]);
 
   const onRefresh = () => void refresh();
 
@@ -327,7 +335,17 @@ export function OwnerMemorySheet({
                         />
                       </div>
                     ) : (
-                      <p className="leading-relaxed text-[#1F1E1C]">{item.content}</p>
+                      <>
+                        <p className="leading-relaxed text-[#1F1E1C]">{item.content}</p>
+                        {tab === "pending" && item.replacesMemoryId && (() => {
+                          const replaced = activeItems.find((a) => a.id === item.replacesMemoryId);
+                          return (
+                            <p className="mt-1 rounded-md bg-[#FAF3E8] px-2 py-1 text-[11px] leading-4 text-[#8A4B08]">
+                              Thay thế: {replaced ? `“${replaced.content}”` : "một mục đang bật trước đó"}
+                            </p>
+                          );
+                        })()}
+                      </>
                     )}
                   </li>
                 );

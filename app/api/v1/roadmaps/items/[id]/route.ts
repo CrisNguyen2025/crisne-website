@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await req.json();
-    const { title, description, section, status, slug, roadmapSlug } = body;
+    const { title, description, section, status, slug, roadmapSlug, markReviewed } = body;
 
     if (status !== undefined && !isLessonStatus(status)) {
       return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
@@ -102,8 +102,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
 
     // Lesson Status (ADR-0010): the time it changes is kept, so a same-status write keeps the old time
+    // unless `markReviewed: true` explicitly records a completed review pass on a `known` lesson.
     if (status !== undefined && status !== current.status) {
       data.status = status;
+      data.statusUpdatedAt = new Date();
+    } else if (markReviewed === true) {
       data.statusUpdatedAt = new Date();
     }
 
@@ -137,7 +140,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     if (hasIndexedChanges) {
       notifyRoadmapChanged();
-    } else if (data.status !== undefined) {
+    } else if (data.status !== undefined || data.statusUpdatedAt !== undefined) {
       try {
         revalidatePath('/', 'layout');
       } catch {

@@ -18,6 +18,8 @@ from rag_service.domains.roadmap.router.schemas import StructuredRoadmapAction
 
 # A previewed change older than this is dropped: an "ok" an hour later must not run it
 PENDING_TTL_SECONDS = 600.0
+# Active Recall quiz session in RAM: longer than a confirm preview, still never persisted to DB
+QUIZ_TTL_SECONDS = 1200.0
 _PENDING_FIELDS = (
     "pending_confirmation",
     "pending_section_rename",
@@ -25,6 +27,7 @@ _PENDING_FIELDS = (
     "pending_status_change",
     "pending_lesson_edit",
     "pending_memory_change",
+    "active_quiz",
 )
 
 
@@ -51,6 +54,8 @@ class SessionContext(BaseModel):
     pending_lesson_edit: Optional[Dict[str, Any]] = None
     # A previewed Owner Memory create/archive waiting for "ok" (domains/roadmap/memory_commands.py, ADR-0015)
     pending_memory_change: Optional[Dict[str, Any]] = None
+    # Active Recall quiz session in RAM (domains/roadmap/quiz_commands.py, TTL QUIZ_TTL_SECONDS)
+    active_quiz: Optional[Dict[str, Any]] = None
     # The open Topic/Lesson focus was read from Turso (SessionStore.load): once per context
     topic_loaded: bool = False
     # When each pending field was set (time.monotonic); stamped on assignment
@@ -66,10 +71,10 @@ class SessionContext(BaseModel):
                 stamps[name] = _now()
             super().__setattr__("pending_since", stamps)
 
-    def fresh_pending(self, name: str = "pending_confirmation") -> Any:
-        """The pending value if it is still within PENDING_TTL_SECONDS; an expired one is cleared."""
+    def fresh_pending(self, name: str = "pending_confirmation", ttl: float = PENDING_TTL_SECONDS) -> Any:
+        """The pending value if it is still within `ttl` seconds; an expired one is cleared."""
         value = getattr(self, name)
-        if value is not None and _now() - self.pending_since.get(name, 0.0) > PENDING_TTL_SECONDS:
+        if value is not None and _now() - self.pending_since.get(name, 0.0) > ttl:
             setattr(self, name, None)
             return None
         return value

@@ -82,4 +82,23 @@ describe("PATCH /api/v1/roadmaps/items/[id] reindex notifications", () => {
     expect(res.status).toBe(200);
     expect(notifyMock).toHaveBeenCalledOnce();
   });
+
+  it("PATCH markReviewed=true trên bài known -> cập nhật statusUpdatedAt và không gọi notifyRoadmapChanged", async () => {
+    prismaMock.roadmapItem.findUnique.mockResolvedValue({ ...currentItem, status: "known" });
+    const res = await PATCH(patch({ markReviewed: true }), context);
+    expect(res.status).toBe(200);
+    expect(prismaMock.roadmapItem.update).toHaveBeenCalledOnce();
+    const updateArg = prismaMock.roadmapItem.update.mock.calls[0][0];
+    expect(updateArg.data.statusUpdatedAt).toBeInstanceOf(Date);
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
+
+  it("PATCH cùng status mà không có markReviewed -> giữ nguyên statusUpdatedAt cũ", async () => {
+    prismaMock.roadmapItem.findUnique.mockResolvedValue({ ...currentItem, status: "known" });
+    const res = await PATCH(patch({ status: "known" }), context);
+    expect(res.status).toBe(200);
+    const updateArg = prismaMock.roadmapItem.update.mock.calls[0][0];
+    expect(updateArg.data.statusUpdatedAt).toBeUndefined();
+    expect(notifyMock).not.toHaveBeenCalled();
+  });
 });

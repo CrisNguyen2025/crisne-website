@@ -81,6 +81,7 @@ def format_review_reply(items: Sequence[dict], topic_title: Optional[str] = None
         if not topic_title and (item.get("topic_title") or item.get("topic_slug")):
             topic_info = f" *(topic: {item.get('topic_title') or item.get('topic_slug')}*)"
         lines.append(f"{idx}. **{title}**{topic_info}")
+    lines.append("\n💡 Nhắn `quiz <tên bài>` hoặc `quiz bài cần ôn nhất` để ôn nhanh 3 câu.")
     return "\n".join(lines)
 
 

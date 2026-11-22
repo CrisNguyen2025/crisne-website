@@ -64,6 +64,8 @@ async def _sse_stream_generator(
     metadata: dict = {}
     # What the turn's actions wrote (see rag_service/execution/changes.py), also sent with `done`
     changes: list[dict] = []
+    # True when this turn yielded a Preview (explicit command/write; skip background memory extraction)
+    had_preview = False
     # Langfuse trace of the turn (None when tracing is off), sent with `done` for 👍/👎 feedback
     trace_id: str | None = None
 
@@ -76,7 +78,7 @@ async def _sse_stream_generator(
         extra_input["target"] = target
 
     async def _stream_from_fallback(f_agent: FallbackAgent):
-        nonlocal trace_id
+        nonlocal trace_id, had_preview
         async for ev in f_agent.astream_events(
             {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
             config=config,
@@ -105,6 +107,7 @@ async def _sse_stream_generator(
                 changes.append(payload)
                 yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "action_preview":
+                had_preview = True
                 payload = {k: v for k, v in ev.items() if k != "type"}
                 yield f"event: action_preview\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             elif ev_type == "metadata":
@@ -172,6 +175,40 @@ async def _sse_stream_generator(
         if trace_id:
             done_payload["trace_id"] = trace_id
         yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+
+        # Background Owner Memory auto-suggestion (ADR-0015 Phase 2): strictly Owner-only, non-blocking,
+        # skipped on explicit memory/CUD/preview/quiz turns to avoid redundant LLM calls.
+        _skip_tools = {
+            "save_owner_memory",
+            "archive_owner_memory",
+            "list_owner_memories",
+            "start_lesson_quiz",
+            "grade_lesson_quiz",
+            "mark_lesson_reviewed",
+        }
+        if (
+            is_owner()
+            and not had_preview
+            and not changes
+            and not any(t.get("name") in _skip_tools for t in executed_tools)
+        ):
+            import asyncio
+            from rag_service.core.memory import has_memory_signal, maybe_suggest_memories
+            from rag_service.state import session_store
+
+            extract_llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
+            if extract_llm is not None and has_memory_signal(message):
+                ctx_topic = ((context or {}).get("roadmapSlug") or "").strip() or session_store.get_or_create(
+                    thread_id
+                ).active_topic_slug
+                asyncio.create_task(
+                    maybe_suggest_memories(
+                        extract_llm,
+                        user_message=message,
+                        assistant_reply=final_message,
+                        scope=ctx_topic,
+                    )
+                )
 
     except Exception as exc:
         err_payload = {"error": str(exc)}

@@ -126,7 +126,11 @@ class HttpApiAdapter:
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         """PATCH /api/v1/roadmaps/items/{id}"""
-        payload = {k: v for k, v in kwargs.items() if k in ("title", "description", "section", "status")}
+        payload = {
+            k: v
+            for k, v in kwargs.items()
+            if k in ("title", "description", "section", "status", "markReviewed")
+        }
         data = await self._request("PATCH", f"/api/v1/roadmaps/items/{item_id}", json=payload)
         return data.get("item", data)
 

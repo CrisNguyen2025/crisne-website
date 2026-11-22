@@ -62,6 +62,12 @@ export function formatToolDisplayName(name: string): string {
       return 'Lưu bộ nhớ Owner';
     case 'archive_owner_memory':
       return 'Gỡ bộ nhớ Owner';
+    case 'start_lesson_quiz':
+      return 'Tạo câu hỏi ôn tập';
+    case 'grade_lesson_quiz':
+      return 'Chấm câu trả lời ôn tập';
+    case 'mark_lesson_reviewed':
+      return 'Đánh dấu đã ôn bài';
     default:
       return name;
   }

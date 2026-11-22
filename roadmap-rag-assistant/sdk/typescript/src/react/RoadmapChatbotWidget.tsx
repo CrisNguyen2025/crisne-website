@@ -12,6 +12,7 @@ import { formatTime } from "./utils/formatters";
 import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ContextUsageSheet } from "./components/ContextUsageSheet";
 import { OwnerMemorySheet } from "./components/OwnerMemorySheet";
+import { usePendingMemoryCount } from "./useOwnerMemories";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { AbotMascot, type MascotState } from "./components/AbotMascot";
@@ -126,6 +127,8 @@ export function RoadmapChatbotWidget({
     canWrite,
     restoreLatestThread,
   });
+
+  const [pendingMemoryCount, setPendingMemoryCount] = usePendingMemoryCount(baseUrl, canWrite && restoreLatestThread && isOpen, isStreaming);
 
   // Follows the on-screen keyboard on phones so the composer stays visible
   const keyboardBox = useVisualViewportBox(isOpen);
@@ -608,6 +611,7 @@ export function RoadmapChatbotWidget({
             textRef={headerTextRef}
             openContext={() => { setIsMemoryOpen(false); setIsContextOpen(true); void refreshContext(); }}
             openMemory={canWrite ? () => { setIsContextOpen(false); setIsMemoryOpen(true); } : undefined}
+            pendingMemoryCount={canWrite ? pendingMemoryCount : 0}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
             optionsRef={optionsRef}
@@ -684,7 +688,7 @@ export function RoadmapChatbotWidget({
 
           {/* ── Owner Memory Bottom Sheet (Owner-only, ADR-0015) ── */}
           {canWrite && isMemoryOpen && (
-            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={getContext?.()?.roadmapSlug} onClose={() => setIsMemoryOpen(false)} />
+            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={getContext?.()?.roadmapSlug} onPendingCountChange={setPendingMemoryCount} onClose={() => setIsMemoryOpen(false)} />
           )}
 
           {/* ── Feedback Reason Bottom Sheet ── */}

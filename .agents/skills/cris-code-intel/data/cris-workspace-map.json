@@ -1442,6 +1442,15 @@
           "action": "Sau khi Owner tạo/sửa/xoá bộ nhớ qua /api/v1/memories (kể cả trên OwnerMemorySheet), gọi nền POST /internal/memory-cache/invalidate để Python xoá ngay RAM cache (không kích hoạt RAG re-index)",
           "callsNext": "roadmap-rag-assistant/rag_service/api/routes.py#invalidate_memory_cache",
           "dataPassed": "POST /internal/memory-cache/invalidate"
+        },
+        {
+          "order": 4,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/core/memory/extractor.py",
+          "functionOrMethod": "maybe_suggest_memories",
+          "action": "Chạy nền sau SSE done cho Owner khi có tín hiệu bền vững; trích xuất fact mới (kèm replacesMemoryId nếu thay thế mục cũ) và chỉ ghi status=pending để hiện badge chờ duyệt trên ChatHeader",
+          "callsNext": "roadmap-rag-assistant/rag_service/core/memory/store.py#OwnerMemoryStore.create",
+          "dataPassed": "{ kind, content, scope, source: 'suggested', status: 'pending', replaces_memory_id }"
         }
       ],
       "invariants": [
@@ -1457,6 +1466,61 @@
         "ADR-0001",
         "ADR-0002",
         "ADR-0005",
+        "ADR-0012",
+        "ADR-0015"
+      ]
+    },
+    {
+      "id": "FLOW_ABOT_ACTIVE_RECALL_QUIZ",
+      "name": "Ôn tập Active Recall (Quiz & Review) nối Lesson Status & Owner Memory",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner nhắn 'quiz bài X', 'kiểm tra mình bài này' hoặc 'quiz bài cần ôn nhất'",
+      "preconditions": [
+        "Actor bắt buộc là Owner; Visitor bị từ chối bằng OWNER_ONLY_MESSAGE",
+        "Bài học mục tiêu phải có nội dung đủ dài (>= 40 ký tự plain text)"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py",
+          "functionOrMethod": "QuizCommands.handle_quiz_command",
+          "action": "Chọn bài học mục tiêu (theo tên, ngữ cảnh trang, hoặc bài quá hạn ôn lâu nhất), sinh 3 câu hỏi bám sát nội dung bài và lưu phiên active_quiz vào RAM (TTL 20 phút)",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py#QuizCommands.handle_active_quiz_turn",
+          "dataPassed": "active_quiz: { lesson_id, lesson_title, questions, index, results }"
+        },
+        {
+          "order": 2,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py",
+          "functionOrMethod": "QuizCommands.handle_active_quiz_turn",
+          "action": "Chấm từng câu trả lời của Owner; khi hoàn thành thì tự tạo learning_note pending cho lỗ hổng kiến thức và trả Preview nâng trạng thái -> known hoặc đánh dấu đã ôn (markReviewed)",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_pending",
+          "dataPassed": "pending_status_change: { item_id, new_status, mark_reviewed }"
+        },
+        {
+          "order": 3,
+          "layer": "API_Route",
+          "component": "app/api/v1/roadmaps/items/[id]/route.ts",
+          "functionOrMethod": "PATCH",
+          "action": "Khi Owner xác nhận Preview, cập nhật status hoặc làm mới statusUpdatedAt (markReviewed=true) mà không kích hoạt RAG re-index",
+          "callsNext": null,
+          "dataPassed": "{ status | markReviewed: true }"
+        }
+      ],
+      "invariants": [
+        "Visitor không bao giờ chạy quiz, đọc trạng thái bài hay tạo OwnerMemory pending",
+        "Mọi cập nhật Lesson Status hoặc markReviewed sau quiz bắt buộc qua Preview -> ok",
+        "Đánh dấu markReviewed không kích hoạt RAG re-index"
+      ],
+      "failureModes": [
+        "Bài học chưa có nội dung: từ chối tạo quiz và gợi ý soạn nội dung trước",
+        "Phiên quiz hết hạn sau 20 phút hoặc Owner gõ 'dừng quiz': tự huỷ state RAM"
+      ],
+      "relatedAdrs": [
+        "ADR-0002",
+        "ADR-0010",
         "ADR-0012",
         "ADR-0015"
       ]

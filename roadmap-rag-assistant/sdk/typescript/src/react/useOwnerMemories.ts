@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RoadmapChatClient } from '../client';
 import type {
   CreateOwnerMemoryInput,
@@ -108,4 +108,55 @@ export function useOwnerMemories(baseUrl: string): UseOwnerMemoriesReturn {
     update,
     remove,
   };
+}
+
+/**
+ * Tracks the count of pending Owner Memory suggestions for the header badge (ADR-0015 Phase 2).
+ * Strictly no-ops when `enabled` is false (Visitors never trigger any request).
+ */
+export function usePendingMemoryCount(
+  baseUrl: string,
+  enabled: boolean,
+  isStreaming: boolean
+): [number, (count: number) => void] {
+  const client = useMemo(() => new RoadmapChatClient({ baseUrl }), [baseUrl]);
+  const [count, setCount] = useState(0);
+  const wasStreamingRef = useRef(false);
+
+  const fetchCount = useCallback(async () => {
+    if (!enabled) return;
+    try {
+      const items = await client.listMemories('pending');
+      setCount(items.length);
+    } catch {
+      // Fail-open: badge stays at last known count when offline or unauthenticated
+    }
+  }, [client, enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setCount(0);
+      return;
+    }
+    void fetchCount();
+  }, [enabled, fetchCount]);
+
+  // Refresh after each Owner streaming reply finishes (immediate for Quiz notes + delayed for async extractor)
+  useEffect(() => {
+    if (!enabled) {
+      wasStreamingRef.current = isStreaming;
+      return;
+    }
+    if (wasStreamingRef.current && !isStreaming) {
+      void fetchCount();
+      const timer = window.setTimeout(() => {
+        void fetchCount();
+      }, 2000);
+      wasStreamingRef.current = false;
+      return () => window.clearTimeout(timer);
+    }
+    wasStreamingRef.current = isStreaming;
+  }, [enabled, isStreaming, fetchCount]);
+
+  return [count, setCount];
 }

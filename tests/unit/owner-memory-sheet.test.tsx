@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OwnerMemorySheet } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet";
+import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
 import type { OwnerMemoryItem } from "@/roadmap-rag-assistant/sdk/typescript/src/types";
 
 const BASE = "/api/roadmap-assistant";
@@ -160,5 +161,64 @@ describe("OwnerMemorySheet & useOwnerMemories", () => {
     await waitFor(() => expect(screen.getByText(/Không tải được bộ nhớ/)).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
     await waitFor(() => expect(screen.getByText("Đang dùng Next.js 15 và FastAPI")).toBeTruthy());
+  });
+
+  it("shows replacement target text for pending suggestions with replacesMemoryId and notifies count", async () => {
+    const active = [makeItem({ id: "old-1", content: "Đang dùng Next.js 14" })];
+    const pending = [
+      makeItem({
+        id: "new-1",
+        content: "Đã nâng cấp lên Next.js 15",
+        source: "suggested",
+        status: "pending",
+        replacesMemoryId: "old-1",
+      }),
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("status=active")) return new Response(JSON.stringify({ memories: active }), { status: 200 });
+        return new Response(JSON.stringify({ memories: pending }), { status: 200 });
+      })
+    );
+
+    const onPendingCountChange = vi.fn();
+    render(
+      <OwnerMemorySheet baseUrl={BASE} onPendingCountChange={onPendingCountChange} onClose={vi.fn()} />
+    );
+
+    await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(1));
+    fireEvent.click(screen.getByRole("button", { name: "Chờ duyệt (1)" }));
+    await waitFor(() => expect(screen.getByText(/Thay thế: “Đang dùng Next\.js 14”/)).toBeTruthy());
+  });
+
+  it("wires pendingMemoryCount badge for Owner and never fetches memories for Visitor", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/v1/memories?status=pending")) {
+        return new Response(
+          JSON.stringify({ memories: [makeItem({ id: "p1", status: "pending" }), makeItem({ id: "p2", status: "pending" })] }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ memories: [] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // 1. Visitor: zero memory requests
+    const { unmount } = render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite={false} restoreLatestThread={false} />);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(fetchMock).not.toHaveBeenCalled();
+    unmount();
+
+    // 2. Owner: fetches pending count and displays badge "2" next to Bộ nhớ
+    render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite restoreLatestThread />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/v1/memories?status=pending", { cache: "no-store" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
+    await waitFor(() => {
+      expect(screen.getByText("Bộ nhớ")).toBeTruthy();
+      expect(screen.getByText("2")).toBeTruthy();
+    });
   });
 });

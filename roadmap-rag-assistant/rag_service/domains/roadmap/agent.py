@@ -31,6 +31,7 @@ from rag_service.domains.roadmap.lesson_content import LessonContentCommands
 from rag_service.domains.roadmap.lesson_edit import LessonEditCommands
 from rag_service.domains.roadmap.lesson_status import LessonStatusCommands
 from rag_service.domains.roadmap.memory_commands import MemoryCommands
+from rag_service.domains.roadmap.quiz_commands import QuizCommands
 from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
@@ -125,6 +126,7 @@ class NextGenRoadmapAgent(
     LessonContentCommands,
     LessonStatusCommands,
     MemoryCommands,
+    QuizCommands,
 ):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -314,6 +316,19 @@ class NextGenRoadmapAgent(
                 yield ev
             return
 
+        # ── 0b. Active Recall quiz turn: grade Owner's answer while a quiz session is open ──
+        outcome = {"handled": False}
+        async for ev in self.handle_active_quiz_turn(
+            content=raw_content,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
         # ── 0d. A create that names nothing ("tôi có thể tạo topic mới không?"): ask for the name ──
         if (unnamed := unnamed_create_reply(content)) is not None:
             async for ev in self._stream_text(unnamed if is_owner() else OWNER_ONLY_MESSAGE, delay):
@@ -371,6 +386,19 @@ class NextGenRoadmapAgent(
         async for ev in self.handle_memory_command(
             content=raw_content,
             page_context=page_context,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        # ── 1f. Active Recall Quiz & Review commands (Owner-only, quiz_commands.py) ──
+        async for ev in self.handle_quiz_command(
+            content=raw_content,
+            page_context=page_context,
+            session_id=session_id,
             session_ctx=session_ctx,
             delay=delay,
             outcome=outcome,

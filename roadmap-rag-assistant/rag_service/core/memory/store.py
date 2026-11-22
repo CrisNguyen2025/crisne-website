@@ -51,6 +51,7 @@ class OwnerMemoryItem:
     scope: Optional[str] = None
     source: str = "explicit"
     status: str = "active"
+    replaces_memory_id: Optional[str] = None
 
 
 def _escape_tag(text: str) -> str:
@@ -69,6 +70,8 @@ def _item_from_dict(raw: dict[str, Any], scope_field: str = "scope") -> Optional
     scope = str(raw_scope).strip().lower() if isinstance(raw_scope, str) and raw_scope.strip() else None
     source = str(raw.get("source") or "explicit").strip()
     status = str(raw.get("status") or "active").strip()
+    raw_replaces = raw.get("replacesMemoryId") or raw.get("replaces_memory_id")
+    replaces_id = str(raw_replaces).strip() if isinstance(raw_replaces, str) and raw_replaces.strip() else None
     return OwnerMemoryItem(
         id=mid,
         kind=kind,
@@ -76,6 +79,7 @@ def _item_from_dict(raw: dict[str, Any], scope_field: str = "scope") -> Optional
         scope=scope,
         source=source,
         status=status,
+        replaces_memory_id=replaces_id,
     )
 
 
@@ -192,6 +196,7 @@ class OwnerMemoryApi:
         scope: Optional[str] = None,
         source: str = "explicit",
         status: str = "active",
+        replaces_memory_id: Optional[str] = None,
     ) -> Optional[OwnerMemoryItem]:
         body: dict[str, Any] = {
             "kind": kind,
@@ -200,6 +205,8 @@ class OwnerMemoryApi:
             "source": source,
             "status": status,
         }
+        if replaces_memory_id:
+            body["replacesMemoryId"] = replaces_memory_id
         async with self._client(timeout=10.0) as client:
             resp = await client.post("/api/v1/memories", json=body)
         resp.raise_for_status()
@@ -279,11 +286,17 @@ class OwnerMemoryStore:
         scope: Optional[str] = None,
         source: str = "explicit",
         status: str = "active",
+        replaces_memory_id: Optional[str] = None,
     ) -> OwnerMemoryItem:
         if not is_owner():
             raise PermissionError("Only the Owner may write OwnerMemory.")
         clean_content = " ".join(content.split()).strip()[:300]
         clean_scope = scope.strip().lower() if isinstance(scope, str) and scope.strip() else None
+        clean_replaces = (
+            replaces_memory_id.strip()
+            if isinstance(replaces_memory_id, str) and replaces_memory_id.strip()
+            else None
+        )
         if self._api is None:
             for existing in self._local:
                 if (
@@ -299,6 +312,7 @@ class OwnerMemoryStore:
                 scope=clean_scope,
                 source=source,
                 status=status,
+                replaces_memory_id=clean_replaces,
             )
             self._local.insert(0, created)
             return created
@@ -308,6 +322,7 @@ class OwnerMemoryStore:
             scope=clean_scope,
             source=source,
             status=status,
+            replaces_memory_id=clean_replaces,
         )
         self.invalidate()
         if created is None:

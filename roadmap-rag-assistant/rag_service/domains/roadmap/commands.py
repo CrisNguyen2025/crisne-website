@@ -451,19 +451,33 @@ class RoadmapCommands:
                     item_id = status_change["item_id"]
                     item_title = status_change["item_title"]
                     new_status = status_change["new_status"]
+                    mark_reviewed = bool(status_change.get("mark_reviewed"))
+                    tool_name = "mark_lesson_reviewed" if mark_reviewed else "update_item"
+                    tool_args = (
+                        {"item_id": item_id, "markReviewed": True, "confirmed": True}
+                        if mark_reviewed
+                        else {"item_id": item_id, "status": new_status, "confirmed": True}
+                    )
                     yield {
                         "type": "tool_start",
-                        "name": "update_item",
-                        "args": {"item_id": item_id, "status": new_status, "confirmed": True},
+                        "name": tool_name,
+                        "args": tool_args,
                     }
                     try:
                         from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
 
-                        with write_granted("confirmed lesson status change"):
-                            res = await get_adapter().update_item(item_id, status=new_status)
+                        with write_granted("confirmed lesson review" if mark_reviewed else "confirmed lesson status change"):
+                            if mark_reviewed:
+                                res = await get_adapter().update_item(item_id, markReviewed=True)
+                            else:
+                                res = await get_adapter().update_item(item_id, status=new_status)
                         label = LESSON_STATUS_LABEL.get(new_status, new_status)
                         title = res.get("title", item_title) if isinstance(res, dict) else item_title
-                        res_msg = f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
+                        res_msg = (
+                            f"✅ Đã đánh dấu đã ôn hôm nay cho bài '{title}'."
+                            if mark_reviewed
+                            else f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
+                        )
                         ok = True
                         session_store.set_active_lesson(
                             session_id,
@@ -472,8 +486,8 @@ class RoadmapCommands:
                             topic_slug=status_change.get("topic_slug"),
                         )
                     except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi đổi trạng thái bài: {exc}"
-                    yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
+                        ok, res_msg = False, f"❌ Lỗi khi cập nhật trạng thái bài: {exc}"
+                    yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
                     async for ev in self._stream_text(res_msg, delay):
                         yield ev
                 outcome["handled"] = True

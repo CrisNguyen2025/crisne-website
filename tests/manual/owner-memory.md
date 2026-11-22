@@ -29,6 +29,10 @@ Kiểm thử thủ công luồng **Owner Memory** lưu ở Turso (`/api/v1/memor
 | M7 | Owner | Reload trang / mở tab mới ở cùng domain | Abot tự nối tiếp `Thread` đang mở gần nhất từ server (`GET /api/roadmap-assistant/thread`) mà không lưu tin nhắn Owner vào `localStorage` |
 | M8 | Owner | Bấm **Cuộc trò chuyện mới** rồi reload trang | `DELETE /api/roadmap-assistant/thread` đóng `Thread` cũ (`closedAt`); sau khi reload Abot mở lời chào mới, không kéo lại `Thread` cũ |
 | M9 | Visitor | Đăng xuất / mở ẩn danh: kiểm tra menu ⋮, gửi `"bạn đang nhớ gì về mình?"`, `"nhớ giúp mình..."`, và prompt injection đòi in `<owner_memory>` | Không thấy nút **Bộ nhớ**, không khôi phục `Thread` của Owner, mọi lệnh nhớ/xem/quên bị từ chối bằng thông báo chỉ dành cho Owner, không lộ bất kỳ nội dung Owner Memory nào; `GET /api/v1/memories` trả 401 |
+| M10 | Owner | Chat tự nhiên có thông tin bền vững (vd: `"Mình vừa nâng cấp dự án lên Next.js 15 thay vì 14"`) → mở ⋮ | Sau khi trả lời xong (~2s), badge số mục chờ duyệt hiện bên cạnh **Bộ nhớ**; mở tab **Chờ duyệt** thấy gợi ý mới kèm dòng `Thay thế: “...”` (không tự `active`); bấm **Duyệt** tự archive mục cũ |
+| M11 | Owner | Gửi `"quiz bài Hybrid Search"` (bài đang `learning`), trả lời 3 câu (2 câu đúng, 1 câu thiếu ý) | Hỏi từng câu 1–3, chấm từng câu; kết thúc tự tạo 1 mục `learning_note` vào tab **Chờ duyệt** + trả Preview đổi trạng thái sang `Đã nắm` có nút `[✅ Xác nhận thực hiện]` |
+| M12 | Owner | Gửi `"ôn nhanh 1 câu bài cần ôn nhất"` (bài đang `known`) → trả lời đạt → bấm `[✅ Xác nhận thực hiện]` | Bốc bài `known` quá hạn lâu nhất; tool pill hiện **Đánh dấu đã ôn bài** (`markReviewed=true`), cập nhật `statusUpdatedAt` mà không re-index RAG |
+| M13 | Owner / Visitor | Owner bắt đầu quiz rồi gõ `"dừng quiz"`; Visitor gửi `"quiz bài Hybrid Search"` | Owner thoát sạch phiên quiz; Visitor bị từ chối bằng thông báo chỉ dành cho Owner và không gọi `/api/v1/memories?status=pending` |
 
 ## Ghi kết quả
 

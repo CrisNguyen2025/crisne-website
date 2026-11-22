@@ -299,6 +299,12 @@ class SqliteAdapter:
                 if status != current_status:
                     sets.extend(["status = ?", "statusUpdatedAt = ?"])
                     args.extend([status, _now_iso()])
+                elif kwargs.get("markReviewed") is True:
+                    sets.append("statusUpdatedAt = ?")
+                    args.append(_now_iso())
+            elif kwargs.get("markReviewed") is True:
+                sets.append("statusUpdatedAt = ?")
+                args.append(_now_iso())
             await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))
             await db.commit()
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
