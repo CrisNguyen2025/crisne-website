@@ -39,6 +39,14 @@
 | `RAG_SERVICE_URL` | 🔴 🔗 | URL service Render |
 | `RAG_INTERNAL_KEY` | 🔴 🔗 | Thiếu → proxy trả 503 |
 
+### Private News Reader (`/news`, `/api/ingest`)
+| ENV | | Ghi chú |
+|---|---|---|
+| `NEWS_WORKER_URL` | 🟡 🔗 | URL service `news-ingest-worker`. Thiếu = không gọi wake, worker tự poll |
+| `NEWS_WORKER_INTERNAL_KEY` | 🟡 🔗 | Phải khớp `INTERNAL_API_KEY` của `news-ingest-worker` |
+| `NEWS_ALLOWED_DOMAINS` | 🟡 | Domain whitelist bổ sung (phân tách dấu phẩy) ngoài danh sách mặc định |
+| `CRON_SECRET` | 🟡 | Secret cho lịch cron gọi `POST /api/news/cron` (`Authorization: Bearer` hoặc `x-cron-secret`) |
+
 ### AI — Cris AI (`/api/chat`)
 | ENV | | Ghi chú |
 |---|---|---|
@@ -153,3 +161,24 @@ Kiểm tra tên model Groq trên console.groq.com trước khi set.
 | Secret | | |
 |---|---|---|
 | `GEMINI_API_KEY` | 🟡 | Job `rag-eval` |
+
+---
+
+## News Ingest Worker (`news-ingest-worker`)
+
+Cấu hình service tách riêng: Language **Docker** · Root Directory `news-ingest-worker` · Dockerfile `./Dockerfile` · Health Check `/health`.
+
+| ENV | | Ghi chú |
+|---|---|---|
+| `NEXTJS_API_BASE_URL` | 🔴 🔗 | `https://crisne.blog` (local: `http://127.0.0.1:3334`) |
+| `ADMIN_API_KEY` | 🔴 🔗 | Phải khớp `ADMIN_API_KEY` trên Next.js để claim & complete job |
+| `INTERNAL_API_KEY` | 🔴 🔗 | Phải khớp `NEWS_WORKER_INTERNAL_KEY` trên Next.js để nhận `/internal/wake` |
+| `GEMINI_API_KEY` | 🔴 | Tóm tắt JSON và Vision đọc slide/frame |
+| `GROQ_API_KEY` | 🟡 | Groq Whisper API (`whisper-large-v3-turbo`) + LLM fallback |
+| `LLM_MODEL` | 🟡 | Mặc định `gemini-2.5-flash` |
+| `VISION_MODEL` | 🟡 | Mặc định `gemini-2.5-flash` |
+| `WHISPER_MODEL` | 🟡 | Mặc định `whisper-large-v3-turbo` |
+| `GROQ_LLM_MODEL` | 🟡 | Mặc định `llama-3.3-70b-versatile` |
+| `POLL_INTERVAL_SECONDS` | 🟡 | Mặc định `10` |
+| `MAX_VIDEO_DURATION_SECONDS` | 🟡 | Mặc định `1200` (20 phút) |
+| `MAX_VISION_FRAMES` | 🟡 | Mặc định `6` |

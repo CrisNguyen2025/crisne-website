@@ -8,6 +8,10 @@ import { RoadmapAssistantChatbot } from "@/components/roadmap/RoadmapAssistantCh
 function ChatbotInner() {
   const pathname = usePathname();
 
+  if (pathname?.startsWith("/news") || pathname?.startsWith("/share")) {
+    return null;
+  }
+
   if (pathname?.startsWith("/portfolio")) {
     return <FloatingChatBot />;
   }

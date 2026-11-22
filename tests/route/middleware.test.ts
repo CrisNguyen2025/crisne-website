@@ -103,4 +103,25 @@ describe("Private App Middleware Auth Guard", () => {
     const res = (await middleware(req, {} as never)) as Response;
     expect(res.headers.get("location")).toBeNull();
   });
+
+  it("preserves full query string in callbackUrl when redirecting /share", async () => {
+    const req = createRequest("/share?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc&title=Test");
+    const res = (await middleware(req, {} as never)) as Response;
+    expect(res.status).toBe(307);
+    const location = res.headers.get("location");
+    expect(location).toBeTruthy();
+    const locationUrl = new URL(location!);
+    expect(locationUrl.pathname).toBe("/login");
+    const callbackUrl = locationUrl.searchParams.get("callbackUrl");
+    expect(callbackUrl).toBe("/share?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc&title=Test");
+  });
+
+  it("callbackUrl for /news is just /news (no query string)", async () => {
+    const req = createRequest("/news");
+    const res = (await middleware(req, {} as never)) as Response;
+    expect(res.status).toBe(307);
+    const location = res.headers.get("location")!;
+    const locationUrl = new URL(location);
+    expect(locationUrl.searchParams.get("callbackUrl")).toBe("/news");
+  });
 });

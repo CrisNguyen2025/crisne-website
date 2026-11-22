@@ -32,9 +32,19 @@ function isCurrentClient(client: PrismaClient) {
     roadmap?: unknown;
     roadmapItem?: unknown;
     slugRedirect?: unknown;
+    newsSource?: unknown;
+    newsItem?: unknown;
+    ingestJob?: unknown;
   };
 
-  return Boolean(delegates.roadmap && delegates.roadmapItem && delegates.slugRedirect);
+  return Boolean(
+    delegates.roadmap &&
+      delegates.roadmapItem &&
+      delegates.slugRedirect &&
+      delegates.newsSource &&
+      delegates.newsItem &&
+      delegates.ingestJob
+  );
 }
 
 export const prisma =

@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-15T05:56:19.000Z",
+  "generatedAt": "2026-11-22T12:19:46Z",
   "headCommit": "2fdb93f92816afb3262dc7ef43f38410b1819f19",
   "repository": "crisne-website",
   "architecture": {
@@ -218,6 +218,58 @@
         "roadmap-rag-assistant/evals/sync_dataset.py"
       ],
       "dataModels": []
+    },
+    {
+      "id": "private-news",
+      "name": "Private News Reader & Ingest Pipeline",
+      "summary": "Kho đọc tin private (/news) chỉ dành cho Owner (noindex). Nhận link qua Paste UI (Phase 1), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
+      "cohesionScore": 0.93,
+      "adrs": [
+        "ADR-0005"
+      ],
+      "glossary": [
+        "Owner"
+      ],
+      "keyFiles": [
+        "app/(news)/layout.tsx",
+        "app/(news)/news/page.tsx",
+        "app/(news)/news/sources/page.tsx",
+        "components/news/NewsFeedClient.tsx",
+        "components/news/NewsCard.tsx",
+        "components/news/NewsReaderPanel.tsx",
+        "components/news/NewsDecisionBar.tsx",
+        "components/news/QuickPasteDialog.tsx",
+        "components/news/SourcesManagerSheet.tsx",
+        "logic/news/newsService.ts",
+        "lib/news/schemas.ts",
+        "lib/news/queries.ts",
+        "lib/news/sources.ts",
+        "lib/news/rss-fetcher.ts",
+        "lib/news/url-guard.ts",
+        "lib/news/dedupe.ts",
+        "lib/news/ingest.ts",
+        "lib/news/worker-trigger.ts",
+        "app/api/ingest/route.ts",
+        "app/api/news/route.ts",
+        "app/api/news/[id]/route.ts",
+        "app/api/news/[id]/reingest/route.ts",
+        "app/api/news/sources/route.ts",
+        "app/api/news/sources/[id]/route.ts",
+        "app/api/news/cron/route.ts",
+        "app/api/news/jobs/claim/route.ts",
+        "app/api/news/jobs/[id]/complete/route.ts",
+        "news-ingest-worker/news_worker/server.py",
+        "news-ingest-worker/news_worker/processor.py",
+        "news-ingest-worker/news_worker/extractors/pipeline.py",
+        "news-ingest-worker/news_worker/summarizer.py",
+        "app/(news)/share/page.tsx",
+        "components/news/ShareTargetClient.tsx"
+      ],
+      "dataModels": [
+        "NewsItem",
+        "NewsSource",
+        "IngestJob"
+      ]
     }
   ],
   "entryPoints": [
@@ -418,6 +470,171 @@
       "summary": "Tải ảnh lên Cloudflare R2 / AWS S3",
       "handler": "app/api/upload-image/route.ts#POST",
       "triggersFlow": "FLOW_IMAGE_UPLOAD_S3"
+    },
+    {
+      "id": "EP_UI_NEWS",
+      "type": "page",
+      "path": "/news",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Trang đọc tin private (/news, noindex) dạng card grid daily.dev với Reader Sheet, bộ lọc nuqs và modal dán URL",
+      "handler": "app/(news)/news/page.tsx#NewsPage",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_INGEST",
+      "type": "api_route",
+      "path": "/api/ingest",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Nhận URL hợp lệ theo whitelist, chuẩn hoá canonicalUrl, dedupe và đưa IngestJob vào hàng đợi Turso",
+      "handler": "app/api/ingest/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
+    },
+    {
+      "id": "EP_API_NEWS_LIST",
+      "type": "api_route",
+      "path": "/api/news",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Lấy danh sách NewsItem private theo bộ lọc view/origin/tag/q/sort cùng thống kê tab và tags",
+      "handler": "app/api/news/route.ts#GET",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_ITEM_GET",
+      "type": "api_route",
+      "path": "/api/news/[id]",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Lấy chi tiết một NewsItem private",
+      "handler": "app/api/news/[id]/route.ts#GET",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_ITEM_PATCH",
+      "type": "api_route",
+      "path": "/api/news/[id]",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Cập nhật readState, isSaved, reviewStatus, tags hoặc personalNote của NewsItem",
+      "handler": "app/api/news/[id]/route.ts#PATCH",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_REINGEST",
+      "type": "api_route",
+      "path": "/api/news/[id]/reingest",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Xếp hàng phân tích sâu lại một NewsItem",
+      "handler": "app/api/news/[id]/reingest/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
+    },
+    {
+      "id": "EP_UI_NEWS_SOURCES",
+      "type": "page",
+      "path": "/news/sources",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Trang mở thẳng ngăn quản lý nguồn RSS (/news/sources)",
+      "handler": "app/(news)/news/sources/page.tsx#NewsSourcesPage",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCES_LIST",
+      "type": "api_route",
+      "path": "/api/news/sources",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Lấy danh sách nguồn RSS đã cấu hình",
+      "handler": "app/api/news/sources/route.ts#GET",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCES_CREATE",
+      "type": "api_route",
+      "path": "/api/news/sources",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Thêm nguồn RSS/Atom mới với kiểm tra DNS chống SSRF",
+      "handler": "app/api/news/sources/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCES_PATCH",
+      "type": "api_route",
+      "path": "/api/news/sources/[id]",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Cập nhật thông tin hoặc bật/tắt nguồn RSS",
+      "handler": "app/api/news/sources/[id]/route.ts#PATCH",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCES_DELETE",
+      "type": "api_route",
+      "path": "/api/news/sources/[id]",
+      "method": "DELETE",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Xoá nguồn RSS (giữ nguyên các NewsItem đã nạp)",
+      "handler": "app/api/news/sources/[id]/route.ts#DELETE",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_CRON",
+      "type": "api_route",
+      "path": "/api/news/cron",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Quét các nguồn RSS đang bật và đẩy bài mới vào hàng đợi ingest với origin='cron' (draft)",
+      "handler": "app/api/news/cron/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_JOBS_CLAIM",
+      "type": "api_route",
+      "path": "/api/news/jobs/claim",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Endpoint nội bộ để Python worker nhận IngestJob kế tiếp và thu hồi lease hết hạn",
+      "handler": "app/api/news/jobs/claim/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
+    },
+    {
+      "id": "EP_API_NEWS_JOBS_COMPLETE",
+      "type": "api_route",
+      "path": "/api/news/jobs/[id]/complete",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Nhận kết quả từ worker, validate bằng Zod, kiểm tra trùng tiêu đề 72h và lưu kết quả",
+      "handler": "app/api/news/jobs/[id]/complete/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
+    },
+    {
+      "id": "EP_UI_SHARE",
+      "type": "ui_page",
+      "path": "/share",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "PWA Share Target — Android chia sẻ URL vào app, auto-ingest với origin='share'",
+      "handler": "app/(news)/share/page.tsx",
+      "triggersFlow": "FLOW_NEWS_PWA_SHARE_TARGET"
     }
   ],
   "executionFlows": [
@@ -891,6 +1108,244 @@
       "relatedAdrs": [
         "ADR-0003"
       ]
+    },
+    {
+      "id": "FLOW_NEWS_INGEST_PIPELINE",
+      "name": "Nạp URL, trích xuất 3 tầng và tóm tắt tin private",
+      "domainId": "private-news",
+      "actor": "Owner",
+      "trigger": "Owner dán URL tại /news hoặc gọi POST /api/ingest",
+      "preconditions": [
+        "Quyền ghi Owner (NextAuth session hoặc ADMIN_API_KEY)",
+        "URL thuộc whitelist domain và không trỏ vào IP nội bộ (SSRF)"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/QuickPasteDialog.tsx",
+          "action": "Owner dán một hoặc nhiều URL vào modal thêm link và bấm đưa vào hàng đợi",
+          "callsNext": "logic/news/newsService.ts#ingestNewsUrl",
+          "dataPassed": "{ url, origin: 'manual', forceDeep }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/ingest/route.ts",
+          "functionOrMethod": "POST",
+          "action": "Kiểm tra quyền Owner, validate request bằng IngestRequestSchema, gọi enqueueNewsUrl",
+          "callsNext": "lib/news/ingest.ts#enqueueNewsUrl",
+          "dataPassed": "Validated IngestRequest"
+        },
+        {
+          "order": 3,
+          "layer": "Domain_Logic",
+          "component": "lib/news/url-guard.ts",
+          "functionOrMethod": "resolveAndValidateUrl",
+          "action": "Kiểm tra whitelist, resolve short link an toàn (chống SSRF), chuẩn hoá canonicalUrl, dedupe trong Turso và tạo NewsItem + IngestJob",
+          "callsNext": "lib/news/worker-trigger.ts#notifyNewsWorker",
+          "dataPassed": "NewsItem (queued) + IngestJob (pending)"
+        },
+        {
+          "order": 4,
+          "layer": "AI_Orchestration",
+          "component": "news-ingest-worker/news_worker/processor.py",
+          "functionOrMethod": "process_single_job",
+          "action": "Claim job qua API, chạy extract_content (tầng 1 -> Whisper -> Vision trong /tmp rồi xoá sạch), gọi summarizer không agent/tool trả về JSON",
+          "callsNext": "app/api/news/jobs/[id]/complete/route.ts#POST",
+          "dataPassed": "JobCompleteReadyPayload | JobCompletePartialPayload | JobCompleteFailedPayload"
+        },
+        {
+          "order": 5,
+          "layer": "Domain_Logic",
+          "component": "lib/news/ingest.ts",
+          "functionOrMethod": "completeIngestJob",
+          "action": "Validate JSON bằng JobCompleteRequestSchema, gắn cờ trùng tiêu đề trong 72h nếu có, cập nhật NewsItem và IngestJob",
+          "callsNext": null,
+          "dataPassed": "Serialized NewsItemDto"
+        }
+      ],
+      "invariants": [
+        "Mọi endpoint /api/ingest và /api/news/* đều requireWriteAccess trước khi chạm DB",
+        "URL phải qua whitelist và kiểm tra DNS/IP công khai trước và sau khi resolve redirect",
+        "Không lưu file video/audio/frame sau khi xử lý xong (xoá /tmp trong finally)",
+        "LLM chỉ trả về JSON validate bằng Zod/Pydantic, không dùng agent hay tool"
+      ],
+      "failureModes": [
+        "Domain không nằm trong whitelist hoặc trỏ về IP nội bộ (403)",
+        "TikTok/YouTube chặn tải media (chuyển sang partial với metadata_only)",
+        "Worker hết hạn lease khi xử lý (tự thu hồi khi claimNextIngestJob chạy lại)"
+      ],
+      "relatedAdrs": [
+        "ADR-0005"
+      ]
+    },
+    {
+      "id": "FLOW_NEWS_FEED_BROWSE_AND_STATE",
+      "name": "Lọc feed, đọc tóm tắt và cập nhật trạng thái NewsItem",
+      "domainId": "private-news",
+      "actor": "Owner",
+      "trigger": "Owner mở /news (tab Tất cả / Chờ xử lý / Đã xử lý), bấm một dòng NewsCard để mở NewsReaderPanel, quyết định Bỏ qua trên NewsDecisionBar",
+      "preconditions": [
+        "Quyền Owner qua Google OAuth session hoặc DEV_OWNER_BYPASS"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/NewsFeedClient.tsx",
+          "action": "Đồng bộ bộ lọc view/origin/tag/q/sort qua nuqs, bỏ response của bộ lọc cũ; từ 1280px danh sách và NewsReaderPanel (cột phải Tag và Ghi chú) nằm cạnh nhau, hẹp hơn thì panel thành màn riêng; Bỏ qua xong tự sang bài kế (J/K)",
+          "callsNext": "logic/news/newsService.ts#updateNewsItem",
+          "dataPassed": "{ readState, isSaved, reviewStatus, tags, personalNote }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/news/[id]/route.ts",
+          "functionOrMethod": "PATCH",
+          "action": "Kiểm tra requireWriteAccess, validate payload bằng UpdateNewsItemSchema",
+          "callsNext": "lib/news/queries.ts#updateNewsItem",
+          "dataPassed": "Validated UpdateNewsItemRequest"
+        },
+        {
+          "order": 3,
+          "layer": "Persistence",
+          "component": "lib/news/queries.ts",
+          "functionOrMethod": "updateNewsItem",
+          "action": "Cập nhật trạng thái đọc, lưu, duyệt draft/dismissed, tags hoặc personalNote trong Turso",
+          "callsNext": null,
+          "dataPassed": "Serialized NewsItemDto"
+        }
+      ],
+      "invariants": [
+        "Bài dismissed bị ẩn khỏi feed nhưng vẫn giữ bản ghi canonicalUrl để dedupe",
+        "Đọc tin mới hoặc mở link gốc của bài published tự động chuyển readState sang read"
+      ],
+      "failureModes": [
+        "Payload rỗng hoặc sai schema (400 Validation failed)",
+        "Bài không tồn tại (404)"
+      ],
+      "relatedAdrs": [
+        "ADR-0005"
+      ]
+    },
+    {
+      "id": "FLOW_NEWS_RSS_CRON_SYNC",
+      "name": "Quản lý nguồn RSS và quét tin tự động theo lịch Cron",
+      "domainId": "private-news",
+      "actor": "Owner | Cron",
+      "trigger": "Lịch cron hoặc Owner bấm 'Quét tất cả ngay' gọi POST /api/news/cron",
+      "preconditions": [
+        "Xác thực qua CRON_SECRET, ADMIN_API_KEY hoặc phiên Owner",
+        "Ít nhất một NewsSource có enabled=true"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/SourcesManagerSheet.tsx",
+          "action": "Owner thêm/bật nguồn RSS hoặc bấm nút quét đồng bộ ngay",
+          "callsNext": "logic/news/newsService.ts#triggerNewsCronSync",
+          "dataPassed": "{ sourceId?, maxItemsPerSource? }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/news/cron/route.ts",
+          "functionOrMethod": "POST",
+          "action": "Kiểm tra CRON_SECRET hoặc requireWriteAccess, validate bằng CronSyncRequestSchema",
+          "callsNext": "lib/news/rss-fetcher.ts#syncNewsSourcesCron",
+          "dataPassed": "{ sourceId, maxItemsPerSource }"
+        },
+        {
+          "order": 3,
+          "layer": "Domain_Logic",
+          "component": "lib/news/rss-fetcher.ts",
+          "functionOrMethod": "syncNewsSourcesCron",
+          "action": "Tải XML từng nguồn qua fetchFeedXmlSafely (chống SSRF), parse RSS 2.0/RDF/Atom bằng parseRssOrAtomXml và gọi enqueueNewsUrl với origin='cron'",
+          "callsNext": "lib/news/ingest.ts#enqueueNewsUrl",
+          "dataPassed": "{ url, title, origin: 'cron', sourceId, tags }"
+        }
+      ],
+      "invariants": [
+        "Bài mới từ cron luôn có reviewStatus='draft'",
+        "Bài đã có canonicalUrl (kể cả đã dismissed) không bị kéo lại",
+        "Lỗi ở một feed RSS chỉ ghi vào NewsSource.lastError, không làm gãy các nguồn khác"
+      ],
+      "failureModes": [
+        "Feed URL trỏ về IP nội bộ hoặc lỗi HTTP/XML (lưu vào lastError của nguồn đó)"
+      ],
+      "relatedAdrs": [
+        "ADR-0005"
+      ]
+    },
+    {
+      "id": "FLOW_NEWS_PWA_SHARE_TARGET",
+      "name": "Android PWA Share Target — chia sẻ URL vào News",
+      "domainId": "private-news",
+      "actor": "Owner (trên Android)",
+      "trigger": "Owner bấm 'Share' trên Chrome/YouTube/TikTok → chọn app → Android gọi GET /share?url=...&title=...&text=...",
+      "preconditions": [
+        "App đã được cài làm PWA (Add to Home Screen)",
+        "manifest.webmanifest có share_target.action=/share",
+        "Owner đã đăng nhập (cookie session)"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "OS_PWA",
+          "component": "app/manifest.ts",
+          "action": "Android intercept share intent, build GET /share?url=&title=&text= và mở PWA window",
+          "callsNext": "middleware.ts",
+          "dataPassed": "?url=<encoded>&title=<encoded>&text=<encoded>"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "middleware.ts",
+          "action": "Kiểm tra auth; nếu chưa đăng nhập redirect /login?callbackUrl=/share%3Furl%3D... (preserve query string)",
+          "callsNext": "app/(news)/share/page.tsx",
+          "dataPassed": "searchParams { url, title, text }"
+        },
+        {
+          "order": 3,
+          "layer": "Presentation_Server",
+          "component": "app/(news)/share/page.tsx",
+          "action": "Xác thực owner, resolve URL từ params, render ShareTargetClient",
+          "callsNext": "components/news/ShareTargetClient.tsx",
+          "dataPassed": "url: string"
+        },
+        {
+          "order": 4,
+          "layer": "Presentation_UI",
+          "component": "components/news/ShareTargetClient.tsx",
+          "action": "On mount gọi ingestNewsUrl với origin='share', spinner→thành công→redirect /news sau 2.5s",
+          "callsNext": "logic/news/newsService.ts#ingestNewsUrl",
+          "dataPassed": "{ url, origin: 'share' }"
+        },
+        {
+          "order": 5,
+          "layer": "Routing_Gateway",
+          "component": "app/api/ingest/route.ts",
+          "functionOrMethod": "POST",
+          "action": "requireWriteAccess, validate URL qua url-guard, enqueue vào IngestJob",
+          "callsNext": "lib/news/ingest.ts#enqueueNewsUrl",
+          "dataPassed": "{ url, origin: 'share' }"
+        }
+      ],
+      "invariants": [
+        "URL phải thuộc whitelist domain hoặc NewsSource domains",
+        "Bài từ share luôn có origin='share' và reviewStatus='draft'",
+        "callbackUrl trong redirect phải encode đầy đủ query string của /share"
+      ],
+      "failureModes": [
+        "URL trong ?text= không parse được → trang hiển thị fallback paste",
+        "Domain không thuộc whitelist → 403 DOMAIN_NOT_ALLOWED, hiển thị error + retry",
+        "Session hết hạn → redirect /login, callback về /share?url=... nguyên vẹn"
+      ],
+      "relatedAdrs": [
+        "ADR-0005"
+      ]
     }
   ],
   "dataModels": [
@@ -964,6 +1419,100 @@
       "relations": [],
       "invariants": [
         "fromSlug là khóa chính lưu slug cũ của Lesson/Topic để chuyển hướng 308 một bước"
+      ]
+    },
+    {
+      "id": "MODEL_NEWS_SOURCE",
+      "name": "NewsSource",
+      "source": "prisma",
+      "table": "NewsSource",
+      "domainId": "private-news",
+      "fields": [
+        "id",
+        "name",
+        "feedUrl",
+        "domain",
+        "enabled",
+        "defaultTags",
+        "lastFetchedAt",
+        "lastError",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [
+        "items -> NewsItem[]"
+      ],
+      "invariants": [
+        "feedUrl là duy nhất; domain nguồn bật sẽ tự động hợp lệ trong whitelist ingest"
+      ]
+    },
+    {
+      "id": "MODEL_NEWS_ITEM",
+      "name": "NewsItem",
+      "source": "prisma",
+      "table": "NewsItem",
+      "domainId": "private-news",
+      "fields": [
+        "id",
+        "sourceUrl",
+        "canonicalUrl",
+        "domain",
+        "platform",
+        "origin",
+        "sourceId",
+        "title",
+        "author",
+        "thumbnailUrl",
+        "tldr",
+        "takeaways",
+        "tags",
+        "personalNote",
+        "ingestStatus",
+        "reviewStatus",
+        "readState",
+        "isSaved",
+        "extractionMethod",
+        "extractionError",
+        "normalizedTitle",
+        "possibleDuplicateOfId",
+        "publishedAt",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [
+        "source -> NewsSource?",
+        "jobs -> IngestJob[]"
+      ],
+      "invariants": [
+        "canonicalUrl là duy nhất để dedupe ở mức URL",
+        "Chỉ bài origin='cron' vào draft; share và manual vào published"
+      ]
+    },
+    {
+      "id": "MODEL_INGEST_JOB",
+      "name": "IngestJob",
+      "source": "prisma",
+      "table": "IngestJob",
+      "domainId": "private-news",
+      "fields": [
+        "id",
+        "newsItemId",
+        "status",
+        "stage",
+        "forceDeep",
+        "attempts",
+        "maxAttempts",
+        "nextRunAt",
+        "lockedUntil",
+        "lastError",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [
+        "newsItem -> NewsItem"
+      ],
+      "invariants": [
+        "Claim nguyên tử bằng status='pending' + lease lockedUntil chống chạy trùng"
       ]
     }
   ],

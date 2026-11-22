@@ -29,6 +29,9 @@ export default defineConfig({
       // Write routes notify the Roadmap Assistant; tests that need it stub these
       RAG_SERVICE_URL: "",
       RAG_INTERNAL_KEY: "",
+      NEWS_WORKER_URL: "",
+      NEWS_WORKER_INTERNAL_KEY: "",
+      CRON_SECRET: "",
     },
   },
 });

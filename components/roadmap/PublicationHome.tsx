@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Newspaper, Plus } from "lucide-react";
 import type {
   PublicationTopicSummary,
   RecentLessonSummary,
@@ -74,6 +74,13 @@ export function PublicationHome({
 
           {canWrite && (
             <div className="flex items-center gap-2">
+              <Link
+                href="/news"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-accent"
+              >
+                <Newspaper className="size-3.5 text-muted-foreground" />
+                <span>News</span>
+              </Link>
               <button
                 type="button"
                 onClick={() => setIsCreateTopicOpen(true)}

@@ -17,7 +17,12 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  if (req.headers.get("x-internal-key") || req.headers.get("x-admin-key")) {
+  if (
+    req.headers.get("x-internal-key") ||
+    req.headers.get("x-admin-key") ||
+    req.headers.get("x-cron-secret") ||
+    (pathname === "/api/news/cron" && req.headers.get("authorization")?.startsWith("Bearer "))
+  ) {
     return NextResponse.next();
   }
 
@@ -30,7 +35,10 @@ export default auth((req) => {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const loginUrl = new URL("/login", req.nextUrl.origin);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    // Preserve query params (critical for /share?url=... PWA share target)
+    const callbackUrl =
+      req.nextUrl.search ? `${pathname}${req.nextUrl.search}` : pathname;
+    loginUrl.searchParams.set("callbackUrl", callbackUrl);
     return NextResponse.redirect(loginUrl);
   }
 

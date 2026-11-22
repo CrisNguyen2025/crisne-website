@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Cris Nguyen — Frontend Developer Portfolio",
-    short_name: "Cris Nguyen",
+    short_name: "Crisne News",
     description:
       "Portfolio of Cris Nguyen featuring scalable, high-performance web solutions built with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
     start_url: "/",
@@ -68,5 +68,16 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     related_applications: [],
     prefer_related_applications: false,
+    // Android PWA Share Target — receives URLs shared from Chrome/YouTube/TikTok
+    share_target: {
+      action: "/share",
+      method: "GET",
+      enctype: "application/x-www-form-urlencoded",
+      params: {
+        url: "url",
+        title: "title",
+        text: "text",
+      },
+    },
   };
 }

@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>News · wireframe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.11/dist/index.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<style type="text/tailwindcss">
+  /* Token chép nguyên từ app/styles/roadmap-theme.css (.roadmap-theme) */
+  :root {
+    --background: #faf9f5;
+    --foreground: #1a1a1a;
+    --card: #ffffff;
+    --primary: #1a1a1a;
+    --primary-foreground: #faf9f5;
+    --secondary: #f1efe9;
+    --muted: #f4f3ee;
+    --muted-foreground: #5c5a55;
+    --accent: #efede6;
+    --border: rgb(26 26 26 / 9%);
+    --input: rgb(26 26 26 / 14%);
+    --ring: #c04a30;
+    --destructive: #c83e32;
+    --editorial-accent: #c04a30;
+    --editorial-accent-soft: rgb(192 74 48 / 9%);
+    --status-target: oklch(0.45 0.14 245);
+    --status-target-bg: oklch(0.95 0.025 245);
+    --status-learning: oklch(0.47 0.14 68);
+    --status-learning-bg: oklch(0.955 0.032 78);
+    --status-known: oklch(0.44 0.12 155);
+    --status-known-bg: oklch(0.952 0.025 155);
+    --scrollbar-thumb: rgb(26 26 26 / 18%);
+  }
+  /* Nấc Xám: tắt màu nhấn và màu trạng thái, còn lại giữ nguyên token */
+  :root[data-mau="xam"] {
+    --ring: #6b6b6b;
+    --editorial-accent: #6b6b6b;
+    --editorial-accent-soft: rgb(26 26 26 / 6%);
+    --destructive: #4a4a4a;
+    --status-target: #4a4a4a; --status-target-bg: #efefec;
+    --status-learning: #4a4a4a; --status-learning-bg: #efefec;
+    --status-known: #4a4a4a; --status-known-bg: #efefec;
+  }
+  @theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --color-destructive: var(--destructive);
+    --color-ed: var(--editorial-accent);
+    --color-ed-soft: var(--editorial-accent-soft);
+    --color-st-target: var(--status-target);
+    --color-st-target-bg: var(--status-target-bg);
+    --color-st-learn: var(--status-learning);
+    --color-st-learn-bg: var(--status-learning-bg);
+    --color-st-known: var(--status-known);
+    --color-st-known-bg: var(--status-known-bg);
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  html { font-family: var(--font-sans); }
+  body { background: var(--background); color: var(--foreground); }
+  /* Thanh cuộn mảnh, tự ẩn (I18) */
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .row-actions { opacity: 0; transition: opacity .15s; }
+  .group:hover .row-actions, .group:focus-within .row-actions { opacity: 1; }
+  @media (hover: none) { .row-actions { opacity: 1; } }
+  .shimmer { background: linear-gradient(90deg, var(--muted) 25%, var(--accent) 50%, var(--muted) 75%); background-size: 200% 100%; animation: sh 1.4s infinite; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  .thumb { background: linear-gradient(135deg, #e9e7e1, #dcd9d1); }
+</style>
+<style>
+  .wf-bar { position: relative; z-index: 50; display: flex; align-items: center; gap: 24px; height: 56px;
+    padding: 0 16px; overflow-x: auto; white-space: nowrap; background: #fff; border-bottom: 1px solid #e5e5e5;
+    color: #737373; font: 14px/1 system-ui, -apple-system, sans-serif; }
+  @media (max-width: 1279px) { .wf-bar { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); } }
+  .wf-bar *, .wf-reason * { box-sizing: border-box; }
+  .wf-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .wf-set { display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding: 3px; border-radius: 10px; background: #f4f4f5; }
+  .wf-set a { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+    border-radius: 7px; color: #737373; text-decoration: none; }
+  .wf-set a:hover { color: #171717; }
+  .wf-switch { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; color: #737373; text-decoration: none; }
+  .wf-switch i { position: relative; width: 36px; height: 20px; border-radius: 10px; background: #e4e4e7; transition: background .15s; }
+  .wf-switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .2); transition: translate .15s; }
+  .wf-switch[aria-checked="true"] i { background: #171717; }
+  .wf-switch[aria-checked="true"] i::after { translate: 16px 0; }
+  .wf-set a[aria-current="page"], .wf-flags a[aria-pressed="true"] { background: #fff; color: #171717; font-weight: 500;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .04); }
+  .wf-bar svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .wf-flags a::before { content: ""; width: 12px; height: 12px; border: 1.5px solid #a3a3a3; border-radius: 3px; }
+  .wf-flags a[aria-pressed="true"]::before { border-color: #171717; background: #171717 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 10px no-repeat; }
+  body[data-gon="1"] [data-wf-gon], body[data-bolap="1"] [data-wf-lap] { display: none !important; }
+  [data-wf-param="v"] a { justify-content: center; min-width: 32px; padding: 0 10px; }
+  [data-wf-param="v"] a[data-recommended]::after { content: ""; position: absolute; top: 5px; right: 5px;
+    width: 5px; height: 5px; border-radius: 50%; background: #c04a30; }
+  .wf-menu { flex-shrink: 0; }
+  .wf-menu summary { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border-radius: 8px; cursor: pointer; list-style: none; }
+  .wf-menu summary::-webkit-details-marker { display: none; }
+  .wf-menu summary:hover, .wf-menu[open] summary { background: #f4f4f5; }
+  .wf-menu b { color: #171717; font-weight: 500; }
+  .wf-popover { position: fixed; z-index: 60; display: grid; gap: 4px; min-width: 168px; padding: 4px; background: #fff;
+    border: 1px solid #e5e5e5; border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .08); }
+  .wf-popover a { display: flex; align-items: center; height: 34px; padding: 0 10px; border-radius: 6px; color: #404040; text-decoration: none; }
+  .wf-popover a:hover, .wf-popover a[aria-current="page"] { background: #f4f4f5; color: #171717; }
+  .wf-popover a[aria-current="page"] { font-weight: 500; }
+  .wf-reason { border-bottom: 1px solid #e5e5e5; background: #fafafa; color: #404040; font: 13px/1.5 system-ui, -apple-system, sans-serif; }
+  .wf-reason summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 44px; padding: 8px 16px; cursor: pointer; list-style: none; }
+  .wf-reason summary::-webkit-details-marker { display: none; }
+  .wf-reason-name { min-width: 0; overflow: hidden; color: #171717; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-reason-tag { flex-shrink: 0; height: 20px; padding: 0 8px; border-radius: 10px; background: #f6e9e5; color: #9a3a25; font-size: 12px; font-weight: 500; line-height: 20px; }
+  .wf-reason-why { flex: 1; min-width: 0; overflow: hidden; color: #525252; text-overflow: ellipsis; white-space: nowrap; }
+  .wf-reason[open] .wf-reason-why { white-space: normal; }
+  .wf-reason-toggle { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 28px; margin-left: auto; padding: 0 8px; border-radius: 6px; color: #171717; font-weight: 500; }
+  .wf-reason summary:hover .wf-reason-toggle { background: #f0f0f0; }
+  .wf-reason-toggle svg { width: 16px; height: 16px; transition: rotate .15s; }
+  .wf-reason[open] .wf-reason-toggle svg { rotate: 180deg; }
+  .wf-reason-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 4px 16px 16px; }
+  .wf-reason-cols { display: grid; max-width: 1120px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px 32px; }
+  .wf-reason h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; color: #171717; font-size: 12px; font-weight: 600; }
+  .wf-reason h3 i { width: 6px; height: 6px; border-radius: 50%; background: #a3a3a3; }
+  .wf-reason h3 i[data-tone="uu"] { background: #16a34a; }
+  .wf-reason h3 i[data-tone="nhuoc"] { background: #d97706; }
+  .wf-reason ul { display: grid; gap: 2px; margin: 0; padding-left: 16px; }
+  .wf-reason li::marker { color: #a3a3a3; }
+  .wf-reason p { margin: 0; }
+  .wf-reason-tips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid #ebebeb; }
+  .wf-reason-tips h3 { margin: 0 4px 0 0; }
+  .wf-reason-tips button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid #e5e5e5;
+    border-radius: 8px; background: #fff; color: #262626; font: inherit; white-space: nowrap; cursor: pointer; }
+  .wf-reason-tips button:hover { border-color: #d4d4d4; background: #f5f5f5; }
+  .wf-reason-tips button svg { width: 14px; height: 14px; color: #737373; }
+  .wf-reason-tips button [data-icon="da-chep"], .wf-reason-tips button[data-copied] [data-icon="chep"] { display: none; }
+  .wf-reason-tips button[data-copied] [data-icon="da-chep"] { display: block; color: #16a34a; }
+  @media (max-width: 767px) {
+    .wf-reason-why { order: 1; flex-basis: 100%; }
+    .wf-reason-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .wf-reason-tips h3 { flex-basis: 100%; }
+  }
+  @layer base { [data-wf-block] { position: relative; } }
+  [data-wf-block]::before { content: attr(data-wf-block); position: absolute; top: 4px; left: 4px; z-index: 5;
+    display: grid; place-items: center; width: 18px; height: 18px; border-radius: 9px; background: #1f1f1f; color: #fff; font: 11px/1 system-ui; }
+  [data-wf-block][data-wf-block-out]::before { top: auto; bottom: 100%; }
+  body[data-frame] .wf-bar, body[data-frame] .wf-reason { display: none; }
+  body:not([data-v="ab"]) .wf-ab-only { display: none !important; }
+</style>
+</head>
+<body class="antialiased">
+<nav class="wf-bar" aria-label="Wireframe">
+  <div class="wf-group">
+    <span>Phương án</span>
+    <span class="wf-set" data-wf-param="v">
+      <a data-value="ab" title="A+B · Hộp phân loại (khuyên dùng)" data-recommended>A+B</a><a data-value="a" title="A · Danh sách đọc">A</a><a data-value="b" title="B · Ba cột: lọc, danh sách, reader">B</a><a data-value="c" title="C · Lưới card gọn">C</a>
+    </span>
+  </div>
+  <span class="wf-set wf-flags"><a data-wf-toggle="gon" data-on="1" data-off="0">Gọn chữ</a><a data-wf-toggle="bolap" data-on="1" data-off="0">Bỏ lặp</a></span>
+  <a class="wf-switch" data-wf-toggle="mau" data-on="mau" data-off="xam" role="switch">Màu <i></i></a>
+  <span class="wf-set" data-wf-param="kho">
+    <a data-value="desktop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Desktop</a>
+    <a data-value="mobile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></svg>Mobile</a>
+  </span>
+  <span class="wf-set wf-ab-only" data-wf-param="man" title="Khổ hẹp: màn đang xem">
+    <a data-value="ds">Danh sách</a><a data-value="xl">Xử lý bài</a>
+  </span>
+  <details class="wf-menu wf-ab-only">
+    <summary><span>Gợi ý:</span><b data-wf-current="goiy"></b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div class="wf-popover" data-wf-param="goiy"><a data-value="co">Có gợi ý</a><a data-value="dang-tim">Đang tìm</a><a data-value="khong">Không khớp</a></div>
+  </details>
+  <details class="wf-menu">
+    <summary><span>Trạng thái:</span><b data-wf-current="tt"></b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <div class="wf-popover" data-wf-param="tt"><a data-value="du-lieu">Có dữ liệu</a><a data-value="dang-tai">Đang tải</a><a data-value="rong">Rỗng</a><a data-value="loi">Lỗi</a></div>
+  </details>
+</nav>
+<details class="wf-reason" data-wf-reason>
+  <summary>
+    <span class="wf-reason-name" id="wf-name"></span>
+    <span class="wf-reason-tag" id="wf-tag">Khuyên dùng</span>
+    <span class="wf-reason-why" id="wf-why"></span>
+    <span class="wf-reason-toggle"><span>Ưu, nhược</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+  </summary>
+  <div class="wf-reason-body">
+    <div class="wf-reason-cols" id="wf-cols"></div>
+    <div class="wf-reason-tips" id="wf-tips"></div>
+  </div>
+</details>
+<main id="wf-design"></main>
+
+<script>
+/* ---------- Dữ liệu: 4 bài thật từ /api/news, còn lại là dữ liệu giả cho đủ trạng thái ---------- */
+const ITEMS = [
+  { id: "n1", triage: "cho", platform: "article", origin: "share", status: "processing", review: "published", read: "unread", saved: false,
+    title: "https://github.com/anthropics/claude-cookbooks/tree/main/patterns/agents", domain: "github.com", author: null,
+    tldr: null, tags: [], time: "vừa xong", thumb: false },
+  { id: "n2", triage: "cho", platform: "youtube", origin: "manual", status: "ready", review: "published", read: "unread", saved: true,
+    title: "Next.js 16: Turbopack mặc định, Cache Components và những thay đổi phá vỡ tương thích cần biết trước khi nâng cấp dự án production",
+    domain: "youtube.com", author: "Vercel", tldr: "Next.js 16 bật Turbopack cho cả dev lẫn build, thay cơ chế cache ngầm bằng Cache Components khai báo rõ ràng, và bỏ một số API cũ; nên nâng cấp từng route và chạy codemod trước.",
+    tags: ["nextjs", "frontend", "turbopack"], time: "2 giờ trước", thumb: true, method: "Captions" },
+  { id: "n3", triage: "desau", platform: "tiktok", origin: "manual", status: "ready", review: "published", read: "unread", saved: false,
+    title: "AI viết code ngày càng giỏi, Dev còn giá trị gì?", domain: "tiktok.com", author: "code.and.growth",
+    tldr: "AI đang viết code tốt hơn, nhưng giá trị thực sự của lập trình viên nằm ở khả năng hiểu nghiệp vụ, tư duy kiến trúc và giải quyết vấn đề; AI sẽ thay đổi vai trò chứ không thay thế hoàn toàn.",
+    tags: ["ai", "dev", "programming"], time: "3 giờ trước", thumb: true, method: "Description" },
+  { id: "n4", triage: "nap", platform: "tiktok", origin: "manual", status: "ready", review: "published", read: "read", saved: false,
+    target: "AI › Agent mã nguồn mở", title: "OpenMausBot (Grockbot) mã nguồn mở tăng sao nhanh, gây tranh cãi giữa hai phe", domain: "tiktok.com", author: "beeknoeeai",
+    tldr: "Bot AI mã nguồn mở Grockbot tăng từ 9.000 lên gần 20.000 sao trong 9 ngày, chạy được trên máy cá nhân hoặc máy ảo cloud, thu hút hàng ngàn fork và tranh luận về chi phí dịch vụ.",
+    tags: ["ai", "open-source", "bot"], time: "4 giờ trước", thumb: true, method: "Whisper" },
+  { id: "n5", triage: "nap", platform: "tiktok", origin: "manual", status: "ready", review: "published", read: "read", saved: false,
+    target: "Database › Scaling ghi", title: "Grab - Cập nhật hàng triệu vị trí: Tại sao không cần lưu mọi bản ghi?", domain: "tiktok.com", author: "lap_trinh_vn",
+    tldr: "Với hàng triệu cập nhật vị trí mỗi phút, chèn một dòng mới cho mỗi lần sẽ làm DB bão hòa. Chỉ ghi đè vị trí hiện tại và lưu mẫu lịch sử đủ cho tính phí.",
+    tags: ["database", "sql", "scaling"], time: "5 giờ trước", thumb: true, method: "Whisper" },
+  { id: "n6", triage: "cho", platform: "article", origin: "cron", status: "ready", review: "draft", read: "unread", saved: false,
+    title: "Building effective agents: khi nào nên dùng workflow thay vì agent tự trị", domain: "anthropic.com", author: "Anthropic",
+    tldr: "Bắt đầu bằng prompt đơn giản và workflow có cấu trúc; chỉ thêm agent tự trị khi bài toán thật sự cần quyết định động, vì chi phí và độ khó debug tăng nhanh.",
+    tags: ["ai", "agents"], time: "hôm qua", thumb: false, method: "Article" },
+  { id: "n7", triage: "boqua", platform: "tiktok", origin: "manual", status: "partial", review: "published", read: "read", saved: false,
+    title: "Trạch Nhật Phi Thăng full Tập 11 Thuyết Minh Mới Nhất #trachnhatphithang", domain: "tiktok.com", author: "huamoc_1",
+    tldr: null, tags: [], time: "hôm qua", thumb: true, method: "Metadata only", note: "Chỉ lấy được tiêu đề, không có nội dung để tóm tắt" },
+  { id: "n8", triage: "cho", platform: "article", origin: "share", status: "failed", review: "published", read: "unread", saved: false,
+    title: "https://medium.com/@devteam/postgres-indexing-deep-dive-9f2c", domain: "medium.com", author: null,
+    tldr: null, tags: [], time: "2 ngày trước", thumb: false, note: "Trang yêu cầu đăng nhập, không tải được nội dung" },
+];
+const VIEWS = [
+  { key: "unread", label: "Chưa đọc", count: 4 }, { key: "saved", label: "Đã lưu", count: 1 },
+  { key: "all", label: "Tất cả", count: 8 }, { key: "draft", label: "Chờ duyệt", count: 1 }, { key: "queue", label: "Hàng đợi", count: 2 },
+];
+const TAGS = [["ai", 3], ["dev", 1], ["database", 1], ["nextjs", 1], ["open-source", 1], ["agents", 1], ["scaling", 1]];
+const PLATFORM_ICON = { youtube: "youtube", tiktok: "music-2", article: "file-text", rss: "rss" };
+
+/* ---------- Mảnh dùng chung ---------- */
+const ic = (name, cls = "size-4") => `<i data-lucide="${name}" class="${cls}"></i>`;
+const btnPrimary = (label, icon) => `<button type="button" class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90">${icon ? ic(icon) : ""}<span>${label}</span></button>`;
+const btnIcon = (icon, label) => `<button type="button" aria-label="${label}" title="${label}" class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground">${ic(icon)}</button>`;
+const search = (cls = "") => `<label class="relative block ${cls}"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">${ic("search")}</span><input type="search" placeholder="Tìm tiêu đề, tag, domain" class="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-3 focus:ring-ed-soft" /></label>`;
+
+function statusBadge(item) {
+  if (item.status === "processing") return `<span class="inline-flex items-center gap-1 rounded-md bg-st-learn-bg px-1.5 py-0.5 text-xs font-medium text-st-learn">${ic("loader-circle", "size-3 animate-spin")}Đang tóm tắt</span>`;
+  if (item.status === "failed") return `<span class="inline-flex items-center gap-1 rounded-md bg-ed-soft px-1.5 py-0.5 text-xs font-medium text-destructive">${ic("circle-alert", "size-3")}Lỗi</span>`;
+  if (item.status === "partial") return `<span class="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">Chỉ có tiêu đề</span>`;
+  if (item.review === "draft") return `<span class="inline-flex items-center rounded-md bg-st-target-bg px-1.5 py-0.5 text-xs font-medium text-st-target">Chờ duyệt</span>`;
+  return "";
+}
+const unreadDot = (item) => item.read === "unread" && item.status !== "processing" && item.status !== "failed"
+  ? `<span class="size-1.5 shrink-0 rounded-full bg-ed" aria-label="Chưa đọc"></span>` : "";
+const isPending = (item) => item.status === "processing" || item.status === "failed";
+function displayTitle(item) {
+  if (!isPending(item)) return item.title;
+  return item.title.replace(/^https?:\/\//, "");
+}
+const metaLine = (item, extra = "") => `
+  <div class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    ${unreadDot(item)}
+    <span class="shrink-0">${ic(PLATFORM_ICON[item.platform], "size-3.5")}</span>
+    <span class="truncate">${item.domain}${item.author ? `<span data-wf-gon> · ${item.author}</span>` : ""}</span>
+    <span class="shrink-0">· ${item.time}</span>
+    ${extra}
+  </div>`;
+const tagText = (item) => item.tags.length ? `<div class="flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground" data-wf-gon>${item.tags.map((t) => `<span>#${t}</span>`).join("")}</div>` : "";
+
+function rowActions(item) {
+  if (item.status === "failed") return `<div class="row-actions flex shrink-0 items-center gap-1"><button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent">${ic("rotate-ccw", "size-3.5")}Thử lại</button></div>`;
+  if (item.review === "draft") return `<div class="row-actions flex shrink-0 items-center gap-1"><button type="button" class="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-xs font-medium text-primary-foreground">Duyệt</button><button type="button" class="inline-flex h-8 items-center rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent">Bỏ</button></div>`;
+  if (item.status === "processing") return "";
+  const small = (icon, label, on) => `<button type="button" aria-label="${label}" title="${label}" class="inline-flex size-8 items-center justify-center rounded-lg ${on ? "text-foreground" : "text-muted-foreground"} hover:bg-accent hover:text-foreground">${ic(icon, "size-4")}</button>`;
+  return `<div class="row-actions flex shrink-0 items-center gap-0.5">${small(item.saved ? "bookmark-check" : "bookmark", item.saved ? "Bỏ lưu" : "Lưu", item.saved)}${small(item.read === "read" ? "circle-dot" : "check", item.read === "read" ? "Đánh dấu chưa đọc" : "Đánh dấu đã đọc")}${small("external-link", "Mở nguồn gốc")}</div>`;
+}
+
+/* ---------- Trạng thái: đang tải, rỗng, lỗi ---------- */
+const skeletonRows = (n, withThumb = true) => Array.from({ length: n }, () => `
+  <div class="flex gap-4 border-b border-border py-5">
+    <div class="min-w-0 flex-1 space-y-2.5"><div class="shimmer h-3 w-40 rounded"></div><div class="shimmer h-5 w-4/5 rounded"></div><div class="shimmer h-3.5 w-full rounded"></div><div class="shimmer h-3.5 w-2/3 rounded"></div></div>
+    ${withThumb ? `<div class="shimmer hidden h-[72px] w-[112px] shrink-0 rounded-lg sm:block"></div>` : ""}
+  </div>`).join("");
+const emptyState = () => `
+  <div class="flex flex-col items-center px-6 py-16 text-center">
+    <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">${ic("inbox", "size-5")}</div>
+    <h2 class="text-base font-semibold">Đã đọc hết</h2>
+    <p class="mt-1 max-w-sm text-sm text-muted-foreground">Không còn bài nào chưa đọc. Dán link mới hoặc share từ điện thoại để thêm vào đây.</p>
+    <div class="mt-5">${btnPrimary("Thêm link", "plus")}</div>
+  </div>`;
+const errorState = () => `
+  <div class="my-6 flex items-start gap-3 rounded-lg border border-border bg-card p-4" role="alert">
+    <span class="mt-0.5 text-destructive">${ic("circle-alert")}</span>
+    <div class="min-w-0 flex-1"><p class="text-sm font-medium">Không tải được danh sách tin</p><p class="mt-0.5 text-sm text-muted-foreground">Kết nối tới máy chủ bị gián đoạn. Dữ liệu đã lưu vẫn còn.</p></div>
+    <button type="button" class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent">${ic("rotate-ccw", "size-3.5")}Thử lại</button>
+  </div>`;
+function bodyFor(state, renderData, skeleton) {
+  if (state === "dang-tai") return skeleton;
+  if (state === "rong") return emptyState();
+  if (state === "loi") return errorState();
+  return renderData();
+}
+
+/* ---------- Header chung cho A và C ---------- */
+function topHeader({ wide = false } = {}) {
+  return `
+  <header data-wf-block="1" class="border-b border-border bg-background">
+    <div class="mx-auto flex ${wide ? "max-w-6xl" : "max-w-3xl"} items-center gap-3 px-4 py-3 sm:px-6">
+      <a href="#" class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Về Crisne">${ic("arrow-left")}</a>
+      <h1 class="font-display text-2xl font-semibold leading-none">News</h1>
+      <span class="hidden text-sm text-muted-foreground sm:inline" data-wf-lap>4 chưa đọc</span>
+      <div class="ml-auto flex items-center gap-2">
+        ${search("hidden w-64 md:block")}
+        <span class="md:hidden">${btnIcon("search", "Tìm")}</span>
+        ${btnIcon("rss", "Nguồn RSS")}
+        ${btnPrimary(`<span class="hidden sm:inline">Thêm link</span>`, "plus")}
+      </div>
+    </div>
+  </header>`;
+}
+function viewTabs(active = "unread") {
+  return VIEWS.map((v) => {
+    const on = v.key === active;
+    return `<a href="#" ${on ? 'aria-current="page"' : ""} class="relative inline-flex h-10 shrink-0 items-center gap-1.5 px-1 text-sm ${on ? "font-medium text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground" : "text-muted-foreground hover:text-foreground"}">${v.label}<span class="text-xs ${on ? "text-ed" : "text-muted-foreground"}">${v.count}</span></a>`;
+  }).join("");
+}
+function filterButton() {
+  return `<button type="button" class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-accent">${ic("sliders-horizontal", "size-3.5")}Lọc<span class="rounded bg-muted px-1 text-muted-foreground">#ai</span></button>
+  <button type="button" class="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground">${ic("arrow-down-up", "size-3.5")}Mới nhất</button>`;
+}
+function processingStrip() {
+  return `<div class="flex items-center gap-2 rounded-lg bg-st-learn-bg px-3 py-2 text-xs text-st-learn">${ic("loader-circle", "size-3.5 animate-spin")}<span>1 link đang được tóm tắt</span><span class="text-muted-foreground">·</span><a href="#" class="font-medium underline-offset-2 hover:underline">Xem hàng đợi</a></div>`;
+}
+
+/* ---------- A · Danh sách đọc ---------- */
+function rowA(item) {
+  const pending = isPending(item);
+  return `
+  <article class="group flex gap-4 border-b border-border py-5 ${item.read === "read" && !pending ? "opacity-75" : ""}">
+    <div class="min-w-0 flex-1">
+      ${metaLine(item, statusBadge(item))}
+      <h2 class="mt-1.5 ${pending ? "truncate font-mono text-sm text-muted-foreground" : "font-display text-lg font-semibold leading-snug line-clamp-2"}">
+        <a href="#" class="${pending ? "block truncate" : ""} hover:underline decoration-1 underline-offset-4">${displayTitle(item)}</a>
+      </h2>
+      ${item.tldr ? `<p class="mt-1.5 text-sm leading-relaxed text-muted-foreground line-clamp-2">${item.tldr}</p>` : ""}
+      ${item.note ? `<p class="mt-1.5 text-sm text-muted-foreground">${item.note}</p>` : ""}
+      ${item.tags.length || rowActions(item) ? `<div class="mt-2.5 flex min-h-8 items-center justify-between gap-3">${tagText(item)}${rowActions(item)}</div>` : ""}
+    </div>
+    ${item.thumb && !pending ? `<div class="thumb hidden h-[72px] w-[112px] shrink-0 rounded-lg sm:block" data-wf-gon></div>` : ""}
+  </article>`;
+}
+function renderA(state) {
+  const visible = ITEMS.filter((i) => i.review !== "draft");
+  return `
+  <div class="min-h-dvh bg-background">
+    ${topHeader()}
+    <div class="mx-auto max-w-3xl px-4 sm:px-6">
+      <div data-wf-block="2" class="sticky top-0 z-10 bg-background">
+        <div class="flex items-center gap-3 border-b border-border">
+          <nav class="no-scrollbar flex min-w-0 flex-1 gap-5 overflow-x-auto" aria-label="Chế độ xem">${viewTabs("all")}</nav>
+          <div class="hidden items-center gap-1 sm:flex">${filterButton()}</div>
+        </div>
+        <div class="flex items-center gap-1 py-2 sm:hidden">${filterButton()}</div>
+      </div>
+      <div class="pt-4" data-wf-gon>${state === "du-lieu" ? processingStrip() : ""}</div>
+      <section data-wf-block="3" aria-label="Danh sách tin" class="pb-16">
+        ${bodyFor(state, () => visible.map(rowA).join(""), skeletonRows(5))}
+      </section>
+    </div>
+  </div>`;
+}
+
+/* ---------- B · Ba cột ---------- */
+function sideNav() {
+  const item = (icon, label, count, on) => `<a href="#" ${on ? 'aria-current="page"' : ""} class="flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm ${on ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}">${ic(icon)}<span class="flex-1 truncate">${label}</span><span class="text-xs ${on ? "text-ed" : ""}">${count}</span></a>`;
+  return `
+  <aside data-wf-block="5" class="hidden w-56 shrink-0 flex-col gap-6 border-r border-border px-3 py-4 lg:flex">
+    <div class="flex items-center gap-2 px-1">
+      <a href="#" class="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent" aria-label="Về Crisne">${ic("arrow-left")}</a>
+      <span class="font-display text-xl font-semibold">News</span>
+    </div>
+    <nav class="grid gap-0.5" aria-label="Chế độ xem">
+      ${item("inbox", "Chưa đọc", 4, true)}${item("bookmark", "Đã lưu", 1)}${item("layers", "Tất cả", 8)}${item("clipboard-check", "Chờ duyệt", 1)}${item("loader", "Hàng đợi", 2)}
+    </nav>
+    <div data-wf-gon>
+      <p class="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">Tag</p>
+      <div class="grid gap-0.5">${TAGS.slice(0, 6).map(([t, c], i) => `<a href="#" class="flex h-8 items-center justify-between rounded-lg px-2.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><span>#${t}</span><span class="text-xs">${c}</span></a>`).join("")}</div>
+    </div>
+    <div class="mt-auto">${btnIcon("rss", "Nguồn RSS")}</div>
+  </aside>`;
+}
+function rowB(item, selected) {
+  const pending = isPending(item);
+  return `
+  <a href="#" ${selected ? 'aria-current="true"' : ""} class="group block border-b border-border px-4 py-3.5 ${selected ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]" : "hover:bg-muted"}">
+    ${metaLine(item, statusBadge(item))}
+    <p class="mt-1 ${pending ? "truncate font-mono text-xs text-muted-foreground" : "text-sm font-semibold leading-snug line-clamp-2"}">${displayTitle(item)}</p>
+    ${item.tldr ? `<p class="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-1" data-wf-gon>${item.tldr}</p>` : ""}
+  </a>`;
+}
+function readerB(item) {
+  return `
+  <article data-wf-block="4" class="hidden min-w-0 flex-1 overflow-y-auto bg-card xl:block">
+    <div class="mx-auto max-w-2xl px-8 py-8">
+      <div data-wf-lap>${metaLine(item, `<span class="rounded-md bg-muted px-1.5 py-0.5 text-xs">via ${item.method}</span>`)}</div>
+      <h1 class="mt-3 font-display text-3xl font-semibold leading-tight">${item.title}</h1>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        ${btnPrimary("Mở nguồn gốc", "external-link")}
+        <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium hover:bg-accent">${ic("bookmark-check")}Đã lưu</button>
+        <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium hover:bg-accent">${ic("check")}Đánh dấu đã đọc</button>
+      </div>
+      <section class="mt-8 border-l-2 border-ed pl-4">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">TL;DR</p>
+        <p class="mt-1.5 text-base leading-relaxed">${item.tldr}</p>
+      </section>
+      <section class="mt-8">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ý chính</p>
+        <ul class="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed">
+          <li>Turbopack thành bundler mặc định cho cả <code class="font-mono text-xs">next dev</code> và <code class="font-mono text-xs">next build</code>.</li>
+          <li>Cache Components thay thế cơ chế cache ngầm; dữ liệu chỉ được cache khi khai báo <code class="font-mono text-xs">"use cache"</code>.</li>
+          <li>Middleware đổi tên thành proxy, một số API cũ bị gỡ hẳn.</li>
+          <li>Nên nâng cấp từng route, chạy codemod chính thức trước khi đổi cấu hình build.</li>
+        </ul>
+      </section>
+      <section class="mt-8" data-wf-gon>
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tag</p>
+        <div class="mt-2 flex flex-wrap gap-1.5">${item.tags.map((t) => `<span class="rounded-md bg-muted px-2 py-0.5 text-xs">#${t}</span>`).join("")}</div>
+      </section>
+      <section class="mt-8" data-wf-gon>
+        <label class="text-xs font-medium uppercase tracking-wide text-muted-foreground" for="note-b">Ghi chú cá nhân</label>
+        <textarea id="note-b" rows="3" class="mt-2 w-full rounded-lg border border-input bg-background p-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ed-soft" placeholder="Áp dụng cho dự án nào, cần thử gì"></textarea>
+      </section>
+    </div>
+  </article>`;
+}
+function renderB(state) {
+  const visible = ITEMS.filter((i) => i.review !== "draft");
+  const selected = ITEMS[1];
+  return `
+  <div class="flex h-dvh min-h-0 bg-background">
+    ${sideNav()}
+    <section data-wf-block="3" class="flex w-full min-w-0 flex-col border-r border-border xl:w-[400px] xl:shrink-0">
+      <div data-wf-block="1" class="flex items-center gap-2 border-b border-border px-4 py-3">
+        <a href="#" class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent lg:hidden" aria-label="Về Crisne">${ic("arrow-left")}</a>
+        <span class="font-display text-xl font-semibold lg:hidden">News</span>
+        ${search("min-w-0 flex-1 hidden sm:block")}
+        <span class="ml-auto sm:hidden">${btnIcon("search", "Tìm")}</span>
+        ${btnPrimary(`<span class="hidden sm:inline">Thêm</span>`, "plus")}
+      </div>
+      <div data-wf-block="2" class="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+        <span class="text-xs text-muted-foreground lg:hidden">Chưa đọc · 4</span>
+        <span class="hidden text-xs font-medium text-muted-foreground lg:inline" data-wf-lap>Chưa đọc · 4</span>
+        <div class="flex items-center gap-1">${filterButton()}</div>
+      </div>
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        ${bodyFor(state, () => visible.map((i) => rowB(i, i === selected)).join(""), `<div class="px-4">${skeletonRows(6, false)}</div>`)}
+      </div>
+    </section>
+    ${state === "du-lieu" ? readerB(selected) : `<div class="hidden flex-1 items-center justify-center bg-card text-sm text-muted-foreground xl:flex">Chọn một bài để đọc tóm tắt</div>`}
+  </div>`;
+}
+
+/* ---------- C · Lưới card gọn ---------- */
+function cardC(item) {
+  const pending = isPending(item);
+  return `
+  <article class="group flex flex-col rounded-xl border border-border bg-card p-4 ${item.read === "read" && !pending ? "opacity-75" : ""}">
+    ${item.thumb && !pending ? `<div class="thumb mb-3 aspect-[16/7] w-full rounded-lg" data-wf-gon></div>` : ""}
+    ${metaLine(item, statusBadge(item))}
+    <h2 class="mt-1.5 ${pending ? "truncate font-mono text-sm text-muted-foreground" : "text-[15px] font-semibold leading-snug line-clamp-2"}"><a href="#" class="${pending ? "block truncate" : ""} hover:underline underline-offset-4">${displayTitle(item)}</a></h2>
+    ${item.tldr ? `<p class="mt-1.5 text-sm leading-relaxed text-muted-foreground line-clamp-3">${item.tldr}</p>` : ""}
+    ${item.note ? `<p class="mt-1.5 text-sm text-muted-foreground">${item.note}</p>` : ""}
+    <div class="mt-auto flex min-h-8 items-center justify-between gap-2 pt-3">${tagText(item)}${rowActions(item)}</div>
+  </article>`;
+}
+function renderC(state) {
+  const visible = ITEMS.filter((i) => i.review !== "draft");
+  const skeleton = `<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">${Array.from({ length: 6 }, () => `<div class="space-y-2.5 rounded-xl border border-border bg-card p-4"><div class="shimmer aspect-[16/7] rounded-lg"></div><div class="shimmer h-3 w-32 rounded"></div><div class="shimmer h-4 w-4/5 rounded"></div><div class="shimmer h-3.5 w-full rounded"></div></div>`).join("")}</div>`;
+  return `
+  <div class="min-h-dvh bg-background">
+    ${topHeader({ wide: true })}
+    <div class="mx-auto max-w-6xl px-4 sm:px-6">
+      <div data-wf-block="2" class="sticky top-0 z-10 bg-background">
+        <div class="flex items-center gap-3 border-b border-border">
+          <nav class="no-scrollbar flex min-w-0 flex-1 gap-5 overflow-x-auto" aria-label="Chế độ xem">${viewTabs("all")}</nav>
+          <div class="hidden items-center gap-1 sm:flex">${filterButton()}</div>
+        </div>
+        <div class="flex items-center gap-1 py-2 sm:hidden">${filterButton()}</div>
+      </div>
+      <section data-wf-block="3" aria-label="Danh sách tin" class="py-5">
+        ${bodyFor(state, () => `<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">${visible.map(cardC).join("")}</div>`, skeleton)}
+      </section>
+    </div>
+  </div>`;
+}
+
+
+/* ---------- A+B · Hộp phân loại: danh sách A bên trái, panel xử lý bên phải ---------- */
+const TRIAGE_TABS = [
+  { key: "cho", label: "Chờ xử lý" }, { key: "desau", label: "Để sau" },
+  { key: "nap", label: "Đã nạp" }, { key: "boqua", label: "Bỏ qua" }, { key: "all", label: "Tất cả" },
+];
+const triageCount = (key) => key === "all" ? ITEMS.length : ITEMS.filter((i) => i.triage === key).length;
+function triageTabs(active) {
+  return TRIAGE_TABS.map((t) => {
+    const on = t.key === active;
+    return `<a href="${linkTo({ tab: t.key })}" ${on ? 'aria-current="page"' : ""} class="relative inline-flex h-10 shrink-0 items-center gap-1.5 px-1 text-sm ${on ? "font-medium text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground" : "text-muted-foreground hover:text-foreground"}">${t.label}<span class="text-xs ${on ? "text-ed" : "text-muted-foreground"}">${triageCount(t.key)}</span></a>`;
+  }).join("");
+}
+function triageBadge(item) {
+  if (item.status === "processing" || item.status === "failed" || item.status === "partial") return statusBadge(item);
+  if (item.triage === "nap") return `<span class="inline-flex min-w-0 items-center gap-1 rounded-md bg-st-known-bg px-1.5 py-0.5 text-xs font-medium text-st-known">${ic("book-open-check", "size-3 shrink-0")}<span class="truncate">${item.target}</span></span>`;
+  if (item.triage === "desau") return `<span class="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">${ic("clock", "size-3")}Để sau</span>`;
+  if (item.triage === "boqua") return `<span class="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">Đã bỏ qua</span>`;
+  if (item.origin === "cron") return `<span class="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">${ic("rss", "size-3")}RSS</span>`;
+  return "";
+}
+function rowQuick(item) {
+  if (item.status === "failed") return `<div class="row-actions flex shrink-0 items-center"><button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent">${ic("rotate-ccw", "size-3.5")}Thử lại</button></div>`;
+  if (item.status === "processing" || item.triage !== "cho") return "";
+  const small = (icon, label) => `<button type="button" aria-label="${label}" title="${label}" class="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground">${ic(icon, "size-4")}</button>`;
+  return `<div class="row-actions flex shrink-0 items-center gap-0.5">${small("clock", "Để sau")}${small("x", "Bỏ qua")}</div>`;
+}
+function rowAB(item, selected) {
+  const pending = isPending(item);
+  const quick = rowQuick(item);
+  return `
+  <article class="group relative border-b border-border px-4 py-4 sm:px-5 ${selected ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]" : "hover:bg-muted/60"} ${item.triage !== "cho" && item.triage !== "desau" ? "opacity-75" : ""}">
+    ${metaLine(item)}
+    <h2 class="mt-1.5 ${pending ? "truncate font-mono text-sm text-muted-foreground" : "font-display text-[17px] font-semibold leading-snug line-clamp-2"}">
+      <a href="${linkTo({ man: "xl" })}" class="${pending ? "block truncate" : ""} hover:underline decoration-1 underline-offset-4">${displayTitle(item)}</a>
+    </h2>
+    ${item.tldr ? `<p class="mt-1 text-sm leading-relaxed text-muted-foreground line-clamp-2" data-wf-gon>${item.tldr}</p>` : ""}
+    ${item.note ? `<p class="mt-1 text-sm text-muted-foreground">${item.note}</p>` : ""}
+    ${triageBadge(item) || quick ? `<div class="mt-2 flex min-h-8 items-center justify-between gap-3"><div class="flex min-w-0 items-center">${triageBadge(item)}</div>${quick}</div>` : ""}
+  </article>`;
+}
+
+const SUGGESTIONS = [
+  { path: ["Next.js", "Caching & Revalidation"], kind: "lesson", flag: "Có thể lỗi thời", checked: true,
+    why: "Lesson đang mô tả cache ngầm của bản 15. Bài này nói bản 16 thay bằng Cache Components khai báo <code class='font-mono text-xs'>\"use cache\"</code>.",
+    action: "Cập nhật lesson" },
+  { path: ["Next.js", "Middleware"], kind: "lesson", checked: true,
+    why: "Bài nói middleware đổi tên thành proxy, lesson chưa nhắc.", action: "Thêm ghi chú" },
+  { path: ["Next.js", "Nâng cấp lên Next.js 16"], kind: "new", checked: false,
+    why: "Chưa có lesson về nâng cấp. Đủ ý chính để tạo bản nháp: Turbopack, Cache Components, codemod.", action: "Tạo lesson mới" },
+];
+function suggestionRow(s) {
+  const id = `sg-${s.path.join("-").replace(/[^a-z0-9]+/gi, "")}`;
+  return `
+  <label for="${id}" class="flex cursor-pointer gap-3 rounded-lg border ${s.checked ? "border-foreground/30 bg-card" : "border-border bg-card/60"} p-3 hover:border-foreground/30">
+    <input id="${id}" type="checkbox" ${s.checked ? "checked" : ""} class="mt-0.5 size-4 shrink-0 accent-[var(--foreground)]" />
+    <span class="min-w-0 flex-1">
+      <span class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+        <span class="text-muted-foreground">${s.path[0]}</span><span class="text-muted-foreground">›</span>
+        <span class="font-medium">${s.path[1]}</span>
+        ${s.kind === "new" ? `<span class="rounded-md bg-st-target-bg px-1.5 py-0.5 text-xs font-medium text-st-target">Lesson mới</span>` : ""}
+        ${s.flag ? `<span class="rounded-md bg-st-learn-bg px-1.5 py-0.5 text-xs font-medium text-st-learn">${s.flag}</span>` : ""}
+      </span>
+      <span class="mt-1 block text-sm leading-relaxed text-muted-foreground" data-wf-gon>${s.why}</span>
+      <span class="mt-1.5 block text-xs font-medium text-foreground">${s.action}</span>
+    </span>
+  </label>`;
+}
+function ingestBox(goiy) {
+  let body;
+  if (goiy === "dang-tim") body = `
+    <div class="flex items-center gap-2 text-sm text-muted-foreground">${ic("loader-circle", "size-4 animate-spin")}Đang tìm lesson liên quan trong roadmap</div>
+    <div class="mt-3 space-y-2">${Array.from({ length: 2 }, () => `<div class="space-y-2 rounded-lg border border-border bg-card p-3"><div class="shimmer h-3.5 w-48 rounded"></div><div class="shimmer h-3 w-full rounded"></div></div>`).join("")}</div>`;
+  else if (goiy === "khong") body = `
+    <p class="text-sm text-muted-foreground">Chưa thấy topic hay lesson nào khớp với bài này.</p>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button type="button" class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent">${ic("plus", "size-3.5")}Tạo lesson mới</button>
+    </div>`;
+  else body = `<div class="grid gap-2">${SUGGESTIONS.map(suggestionRow).join("")}</div>`;
+  return `
+  <section data-wf-block="5" class="mt-6 rounded-xl border border-border bg-background p-4">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-sm font-semibold">Nạp vào kho</h2>
+      <span class="text-xs text-muted-foreground" data-wf-lap>Abot gợi ý</span>
+    </div>
+    <div class="mt-3">${body}</div>
+    <label class="relative mt-3 block"><span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground">${ic("search")}</span><input type="search" placeholder="Chọn topic hoặc lesson khác" class="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-3 focus:ring-ed-soft" /></label>
+  </section>`;
+}
+function decisionBar(goiy) {
+  const n = goiy === "co" ? SUGGESTIONS.filter((s) => s.checked).length : 0;
+  return `
+  <div data-wf-block="6" class="flex shrink-0 items-center gap-2 border-t border-border bg-card px-4 py-3 sm:px-8">
+    <button type="button" class="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground">${ic("x")}Bỏ qua</button>
+    <button type="button" class="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-lg border border-border px-3 text-sm font-medium hover:bg-accent">${ic("clock")}Để sau</button>
+    <span class="ml-auto hidden text-xs text-muted-foreground lg:inline" data-wf-lap>Xong tự sang bài kế · <kbd class="font-mono">J</kbd>/<kbd class="font-mono">K</kbd></span>
+    <button type="button" ${n ? "" : "disabled"} class="ml-auto inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40 lg:ml-0">${ic("book-plus")}${n ? `<span class="sm:hidden">Nạp · ${n}</span><span class="hidden sm:inline">Nạp vào ${n} lesson</span>` : "Nạp"}</button>
+  </div>`;
+}
+function panelAB(item, goiy, man) {
+  return `
+  <article data-wf-block="4" class="${man === "xl" ? "flex" : "hidden xl:flex"} min-h-0 min-w-0 flex-1 flex-col bg-card">
+    <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="mx-auto max-w-2xl px-4 py-5 sm:px-8 sm:py-7">
+        <a href="${linkTo({ man: "ds" })}" class="-ml-2 mb-3 inline-flex h-8 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground hover:bg-accent xl:hidden">${ic("arrow-left")}Danh sách</a>
+        ${metaLine(item, `<span class="hidden rounded-md bg-muted px-1.5 py-0.5 text-xs sm:inline" data-wf-lap>via ${item.method}</span>`)}
+        <h1 class="mt-2 font-display text-2xl font-semibold leading-tight sm:text-[28px]">${item.title}</h1>
+        <div class="mt-3 flex items-center gap-1">
+          <a href="#" class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium hover:bg-accent">${ic("external-link")}Mở nguồn gốc</a>
+          <button type="button" aria-label="Bỏ lưu" title="Bỏ lưu" class="inline-flex size-8 items-center justify-center rounded-lg hover:bg-accent">${ic("bookmark-check")}</button>
+        </div>
+        <section class="mt-5 border-l-2 border-ed pl-4">
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">TL;DR</p>
+          <p class="mt-1.5 text-[15px] leading-relaxed">${item.tldr}</p>
+        </section>
+        ${ingestBox(goiy)}
+        <section class="mt-7">
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ý chính</p>
+          <ul class="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed">
+            <li>Turbopack thành bundler mặc định cho cả <code class="font-mono text-xs">next dev</code> và <code class="font-mono text-xs">next build</code>.</li>
+            <li>Cache Components thay thế cơ chế cache ngầm; dữ liệu chỉ được cache khi khai báo <code class="font-mono text-xs">"use cache"</code>.</li>
+            <li>Middleware đổi tên thành proxy, một số API cũ bị gỡ hẳn.</li>
+            <li>Nên nâng cấp từng route, chạy codemod chính thức trước khi đổi cấu hình build.</li>
+          </ul>
+        </section>
+        <section class="mt-7" data-wf-gon>
+          <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Tag</p>
+          <div class="mt-2 flex flex-wrap gap-1.5">${item.tags.map((t) => `<span class="rounded-md bg-muted px-2 py-0.5 text-xs">#${t}</span>`).join("")}<button type="button" class="rounded-md px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent">+ Tag</button></div>
+        </section>
+        <section class="mt-7 pb-4" data-wf-gon>
+          <label class="text-xs font-medium uppercase tracking-wide text-muted-foreground" for="note-ab">Ghi chú cá nhân</label>
+          <textarea id="note-ab" rows="2" class="mt-2 w-full rounded-lg border border-input bg-background p-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ed-soft" placeholder="Áp dụng cho dự án nào, cần thử gì"></textarea>
+        </section>
+      </div>
+    </div>
+    ${decisionBar(goiy)}
+  </article>`;
+}
+function renderAB(st) {
+  const tab = st.tab;
+  const visible = tab === "all" ? ITEMS : ITEMS.filter((i) => i.triage === tab);
+  const selected = ITEMS[1];
+  const man = st.man;
+  const empty = `
+  <div class="flex flex-col items-center px-6 py-16 text-center">
+    <div class="mb-4 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">${ic("inbox", "size-5")}</div>
+    <h2 class="text-base font-semibold">Hộp đã trống</h2>
+    <p class="mt-1 max-w-xs text-sm text-muted-foreground">Không còn bài nào chờ xử lý. Share link từ điện thoại hoặc dán link để thêm.</p>
+    <div class="mt-5">${btnPrimary("Thêm link", "plus")}</div>
+  </div>`;
+  const list = st.tt === "rong" ? empty : bodyFor(st.tt, () => visible.length ? visible.map((i) => rowAB(i, i === selected)).join("") : `<p class="px-5 py-10 text-center text-sm text-muted-foreground">Chưa có bài nào ở đây.</p>`, `<div class="px-5">${skeletonRows(5, false)}</div>`);
+  return `
+  <div class="flex h-dvh min-h-0 flex-col bg-background">
+    <header data-wf-block="1" class="${man === "xl" ? "hidden xl:block" : ""} shrink-0 border-b border-border bg-background">
+      <div class="flex items-center gap-3 px-4 py-3 sm:px-5">
+        <a href="#" class="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Về Crisne">${ic("arrow-left")}</a>
+        <h1 class="font-display text-2xl font-semibold leading-none">News</h1>
+        <div class="ml-auto flex items-center gap-2">
+          ${search("hidden w-64 md:block")}
+          <span class="md:hidden">${btnIcon("search", "Tìm")}</span>
+          ${btnIcon("rss", "Nguồn RSS")}
+          ${btnPrimary(`<span class="hidden sm:inline">Thêm link</span>`, "plus")}
+        </div>
+      </div>
+    </header>
+    <div class="flex min-h-0 flex-1">
+      <section aria-label="Danh sách tin" class="${man === "xl" ? "hidden xl:flex" : "flex"} w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0">
+        <div data-wf-block="2" class="shrink-0 border-b border-border px-4 sm:px-5">
+          <div class="flex items-center gap-3">
+            <nav class="no-scrollbar flex min-w-0 flex-1 gap-5 overflow-x-auto" aria-label="Phân loại">${triageTabs(tab)}</nav>
+            <button type="button" aria-label="Lọc" title="Lọc theo nguồn, tag" class="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground">${ic("sliders-horizontal")}</button>
+          </div>
+        </div>
+        <div data-wf-block="3" class="min-h-0 flex-1 overflow-y-auto">
+          ${st.tt === "du-lieu" && tab === "cho" ? `<div class="px-4 pt-3 sm:px-5" data-wf-gon>${processingStrip()}</div>` : ""}
+          ${list}
+        </div>
+      </section>
+      ${st.tt === "du-lieu" ? panelAB(selected, st.goiy, man) : `<div class="hidden flex-1 items-center justify-center bg-card text-sm text-muted-foreground xl:flex">Chọn một bài để xử lý</div>`}
+    </div>
+  </div>`;
+}
+
+/* ---------- Khung lý do ---------- */
+const REASONS = {
+  ab: { name: "A+B · Hộp phân loại", rec: true,
+    why: "News là hộp chờ nạp vào kho: danh sách bên trái, bên phải đọc TL;DR rồi chọn lesson để nạp, bấm xong tự sang bài kế.",
+    uu: ["Xử lý cả loạt bài không phải mở, đóng sheet", "Tab theo việc phân loại (Chờ xử lý, Để sau, Đã nạp, Bỏ qua); bài RSS cũng vào Chờ xử lý, không cần tab Chờ duyệt riêng", "Gợi ý topic/lesson kèm lý do, đánh dấu lesson có thể lỗi thời", "Dòng đã nạp ghi rõ nạp vào đâu"],
+    nhuoc: ["Cần từ 1280px mới thấy hai cột; hẹp hơn thì danh sách và màn xử lý tách hai trang", "Danh sách 520px, bỏ thumbnail", "Gợi ý lesson và nút Nạp là tính năng mới, chưa có backend"],
+    hop: "Gửi link vào rồi định kỳ ngồi phân loại một loạt, mục tiêu là cập nhật roadmap chứ không phải đọc tin.",
+    tips: ["Đưa Nạp vào kho xuống dưới Ý chính", "Chỉ cho chọn một lesson mỗi bài", "Bỏ tab Tất cả", "Hiện thumbnail nhỏ trong danh sách"] },
+  a: { name: "A · Danh sách đọc", rec: false,
+    why: "Bạn đến để lướt và quyết định đọc bài nào, nên tiêu đề và TL;DR đứng đầu mỗi dòng, ảnh lùi thành thumbnail nhỏ bên phải.",
+    uu: ["Thấy 5–6 bài một màn, đọc được TL;DR mà không cần mở", "Header một hàng, lọc gom vào một nút: từ 4 tầng điều khiển còn 2", "Nút hành động chỉ hiện khi rê, dòng đọc rồi mờ đi"],
+    nhuoc: ["Đọc tóm tắt đầy đủ vẫn mở sheet đè lên danh sách như bây giờ"],
+    hop: "Mỗi ngày vài chục bài, đọc chủ yếu trên máy tính, muốn liếc nhanh rồi đi.",
+    tips: ["Bỏ thumbnail hẳn", "Tiêu đề dùng font sans thay vì serif", "Đưa tag về lại thành chip lọc", "Ghép A với reader cột phải của B"] },
+  b: { name: "B · Ba cột: lọc, danh sách, reader", rec: false,
+    why: "Đọc TL;DR và ý chính ngay cột phải, không có lớp phủ, chuyển bài bằng phím lên xuống như một app đọc tin.",
+    uu: ["Đọc liên tục nhiều bài không đóng mở sheet", "Chế độ xem và tag thành sidebar, hàng trên danh sách chỉ còn tìm và Thêm"],
+    nhuoc: ["Cần từ 1280px mới đủ ba cột; dưới đó reader thành trang riêng", "Danh sách hẹp (400px), mỗi dòng chỉ còn 1 dòng TL;DR"],
+    hop: "Bạn hay ngồi đọc một lèo nhiều bài trên màn hình rộng.",
+    tips: ["Bỏ cột tag, chỉ giữ chế độ xem", "Danh sách rộng hơn, reader hẹp lại", "Thêm phím tắt j/k chuyển bài"] },
+  c: { name: "C · Lưới card gọn", rec: false,
+    why: "Giữ lưới card quen thuộc nhưng ảnh thấp lại, lọc gom vào một nút, nút hành động chỉ hiện khi rê.",
+    uu: ["Thay đổi ít nhất so với bản hiện tại", "Ảnh YouTube có thumbnail đẹp vẫn được thấy"],
+    nhuoc: ["Card cao không đều, TL;DR bị cắt 3 dòng, mắt phải đi ngang rồi dọc", "Ảnh TikTok tối và khung trống vẫn chiếm chỗ dù đã thấp hơn"],
+    hop: "Phần lớn link là video có thumbnail rõ ràng.",
+    tips: ["Bỏ ảnh hẳn", "Hai cột thay vì ba", "Card không viền, tách bằng khoảng trắng"] },
+};
+function renderReason(v) {
+  const r = REASONS[v];
+  document.getElementById("wf-name").textContent = r.name;
+  document.getElementById("wf-tag").style.display = r.rec ? "" : "none";
+  document.getElementById("wf-why").textContent = r.why;
+  document.getElementById("wf-cols").innerHTML = `
+    <section><h3><i data-tone="uu"></i>Ưu</h3><ul>${r.uu.map((x) => `<li>${x}</li>`).join("")}</ul></section>
+    <section><h3><i data-tone="nhuoc"></i>Nhược</h3><ul>${r.nhuoc.map((x) => `<li>${x}</li>`).join("")}</ul></section>
+    <section><h3><i></i>Hợp khi</h3><p>${r.hop}</p></section>`;
+  const copyIcon = `<svg data-icon="chep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><svg data-icon="da-chep" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>`;
+  document.getElementById("wf-tips").innerHTML = `<h3>Gợi ý góp ý</h3>` + r.tips.map((t) => `<button type="button" data-copy="${t}">${t}${copyIcon}</button>`).join("");
+}
+
+/* ---------- Thanh công cụ ---------- */
+new MutationObserver(() => { if (document.querySelector("i[data-lucide]")) lucide.createIcons(); }).observe(document.body, { childList: true, subtree: true });
+const params = new URLSearchParams(location.search);
+const state = { v: "ab", man: "ds", goiy: "co", tab: "cho", gon: "0", bolap: "0", mau: "xam", kho: "desktop", tt: "du-lieu", uu: "0" };
+for (const key of Object.keys(state)) state[key] = params.get(key) || state[key];
+Object.assign(document.body.dataset, state);
+document.documentElement.dataset.mau = state.mau;
+if (params.has("frame")) document.body.dataset.frame = "1";
+const linkTo = (changes) => `?${new URLSearchParams({ ...state, ...changes })}`;
+function updateLinks() {
+  for (const set of document.querySelectorAll("[data-wf-param]")) {
+    for (const link of set.querySelectorAll("a")) {
+      link.href = linkTo({ [set.dataset.wfParam]: link.dataset.value });
+      if (state[set.dataset.wfParam] !== link.dataset.value) continue;
+      link.setAttribute("aria-current", "page");
+      const currentLabel = document.querySelector(`[data-wf-current="${set.dataset.wfParam}"]`);
+      if (currentLabel) currentLabel.textContent = link.textContent.trim();
+    }
+  }
+  for (const toggle of document.querySelectorAll("[data-wf-toggle]")) {
+    const param = toggle.dataset.wfToggle;
+    const isOn = state[param] === toggle.dataset.on;
+    toggle.setAttribute(toggle.getAttribute("role") === "switch" ? "aria-checked" : "aria-pressed", String(isOn));
+    toggle.href = linkTo({ [param]: isOn ? toggle.dataset.off : toggle.dataset.on });
+  }
+}
+updateLinks();
+renderReason(state.v);
+const reasonBox = document.querySelector("[data-wf-reason]");
+reasonBox.open = state.uu === "1";
+reasonBox.addEventListener("toggle", () => { state.uu = reasonBox.open ? "1" : "0"; history.replaceState(null, "", linkTo({})); updateLinks(); });
+const barMenus = [...document.querySelectorAll(".wf-menu")];
+for (const barMenu of barMenus) {
+  barMenu.addEventListener("toggle", () => {
+    const r = barMenu.querySelector("summary").getBoundingClientRect();
+    Object.assign(barMenu.querySelector(".wf-popover").style, { top: `${r.bottom + 6}px`, left: `${r.left}px` });
+  });
+}
+document.addEventListener("click", (e) => { for (const m of barMenus) if (!m.contains(e.target)) m.open = false; });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") for (const m of barMenus) m.open = false; });
+for (const button of document.querySelectorAll("[data-copy]")) {
+  button.addEventListener("click", async () => { await navigator.clipboard.writeText(button.dataset.copy); button.setAttribute("data-copied", ""); setTimeout(() => button.removeAttribute("data-copied"), 1500); });
+}
+const design = document.getElementById("wf-design");
+if (state.kho === "mobile" && !params.has("frame")) {
+  const src = `?${new URLSearchParams({ ...state, kho: "desktop", frame: "1" })}`;
+  design.innerHTML = `<div style="display:grid;place-items:center;padding:24px"><iframe src="${src}" title="Mobile" style="width:375px;max-width:100%;height:812px;border:1px solid #ddd;border-radius:24px;background:#fff"></iframe></div>`;
+} else {
+  design.innerHTML = state.v === "ab" ? renderAB(state) : ({ a: renderA, b: renderB, c: renderC })[state.v](state.tt);
+}
+/* A+B cao đúng phần còn lại dưới thanh wireframe, để thanh quyết định luôn nằm trong màn */
+function fitAB() {
+  if (state.v !== "ab" || !design.firstElementChild || design.querySelector("iframe")) return;
+  design.firstElementChild.style.height = `calc(100dvh - ${design.getBoundingClientRect().top + scrollY}px)`;
+}
+fitAB(); addEventListener("resize", fitAB);
+function placeBlockNumbers() {
+  const isOverlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  for (const block of document.querySelectorAll("[data-wf-block]")) {
+    const br = block.getBoundingClientRect();
+    if (!br.width) continue;
+    const s = br.width / block.offsetWidth;
+    const nr = { left: br.left + 4 * s, top: br.top + 4 * s, right: br.left + 22 * s, bottom: br.top + 22 * s };
+    const rects = [...block.querySelectorAll("svg, img")].map((n) => n.getBoundingClientRect());
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim()) continue;
+      const range = document.createRange(); range.selectNodeContents(n); rects.push(...range.getClientRects());
+    }
+    block.toggleAttribute("data-wf-block-out", rects.some((r) => r.width > 0 && isOverlap(r, nr)));
+  }
+}
+requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(placeBlockNumbers, 300)));
+addEventListener("resize", placeBlockNumbers);
+</script>
+</body>
+</html>

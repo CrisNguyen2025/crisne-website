@@ -11,6 +11,8 @@ export const RESERVED_TOPIC_SLUGS: readonly string[] = [
   'notes',
   'portfolio',
   'login',
+  'news',
+  'share',
   '_next',
 ];
 
