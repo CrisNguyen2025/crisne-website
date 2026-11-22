@@ -31,7 +31,7 @@ MIN_MESSAGE_CHARS = 15
 MIN_CONFIDENCE = 0.75
 MAX_SUGGESTIONS_PER_TURN = 2
 MAX_PENDING_MEMORIES = 10
-EXTRACT_TIMEOUT_SECONDS = 12.0
+EXTRACT_TIMEOUT_SECONDS = 20.0
 
 _TRIVIAL_MESSAGES = frozenset({"ok", "okay", "oke", "yes", "co", "có", "huy", "hủy", "cancel", "no", "khong", "không"})
 
@@ -248,7 +248,7 @@ async def extract_memory_suggestions(
     try:
         raw = await _invoke_llm_text(llm, prompt)
     except Exception as exc:
-        log.debug("owner_memory.extractor: skipped due to LLM error (%s)", exc)
+        log.warning("owner_memory.extractor: skipped due to LLM error (%s)", exc)
         return []
 
     return _parse_suggestions(
@@ -308,5 +308,7 @@ async def maybe_suggest_memories(
             )
             created.append(item)
         except Exception as exc:
-            log.debug("owner_memory.extractor: failed to save pending suggestion (%s)", exc)
+            log.warning("owner_memory.extractor: failed to save pending suggestion (%s)", exc)
+    if created:
+        log.info("owner_memory.extractor: saved %d pending suggestion(s)", len(created))
     return created

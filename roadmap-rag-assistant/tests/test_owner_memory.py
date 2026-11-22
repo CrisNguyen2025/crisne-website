@@ -195,6 +195,15 @@ def test_parse_memory_command_ignores_normal_questions_and_recall():
     assert req.use_current_topic is True
     assert infer_memory_kind(req.content) == "preference"
 
+    for phrasing in (
+        "nhớ là mình dùng Next.js 15",
+        "bạn nhớ giúp mình là luôn kết thúc bằng Tóm tắt",
+        "abot ghi nhớ lại: ưu tiên ví dụ ngắn",
+        "lưu lại giúp mình mục tiêu Q4 học RAG",
+    ):
+        parsed = parse_memory_command(phrasing)
+        assert parsed is not None and parsed.action == "create", phrasing
+
 
 @pytest.mark.asyncio
 async def test_generation_pipeline_keeps_citations_clean_with_owner_memory():

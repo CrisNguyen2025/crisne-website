@@ -38,11 +38,14 @@ _VIEW_MEMORY_RE = re.compile(
 
 # Explicit remember command: anchored at start to avoid matching questions ("bạn có nhớ ... không?")
 _REMEMBER_PREFIX_RE = re.compile(
-    r"^\s*(?:(?:hãy|vui\s+lòng|làm\s+ơn)\s+)?"
+    r"^\s*(?:(?:bạn|abot|bot)\s+)?"
+    r"(?:(?:hãy|vui\s+lòng|làm\s+ơn)\s+)?"
     r"(?:"
-    r"ghi\s+nhớ(?:\s+giúp\s+(?:mình|tôi|em|anh)|\s+giùm\s+(?:mình|tôi|em|anh)|\s+cho\s+(?:mình|tôi|em|anh))?"
-    r"|lưu\s+(?:vào\s+)?bộ\s+nhớ(?:\s+(?:giúp|giùm|cho)\s+(?:mình|tôi|em|anh))?"
+    r"ghi\s+nhớ(?:\s+lại)?(?:\s+giúp\s+(?:mình|tôi|em|anh)|\s+giùm\s+(?:mình|tôi|em|anh)|\s+cho\s+(?:mình|tôi|em|anh))?"
+    r"|lưu\s+(?:lại\s+)?(?:vào\s+bộ\s+nhớ|bộ\s+nhớ)(?:\s+(?:giúp|giùm|cho)\s+(?:mình|tôi|em|anh))?"
+    r"|lưu\s+lại\s+(?:giúp|giùm|cho)\s+(?:mình|tôi|em|anh)"
     r"|nhớ\s+(?:giúp|giùm|cho)\s+(?:mình|tôi|em|anh)"
+    r"|nhớ\s+(?:rằng|là)"
     r"|(?:từ\s+giờ|sau\s+này|từ\s+nay)\s+(?:hãy\s+)?(?:ghi\s+)?nhớ"
     r"|hãy\s+nhớ"
     r"|remember(?:\s+that)?"
