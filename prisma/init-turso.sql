@@ -65,7 +65,25 @@ CREATE TABLE IF NOT EXISTS "ThreadState" (
     "threadId" TEXT NOT NULL PRIMARY KEY,
     "activeTopicSlug" TEXT,
     "activeTopicTitle" TEXT,
+    "activeLessonId" TEXT,
+    "activeLessonTitle" TEXT,
+    "activeSection" TEXT,
+    "closedAt" DATETIME,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "OwnerMemory" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "kind" TEXT NOT NULL,
+    "scopeTopicSlug" TEXT,
+    "content" TEXT NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'explicit',
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "replacesMemoryId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "lastUsedAt" DATETIME
 );
 
 -- CreateIndex
@@ -76,6 +94,15 @@ CREATE INDEX IF NOT EXISTS "ThreadMessage_createdAt_idx" ON "ThreadMessage"("cre
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "ThreadState_updatedAt_idx" ON "ThreadState"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "ThreadState_closedAt_updatedAt_idx" ON "ThreadState"("closedAt", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "OwnerMemory_status_scopeTopicSlug_idx" ON "OwnerMemory"("status", "scopeTopicSlug");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "OwnerMemory_kind_status_idx" ON "OwnerMemory"("kind", "status");
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "NewsSource" (

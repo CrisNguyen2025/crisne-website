@@ -14,6 +14,7 @@ from typing import Any, List, Literal, Optional, Sequence, Tuple
 from rag_service.core.augmentation.documents import ContextDocument
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.augmentation.history import HistoryStore, Turn, history_store
+from rag_service.core.memory.store import format_owner_memory
 
 Mode = Literal["rag", "chitchat"]
 
@@ -26,6 +27,9 @@ class GenerationRequest:
     # Retrieved (source, score) pairs as the retriever returned them; mode "rag" only.
     # DomainProfile.to_document turns each source into a ContextDocument.
     sources: Sequence[Tuple[Any, float]] = field(default_factory=list)
+    # Owner-only persistent memories applicable to this turn (ADR-0015); always empty for Visitors.
+    owner_memories: Sequence[Any] = field(default_factory=list)
+    memory_scope: Optional[str] = None
 
 
 def _escape(text: str) -> str:
@@ -108,6 +112,16 @@ def build_prompt(
     # Fixed text first, per-request data after: the prefix stays the same from one request to the next
     system = "\n".join(s.strip("\n") for s in (persona, rules, profile.suggestion_format) if s)
     parts = [f"<system>\n{system}\n</system>"]
+    if req.owner_memories:
+        mem_block, _ = format_owner_memory(
+            req.owner_memories,
+            note=profile.memory_note,
+            scope=req.memory_scope,
+            max_items=profile.memory_max_items,
+            max_chars=profile.memory_total_chars,
+        )
+        if mem_block:
+            parts.append(mem_block)
     if hist := format_history(history.get_recent(req.thread_id, profile.history_turns * 2), profile):
         parts.append(hist)
     if req.mode == "rag":

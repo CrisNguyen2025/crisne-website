@@ -189,6 +189,54 @@ class RoadmapCommands:
         target: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
+        # A previewed Owner Memory create/archive (memory_commands.py, ADR-0015): "ok" applies it
+        if mem_change := session_ctx.fresh_pending("pending_memory_change"):
+            session_ctx.pending_memory_change = None
+            if lower in CONFIRM_WORDS:
+                if not is_owner():
+                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                        yield ev
+                else:
+                    from rag_service.core.memory import KIND_LABELS, owner_memory_store
+
+                    op = mem_change.get("op")
+                    tool_name = "save_owner_memory" if op == "create" else "archive_owner_memory"
+                    yield {"type": "tool_start", "name": tool_name, "args": {"op": op, "confirmed": True}}
+                    try:
+                        if op == "create":
+                            saved = await owner_memory_store.create(
+                                kind=mem_change["kind"],
+                                content=mem_change["content"],
+                                scope=mem_change.get("scope_topic_slug"),
+                                source="explicit",
+                                status="active",
+                            )
+                            kind_label = KIND_LABELS.get(saved.kind, saved.kind)
+                            scope = f" *(topic: `{saved.scope}`)*" if saved.scope else ""
+                            res_msg = f"✅ Đã lưu vào Bộ nhớ Owner (**{kind_label}**{scope}): {saved.content}"
+                            ok = True
+                        else:
+                            archived = await owner_memory_store.archive(mem_change["memory_id"])
+                            if archived:
+                                res_msg = f"🗑️ Đã gỡ khỏi Bộ nhớ Owner: {mem_change['content']}"
+                                ok = True
+                            else:
+                                res_msg = "⚠️ Không tìm thấy mục bộ nhớ này (có thể đã được gỡ trước đó)."
+                                ok = False
+                    except Exception as exc:
+                        ok, res_msg = False, f"❌ Lỗi khi cập nhật Bộ nhớ Owner: {exc}"
+                    yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+                    async for ev in self._stream_text(res_msg, delay):
+                        yield ev
+                outcome["handled"] = True
+                return
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác bộ nhớ theo yêu cầu của bạn.", delay):
+                    yield ev
+                outcome["handled"] = True
+                return
+            # Anything else drops the preview
+            return
         # A previewed lesson body (lesson_content.py): "ok" adds it to the end of the lesson
         if draft := session_ctx.fresh_pending("pending_content_draft"):
             session_ctx.pending_content_draft = None
@@ -210,6 +258,14 @@ class RoadmapCommands:
                         with write_granted("confirmed lesson content draft"):
                             res_msg = await update_item_content.coroutine(**args)
                         ok = res_msg.startswith("✅")
+                        if ok:
+                            session_store.set_active_lesson(
+                                session_id,
+                                draft["item_id"],
+                                draft.get("title") or "",
+                                topic_slug=draft.get("topic"),
+                                topic_title=draft.get("topic_title"),
+                            )
                     except Exception as exc:
                         ok, res_msg = False, f"❌ Lỗi khi ghi nội dung bài: {exc}"
                     yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
@@ -263,6 +319,8 @@ class RoadmapCommands:
                         with write_granted("confirmed section rename"):
                             res_msg = await rename_section.coroutine(**args)
                         ok = res_msg.startswith("✅")
+                        if ok and rename.get("topic"):
+                            session_store.set_active_topic(session_id, rename["topic"], rename.get("title") or "")
                     except Exception as exc:
                         ok, res_msg = False, f"❌ Lỗi khi đổi tên mục: {exc}"
                     yield {"type": "tool_end", "name": "rename_section", "result": res_msg, "is_error": not ok}
@@ -358,6 +416,14 @@ class RoadmapCommands:
                         else:
                             res_msg = f"✅ Đã chuyển bài **{final_title}** sang mục `{final_sec}`."
                         ok = True
+                        session_store.set_active_lesson(
+                            session_id,
+                            item_id,
+                            final_title,
+                            section=new_section if "section" in update_kwargs else None,
+                            topic_slug=edit.get("topic"),
+                            topic_title=edit.get("topic_title"),
+                        )
                     except DuplicateEntityError as dup:
                         ok, res_msg = False, f"ℹ️ Topic đã có bài **{dup.title}**, không đổi tên."
                     except Exception as exc:
@@ -399,6 +465,12 @@ class RoadmapCommands:
                         title = res.get("title", item_title) if isinstance(res, dict) else item_title
                         res_msg = f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
                         ok = True
+                        session_store.set_active_lesson(
+                            session_id,
+                            item_id,
+                            title,
+                            topic_slug=status_change.get("topic_slug"),
+                        )
                     except Exception as exc:
                         ok, res_msg = False, f"❌ Lỗi khi đổi trạng thái bài: {exc}"
                     yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}

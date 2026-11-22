@@ -111,7 +111,9 @@
         "ADR-0002",
         "ADR-0003",
         "ADR-0004",
-        "ADR-0006"
+        "ADR-0006",
+        "ADR-0012",
+        "ADR-0015"
       ],
       "glossary": [
         "Roadmap Assistant",
@@ -119,12 +121,20 @@
         "Owner",
         "Visitor",
         "Thread",
+        "Owner Memory",
+        "Thread Summary",
         "Change",
         "Preview",
         "Pending Action"
       ],
       "keyFiles": [
         "app/api/roadmap-assistant/[...path]/route.ts",
+        "app/api/roadmap-assistant/thread/route.ts",
+        "app/api/v1/threads/[threadId]/route.ts",
+        "app/api/v1/memories/route.ts",
+        "app/api/v1/memories/[id]/route.ts",
+        "lib/roadmap/thread-state.ts",
+        "lib/roadmap/owner-memory.ts",
         "logic/roadmap/roadmapAssistantService.ts",
         "components/roadmap/RoadmapAssistantChatbot.tsx",
         "roadmap-rag-assistant/rag_service/api/server.py",
@@ -135,6 +145,8 @@
         "roadmap-rag-assistant/rag_service/domains/roadmap/router/understanding.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/agent_actions.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py",
+        "roadmap-rag-assistant/rag_service/core/memory/store.py",
         "roadmap-rag-assistant/rag_service/core/orchestration/sources.py",
         "roadmap-rag-assistant/rag_service/core/retrieval/hybrid.py",
         "roadmap-rag-assistant/rag_service/core/augmentation/context.py",
@@ -144,7 +156,10 @@
       ],
       "dataModels": [
         "In-memory Topic/Section/Lesson Embeddings",
-        "PendingAction Store"
+        "PendingAction Store",
+        "ThreadMessage",
+        "ThreadState",
+        "OwnerMemory"
       ]
     },
     {
@@ -635,6 +650,50 @@
       "summary": "PWA Share Target — Android chia sẻ URL vào app, auto-ingest với origin='share'",
       "handler": "app/(news)/share/page.tsx",
       "triggersFlow": "FLOW_NEWS_PWA_SHARE_TARGET"
+    },
+    {
+      "id": "EP_API_ROADMAP_ASSISTANT_THREAD",
+      "type": "api_route",
+      "path": "/api/roadmap-assistant/thread",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Khôi phục Thread đang mở gần nhất của Owner (hoặc đánh dấu đóng khi tạo hội thoại mới, ADR-0012 / ADR-0015)",
+      "handler": "app/api/roadmap-assistant/thread/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
+    },
+    {
+      "id": "EP_API_MEMORIES_GET",
+      "type": "api_route",
+      "path": "/api/v1/memories",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Đọc danh sách Owner Memory (active/pending) theo Topic hoặc toàn cục (ADR-0015)",
+      "handler": "app/api/v1/memories/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_POST",
+      "type": "api_route",
+      "path": "/api/v1/memories",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Tạo mới một mục Owner Memory (explicit active hoặc suggested pending, ADR-0015)",
+      "handler": "app/api/v1/memories/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_PATCH",
+      "type": "api_route",
+      "path": "/api/v1/memories/[id]",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Cập nhật nội dung/trạng thái mục Owner Memory (duyệt pending -> active tự archive mục thay thế, ADR-0015)",
+      "handler": "app/api/v1/memories/[id]/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
     }
   ],
   "executionFlows": [
@@ -1346,6 +1405,61 @@
       "relatedAdrs": [
         "ADR-0005"
       ]
+    },
+    {
+      "id": "FLOW_ABOT_OWNER_MEMORY_MANAGE",
+      "name": "Quản lý & nạp Owner Memory xuyên Thread cho Abot (ADR-0015)",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner nhắn lệnh nhớ/quên qua chat (Preview -> ok) hoặc quản lý trực tiếp trong OwnerMemorySheet",
+      "preconditions": [
+        "Actor bắt buộc là Owner (session cookie hoặc x-admin-key); Visitor bị chặn hoàn toàn"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py",
+          "functionOrMethod": "MemoryCommands.handle_memory_command",
+          "action": "Phân tích lệnh nhớ/quên/xem; lưu pending_memory_change vào RAM (TTL 10 phút) và trả Preview chờ Owner xác nhận",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_pending",
+          "dataPassed": "pending_memory_change: { op, kind, content, scope_topic_slug }"
+        },
+        {
+          "order": 2,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/core/memory/store.py",
+          "functionOrMethod": "OwnerMemoryStore.create",
+          "action": "Gửi POST/PATCH tới Next.js /api/v1/memories sau khi Owner gõ 'ok', xoá RAM cache và tiêm <owner_memory> ở các lượt sau",
+          "callsNext": "app/api/v1/memories/route.ts#POST",
+          "dataPassed": "{ kind, content, scopeTopicSlug, source, status }"
+        },
+        {
+          "order": 3,
+          "layer": "Domain_Logic",
+          "component": "lib/roadmap/rag-reindex.ts",
+          "functionOrMethod": "notifyOwnerMemoryChanged",
+          "action": "Sau khi Owner tạo/sửa/xoá bộ nhớ qua /api/v1/memories (kể cả trên OwnerMemorySheet), gọi nền POST /internal/memory-cache/invalidate để Python xoá ngay RAM cache (không kích hoạt RAG re-index)",
+          "callsNext": "roadmap-rag-assistant/rag_service/api/routes.py#invalidate_memory_cache",
+          "dataPassed": "POST /internal/memory-cache/invalidate"
+        }
+      ],
+      "invariants": [
+        "Visitor không bao giờ đọc, ghi hay nhận <owner_memory> trong prompt (ADR-0002, ADR-0015)",
+        "Mọi thao tác nhớ/quên qua chat bắt buộc qua Preview -> ok như mọi Change khác",
+        "Đề xuất tự động luôn đi vào trạng thái pending chờ Owner duyệt"
+      ],
+      "failureModes": [
+        "Next.js API không phản hồi khi đọc memory: fail-open chạy tiếp không có <owner_memory>",
+        "Preview hết hạn sau 10 phút: câu 'ok' muộn không lưu dữ liệu"
+      ],
+      "relatedAdrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0005",
+        "ADR-0012",
+        "ADR-0015"
+      ]
     }
   ],
   "dataModels": [
@@ -1514,6 +1628,53 @@
       "invariants": [
         "Claim nguyên tử bằng status='pending' + lease lockedUntil chống chạy trùng"
       ]
+    },
+    {
+      "id": "MODEL_THREAD_STATE",
+      "name": "ThreadState",
+      "source": "prisma",
+      "table": "ThreadState",
+      "domainId": "roadmap-assistant-abot",
+      "fields": [
+        "threadId",
+        "activeTopicSlug",
+        "activeTopicTitle",
+        "activeLessonId",
+        "activeLessonTitle",
+        "activeSection",
+        "closedAt",
+        "updatedAt"
+      ],
+      "relations": [],
+      "invariants": [
+        "Chỉ lưu Thread của Owner (prefix 'owner:'), retention 30 ngày (ADR-0012)",
+        "closedAt đánh dấu Thread đã đóng khi Owner mở hội thoại mới (ADR-0015)"
+      ]
+    },
+    {
+      "id": "MODEL_OWNER_MEMORY",
+      "name": "OwnerMemory",
+      "source": "prisma",
+      "table": "OwnerMemory",
+      "domainId": "roadmap-assistant-abot",
+      "fields": [
+        "id",
+        "kind",
+        "scopeTopicSlug",
+        "content",
+        "source",
+        "status",
+        "replacesMemoryId",
+        "createdAt",
+        "updatedAt",
+        "lastUsedAt"
+      ],
+      "relations": [],
+      "invariants": [
+        "Chỉ dành riêng cho Owner; Visitor tuyệt đối không đọc/ghi/nhận trong prompt (ADR-0015)",
+        "kind thuộc 5 giá trị: profile | techstack | goal | preference | learning_note; content <= 300 ký tự",
+        "status thuộc active | pending | archived; gợi ý tự động luôn ở pending chờ duyệt"
+      ]
     }
   ],
   "invariantsAndRules": [
@@ -1566,6 +1727,16 @@
       "ruleId": "ADR-0010",
       "title": "Lesson Status Known Learning Target",
       "summary": "Trạng thái bài học phản ánh tiến trình của Owner (target, learning, known); chỉ Owner xem được; mặc định là known; không gắn với độ khó."
+    },
+    {
+      "ruleId": "ADR-0012",
+      "title": "Owner Thread State in Turso",
+      "summary": "Lịch sử và ngữ cảnh đang mở của Thread Owner lưu ở Turso qua Next.js API; Thread Visitor và mọi Pending Action chỉ nằm trong RAM."
+    },
+    {
+      "ruleId": "ADR-0015",
+      "title": "Abot Owner Memory",
+      "summary": "Owner Memory xuyên Thread lưu ở Turso (5 kind, <= 300 ký tự), cách ly hoàn toàn với Visitor, lệnh chat luôn có Preview -> ok, gợi ý tự động vào pending chờ duyệt."
     }
   ]
 }

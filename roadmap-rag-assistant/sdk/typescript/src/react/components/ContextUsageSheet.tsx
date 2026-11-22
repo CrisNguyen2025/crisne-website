@@ -7,6 +7,7 @@ import { ChevronDownIcon, CloseIcon } from "../icons";
 // One class per part: Tailwind needs the full class names to be present in the source
 const PART_COLORS: Record<string, string> = {
   system: "bg-[#C2410C]",
+  owner_memory: "bg-[#3F7D58]",
   messages: "bg-[#2563EB]",
 };
 const FALLBACK_COLOR = "bg-[#8A8780]";

@@ -6,7 +6,6 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 - Lesson Status Step 6: Abot đọc trạng thái bài (chỉ Owner) và đổi trạng thái qua chat có Preview. Chi tiết: `.handoff/specs/TASK-lesson-status-001.md` Step 6; kịch bản test: `tests/manual/lesson-status.md`.
 - Sửa bài qua chat ("chuyển bài X sang mục Y", "đổi tên bài X thành Y"): `docs/abot-next-actions-plan.md` mục 6.
-- Ghi memory (`<conversation_history>`) vào trace: `docs/abot-next-actions-plan.md` mục 7.
 - Siết ratchet router và thêm flow eval router vào map: `.handoff/specs/TASK-router-stress-001.md` (READY).
 
 ## Hạ tầng và deploy

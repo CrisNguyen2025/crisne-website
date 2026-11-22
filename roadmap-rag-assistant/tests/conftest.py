@@ -154,11 +154,17 @@ def no_live_roadmap_api():
     The adapter is process-wide, so it is also restored after each test: no test sees another test's adapter.
     """
     import rag_service.tools as tools
+    from rag_service.core.memory import owner_memory_store
 
     previous = tools._adapter
+    previous_mem_api = owner_memory_store._api
     tools._adapter = OfflineAdapter()
+    owner_memory_store._api = None
+    owner_memory_store.reset_local()
     yield
     tools._adapter = previous
+    owner_memory_store._api = previous_mem_api
+    owner_memory_store.reset_local()
 
 
 @pytest.fixture

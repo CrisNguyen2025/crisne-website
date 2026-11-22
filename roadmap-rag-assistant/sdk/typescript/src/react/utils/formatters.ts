@@ -56,6 +56,12 @@ export function formatToolDisplayName(name: string): string {
       return 'Xóa thực thể Roadmap';
     case 'list_topics':
       return 'Liệt kê danh sách Topic';
+    case 'list_owner_memories':
+      return 'Xem bộ nhớ Owner';
+    case 'save_owner_memory':
+      return 'Lưu bộ nhớ Owner';
+    case 'archive_owner_memory':
+      return 'Gỡ bộ nhớ Owner';
     default:
       return name;
   }

@@ -32,8 +32,9 @@ class DomainProfile:
     rules_chitchat: str
     # Appended after the prompt, e.g. a format for follow-up suggestion chips.
     suggestion_format: str = ""
-    # Shown above the history block so the model reads it as context, not instructions.
+    # Shown above the history / memory blocks so the model reads them as context, not instructions.
     history_note: str = ""
+    memory_note: str = ""
     query_note: str = ""
     # Turns one retrieved source into the <document> the model reads.
     to_document: Callable[[Any, float], ContextDocument] = _generic_document
@@ -61,11 +62,13 @@ class DomainProfile:
     # Mask emails/phones in the answer before it reaches the client.
     mask_output_pii: bool = True
 
-    # ── S5: conversation memory ──
+    # ── S5: conversation & owner memory ──
     history_turns: int = 10  # user+assistant pairs fed back into S1
     history_max_chars: int = 1000  # per message, so one long paste cannot flood the prompt
     # All history messages together, after the per-message clip; the oldest are dropped first.
     history_total_chars: int = 8000
+    memory_max_items: int = 15  # active OwnerMemory items injected per answer (ADR-0015)
+    memory_total_chars: int = 1500  # hard cap for <owner_memory> block (~375 tokens)
 
     # ── Observability: Langfuse step name per mode ──
     trace_names: dict[str, str] = field(

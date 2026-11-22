@@ -48,6 +48,14 @@ _Avoid_: guest, anonymous, user
 Một cuộc hội thoại với Roadmap Assistant, luôn thuộc về đúng một Actor.
 _Avoid_: session, conversation
 
+**Owner Memory**:
+Mục ghi nhớ ngắn và bền vững về Owner xuyên qua nhiều Thread (nền tảng, techstack, mục tiêu, quy ước trả lời hoặc ghi chú học tập), chỉ Owner thấy và dùng.
+_Avoid_: user profile, global context, long-term prompt
+
+**Thread Summary**:
+Bản tóm tắt phần hội thoại cũ của một Thread khi số lượt vượt quá cửa sổ tin nhắn gần nhất.
+_Avoid_: chat recap, memory summary
+
 **Change**:
 Yêu cầu tạo, sửa hoặc xoá một Topic, Section hoặc Lesson.
 _Also_: CUD

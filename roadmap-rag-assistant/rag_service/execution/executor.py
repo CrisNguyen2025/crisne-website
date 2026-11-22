@@ -115,6 +115,7 @@ class ActionExecutor:
 
             if act_type == ActionType.CREATE:
                 created_items: list[str] = []
+                created_records: list[tuple[str, str, Optional[str]]] = []
                 skipped = []
                 for ent in action.entities:
                     try:
@@ -130,9 +131,18 @@ class ActionExecutor:
                         continue
                     changes.created(ent.title, res)
                     created_items.append(ent.title)
+                    item_id = res.get("id") if isinstance(res, dict) else None
+                    created_records.append((str(item_id or ""), ent.title, ent.section))
 
                 if not created_items:
                     return True, _skipped_message(skipped)
+                if len(created_records) == 1 and created_records[0][0]:
+                    cid, ctitle, csec = created_records[0]
+                    session_store.set_active_lesson(
+                        session_id, cid, ctitle, section=csec, topic_slug=topic_slug
+                    )
+                else:
+                    session_store.set_active_topic(session_id, slug=topic_slug)
                 asyncio.create_task(rag_engine.sync_live_database())
                 bullets = "\n".join(f"- **{i}**" for i in created_items)
                 section_note = ""
@@ -152,6 +162,8 @@ class ActionExecutor:
                 # handle_cud resolved the name to the id: the reply names the lesson, not its id
                 name = action.entities[0].title if action.entities else item_id
                 if ok:
+                    if session_store.get_or_create(session_id).active_lesson_id == item_id:
+                        session_store.set_active_lesson(session_id, None)
                     changes.deleted(item_id, before)
                     return True, f"🗑️ Đã xóa bài học **{name}**."
                 return False, f"⚠️ Không tìm thấy bài học **{name}** trong hệ thống."

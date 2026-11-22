@@ -30,10 +30,12 @@ from rag_service.domains.roadmap.commands import RoadmapCommands
 from rag_service.domains.roadmap.lesson_content import LessonContentCommands
 from rag_service.domains.roadmap.lesson_edit import LessonEditCommands
 from rag_service.domains.roadmap.lesson_status import LessonStatusCommands
+from rag_service.domains.roadmap.memory_commands import MemoryCommands
 from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
+from rag_service.core.memory import owner_memory_store
 from rag_service.observability import (
     current_trace,
     end_step,
@@ -116,7 +118,13 @@ async def _plan_queries(llm, query: str, session_id: str):
 
 
 class NextGenRoadmapAgent(
-    RoadmapAgentActions, RoadmapCommands, SectionCommands, LessonEditCommands, LessonContentCommands, LessonStatusCommands
+    RoadmapAgentActions,
+    RoadmapCommands,
+    SectionCommands,
+    LessonEditCommands,
+    LessonContentCommands,
+    LessonStatusCommands,
+    MemoryCommands,
 ):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -264,9 +272,21 @@ class NextGenRoadmapAgent(
                 yield ev
             return
 
-        # An Owner's thread kept in Turso (ADR-0012), its history and open Topic, is read once, before anything
-        # below reads either; the two reads run together so a cold start waits for one round trip
+        # An Owner's thread kept in Turso (ADR-0012), its history and open Topic/Lesson focus, is read once,
+        # before anything below reads either; the two reads run together so a cold start waits for one round trip
         await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
+
+        # Keep Thread focus in sync with the open page so subsequent turns outside the page retain context
+        page_slug = ((page_context or {}).get("roadmapSlug") or "").strip()
+        page_item = ((page_context or {}).get("itemId") or "").strip()
+        page_section = ((page_context or {}).get("section") or "").strip() or None
+        if page_slug and page_item:
+            if session_ctx.active_lesson_id != page_item or session_ctx.active_topic_slug != page_slug:
+                session_store.set_active_lesson(
+                    session_id, page_item, section=page_section, topic_slug=page_slug
+                )
+        elif page_slug and session_ctx.active_topic_slug != page_slug:
+            session_store.set_active_topic(session_id, page_slug)
 
         # ── 0. Pending roadmap change: confirmation (roadmap domain) ──
         outcome = {"handled": False}
@@ -347,6 +367,18 @@ class NextGenRoadmapAgent(
         if outcome["handled"]:
             return
 
+        # ── 1e. Explicit Owner Memory commands: remember/forget (preview -> "ok") or inspect (ADR-0015) ──
+        async for ev in self.handle_memory_command(
+            content=raw_content,
+            page_context=page_context,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
         # ── 2b. Bulk import of a pasted list (roadmap domain: rag_service/domains/roadmap/commands.py) ──
         if self.bulk_import_applies(raw_content, lower, page_context):
             async for ev in self.handle_bulk_import(raw_content=raw_content, lower=lower, page_context=page_context, delay=delay):
@@ -388,6 +420,9 @@ class NextGenRoadmapAgent(
                 "verdict": outcome.verdict.model_dump(mode="json") if outcome.verdict else None,
                 "grounding": outcome.grounding.status if outcome.grounding else None,
                 "phases": outcome.trace(),
+                "recent_turns": [{"role": t.role, "content": t.content[:200]} for t in recent],
+                "active_topic_slug": session_ctx.active_topic_slug,
+                "active_lesson_id": session_ctx.active_lesson_id,
             },
         )
         yield step_event(
@@ -497,9 +532,11 @@ class NextGenRoadmapAgent(
                 deps = dataclasses.replace(
                     deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
                 )
+            active_topic = page_slug or session_ctx.active_topic_slug
+            owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=deps,
+                llm=self.llm, deps=deps, owner_memories=owner_memories, memory_scope=active_topic,
             ):
                 yield ev
             return
@@ -507,9 +544,11 @@ class NextGenRoadmapAgent(
         # ── 5b. LEARNING PLAN: answered from the owner's own lessons, never from a ready-made template ──
         # Without this branch a plan request fell through to chitchat, where the model wrote a plan from nothing.
         if intent_res.intent == IntentType.PLAN_GOAL:
+            active_topic = page_slug or session_ctx.active_topic_slug
+            owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
             async for ev in answer_from_sources(
                 query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=self._source_deps(content),
+                llm=self.llm, deps=self._source_deps(content), owner_memories=owner_memories, memory_scope=active_topic,
             ):
                 yield ev
             return
@@ -523,8 +562,11 @@ class NextGenRoadmapAgent(
             return
 
         outcome = {"handled": False, "llm_failed": False}
+        active_topic = page_slug or session_ctx.active_topic_slug
+        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
         async for ev in answer_with_llm(
             llm=self.llm, pipeline=generation_pipeline, mode="chitchat", query=content, session_id=session_id, outcome=outcome,
+            owner_memories=owner_memories, memory_scope=active_topic,
         ):
             yield ev
         if outcome["handled"]:

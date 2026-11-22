@@ -32,6 +32,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0012](adr/0012-owner-thread-state-in-turso.md)               | Thread Owner lưu ở Turso, Thread Visitor chỉ trong RAM       | accepted               |
 | [0013](adr/0013-flat-lesson-urls-and-global-slugs.md)        | URL bài học phẳng /lessons/[lessonSlug] và slug duy nhất toàn cục | superseded by ADR-0014 |
 | [0014](adr/0014-topic-scoped-urls-and-heading-anchors.md)     | URL theo Topic /[topicSlug]/[lessonSlug], anchor heading theo slug | accepted               |
+| [0015](adr/0015-abot-owner-memory.md)                         | Owner Memory xuyên Thread lưu ở Turso, cách ly hoàn toàn với Visitor | accepted               |
 
 ## Sơ đồ Mermaid
 

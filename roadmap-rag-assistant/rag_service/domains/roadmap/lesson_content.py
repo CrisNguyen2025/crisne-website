@@ -75,7 +75,7 @@ SECTION_CONTENT_REQUEST = re.compile(
 )
 _QUOTED = re.compile(r"[\"“”'‘’«»](.+?)[\"“”'‘’«»]")
 _TOPIC_TAIL = re.compile(r"\s+(?:trong|o|thuoc|cua|in)\s+(?:topic\s+|chu\s+de\s+|lo\s+trinh\s+)?(?P<topic>.+)$")
-_POINTING = {"", "nay", "do", "day", "kia", r"hien\s+tai", "this", "it"}
+_POINTING = {"", "nay", "do", "day", "kia", r"hien\s+tai", r"vua\s+tao", r"vua\s+them", "no", "this", "it"}
 
 
 @dataclass(frozen=True)
@@ -307,6 +307,7 @@ def draft_prompt(
     write_mode: WriteMode = "create_or_replace_empty",
     target_h2: Optional[str] = None,
     strict_retry_reason: Optional[str] = None,
+    owner_memory_block: str = "",
 ) -> str:
     raw_existing = lesson.get("content") or ""
     existing = "" if is_template_placeholder_only(raw_existing) else _plain(raw_existing)[:MAX_EXISTING_CHARS]
@@ -335,11 +336,13 @@ def draft_prompt(
         )
 
     retry_note = f"\nLƯU Ý SỬA LỖI LẦN TRƯỚC: {strict_retry_reason}\n" if strict_retry_reason else ""
+    memory_section = f"\n{owner_memory_block}\n" if owner_memory_block else ""
 
     return (
         "Bạn viết nội dung cho một bài trong kho kiến thức cá nhân (second brain) của một kỹ sư phần mềm.\n"
         f"{topic_line}\nMục: {section}\nTên bài: {lesson.get('title')}\nMô tả: {description}\n"
-        f"Yêu cầu của chủ kho: {request}\n\n"
+        f"Yêu cầu của chủ kho: {request}\n"
+        f"{memory_section}\n"
         f"{structure_block}"
         "Viết bằng tiếng Việt, thuật ngữ kỹ thuật giữ tiếng Anh. Dùng Markdown: tiêu đề ## và ###, gạch đầu dòng, "
         "ví dụ code trong ``` khi hợp chủ đề. Không viết tiêu đề # (tên bài đã là tiêu đề trang), không lời mở đầu "
@@ -417,6 +420,8 @@ class LessonContentCommands:
             page_item = ((page_context or {}).get("itemId") or "").strip()
             if (page_context or {}).get("roadmapSlug") == topic.get("slug") and page_item:
                 lesson = next((i for i in lessons if matches_page_item(i, page_item)), None)
+            if lesson is None and session_ctx.active_lesson_id:
+                lesson = next((i for i in lessons if matches_page_item(i, session_ctx.active_lesson_id)), None)
         if lesson is None:
             listing = ", ".join(f"**{i.get('title')}**" for i in lessons[:8]) or "_(topic chưa có bài nào)_"
             what = f"bài **{request.lesson}**" if request.lesson else "bài bạn đang nói tới"
@@ -456,6 +461,19 @@ class LessonContentCommands:
             },
         }
 
+        from rag_service.core.memory import format_owner_memory, owner_memory_store
+
+        topic_slug = topic.get("slug")
+        owner_memories = await owner_memory_store.list_active(topic_slug)
+        relevant_memories = [m for m in owner_memories if m.kind in ("preference", "techstack", "learning_note")]
+        owner_memory_block, _ = format_owner_memory(
+            relevant_memories,
+            note="Ngữ cảnh cá nhân của Owner (áp dụng cho ví dụ và phong cách viết, không nhắc lại như lời trò chuyện):",
+            scope=topic_slug,
+            max_items=8,
+            max_chars=800,
+        )
+
         markdown = ""
         draft_html = ""
         guard_error: Optional[str] = None
@@ -472,6 +490,7 @@ class LessonContentCommands:
                             write_mode=write_mode,
                             target_h2=request.target_h2,
                             strict_retry_reason=guard_error if attempt == 1 else None,
+                            owner_memory_block=owner_memory_block,
                         )
                     ),
                     DRAFT_TIMEOUT,

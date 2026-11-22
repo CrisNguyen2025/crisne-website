@@ -11,6 +11,7 @@ import { SparklesIcon } from "./icons";
 import { formatTime } from "./utils/formatters";
 import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ContextUsageSheet } from "./components/ContextUsageSheet";
+import { OwnerMemorySheet } from "./components/OwnerMemorySheet";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { AbotMascot, type MascotState } from "./components/AbotMascot";
@@ -43,12 +44,14 @@ export function RoadmapChatbotWidget({
   conversationId: customConversationId,
   threadId,
   canWrite = false,
+  restoreLatestThread = false,
 }: ChatbotConfig) {
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isHovered, setIsHovered] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
+  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
@@ -121,6 +124,7 @@ export function RoadmapChatbotWidget({
     getContext,
     onWebMcpMessage,
     canWrite,
+    restoreLatestThread,
   });
 
   // Follows the on-screen keyboard on phones so the composer stays visible
@@ -136,11 +140,13 @@ export function RoadmapChatbotWidget({
   const dismiss = useCallback(() => {
     setIsOpen(false);
     setIsOptionsOpen(false);
+    setIsContextOpen(false);
+    setIsMemoryOpen(false);
   }, []);
   const { close: animateClose } = useDrawerMotion(
     containerRef,
     scrimRef,
-    isOpen && !activeFeedbackMsgId,
+    isOpen && !activeFeedbackMsgId && !isMemoryOpen && !isContextOpen,
     dismiss
   );
   const closeDrawer = useCallback(
@@ -600,10 +606,8 @@ export function RoadmapChatbotWidget({
             hideBrand={isInitStage}
             mascotRef={headerMascotRef}
             textRef={headerTextRef}
-            openContext={() => {
-              setIsContextOpen(true);
-              void refreshContext();
-            }}
+            openContext={() => { setIsMemoryOpen(false); setIsContextOpen(true); void refreshContext(); }}
+            openMemory={canWrite ? () => { setIsContextOpen(false); setIsMemoryOpen(true); } : undefined}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
             optionsRef={optionsRef}
@@ -676,6 +680,11 @@ export function RoadmapChatbotWidget({
               onRetry={() => void refreshContext()}
               onClose={() => setIsContextOpen(false)}
             />
+          )}
+
+          {/* ── Owner Memory Bottom Sheet (Owner-only, ADR-0015) ── */}
+          {canWrite && isMemoryOpen && (
+            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={getContext?.()?.roadmapSlug} onClose={() => setIsMemoryOpen(false)} />
           )}
 
           {/* ── Feedback Reason Bottom Sheet ── */}

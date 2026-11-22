@@ -105,6 +105,7 @@ export function RoadmapAssistantChatbot({
       title={title}
       baseUrl={baseUrl}
       canWrite={canWrite}
+      restoreLatestThread={canWrite}
       className={className}
       onToolExecuted={handleToolExecuted}
       getContext={getRoadmapPageContext}

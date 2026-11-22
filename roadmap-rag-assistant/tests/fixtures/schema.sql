@@ -50,7 +50,25 @@ CREATE TABLE "ThreadState" (
     "threadId" TEXT NOT NULL PRIMARY KEY,
     "activeTopicSlug" TEXT,
     "activeTopicTitle" TEXT,
+    "activeLessonId" TEXT,
+    "activeLessonTitle" TEXT,
+    "activeSection" TEXT,
+    "closedAt" DATETIME,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "OwnerMemory" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "kind" TEXT NOT NULL,
+    "scopeTopicSlug" TEXT,
+    "content" TEXT NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'explicit',
+    "status" TEXT NOT NULL DEFAULT 'active',
+    "replacesMemoryId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "lastUsedAt" DATETIME
 );
 
 -- CreateTable
@@ -137,6 +155,15 @@ CREATE INDEX "ThreadMessage_createdAt_idx" ON "ThreadMessage"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "ThreadState_updatedAt_idx" ON "ThreadState"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX "ThreadState_closedAt_updatedAt_idx" ON "ThreadState"("closedAt", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "OwnerMemory_status_scopeTopicSlug_idx" ON "OwnerMemory"("status", "scopeTopicSlug");
+
+-- CreateIndex
+CREATE INDEX "OwnerMemory_kind_status_idx" ON "OwnerMemory"("kind", "status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NewsSource_feedUrl_key" ON "NewsSource"("feedUrl");

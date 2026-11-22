@@ -7,21 +7,38 @@ carries the reason when the call failed (the caller then answers from its templa
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Optional, Sequence
 
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
 
 
 async def answer_with_llm(
-    *, llm: Any, pipeline: Any, mode: str, query: str, session_id: str, outcome: dict
+    *,
+    llm: Any,
+    pipeline: Any,
+    mode: str,
+    query: str,
+    session_id: str,
+    outcome: dict,
+    owner_memories: Sequence[Any] = (),
+    memory_scope: Optional[str] = None,
 ) -> AsyncGenerator[dict, None]:
     outcome.setdefault("handled", False)
     outcome.setdefault("llm_failed", False)
     if not pipeline.available(llm):
         return
     try:
-        async for ev in pipeline.astream(llm, GenerationRequest(mode=mode, query=query, thread_id=session_id)):
+        async for ev in pipeline.astream(
+            llm,
+            GenerationRequest(
+                mode=mode,
+                query=query,
+                thread_id=session_id,
+                owner_memories=owner_memories,
+                memory_scope=memory_scope,
+            ),
+        ):
             yield ev
         outcome["handled"] = True
     except GenerationFailed as exc:

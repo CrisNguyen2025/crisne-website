@@ -69,6 +69,12 @@ export interface ChatbotConfig {
   canWrite?: boolean;
 
   /**
+   * Opt-in: restore the Owner's latest open Thread from `${baseUrl}/thread` on fresh tab open.
+   * Default: false.
+   */
+  restoreLatestThread?: boolean;
+
+  /**
    * Screen anchor corner for the floating widget.
    * Default: 'bottom-right'
    */

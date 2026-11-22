@@ -27,7 +27,10 @@ from rag_service.tools.topic_resolver import (
 )
 
 _QUOTES = "\"'`“”‘’«»"
-_POINTING_LESSON = {"này", "nay", "đó", "do", "đây", "day", "hiện tại", "hien tai", "đang mở", "dang mo", "this", "it"}
+_POINTING_LESSON = {
+    "này", "nay", "đó", "do", "đây", "day", "hiện tại", "hien tai", "đang mở", "dang mo",
+    "vừa tạo", "vua tao", "vừa thêm", "vua them", "nó", "no", "this", "it",
+}
 _THIS_TOPIC = {"này", "nay", "đó", "do", "nó", "hiện tại", "hien tai", "đang mở", "dang mo", "this", "it"}
 
 _MULTI_CLAUSE_RE = re.compile(
@@ -281,30 +284,32 @@ class LessonEditCommands:
         lesson: Optional[dict] = None
 
         if edit["src"] == "":
-            if not page_item_id:
+            active_item_ref = page_item_id or (session_ctx.active_lesson_id or "").strip()
+            if not active_item_ref:
                 async for ev in self._stream_text(
                     "Chưa xác định được bài học bạn đang mở. Hãy mở trang bài học hoặc nêu rõ tên bài cần sửa.",
                     delay,
                 ):
                     yield ev
                 return
+            preferred_slug = page_slug or session_ctx.active_topic_slug
             if target_topic is not None:
                 topic = target_topic
-                lesson = next((i for i in topic.get("items") or [] if matches_page_item(i, page_item_id)), None)
-            elif page_slug:
-                detail = await adapter.get_topic(page_slug)
+                lesson = next((i for i in topic.get("items") or [] if matches_page_item(i, active_item_ref)), None)
+            elif preferred_slug:
+                detail = await adapter.get_topic(preferred_slug)
                 if detail:
                     topic = detail
-                    lesson = next((i for i in detail.get("items") or [] if matches_page_item(i, page_item_id)), None)
+                    lesson = next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)
             if lesson is None and target_topic is None:
                 for t in await adapter.list_topics():
                     slug = t.get("slug")
-                    if not slug or slug == page_slug:
+                    if not slug or slug == preferred_slug:
                         continue
                     detail = await adapter.get_topic(slug)
                     if not detail:
                         continue
-                    found_item = next((i for i in detail.get("items") or [] if matches_page_item(i, page_item_id)), None)
+                    found_item = next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)
                     if found_item is not None:
                         topic, lesson = detail, found_item
                         break

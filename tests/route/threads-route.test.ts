@@ -154,6 +154,32 @@ describe("/api/v1/threads/[threadId]", () => {
       expect(state).toEqual({ activeTopicSlug: "ai", activeTopicTitle: "AI" });
     });
 
+    it("stores and clears activeLessonId, activeLessonTitle, and activeSection", async () => {
+      await PATCH(
+        request("PATCH", {
+          activeTopicSlug: "ai",
+          activeTopicTitle: "AI",
+          activeLessonId: "lesson-1",
+          activeLessonTitle: "Hybrid Search",
+          activeSection: "RAG",
+        }),
+        contextFor(OWNER)
+      );
+
+      const first = await (await GET(request("GET") as NextRequest, contextFor(OWNER))).json();
+      expect(first.state).toEqual({
+        activeTopicSlug: "ai",
+        activeTopicTitle: "AI",
+        activeLessonId: "lesson-1",
+        activeLessonTitle: "Hybrid Search",
+        activeSection: "RAG",
+      });
+
+      await PATCH(request("PATCH", { activeLessonId: null, activeSection: null }), contextFor(OWNER));
+      const cleared = await (await GET(request("GET") as NextRequest, contextFor(OWNER))).json();
+      expect(cleared.state).toEqual({ activeTopicSlug: "ai", activeTopicTitle: "AI" });
+    });
+
     it("rejects a missing or blank slug with 400", async () => {
       for (const body of [{}, { activeTopicSlug: "  " }, { activeTopicSlug: 3 }]) {
         const res = await PATCH(request("PATCH", body), contextFor(OWNER));

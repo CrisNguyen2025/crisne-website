@@ -21,10 +21,11 @@ from typing import Any, AsyncGenerator
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
-from rag_service.context_usage import record_last_turn, record_turn_diagnostics
+from rag_service.context_usage import record_last_turn, record_turn_diagnostics, split_prompt
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
+from rag_service.core.memory.store import format_owner_memory
 from rag_service.core.augmentation.context import (
     GenerationRequest,
     build_prompt,
@@ -132,12 +133,36 @@ class GenerationPipeline:
 
         answer = strip_marks("".join(clean)) if channel else result.text
         usage = usage_from_langchain(result.merged)
-        sections = {
+        prompt_parts = split_prompt(prompt)
+        history_block = prompt_parts.get("history", "")
+        # Keep the newest tail (<= 4 KB) so trace reports see the turns actually sent to the model
+        # even when <system> + <owner_memory> exceed the 4000-char input clip.
+        if len(history_block) > 4000:
+            history_snippet = "…\n" + history_block[-3998:]
+        else:
+            history_snippet = history_block
+        _, selected_memory_ids = (
+            format_owner_memory(
+                req.owner_memories,
+                note=profile.memory_note,
+                scope=req.memory_scope,
+                max_items=profile.memory_max_items,
+                max_chars=profile.memory_total_chars,
+            )
+            if req.owner_memories
+            else ("", [])
+        )
+        sections: dict[str, Any] = {
             "history_turns": prompt.count("<turn "),
             "documents": [d.id for d in documents],
             "dropped_documents": len(req.sources) - len(documents),
             "removed_links": links.removed,
         }
+        if history_snippet:
+            sections["conversation_history"] = history_snippet
+        if selected_memory_ids:
+            sections["owner_memory_ids"] = selected_memory_ids
+            sections["owner_memory_count"] = len(selected_memory_ids)
         if getattr(claims, "dropped", None):
             sections["dropped_claims"] = claims.dropped
         if cite and tracker:

@@ -105,13 +105,13 @@ export interface AssistantStepItem {
 
 /** One kind of input in the conversation's context (POST /chat/context, rag_service/context_usage.py). */
 export interface ContextPart {
-  key: 'system' | 'messages' | 'retrieved' | 'message' | 'output' | (string & {});
+  key: 'system' | 'owner_memory' | 'messages' | 'retrieved' | 'message' | 'output' | (string & {});
   label: string;
   /** Estimated from the prompt text (characters / 4). */
   tokens: number;
-  /** messages: how many are in the window; retrieved: most documents per answer. */
+  /** messages/owner_memory: how many are in the window; retrieved: most documents per answer. */
   count?: number;
-  /** messages: most the window holds before the oldest drop out. */
+  /** messages/owner_memory: most the window holds before capping. */
   limit?: number;
 }
 
@@ -244,4 +244,47 @@ export interface ChatMessage {
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   timestamp: Date;
+}
+
+/** Persistent cross-Thread Owner Memory entry (ADR-0015). Strictly Owner-only. */
+export type OwnerMemoryKind = 'profile' | 'techstack' | 'goal' | 'preference' | 'learning_note';
+export type OwnerMemoryStatus = 'active' | 'pending' | 'archived';
+export type OwnerMemorySource = 'explicit' | 'suggested';
+
+export interface OwnerMemoryItem {
+  id: string;
+  kind: OwnerMemoryKind;
+  scopeTopicSlug: string | null;
+  content: string;
+  source: OwnerMemorySource;
+  status: OwnerMemoryStatus;
+  replacesMemoryId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string | null;
+}
+
+export interface CreateOwnerMemoryInput {
+  kind: OwnerMemoryKind;
+  content: string;
+  scopeTopicSlug?: string | null;
+}
+
+export interface UpdateOwnerMemoryInput {
+  kind?: OwnerMemoryKind;
+  content?: string;
+  scopeTopicSlug?: string | null;
+  status?: OwnerMemoryStatus;
+}
+
+export interface LatestThreadMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface LatestThreadResponse {
+  threadId: string | null;
+  messages: LatestThreadMessage[];
 }

@@ -44,6 +44,7 @@ _FLAGS = re.DOTALL | re.MULTILINE
 # Blocks are matched only where a tag stands on its own line: the rules mention "<context>" inside a
 # sentence, and that mention belongs to the system prompt. The optional line before a block is its note.
 # Data inside a block cannot fake a closing tag ("</" is escaped by context.py).
+_OWNER_MEMORY = re.compile(r"(?:^[^\n]*\n)?^<owner_memory>$.*?^</owner_memory>$", _FLAGS)
 _HISTORY = re.compile(r"(?:^[^\n]*\n)?^<conversation_history>$.*?^</conversation_history>$", _FLAGS)
 _CONTEXT = re.compile(r"^<context>$.*?^</context>$", _FLAGS)
 _QUERY = re.compile(r"(?:^[^\n]*\n)?^<user_query>$.*?^</user_query>$", _FLAGS)
@@ -71,11 +72,18 @@ def _take(pattern: re.Pattern[str], prompt: str) -> tuple[str, str]:
 
 
 def split_prompt(prompt: str) -> dict[str, str]:
-    """The prompt's text by part: system (everything else), history, retrieved, message."""
-    history, rest = _take(_HISTORY, prompt)
+    """The prompt's text by part: system (everything else), owner_memory, history, retrieved, message."""
+    owner_memory, rest = _take(_OWNER_MEMORY, prompt)
+    history, rest = _take(_HISTORY, rest)
     retrieved, rest = _take(_CONTEXT, rest)
     message, system = _take(_QUERY, rest)
-    return {"system": system, "history": history, "retrieved": retrieved, "message": message}
+    return {
+        "system": system,
+        "owner_memory": owner_memory,
+        "history": history,
+        "retrieved": retrieved,
+        "message": message,
+    }
 
 
 def record_last_turn(
@@ -125,11 +133,27 @@ def conversation_context(
     model: str,
     window: Optional[int] = None,
     history: HistoryStore = history_store,
+    owner_memories: Sequence[Any] = (),
+    memory_scope: Optional[str] = None,
 ) -> dict[str, Any]:
     """What the next answer of `thread_id` carries, against Abot's budget."""
     # The answer prompt with no documents and no question: exactly what is in context between turns
-    texts = split_prompt(build_prompt(GenerationRequest(mode="rag", query="", thread_id=thread_id), profile, history))
+    texts = split_prompt(
+        build_prompt(
+            GenerationRequest(
+                mode="rag",
+                query="",
+                thread_id=thread_id,
+                owner_memories=owner_memories,
+                memory_scope=memory_scope,
+            ),
+            profile,
+            history,
+        )
+    )
     system = estimate_tokens(texts["system"])
+    memory_tokens = estimate_tokens(texts["owner_memory"])
+    memory_count = len([line for line in texts["owner_memory"].splitlines() if line.startswith("- [")])
     messages = estimate_tokens(texts["history"])
     history_limit = profile.history_turns * 2
     in_window = texts["history"].count("<turn ")
@@ -137,13 +161,14 @@ def conversation_context(
     outside = max(len(history.get_recent(thread_id, 1000)) - in_window, 0)
 
     history_cap = math.ceil(history_limit * (profile.history_max_chars + TURN_OVERHEAD_CHARS) / CHARS_PER_TOKEN)
+    memory_cap = math.ceil(profile.memory_total_chars / CHARS_PER_TOKEN) if memory_tokens else 0
     reserved = [
         {"key": "retrieved", "label": "Tài liệu truy xuất",
          "tokens": math.ceil(profile.max_documents * DOCUMENT_BUDGET_CHARS / CHARS_PER_TOKEN), "count": profile.max_documents},
         {"key": "message", "label": "Câu hỏi kế tiếp", "tokens": math.ceil(QUERY_MAX_CHARS / CHARS_PER_TOKEN)},
         {"key": "output", "label": "Câu trả lời", "tokens": OUTPUT_RESERVE_TOKENS},
     ]
-    budget = system + history_cap + sum(r["tokens"] for r in reserved)
+    budget = system + memory_cap + history_cap + sum(r["tokens"] for r in reserved)
 
     omitted = []
     if outside:
@@ -153,15 +178,27 @@ def conversation_context(
         omitted.append({"key": "retrieved_dropped", "label": "Tài liệu bị loại (lượt gần nhất)",
                         "count": last_turn["dropped_documents"]})
 
+    parts: list[dict[str, Any]] = [
+        {"key": "system", "label": "System prompt", "tokens": system},
+    ]
+    if memory_tokens:
+        parts.append(
+            {
+                "key": "owner_memory",
+                "label": "Bộ nhớ Owner",
+                "tokens": memory_tokens,
+                "count": memory_count,
+                "limit": profile.memory_max_items,
+            }
+        )
+    parts.append({"key": "messages", "label": "Tin nhắn", "tokens": messages, "count": in_window, "limit": history_limit})
+
     return {
         "model": model,
         "window": window or context_window(model),
         "budget": budget,
-        "used": system + messages,
-        "parts": [
-            {"key": "system", "label": "System prompt", "tokens": system},
-            {"key": "messages", "label": "Tin nhắn", "tokens": messages, "count": in_window, "limit": history_limit},
-        ],
+        "used": system + memory_tokens + messages,
+        "parts": parts,
         "reserved": reserved,
         "omitted": omitted,
         "last_turn": last_turn,

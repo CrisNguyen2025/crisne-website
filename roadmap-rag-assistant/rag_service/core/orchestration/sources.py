@@ -66,7 +66,15 @@ def llm_fallback_reason(llm: Any, failed: bool | str) -> Optional[str]:
 
 
 async def answer_from_sources(
-    *, query: str, session_id: str, owner: bool, delay: float, llm: Any, deps: SourceDeps
+    *,
+    query: str,
+    session_id: str,
+    owner: bool,
+    delay: float,
+    llm: Any,
+    deps: SourceDeps,
+    owner_memories: tuple[Any, ...] | list[Any] = (),
+    memory_scope: Optional[str] = None,
 ) -> AsyncGenerator[dict, None]:
     """Retrieve for `query`, then answer from what was found (LLM), fall back to the formatted sources, or say nothing matched."""
     search, format_context, href_of = deps.search, deps.format_context, deps.href_of
@@ -150,7 +158,12 @@ async def answer_from_sources(
         if pipeline.available(llm):
             try:
                 req = GenerationRequest(
-                    mode="rag", query=query, thread_id=session_id, sources=matches
+                    mode="rag",
+                    query=query,
+                    thread_id=session_id,
+                    sources=matches,
+                    owner_memories=owner_memories if owner else (),
+                    memory_scope=memory_scope,
                 )
                 async for ev in pipeline.astream(llm, req):
                     yield ev

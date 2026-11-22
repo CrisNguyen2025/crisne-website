@@ -67,6 +67,8 @@ export interface UseRoadmapAssistantChatOptions {
   onWebMcpMessage?: (request: string) => Promise<string>;
   /** Whether the reader may change roadmap data; decides which examples the greeting shows. */
   canWrite?: boolean;
+  /** Opt-in: restore the Owner's latest open Thread from `${baseUrl}/thread` on fresh tab open. */
+  restoreLatestThread?: boolean;
 }
 
 export interface ConversationContextState {
@@ -115,6 +117,7 @@ export function useRoadmapAssistantChat(
     getContext,
     onWebMcpMessage,
     canWrite = false,
+    restoreLatestThread = false,
   } = options;
 
   // Read once per mount: the saved conversation (if any) is shown and continued
@@ -192,6 +195,56 @@ export function useRoadmapAssistantChat(
 
   // Pure useMemo instantiates client reactively without render-phase ref mutations/reads
   const client = useMemo(() => new RoadmapChatClient({ baseUrl }), [baseUrl]);
+
+  // For the Owner, automatically resume the latest open Thread from Turso when opening a fresh tab
+  // (ADR-0012 / ADR-0015). Visitors stay sessionStorage/RAM-only so Owner history never leaks on logout.
+  const hasHydratedOwnerThreadRef = useRef(false);
+  const messagesCountRef = useRef(messages.length);
+  const isWelcomeOnlyRef = useRef(
+    messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID
+  );
+  useEffect(() => {
+    messagesCountRef.current = messages.length;
+    isWelcomeOnlyRef.current =
+      messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
+  }, [messages]);
+
+  useEffect(() => {
+    if (
+      !canWrite ||
+      !restoreLatestThread ||
+      hasHydratedOwnerThreadRef.current ||
+      initialConversationId ||
+      threadId ||
+      (initialMessages && initialMessages.length > 0)
+    ) {
+      return;
+    }
+    if (!isWelcomeOnlyRef.current) {
+      hasHydratedOwnerThreadRef.current = true;
+      return;
+    }
+    hasHydratedOwnerThreadRef.current = true;
+    let active = true;
+    void client.getLatestThread().then((latest) => {
+      if (!active || !latest?.threadId || !latest.messages.length || !isWelcomeOnlyRef.current) {
+        return;
+      }
+      setConversationId(latest.threadId);
+      setMessages(
+        latest.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          status: 'complete',
+          timestamp: new Date(m.timestamp),
+        }))
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [canWrite, restoreLatestThread, client, initialConversationId, threadId, initialMessages]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const smoothRef = useRef<SmoothStream | null>(null);
@@ -561,6 +614,9 @@ export function useRoadmapAssistantChat(
     // Stop anything still streaming so its tokens can't land in the new conversation
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
+    if (canWriteRef.current && restoreLatestThread && conversationId) {
+      void client.resetThread(conversationId);
+    }
     setIsLoading(false);
     setIsStreaming(false);
     setActiveTool(null);
@@ -569,7 +625,7 @@ export function useRoadmapAssistantChat(
     setMessages([buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)]);
     setConversationId(generateConversationId());
     clearConversation(storageKey);
-  }, [storageKey]);
+  }, [storageKey, client, conversationId, restoreLatestThread]);
 
   return {
     messages,

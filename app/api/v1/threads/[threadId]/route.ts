@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from '@/lib/auth/write-access';
 import {
   MAX_THREAD_MESSAGES,
   THREAD_RETENTION_MS,
   clipMessageContent,
+  cleanLessonIdField,
   cleanTopicField,
   isOwnerThreadId,
   isThreadRole,
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
   if ('denied' in thread) return thread.denied;
 
   try {
-    const [newestFirst, state] = await Promise.all([
+    const [newestFirst, rawState] = await Promise.all([
       prisma.threadMessage.findMany({
         where: { threadId: thread.threadId },
         orderBy: { id: 'desc' },
@@ -49,9 +51,25 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }),
       prisma.threadState.findUnique({
         where: { threadId: thread.threadId },
-        select: { activeTopicSlug: true, activeTopicTitle: true },
+        select: {
+          activeTopicSlug: true,
+          activeTopicTitle: true,
+          activeLessonId: true,
+          activeLessonTitle: true,
+          activeSection: true,
+        },
       }),
     ]);
+
+    const state = rawState
+      ? {
+          activeTopicSlug: rawState.activeTopicSlug,
+          activeTopicTitle: rawState.activeTopicTitle,
+          ...(rawState.activeLessonId ? { activeLessonId: rawState.activeLessonId } : {}),
+          ...(rawState.activeLessonTitle ? { activeLessonTitle: rawState.activeLessonTitle } : {}),
+          ...(rawState.activeSection ? { activeSection: rawState.activeSection } : {}),
+        }
+      : null;
 
     return NextResponse.json({ messages: newestFirst.reverse(), state }, { headers: NO_STORE });
   } catch (error) {
@@ -103,7 +121,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   }
 }
 
-// PATCH /api/v1/threads/[threadId] - Set the Topic the Thread has open.
+// PATCH /api/v1/threads/[threadId] - Update the Topic / Lesson / Section focus of the Thread.
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -113,17 +131,51 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   try {
     const body = await req.json();
+    const hasTopicSlug = 'activeTopicSlug' in (body ?? {});
+    const hasLessonId = 'activeLessonId' in (body ?? {});
+    const hasSection = 'activeSection' in (body ?? {});
+
     const activeTopicSlug = cleanTopicField(body?.activeTopicSlug);
-    if (!activeTopicSlug) {
-      return NextResponse.json({ error: 'activeTopicSlug is required' }, { status: 400 });
-    }
     const activeTopicTitle = cleanTopicField(body?.activeTopicTitle);
+    const activeLessonId = cleanLessonIdField(body?.activeLessonId);
+    const activeLessonTitle = cleanTopicField(body?.activeLessonTitle);
+    const activeSection = cleanTopicField(body?.activeSection);
+
+    // Reject calls that provide neither a valid topic nor a valid lesson/section update
+    if (!activeTopicSlug && !activeLessonId && !activeSection && !(hasLessonId && body?.activeLessonId === null)) {
+      return NextResponse.json(
+        { error: 'activeTopicSlug, activeLessonId, or activeSection is required' },
+        { status: 400 }
+      );
+    }
+
+    const createData: Prisma.ThreadStateUncheckedCreateInput = {
+      threadId: thread.threadId,
+      activeTopicSlug,
+      activeTopicTitle,
+      activeLessonId,
+      activeLessonTitle,
+      activeSection,
+      closedAt: null,
+    };
+
+    const updateData: Prisma.ThreadStateUncheckedUpdateInput = { closedAt: null };
+    if (hasTopicSlug && activeTopicSlug) {
+      updateData.activeTopicSlug = activeTopicSlug;
+      if (activeTopicTitle) updateData.activeTopicTitle = activeTopicTitle;
+    }
+    if (hasLessonId) {
+      updateData.activeLessonId = body?.activeLessonId === null ? null : activeLessonId;
+      updateData.activeLessonTitle = body?.activeLessonId === null ? null : activeLessonTitle;
+    }
+    if (hasSection) {
+      updateData.activeSection = body?.activeSection === null ? null : activeSection;
+    }
 
     await prisma.threadState.upsert({
       where: { threadId: thread.threadId },
-      create: { threadId: thread.threadId, activeTopicSlug, activeTopicTitle },
-      // A missing title keeps the stored one, like SessionStore.set_active_topic
-      update: { activeTopicSlug, ...(activeTopicTitle ? { activeTopicTitle } : {}) },
+      create: createData,
+      update: updateData,
     });
 
     return NextResponse.json({ ok: true });

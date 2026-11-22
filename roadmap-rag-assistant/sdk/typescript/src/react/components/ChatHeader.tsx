@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MoreVerticalIcon, NewChatIcon } from "../icons";
+import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MemoryIcon, MoreVerticalIcon, NewChatIcon } from "../icons";
 import { AbotMascot, type MascotState } from "./AbotMascot";
 
 export interface ChatHeaderProps {
@@ -11,6 +11,8 @@ export interface ChatHeaderProps {
   mascotRef?: React.RefObject<HTMLDivElement | null>;
   textRef?: React.RefObject<HTMLDivElement | null>;
   openContext: () => void;
+  openMemory?: () => void;
+  pendingMemoryCount?: number;
   handleCopyConversationId: (e: React.MouseEvent) => void;
   isOptionsOpen: boolean;
   optionsRef: React.RefObject<HTMLDivElement | null>;
@@ -20,7 +22,7 @@ export interface ChatHeaderProps {
   title: string;
 }
 
-export function ChatHeader({ activityState = "idle", canWrite, clearMessages, copiedConvId, hideBrand = false, mascotRef, textRef, openContext, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
+export function ChatHeader({ activityState = "idle", canWrite, clearMessages, copiedConvId, hideBrand = false, mascotRef, textRef, openContext, openMemory, pendingMemoryCount = 0, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
   return (
     // Like Claude: no divider; messages fade out under the header instead of meeting a line.
     <div
@@ -94,6 +96,26 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
                 <ContextIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
                 <span>Context</span>
               </button>
+              {canWrite && openMemory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    openMemory();
+                  }}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
+                >
+                  <span className="flex items-center gap-2">
+                    <MemoryIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                    <span>Bộ nhớ</span>
+                  </span>
+                  {pendingMemoryCount > 0 && (
+                    <span className="rounded-full bg-[#C2410C]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#C2410C]">
+                      {pendingMemoryCount}
+                    </span>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {

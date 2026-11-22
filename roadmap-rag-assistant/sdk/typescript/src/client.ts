@@ -7,15 +7,22 @@ import type {
   ChangeReview,
   ChatResponse,
   ConversationContext,
+  CreateOwnerMemoryInput,
   HealthResponse,
+  LatestThreadResponse,
+  OwnerMemoryItem,
+  OwnerMemoryStatus,
   PageContext,
   PlanResponse,
   ToolCallResult,
+  UpdateOwnerMemoryInput,
   WebMcpToolSpec,
 } from './types';
 
 export interface RoadmapChatClientOptions {
   baseUrl?: string;
+  /** Base path for Owner Memory CRUD API (defaults to `/api/v1/memories`). */
+  memoriesBaseUrl?: string;
   /** Total time allowed for one request, in ms. */
   timeout?: number;
   /** Longest silence allowed between stream chunks, in ms. */
@@ -60,11 +67,16 @@ export interface StreamCallbacks {
 
 export class RoadmapChatClient {
   private readonly baseUrl: string;
+  private readonly memoriesBaseUrl: string;
   private readonly timeout: number;
   private readonly idleTimeout: number;
 
   constructor(options: RoadmapChatClientOptions = {}) {
     this.baseUrl = (options.baseUrl || 'http://localhost:8000').replace(
+      /\/$/,
+      ''
+    );
+    this.memoriesBaseUrl = (options.memoriesBaseUrl || '/api/v1/memories').replace(
       /\/$/,
       ''
     );
@@ -374,6 +386,89 @@ export class RoadmapChatClient {
       throw new Error(`Context request failed (${resp.status})`);
     }
     return (await resp.json()) as ConversationContext;
+  }
+
+  /**
+   * Restore the Owner's latest open Thread from Turso (ADR-0012 / ADR-0015).
+   * Returns null for Visitors or when the host does not expose `/thread`.
+   */
+  async getLatestThread(): Promise<LatestThreadResponse | null> {
+    try {
+      const resp = await fetch(`${this.baseUrl}/thread`, { cache: 'no-store' });
+      if (!resp.ok) return null;
+      const data = (await resp.json()) as LatestThreadResponse;
+      if (!data || typeof data.threadId !== 'string' || !Array.isArray(data.messages)) return null;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Mark the Owner's Thread closed when starting a fresh conversation so a new tab will not re-open it.
+   */
+  async resetThread(threadId: string): Promise<void> {
+    try {
+      await fetch(`${this.baseUrl}/thread`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId }),
+      });
+    } catch {
+      // Fail-open: starting a new conversation locally still works
+    }
+  }
+
+  /** List Owner Memory items by status (`active`, `pending`, `archived`, or `all`). */
+  async listMemories(status: OwnerMemoryStatus | 'all' = 'active'): Promise<OwnerMemoryItem[]> {
+    const resp = await fetch(`${this.memoriesBaseUrl}?status=${encodeURIComponent(status)}`, {
+      cache: 'no-store',
+    });
+    if (!resp.ok) {
+      throw new Error(`Không tải được bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { memories?: OwnerMemoryItem[] };
+    return Array.isArray(data.memories) ? data.memories : [];
+  }
+
+  /** Create an explicit active Owner Memory entry. */
+  async createMemory(input: CreateOwnerMemoryInput): Promise<OwnerMemoryItem> {
+    const resp = await fetch(this.memoriesBaseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không lưu được mục bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { memory: OwnerMemoryItem };
+    return data.memory;
+  }
+
+  /** Update an Owner Memory entry (content, kind, scope, or status such as approving pending -> active). */
+  async updateMemory(id: string, input: UpdateOwnerMemoryInput): Promise<OwnerMemoryItem> {
+    const resp = await fetch(`${this.memoriesBaseUrl}/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không cập nhật được mục bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { memory: OwnerMemoryItem };
+    return data.memory;
+  }
+
+  /** Permanently delete an Owner Memory entry. */
+  async deleteMemory(id: string): Promise<void> {
+    const resp = await fetch(`${this.memoriesBaseUrl}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (!resp.ok) {
+      throw new Error(`Không xoá được mục bộ nhớ (${resp.status})`);
+    }
   }
 
   /**

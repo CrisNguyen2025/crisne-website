@@ -8,7 +8,12 @@ vi.mock("next/server", async (importOriginal) => ({
   after: afterMock,
 }));
 
-import { notifyRoadmapChanged, requestRagReindex } from "@/lib/roadmap/rag-reindex";
+import {
+  notifyOwnerMemoryChanged,
+  notifyRoadmapChanged,
+  requestOwnerMemoryCacheInvalidate,
+  requestRagReindex,
+} from "@/lib/roadmap/rag-reindex";
 
 const upstream = vi.fn<typeof fetch>();
 
@@ -63,6 +68,29 @@ describe("notifyRoadmapChanged", () => {
       throw new Error("`after` was called outside a request scope");
     });
     expect(() => notifyRoadmapChanged()).not.toThrow();
+    expect(upstream).toHaveBeenCalledOnce();
+  });
+});
+
+describe("requestOwnerMemoryCacheInvalidate & notifyOwnerMemoryChanged", () => {
+  it("posts to /internal/memory-cache/invalidate with the internal key", async () => {
+    upstream.mockResolvedValueOnce(new Response('{"status":"invalidated"}', { status: 200 }));
+    await requestOwnerMemoryCacheInvalidate();
+    const [url, init] = upstream.mock.calls[0];
+    expect(String(url)).toBe("https://rag.example.com/internal/memory-cache/invalidate");
+    expect(init?.method).toBe("POST");
+    expect((init?.headers as Record<string, string>)["x-internal-key"]).toBe("internal-secret");
+  });
+
+  it("defers cache invalidation via after() and falls back silently outside request scope", () => {
+    notifyOwnerMemoryChanged();
+    expect(afterMock).toHaveBeenCalledWith(requestOwnerMemoryCacheInvalidate);
+    expect(upstream).not.toHaveBeenCalled();
+
+    afterMock.mockImplementationOnce(() => {
+      throw new Error("outside request scope");
+    });
+    expect(() => notifyOwnerMemoryChanged()).not.toThrow();
     expect(upstream).toHaveBeenCalledOnce();
   });
 });

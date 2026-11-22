@@ -41,6 +41,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [news-inbox.md](news-inbox.md) | News hộp chờ xử lý (A+B) và luồng thêm link TikTok (TASK-news-inbox-ui-001) | 2026-11-22 lượt 2 (chưa commit) | N1, N4, N5, N7–N10 Pass |
 | [abot-context-panel.md](abot-context-panel.md) | Mục Context trong menu ⋮ của Abot, concept hội thoại như Claude Code (TASK-abot-context-panel-001) | 2026-11-14 (lần 2) | C1–C7 Pass; C8 chỉ có test tự động |
 | [topic-scoped-urls.md](topic-scoped-urls.md) | URL theo Topic `/[topicSlug]/[lessonSlug]#[headingSlug]`, redirect URL cũ (ADR-0014) | 2026-11-19 (chưa commit, trên `5baadeb`) | U1–U9 Pass |
+| [owner-memory.md](owner-memory.md) | Owner Memory xuyên Thread, cache invalidate, nối tiếp Thread & cách ly Visitor (ADR-0015) | Chưa chạy | Kịch bản mới (M1–M9) |
 
 ## Cách chạy (đã kiểm chứng)
 

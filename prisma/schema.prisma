@@ -74,12 +74,38 @@ model ThreadMessage {
 }
 
 model ThreadState {
-  threadId         String   @id
-  activeTopicSlug  String?
-  activeTopicTitle String?
-  updatedAt        DateTime @updatedAt
+  threadId          String    @id
+  activeTopicSlug   String?
+  activeTopicTitle  String?
+  activeLessonId    String?
+  activeLessonTitle String?
+  activeSection     String?
+  closedAt          DateTime?
+  updatedAt         DateTime  @updatedAt
 
   @@index([updatedAt])
+  @@index([closedAt, updatedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner Memory across Threads (ADR-0015): profile, techstack, goals, preferences, notes
+// Strictly Owner-only; never loaded or exposed for Visitors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OwnerMemory {
+  id               String    @id @default(uuid(7))
+  kind             String    // profile | techstack | goal | preference | learning_note
+  scopeTopicSlug   String?   // null = global; topic slug = injected when working on that Topic
+  content          String    // Short atomic fact (<= 300 chars)
+  source           String    @default("explicit") // explicit | suggested
+  status           String    @default("active")   // active | pending | archived
+  replacesMemoryId String?   // Optional active memory archived when a pending item is approved
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lastUsedAt       DateTime?
+
+  @@index([status, scopeTopicSlug])
+  @@index([kind, status])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

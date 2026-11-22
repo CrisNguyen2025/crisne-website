@@ -259,11 +259,27 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 @router.post("/chat/context")
 async def chat_context(req: ContextRequest) -> dict:
     """What the thread's next answer carries, against Abot's budget (rag_service/context_usage.py)."""
+    import asyncio
+
     from rag_service.context_usage import conversation_context
+    from rag_service.core.augmentation.history import history_store
+    from rag_service.core.memory import owner_memory_store
     from rag_service.domains.roadmap.profile import PROFILE
+    from rag_service.state import session_store
+
+    # Restore Owner thread state & history from Turso if this instance just cold-started (ADR-0012)
+    await asyncio.gather(history_store.load(req.thread_id), session_store.load(req.thread_id))
+    session_ctx = session_store.get_or_create(req.thread_id)
+    memories = await owner_memory_store.list_active(session_ctx.active_topic_slug) if is_owner() else []
 
     return conversation_context(
-        req.thread_id, PROFILE, model=settings.llm_model, window=settings.llm_context_window or None
+        req.thread_id,
+        PROFILE,
+        model=settings.llm_model,
+        window=settings.llm_context_window or None,
+        history=history_store,
+        owner_memories=memories,
+        memory_scope=session_ctx.active_topic_slug,
     )
 
 
@@ -301,6 +317,15 @@ async def reindex() -> dict:
 
     rag_engine.request_reindex()
     return {"status": "queued"}
+
+
+@router.post("/internal/memory-cache/invalidate", status_code=200)
+async def invalidate_memory_cache() -> dict:
+    """Next.js calls this after Owner Memory mutations in /api/v1/memories so RAM cache drops immediately (ADR-0015)."""
+    from rag_service.core.memory import owner_memory_store
+
+    owner_memory_store.invalidate()
+    return {"status": "invalidated"}
 
 
 @router.post("/chat/confirm", response_model=ActionConfirmResponse, response_model_exclude_none=True)

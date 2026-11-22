@@ -186,7 +186,7 @@ _STATUS_MAP = {
     "target": ["target", "muc tieu", "se hoc", "du dinh"],
 }
 
-_POINTING_WORDS = {"", "nay", "do", "day", "kia", "hien tai", "this", "it"}
+_POINTING_WORDS = {"", "nay", "do", "day", "kia", "hien tai", "vua tao", "vua them", "no", "this", "it"}
 
 
 @dataclass(frozen=True)
@@ -329,7 +329,7 @@ class LessonStatusCommands:
                         lesson = item
                         break
             else:
-                current_item_id = (page_context or {}).get("itemId")
+                current_item_id = ((page_context or {}).get("itemId") or "").strip() or (session_ctx.active_lesson_id or "").strip()
                 if current_item_id:
                     lesson = next((i for i in items if matches_page_item(i, current_item_id)), None)
 

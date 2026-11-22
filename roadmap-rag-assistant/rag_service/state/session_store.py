@@ -24,6 +24,7 @@ _PENDING_FIELDS = (
     "pending_content_draft",
     "pending_status_change",
     "pending_lesson_edit",
+    "pending_memory_change",
 )
 
 
@@ -36,7 +37,9 @@ class SessionContext(BaseModel):
     session_id: str
     active_topic_slug: Optional[str] = None
     active_topic_title: Optional[str] = None
-    last_action: Optional[StructuredRoadmapAction] = None
+    active_lesson_id: Optional[str] = None
+    active_lesson_title: Optional[str] = None
+    active_section: Optional[str] = None
     pending_confirmation: Optional[StructuredRoadmapAction] = None
     # A previewed section rename (domains/roadmap/sections.py): {"topic", "title", "from", "to", "count", "merge"}
     pending_section_rename: Optional[Dict[str, Any]] = None
@@ -46,8 +49,9 @@ class SessionContext(BaseModel):
     pending_status_change: Optional[Dict[str, Any]] = None
     # A previewed lesson title/section edit waiting for "ok" (domains/roadmap/lesson_edit.py)
     pending_lesson_edit: Optional[Dict[str, Any]] = None
-    recent_created_entities: List[dict] = Field(default_factory=list)
-    # The open Topic was read from Turso (SessionStore.load): once per context, so a thread without one is not read again
+    # A previewed Owner Memory create/archive waiting for "ok" (domains/roadmap/memory_commands.py, ADR-0015)
+    pending_memory_change: Optional[Dict[str, Any]] = None
+    # The open Topic/Lesson focus was read from Turso (SessionStore.load): once per context
     topic_loaded: bool = False
     # When each pending field was set (time.monotonic); stamped on assignment
     pending_since: Dict[str, float] = Field(default_factory=dict)
@@ -70,6 +74,12 @@ class SessionContext(BaseModel):
             return None
         return value
 
+    def clear_pending(self, *, keep: Optional[str] = None) -> None:
+        """Clear every pending confirmation slot except `keep` so a new preview never collides with an old one."""
+        for field in _PENDING_FIELDS:
+            if field != keep and getattr(self, field) is not None:
+                setattr(self, field, None)
+
 
 class SessionStore:
     """In-memory multi-turn session storage.
@@ -90,16 +100,60 @@ class SessionStore:
 
     def set_active_topic(self, session_id: str, slug: str, title: str = "") -> None:
         ctx = self.get_or_create(session_id)
+        switched = bool(slug and ctx.active_topic_slug and ctx.active_topic_slug != slug)
         ctx.active_topic_slug = slug
         if title:
             ctx.active_topic_title = title
+        elif switched:
+            ctx.active_topic_title = None
+        if switched:
+            ctx.active_lesson_id = None
+            ctx.active_lesson_title = None
+            ctx.active_section = None
         if self._api and slug and self._api.stored(session_id):
-            self._api.write_later(
-                "PATCH", session_id, {"activeTopicSlug": slug, "activeTopicTitle": ctx.active_topic_title}
-            )
+            payload: Dict[str, Any] = {
+                "activeTopicSlug": slug,
+                "activeTopicTitle": ctx.active_topic_title,
+            }
+            if switched:
+                payload["activeLessonId"] = None
+                payload["activeSection"] = None
+            self._api.write_later("PATCH", session_id, payload)
+
+    def set_active_lesson(
+        self,
+        session_id: str,
+        lesson_id: Optional[str],
+        lesson_title: str = "",
+        *,
+        section: Optional[str] = None,
+        topic_slug: Optional[str] = None,
+        topic_title: Optional[str] = None,
+    ) -> None:
+        """Track the Lesson/Section/Topic last acted on in this Thread for anaphora ("bài đó", "bài vừa tạo")."""
+        ctx = self.get_or_create(session_id)
+        if topic_slug:
+            ctx.active_topic_slug = topic_slug
+        if topic_title:
+            ctx.active_topic_title = topic_title
+        ctx.active_lesson_id = lesson_id or None
+        ctx.active_lesson_title = (lesson_title or None) if lesson_id else None
+        if section is not None:
+            ctx.active_section = section or None
+        if self._api and self._api.stored(session_id):
+            payload: Dict[str, Any] = {"activeLessonId": ctx.active_lesson_id}
+            if ctx.active_lesson_title:
+                payload["activeLessonTitle"] = ctx.active_lesson_title
+            if topic_slug:
+                payload["activeTopicSlug"] = topic_slug
+                if ctx.active_topic_title:
+                    payload["activeTopicTitle"] = ctx.active_topic_title
+            if section is not None:
+                payload["activeSection"] = ctx.active_section
+            self._api.write_later("PATCH", session_id, payload)
 
     async def load(self, session_id: str) -> None:
-        """Read an Owner thread's open Topic from Turso, once per context (after a restart or a spin down)."""
+        """Read an Owner thread's open Topic/Lesson focus from Turso, once per context (after a restart or spin down)."""
         ctx = self.get_or_create(session_id)
         if ctx.topic_loaded or not self._api or not self._api.stored(session_id):
             return
@@ -107,15 +161,19 @@ class SessionStore:
         ctx.topic_loaded = True
         data = await self._api.read(session_id)
         state = data.get("state") if data else None
+        if not isinstance(state, dict):
+            return
         # A Topic opened while the call was in flight is newer than the stored one
-        if isinstance(state, dict) and not ctx.active_topic_slug and isinstance(state.get("activeTopicSlug"), str):
+        if not ctx.active_topic_slug and isinstance(state.get("activeTopicSlug"), str):
             ctx.active_topic_slug = state["activeTopicSlug"]
             title = state.get("activeTopicTitle")
             ctx.active_topic_title = title if isinstance(title, str) else None
-
-    def set_last_action(self, session_id: str, action: StructuredRoadmapAction) -> None:
-        ctx = self.get_or_create(session_id)
-        ctx.last_action = action
+        if not ctx.active_lesson_id and isinstance(state.get("activeLessonId"), str):
+            ctx.active_lesson_id = state["activeLessonId"]
+            ltitle = state.get("activeLessonTitle")
+            ctx.active_lesson_title = ltitle if isinstance(ltitle, str) else None
+        if not ctx.active_section and isinstance(state.get("activeSection"), str):
+            ctx.active_section = state["activeSection"]
 
     def set_pending_confirmation(self, session_id: str, action: Optional[StructuredRoadmapAction]) -> None:
         ctx = self.get_or_create(session_id)
