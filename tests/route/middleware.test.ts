@@ -11,7 +11,7 @@ const authMock = vi.hoisted(() =>
 
 vi.mock("@/auth", () => ({ auth: authMock }));
 
-import middleware from "@/middleware";
+import middleware, { config } from "@/middleware";
 
 const createRequest = (
   pathname: string,
@@ -123,5 +123,23 @@ describe("Private App Middleware Auth Guard", () => {
     const location = res.headers.get("location")!;
     const locationUrl = new URL(location);
     expect(locationUrl.searchParams.get("callbackUrl")).toBe("/news");
+  });
+
+  describe("matcher", () => {
+    // Next.js anchors each matcher pattern to the whole pathname
+    const runsMiddleware = (pathname: string) =>
+      config.matcher.some((pattern) => new RegExp(`^${pattern}$`).test(pathname));
+
+    it("keeps the PWA manifest and icons public so Chrome can install the app", () => {
+      expect(runsMiddleware("/manifest.webmanifest")).toBe(false);
+      expect(runsMiddleware("/pwa-icon-192.png")).toBe(false);
+      expect(runsMiddleware("/pwa-icon-512.png")).toBe(false);
+    });
+
+    it("still guards private pages and the share target", () => {
+      expect(runsMiddleware("/news")).toBe(true);
+      expect(runsMiddleware("/share")).toBe(true);
+      expect(runsMiddleware("/api/news")).toBe(true);
+    });
   });
 });

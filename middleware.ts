@@ -47,6 +47,8 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // manifest.webmanifest must stay public: Chrome fetches it without cookies, and a redirect
+    // to /login makes the site installable only as a shortcut (no share target on Android)
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
