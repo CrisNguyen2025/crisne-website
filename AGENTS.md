@@ -37,10 +37,10 @@ Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file
 
 ## 🌿 Git branches
 
-- Nhánh làm việc (`feat/*`, `fix/*`, `chore/*`, `docs/*`, ...) sau khi đã merge vào `main` thì xoá ngay, tránh nhánh rác và conflict về sau.
-- Kiểm tra trước khi xoá: nhánh nằm trong `git branch --merged main`. Xoá local bằng `git branch -d <branch>`, không dùng `-D` (`-d` tự từ chối nếu còn commit chưa merge).
-- Xoá nhánh remote (`git push origin --delete <branch>`) là thao tác push: hỏi user trước. Sau đó chạy `git fetch --prune` để dọn ref `origin/*` đã mất.
-- Không xoá nhánh đang checkout hay nhánh đang có worktree; không đụng `main`.
+- Nhánh làm việc (`feat/*`, `fix/*`, `chore/*`, `docs/*`, ...) sau khi đã merge vào `main` (và `main` đã push lên `origin`, hoặc PR vào `main` đã merge) thì xoá ngay cả local lẫn remote, tránh nhánh rác và conflict về sau.
+- Kiểm tra trước khi xoá: local nằm trong `git branch --merged main` và xoá bằng `git branch -d <branch>` (không dùng `-D`).
+- Remote: nếu `origin/<branch>` đã nằm trong `origin/main` (`git branch -r --merged origin/main`), tự chạy luôn `git push origin --delete <branch>` rồi `git fetch --prune` không cần hỏi lại; chỉ hỏi user khi `origin/<branch>` còn commit chưa có trên `origin/main` (ví dụ squash merge hoặc lệch remote).
+- Không xoá nhánh đang checkout, nhánh đang có worktree, hoặc `main`.
 
 ## 📐 Conventions
 
