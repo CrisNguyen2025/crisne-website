@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -11,8 +12,10 @@ import {
   Plus,
   RotateCcw,
   Save,
+  Trash2,
   X,
 } from "lucide-react";
+import { formatNewsContentType } from "@/lib/news/content-type";
 import type { ExtractionMethod, NewsItemDto } from "@/lib/news/schemas";
 import { dayjs } from "@/lib/roadmap/date-utils";
 import { NewsDecisionBar } from "./NewsDecisionBar";
@@ -23,10 +26,13 @@ interface NewsReaderPanelProps {
   duplicateTitle?: string;
   isUpdating?: boolean;
   isReingesting?: boolean;
+  isDeleting?: boolean;
   onBack: () => void;
   onToggleRead: (item: NewsItemDto, nextState: "read" | "unread") => void;
+  onToggleSave: (item: NewsItemDto) => void;
   onDismiss: (item: NewsItemDto) => void;
   onReopen: (item: NewsItemDto) => void;
+  onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
   onSaveNote: (item: NewsItemDto, note: string | null) => Promise<void>;
   onReingest: (item: NewsItemDto) => void;
@@ -46,16 +52,30 @@ const AUTO_READ_DELAY_MS = 3_000;
 const SECTION_LABEL =
   "text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
+function toSafeHttpHref(rawUrl: string): string | undefined {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Inline reader for the selected item; remount it per item (`key={item.id}`) to reset drafts. */
 export function NewsReaderPanel({
   item,
   duplicateTitle,
   isUpdating = false,
   isReingesting = false,
+  isDeleting = false,
   onBack,
   onToggleRead,
+  onToggleSave,
   onDismiss,
   onReopen,
+  onDelete,
   onUpdateTags,
   onSaveNote,
   onReingest,
@@ -63,6 +83,8 @@ export function NewsReaderPanel({
 }: NewsReaderPanelProps) {
   const [tagInput, setTagInput] = useState("");
   const [noteDraft, setNoteDraft] = useState(item.personalNote ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [thumbFailed, setThumbFailed] = useState(false);
 
   const isNoteDirty = noteDraft.trim() !== (item.personalNote ?? "").trim();
 
@@ -121,18 +143,20 @@ export function NewsReaderPanel({
   const isWorking =
     item.ingestStatus === "queued" || item.ingestStatus === "processing";
   const publishedAt = item.publishedAt ?? item.createdAt;
+  const contentTypeLabel = isPendingIngest(item) ? null : formatNewsContentType(item.tags);
+  const safeThumbnailUrl = item.thumbnailUrl ? toSafeHttpHref(item.thumbnailUrl) : undefined;
 
   return (
     <article
       aria-label={item.title}
-      className="@container flex min-h-0 min-w-0 flex-1 flex-col bg-card"
+      className="@container flex min-h-0 min-w-0 flex-1 flex-col bg-card motion-safe:animate-in motion-safe:fade-in duration-150 ease-out"
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8 sm:py-7">
           <button
             type="button"
             onClick={onBack}
-            className="-ml-2 mb-3 inline-flex h-8 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground hover:bg-accent xl:hidden cursor-pointer"
+            className="-ml-2 mb-3 inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] xl:hidden cursor-pointer"
           >
             <ArrowLeft className="size-4" />
             Danh sách
@@ -152,6 +176,11 @@ export function NewsReaderPanel({
                 via {METHOD_LABELS[item.extractionMethod]}
               </span>
             )}
+            {contentTypeLabel && (
+              <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-foreground">
+                {contentTypeLabel}
+              </span>
+            )}
           </div>
 
           <h1
@@ -166,11 +195,11 @@ export function NewsReaderPanel({
 
           <div className="mt-3 flex flex-wrap items-center gap-1">
             <a
-              href={item.canonicalUrl}
+              href={toSafeHttpHref(item.canonicalUrl)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => onOpenExternal(item)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground hover:bg-accent"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
             >
               <ExternalLink className="size-4" />
               Mở nguồn gốc
@@ -184,10 +213,10 @@ export function NewsReaderPanel({
                   item.readState === "read" ? "unread" : "read"
                 )
               }
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 cursor-pointer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
             >
               {item.readState === "read" ? (
-                <CheckCircle2 className="size-4" />
+                <CheckCircle2 className="size-4 text-[var(--status-known)]" />
               ) : (
                 <Circle className="size-4" />
               )}
@@ -197,18 +226,62 @@ export function NewsReaderPanel({
               type="button"
               disabled={isReingesting || isWorking}
               onClick={() => onReingest(item)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 cursor-pointer"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
             >
               <RotateCcw
                 className={`size-4 ${isReingesting ? "animate-spin" : ""}`}
               />
               Phân tích sâu lại
             </button>
+            {confirmDelete ? (
+              <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
+                <button
+                  type="button"
+                  disabled={isDeleting || isUpdating}
+                  onClick={() => onDelete(item)}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-destructive px-2.5 text-xs font-medium text-destructive-foreground transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                >
+                  {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  Xác nhận xoá
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setConfirmDelete(false)}
+                  className="inline-flex h-8 items-center rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer"
+                >
+                  Huỷ
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={isDeleting || isUpdating}
+                onClick={() => setConfirmDelete(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+              >
+                <Trash2 className="size-4" />
+                Xoá
+              </button>
+            )}
           </div>
 
           {/* Two columns from a 672px wide panel: content on the left, Tag and note on the right */}
           <div className="@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_15rem] @2xl:gap-8">
             <div className="min-w-0">
+              {safeThumbnailUrl && !thumbFailed && (
+                <div className="mt-5 overflow-hidden rounded-xl border border-border bg-muted">
+                  <Image
+                    src={safeThumbnailUrl}
+                    alt={item.title}
+                    width={960}
+                    height={540}
+                    unoptimized
+                    onError={() => setThumbFailed(true)}
+                    className="max-h-60 w-full object-cover"
+                  />
+                </div>
+              )}
               {item.possibleDuplicateOfId && (
                 <div className="mt-5 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -270,7 +343,7 @@ export function NewsReaderPanel({
                     {item.tags.map((tag) => (
                       <span
                         key={tag}
-                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs transition-colors duration-150"
                       >
                         #{tag}
                         <button
@@ -278,7 +351,7 @@ export function NewsReaderPanel({
                           disabled={isUpdating}
                           onClick={() => void handleRemoveTag(tag)}
                           aria-label={`Xoá tag ${tag}`}
-                          className="rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                          className="-mr-0.5 rounded p-0.5 text-muted-foreground transition-colors duration-150 hover:bg-background/70 hover:text-foreground disabled:pointer-events-none cursor-pointer"
                         >
                           <X className="size-3" />
                         </button>
@@ -296,14 +369,14 @@ export function NewsReaderPanel({
                     onChange={(e) => setTagInput(e.target.value)}
                     placeholder="Thêm tag (vd: ai, nextjs)..."
                     maxLength={32}
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <button
                     type="submit"
                     disabled={
                       isUpdating || !tagInput.trim() || item.tags.length >= 8
                     }
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-50 cursor-pointer"
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                   >
                     <Plus className="size-3.5" />
                     Thêm
@@ -320,7 +393,7 @@ export function NewsReaderPanel({
                     Ghi chú cá nhân
                   </label>
                   {isNoteDirty && (
-                    <span className="text-xs text-[var(--editorial-accent)]">
+                    <span className="text-xs text-[var(--editorial-accent)] motion-safe:animate-in motion-safe:fade-in duration-150">
                       Chưa lưu
                     </span>
                   )}
@@ -332,15 +405,18 @@ export function NewsReaderPanel({
                   onChange={(e) => setNoteDraft(e.target.value)}
                   onKeyDown={handleNoteKeyDown}
                   placeholder="Áp dụng cho dự án nào, cần thử gì"
-                  className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 {isNoteDirty && (
-                  <div className="mt-2 flex justify-end">
+                  <div className="mt-2 flex items-center justify-end gap-2 motion-safe:animate-in motion-safe:fade-in duration-150">
+                    <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                      <kbd className="font-mono">⌘/Ctrl</kbd>+<kbd className="font-mono">Enter</kbd>
+                    </span>
                     <button
                       type="button"
                       disabled={isUpdating}
                       onClick={() => void handleSaveNote()}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                     >
                       {isUpdating ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -359,7 +435,8 @@ export function NewsReaderPanel({
 
       <NewsDecisionBar
         item={item}
-        isBusy={isUpdating}
+        isBusy={isUpdating || isDeleting}
+        onToggleSave={onToggleSave}
         onDismiss={onDismiss}
         onReopen={onReopen}
       />

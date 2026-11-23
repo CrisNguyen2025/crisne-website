@@ -4,9 +4,11 @@ import { auth } from "@/auth";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
 import { queryNewsFeed } from "@/lib/news/queries";
 import {
+  NewsContentTypeTagSchema,
   NewsFeedSortSchema,
   NewsFeedViewSchema,
   NewsOriginSchema,
+  ReadStateSchema,
 } from "@/lib/news/schemas";
 import { listNewsSources } from "@/lib/news/sources";
 import { NewsFeedClient } from "@/components/news/NewsFeedClient";
@@ -22,6 +24,8 @@ interface NewsPageProps {
     view?: string;
     origin?: string;
     tag?: string;
+    contentType?: string;
+    readState?: string;
     q?: string;
     sort?: string;
   }>;
@@ -38,12 +42,16 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
   const sp = await searchParams;
   const viewParsed = NewsFeedViewSchema.safeParse(sp.view);
   const originParsed = NewsOriginSchema.safeParse(sp.origin);
+  const contentTypeParsed = NewsContentTypeTagSchema.safeParse(sp.contentType);
+  const readStateParsed = ReadStateSchema.safeParse(sp.readState);
   const sortParsed = NewsFeedSortSchema.safeParse(sp.sort);
 
   const initialParams = {
     view: viewParsed.success ? viewParsed.data : ("inbox" as const),
     origin: originParsed.success ? originParsed.data : undefined,
     tag: sp.tag?.trim().toLowerCase() || undefined,
+    contentType: contentTypeParsed.success ? contentTypeParsed.data : undefined,
+    readState: readStateParsed.success ? readStateParsed.data : undefined,
     q: sp.q?.trim() || undefined,
     sort: sortParsed.success ? sortParsed.data : ("latest" as const),
   };
@@ -62,6 +70,7 @@ export default async function NewsPage({ searchParams }: NewsPageProps) {
         initialData={initialData}
         initialParams={initialParams}
         initialSources={initialSources}
+        workerConfigured={Boolean(process.env.NEWS_WORKER_URL?.trim())}
       />
     </Suspense>
   );

@@ -10,7 +10,12 @@ vi.mock("@/lib/auth/write-access", () => writeAccess);
 import { prisma } from "@/lib/prisma";
 import { POST as ingestPost } from "@/app/api/ingest/route";
 import { GET as newsListGet } from "@/app/api/news/route";
-import { GET as newsItemGet, PATCH as newsItemPatch } from "@/app/api/news/[id]/route";
+import { POST as markReadPost } from "@/app/api/news/mark-read/route";
+import {
+  DELETE as newsItemDelete,
+  GET as newsItemGet,
+  PATCH as newsItemPatch,
+} from "@/app/api/news/[id]/route";
 
 const jsonRequest = (url: string, method: string, body?: unknown) =>
   new NextRequest(url, {
@@ -50,16 +55,20 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
   it("rejects unauthorized callers on GET and PATCH /api/news/[id]", async () => {
     writeAccess.requireWriteAccess.mockResolvedValue(new Response("Unauthorized", { status: 401 }));
 
-    const [getRes, patchRes] = await Promise.all([
+    const [getRes, patchRes, deleteRes, markReadRes] = await Promise.all([
       newsItemGet(jsonRequest("http://localhost/api/news/item-1", "GET"), idContext("item-1")),
       newsItemPatch(
         jsonRequest("http://localhost/api/news/item-1", "PATCH", { readState: "read" }),
         idContext("item-1")
       ),
+      newsItemDelete(jsonRequest("http://localhost/api/news/item-1", "DELETE"), idContext("item-1")),
+      markReadPost(jsonRequest("http://localhost/api/news/mark-read", "POST", {})),
     ]);
 
     expect(getRes.status).toBe(401);
     expect(patchRes.status).toBe(401);
+    expect(deleteRes.status).toBe(401);
+    expect(markReadRes.status).toBe(401);
   });
 
   it("filters GET /api/news by view, origin, tag, accent-insensitive q, and sort=curated_first", async () => {
@@ -158,7 +167,7 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
     });
     expect(unreadData.tags).toEqual(
       expect.arrayContaining([
-        { tag: "ai", count: 2 },
+        { tag: "ai", count: 1 },
         { tag: "nextjs", count: 1 },
       ])
     );
@@ -179,6 +188,7 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
     );
     const savedAiData = await savedAiRes.json();
     expect(savedAiData.items).toHaveLength(2);
+    expect(savedAiData.tags).toEqual(expect.arrayContaining([{ tag: "ai", count: 2 }]));
 
     // view=draft
     const draftRes = await newsListGet(jsonRequest("http://localhost/api/news?view=draft", "GET"));
@@ -280,5 +290,72 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
     );
     expect(reIngest.status).toBe(200);
     expect((await reIngest.json()).status).toBe("duplicate");
+
+    // View=dismissed exposes dismissed items, and DELETE /api/news/[id] removes the item permanently
+    const listDismissed = await newsListGet(
+      jsonRequest("http://localhost/api/news?view=dismissed", "GET")
+    );
+    expect((await listDismissed.json()).items).toHaveLength(1);
+
+    const deleteRes = await newsItemDelete(
+      jsonRequest(`http://localhost/api/news/${created.id}`, "DELETE"),
+      idContext(created.id)
+    );
+    expect(deleteRes.status).toBe(200);
+    expect(await prisma.newsItem.count()).toBe(0);
+
+    const missingDelete = await newsItemDelete(
+      jsonRequest(`http://localhost/api/news/${created.id}`, "DELETE"),
+      idContext(created.id)
+    );
+    expect(missingDelete.status).toBe(404);
+  });
+
+  it("supports contentType, readState, and POST /api/news/mark-read", async () => {
+    await prisma.newsItem.createMany({
+      data: [
+        {
+          sourceUrl: "https://github.com/a/tip",
+          canonicalUrl: "https://github.com/a/tip",
+          domain: "github.com",
+          platform: "article",
+          origin: "manual",
+          title: "Tip 1",
+          tags: JSON.stringify(["tip", "nextjs"]),
+          reviewStatus: "published",
+          readState: "unread",
+          isSaved: false,
+        },
+        {
+          sourceUrl: "https://github.com/a/tut",
+          canonicalUrl: "https://github.com/a/tut",
+          domain: "github.com",
+          platform: "article",
+          origin: "manual",
+          title: "Tutorial 1",
+          tags: JSON.stringify(["tutorial", "ai"]),
+          reviewStatus: "published",
+          readState: "read",
+          isSaved: false,
+        },
+      ],
+    });
+
+    const byType = await newsListGet(
+      jsonRequest("http://localhost/api/news?view=inbox&contentType=tip&readState=unread", "GET")
+    );
+    const byTypeData = await byType.json();
+    expect(byTypeData.items.map((i: { title: string }) => i.title)).toEqual(["Tip 1"]);
+
+    const markRes = await markReadPost(
+      jsonRequest("http://localhost/api/news/mark-read", "POST", { view: "inbox" })
+    );
+    expect(markRes.status).toBe(200);
+    expect((await markRes.json()).updated).toBe(1);
+
+    const unreadAfter = await newsListGet(
+      jsonRequest("http://localhost/api/news?view=inbox&readState=unread", "GET")
+    );
+    expect((await unreadAfter.json()).items).toHaveLength(0);
   });
 });

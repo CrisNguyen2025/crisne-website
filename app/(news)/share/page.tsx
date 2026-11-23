@@ -10,18 +10,34 @@ function isDevOwnerBypass(): boolean {
   return process.env.NODE_ENV === "development" && process.env.DEV_OWNER_BYPASS === "true";
 }
 
-/** Extract the first plausible URL from a string (handles "Check this out: https://...") */
+const MAX_SHARE_URL_LENGTH = 2048;
+
+function isSafeHttpUrl(raw: string): boolean {
+  if (raw.length > MAX_SHARE_URL_LENGTH) return false;
+  try {
+    const parsed = new URL(raw);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      !parsed.username &&
+      !parsed.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Extract the first plausible http/https URL from a string (handles "Check this out: https://...") */
 function extractUrl(raw: string | undefined): string | null {
   if (!raw) return null;
-  raw = raw.trim();
-  try {
-    new URL(raw);
-    return raw; // already a valid URL
-  } catch {
-    // Try to find a URL inside the string (e.g. text param from some share sheets)
-    const match = raw.match(/https?:\/\/[^\s]+/);
-    return match ? match[0] : null;
+  const trimmed = raw.trim();
+  if (isSafeHttpUrl(trimmed)) {
+    return trimmed;
   }
+  const match = trimmed.match(/https?:\/\/[^\s]+/);
+  if (match && isSafeHttpUrl(match[0])) {
+    return match[0];
+  }
+  return null;
 }
 
 interface SharePageProps {

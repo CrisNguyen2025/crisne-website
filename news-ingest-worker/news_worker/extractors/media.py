@@ -16,6 +16,9 @@ from news_worker.ssrf import assert_public_url
 
 
 MAX_WHISPER_BYTES = 24 * 1024 * 1024
+MAX_MEDIA_DOWNLOAD_BYTES = 100 * 1024 * 1024
+YTDLP_SOCKET_TIMEOUT_SECONDS = 20
+LLM_API_TIMEOUT_SECONDS = 90.0
 
 
 def _format_upload_date(raw: str | None) -> str | None:
@@ -29,8 +32,10 @@ def _fetch_video_metadata_sync(url: str) -> dict[str, Any]:
     ydl_opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
+        "no_color": True,
         "skip_download": True,
         "noplaylist": True,
+        "socket_timeout": 15,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
@@ -63,7 +68,8 @@ def _transcribe_audio_sync(
     settings: Settings,
     duration: float | None = None,
 ) -> str:
-    if not settings.groq_api_key:
+    groq_keys = settings.get_groq_keys()
+    if not groq_keys:
         raise RuntimeError("Thiếu GROQ_API_KEY cho bước Whisper.")
     if duration is not None and duration > settings.max_video_duration_seconds:
         raise RuntimeError(
@@ -77,7 +83,10 @@ def _transcribe_audio_sync(
     ydl_opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
+        "no_color": True,
         "noplaylist": True,
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT_SECONDS,
+        "max_filesize": MAX_MEDIA_DOWNLOAD_BYTES,
         "format": "bestaudio/best",
         "outtmpl": str(tmp_path / "audio_src.%(ext)s"),
     }
@@ -90,7 +99,10 @@ def _transcribe_audio_sync(
     proc = subprocess.run(
         [
             "ffmpeg",
+            "-nostdin",
             "-y",
+            "-protocol_whitelist",
+            "file,pipe",
             "-i",
             str(src_file),
             "-vn",
@@ -112,14 +124,20 @@ def _transcribe_audio_sync(
     if mp3_file.stat().st_size > MAX_WHISPER_BYTES:
         raise RuntimeError("File audio nén vẫn vượt giới hạn kích thước Whisper (24MB).")
 
-    client = Groq(api_key=settings.groq_api_key)
-    with mp3_file.open("rb") as audio_fp:
-        transcription = client.audio.transcriptions.create(
-            model=settings.whisper_model,
-            file=(mp3_file.name, audio_fp.read()),
-            response_format="text",
-        )
-    return str(transcription).strip()
+    audio_bytes = mp3_file.read_bytes()
+    last_exc: Exception | None = None
+    for api_key in groq_keys:
+        try:
+            client = Groq(api_key=api_key, timeout=LLM_API_TIMEOUT_SECONDS)
+            transcription = client.audio.transcriptions.create(
+                model=settings.whisper_model,
+                file=(mp3_file.name, audio_bytes),
+                response_format="text",
+            )
+            return str(transcription).strip()
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc or RuntimeError("Groq Whisper thất bại.")
 
 
 async def transcribe_audio_with_whisper(
@@ -137,7 +155,8 @@ def _extract_slides_vision_sync(
     settings: Settings,
     duration: float | None = None,
 ) -> str:
-    if not settings.gemini_api_key:
+    gemini_keys = settings.get_gemini_keys()
+    if not gemini_keys:
         raise RuntimeError("Thiếu GEMINI_API_KEY cho bước Vision.")
     if duration is not None and duration > settings.max_video_duration_seconds:
         raise RuntimeError(
@@ -151,7 +170,10 @@ def _extract_slides_vision_sync(
     ydl_opts: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
+        "no_color": True,
         "noplaylist": True,
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT_SECONDS,
+        "max_filesize": MAX_MEDIA_DOWNLOAD_BYTES,
         "format": "bestvideo[height<=720][ext=mp4]/best[height<=720]/best",
         "outtmpl": str(tmp_path / "video_src.%(ext)s"),
     }
@@ -164,7 +186,10 @@ def _extract_slides_vision_sync(
     subprocess.run(
         [
             "ffmpeg",
+            "-nostdin",
             "-y",
+            "-protocol_whitelist",
+            "file,pipe",
             "-i",
             str(video_file),
             "-vf",
@@ -190,7 +215,10 @@ def _extract_slides_vision_sync(
         subprocess.run(
             [
                 "ffmpeg",
+                "-nostdin",
                 "-y",
+                "-protocol_whitelist",
+                "file,pipe",
                 "-i",
                 str(video_file),
                 "-vf",
@@ -220,12 +248,18 @@ def _extract_slides_vision_sync(
     for frame in frame_paths[: settings.max_vision_frames]:
         parts.append(types.Part.from_bytes(data=frame.read_bytes(), mime_type="image/jpeg"))
 
-    client = genai.Client(api_key=settings.gemini_api_key)
-    response = client.models.generate_content(
-        model=settings.vision_model,
-        contents=parts,
-    )
-    return (response.text or "").strip()
+    last_exc: Exception | None = None
+    for api_key in gemini_keys:
+        try:
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=settings.vision_model,
+                contents=parts,
+            )
+            return (response.text or "").strip()
+        except Exception as exc:
+            last_exc = exc
+    raise last_exc or RuntimeError("Gemini Vision thất bại.")
 
 
 async def extract_slides_with_vision(

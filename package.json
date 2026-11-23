@@ -18,6 +18,7 @@
     "news:worker": "cd news-ingest-worker && .venv/bin/uvicorn news_worker.server:app --reload --port 8001",
     "db:lesson-status": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-lesson-status.ts",
     "db:owner-memory": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-owner-memory.ts",
+    "db:news-source-cache": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-source-cache.ts",
     "db:import-seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-seed-lessons.ts",
     "db:flatten-sections": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/flatten-to-sections.ts",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",

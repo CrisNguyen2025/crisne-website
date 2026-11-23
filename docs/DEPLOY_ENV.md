@@ -45,7 +45,8 @@
 | `NEWS_WORKER_URL` | 🟡 🔗 | URL service `news-ingest-worker`. Thiếu = không gọi wake, worker tự poll |
 | `NEWS_WORKER_INTERNAL_KEY` | 🟡 🔗 | Phải khớp `INTERNAL_API_KEY` của `news-ingest-worker` |
 | `NEWS_ALLOWED_DOMAINS` | 🟡 | Domain whitelist bổ sung (phân tách dấu phẩy) ngoài danh sách mặc định |
-| `CRON_SECRET` | 🟡 | Secret cho lịch cron gọi `POST /api/news/cron` (`Authorization: Bearer` hoặc `x-cron-secret`) |
+| `CRON_SECRET` | 🟡 | Secret cho lịch cron gọi `GET` hoặc `POST /api/news/cron` (`Authorization: Bearer` hoặc `x-cron-secret`) |
+| `NEWS_CRON_MAX_ITEMS_PER_SOURCE` | 🟡 | Số bài tối đa lấy mỗi nguồn khi cron không truyền `maxItemsPerSource` (`1..30`, mặc định `10`) |
 
 ### AI — Cris AI (`/api/chat`)
 | ENV | | Ghi chú |
@@ -174,11 +175,16 @@ Cấu hình service tách riêng: Language **Docker** · Root Directory `news-in
 | `ADMIN_API_KEY` | 🔴 🔗 | Phải khớp `ADMIN_API_KEY` trên Next.js để claim & complete job |
 | `INTERNAL_API_KEY` | 🔴 🔗 | Phải khớp `NEWS_WORKER_INTERNAL_KEY` trên Next.js để nhận `/internal/wake` |
 | `GEMINI_API_KEY` | 🔴 | Tóm tắt JSON và Vision đọc slide/frame |
+| `GEMINI_API_KEYS` | 🟡 | `k1,k2` — xoay vòng key khi gặp rate limit (429) |
 | `GROQ_API_KEY` | 🟡 | Groq Whisper API (`whisper-large-v3-turbo`) + LLM fallback |
-| `LLM_MODEL` | 🟡 | Mặc định `gemini-2.5-flash` |
-| `VISION_MODEL` | 🟡 | Mặc định `gemini-2.5-flash` |
+| `GROQ_API_KEYS` | 🟡 | `k1,k2` — xoay vòng key Groq khi gặp rate limit |
+| `LLM_MODEL` | 🟡 | Mặc định `gemini-flash-latest` |
+| `VISION_MODEL` | 🟡 | Mặc định `gemini-flash-latest` |
 | `WHISPER_MODEL` | 🟡 | Mặc định `whisper-large-v3-turbo` |
-| `GROQ_LLM_MODEL` | 🟡 | Mặc định `llama-3.3-70b-versatile` |
+| `GROQ_LLM_MODEL` | 🟡 | Mặc định `openai/gpt-oss-120b` |
 | `POLL_INTERVAL_SECONDS` | 🟡 | Mặc định `10` |
+| `WORKER_CONCURRENCY` | 🟡 | Số job xử lý song song (`1..5`, mặc định `2`) |
 | `MAX_VIDEO_DURATION_SECONDS` | 🟡 | Mặc định `1200` (20 phút) |
 | `MAX_VISION_FRAMES` | 🟡 | Mặc định `6` |
+
+> Lưu ý nguồn Cron RSS: repo không cố định sẵn `vercel.json` hay workflow lịch để bạn tự chọn runner (Vercel Cron gọi `GET /api/news/cron`, hoặc GitHub Actions / cron ngoài gọi `POST /api/news/cron` kèm `Authorization: Bearer <CRON_SECRET>`). Nhớ chạy `yarn db:news-source-cache --apply` lên Turso nếu nâng cấp từ bảng `NewsSource` cũ.

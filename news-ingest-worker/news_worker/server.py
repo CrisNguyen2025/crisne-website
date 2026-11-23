@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 from contextlib import asynccontextmanager, suppress
+from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -19,6 +20,18 @@ def is_valid_internal_key(provided: str | None, expected: str) -> bool:
     return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
 
 
+async def _run_job_with_semaphore(
+    semaphore: asyncio.Semaphore,
+    job: Any,
+    client: NextJsJobClient,
+    active_settings: Settings,
+) -> None:
+    try:
+        await process_single_job(job, client, active_settings)
+    finally:
+        semaphore.release()
+
+
 async def _worker_loop(
     app: FastAPI,
     active_settings: Settings,
@@ -28,31 +41,52 @@ async def _worker_loop(
         base_url=active_settings.nextjs_api_base_url,
         admin_api_key=active_settings.admin_api_key,
     )
-    while not getattr(app.state, "stopping", False):
-        processed_any = False
-        try:
-            while not getattr(app.state, "stopping", False):
-                if not active_settings.admin_api_key:
-                    break
-                job = await client.claim_next_job()
-                if not job:
-                    break
-                processed_any = True
-                await process_single_job(job, client, active_settings)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            print(f"[news-worker] poll error: {exc}")
+    concurrency = max(1, min(active_settings.worker_concurrency, 5))
+    semaphore = asyncio.Semaphore(concurrency)
+    in_flight: set[asyncio.Task[None]] = set()
 
-        if processed_any:
-            continue
+    try:
+        while not getattr(app.state, "stopping", False):
+            wake_event.clear()
+            claimed_any = False
+            try:
+                while not getattr(app.state, "stopping", False):
+                    if not active_settings.admin_api_key:
+                        break
+                    await semaphore.acquire()
+                    try:
+                        job = await client.claim_next_job()
+                    except Exception:
+                        semaphore.release()
+                        raise
+                    if not job:
+                        semaphore.release()
+                        break
+                    claimed_any = True
+                    task = asyncio.create_task(
+                        _run_job_with_semaphore(semaphore, job, client, active_settings)
+                    )
+                    in_flight.add(task)
+                    task.add_done_callback(in_flight.discard)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                print(f"[news-worker] poll error: {exc}")
 
-        wake_event.clear()
-        with suppress(TimeoutError):
-            await asyncio.wait_for(
-                wake_event.wait(),
-                timeout=max(1.0, active_settings.poll_interval_seconds),
-            )
+            if claimed_any:
+                continue
+
+            with suppress(TimeoutError):
+                await asyncio.wait_for(
+                    wake_event.wait(),
+                    timeout=max(1.0, active_settings.poll_interval_seconds),
+                )
+    finally:
+        for task in list(in_flight):
+            task.cancel()
+        if in_flight:
+            await asyncio.gather(*in_flight, return_exceptions=True)
+        await client.aclose()
 
 
 def create_app(custom_settings: Settings | None = None, enable_worker_loop: bool = True) -> FastAPI:
@@ -72,8 +106,8 @@ def create_app(custom_settings: Settings | None = None, enable_worker_loop: bool
                 name
                 for name, val in (
                     ("ADMIN_API_KEY", active_settings.admin_api_key),
-                    ("GEMINI_API_KEY", active_settings.gemini_api_key),
-                    ("GROQ_API_KEY", active_settings.groq_api_key),
+                    ("GEMINI_API_KEY", bool(active_settings.get_gemini_keys())),
+                    ("GROQ_API_KEY", bool(active_settings.get_groq_keys())),
                 )
                 if not val
             ]

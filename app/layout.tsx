@@ -14,6 +14,7 @@ import {
 import { GA_ID } from "@/lib/analytics";
 import { SiteChatbot } from "@/components/site-chatbot";
 import { RoadmapWebMcpRegistrar } from "@/components/roadmap/RoadmapWebMcpRegistrar";
+import { PwaServiceWorkerRegistrar } from "@/components/news/PwaServiceWorkerRegistrar";
 import { ToastProvider } from "@/components/ui/toast";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import "./styles/globals.css";
@@ -178,6 +179,7 @@ export default function RootLayout({
               <NuqsAdapter>{children}</NuqsAdapter>
               <SiteChatbot />
               <RoadmapWebMcpRegistrar />
+              <PwaServiceWorkerRegistrar />
             </ToastProvider>
           </TooltipProvider>
         </ThemeProvider>

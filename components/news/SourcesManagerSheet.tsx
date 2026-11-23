@@ -32,6 +32,11 @@ export function SourcesManagerSheet({
 }: SourcesManagerSheetProps) {
   const { toast } = useToast();
   const [sources, setSources] = useState<NewsSourceDto[]>(initialSources);
+  const [prevInitialSources, setPrevInitialSources] = useState<NewsSourceDto[]>(initialSources);
+  if (initialSources !== prevInitialSources) {
+    setPrevInitialSources(initialSources);
+    setSources(initialSources);
+  }
   const [nameInput, setNameInput] = useState("");
   const [feedUrlInput, setFeedUrlInput] = useState("");
   const [domainInput, setDomainInput] = useState("");
@@ -134,7 +139,7 @@ export function SourcesManagerSheet({
       await reloadSources();
       onChanged();
       toast(
-        `Đã quét ${summary.sourcesProcessed} nguồn: +${summary.totalQueued} bài vào Chờ duyệt`,
+        `Đã quét ${summary.sourcesProcessed} nguồn: +${summary.totalQueued} bài vào Chờ xử lý`,
         "success"
       );
     } catch (error) {
@@ -170,7 +175,7 @@ export function SourcesManagerSheet({
             type="button"
             disabled={isSyncingAll || sources.length === 0}
             onClick={() => void handleSync()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             {isSyncingAll ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -184,7 +189,7 @@ export function SourcesManagerSheet({
             type="button"
             onClick={onClose}
             aria-label="Đóng quản lý nguồn"
-            className="-mr-1 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+            className="-mr-1 rounded-lg p-1.5 text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
           >
             <X className="size-4" />
           </button>
@@ -217,7 +222,7 @@ export function SourcesManagerSheet({
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 placeholder="Vercel Blog"
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
@@ -234,7 +239,7 @@ export function SourcesManagerSheet({
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
                 placeholder="Tự tách từ Feed URL"
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </div>
@@ -253,7 +258,7 @@ export function SourcesManagerSheet({
               value={feedUrlInput}
               onChange={(e) => setFeedUrlInput(e.target.value)}
               placeholder="https://vercel.com/atom"
-              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -271,14 +276,14 @@ export function SourcesManagerSheet({
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="nextjs, frontend"
-                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             <button
               type="submit"
               disabled={isCreating}
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+              className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
             >
               {isCreating ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -298,20 +303,36 @@ export function SourcesManagerSheet({
         </form>
 
         {/* Sync Summary Banner */}
-        {lastSyncSummary && (
-          <div
-            role="status"
-            className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-xs text-emerald-800 dark:text-emerald-300"
-          >
-            <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-            <div>
-              <p className="font-medium">
-                Đã quét {lastSyncSummary.sourcesProcessed} nguồn: +{lastSyncSummary.totalQueued} bài
-                mới vào tab Chờ duyệt · {lastSyncSummary.totalDuplicates} bài đã tồn tại
-              </p>
+        {lastSyncSummary && (() => {
+          const totalSkipped = lastSyncSummary.results.reduce(
+            (sum, r) => sum + r.skippedErrors,
+            0
+          );
+          const failedSources = lastSyncSummary.results.filter((r) => Boolean(r.error));
+          const notModifiedCount = lastSyncSummary.results.filter((r) => r.notModified).length;
+
+          return (
+            <div
+              role="status"
+              className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-3 text-xs text-emerald-800 dark:text-emerald-300 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 duration-200"
+            >
+              <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium">
+                  Đã quét {lastSyncSummary.sourcesProcessed} nguồn: +{lastSyncSummary.totalQueued} bài
+                  mới vào Chờ xử lý · {lastSyncSummary.totalDuplicates} bài đã tồn tại
+                  {notModifiedCount > 0 ? ` · ${notModifiedCount} nguồn chưa đổi` : ""}
+                  {totalSkipped > 0 ? ` · ${totalSkipped} link bị bỏ qua` : ""}
+                </p>
+                {failedSources.map((src) => (
+                  <p key={src.sourceId} className="text-destructive">
+                    {src.sourceName}: {src.error}
+                  </p>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Configured Sources List */}
         <div className="space-y-3">
@@ -321,7 +342,7 @@ export function SourcesManagerSheet({
 
           {sources.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-xs text-muted-foreground">
-              Chưa có nguồn RSS nào. Thêm một feed ở trên để cron tự lấy bài định kỳ vào tab Chờ duyệt.
+              Chưa có nguồn RSS nào. Thêm một feed ở trên để cron tự lấy bài định kỳ vào Chờ xử lý.
             </div>
           ) : (
             sources.map((source) => {
@@ -330,7 +351,7 @@ export function SourcesManagerSheet({
               return (
                 <div
                   key={source.id}
-                  className="rounded-xl border border-border bg-card p-4 space-y-2.5"
+                  className="rounded-xl border border-border bg-card p-4 space-y-2.5 transition-colors duration-150 hover:border-foreground/20"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -363,7 +384,7 @@ export function SourcesManagerSheet({
                         onClick={() => void handleSync(source.id)}
                         aria-label={`Quét nguồn ${source.name}`}
                         title="Quét nguồn này ngay"
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50 cursor-pointer"
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw
                           className={`size-3 ${
@@ -377,8 +398,11 @@ export function SourcesManagerSheet({
                         type="button"
                         disabled={isBusy}
                         onClick={() => void handleToggleEnabled(source)}
-                        className="inline-flex h-7 items-center rounded-md border border-border px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 cursor-pointer"
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                       >
+                        {busySourceId === source.id && (
+                          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                        )}
                         {source.enabled ? "Tắt" : "Bật"}
                       </button>
 
@@ -388,7 +412,7 @@ export function SourcesManagerSheet({
                         onClick={() => void handleDelete(source)}
                         aria-label={`Xoá nguồn ${source.name}`}
                         title="Xoá nguồn"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50 cursor-pointer"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
                       >
                         <Trash2 className="size-3.5" />
                       </button>

@@ -41,6 +41,12 @@ export const DEFAULT_ALLOWED_DOMAINS: readonly string[] = [
   "anthropic.com",
   "blog.google",
   "huggingface.co",
+  "news.ycombinator.com",
+  "x.com",
+  "twitter.com",
+  "web.dev",
+  "developer.mozilla.org",
+  "simonwillison.net",
 ];
 
 export const SHORT_LINK_DOMAINS: readonly string[] = [
@@ -77,6 +83,7 @@ const TRACKING_QUERY_PARAMS = new Set([
 
 const MAX_REDIRECT_HOPS = 5;
 const REDIRECT_TIMEOUT_MS = 5_000;
+const MAX_URL_LENGTH = 2048;
 
 export interface LookupAddress {
   address: string;
@@ -139,11 +146,21 @@ function parseIpv4ToInt(ip: string): number | null {
   return value >>> 0;
 }
 
+export function assertNoUrlCredentials(
+  parsed: URL,
+  message = "URL không được chứa thông tin đăng nhập."
+): void {
+  if (parsed.username || parsed.password) {
+    throw new UrlGuardError("INVALID_URL", 400, message);
+  }
+}
+
 function isPrivateIpv4(ip: string): boolean {
   const num = parseIpv4ToInt(ip);
   if (num === null) return true;
   const first = (num >>> 24) & 0xff;
   const second = (num >>> 16) & 0xff;
+  const third = (num >>> 8) & 0xff;
 
   if (first === 0) return true; // 0.0.0.0/8
   if (first === 10) return true; // 10.0.0.0/8
@@ -151,9 +168,13 @@ function isPrivateIpv4(ip: string): boolean {
   if (first === 127) return true; // 127.0.0.0/8 loopback
   if (first === 169 && second === 254) return true; // 169.254.0.0/16 link-local / metadata
   if (first === 172 && second >= 16 && second <= 31) return true; // 172.16.0.0/12
-  if (first === 192 && second === 0 && ((num >>> 8) & 0xff) === 0) return true; // 192.0.0.0/24
+  if (first === 192 && second === 0 && third === 0) return true; // 192.0.0.0/24
+  if (first === 192 && second === 0 && third === 2) return true; // 192.0.2.0/24 TEST-NET-1
+  if (first === 192 && second === 88 && third === 99) return true; // 192.88.99.0/24 6to4 relay
   if (first === 192 && second === 168) return true; // 192.168.0.0/16
   if (first === 198 && (second === 18 || second === 19)) return true; // 198.18.0.0/15 benchmark
+  if (first === 198 && second === 51 && third === 100) return true; // 198.51.100.0/24 TEST-NET-2
+  if (first === 203 && second === 0 && third === 113) return true; // 203.0.113.0/24 TEST-NET-3
   if (first >= 224) return true; // multicast & reserved (224.0.0.0/4, 240.0.0.0/4)
   return false;
 }
@@ -199,9 +220,7 @@ function isPrivateIpv6(ip: string): boolean {
   const words = expandIpv6Words(ip);
   if (!words) return true;
 
-  const allZero = words.every((w) => w === 0);
-  const isLoopback = words.slice(0, 7).every((w) => w === 0) && words[7] === 1;
-  if (allZero || isLoopback) return true;
+  if (words.slice(0, 6).every((w) => w === 0)) return true;
 
   // IPv4-mapped IPv6 (::ffff:0:0/96)
   const isIpv4Mapped = words.slice(0, 5).every((w) => w === 0) && words[5] === 0xffff;
@@ -212,16 +231,24 @@ function isPrivateIpv6(ip: string): boolean {
     return isPrivateIpv4(mappedIpv4);
   }
 
-  // NAT64 (64:ff9b::/96)
+  // NAT64 (64:ff9b::/96 and 64:ff9b:1::/48)
   if (words[0] === 0x0064 && words[1] === 0xff9b && words.slice(2, 6).every((w) => w === 0)) {
     const hi = words[6];
     const lo = words[7];
     const mappedIpv4 = `${(hi >>> 8) & 0xff}.${hi & 0xff}.${(lo >>> 8) & 0xff}.${lo & 0xff}`;
     return isPrivateIpv4(mappedIpv4);
   }
+  if (words[0] === 0x0064 && words[1] === 0xff9b && words[2] === 0x0001) return true;
+
+  if (words[0] === 0x0100 && words[1] === 0 && words[2] === 0 && words[3] === 0) return true;
+  if (words[0] === 0x2001 && words[1] === 0x0000) return true;
+  if (words[0] === 0x2001 && words[1] === 0x0002 && words[2] === 0) return true;
+  if (words[0] === 0x2001 && words[1] === 0x0db8) return true;
+  if (words[0] === 0x2002) return true;
 
   if ((words[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 Unique Local
   if ((words[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 Link-local
+  if ((words[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 Site-local
   if ((words[0] & 0xff00) === 0xff00) return true; // ff00::/8 Multicast
   return false;
 }
@@ -243,7 +270,15 @@ export async function assertPublicHostname(
   lookupFn: HostLookupFn = defaultLookupFn
 ): Promise<void> {
   const clean = normalizeHost(hostname);
-  if (!clean || clean === "localhost" || clean.endsWith(".localhost") || clean.endsWith(".local") || clean.endsWith(".internal")) {
+  if (
+    !clean ||
+    clean === "localhost" ||
+    clean === "localhost.localdomain" ||
+    clean === "ip6-localhost" ||
+    clean.endsWith(".localhost") ||
+    clean.endsWith(".local") ||
+    clean.endsWith(".internal")
+  ) {
     throw new UrlGuardError("SSRF_BLOCKED", 403, `Hostname bị chặn vì lý do bảo mật: ${hostname}`);
   }
 
@@ -313,6 +348,7 @@ export function normalizeCanonicalUrl(rawUrl: string): {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Chỉ hỗ trợ URL http hoặc https.");
   }
+  assertNoUrlCredentials(parsed);
 
   const rawDomain = normalizeHost(parsed.hostname);
   const domain = rawDomain.startsWith("m.") ? rawDomain.slice(2) : rawDomain;
@@ -329,9 +365,23 @@ export function normalizeCanonicalUrl(rawUrl: string): {
     }
   }
 
+  // arXiv PDF links fail HTML extraction; normalize to the abstract page so both dedupe together
+  if (domain === "arxiv.org") {
+    const pdfMatch = parsed.pathname.match(/^\/pdf\/(.+?)(?:\.pdf)?$/i);
+    if (pdfMatch?.[1]) {
+      return {
+        canonicalUrl: `https://arxiv.org/abs/${pdfMatch[1]}`,
+        domain: "arxiv.org",
+        platform: "article",
+      };
+    }
+  }
+
   const cleanUrl = new URL(parsed.toString());
   cleanUrl.protocol = "https:";
   cleanUrl.hostname = domain;
+  cleanUrl.username = "";
+  cleanUrl.password = "";
   cleanUrl.hash = "";
 
   for (const key of Array.from(cleanUrl.searchParams.keys())) {
@@ -375,7 +425,12 @@ async function followRedirectsSafely(
         signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS),
       });
 
-      if (response.status === 403 || response.status === 405 || response.status === 501) {
+      const shouldRetryWithGet =
+        response.status === 405 ||
+        response.status === 501 ||
+        (response.status === 403 && isShortLinkHostname(current.hostname));
+      if (shouldRetryWithGet) {
+        await response.body?.cancel();
         response = await fetchFn(current.toString(), {
           method: "GET",
           headers: { Range: "bytes=0-0" },
@@ -412,6 +467,7 @@ async function followRedirectsSafely(
     if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
       throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Redirect tới protocol không được hỗ trợ.");
     }
+    assertNoUrlCredentials(nextUrl, "Redirect trả về URL chứa thông tin đăng nhập không hợp lệ.");
 
     await assertPublicHostname(nextUrl.hostname, lookupFn);
     // Chained short links (t.co → bit.ly → …) are allowed as hops; the final target is checked by the caller
@@ -433,6 +489,9 @@ export async function resolveAndValidateUrl(
   options: ResolveUrlOptions = {}
 ): Promise<ValidatedUrlResult> {
   const sourceUrl = rawUrl.trim();
+  if (sourceUrl.length > MAX_URL_LENGTH) {
+    throw new UrlGuardError("INVALID_URL", 400, "URL vượt quá độ dài tối đa 2048 ký tự.");
+  }
   let parsed: URL;
   try {
     parsed = new URL(sourceUrl);
@@ -443,6 +502,7 @@ export async function resolveAndValidateUrl(
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Chỉ hỗ trợ URL http hoặc https.");
   }
+  assertNoUrlCredentials(parsed);
 
   const allowedDomains = getAllowedDomains(options.extraAllowedDomains);
   const lookupFn = options.lookupFn ?? defaultLookupFn;

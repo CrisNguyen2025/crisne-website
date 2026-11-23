@@ -40,6 +40,7 @@ export default async function NewsSourcesPage() {
         initialParams={initialParams}
         initialSources={initialSources}
         initialSourcesOpen={true}
+        workerConfigured={Boolean(process.env.NEWS_WORKER_URL?.trim())}
       />
     </Suspense>
   );

@@ -52,14 +52,15 @@ describe("news feed UI components", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders a NewsCard row that opens the item and has no quick actions", () => {
-    const item = makeItem();
+  it("renders a NewsCard row with contentType label and has no quick actions", () => {
+    const item = makeItem({ tags: ["tip", "ai", "architecture"] });
     const onSelect = vi.fn();
 
     render(<NewsCard item={item} onSelect={onSelect} />);
 
     expect(screen.getByText(item.title)).toBeTruthy();
     expect(screen.getByText(item.tldr!)).toBeTruthy();
+    expect(screen.getByText("Mẹo")).toBeTruthy();
     expect(screen.getByLabelText("Chưa đọc")).toBeTruthy();
     // The title button stretches over the whole row, so it is the row's only control
     expect(screen.getAllByRole("button")).toHaveLength(1);
@@ -88,8 +89,10 @@ describe("news feed UI components", () => {
       item,
       onBack: vi.fn(),
       onToggleRead: vi.fn(),
+      onToggleSave: vi.fn(),
       onDismiss: vi.fn(),
       onReopen: vi.fn(),
+      onDelete: vi.fn(),
       onUpdateTags: vi.fn(async () => {}),
       onSaveNote: vi.fn(async () => {}),
       onReingest: vi.fn(),
@@ -99,30 +102,40 @@ describe("news feed UI components", () => {
     return { props, ...render(<NewsReaderPanel {...props} />) };
   }
 
-  it("renders NewsReaderPanel details and supports editing tags and personalNote", async () => {
+  it("renders NewsReaderPanel details, thumbnail, 2-step delete, and tag/note editing", async () => {
     const item = makeItem({
       possibleDuplicateOfId: "news-0",
       personalNote: "Note cũ",
+      thumbnailUrl: "https://i.ytimg.com/vi/abc/hqdefault.jpg",
+      tags: ["tutorial", "ai", "architecture"],
     });
     const onUpdateTags = vi.fn(async () => {});
     const onSaveNote = vi.fn(async () => {});
+    const onDelete = vi.fn();
 
-    renderPanel(item, { duplicateTitle: "Bài viết tương tự trước đó", onUpdateTags, onSaveNote });
+    renderPanel(item, {
+      duplicateTitle: "Bài viết tương tự trước đó",
+      onUpdateTags,
+      onSaveNote,
+      onDelete,
+    });
 
     expect(screen.getByText("via Captions")).toBeTruthy();
+    expect(screen.getByText("Hướng dẫn")).toBeTruthy();
+    expect(screen.getByAltText(item.title)).toBeTruthy();
     expect(screen.getByText("Bài viết tương tự trước đó")).toBeTruthy();
     expect(screen.getByText("Dùng schema rõ ràng.")).toBeTruthy();
 
     // Remove existing tag
     fireEvent.click(screen.getByRole("button", { name: "Xoá tag ai" }));
-    expect(onUpdateTags).toHaveBeenCalledWith(item, ["architecture"]);
+    expect(onUpdateTags).toHaveBeenCalledWith(item, ["tutorial", "architecture"]);
 
     // Add new tag
     const tagInput = screen.getByPlaceholderText("Thêm tag (vd: ai, nextjs)...");
     fireEvent.change(tagInput, { target: { value: "LLM" } });
     fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
     await waitFor(() => {
-      expect(onUpdateTags).toHaveBeenCalledWith(item, ["ai", "architecture", "llm"]);
+      expect(onUpdateTags).toHaveBeenCalledWith(item, ["tutorial", "ai", "architecture", "llm"]);
     });
 
     // Edit & save personalNote
@@ -132,20 +145,29 @@ describe("news feed UI components", () => {
     await waitFor(() => {
       expect(onSaveNote).toHaveBeenCalledWith(item, "Áp dụng cho pipeline ingest");
     });
+
+    // 2-step delete confirmation
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận xoá" }));
+    expect(onDelete).toHaveBeenCalledWith(item);
   });
 
-  it("offers only Bỏ qua for an inbox item and Đưa lại Chờ xử lý once it is done", () => {
+  it("offers Lưu + Bỏ qua for inbox items and Đưa lại Chờ xử lý for saved/dismissed items", () => {
     const inboxItem = makeItem();
     const { props: inboxProps } = renderPanel(inboxItem);
-    expect(screen.queryByRole("button", { name: "Đã xử lý" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Lưu" }));
+    expect(inboxProps.onToggleSave).toHaveBeenCalledWith(inboxItem);
     fireEvent.click(screen.getByRole("button", { name: "Bỏ qua" }));
     expect(inboxProps.onDismiss).toHaveBeenCalledWith(inboxItem);
     cleanup();
 
-    const doneItem = makeItem({ isSaved: true });
-    const { props: doneProps } = renderPanel(doneItem);
+    const savedItem = makeItem({ isSaved: true });
+    const { props: savedProps } = renderPanel(savedItem);
+    fireEvent.click(screen.getByRole("button", { name: "Đã lưu" }));
+    expect(savedProps.onToggleSave).toHaveBeenCalledWith(savedItem);
     fireEvent.click(screen.getByRole("button", { name: "Đưa lại Chờ xử lý" }));
-    expect(doneProps.onReopen).toHaveBeenCalledWith(doneItem);
+    expect(savedProps.onReopen).toHaveBeenCalledWith(savedItem);
     cleanup();
 
     const dismissedItem = makeItem({ reviewStatus: "dismissed" });
@@ -163,8 +185,10 @@ describe("news feed UI components", () => {
         item: makeItem({ title }),
         onBack: vi.fn(),
         onToggleRead: (item: NewsItemDto, next: "read" | "unread") => onToggleRead(item, next),
+        onToggleSave: vi.fn(),
         onDismiss: vi.fn(),
-          onReopen: vi.fn(),
+        onReopen: vi.fn(),
+        onDelete: vi.fn(),
         onUpdateTags: vi.fn(async () => {}),
         onSaveNote: vi.fn(async () => {}),
         onReingest: vi.fn(),
@@ -189,12 +213,12 @@ describe("news feed UI components", () => {
     }
   });
 
-  it("dismisses the selected item from the feed panel and moves on to the next one", async () => {
+  it("dismisses and saves items from the feed panel, moves on, and supports Tải thêm", async () => {
     const draft = makeItem({ id: "draft-1", title: "Bài RSS chờ duyệt", origin: "cron", reviewStatus: "draft" });
     const next = makeItem({ id: "news-2", title: "Bài kế tiếp" });
     const counts = {
-      total: 2, queued: 0, processing: 0, ready: 2, partial: 0, failed: 0,
-      draft: 1, unread: 1, saved: 0, queue: 0, inbox: 2, done: 0,
+      total: 3, queued: 0, processing: 0, ready: 3, partial: 0, failed: 0,
+      draft: 1, unread: 2, saved: 0, dismissed: 0, queue: 0, inbox: 3, done: 0,
     };
     // jsdom has no matchMedia; report a wide screen so list and reader render side by side
     vi.stubGlobal("matchMedia", (query: string) => ({
@@ -206,15 +230,15 @@ describe("news feed UI components", () => {
     const updateSpy = vi
       .spyOn(newsService, "updateNewsItem")
       .mockImplementation(async (id) => ({ item: id === draft.id ? draft : next }));
-    vi.spyOn(newsService, "fetchNewsFeed").mockResolvedValue({
-      items: [draft, next], counts, tags: [], duplicateTitles: {},
+    const fetchSpy = vi.spyOn(newsService, "fetchNewsFeed").mockResolvedValue({
+      items: [draft, next], counts, tags: [], duplicateTitles: {}, hasMore: true,
     });
 
     render(
       <NuqsTestingAdapter>
         <ToastProvider>
           <NewsFeedClient
-            initialData={{ items: [draft, next], counts, tags: [], duplicateTitles: {} }}
+            initialData={{ items: [draft, next], counts, tags: [], duplicateTitles: {}, hasMore: true }}
             initialParams={{ view: "inbox", sort: "latest" }}
           />
         </ToastProvider>
@@ -224,13 +248,18 @@ describe("news feed UI components", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Bài RSS chờ duyệt" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Bỏ qua" }));
     await waitFor(() => {
-      expect(updateSpy).toHaveBeenCalledWith("draft-1", { reviewStatus: "dismissed" });
+      expect(updateSpy).toHaveBeenCalledWith("draft-1", { reviewStatus: "dismissed", isSaved: false });
     });
 
     expect(await screen.findByRole("heading", { level: 1, name: "Bài kế tiếp" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Bỏ qua" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu" }));
     await waitFor(() => {
-      expect(updateSpy).toHaveBeenCalledWith("news-2", { reviewStatus: "dismissed" });
+      expect(updateSpy).toHaveBeenCalledWith("news-2", { isSaved: true });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tải thêm" }));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(expect.objectContaining({ limit: 120 }));
     });
   });
 
@@ -242,18 +271,18 @@ describe("news feed UI components", () => {
       removeEventListener: vi.fn(),
     }));
     const pending = makeItem({ id: "pending-1", title: "Bài chờ xử lý" });
-    const done = makeItem({ id: "done-1", title: "Bài đã xử lý", isSaved: true });
+    const saved = makeItem({ id: "saved-1", title: "Bài đã lưu", isSaved: true });
     const counts = {
       total: 2, queued: 0, processing: 0, ready: 2, partial: 0, failed: 0,
-      draft: 0, unread: 2, saved: 1, queue: 0, inbox: 1, done: 1,
+      draft: 0, unread: 2, saved: 1, dismissed: 0, queue: 0, inbox: 1, done: 1,
     };
-    const feedOf = (items: NewsItemDto[]) => ({ items, counts, tags: [], duplicateTitles: {} });
+    const feedOf = (items: NewsItemDto[]) => ({ items, counts, tags: [], duplicateTitles: {}, hasMore: false });
 
     let resolveSlowInbox: (value: ReturnType<typeof feedOf>) => void = () => {};
     vi.spyOn(newsService, "updateNewsItem").mockResolvedValue({ item: pending });
     vi.spyOn(newsService, "fetchNewsFeed").mockImplementation((params) =>
-      params?.view === "done"
-        ? Promise.resolve(feedOf([done]))
+      params?.view === "saved"
+        ? Promise.resolve(feedOf([saved]))
         : new Promise((resolve) => {
             resolveSlowInbox = resolve;
           })
@@ -270,19 +299,50 @@ describe("news feed UI components", () => {
     // Dismissing an item starts a refresh of the inbox that is still in flight...
     fireEvent.click(screen.getByRole("button", { name: "Bỏ qua" }));
     await waitFor(() => expect(newsService.fetchNewsFeed).toHaveBeenCalledTimes(1));
-    // ...when the Owner switches to the done tab
-    fireEvent.click(screen.getByRole("button", { name: /^Đã xử lý\s*1$/ }));
-    expect(await screen.findByRole("heading", { level: 1, name: "Bài đã xử lý" })).toBeTruthy();
+    // ...when the Owner switches to the saved tab
+    fireEvent.click(screen.getByRole("button", { name: /^Đã lưu\s*1$/ }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Bài đã lưu" })).toBeTruthy();
 
     resolveSlowInbox(feedOf([pending]));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.getByRole("heading", { level: 1, name: "Bài đã xử lý" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Bài đã lưu" })).toBeTruthy();
     expect(screen.queryByText("Bài chờ xử lý")).toBeNull();
-    // The stale inbox response was dropped, so the done tab never had to be fetched again
-    const doneFetches = vi
+    // The stale inbox response was dropped, so the saved tab never had to be fetched again
+    const savedFetches = vi
       .mocked(newsService.fetchNewsFeed)
-      .mock.calls.filter(([params]) => params?.view === "done");
-    expect(doneFetches).toHaveLength(1);
+      .mock.calls.filter(([params]) => params?.view === "saved");
+    expect(savedFetches).toHaveLength(1);
+  });
+
+  it("shows error banner without skeleton when switching tabs fails", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const pending = makeItem({ id: "pending-1", title: "Bài chờ xử lý" });
+    const counts = {
+      total: 2, queued: 0, processing: 0, ready: 2, partial: 0, failed: 0,
+      draft: 0, unread: 2, saved: 1, dismissed: 0, queue: 0, inbox: 1, done: 1,
+    };
+    vi.spyOn(newsService, "fetchNewsFeed").mockRejectedValue(new Error("Mạng gián đoạn"));
+
+    render(
+      <NuqsTestingAdapter hasMemory>
+        <ToastProvider>
+          <NewsFeedClient
+            initialData={{ items: [pending], counts, tags: [], duplicateTitles: {}, hasMore: false }}
+            initialParams={{ view: "inbox", sort: "latest" }}
+          />
+        </ToastProvider>
+      </NuqsTestingAdapter>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Đã lưu\s*1$/ }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Mạng gián đoạn")).toBeTruthy();
+    expect(screen.queryByLabelText("Đang tải bài")).toBeNull();
   });
 
   it("submits pasted URLs in QuickPasteDialog and reports results", async () => {
@@ -344,7 +404,7 @@ describe("news feed UI components", () => {
           sourceName: "Vercel Blog",
           queued: 2,
           duplicates: 0,
-          skippedErrors: 0,
+          skippedErrors: 1,
           error: null,
         },
       ],
@@ -389,5 +449,6 @@ describe("news feed UI components", () => {
       expect(syncSpy).toHaveBeenCalledWith({});
       expect(onChanged).toHaveBeenCalledTimes(2);
     });
+    expect(await screen.findByText(/1 link bị bỏ qua/)).toBeTruthy();
   });
 });

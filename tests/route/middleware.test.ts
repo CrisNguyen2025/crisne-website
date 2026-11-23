@@ -130,8 +130,9 @@ describe("Private App Middleware Auth Guard", () => {
     const runsMiddleware = (pathname: string) =>
       config.matcher.some((pattern) => new RegExp(`^${pattern}$`).test(pathname));
 
-    it("keeps the PWA manifest and icons public so Chrome can install the app", () => {
+    it("keeps the PWA manifest, service worker, and icons public so Chrome can install the app", () => {
       expect(runsMiddleware("/manifest.webmanifest")).toBe(false);
+      expect(runsMiddleware("/sw.js")).toBe(false);
       expect(runsMiddleware("/pwa-icon-192.png")).toBe(false);
       expect(runsMiddleware("/pwa-icon-512.png")).toBe(false);
     });

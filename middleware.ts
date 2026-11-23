@@ -17,11 +17,14 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  const isApiRoute = pathname.startsWith("/api/");
+  const isCronRoute = pathname === "/api/news/cron";
+
   if (
-    req.headers.get("x-internal-key") ||
-    req.headers.get("x-admin-key") ||
-    req.headers.get("x-cron-secret") ||
-    (pathname === "/api/news/cron" && req.headers.get("authorization")?.startsWith("Bearer "))
+    (isApiRoute && (req.headers.get("x-internal-key") || req.headers.get("x-admin-key"))) ||
+    (isCronRoute &&
+      (req.headers.get("x-cron-secret") ||
+        req.headers.get("authorization")?.startsWith("Bearer ")))
   ) {
     return NextResponse.next();
   }
@@ -47,8 +50,8 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    // manifest.webmanifest must stay public: Chrome fetches it without cookies, and a redirect
-    // to /login makes the site installable only as a shortcut (no share target on Android)
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // manifest.webmanifest and sw.js must stay public: Chrome fetches them without cookies, and a
+    // redirect to /login makes the site installable only as a shortcut (no share target on Android)
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

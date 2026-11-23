@@ -79,6 +79,8 @@ CREATE TABLE "NewsSource" (
     "domain" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
     "defaultTags" TEXT NOT NULL DEFAULT '[]',
+    "etag" TEXT,
+    "lastModified" TEXT,
     "lastFetchedAt" DATETIME,
     "lastError" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -175,10 +177,16 @@ CREATE UNIQUE INDEX "NewsItem_canonicalUrl_key" ON "NewsItem"("canonicalUrl");
 CREATE INDEX "NewsItem_reviewStatus_readState_createdAt_idx" ON "NewsItem"("reviewStatus", "readState", "createdAt");
 
 -- CreateIndex
+CREATE INDEX "NewsItem_isSaved_reviewStatus_createdAt_idx" ON "NewsItem"("isSaved", "reviewStatus", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "NewsItem_isSaved_createdAt_idx" ON "NewsItem"("isSaved", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "NewsItem_origin_createdAt_idx" ON "NewsItem"("origin", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "NewsItem_createdAt_idx" ON "NewsItem"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "NewsItem_ingestStatus_idx" ON "NewsItem"("ingestStatus");
@@ -188,6 +196,9 @@ CREATE INDEX "NewsItem_normalizedTitle_idx" ON "NewsItem"("normalizedTitle");
 
 -- CreateIndex
 CREATE INDEX "IngestJob_status_nextRunAt_idx" ON "IngestJob"("status", "nextRunAt");
+
+-- CreateIndex
+CREATE INDEX "IngestJob_status_lockedUntil_idx" ON "IngestJob"("status", "lockedUntil");
 
 -- CreateIndex
 CREATE INDEX "IngestJob_newsItemId_idx" ON "IngestJob"("newsItemId");

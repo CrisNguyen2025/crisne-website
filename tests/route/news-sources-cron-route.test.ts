@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/write-access", () => writeAccess);
 
 import { prisma } from "@/lib/prisma";
 import { PATCH as newsItemPatch } from "@/app/api/news/[id]/route";
-import { POST as cronPost } from "@/app/api/news/cron/route";
+import { GET as cronGet, POST as cronPost } from "@/app/api/news/cron/route";
 import {
   GET as sourcesGet,
   POST as sourcesPost,
@@ -70,12 +70,23 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     ] as never);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: string | URL) => {
+      vi.fn(async (input: string | URL, init?: RequestInit) => {
         const url = String(input);
+        const headers = new Headers(init?.headers);
         if (url === "https://custom-eng.blog/feed.xml") {
+          if (headers.get("if-none-match") === '"etag-v1"') {
+            return new Response(null, {
+              status: 304,
+              headers: { etag: '"etag-v1"' },
+            });
+          }
           return new Response(SAMPLE_RSS_XML, {
             status: 200,
-            headers: { "Content-Type": "application/rss+xml" },
+            headers: {
+              "Content-Type": "application/rss+xml",
+              etag: '"etag-v1"',
+              "last-modified": "Sun, 22 Nov 2026 07:05:00 GMT",
+            },
           });
         }
         if (url === "https://broken-feed.blog/rss.xml") {
@@ -224,17 +235,36 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     );
     expect(brokenResult.error).toContain("HTTP 500");
 
-    // Verify queued items are in draft status with source's defaultTags and stripped utm_source
+    // Verify queued items are in draft status with source's defaultTags, stripped utm_source, and pubDate preserved
     const items = await prisma.newsItem.findMany({ orderBy: { canonicalUrl: "asc" } });
     expect(items).toHaveLength(2);
     expect(items[0].canonicalUrl).toBe("https://custom-eng.blog/posts/post-1");
     expect(items[0].reviewStatus).toBe("draft");
     expect(items[0].origin).toBe("cron");
     expect(items[0].sourceId).toBe(okSource.id);
+    expect(items[0].publishedAt?.toISOString()).toBe("2026-11-22T06:00:00.000Z");
     expect(JSON.parse(items[0].tags)).toEqual(["eng"]);
 
-    // Dismiss post-1, then run cron again -> both post-1 (dismissed) and post-2 are counted as duplicates
+    // Subsequent GET /api/news/cron with CRON_SECRET uses stored ETag -> 304 Not Modified
+    const cachedGetCron = await cronGet(
+      jsonRequest(
+        `http://localhost/api/news/cron?sourceId=${encodeURIComponent(okSource.id)}`,
+        "GET",
+        undefined,
+        { authorization: "Bearer super-cron-secret" }
+      )
+    );
+    expect(cachedGetCron.status).toBe(200);
+    const cachedSummary = await cachedGetCron.json();
+    expect(cachedSummary.totalQueued).toBe(0);
+    expect(cachedSummary.results[0].notModified).toBe(true);
+
+    // Dismiss post-1, then clear etag and run POST cron again -> both post-1 (dismissed) and post-2 are duplicates
     writeAccess.requireWriteAccess.mockResolvedValue(null);
+    await prisma.newsSource.update({
+      where: { id: okSource.id },
+      data: { etag: null, lastModified: null },
+    });
     await newsItemPatch(
       jsonRequest(`http://localhost/api/news/${items[0].id}`, "PATCH", {
         reviewStatus: "dismissed",
@@ -250,5 +280,32 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     expect(secondSummary.totalQueued).toBe(0);
     expect(secondSummary.totalDuplicates).toBe(2);
     expect(await prisma.newsItem.count()).toBe(2);
+  });
+
+  it("uses NEWS_CRON_MAX_ITEMS_PER_SOURCE when maxItemsPerSource is omitted", async () => {
+    const manyItemsXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <rss version="2.0"><channel><title>Bulk</title>
+      ${Array.from({ length: 4 }, (_, i) => `<item><title>Item ${i}</title><link>https://custom-eng.blog/p-${i}</link></item>`).join("")}
+      </channel></rss>`;
+
+    vi.stubEnv("NEWS_CRON_MAX_ITEMS_PER_SOURCE", "2");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(manyItemsXml, { status: 200 }))
+    );
+
+    const createRes = await sourcesPost(
+      jsonRequest("http://localhost/api/news/sources", "POST", {
+        name: "Bulk",
+        feedUrl: "https://custom-eng.blog/bulk.xml",
+      })
+    );
+    const source = (await createRes.json()).source;
+
+    const res = await cronPost(
+      jsonRequest("http://localhost/api/news/cron", "POST", { sourceId: source.id })
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).totalQueued).toBe(2);
   });
 });

@@ -63,14 +63,14 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 p-6">
       <div className="w-full max-w-sm space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
         {state.status === "loading" && (
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex flex-col items-center gap-3 text-center motion-safe:animate-in motion-safe:fade-in duration-150">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Đang thêm vào hàng đợi…</p>
           </div>
         )}
 
         {state.status === "success" && (
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex flex-col items-center gap-3 text-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 duration-200">
             <CheckCircle2 className="h-8 w-8 text-green-500" />
             <p className="font-medium">{state.message}</p>
             <p className="text-sm text-muted-foreground">
@@ -78,7 +78,7 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
             </p>
             <Link
               href="/news"
-              className="text-xs text-primary underline underline-offset-2"
+              className="text-xs text-primary underline underline-offset-2 transition-opacity duration-150 hover:opacity-80"
             >
               Mở ngay
             </Link>
@@ -86,20 +86,21 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
         )}
 
         {state.status === "error" && (
-          <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex flex-col items-center gap-3 text-center motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 duration-200">
             <XCircle className="h-8 w-8 text-destructive" />
             <p className="font-medium text-destructive">{state.message}</p>
             <p className="truncate text-xs text-muted-foreground">{url}</p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={handleRetry}
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
               >
                 Thử lại
               </button>
               <Link
                 href="/news"
-                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium"
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
               >
                 Về News
               </Link>

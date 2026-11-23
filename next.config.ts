@@ -88,6 +88,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Service worker should always revalidate
+      {
+        source: "/sw.js",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
       // API routes default cache settings (allow custom route-level Cache-Control headers)
       {
         source: "/api/((?!v1/roadmaps).*)*",

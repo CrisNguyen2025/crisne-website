@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import shutil
 import tempfile
 
@@ -11,6 +12,8 @@ from news_worker.extractors.base import (
     has_meaningful_text,
 )
 from news_worker.schemas import ClaimedJob
+
+MEDIA_TIER_TIMEOUT_SECONDS = 180.0
 
 
 async def _extract_video_tiers(
@@ -28,8 +31,11 @@ async def _extract_video_tiers(
     try:
         # Tier 2: Audio transcript via Groq Whisper
         try:
-            transcript = await media.transcribe_audio_with_whisper(
-                url, tmp_dir, settings, duration=duration
+            transcript = await asyncio.wait_for(
+                media.transcribe_audio_with_whisper(
+                    url, tmp_dir, settings, duration=duration
+                ),
+                timeout=MEDIA_TIER_TIMEOUT_SECONDS,
             )
             if count_meaningful_words(transcript) >= settings.min_transcript_words:
                 return ExtractionResult(
@@ -47,8 +53,11 @@ async def _extract_video_tiers(
 
         # Tier 3: Keyframe / slide extraction via Gemini Vision
         try:
-            vision_text = await media.extract_slides_with_vision(
-                url, tmp_dir, settings, duration=duration
+            vision_text = await asyncio.wait_for(
+                media.extract_slides_with_vision(
+                    url, tmp_dir, settings, duration=duration
+                ),
+                timeout=MEDIA_TIER_TIMEOUT_SECONDS,
             )
             if vision_text.strip():
                 return ExtractionResult(

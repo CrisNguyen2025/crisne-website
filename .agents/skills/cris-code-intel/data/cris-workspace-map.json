@@ -237,7 +237,7 @@
     {
       "id": "private-news",
       "name": "Private News Reader & Ingest Pipeline",
-      "summary": "Kho đọc tin private (/news) chỉ dành cho Owner (noindex). Nhận link qua Paste UI (Phase 1), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
+      "summary": "Kho đọc tin private độc lập (/news) chỉ dành cho Owner (noindex). Nhận link qua Paste UI, Android PWA Share Target (/share + sw.js) và RSS/Atom Cron (ETag/304), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
       "cohesionScore": 0.93,
       "adrs": [
         "ADR-0005"
@@ -255,8 +255,10 @@
         "components/news/NewsDecisionBar.tsx",
         "components/news/QuickPasteDialog.tsx",
         "components/news/SourcesManagerSheet.tsx",
+        "components/news/PwaServiceWorkerRegistrar.tsx",
         "logic/news/newsService.ts",
         "lib/news/schemas.ts",
+        "lib/news/content-type.ts",
         "lib/news/queries.ts",
         "lib/news/sources.ts",
         "lib/news/rss-fetcher.ts",
@@ -268,6 +270,8 @@
         "app/api/news/route.ts",
         "app/api/news/[id]/route.ts",
         "app/api/news/[id]/reingest/route.ts",
+        "app/api/news/mark-read/route.ts",
+        "app/api/news/worker-health/route.ts",
         "app/api/news/sources/route.ts",
         "app/api/news/sources/[id]/route.ts",
         "app/api/news/cron/route.ts",
@@ -278,7 +282,8 @@
         "news-ingest-worker/news_worker/extractors/pipeline.py",
         "news-ingest-worker/news_worker/summarizer.py",
         "app/(news)/share/page.tsx",
-        "components/news/ShareTargetClient.tsx"
+        "components/news/ShareTargetClient.tsx",
+        "public/sw.js"
       ],
       "dataModels": [
         "NewsItem",
@@ -493,7 +498,7 @@
       "method": "GET",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Trang đọc tin private (/news, noindex) dạng card grid daily.dev với Reader Sheet, bộ lọc nuqs và modal dán URL",
+      "summary": "Trang đọc tin private (/news, noindex) bố cục 2 cột danh sách + NewsReaderPanel, 4 tab (Chờ xử lý / Đã lưu / Đã bỏ qua / Tất cả), bộ lọc nuqs và modal dán URL",
       "handler": "app/(news)/news/page.tsx#NewsPage",
       "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
     },
@@ -539,6 +544,39 @@
       "domainId": "private-news",
       "summary": "Cập nhật readState, isSaved, reviewStatus, tags hoặc personalNote của NewsItem",
       "handler": "app/api/news/[id]/route.ts#PATCH",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_ITEM_DELETE",
+      "type": "api_route",
+      "path": "/api/news/[id]",
+      "method": "DELETE",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Xoá hẳn một NewsItem (cascade IngestJob)",
+      "handler": "app/api/news/[id]/route.ts#DELETE",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_MARK_READ",
+      "type": "api_route",
+      "path": "/api/news/mark-read",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Đánh dấu đã đọc hàng loạt các NewsItem chưa đọc khớp bộ lọc hiện tại",
+      "handler": "app/api/news/mark-read/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_WORKER_HEALTH",
+      "type": "api_route",
+      "path": "/api/news/worker-health",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Proxy server-side kiểm tra trạng thái /health của news-ingest-worker",
+      "handler": "app/api/news/worker-health/route.ts#GET",
       "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
     },
     {
@@ -605,6 +643,17 @@
       "domainId": "private-news",
       "summary": "Xoá nguồn RSS (giữ nguyên các NewsItem đã nạp)",
       "handler": "app/api/news/sources/[id]/route.ts#DELETE",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_CRON_GET",
+      "type": "api_route",
+      "path": "/api/news/cron",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Quét các nguồn RSS đang bật qua GET (Vercel Cron / scheduler ngoài dùng CRON_SECRET)",
+      "handler": "app/api/news/cron/route.ts#GET",
       "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
     },
     {
@@ -1244,7 +1293,7 @@
       "name": "Lọc feed, đọc tóm tắt và cập nhật trạng thái NewsItem",
       "domainId": "private-news",
       "actor": "Owner",
-      "trigger": "Owner mở /news (tab Tất cả / Chờ xử lý / Đã xử lý), bấm một dòng NewsCard để mở NewsReaderPanel, quyết định Bỏ qua trên NewsDecisionBar",
+      "trigger": "Owner mở /news (tab Chờ xử lý / Đã lưu / Đã bỏ qua / Tất cả), bấm dòng NewsCard mở NewsReaderPanel, quyết định Lưu / Bỏ qua trên NewsDecisionBar hoặc Xoá hẳn",
       "preconditions": [
         "Quyền Owner qua Google OAuth session hoặc DEV_OWNER_BYPASS"
       ],
@@ -1253,7 +1302,7 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/news/NewsFeedClient.tsx",
-          "action": "Đồng bộ bộ lọc view/origin/tag/q/sort qua nuqs, bỏ response của bộ lọc cũ; từ 1280px danh sách và NewsReaderPanel (cột phải Tag và Ghi chú) nằm cạnh nhau, hẹp hơn thì panel thành màn riêng; Bỏ qua xong tự sang bài kế (J/K)",
+          "action": "Đồng bộ bộ lọc view/origin/contentType/readState/tag/q/sort qua nuqs, hỗ trợ Tải thêm và Đọc hết, bỏ response của bộ lọc cũ; từ 1280px danh sách và NewsReaderPanel nằm cạnh nhau; Lưu/Bỏ qua xong tự sang bài kế (S/J/K)",
           "callsNext": "logic/news/newsService.ts#updateNewsItem",
           "dataPassed": "{ readState, isSaved, reviewStatus, tags, personalNote }"
         },
@@ -1262,7 +1311,7 @@
           "layer": "Routing_Gateway",
           "component": "app/api/news/[id]/route.ts",
           "functionOrMethod": "PATCH",
-          "action": "Kiểm tra requireWriteAccess, validate payload bằng UpdateNewsItemSchema",
+          "action": "Kiểm tra requireWriteAccess, validate payload bằng UpdateNewsItemSchema (hoặc DELETE xoá hẳn)",
           "callsNext": "lib/news/queries.ts#updateNewsItem",
           "dataPassed": "Validated UpdateNewsItemRequest"
         },
@@ -1277,8 +1326,9 @@
         }
       ],
       "invariants": [
-        "Bài dismissed bị ẩn khỏi feed nhưng vẫn giữ bản ghi canonicalUrl để dedupe",
-        "Đọc tin mới hoặc mở link gốc của bài published tự động chuyển readState sang read"
+        "Bài dismissed rời khỏi tab Chờ xử lý nhưng xem lại được ở Đã bỏ qua / Tất cả và giữ canonicalUrl để dedupe; chỉ DELETE mới xoá hẳn",
+        "Đọc tin mới 3s hoặc mở link gốc của bài chưa dismissed tự động chuyển readState sang read",
+        "Tag filter gợi ý tính theo view/origin đang chọn để không hiện tag rỗng"
       ],
       "failureModes": [
         "Payload rỗng hoặc sai schema (400 Validation failed)",
@@ -1293,7 +1343,7 @@
       "name": "Quản lý nguồn RSS và quét tin tự động theo lịch Cron",
       "domainId": "private-news",
       "actor": "Owner | Cron",
-      "trigger": "Lịch cron hoặc Owner bấm 'Quét tất cả ngay' gọi POST /api/news/cron",
+      "trigger": "Lịch cron (GET/POST với CRON_SECRET) hoặc Owner bấm 'Quét tất cả ngay' gọi POST /api/news/cron",
       "preconditions": [
         "Xác thực qua CRON_SECRET, ADMIN_API_KEY hoặc phiên Owner",
         "Ít nhất một NewsSource có enabled=true"
@@ -1303,7 +1353,7 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/news/SourcesManagerSheet.tsx",
-          "action": "Owner thêm/bật nguồn RSS hoặc bấm nút quét đồng bộ ngay",
+          "action": "Owner thêm/bật nguồn RSS hoặc bấm nút quét đồng bộ ngay; xem tổng hợp queued/duplicates/skippedErrors",
           "callsNext": "logic/news/newsService.ts#triggerNewsCronSync",
           "dataPassed": "{ sourceId?, maxItemsPerSource? }"
         },
@@ -1312,7 +1362,7 @@
           "layer": "Routing_Gateway",
           "component": "app/api/news/cron/route.ts",
           "functionOrMethod": "POST",
-          "action": "Kiểm tra CRON_SECRET hoặc requireWriteAccess, validate bằng CronSyncRequestSchema",
+          "action": "Kiểm tra CRON_SECRET (rate-limit khi sai) hoặc requireWriteAccess, validate bằng CronSyncRequestSchema",
           "callsNext": "lib/news/rss-fetcher.ts#syncNewsSourcesCron",
           "dataPassed": "{ sourceId, maxItemsPerSource }"
         },
@@ -1321,9 +1371,9 @@
           "layer": "Domain_Logic",
           "component": "lib/news/rss-fetcher.ts",
           "functionOrMethod": "syncNewsSourcesCron",
-          "action": "Tải XML từng nguồn qua fetchFeedXmlSafely (chống SSRF), parse RSS 2.0/RDF/Atom bằng parseRssOrAtomXml và gọi enqueueNewsUrl với origin='cron'",
+          "action": "Tải XML qua fetchFeedWithCacheSafely (chống SSRF + ETag/If-Modified-Since 304), parse bằng parseRssOrAtomXml, truyền publishedAt vào enqueueNewsUrl với origin='cron' và chỉ wake worker 1 lần ở cuối batch",
           "callsNext": "lib/news/ingest.ts#enqueueNewsUrl",
-          "dataPassed": "{ url, title, origin: 'cron', sourceId, tags }"
+          "dataPassed": "{ url, title, publishedAt, origin: 'cron', sourceId, tags }"
         }
       ],
       "invariants": [
@@ -1345,7 +1395,7 @@
       "actor": "Owner (trên Android)",
       "trigger": "Owner bấm 'Share' trên Chrome/YouTube/TikTok → chọn app → Android gọi GET /share?url=...&title=...&text=...",
       "preconditions": [
-        "App đã được cài làm PWA (Add to Home Screen)",
+        "App đã được cài làm PWA (Add to Home Screen) với public/sw.js đăng ký scope /",
         "manifest.webmanifest có share_target.action=/share",
         "Owner đã đăng nhập (cookie session)"
       ],
@@ -1362,7 +1412,7 @@
           "order": 2,
           "layer": "Routing_Gateway",
           "component": "middleware.ts",
-          "action": "Kiểm tra auth; nếu chưa đăng nhập redirect /login?callbackUrl=/share%3Furl%3D... (preserve query string)",
+          "action": "Giữ public manifest.webmanifest và sw.js; kiểm tra auth cho /share, nếu chưa đăng nhập redirect /login?callbackUrl=/share%3Furl%3D...",
           "callsNext": "app/(news)/share/page.tsx",
           "dataPassed": "searchParams { url, title, text }"
         },
@@ -1370,7 +1420,7 @@
           "order": 3,
           "layer": "Presentation_Server",
           "component": "app/(news)/share/page.tsx",
-          "action": "Xác thực owner, resolve URL từ params, render ShareTargetClient",
+          "action": "Xác thực owner, resolve URL an toàn (http/https, không chứa credentials) từ params, render ShareTargetClient",
           "callsNext": "components/news/ShareTargetClient.tsx",
           "dataPassed": "url: string"
         },
@@ -1394,7 +1444,7 @@
       ],
       "invariants": [
         "URL phải thuộc whitelist domain hoặc NewsSource domains",
-        "Bài từ share luôn có origin='share' và reviewStatus='draft'",
+        "Bài từ share luôn có origin='share' và reviewStatus='published'",
         "callbackUrl trong redirect phải encode đầy đủ query string của /share"
       ],
       "failureModes": [
@@ -1612,6 +1662,8 @@
         "domain",
         "enabled",
         "defaultTags",
+        "etag",
+        "lastModified",
         "lastFetchedAt",
         "lastError",
         "createdAt",

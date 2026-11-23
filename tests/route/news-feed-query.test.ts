@@ -90,17 +90,22 @@ describe("queryNewsFeed filtering beyond the newest 500 rows", () => {
       data: { reviewStatus: "dismissed" },
     });
 
-    const titlesOf = async (view: "all" | "inbox" | "done") =>
+    const titlesOf = async (view: "all" | "inbox" | "saved" | "dismissed" | "done") =>
       (await queryNewsFeed({ view, limit: 10 })).items.map((item) => item.title);
 
     expect(await titlesOf("inbox")).toEqual(["Bài cron chờ duyệt", "Bài chờ xử lý"]);
+    expect(await titlesOf("saved")).toEqual(["Bài để sau"]);
+    expect(await titlesOf("dismissed")).toEqual(["Bài đã bỏ qua"]);
     expect(await titlesOf("done")).toEqual(["Bài đã bỏ qua", "Bài để sau"]);
     expect(await titlesOf("all")).toHaveLength(4);
 
-    const { counts } = await queryNewsFeed({ view: "inbox", limit: 10 });
+    const { counts, hasMore } = await queryNewsFeed({ view: "inbox", limit: 1 });
     expect(counts.total).toBe(4);
     expect(counts.inbox).toBe(2);
+    expect(counts.saved).toBe(1);
+    expect(counts.dismissed).toBe(1);
     expect(counts.done).toBe(2);
+    expect(hasMore).toBe(true);
   });
 
   it("puts older curated items before newer cron items when sorting curated_first", async () => {

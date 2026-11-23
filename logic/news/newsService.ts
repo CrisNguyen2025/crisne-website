@@ -2,11 +2,13 @@ import type { EnqueueNewsResult } from "@/lib/news/ingest";
 import type {
   CreateNewsSourceRequest,
   CronSyncSummary,
+  MarkReadRequest,
   NewsFeedQueryParams,
   NewsFeedResponseDto,
   NewsItemDto,
   NewsOrigin,
   NewsSourceDto,
+  NewsWorkerHealthDto,
   UpdateNewsItemRequest,
   UpdateNewsSourceRequest,
 } from "@/lib/news/schemas";
@@ -35,6 +37,8 @@ export async function fetchNewsFeed(
   if (params.view) qs.set("view", params.view);
   if (params.origin) qs.set("origin", params.origin);
   if (params.tag) qs.set("tag", params.tag);
+  if (params.contentType) qs.set("contentType", params.contentType);
+  if (params.readState) qs.set("readState", params.readState);
   if (params.q) qs.set("q", params.q);
   if (params.sort) qs.set("sort", params.sort);
   qs.set("limit", String(params.limit ?? 50));
@@ -157,6 +161,40 @@ export async function deleteNewsSource(id: string): Promise<{ deleted: boolean }
     throw new Error(err.error);
   }
   return (await res.json()) as { deleted: boolean };
+}
+
+export async function deleteNewsItem(id: string): Promise<{ deleted: boolean }> {
+  const res = await fetch(`/api/news/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await parseErrorMessage(res, "Không thể xoá bài tin.");
+    throw new Error(err.error);
+  }
+  return (await res.json()) as { deleted: boolean };
+}
+
+export async function markNewsItemsAsRead(
+  payload: MarkReadRequest = {}
+): Promise<{ updated: number }> {
+  const res = await fetch("/api/news/mark-read", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await parseErrorMessage(res, "Không thể đánh dấu đã đọc.");
+    throw new Error(err.error);
+  }
+  return (await res.json()) as { updated: number };
+}
+
+export async function fetchNewsWorkerHealth(): Promise<NewsWorkerHealthDto> {
+  const res = await fetch("/api/news/worker-health", { cache: "no-store" });
+  if (!res.ok) {
+    return { configured: true, status: "offline" };
+  }
+  return (await res.json()) as NewsWorkerHealthDto;
 }
 
 export async function triggerNewsCronSync(payload?: {

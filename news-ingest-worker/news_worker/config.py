@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     )
 
     gemini_api_key: str = ""
+    gemini_api_keys: str = ""
     groq_api_key: str = ""
+    groq_api_keys: str = ""
 
     llm_model: str = "gemini-flash-latest"
     vision_model: str = "gemini-flash-latest"
@@ -32,10 +34,28 @@ class Settings(BaseSettings):
     groq_llm_model: str = "openai/gpt-oss-120b"
 
     poll_interval_seconds: float = 10.0
+    worker_concurrency: int = 2
     max_video_duration_seconds: int = 1200
     max_vision_frames: int = 6
     min_description_chars: int = 300
     min_transcript_words: int = 40
+
+    @staticmethod
+    def _merge_keys(multi: str, single: str) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for raw in [*multi.split(","), single]:
+            key = raw.strip()
+            if key and key not in seen:
+                seen.add(key)
+                result.append(key)
+        return result
+
+    def get_gemini_keys(self) -> list[str]:
+        return self._merge_keys(self.gemini_api_keys, self.gemini_api_key)
+
+    def get_groq_keys(self) -> list[str]:
+        return self._merge_keys(self.groq_api_keys, self.groq_api_key)
 
 
 settings = Settings()

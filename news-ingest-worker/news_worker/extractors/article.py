@@ -7,11 +7,45 @@ import httpx
 import trafilatura
 
 from news_worker.extractors.base import ExtractionResult
-from news_worker.ssrf import assert_public_url
+from news_worker.ssrf import assert_public_url_async
 
 
 MAX_HTML_BYTES = 5 * 1024 * 1024
 MAX_REDIRECTS = 5
+ALLOWED_HTML_CONTENT_TYPES = {
+    "",
+    "text/html",
+    "application/xhtml+xml",
+    "text/plain",
+    "application/xml",
+    "text/xml",
+}
+
+
+async def _read_html_with_limit(response: httpx.Response) -> str:
+    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+    if content_type not in ALLOWED_HTML_CONTENT_TYPES:
+        raise ValueError(f"Unsupported content-type for article: {content_type}")
+
+    declared_length = response.headers.get("content-length")
+    if declared_length:
+        try:
+            if int(declared_length) > MAX_HTML_BYTES:
+                raise ValueError("Article exceeds 5MB size limit")
+        except ValueError as exc:
+            if "5MB" in str(exc):
+                raise
+
+    chunks: list[bytes] = []
+    received = 0
+    async for chunk in response.aiter_bytes():
+        received += len(chunk)
+        if received > MAX_HTML_BYTES:
+            raise ValueError("Article exceeds 5MB size limit")
+        chunks.append(chunk)
+
+    encoding = response.encoding or "utf-8"
+    return b"".join(chunks).decode(encoding, errors="replace")
 
 
 async def _safe_fetch_html(url: str) -> tuple[str, str]:
@@ -24,18 +58,17 @@ async def _safe_fetch_html(url: str) -> tuple[str, str]:
         },
     ) as client:
         for _ in range(MAX_REDIRECTS + 1):
-            assert_public_url(current)
-            response = await client.get(current)
-            if 300 <= response.status_code < 400:
-                location = response.headers.get("location")
-                if not location:
-                    break
-                current = urljoin(current, location)
-                continue
-            response.raise_for_status()
-            content = response.content[:MAX_HTML_BYTES]
-            encoding = response.encoding or "utf-8"
-            return content.decode(encoding, errors="replace"), current
+            await assert_public_url_async(current)
+            async with client.stream("GET", current) as response:
+                if 300 <= response.status_code < 400:
+                    location = response.headers.get("location")
+                    if not location:
+                        break
+                    current = urljoin(current, location)
+                    continue
+                response.raise_for_status()
+                html = await _read_html_with_limit(response)
+                return html, current
     raise RuntimeError("Too many redirects while fetching article")
 
 

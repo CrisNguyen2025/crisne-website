@@ -46,6 +46,20 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
+        name: "News Inbox",
+        short_name: "News",
+        description: "Open private News inbox",
+        url: "/news",
+        icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
+      {
+        name: "RSS Sources",
+        short_name: "Sources",
+        description: "Manage RSS & Atom news sources",
+        url: "/news/sources",
+        icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
+      },
+      {
         name: "View Projects",
         short_name: "Projects",
         description: "View my portfolio projects",

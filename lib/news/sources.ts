@@ -61,13 +61,29 @@ export async function listNewsSources(): Promise<NewsSourceDto[]> {
   return rows.map(serializeNewsSource);
 }
 
+function parseAndValidateFeedUrl(rawFeedUrl: string): { feedUrl: string; hostname: string } {
+  const feedUrl = rawFeedUrl.trim();
+  let parsedFeed: URL;
+  try {
+    parsedFeed = new URL(feedUrl);
+  } catch {
+    throw new UrlGuardError("INVALID_URL", 400, "Feed URL không hợp lệ.");
+  }
+  if (parsedFeed.protocol !== "http:" && parsedFeed.protocol !== "https:") {
+    throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Feed URL phải dùng http hoặc https.");
+  }
+  if (parsedFeed.username || parsedFeed.password) {
+    throw new UrlGuardError("INVALID_URL", 400, "Feed URL không được chứa thông tin đăng nhập.");
+  }
+  return { feedUrl, hostname: parsedFeed.hostname };
+}
+
 export async function createNewsSource(
   input: CreateNewsSourceRequest,
   options: { lookupFn?: HostLookupFn } = {}
 ): Promise<NewsSourceDto> {
-  const feedUrl = input.feedUrl.trim();
-  const parsedFeed = new URL(feedUrl);
-  await assertPublicHostname(parsedFeed.hostname, options.lookupFn);
+  const { feedUrl, hostname } = parseAndValidateFeedUrl(input.feedUrl);
+  await assertPublicHostname(hostname, options.lookupFn);
 
   const domain = extractSourceDomain(feedUrl, input.domain);
   await assertPublicHostname(domain, options.lookupFn);
@@ -101,10 +117,11 @@ export async function updateNewsSource(
   const existing = await prisma.newsSource.findUnique({ where: { id } });
   if (!existing) return null;
 
-  const nextFeedUrl = input.feedUrl ? input.feedUrl.trim() : existing.feedUrl;
+  let nextFeedUrl = existing.feedUrl;
   if (input.feedUrl) {
-    const parsedFeed = new URL(nextFeedUrl);
-    await assertPublicHostname(parsedFeed.hostname, options.lookupFn);
+    const validatedFeed = parseAndValidateFeedUrl(input.feedUrl);
+    nextFeedUrl = validatedFeed.feedUrl;
+    await assertPublicHostname(validatedFeed.hostname, options.lookupFn);
   }
 
   let nextDomain = existing.domain;

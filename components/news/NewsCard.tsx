@@ -2,7 +2,7 @@
 
 import React from "react";
 import {
-  Check,
+  BookmarkCheck,
   CircleAlert,
   Clapperboard,
   Globe,
@@ -10,6 +10,7 @@ import {
   Rss,
   Youtube,
 } from "lucide-react";
+import { formatNewsContentType } from "@/lib/news/content-type";
 import type { NewsItemDto, NewsPlatform } from "@/lib/news/schemas";
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import { isNewsItemDone } from "./NewsDecisionBar";
@@ -67,8 +68,8 @@ function renderStatusBadge(item: NewsItemDto): React.ReactNode {
   if (item.isSaved) {
     return (
       <span className={`${BADGE} bg-[var(--status-known-bg)] text-[var(--status-known)]`}>
-        <Check className="size-3" aria-hidden="true" />
-        Đã xử lý
+        <BookmarkCheck className="size-3" aria-hidden="true" />
+        Đã lưu
       </span>
     );
   }
@@ -93,11 +94,15 @@ export function NewsCard({
   const isUnread = item.readState === "unread" && !isPending;
   const isDone = isNewsItemDone(item);
   const badge = renderStatusBadge(item);
+  const contentTypeLabel = isPending ? null : formatNewsContentType(item.tags);
 
   return (
     <article
-      className={`group relative cursor-pointer border-b border-border px-4 py-4 sm:px-5 ${
-        isSelected ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]" : "hover:bg-muted/60"
+      data-news-card-id={item.id}
+      className={`group relative cursor-pointer border-b border-border px-4 py-4 transition-[background-color,box-shadow,opacity] duration-150 ease-out sm:px-5 ${
+        isSelected
+          ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]"
+          : "hover:bg-muted/60 active:bg-muted/80"
       } ${isDone ? "opacity-75" : ""}`}
     >
       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -121,7 +126,7 @@ export function NewsCard({
           type="button"
           onClick={() => onSelect(item)}
           aria-current={isSelected ? "true" : undefined}
-          className={`block w-full text-left decoration-1 underline-offset-4 group-hover:underline cursor-pointer after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring ${
+          className={`block w-full text-left decoration-1 underline-offset-4 transition-colors duration-150 group-hover:underline cursor-pointer after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring ${
             isPending
               ? "truncate font-mono text-sm text-muted-foreground"
               : "line-clamp-2 font-display text-[17px] font-semibold leading-snug text-foreground"
@@ -137,7 +142,14 @@ export function NewsCard({
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.extractionError}</p>
       ) : null}
 
-      {badge && <div className="mt-2 flex min-w-0 items-center">{badge}</div>}
+      {(badge || contentTypeLabel) && (
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+          {badge}
+          {contentTypeLabel && (
+            <span className={`${BADGE} bg-muted text-muted-foreground`}>{contentTypeLabel}</span>
+          )}
+        </div>
+      )}
     </article>
   );
 }

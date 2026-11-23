@@ -14,6 +14,10 @@ const prismaDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const workerId = process.env.VITEST_WORKER_ID ?? process.env.VITEST_POOL_ID ?? String(process.pid);
 const dbFile = `${TEST_DB_WORKER_PREFIX}${workerId}`;
 
-fs.copyFileSync(path.join(prismaDir, TEST_DB_TEMPLATE_FILE), path.join(prismaDir, dbFile));
+const dbPath = path.join(prismaDir, dbFile);
+for (const suffix of ["", "-wal", "-shm"]) {
+  fs.rmSync(`${dbPath}${suffix}`, { force: true });
+}
+fs.copyFileSync(path.join(prismaDir, TEST_DB_TEMPLATE_FILE), dbPath);
 // Relative to prisma/schema.prisma, like TEST_DATABASE_URL
 process.env.DATABASE_URL = `file:./${dbFile}`;

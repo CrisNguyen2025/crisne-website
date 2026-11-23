@@ -119,6 +119,8 @@ model NewsSource {
   domain        String
   enabled       Boolean    @default(true)
   defaultTags   String     @default("[]")
+  etag          String?
+  lastModified  String?
   lastFetchedAt DateTime?
   lastError     String?
   createdAt     DateTime   @default(now())
@@ -163,8 +165,10 @@ model NewsItem {
   jobs                  IngestJob[]
 
   @@index([reviewStatus, readState, createdAt])
+  @@index([isSaved, reviewStatus, createdAt])
   @@index([isSaved, createdAt])
   @@index([origin, createdAt])
+  @@index([createdAt])
   @@index([ingestStatus])
   @@index([normalizedTitle])
 }
@@ -185,6 +189,7 @@ model IngestJob {
   updatedAt   DateTime  @updatedAt
 
   @@index([status, nextRunAt])
+  @@index([status, lockedUntil])
   @@index([newsItemId])
 }
 

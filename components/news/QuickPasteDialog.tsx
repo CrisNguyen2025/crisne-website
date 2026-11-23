@@ -29,8 +29,7 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitUrls = async () => {
     const lines = Array.from(
       new Set(
         urlsText
@@ -39,7 +38,7 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
           .filter(Boolean)
       )
     );
-    if (lines.length === 0) return;
+    if (lines.length === 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     setResults([]);
@@ -91,6 +90,11 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
     setIsSubmitting(false);
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitUrls();
+  };
+
   return (
     <Dialog
       open={open}
@@ -114,8 +118,14 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
             required
             value={urlsText}
             onChange={(e) => setUrlsText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                void submitUrls();
+              }
+            }}
             placeholder={"https://www.youtube.com/watch?v=...\nhttps://vt.tiktok.com/..."}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
@@ -130,7 +140,7 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
         </label>
 
         {results.length > 0 && (
-          <ul className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+          <ul className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs motion-safe:animate-in motion-safe:fade-in duration-150">
             {results.map((row) => (
               <li key={row.url} className="flex items-start gap-2">
                 {row.kind === "error" ? (
@@ -162,14 +172,14 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50 cursor-pointer"
+            className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             Đóng
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !urlsText.trim()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
             <span>Đưa vào hàng đợi</span>

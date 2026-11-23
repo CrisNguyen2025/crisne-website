@@ -3,27 +3,34 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { debounce, parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import {
+  Activity,
   ArrowLeft,
   ArrowUpDown,
+  CheckCheck,
   CircleAlert,
   Inbox,
   Loader2,
   Plus,
+  RefreshCw,
   RotateCcw,
   Rss,
   Search,
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { NEWS_CONTENT_TYPE_TAGS } from "@/lib/news/content-type";
 import type {
+  NewsContentTypeTag,
   NewsFeedQueryParams,
   NewsFeedResponseDto,
   NewsFeedSort,
@@ -31,6 +38,8 @@ import type {
   NewsItemDto,
   NewsOrigin,
   NewsSourceDto,
+  NewsWorkerHealthDto,
+  ReadState,
 } from "@/lib/news/schemas";
 import * as newsService from "@/logic/news/newsService";
 import { useToast } from "@/components/ui/toast";
@@ -45,14 +54,18 @@ interface NewsFeedClientProps {
     view: NewsFeedView;
     origin?: NewsOrigin;
     tag?: string;
+    contentType?: NewsContentTypeTag;
+    readState?: ReadState;
     q?: string;
     sort: NewsFeedSort;
   };
   initialSources?: NewsSourceDto[];
   initialSourcesOpen?: boolean;
+  workerConfigured?: boolean;
 }
 
-const VIEW_VALUES = ["inbox", "done", "all", "unread", "saved", "draft", "queue"] as const;
+const DEFAULT_PAGE_LIMIT = 60;
+const VIEW_VALUES = ["inbox", "saved", "dismissed", "all", "done", "unread", "draft", "queue"] as const;
 const SORT_VALUES = ["latest", "curated_first"] as const;
 const ORIGIN_OPTIONS: { value: "" | NewsOrigin; label: string }[] = [
   { value: "", label: "Tất cả nguồn" },
@@ -61,18 +74,19 @@ const ORIGIN_OPTIONS: { value: "" | NewsOrigin; label: string }[] = [
   { value: "cron", label: "RSS" },
 ];
 
-/** Views shown as tabs; the rest stay reachable by URL (e.g. the queue link). */
+/** Views shown as tabs; legacy views (done/unread/draft/queue) stay reachable by URL. */
 const TAB_VIEWS: { id: NewsFeedView; label: string; countKey: keyof NewsFeedResponseDto["counts"] }[] = [
-  { id: "all", label: "Tất cả", countKey: "total" },
   { id: "inbox", label: "Chờ xử lý", countKey: "inbox" },
-  { id: "done", label: "Đã xử lý", countKey: "done" },
+  { id: "saved", label: "Đã lưu", countKey: "saved" },
+  { id: "dismissed", label: "Đã bỏ qua", countKey: "dismissed" },
+  { id: "all", label: "Tất cả", countKey: "total" },
 ];
 
 const EXTRA_VIEW_LABELS: Partial<Record<NewsFeedView, string>> = {
   queue: "Hàng đợi",
   unread: "Chưa đọc",
-  saved: "Đã xử lý (không gồm bài bỏ qua)",
-  draft: "Bài RSS chờ duyệt",
+  done: "Đã xử lý",
+  draft: "Bài từ RSS",
 };
 
 const EMPTY_MESSAGES: Partial<Record<NewsFeedView, { title: string; hint: string }>> = {
@@ -80,9 +94,13 @@ const EMPTY_MESSAGES: Partial<Record<NewsFeedView, { title: string; hint: string
     title: "Hộp đã trống",
     hint: "Không còn bài nào chờ xử lý. Share link từ điện thoại hoặc dán link để thêm.",
   },
-  done: {
-    title: "Chưa xử lý bài nào",
-    hint: "Bài đã nạp vào roadmap hoặc đã bỏ qua sẽ nằm ở đây, đưa lại Chờ xử lý được.",
+  saved: {
+    title: "Chưa lưu bài nào",
+    hint: "Bấm Lưu ở bài viết để giữ lại đọc sau hoặc tham khảo lâu dài.",
+  },
+  dismissed: {
+    title: "Chưa bỏ qua bài nào",
+    hint: "Các bài đã bỏ qua vẫn giữ URL chống trùng và có thể đưa lại Chờ xử lý tại đây.",
   },
   queue: { title: "Hàng đợi đang trống", hint: "Mọi link đã được xử lý xong." },
 };
@@ -109,8 +127,11 @@ function serializeParams(params: NewsFeedQueryParams): string {
     params.view ?? "inbox",
     params.origin ?? "",
     params.tag ?? "",
+    params.contentType ?? "",
+    params.readState ?? "",
     params.q ?? "",
     params.sort ?? "latest",
+    String(params.limit ?? DEFAULT_PAGE_LIMIT),
   ].join("|");
 }
 
@@ -126,6 +147,7 @@ export function NewsFeedClient({
   initialParams,
   initialSources = [],
   initialSourcesOpen = false,
+  workerConfigured = false,
 }: NewsFeedClientProps) {
   const { toast } = useToast();
 
@@ -141,6 +163,14 @@ export function NewsFeedClient({
     "tag",
     parseAsString.withDefault(initialParams.tag ?? "")
   );
+  const [contentType, setContentType] = useQueryState(
+    "contentType",
+    parseAsString.withDefault(initialParams.contentType ?? "")
+  );
+  const [readState, setReadState] = useQueryState(
+    "readState",
+    parseAsString.withDefault(initialParams.readState ?? "")
+  );
   const [q, setQ] = useQueryState(
     "q",
     parseAsString
@@ -152,10 +182,15 @@ export function NewsFeedClient({
     parseAsStringLiteral(SORT_VALUES).withDefault(initialParams.sort)
   );
 
+  const [limit, setLimit] = useState(DEFAULT_PAGE_LIMIT);
   const [data, setData] = useState<NewsFeedResponseDto>(initialData);
   // Filter key the current `data` belongs to; differs from `filterKey` while a tab switch loads
-  const [dataKey, setDataKey] = useState<string>(() => serializeParams(initialParams));
+  const [dataKey, setDataKey] = useState<string>(() =>
+    serializeParams({ ...initialParams, limit: DEFAULT_PAGE_LIMIT })
+  );
+  const [sources, setSources] = useState<NewsSourceDto[]>(initialSources);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [isSourcesOpen, setIsSourcesOpen] = useState(initialSourcesOpen);
@@ -165,6 +200,24 @@ export function NewsFeedClient({
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [reingestingId, setReingestingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
+  const [workerHealth, setWorkerHealth] = useState<NewsWorkerHealthDto | null>(() =>
+    workerConfigured ? null : { configured: false, status: "unconfigured" }
+  );
+  const [isCheckingWorker, setIsCheckingWorker] = useState(false);
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const listScrollTopRef = useRef(0);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const pendingScrollItemIdRef = useRef<string | null>(null);
+
+  const validContentType = useMemo<NewsContentTypeTag | undefined>(() => {
+    return NEWS_CONTENT_TYPE_TAGS.some((item) => item.tag === contentType)
+      ? (contentType as NewsContentTypeTag)
+      : undefined;
+  }, [contentType]);
+
+  const validReadState = readState === "unread" || readState === "read" ? readState : undefined;
 
   const currentQueryParams = useMemo<NewsFeedQueryParams>(
     () => ({
@@ -174,11 +227,13 @@ export function NewsFeedClient({
           ? origin
           : undefined,
       tag: tag.trim().toLowerCase() || undefined,
+      contentType: validContentType,
+      readState: validReadState,
       q: q.trim() || undefined,
       sort,
-      limit: 60,
+      limit,
     }),
-    [view, origin, tag, q, sort]
+    [view, origin, tag, validContentType, validReadState, q, sort, limit]
   );
 
   const filterKey = serializeParams(currentQueryParams);
@@ -191,17 +246,14 @@ export function NewsFeedClient({
     latestFilterKeyRef.current = filterKey;
   });
 
-  const loadFeed = useCallback(
-    async (params: NewsFeedQueryParams): Promise<void> => {
-      const key = serializeParams(params);
-      const next = await newsService.fetchNewsFeed(params);
-      if (key !== latestFilterKeyRef.current) return;
-      setData(next);
-      setDataKey(key);
-      setLoadError(null);
-    },
-    []
-  );
+  const loadFeed = useCallback(async (params: NewsFeedQueryParams): Promise<void> => {
+    const key = serializeParams(params);
+    const next = await newsService.fetchNewsFeed(params);
+    if (key !== latestFilterKeyRef.current) return;
+    setData(next);
+    setDataKey(key);
+    setLoadError(null);
+  }, []);
 
   const refreshFeed = useCallback(
     async (options: { showLoading?: boolean } = {}) => {
@@ -214,20 +266,25 @@ export function NewsFeedClient({
         );
       } finally {
         if (options.showLoading) setIsLoading(false);
+        setIsLoadingMore(false);
       }
     },
     [currentQueryParams, loadFeed]
   );
 
-  // Fetch when URL filter parameters diverge from the data on screen
+  // Fetch when URL filter parameters or page limit diverge from the data on screen
   useEffect(() => {
     if (filterKey === dataKey) return;
-    loadFeed(currentQueryParams).catch((error: unknown) => {
-      if (serializeParams(currentQueryParams) !== latestFilterKeyRef.current) return;
-      setLoadError(
-        error instanceof Error ? error.message : "Không thể tải danh sách tin."
-      );
-    });
+    loadFeed(currentQueryParams)
+      .catch((error: unknown) => {
+        if (serializeParams(currentQueryParams) !== latestFilterKeyRef.current) return;
+        setLoadError(
+          error instanceof Error ? error.message : "Không thể tải danh sách tin."
+        );
+      })
+      .finally(() => {
+        setIsLoadingMore(false);
+      });
   }, [currentQueryParams, dataKey, filterKey, loadFeed]);
 
   const activeJobsCount = data.counts.queued + data.counts.processing;
@@ -253,34 +310,41 @@ export function NewsFeedClient({
   const isPanelVisible =
     !isSwitchingView && Boolean(selectedItem) && (isWide || isPanelOpenOnNarrow);
 
+  useLayoutEffect(() => {
+    if (isWide || isPanelVisible) return;
+    const el = listScrollRef.current;
+    if (el && listScrollTopRef.current > 0) {
+      el.scrollTop = listScrollTopRef.current;
+    }
+  }, [isPanelVisible, isWide]);
+
+  useEffect(() => {
+    const targetId = pendingScrollItemIdRef.current;
+    if (!targetId || selectedItem?.id !== targetId) return;
+    pendingScrollItemIdRef.current = null;
+    const cardEl = listScrollRef.current?.querySelector<HTMLElement>(
+      `[data-news-card-id="${targetId}"]`
+    );
+    const behavior: ScrollBehavior =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth";
+    cardEl?.scrollIntoView?.({ block: "nearest", behavior });
+  }, [selectedItem?.id]);
+
   const selectByOffset = useCallback(
     (offset: 1 | -1) => {
       if (data.items.length === 0) return;
       const index = selectedItem ? data.items.findIndex((item) => item.id === selectedItem.id) : -1;
       const nextIndex = Math.min(Math.max(index + offset, 0), data.items.length - 1);
-      setSelectedItemId(data.items[nextIndex].id);
+      const nextId = data.items[nextIndex].id;
+      pendingScrollItemIdRef.current = nextId;
+      setSelectedItemId(nextId);
     },
     [data.items, selectedItem]
   );
-
-  // Keyboard shortcuts: 'N' opens quick paste, 'J'/'K' move through the list
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isPasteOpen || isSourcesOpen) return;
-      if (isEditableTarget(e.target)) return;
-      const key = e.key.toLowerCase();
-      if (key === "n") {
-        e.preventDefault();
-        setIsPasteOpen(true);
-      } else if (key === "j" || key === "k") {
-        e.preventDefault();
-        selectByOffset(key === "j" ? 1 : -1);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPasteOpen, isSourcesOpen, selectByOffset]);
 
   const applyItemUpdate = useCallback(
     async (
@@ -310,6 +374,9 @@ export function NewsFeedClient({
   );
 
   const handleSelectItem = useCallback((item: NewsItemDto) => {
+    if (listScrollRef.current) {
+      listScrollTopRef.current = listScrollRef.current.scrollTop;
+    }
     setSelectedItemId(item.id);
     setIsPanelOpenOnNarrow(true);
   }, []);
@@ -334,14 +401,33 @@ export function NewsFeedClient({
       const wasSelected = selectedItem?.id === item.id;
       const isDone = await applyItemUpdate(item.id, patch, successMessage);
       if (!isDone || !wasSelected) return;
+      pendingScrollItemIdRef.current = neighbour?.id ?? null;
       setSelectedItemId(neighbour?.id ?? null);
       if (!neighbour) setIsPanelOpenOnNarrow(false);
     },
     [applyItemUpdate, data.items, selectedItem]
   );
 
+  const handleToggleSave = useCallback(
+    (item: NewsItemDto) => {
+      const nextSaved = !(item.isSaved && item.reviewStatus !== "dismissed");
+      const patch =
+        nextSaved && item.reviewStatus === "dismissed"
+          ? { isSaved: true, reviewStatus: "published" as const }
+          : { isSaved: nextSaved };
+      const message = nextSaved ? "Đã lưu bài" : "Đã bỏ lưu bài";
+      if (view === "all") {
+        void applyItemUpdate(item.id, patch, message);
+        return;
+      }
+      void decide(item, patch, message);
+    },
+    [applyItemUpdate, decide, view]
+  );
+
   const handleDismiss = useCallback(
-    (item: NewsItemDto) => void decide(item, { reviewStatus: "dismissed" }, "Đã bỏ qua bài"),
+    (item: NewsItemDto) =>
+      void decide(item, { reviewStatus: "dismissed", isSaved: false }, "Đã bỏ qua bài"),
     [decide]
   );
 
@@ -356,6 +442,55 @@ export function NewsFeedClient({
       ),
     [decide]
   );
+
+  const handleDelete = useCallback(
+    async (item: NewsItemDto) => {
+      const index = data.items.findIndex((row) => row.id === item.id);
+      const neighbour = data.items[index + 1] ?? data.items[index - 1] ?? null;
+      const wasSelected = selectedItem?.id === item.id;
+      setDeletingId(item.id);
+      try {
+        await newsService.deleteNewsItem(item.id);
+        await refreshFeed();
+        toast("Đã xoá bài", "success");
+        if (wasSelected) {
+          pendingScrollItemIdRef.current = neighbour?.id ?? null;
+          setSelectedItemId(neighbour?.id ?? null);
+          if (!neighbour) setIsPanelOpenOnNarrow(false);
+        }
+      } catch (error) {
+        toast(
+          error instanceof Error ? error.message : "Không thể xoá bài tin.",
+          "error"
+        );
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [data.items, refreshFeed, selectedItem, toast]
+  );
+
+  // Keyboard shortcuts: 'N' quick paste, 'J'/'K' navigate, 'S' toggle save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isPasteOpen || isSourcesOpen) return;
+      if (isEditableTarget(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (key === "n") {
+        e.preventDefault();
+        setIsPasteOpen(true);
+      } else if (key === "j" || key === "k") {
+        e.preventDefault();
+        selectByOffset(key === "j" ? 1 : -1);
+      } else if (key === "s" && selectedItem && busyItemId !== selectedItem.id) {
+        e.preventDefault();
+        handleToggleSave(selectedItem);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [busyItemId, handleToggleSave, isPasteOpen, isSourcesOpen, selectByOffset, selectedItem]);
 
   const handleUpdateTags = useCallback(
     async (item: NewsItemDto, tags: string[]) => {
@@ -399,32 +534,126 @@ export function NewsFeedClient({
     [applyItemUpdate]
   );
 
+  const handleSelectView = useCallback(
+    (nextView: NewsFeedView) => {
+      setLoadError(null);
+      setLimit(DEFAULT_PAGE_LIMIT);
+      void setView(nextView);
+    },
+    [setView]
+  );
+
   const handleSelectTag = useCallback(
     (clickedTag: string) => {
+      setLimit(DEFAULT_PAGE_LIMIT);
       void setTag(tag === clickedTag ? "" : clickedTag);
     },
     [setTag, tag]
   );
 
-  const activeFilterCount = [origin, tag, sort !== "latest" ? sort : ""].filter(Boolean).length;
+  const handleSelectContentType = useCallback(
+    (clickedType: string) => {
+      setLimit(DEFAULT_PAGE_LIMIT);
+      void setContentType(contentType === clickedType ? "" : clickedType);
+    },
+    [contentType, setContentType]
+  );
+
+  const handleToggleUnreadFilter = useCallback(() => {
+    setLimit(DEFAULT_PAGE_LIMIT);
+    void setReadState(validReadState === "unread" ? "" : "unread");
+  }, [setReadState, validReadState]);
+
+  const handleMarkAllRead = useCallback(async () => {
+    setIsMarkingAllRead(true);
+    try {
+      const { updated } = await newsService.markNewsItemsAsRead({
+        view,
+        origin: currentQueryParams.origin,
+        tag: currentQueryParams.tag,
+        contentType: currentQueryParams.contentType,
+      });
+      await refreshFeed();
+      if (updated > 0) {
+        toast(`Đã đánh dấu đọc ${updated} bài`, "success");
+      }
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Không thể đánh dấu đã đọc.",
+        "error"
+      );
+    } finally {
+      setIsMarkingAllRead(false);
+    }
+  }, [currentQueryParams.contentType, currentQueryParams.origin, currentQueryParams.tag, refreshFeed, toast, view]);
+
+  const handleCheckWorkerHealth = useCallback(async () => {
+    setIsCheckingWorker(true);
+    try {
+      const health = await newsService.fetchNewsWorkerHealth();
+      setWorkerHealth(health);
+    } finally {
+      setIsCheckingWorker(false);
+    }
+  }, []);
+
+  const handleOpenSources = useCallback(() => {
+    setIsSourcesOpen(true);
+    void newsService
+      .fetchNewsSources()
+      .then((res) => setSources(res.sources))
+      .catch(() => {
+        // Keep current sources snapshot if background refresh fails
+      });
+  }, []);
+
+  const handleRefreshAll = useCallback(() => {
+    void refreshFeed({ showLoading: true });
+    if (workerConfigured) {
+      void handleCheckWorkerHealth();
+    }
+  }, [handleCheckWorkerHealth, refreshFeed, workerConfigured]);
+
+  const activeFilterCount = [
+    origin,
+    tag,
+    validContentType ?? "",
+    validReadState ?? "",
+    sort !== "latest" ? sort : "",
+  ].filter(Boolean).length;
+
   const isTabView = TAB_VIEWS.some((tab) => tab.id === view);
+  const unreadInListCount = data.items.filter((item) => item.readState === "unread").length;
+
   const emptyMessage =
     q || activeFilterCount > 0
       ? { title: "Không tìm thấy bài nào khớp bộ lọc", hint: "Đổi từ khoá hoặc xoá bộ lọc." }
       : (EMPTY_MESSAGES[view] ?? { title: "Chưa có bài nào ở đây", hint: "Đổi tab để xem bài khác." });
 
   const clearFilters = () => {
+    setLimit(DEFAULT_PAGE_LIMIT);
     void setOrigin("");
     void setTag("");
+    void setContentType("");
+    void setReadState("");
     void setSort("latest");
   };
 
   const chip = (isSelected: boolean) =>
-    `inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors cursor-pointer ${
+    `inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer ${
       isSelected
         ? "bg-primary text-primary-foreground"
         : "border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
     }`;
+
+  const workerStatusLabel =
+    workerHealth?.status === "ok"
+      ? "Worker OK"
+      : workerHealth?.status === "offline"
+        ? "Worker offline"
+        : workerHealth?.status === "unconfigured"
+          ? "Chưa gắn worker"
+          : "Worker";
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
@@ -433,11 +662,37 @@ export function NewsFeedClient({
           <Link
             href="/"
             aria-label="Về Crisne"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95"
           >
             <ArrowLeft className="size-4" />
           </Link>
           <h1 className="font-display text-2xl font-semibold leading-none text-foreground">News</h1>
+
+          {workerConfigured && (
+            <button
+              type="button"
+              onClick={() => void handleCheckWorkerHealth()}
+              disabled={isCheckingWorker}
+              title="Kiểm tra trạng thái worker tóm tắt"
+              className="hidden sm:inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer"
+            >
+              <span
+                className={`size-1.5 rounded-full transition-colors duration-150 ${
+                  workerHealth?.status === "ok"
+                    ? "bg-emerald-500"
+                    : workerHealth?.status === "offline"
+                      ? "bg-destructive"
+                      : "bg-muted-foreground/50"
+                }`}
+              />
+              {isCheckingWorker ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Activity className="size-3" />
+              )}
+              <span>{workerStatusLabel}</span>
+            </button>
+          )}
 
           <div className="ml-auto flex min-w-0 items-center gap-2">
             <label className="relative hidden w-64 md:block">
@@ -445,27 +700,61 @@ export function NewsFeedClient({
               <input
                 type="search"
                 value={q}
-                onChange={(e) => void setQ(e.target.value)}
+                onChange={(e) => {
+                  setLimit(DEFAULT_PAGE_LIMIT);
+                  void setQ(e.target.value);
+                }}
                 placeholder="Tìm tiêu đề, tag, domain"
                 aria-label="Tìm kiếm bài tin"
-                className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className={cn(
+                  "h-9 w-full rounded-lg border border-input bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
+                  q ? "pr-8" : "pr-3"
+                )}
               />
+              {q && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLimit(DEFAULT_PAGE_LIMIT);
+                    void setQ("");
+                  }}
+                  aria-label="Xoá từ khoá"
+                  className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground cursor-pointer"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </label>
             <button
               type="button"
-              onClick={() => setIsFilterOpen(true)}
+              onClick={() => {
+                setIsFilterOpen(true);
+                window.requestAnimationFrame(() => {
+                  mobileSearchInputRef.current?.focus({ preventScroll: true });
+                });
+              }}
               aria-label="Tìm"
               title="Tìm"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground md:hidden cursor-pointer"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 md:hidden cursor-pointer"
             >
               <Search className="size-4" />
             </button>
             <button
               type="button"
-              onClick={() => setIsSourcesOpen(true)}
+              onClick={handleRefreshAll}
+              disabled={isLoading}
+              aria-label="Làm mới"
+              title="Làm mới danh sách"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            >
+              <RefreshCw className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenSources}
               aria-label="Nguồn RSS"
               title="Nguồn RSS"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 cursor-pointer"
             >
               <Rss className="size-4" />
             </button>
@@ -473,7 +762,7 @@ export function NewsFeedClient({
               type="button"
               onClick={() => setIsPasteOpen(true)}
               aria-label="Thêm link"
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 cursor-pointer"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
             >
               <Plus className="size-4" />
               <span className="hidden sm:inline">Thêm link</span>
@@ -488,25 +777,27 @@ export function NewsFeedClient({
           className={`${isPanelVisible ? "hidden xl:flex" : "flex"} w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0`}
         >
           <div className="shrink-0 border-b border-border px-4 sm:px-5">
-            <div className="flex items-center gap-3">
-              <nav className="flex min-w-0 flex-1 gap-5 overflow-x-auto [scrollbar-width:none]" aria-label="Chế độ xem">
+            <div className="flex items-center gap-2">
+              <nav className="flex min-w-0 flex-1 gap-4 overflow-x-auto [scrollbar-width:none]" aria-label="Chế độ xem">
                 {TAB_VIEWS.map((tab) => {
                   const isActive = view === tab.id;
                   return (
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => void setView(tab.id)}
+                      onClick={() => handleSelectView(tab.id)}
                       aria-current={isActive ? "page" : undefined}
-                      className={`relative inline-flex h-10 shrink-0 items-center gap-1.5 px-1 text-sm cursor-pointer ${
+                      className={cn(
+                        "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-1 text-sm font-medium transition-colors duration-150 cursor-pointer",
+                        "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-center after:bg-foreground after:transition-[transform,opacity] after:duration-200 after:ease-out motion-reduce:after:transition-none",
                         isActive
-                          ? "font-medium text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-foreground"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
+                          ? "text-foreground after:scale-x-100 after:opacity-100"
+                          : "text-muted-foreground hover:text-foreground after:scale-x-0 after:opacity-0"
+                      )}
                     >
                       {tab.label}
                       <span
-                        className={`text-xs tabular-nums ${
+                        className={`text-xs tabular-nums transition-colors duration-150 ${
                           isActive ? "text-[var(--editorial-accent)]" : "text-muted-foreground"
                         }`}
                       >
@@ -516,13 +807,30 @@ export function NewsFeedClient({
                   );
                 })}
               </nav>
+              {unreadInListCount > 0 && view !== "dismissed" && (
+                <button
+                  type="button"
+                  disabled={isMarkingAllRead}
+                  onClick={() => void handleMarkAllRead()}
+                  aria-label="Đánh dấu tất cả đã đọc"
+                  title="Đánh dấu tất cả đã đọc"
+                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                >
+                  {isMarkingAllRead ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <CheckCheck className="size-3.5" />
+                  )}
+                  <span className="hidden sm:inline">Đọc hết</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setIsFilterOpen((open) => !open)}
                 aria-expanded={isFilterOpen}
                 aria-label="Lọc"
-                title="Lọc theo nguồn, tag, thứ tự"
-                className={`relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg hover:bg-accent hover:text-foreground cursor-pointer ${
+                title="Lọc theo nguồn, loại, tag, thứ tự"
+                className={`relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 cursor-pointer ${
                   isFilterOpen || activeFilterCount > 0 ? "text-foreground" : "text-muted-foreground"
                 }`}
               >
@@ -533,76 +841,127 @@ export function NewsFeedClient({
               </button>
             </div>
 
-            {isFilterOpen && (
-              <div className="flex flex-col gap-2.5 border-t border-border py-3">
-                <label className="relative block md:hidden">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="search"
-                    value={q}
-                    onChange={(e) => void setQ(e.target.value)}
-                    placeholder="Tìm tiêu đề, tag, domain"
-                    aria-label="Tìm kiếm bài tin trên di động"
-                    className="h-9 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </label>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {ORIGIN_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => void setOrigin(opt.value)}
-                      className={chip(origin === opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => void setSort(sort === "latest" ? "curated_first" : "latest")}
-                    className="ml-auto inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-                  >
-                    <ArrowUpDown className="size-3.5" />
-                    {sort === "curated_first" ? "Ưu tiên tự chọn" : "Mới nhất"}
-                  </button>
-                </div>
-                {data.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {data.tags.map((item) => (
+            <div
+              inert={!isFilterOpen || undefined}
+              aria-hidden={!isFilterOpen || undefined}
+              className={cn(
+                "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
+                isFilterOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+              )}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-2.5 border-t border-border py-3">
+                  <label className="relative block md:hidden">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      ref={mobileSearchInputRef}
+                      type="search"
+                      value={q}
+                      onChange={(e) => {
+                        setLimit(DEFAULT_PAGE_LIMIT);
+                        void setQ(e.target.value);
+                      }}
+                      placeholder="Tìm tiêu đề, tag, domain"
+                      aria-label="Tìm kiếm bài tin trên di động"
+                      className={cn(
+                        "h-9 w-full rounded-lg border border-input bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
+                        q ? "pr-8" : "pr-3"
+                      )}
+                    />
+                    {q && (
                       <button
-                        key={item.tag}
                         type="button"
-                        onClick={() => handleSelectTag(item.tag)}
-                        className={chip(tag === item.tag)}
+                        onClick={() => {
+                          setLimit(DEFAULT_PAGE_LIMIT);
+                          void setQ("");
+                        }}
+                        aria-label="Xoá từ khoá trên di động"
+                        className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground cursor-pointer"
                       >
-                        #{item.tag}
-                        <span className="tabular-nums opacity-70">{item.count}</span>
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {ORIGIN_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => {
+                          setLimit(DEFAULT_PAGE_LIMIT);
+                          void setOrigin(opt.value);
+                        }}
+                        className={chip(origin === opt.value)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleToggleUnreadFilter}
+                      className={chip(validReadState === "unread")}
+                    >
+                      Chưa đọc
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void setSort(sort === "latest" ? "curated_first" : "latest")}
+                      className="ml-auto inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] cursor-pointer"
+                    >
+                      <ArrowUpDown className="size-3.5" />
+                      {sort === "curated_first" ? "Ưu tiên tự chọn" : "Mới nhất"}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {NEWS_CONTENT_TYPE_TAGS.map((ct) => (
+                      <button
+                        key={ct.tag}
+                        type="button"
+                        onClick={() => handleSelectContentType(ct.tag)}
+                        className={chip(validContentType === ct.tag)}
+                      >
+                        {ct.label}
                       </button>
                     ))}
                   </div>
-                )}
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="inline-flex h-7 w-fit items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-                  >
-                    <X className="size-3.5" />
-                    Xoá lọc
-                  </button>
-                )}
+                  {data.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {data.tags.map((item) => (
+                        <button
+                          key={item.tag}
+                          type="button"
+                          onClick={() => handleSelectTag(item.tag)}
+                          className={chip(tag === item.tag)}
+                        >
+                          #{item.tag}
+                          <span className="tabular-nums opacity-70">{item.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {activeFilterCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="inline-flex h-7 w-fit items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] cursor-pointer"
+                    >
+                      <X className="size-3.5" />
+                      Xoá lọc
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {!isTabView && (
               <div className="flex items-center justify-between gap-2 px-4 pt-3 text-sm sm:px-5">
                 <span className="font-medium text-foreground">{EXTRA_VIEW_LABELS[view] ?? view}</span>
                 <button
                   type="button"
-                  onClick={() => void setView("inbox")}
-                  className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+                  onClick={() => handleSelectView("inbox")}
+                  className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] cursor-pointer"
                 >
                   <Inbox className="size-3.5" />
                   Về Chờ xử lý
@@ -611,14 +970,14 @@ export function NewsFeedClient({
             )}
 
             {activeJobsCount > 0 && view !== "queue" && (
-              <div className="px-4 pt-3 sm:px-5">
+              <div className="px-4 pt-3 sm:px-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 duration-200">
                 <div className="flex items-center gap-2 rounded-lg bg-[var(--status-learning-bg)] px-3 py-2 text-xs text-[var(--status-learning)]">
                   <Loader2 className="size-3.5 animate-spin" />
                   <span>{activeJobsCount} link đang được tóm tắt</span>
                   <span className="text-muted-foreground">·</span>
                   <button
                     type="button"
-                    onClick={() => void setView("queue")}
+                    onClick={() => handleSelectView("queue")}
                     className="font-medium underline-offset-2 hover:underline cursor-pointer"
                   >
                     Xem hàng đợi
@@ -628,7 +987,7 @@ export function NewsFeedClient({
             )}
 
             {loadError && (
-              <div className="mx-4 mt-3 flex items-start gap-3 rounded-lg border border-border bg-card p-4 sm:mx-5" role="alert">
+              <div className="mx-4 mt-3 flex items-start gap-3 rounded-lg border border-border bg-card p-4 sm:mx-5 motion-safe:animate-in motion-safe:fade-in duration-150" role="alert">
                 <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">Không tải được danh sách tin</p>
@@ -637,7 +996,7 @@ export function NewsFeedClient({
                 <button
                   type="button"
                   onClick={() => void refreshFeed({ showLoading: true })}
-                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium hover:bg-accent cursor-pointer"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.97] cursor-pointer"
                 >
                   <RotateCcw className="size-3.5" />
                   Thử lại
@@ -645,42 +1004,76 @@ export function NewsFeedClient({
               </div>
             )}
 
-            {isLoading || isSwitchingView ? (
+            {!loadError && (isLoading || (isSwitchingView && !isLoadingMore)) ? (
               <div className="px-4 sm:px-5">
                 {Array.from({ length: 5 }).map((_, idx) => (
                   <div key={idx} className="space-y-2.5 border-b border-border py-5">
-                    <div className="h-3 w-40 animate-pulse rounded bg-muted" />
-                    <div className="h-5 w-4/5 animate-pulse rounded bg-muted" />
-                    <div className="h-3.5 w-full animate-pulse rounded bg-muted" />
+                    <div className="h-3 w-40 rounded bg-muted motion-safe:animate-pulse" />
+                    <div className="h-5 w-4/5 rounded bg-muted motion-safe:animate-pulse" />
+                    <div className="h-3.5 w-full rounded bg-muted motion-safe:animate-pulse" />
                   </div>
                 ))}
               </div>
-            ) : data.items.length === 0 ? (
-              <div className="flex flex-col items-center px-6 py-16 text-center">
+            ) : !isSwitchingView && data.items.length === 0 && !loadError ? (
+              <div className="flex flex-col items-center px-6 py-16 text-center motion-safe:animate-in motion-safe:fade-in duration-150">
                 <div className="mb-4 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                   <Inbox className="size-5" />
                 </div>
                 <h2 className="text-base font-semibold text-foreground">{emptyMessage.title}</h2>
                 <p className="mt-1 max-w-xs text-sm text-muted-foreground">{emptyMessage.hint}</p>
-                <button
-                  type="button"
-                  onClick={() => setIsPasteOpen(true)}
-                  className="mt-5 inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 cursor-pointer"
-                >
-                  <Plus className="size-4" />
-                  Thêm link
-                </button>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  {(q || activeFilterCount > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLimit(DEFAULT_PAGE_LIMIT);
+                        void setQ("");
+                        clearFilters();
+                      }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] cursor-pointer"
+                    >
+                      <X className="size-4" />
+                      Xoá bộ lọc
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsPasteOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+                  >
+                    <Plus className="size-4" />
+                    Thêm link
+                  </button>
+                </div>
               </div>
-            ) : (
-              data.items.map((item) => (
-                <NewsCard
-                  key={item.id}
-                  item={item}
-                  isSelected={isPanelVisible && selectedItem?.id === item.id}
-                  onSelect={handleSelectItem}
-                />
-              ))
-            )}
+            ) : !isSwitchingView && data.items.length > 0 ? (
+              <>
+                {data.items.map((item) => (
+                  <NewsCard
+                    key={item.id}
+                    item={item}
+                    isSelected={isPanelVisible && selectedItem?.id === item.id}
+                    onSelect={handleSelectItem}
+                  />
+                ))}
+                {data.hasMore && (
+                  <div className="flex justify-center border-b border-border py-4">
+                    <button
+                      type="button"
+                      disabled={isLoadingMore}
+                      onClick={() => {
+                        setIsLoadingMore(true);
+                        setLimit((prev) => Math.min(prev + DEFAULT_PAGE_LIMIT, 300));
+                      }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-4 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                    >
+                      {isLoadingMore && <Loader2 className="size-3.5 animate-spin" />}
+                      Tải thêm
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
         </section>
 
@@ -695,16 +1088,19 @@ export function NewsFeedClient({
             }
             isUpdating={busyItemId === selectedItem.id}
             isReingesting={reingestingId === selectedItem.id}
+            isDeleting={deletingId === selectedItem.id}
             onBack={() => setIsPanelOpenOnNarrow(false)}
             onToggleRead={handleToggleRead}
+            onToggleSave={handleToggleSave}
             onDismiss={handleDismiss}
             onReopen={handleReopen}
+            onDelete={handleDelete}
             onUpdateTags={handleUpdateTags}
             onSaveNote={handleSaveNote}
             onReingest={handleReingest}
             onOpenExternal={handleOpenExternal}
           />
-        ) : data.items.length > 0 || isSwitchingView || isLoading ? (
+        ) : (!isSwitchingView && data.items.length > 0) || (!loadError && (isSwitchingView || isLoading)) ? (
           // Shown while the list or the wide-screen check is still settling, so the panel fades in
           <NewsReaderSkeleton />
         ) : (
@@ -720,7 +1116,7 @@ export function NewsFeedClient({
 
       <SourcesManagerSheet
         open={isSourcesOpen}
-        initialSources={initialSources}
+        initialSources={sources}
         onClose={() => setIsSourcesOpen(false)}
         onChanged={() => void refreshFeed()}
       />

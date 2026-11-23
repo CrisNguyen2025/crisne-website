@@ -7,6 +7,7 @@ import {
   parseJsonStringArray,
 } from "./schemas";
 import { type HostLookupFn, UrlGuardError, assertPublicHostname } from "./url-guard";
+import { notifyNewsWorker } from "./worker-trigger";
 
 const MAX_FEED_XML_BYTES = 2 * 1024 * 1024;
 const FEED_FETCH_TIMEOUT_MS = 10_000;
@@ -213,10 +214,19 @@ async function readFeedBodyWithLimit(response: Response): Promise<string> {
   return text + decoder.decode();
 }
 
-export async function fetchFeedXmlSafely(
+export type FeedFetchResult =
+  | { kind: "not_modified"; etag: string | null; lastModified: string | null }
+  | { kind: "ok"; xml: string; etag: string | null; lastModified: string | null };
+
+export async function fetchFeedWithCacheSafely(
   feedUrl: string,
-  options: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch } = {}
-): Promise<string> {
+  options: {
+    lookupFn?: HostLookupFn;
+    fetchFn?: typeof fetch;
+    etag?: string | null;
+    lastModified?: string | null;
+  } = {}
+): Promise<FeedFetchResult> {
   const fetchFn = options.fetchFn ?? fetch;
   let current = new URL(feedUrl.trim());
 
@@ -224,19 +234,38 @@ export async function fetchFeedXmlSafely(
     if (current.protocol !== "http:" && current.protocol !== "https:") {
       throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Feed URL phải dùng http hoặc https.");
     }
+    if (current.username || current.password) {
+      throw new UrlGuardError("INVALID_URL", 400, "Feed URL không được chứa thông tin đăng nhập.");
+    }
     await assertPublicHostname(current.hostname, options.lookupFn);
+
+    const headers: Record<string, string> = {
+      Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+      "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)",
+    };
+    if (options.etag) {
+      headers["If-None-Match"] = options.etag;
+    }
+    if (options.lastModified) {
+      headers["If-Modified-Since"] = options.lastModified;
+    }
 
     const response = await fetchFn(current.toString(), {
       method: "GET",
       redirect: "manual",
-      headers: {
-        Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-        "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)",
-      },
+      headers,
       signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
     });
 
     if (response.status >= 300 && response.status < 400) {
+      if (response.status === 304) {
+        await response.body?.cancel();
+        return {
+          kind: "not_modified",
+          etag: response.headers.get("etag") ?? options.etag ?? null,
+          lastModified: response.headers.get("last-modified") ?? options.lastModified ?? null,
+        };
+      }
       const location = response.headers.get("location");
       await response.body?.cancel();
       if (!location) {
@@ -253,10 +282,32 @@ export async function fetchFeedXmlSafely(
       throw new Error(`Tải feed thất bại với HTTP ${response.status}`);
     }
 
-    return readFeedBodyWithLimit(response);
+    const xml = await readFeedBodyWithLimit(response);
+    return {
+      kind: "ok",
+      xml,
+      etag: response.headers.get("etag"),
+      lastModified: response.headers.get("last-modified"),
+    };
   }
 
   throw new UrlGuardError("TOO_MANY_REDIRECTS", 400, "Feed URL chuyển hướng quá nhiều lần.");
+}
+
+export async function fetchFeedXmlSafely(
+  feedUrl: string,
+  options: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch } = {}
+): Promise<string> {
+  const result = await fetchFeedWithCacheSafely(feedUrl, options);
+  return result.kind === "ok" ? result.xml : "";
+}
+
+function resolveDefaultCronMaxItems(): number {
+  const raw = Number(process.env.NEWS_CRON_MAX_ITEMS_PER_SOURCE);
+  if (Number.isFinite(raw) && raw >= 1) {
+    return Math.min(Math.trunc(raw), 30);
+  }
+  return 10;
 }
 
 export async function syncNewsSourcesCron(
@@ -267,7 +318,10 @@ export async function syncNewsSourcesCron(
     fetchFn?: typeof fetch;
   } = {}
 ): Promise<CronSyncSummary> {
-  const maxItems = Math.min(Math.max(1, options.maxItemsPerSource ?? 10), 30);
+  const maxItems = Math.min(
+    Math.max(1, options.maxItemsPerSource ?? resolveDefaultCronMaxItems()),
+    30
+  );
   const sources = await prisma.newsSource.findMany({
     where: options.sourceId ? { id: options.sourceId } : { enabled: true },
     orderBy: { createdAt: "asc" },
@@ -281,52 +335,73 @@ export async function syncNewsSourcesCron(
     let queued = 0;
     let duplicates = 0;
     let skippedErrors = 0;
+    let notModified = false;
     let sourceError: string | null = null;
 
     try {
-      const xml = await fetchFeedXmlSafely(source.feedUrl, {
+      const feedRes = await fetchFeedWithCacheSafely(source.feedUrl, {
         lookupFn: options.lookupFn,
         fetchFn: options.fetchFn,
+        etag: source.etag,
+        lastModified: source.lastModified,
       });
-      const entries = parseRssOrAtomXml(xml, source.feedUrl).slice(0, maxItems);
-      const feedHost = new URL(source.feedUrl).hostname.toLowerCase().replace(/^www\./, "");
-      const defaultTags = parseJsonStringArray(source.defaultTags);
 
-      for (const entry of entries) {
-        try {
-          const res = await enqueueNewsUrl(
-            {
-              url: entry.url,
-              title: entry.title,
-              origin: "cron",
-              sourceId: source.id,
-              tags: defaultTags,
-            },
-            {
-              extraAllowedDomains: [source.domain, feedHost],
-              lookupFn: options.lookupFn,
-              fetchFn: options.fetchFn,
+      if (feedRes.kind === "not_modified") {
+        notModified = true;
+        await prisma.newsSource.update({
+          where: { id: source.id },
+          data: {
+            etag: feedRes.etag ?? source.etag,
+            lastModified: feedRes.lastModified ?? source.lastModified,
+            lastFetchedAt: new Date(),
+            lastError: null,
+          },
+        });
+      } else {
+        const entries = parseRssOrAtomXml(feedRes.xml, source.feedUrl).slice(0, maxItems);
+        const feedHost = new URL(source.feedUrl).hostname.toLowerCase().replace(/^www\./, "");
+        const defaultTags = parseJsonStringArray(source.defaultTags);
+
+        for (const entry of entries) {
+          try {
+            const res = await enqueueNewsUrl(
+              {
+                url: entry.url,
+                title: entry.title,
+                origin: "cron",
+                sourceId: source.id,
+                tags: defaultTags,
+                publishedAt: entry.publishedAt,
+              },
+              {
+                extraAllowedDomains: [source.domain, feedHost],
+                lookupFn: options.lookupFn,
+                fetchFn: options.fetchFn,
+                skipWake: true,
+              }
+            );
+            if (res.status === "queued") {
+              queued++;
+              totalQueued++;
+            } else {
+              duplicates++;
+              totalDuplicates++;
             }
-          );
-          if (res.status === "queued") {
-            queued++;
-            totalQueued++;
-          } else {
-            duplicates++;
-            totalDuplicates++;
+          } catch {
+            skippedErrors++;
           }
-        } catch {
-          skippedErrors++;
         }
-      }
 
-      await prisma.newsSource.update({
-        where: { id: source.id },
-        data: {
-          lastFetchedAt: new Date(),
-          lastError: null,
-        },
-      });
+        await prisma.newsSource.update({
+          where: { id: source.id },
+          data: {
+            etag: feedRes.etag ?? null,
+            lastModified: feedRes.lastModified ?? null,
+            lastFetchedAt: new Date(),
+            lastError: null,
+          },
+        });
+      }
     } catch (error) {
       sourceError =
         error instanceof Error ? error.message.slice(0, 500) : "Lỗi không xác định khi quét feed.";
@@ -345,8 +420,13 @@ export async function syncNewsSourcesCron(
       queued,
       duplicates,
       skippedErrors,
+      ...(notModified ? { notModified: true } : {}),
       error: sourceError,
     });
+  }
+
+  if (totalQueued > 0) {
+    notifyNewsWorker();
   }
 
   return {

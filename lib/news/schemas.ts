@@ -16,11 +16,15 @@ export type ReviewStatus = z.infer<typeof ReviewStatusSchema>;
 export const ReadStateSchema = z.enum(["unread", "read"]);
 export type ReadState = z.infer<typeof ReadStateSchema>;
 
+export const NewsContentTypeTagSchema = z.enum(["tip", "tutorial", "tin-moi", "quan-diem"]);
+export type NewsContentTypeTag = z.infer<typeof NewsContentTypeTagSchema>;
+
 export const NewsFeedViewSchema = z.enum([
   "inbox",
+  "saved",
+  "dismissed",
   "done",
   "unread",
-  "saved",
   "all",
   "draft",
   "queue",
@@ -40,18 +44,25 @@ export const ExtractionMethodSchema = z.enum([
 ]);
 export type ExtractionMethod = z.infer<typeof ExtractionMethodSchema>;
 
+const MAX_URL_LENGTH = 2048;
+
 const HttpUrlSchema = z
   .string()
   .trim()
+  .max(MAX_URL_LENGTH)
   .url()
   .refine((value) => {
     try {
-      const protocol = new URL(value).protocol;
-      return protocol === "http:" || protocol === "https:";
+      const parsed = new URL(value);
+      return (
+        (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+        !parsed.username &&
+        !parsed.password
+      );
     } catch {
       return false;
     }
-  }, "URL must use http or https");
+  }, "URL must use http or https without credentials");
 
 const OptionalDateStringSchema = z
   .string()
@@ -71,12 +82,13 @@ export const NewsSummaryOutputSchema = z.object({
 export type NewsSummaryOutput = z.infer<typeof NewsSummaryOutputSchema>;
 
 export const IngestRequestSchema = z.object({
-  url: z.string().trim().url(),
+  url: z.string().trim().max(MAX_URL_LENGTH).url(),
   origin: NewsOriginSchema.default("manual"),
   title: z.string().trim().min(1).max(240).optional(),
   sourceId: z.string().trim().min(1).optional(),
   forceDeep: z.boolean().optional(),
   tags: z.array(z.string().trim().min(1).max(32)).max(5).optional(),
+  publishedAt: OptionalDateStringSchema,
 });
 export type IngestRequest = z.infer<typeof IngestRequestSchema>;
 
@@ -104,7 +116,7 @@ export type UpdateNewsSourceRequest = z.infer<typeof UpdateNewsSourceSchema>;
 
 export const CronSyncRequestSchema = z.object({
   sourceId: z.string().trim().min(1).optional(),
-  maxItemsPerSource: z.number().int().min(1).max(30).optional().default(10),
+  maxItemsPerSource: z.number().int().min(1).max(30).optional(),
 });
 export type CronSyncRequest = z.infer<typeof CronSyncRequestSchema>;
 
@@ -118,13 +130,21 @@ export const UpdateNewsItemSchema = z
     readState: ReadStateSchema.optional(),
     isSaved: z.boolean().optional(),
     reviewStatus: ReviewStatusSchema.optional(),
-    tags: z.array(z.string().trim().min(1).max(32)).max(10).optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(8).optional(),
     personalNote: z.string().max(4000).nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
   });
 export type UpdateNewsItemRequest = z.infer<typeof UpdateNewsItemSchema>;
+
+export const MarkReadRequestSchema = z.object({
+  view: NewsFeedViewSchema.optional(),
+  origin: NewsOriginSchema.optional(),
+  tag: z.string().trim().min(1).max(32).optional(),
+  contentType: NewsContentTypeTagSchema.optional(),
+});
+export type MarkReadRequest = z.infer<typeof MarkReadRequestSchema>;
 
 // Attempt number from the claim; optional so older workers keep working
 const JobAttemptSchema = z.number().int().min(1).optional();
@@ -195,6 +215,7 @@ export interface NewsCountsDto {
   draft: number;
   unread: number;
   saved: number;
+  dismissed: number;
   queue: number;
   inbox: number;
   done: number;
@@ -209,6 +230,8 @@ export interface NewsFeedQueryParams {
   view?: NewsFeedView;
   origin?: NewsOrigin;
   tag?: string;
+  contentType?: NewsContentTypeTag;
+  readState?: ReadState;
   q?: string;
   sort?: NewsFeedSort;
   limit?: number;
@@ -219,6 +242,12 @@ export interface NewsFeedResponseDto {
   counts: NewsCountsDto;
   tags: NewsTagCountDto[];
   duplicateTitles: Record<string, string>;
+  hasMore?: boolean;
+}
+
+export interface NewsWorkerHealthDto {
+  configured: boolean;
+  status: "ok" | "offline" | "unconfigured";
 }
 
 export interface NewsSourceDto {
@@ -240,6 +269,7 @@ export interface CronSyncSourceResult {
   queued: number;
   duplicates: number;
   skippedErrors: number;
+  notModified?: boolean;
   error: string | null;
 }
 

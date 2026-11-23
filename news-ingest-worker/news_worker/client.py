@@ -12,6 +12,17 @@ class NextJsJobClient:
         self.base_url = base_url.rstrip("/")
         self.admin_api_key = admin_api_key
         self.timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -20,24 +31,24 @@ class NextJsJobClient:
         }
 
     async def claim_next_job(self) -> ClaimedJob | None:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            res = await client.post(
-                f"{self.base_url}/api/news/jobs/claim",
-                headers=self._headers(),
-            )
-            res.raise_for_status()
-            data = res.json()
-            raw_job = data.get("job")
-            if not raw_job:
-                return None
-            return ClaimedJob.model_validate(raw_job)
+        client = self._get_client()
+        res = await client.post(
+            f"{self.base_url}/api/news/jobs/claim",
+            headers=self._headers(),
+        )
+        res.raise_for_status()
+        data = res.json()
+        raw_job = data.get("job")
+        if not raw_job:
+            return None
+        return ClaimedJob.model_validate(raw_job)
 
     async def complete_job(self, job_id: str, payload: JobCompletePayload) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            res = await client.post(
-                f"{self.base_url}/api/news/jobs/{job_id}/complete",
-                headers=self._headers(),
-                json=payload.model_dump(exclude_none=True),
-            )
-            res.raise_for_status()
-            return dict(res.json())
+        client = self._get_client()
+        res = await client.post(
+            f"{self.base_url}/api/news/jobs/{job_id}/complete",
+            headers=self._headers(),
+            json=payload.model_dump(exclude_none=True),
+        )
+        res.raise_for_status()
+        return dict(res.json())

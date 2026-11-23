@@ -14,7 +14,11 @@ import {
 import { type ResolveUrlOptions, resolveAndValidateUrl } from "./url-guard";
 import { notifyNewsWorker } from "./worker-trigger";
 
-const JOB_LEASE_DURATION_MS = 5 * 60_000;
+const JOB_LEASE_DURATION_MS = 10 * 60_000;
+
+export interface EnqueueNewsOptions extends ResolveUrlOptions {
+  skipWake?: boolean;
+}
 
 export interface EnqueueNewsResult {
   status: "queued" | "duplicate";
@@ -36,7 +40,7 @@ export interface ClaimedJobDto {
 
 export async function enqueueNewsUrl(
   input: IngestRequest,
-  urlOptions: ResolveUrlOptions = {}
+  urlOptions: EnqueueNewsOptions = {}
 ): Promise<EnqueueNewsResult> {
   const enabledSources = await prisma.newsSource.findMany({
     where: { enabled: true },
@@ -58,6 +62,9 @@ export async function enqueueNewsUrl(
 
   const reviewStatus = input.origin === "cron" ? "draft" : "published";
   const initialTags = normalizeTagList(input.tags ?? [], 5);
+  const parsedPublishedAt = input.publishedAt ? new Date(input.publishedAt) : null;
+  const publishedAt =
+    parsedPublishedAt && !Number.isNaN(parsedPublishedAt.getTime()) ? parsedPublishedAt : null;
 
   try {
     const created = await prisma.$transaction(async (tx) => {
@@ -71,6 +78,7 @@ export async function enqueueNewsUrl(
           sourceId: input.sourceId ?? null,
           title: input.title ?? validated.canonicalUrl,
           tags: JSON.stringify(initialTags),
+          publishedAt,
           ingestStatus: "queued",
           reviewStatus,
           readState: "unread",
@@ -87,7 +95,9 @@ export async function enqueueNewsUrl(
       return { item, job };
     });
 
-    notifyNewsWorker(created.job.id);
+    if (!urlOptions.skipWake) {
+      notifyNewsWorker(created.job.id);
+    }
     return {
       status: "queued",
       item: serializeNewsItem(created.item),
@@ -214,25 +224,29 @@ export async function claimNextIngestJob(): Promise<ClaimedJobDto | null> {
   if (!candidate) return null;
 
   const leaseUntil = new Date(now.getTime() + JOB_LEASE_DURATION_MS);
-  const claimed = await prisma.ingestJob.updateMany({
-    where: {
-      id: candidate.id,
-      status: "pending",
-    },
-    data: {
-      status: "running",
-      stage: "extracting",
-      attempts: { increment: 1 },
-      lockedUntil: leaseUntil,
-    },
+  const didClaim = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.ingestJob.updateMany({
+      where: {
+        id: candidate.id,
+        status: "pending",
+      },
+      data: {
+        status: "running",
+        stage: "extracting",
+        attempts: { increment: 1 },
+        lockedUntil: leaseUntil,
+      },
+    });
+    if (claimed.count === 0) return false;
+
+    await tx.newsItem.update({
+      where: { id: candidate.newsItemId },
+      data: { ingestStatus: "processing" },
+    });
+    return true;
   });
 
-  if (claimed.count === 0) return null;
-
-  await prisma.newsItem.update({
-    where: { id: candidate.newsItemId },
-    data: { ingestStatus: "processing" },
-  });
+  if (!didClaim) return null;
 
   return {
     jobId: candidate.id,
@@ -283,7 +297,7 @@ export async function completeIngestJob(
 
   if (payload.outcome === "ready") {
     const existingTags = parseJsonStringArray(job.newsItem.tags);
-    const normalizedTags = normalizeTagList([...payload.summary.tags, ...existingTags], 6);
+    const normalizedTags = normalizeTagList([...payload.summary.tags, ...existingTags], 8);
     const normalizedTitle = normalizeTitleForCompare(payload.summary.title);
     const possibleDuplicateOfId = await findPossibleTitleDuplicate({
       excludeId: job.newsItemId,

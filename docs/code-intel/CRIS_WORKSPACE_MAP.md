@@ -86,6 +86,7 @@ graph TB
 | `storage-media`          | Storage & Media          | N/A                                              | S3/R2 client, image upload                                                                                 | `app/api/upload-image/*`, `lib/r2-client.ts`                                                                               |
 | `auth-security`          | Auth & Actor Model       | ADR-0002                                         | NextAuth, Actor `Owner` vs `Visitor`, `requireWriteAccess`, internal Bearer token                          | `auth.ts`, `lib/auth/*`, `hooks/use-can-write.ts`, `rag_service/auth.py`                                                  |
 | `observability`          | Observability & Golden Set | ADR-0011                                         | Langfuse traces, feedback scores, Golden set evals                                                         | `lib/ai/langfuse.ts`, `app/api/chat/feedback/route.ts`                                                                    |
+| `private-news`           | Private News Reader      | ADR-0005                                         | Kho đọc tin độc lập `/news` cho `Owner`, `/share` PWA Share Target, RSS cron (`ETag`/`304`), `news-ingest-worker/` 3 tầng  | `app/(news)/*`, `components/news/*`, `lib/news/*`, `app/api/news/*`, `app/api/ingest/route.ts`, `news-ingest-worker/*`   |
 
 ---
 
@@ -220,6 +221,11 @@ sequenceDiagram
 | `POST`   | `/api/roadmap-assistant/[...path]`              | None (Actor Header) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts#POST`              | Proxy to Python Service   |
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
+| `GET`    | `/news` · `/news/sources` · `/share`            | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
+| `POST`   | `/api/ingest`                                   | Owner Only          | `private-news`           | `app/api/ingest/route.ts#POST`                                   | `FLOW_NEWS_INGEST_PIPELINE` |
+| `GET`    | `/api/news` · `/api/news/[id]` · `/api/news/worker-health` | Owner Only | `private-news`       | `app/api/news/**`                                                | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
+| `PATCH`  | `/api/news/[id]` · `DELETE /api/news/[id]` · `POST /api/news/mark-read` | Owner Only | `private-news` | `app/api/news/**`                                       | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
+| `GET/POST` | `/api/news/cron`                              | Owner / Cron Secret | `private-news`           | `app/api/news/cron/route.ts`                                     | `FLOW_NEWS_RSS_CRON_SYNC` |
 
 ---
 

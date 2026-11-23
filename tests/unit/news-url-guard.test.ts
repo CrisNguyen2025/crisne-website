@@ -113,6 +113,23 @@ describe("news url-guard", () => {
       const article = normalizeCanonicalUrl("https://github.com/vercel/next.js/?utm_source=x&tab=readme#top");
       expect(article.canonicalUrl).toBe("https://github.com/vercel/next.js?tab=readme");
       expect(article.platform).toBe("article");
+
+      const arxivPdf = normalizeCanonicalUrl("https://arxiv.org/pdf/2501.12345v2.pdf");
+      expect(arxivPdf.canonicalUrl).toBe("https://arxiv.org/abs/2501.12345v2");
+      expect(arxivPdf.domain).toBe("arxiv.org");
+    });
+
+    it("includes newly added tech domains in DEFAULT_ALLOWED_DOMAINS", () => {
+      const allowed = getAllowedDomains();
+      for (const host of [
+        "news.ycombinator.com",
+        "x.com",
+        "web.dev",
+        "developer.mozilla.org",
+        "simonwillison.net",
+      ]) {
+        expect(isDomainAllowed(host, allowed), host).toBe(true);
+      }
     });
   });
 

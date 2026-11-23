@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeTitleForCompare } from "./dedupe";
 import {
+  type MarkReadRequest,
   type NewsCountsDto,
   type NewsFeedQueryParams,
   type NewsFeedResponseDto,
@@ -16,17 +17,21 @@ import {
 const SEARCH_BATCH_SIZE = 500;
 const MAX_SEARCH_SCANNED_ROWS = 5000;
 const MAX_RETURNED_TAGS = 40;
+const MAX_FEED_LIMIT = 300;
+const MAX_ITEM_TAGS = 8;
 
 function buildViewWhere(view?: NewsFeedView): Prisma.NewsItemWhereInput {
   switch (view) {
     case "inbox":
       return { reviewStatus: { not: "dismissed" }, isSaved: false };
+    case "saved":
+      return { reviewStatus: { not: "dismissed" }, isSaved: true };
+    case "dismissed":
+      return { reviewStatus: "dismissed" };
     case "done":
       return { OR: [{ isSaved: true }, { reviewStatus: "dismissed" }] };
     case "unread":
       return { reviewStatus: "published", readState: "unread" };
-    case "saved":
-      return { reviewStatus: { not: "dismissed" }, isSaved: true };
     case "all":
       return {};
     case "draft":
@@ -39,6 +44,29 @@ function buildViewWhere(view?: NewsFeedView): Prisma.NewsItemWhereInput {
     default:
       return { reviewStatus: { not: "dismissed" } };
   }
+}
+
+function buildFeedFilterWhere(
+  params: Pick<NewsFeedQueryParams, "view" | "origin" | "tag" | "contentType" | "readState">,
+  options: { includeTags?: boolean } = {}
+): Prisma.NewsItemWhereInput {
+  const andConditions: Prisma.NewsItemWhereInput[] = [];
+  if (options.includeTags !== false) {
+    const tagFilter = params.tag?.trim().toLowerCase() ?? "";
+    if (tagFilter) {
+      andConditions.push({ tags: { contains: JSON.stringify(tagFilter) } });
+    }
+    if (params.contentType) {
+      andConditions.push({ tags: { contains: JSON.stringify(params.contentType) } });
+    }
+  }
+
+  return {
+    ...buildViewWhere(params.view),
+    ...(params.origin ? { origin: params.origin } : {}),
+    ...(params.readState ? { readState: params.readState } : {}),
+    ...(andConditions.length > 0 ? { AND: andConditions } : {}),
+  };
 }
 
 function matchesSearchQuery(item: NewsItemDto, normalizedQuery: string): boolean {
@@ -65,6 +93,7 @@ async function computeNewsCounts(): Promise<NewsCountsDto> {
     draft,
     unread,
     saved,
+    dismissed,
     queue,
     inbox,
     done,
@@ -81,6 +110,7 @@ async function computeNewsCounts(): Promise<NewsCountsDto> {
       prisma.newsItem.count({ where: { reviewStatus: "draft" } }),
       prisma.newsItem.count({ where: { reviewStatus: "published", readState: "unread" } }),
       prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, isSaved: true } }),
+      prisma.newsItem.count({ where: buildViewWhere("dismissed") }),
       prisma.newsItem.count({
         where: {
           reviewStatus: { not: "dismissed" },
@@ -101,15 +131,16 @@ async function computeNewsCounts(): Promise<NewsCountsDto> {
     draft,
     unread,
     saved,
+    dismissed,
     queue,
     inbox,
     done,
   };
 }
 
-async function computeAvailableTags(): Promise<NewsTagCountDto[]> {
+async function computeAvailableTags(where: Prisma.NewsItemWhereInput): Promise<NewsTagCountDto[]> {
   const rows = await prisma.newsItem.findMany({
-    where: { reviewStatus: { not: "dismissed" } },
+    where,
     select: { tags: true },
   });
 
@@ -184,31 +215,27 @@ async function collectFeedItems(
 export async function queryNewsFeed(
   params: NewsFeedQueryParams = {}
 ): Promise<NewsFeedResponseDto> {
-  const safeLimit = Math.min(Math.max(1, params.limit ?? 50), 100);
-  const tagFilter = params.tag?.trim().toLowerCase() ?? "";
+  const safeLimit = Math.min(Math.max(1, params.limit ?? 50), MAX_FEED_LIMIT);
   const normalizedQuery = params.q ? normalizeTitleForCompare(params.q) : "";
   const sortMode = params.sort ?? "latest";
 
-  const where: Prisma.NewsItemWhereInput = {
-    ...buildViewWhere(params.view),
-    ...(params.origin ? { origin: params.origin } : {}),
-    // tags is a JSON array of lowercase strings, so the quoted value matches one whole element
-    ...(tagFilter ? { tags: { contains: JSON.stringify(tagFilter) } } : {}),
-  };
+  const where = buildFeedFilterWhere(params);
+  const tagScopeWhere = buildFeedFilterWhere(params, { includeTags: false });
+  const probeLimit = safeLimit + 1;
 
   const loadItems = async (): Promise<NewsItemDto[]> => {
     if (sortMode !== "curated_first" || params.origin) {
-      return collectFeedItems(where, safeLimit, normalizedQuery);
+      return collectFeedItems(where, probeLimit, normalizedQuery);
     }
     // Curated (share/manual) items first, then cron items, each newest first
     const curated = await collectFeedItems(
       { ...where, origin: { not: "cron" } },
-      safeLimit,
+      probeLimit,
       normalizedQuery
     );
     const cron = await collectFeedItems(
       { ...where, origin: "cron" },
-      safeLimit - curated.length,
+      probeLimit - curated.length,
       normalizedQuery
     );
     return [...curated, ...cron];
@@ -217,9 +244,10 @@ export async function queryNewsFeed(
   const [items, counts, tags] = await Promise.all([
     loadItems(),
     computeNewsCounts(),
-    computeAvailableTags(),
+    computeAvailableTags(tagScopeWhere),
   ]);
 
+  const hasMore = items.length > safeLimit;
   const sliced = items.slice(0, safeLimit);
 
   const duplicateIds = Array.from(
@@ -245,6 +273,7 @@ export async function queryNewsFeed(
     counts,
     tags,
     duplicateTitles,
+    hasMore,
   };
 }
 
@@ -274,7 +303,7 @@ export async function updateNewsItem(
     data.reviewStatus = input.reviewStatus;
   }
   if (input.tags !== undefined) {
-    data.tags = JSON.stringify(normalizeTagList(input.tags, 8));
+    data.tags = JSON.stringify(normalizeTagList(input.tags, MAX_ITEM_TAGS));
   }
   if (input.personalNote !== undefined) {
     const trimmed = input.personalNote === null ? "" : input.personalNote.trim();
@@ -286,4 +315,26 @@ export async function updateNewsItem(
     data,
   });
   return serializeNewsItem(updated);
+}
+
+export async function deleteNewsItem(id: string): Promise<boolean> {
+  const existing = await prisma.newsItem.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) return false;
+
+  await prisma.newsItem.delete({ where: { id } });
+  return true;
+}
+
+export async function markNewsItemsAsRead(params: MarkReadRequest = {}): Promise<number> {
+  const result = await prisma.newsItem.updateMany({
+    where: {
+      ...buildFeedFilterWhere(params),
+      readState: "unread",
+    },
+    data: { readState: "read" },
+  });
+  return result.count;
 }
