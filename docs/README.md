@@ -33,6 +33,9 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0013](adr/0013-flat-lesson-urls-and-global-slugs.md)        | URL bài học phẳng /lessons/[lessonSlug] và slug duy nhất toàn cục | superseded by ADR-0014 |
 | [0014](adr/0014-topic-scoped-urls-and-heading-anchors.md)     | URL theo Topic /[topicSlug]/[lessonSlug], anchor heading theo slug | accepted               |
 | [0015](adr/0015-abot-owner-memory.md)                         | Owner Memory xuyên Thread lưu ở Turso, cách ly hoàn toàn với Visitor | accepted               |
+| [0016](adr/0016-news-ingest-worker-separate-service.md)       | News Ingest Worker là service Python riêng, chỉ xử lý từng News Item | accepted               |
+| [0017](adr/0017-owner-only-statement-provenance.md)           | Provenance gắn theo từng câu trong Lesson, chỉ Owner thấy    | accepted               |
+| [0018](adr/0018-owner-only-site-except-public-news.md)        | Site chỉ dành cho Owner, trừ Public News                     | accepted               |
 
 ## Sơ đồ Mermaid
 

@@ -36,21 +36,21 @@
 - Phần lõi ("cần ôn", "học gì tiếp") nằm trong `TASK-lesson-status-002`.
 - Tiếp theo: bản tóm tắt định kỳ ("tuần này nên ôn…"). Cần chốt kênh hiện (xem câu hỏi 4).
 
-### Giai đoạn 2: theo dõi thay đổi công nghệ (cần buổi `/grill-with-docs` + ADR trước)
-- Mỗi topic gắn nguồn theo dõi (GitHub Releases, changelog).
-- Job theo lịch phát hiện version mới, LLM so với nội dung bài, tạo gợi ý trong Triage. Owner duyệt → Abot soạn bản cập nhật → Preview → `ok`.
+### Giai đoạn 2: theo dõi thay đổi công nghệ → chuyển sang `.handoff/PLAN-knowledge-acquisition.md` (2026-11-23)
+- Đã chốt và có ADR (ADR-0016, ADR-0017, ADR-0018). Chi tiết và lộ trình nằm trong plan đó; phần dưới chỉ giữ làm lịch sử.
+- Ý cũ: mỗi topic gắn nguồn theo dõi, job phát hiện version mới, tạo gợi ý trong Triage. Đã đổi: Triage bị bỏ (ADR-0011); News Source vẫn toàn cục, không gắn với Topic; Owner đưa News Item vào Lesson ở `/feed-ingestion`; viết lại nội dung bài bằng LLM đi qua Abot Preview → `ok` (Phase 3 của plan mới).
 
 ### Giai đoạn 3: theo techstack của Owner (cần ADR)
 - Đọc dependency trong các repo của Owner và map sang topic. Khi nâng version hoặc thêm công nghệ mới thì gợi ý bài `target` hoặc bài cần ôn.
 
 ## Quyết định Owner cần chốt (buổi `/grill-with-docs`, trước giai đoạn 2)
-1. Bao lâu thì coi một bài là cũ: theo thời gian, hay chỉ khi có version mới?
-2. Abot có được tìm trên web, hay chỉ đọc nguồn đã khai báo cho từng topic?
-3. "Đổi techstack" là thế giới ra version mới, repo của Owner đổi dependency, hay cả hai?
-4. Gợi ý hiện ở đâu: Triage, chat của Abot, hay bản tóm tắt định kỳ?
-5. Kho tri thức có còn công khai cho Visitor không, hay chỉ trạng thái và gợi ý là riêng tư (như ADR-0010)?
+1. ~~Bao lâu thì coi một bài là cũ: theo thời gian, hay chỉ khi có version mới?~~ Đã chốt 2026-11-23: khi có version mới.
+2. ~~Abot có được tìm trên web, hay chỉ đọc nguồn đã khai báo cho từng topic?~~ Đã chốt 2026-11-23: chỉ đọc nguồn đã khai báo, không tìm web.
+3. "Đổi techstack" là thế giới ra version mới, repo của Owner đổi dependency, hay cả hai? (Còn mở, tách khỏi plan Knowledge Acquisition.)
+4. ~~Gợi ý hiện ở đâu: Triage, chat của Abot, hay bản tóm tắt định kỳ?~~ Đã chốt 2026-11-23: gợi ý từ nguồn tin ở `/feed-ingestion`, gợi ý ôn tập trong chat Abot.
+5. ~~Kho tri thức có còn công khai cho Visitor không, hay chỉ trạng thái và gợi ý là riêng tư (như ADR-0010)?~~ Đã chốt 2026-11-23: chỉ Owner, trừ Public News (ADR-0018).
 6. ~~Có nhập bài seed vào Turso không?~~ Đã chốt 2026-11-05: nhập, trạng thái `target`.
-7. Lịch sử chat của Abot có cần giữ qua các lần deploy không? Hiện lưu trong RAM, trừ khi đặt `RAG_HISTORY_DB`, mà trên Railway file cũng mất khi deploy.
+7. Lịch sử chat của Abot có cần giữ qua các lần deploy không? Hiện lưu trong RAM, trừ khi đặt `RAG_HISTORY_DB`, mà trên Railway file cũng mất khi deploy. (Còn mở. ADR-0012 đã lưu Thread của Owner ở Turso; cần xem câu này còn đúng không.)
 
 ## Kết quả gần nhất (2026-11-05)
 - **lesson-status-002**: Antigravity báo `COMPLETED` (lần 1, chưa commit). **Claude review: cần sửa 3 việc**, đã giao lại (lần thử 2). (1) bỏ nhánh schema Layer/Group cũ đã thêm vào `sqlite_adapter.py` chỉ để test pass trên `dev.db` cũ; (2) bỏ `status` khỏi tool LLM `update_item`, vì luồng CUD chung có thể ghi ngay mà không qua Preview; (3) hoàn tác thay đổi ngoài phạm vi. Những phần khác đạt: (a)/(b)/(c), Preview ok/hủy, chặn Visitor ở cả handler và adapter, pytest 982/982.
@@ -77,13 +77,12 @@
 | `TASK-rag-sync-002` | rag-sync-001 merge | Index FTS ngay, embedding chạy nền sau. Sau mỗi lần deploy, index không còn trống. |
 | `TASK-abot-bugs-001` | lesson-status-002 merge | Lỗi 9 (dòng "Chưa có topic nào được chọn" hiện sai), lỗi 2 (tên topic chứa "Section"), lỗi 8 (preview xoá bài) |
 
-**Đợt C: chốt giai đoạn 2** (Owner + Claude, làm **ngay bây giờ** được, không phụ thuộc đợt A và B)
-- Buổi `/grill-with-docs`: trả lời các câu hỏi 1, 2, 3, 4, 5, 7 ở trên → GLOSSARY (thuật ngữ mới, ví dụ "nguồn theo dõi", "gợi ý cập nhật") và ADR-0011.
-- Kết quả: spec `TASK-change-watch-001` (khai báo nguồn theo dõi cho từng topic, job theo lịch phát hiện version mới, tạo gợi ý trong Triage).
+**Đợt C: chốt giai đoạn 2** (xong 2026-11-23)
+- Đã chốt các câu 1, 2, 4, 5; câu 3 và 7 còn mở. Kết quả: ADR-0016, ADR-0017, ADR-0018, nhóm thuật ngữ News trong GLOSSARY, và `.handoff/PLAN-knowledge-acquisition.md` (thay cho `TASK-change-watch-001` dự kiến trước đây).
 
 **Đợt D: giai đoạn 1 mở rộng + giai đoạn 2** (Antigravity, sau đợt C)
-- `TASK-review-digest-001`: tóm tắt ôn tập định kỳ, kênh hiện theo câu 4.
-- `TASK-change-watch-001` → `-002`: phát hiện thay đổi → gợi ý trong Triage → Owner duyệt → Abot soạn bản cập nhật bài có Preview.
+- `TASK-review-digest-001`: tóm tắt ôn tập định kỳ, hiện trong chat Abot (câu 4).
+- Knowledge Acquisition: tách `TASK-*.md` theo Phase 1 và Phase 3 của `.handoff/PLAN-knowledge-acquisition.md`.
 
 ## Nhật ký
 - 2026-11-05: lần thử Step 6 bằng Claude Haiku (`ngtienanh/lesson-status-step6-haiku-ref`, `ce07b23`) bị loại: 6/8 test fail, handler không bao giờ chạy. Giữ branch chỉ để tham khảo.

@@ -90,6 +90,27 @@ _Avoid_: outline, template
 Lệnh của Owner để Roadmap Assistant tạo trọn một Topic từ một mục tiêu học.
 _Avoid_: auto-generate
 
+## News
+
+**News Source**:
+Một nguồn tin Owner khai báo để hệ thống tự thu thập bài mới theo lịch, ví dụ blog hoặc trang release của một thư viện.
+_Also_: nguồn tin
+_Avoid_: subscription, channel
+
+**News Item**:
+Một bài hoặc link được thu thập từ News Source, do Owner chia sẻ hoặc nhập tay, kèm bản tóm tắt và các ý chính.
+_Also_: tin
+_Avoid_: article, bookmark, acquired item
+
+**Public News**:
+Trang chỉ đọc cho Visitor, gồm những News Item mà Owner cho phép công khai; là phần duy nhất của site Visitor xem được.
+_Avoid_: picks, news feed
+
+**Provenance**:
+Nguồn gốc của một câu trong Lesson: câu đó lấy từ News Item nào, đoạn trích làm căn cứ và thời điểm thu thập. Chỉ Owner thấy.
+_Also_: nguồn gốc
+_Avoid_: citation (thuật ngữ trích dẫn của Roadmap Assistant), knowledge statement, source
+
 ## Cris AI & Feedback
 
 **Cris AI**:

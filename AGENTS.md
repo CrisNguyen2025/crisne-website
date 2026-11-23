@@ -84,6 +84,7 @@ Nguồn sự thật về ngôn ngữ domain và quyết định kiến trúc. In
 ## 🎯 Phạm vi hiện tại
 
 - Từ 2026-11-09 chỉ tập trung vào Abot (Roadmap Assistant, `roadmap-rag-assistant/`). Cris AI (`/portfolio`, `hooks/use-floating-chat.ts`, `components/floating-bot/**`) tạm ngoài phạm vi: không đưa vào plan, review, test hay đề xuất cho tới khi Abot hoàn thiện.
+- Từ 2026-11-23, Knowledge Acquisition (đưa News Item vào Lesson kèm Provenance, nối kết quả vào Abot) thuộc phạm vi Abot: Phase 1 và Phase 3 của `.handoff/PLAN-knowledge-acquisition.md`. Phase 2 (nhiều loại nguồn, tách job worker) hoãn tới khi Phase 1 được dùng thật.
 - Vẫn giữ nguyên luồng 👍/👎 hiện có của Cris AI. Khi sửa code dùng chung (`app/api/chat/feedback/route.ts`, `lib/ai/langfuse.ts`) thì không được đổi behavior của luồng này.
 
 ## 📌 Việc đang mở
