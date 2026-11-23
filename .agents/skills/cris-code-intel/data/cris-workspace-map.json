@@ -240,7 +240,9 @@
       "summary": "Kho đọc tin private (/feed-ingestion) chỉ dành cho Owner (noindex) và trang public /news cho Visitor. Nhận link qua Paste UI, Android PWA Share Target (/share + sw.js) và RSS/Atom Cron (ETag/304), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
       "cohesionScore": 0.93,
       "adrs": [
-        "ADR-0005"
+        "ADR-0005",
+        "ADR-0016",
+        "ADR-0017"
       ],
       "glossary": [
         "Owner",
@@ -292,7 +294,10 @@
         "app/(public-news)/news/page.tsx",
         "app/(public-news)/news/[slug]/page.tsx",
         "lib/news/public-queries.ts",
-        "lib/auth/public-paths.ts"
+        "lib/auth/public-paths.ts",
+        "components/news/AddToLessonSheet.tsx",
+        "app/api/news/[id]/integrate/route.ts",
+        "lib/provenance/markers.ts"
       ],
       "dataModels": [
         "NewsItem",
@@ -457,6 +462,17 @@
       "triggersFlow": "FLOW_LESSON_CONTENT_EDIT"
     },
     {
+      "id": "EP_API_ROADMAP_ITEM_PROVENANCE",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/items/[id]/provenance",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Provenance của các câu trong một Lesson; đối chiếu marker lúc đọc, trả provenances và orphans (ADR-0017)",
+      "handler": "app/api/v1/roadmaps/items/[id]/provenance/route.ts#GET",
+      "triggersFlow": "FLOW_NEWS_ADD_TO_LESSON"
+    },
+    {
       "id": "EP_API_ROADMAP_SECTIONS_PATCH",
       "type": "api_route",
       "path": "/api/v1/roadmaps/[slug]/sections",
@@ -543,6 +559,17 @@
       "summary": "Lấy chi tiết một NewsItem private",
       "handler": "app/api/news/[id]/route.ts#GET",
       "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
+    },
+    {
+      "id": "EP_API_NEWS_ITEM_INTEGRATE",
+      "type": "api_route",
+      "path": "/api/news/[id]/integrate",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Đưa các ý Owner chọn từ một NewsItem vào Lesson mới hoặc có sẵn, mỗi câu kèm marker Provenance (ADR-0017)",
+      "handler": "app/api/news/[id]/integrate/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_ADD_TO_LESSON"
     },
     {
       "id": "EP_API_NEWS_ITEM_PATCH",
@@ -1370,6 +1397,72 @@
       ]
     },
     {
+      "id": "FLOW_NEWS_ADD_TO_LESSON",
+      "name": "Đưa ý của NewsItem vào Lesson kèm Provenance, xem nguồn trên trang Lesson",
+      "domainId": "private-news",
+      "actor": "Owner",
+      "trigger": "Owner bấm 'Đưa vào Lesson' trong NewsReaderPanel ở /feed-ingestion (chỉ với bài ready, chưa dismissed)",
+      "preconditions": [
+        "Quyền Owner qua Google OAuth session, admin key hoặc DEV_OWNER_BYPASS",
+        "NewsItem ingestStatus='ready' và reviewStatus khác 'dismissed'"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/AddToLessonSheet.tsx",
+          "action": "Chọn và sửa takeaways (tối đa 10), chọn Tạo bài mới (Topic, Section, tiêu đề, Lesson Status mặc định target) hoặc Nối vào bài có sẵn, xem trước rồi lưu",
+          "callsNext": "logic/news/newsService.ts#addNewsItemToLesson",
+          "dataPassed": "IntegrateRequest { mode, statements[{ text, excerpt, authorType }] }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/news/[id]/integrate/route.ts",
+          "functionOrMethod": "POST",
+          "action": "requireWriteAccess, validate IntegrateRequestSchema, kiểm NewsItem ready/không dismissed, sinh claimRefKey và HTML có marker",
+          "callsNext": "lib/roadmap/create-lesson.ts#createLesson",
+          "dataPassed": "Statements đã gắn claimRefKey"
+        },
+        {
+          "order": 3,
+          "layer": "Persistence",
+          "component": "lib/roadmap/create-lesson.ts",
+          "functionOrMethod": "createLesson",
+          "action": "Trong một transaction: tạo Lesson (chặn trùng title, slug toàn cục) hoặc nối HTML vào Lesson có sẵn, rồi ghi KnowledgeProvenance",
+          "callsNext": "lib/roadmap/rag-reindex.ts#notifyRoadmapChanged",
+          "dataPassed": "{ lesson, provenanceCount }"
+        },
+        {
+          "order": 4,
+          "layer": "Presentation_UI",
+          "component": "components/roadmap/LessonEditorialReader.tsx",
+          "action": "Khi canWrite, useLessonProvenance gọi GET /api/v1/roadmaps/items/[id]/provenance; ProvenanceChips gắn chip vào span marker, LessonSources liệt kê orphans",
+          "callsNext": null,
+          "dataPassed": "LessonProvenanceResponse { provenances, orphans }"
+        }
+      ],
+      "invariants": [
+        "Marker là <span data-provenance-ref=\"<uuid>\"></span> rỗng, không mang thông tin nguồn (ADR-0017)",
+        "getLessonPageData và full-export không đọc KnowledgeProvenance; Visitor không gọi API provenance",
+        "Marker mất do sửa bài không xoá Provenance: bản ghi hiện ở 'Nguồn tham khảo của bài'",
+        "Provenance không vào index in-memory của Abot"
+      ],
+      "failureModes": [
+        "Trùng title trong Topic (409 DUPLICATE)",
+        "Đã nối NewsItem vào bài đó (409 ALREADY_INTEGRATED)",
+        "NewsItem chưa ready hoặc đã dismissed (409 NOT_INTEGRABLE)",
+        "Topic/Lesson/NewsItem không tồn tại (404)"
+      ],
+      "relatedAdrs": [
+        "ADR-0005",
+        "ADR-0010",
+        "ADR-0014",
+        "ADR-0017",
+        "ADR-0018"
+      ]
+    },
+    {
       "id": "FLOW_NEWS_RSS_CRON_SYNC",
       "name": "Quản lý nguồn RSS và quét tin tự động theo lịch Cron",
       "domainId": "private-news",
@@ -1724,7 +1817,8 @@
         "updatedAt"
       ],
       "relations": [
-        "roadmap -> Roadmap"
+        "roadmap -> Roadmap",
+        "provenances -> KnowledgeProvenance[]"
       ],
       "invariants": [
         "slug là @unique toàn cục trên toàn bộ bảng RoadmapItem (ADR-0013, giữ nguyên ở ADR-0014)",
@@ -1810,18 +1904,22 @@
         "normalizedTitle",
         "possibleDuplicateOfId",
         "publishedAt",
+        "extractedAt",
         "createdAt",
         "updatedAt"
       ],
       "relations": [
         "source -> NewsSource?",
-        "jobs -> IngestJob[]"
+        "jobs -> IngestJob[]",
+        "provenances -> KnowledgeProvenance[]"
       ],
       "invariants": [
         "canonicalUrl là duy nhất để dedupe ở mức URL",
         "Chỉ bài origin='cron' vào draft; share và manual vào published",
         "Chỉ bài isPublic=true, ingestStatus='ready' và chưa dismissed mới hiện ở /news; publicAt đặt khi bật, xoá khi tắt",
-        "slug duy nhất toàn cục, cấp một lần từ tiêu đề (fallback domain/'news') khi complete và giữ nguyên qua reingest"
+        "slug duy nhất toàn cục, cấp một lần từ tiêu đề (fallback domain/'news') khi complete và giữ nguyên qua reingest",
+        "Bài mới từ share/manual mặc định isPublic=true; bài cron mặc định isPublic=false cho tới khi Owner bật",
+        "extractedAt do Next.js đóng dấu khi job complete ready/partial"
       ]
     },
     {
@@ -1849,6 +1947,38 @@
       ],
       "invariants": [
         "Claim nguyên tử bằng status='pending' + lease lockedUntil chống chạy trùng"
+      ]
+    },
+    {
+      "id": "MODEL_KNOWLEDGE_PROVENANCE",
+      "name": "KnowledgeProvenance",
+      "source": "prisma",
+      "table": "KnowledgeProvenance",
+      "domainId": "private-news",
+      "fields": [
+        "id",
+        "lessonId",
+        "claimRefKey",
+        "newsItemId",
+        "sourceId",
+        "relationType",
+        "sourceName",
+        "sourceUrl",
+        "sourceTitle",
+        "excerpt",
+        "authorType",
+        "collectedAt",
+        "extractedAt",
+        "createdAt"
+      ],
+      "relations": [
+        "lesson -> RoadmapItem (onDelete Cascade)",
+        "newsItem -> NewsItem? (onDelete SetNull)"
+      ],
+      "invariants": [
+        "claimRefKey là UUID ngẫu nhiên, duy nhất toàn cục, khớp data-provenance-ref trong RoadmapItem.content",
+        "Chỉ Owner đọc (ADR-0017); không vào getLessonPageData, full-export hay index Abot",
+        "relationType MVP chỉ 'derived_from'; excerpt tối đa 1.000 ký tự"
       ]
     },
     {
@@ -1959,6 +2089,21 @@
       "ruleId": "ADR-0015",
       "title": "Abot Owner Memory",
       "summary": "Owner Memory xuyên Thread lưu ở Turso (5 kind, <= 300 ký tự), cách ly hoàn toàn với Visitor, lệnh chat luôn có Preview -> ok, gợi ý tự động vào pending chờ duyệt."
+    },
+    {
+      "ruleId": "ADR-0016",
+      "title": "News Ingest Worker separate service",
+      "summary": "news-ingest-worker là service Python riêng, chỉ trích xuất và tóm tắt từng NewsItem; mọi suy luận đối chiếu với Lesson thuộc Abot; hai service không gọi nhau."
+    },
+    {
+      "ruleId": "ADR-0017",
+      "title": "Owner-only statement Provenance",
+      "summary": "Mỗi câu có nguồn trong Lesson gắn marker rỗng data-provenance-ref (UUID); metadata trong KnowledgeProvenance; chỉ Owner thấy, nạp phía client, không vào index Abot; marker mất thì giữ thành nguồn của bài."
+    },
+    {
+      "ruleId": "ADR-0018",
+      "title": "Owner-only site except Public News",
+      "summary": "Middleware bắt đăng nhập mọi trang trừ /login và /news; route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key."
     }
   ]
 }

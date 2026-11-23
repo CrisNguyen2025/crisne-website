@@ -44,7 +44,10 @@ import {
   type EditItemInfoSubmitOptions,
 } from "./EditItemInfoDrawer";
 import { LectureShell } from "./LectureShell";
+import { LessonSources } from "./LessonSources";
 import { LessonStatusPicker } from "./LessonStatus";
+import { ProvenanceChips } from "./ProvenanceChip";
+import { useLessonProvenance } from "./useLessonProvenance";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
 /** Tailwind `xl`: "On this page" moves to the right rail */
@@ -140,6 +143,10 @@ export function LessonEditorialReader({
     processedHtml,
     headings,
   ]);
+
+  // Provenance chips and sources are Owner-only and fetched on the client (ADR-0017)
+  const provenance = useLessonProvenance(lesson.id, canWrite, rendered.rawContent);
+  const [contentElement, setContentElement] = useState<HTMLDivElement | null>(null);
 
   const sectionNames = useMemo(
     () =>
@@ -456,6 +463,7 @@ export function LessonEditorialReader({
         <div className="mt-7">
           {rendered.html ? (
             <div
+              ref={setContentElement}
               onClick={handleContentClick}
               className="post-content-view editorial-prose prose dark:prose-invert max-w-none select-text [&_h2]:scroll-mt-16 [&_h3]:scroll-mt-16 [&_h4]:scroll-mt-16"
               dangerouslySetInnerHTML={{ __html: rendered.html }}
@@ -498,6 +506,15 @@ export function LessonEditorialReader({
                 </div>
               )}
             </div>
+          )}
+          {canWrite && (
+            <>
+              <ProvenanceChips
+                container={contentElement}
+                provenances={provenance.provenances}
+              />
+              <LessonSources sources={provenance.orphans} />
+            </>
           )}
         </div>
       </LectureShell>

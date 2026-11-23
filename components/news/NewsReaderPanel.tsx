@@ -16,6 +16,7 @@ import {
 import { formatNewsContentType } from "@/lib/news/content-type";
 import type { ExtractionMethod, NewsItemDto } from "@/lib/news/schemas";
 import { dayjs } from "@/lib/roadmap/date-utils";
+import { AddToLessonSheet } from "./AddToLessonSheet";
 import { EmphasisText } from "./EmphasisText";
 import { NewsDecisionBar } from "./NewsDecisionBar";
 import { PlatformIcon, formatNewsTitle, isPendingIngest } from "./NewsCard";
@@ -228,6 +229,7 @@ export function NewsReaderPanel({
               <Globe className="size-4" />
               {item.isPublic ? "Đang public" : "Public"}
             </button>
+            {isPublishable && <AddToLessonSheet item={item} isDisabled={isUpdating || isDeleting} />}
             {confirmDelete ? (
               <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
                 <button

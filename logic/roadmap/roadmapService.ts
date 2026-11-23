@@ -17,6 +17,7 @@ import {
   UpdateRoadmapDto,
 } from '@/lib/roadmap/types';
 import type { LessonStatus } from '@/lib/roadmap/status';
+import type { LessonProvenanceResponse } from '@/lib/provenance/dto';
 import { apiFetch } from '@/logic/api-fetch';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +113,11 @@ export async function updateItemContent(payload: UpdateItemContentDto): Promise<
     method: 'PATCH',
     body: JSON.stringify({ content: payload.content }),
   });
+}
+
+/** Provenance of a lesson's sentences (ADR-0017); the Owner only */
+export async function fetchLessonProvenance(lessonId: string): Promise<LessonProvenanceResponse> {
+  return apiFetch<LessonProvenanceResponse>(`/api/v1/roadmaps/items/${lessonId}/provenance`);
 }
 
 /** Delete a lesson by ID */

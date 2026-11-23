@@ -21,6 +21,7 @@ const serviceSpies = vi.hoisted(() => ({
   updateItemContent: vi.fn(),
   updateItemStatus: vi.fn(),
   deleteItem: vi.fn(),
+  fetchLessonProvenance: vi.fn(() => Promise.resolve({ provenances: [], orphans: [] })),
 }));
 
 vi.mock('next/navigation', () => ({

@@ -148,9 +148,30 @@ CREATE TABLE IF NOT EXISTS "NewsItem" (
     "normalizedTitle" TEXT,
     "possibleDuplicateOfId" TEXT,
     "publishedAt" DATETIME,
+    "extractedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "NewsItem_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "NewsSource" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "KnowledgeProvenance" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "lessonId" TEXT NOT NULL,
+    "claimRefKey" TEXT NOT NULL,
+    "newsItemId" TEXT,
+    "sourceId" TEXT,
+    "relationType" TEXT NOT NULL DEFAULT 'derived_from',
+    "sourceName" TEXT NOT NULL,
+    "sourceUrl" TEXT NOT NULL,
+    "sourceTitle" TEXT NOT NULL,
+    "excerpt" TEXT NOT NULL,
+    "authorType" TEXT NOT NULL,
+    "collectedAt" DATETIME NOT NULL,
+    "extractedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KnowledgeProvenance_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "KnowledgeProvenance_newsItemId_fkey" FOREIGN KEY ("newsItemId") REFERENCES "NewsItem" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -211,3 +232,12 @@ CREATE INDEX IF NOT EXISTS "IngestJob_status_lockedUntil_idx" ON "IngestJob"("st
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "IngestJob_newsItemId_idx" ON "IngestJob"("newsItemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "KnowledgeProvenance_claimRefKey_key" ON "KnowledgeProvenance"("claimRefKey");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeProvenance_lessonId_idx" ON "KnowledgeProvenance"("lessonId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeProvenance_newsItemId_idx" ON "KnowledgeProvenance"("newsItemId");

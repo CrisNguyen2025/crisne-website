@@ -132,11 +132,13 @@ describe("news ingest & job routes", () => {
     const shareData = await shareRes.json();
     expect(shareData.item.reviewStatus).toBe("published");
 
-    // Every new post starts public, whatever its origin
-    for (const data of [manualData, cronData, shareData]) {
+    // Links the Owner added or shared start public; cron drafts stay private until reviewed
+    for (const data of [manualData, shareData]) {
       expect(data.item.isPublic).toBe(true);
       expect(data.item.publicAt).not.toBeNull();
     }
+    expect(cronData.item.isPublic).toBe(false);
+    expect(cronData.item.publicAt).toBeNull();
   });
 
   it("claims a job atomically, validates summary with Zod, and detects 72h title similarity", async () => {
@@ -194,6 +196,9 @@ describe("news ingest & job routes", () => {
     expect(firstCompleted.slug).toMatch(/^[a-z0-9-]+$/);
     expect(firstCompleted.tags).toEqual(["nextjs", "frontend"]);
     expect(firstCompleted.possibleDuplicateOfId).toBeNull();
+    // Next.js stamps when extraction finished; the worker does not send it
+    const firstRow = await prisma.newsItem.findUnique({ where: { id: firstCompleted.id } });
+    expect(firstRow?.extractedAt).toBeInstanceOf(Date);
 
     // Claim 2nd job and complete with nearly identical title
     const claim2 = await claimPost(jsonRequest("http://localhost/api/news/jobs/claim", "POST"));

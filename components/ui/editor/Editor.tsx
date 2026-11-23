@@ -23,6 +23,7 @@ import { CalloutNode } from './nodes/CalloutNode';
 import { ImageNode } from './nodes/ImageNode';
 import { KeywordNode } from './nodes/KeywordNode';
 import { MentionNode } from './nodes/MentionNode';
+import { ProvenanceNode } from './nodes/ProvenanceNode';
 import {
   AutoLinkPlugin,
   CodeActionPlugin,
@@ -65,6 +66,7 @@ const initialConfig = {
     KeywordNode,
     MentionNode,
     CalloutNode,
+    ProvenanceNode,
   ],
 };
 

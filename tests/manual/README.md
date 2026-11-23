@@ -43,6 +43,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [topic-scoped-urls.md](topic-scoped-urls.md) | URL theo Topic `/[topicSlug]/[lessonSlug]#[headingSlug]`, redirect URL cũ (ADR-0014) | 2026-11-19 (chưa commit, trên `5baadeb`) | U1–U9 Pass |
 | [news-public.md](news-public.md) | Public News cho Visitor (`/news`, `/news/[slug]`), bật/tắt Public từ Reader | 2026-11-23 (chưa commit, trên `4ea8846`) | A1–A3, B1–B8 Pass (cần re-run sau khi đổi `/picks` → `/news/[slug]`) |
 | [owner-memory.md](owner-memory.md) | Owner Memory xuyên Thread, cache invalidate, nối tiếp Thread & cách ly Visitor (ADR-0015) | Chưa chạy | Kịch bản mới (M1–M9) |
+| [knowledge-provenance.md](knowledge-provenance.md) | Đưa News Item vào Lesson kèm Provenance, chip nguồn trên trang Lesson (ADR-0017, TASK-knowledge-provenance-001..003) | 2026-11-23 (chưa commit, trên `ce7564a`) | P1–P10 Pass |
 
 ## Cách chạy (đã kiểm chứng)
 

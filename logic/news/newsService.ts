@@ -1,4 +1,5 @@
 import type { EnqueueNewsResult } from "@/lib/news/ingest";
+import type { IntegrateRequest, IntegrateResponse } from "@/lib/provenance/schemas";
 import type {
   CreateNewsSourceRequest,
   CronSyncSummary,
@@ -94,6 +95,36 @@ export async function updateNewsItem(
     throw new Error(err.error);
   }
   return (await res.json()) as { item: NewsItemDto };
+}
+
+export type AddToLessonResult =
+  | ({ kind: "created" } & IntegrateResponse)
+  | { kind: "duplicate"; existing: { id: string; title: string } }
+  | { kind: "already_integrated" }
+  | { kind: "error"; message: string };
+
+/** Put the chosen statements of a News Item into a new or existing Lesson, with Provenance (ADR-0017). */
+export async function addNewsItemToLesson(id: string, payload: IntegrateRequest): Promise<AddToLessonResult> {
+  const res = await fetch(`/api/news/${encodeURIComponent(id)}/integrate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (res.status === 201) {
+    return { kind: "created", ...((await res.json()) as IntegrateResponse) };
+  }
+  if (res.status === 409) {
+    const data = (await res.json().catch(() => ({}))) as {
+      code?: string;
+      error?: string;
+      existing?: { id: string; title: string };
+    };
+    if (data.code === "DUPLICATE" && data.existing) return { kind: "duplicate", existing: data.existing };
+    if (data.code === "ALREADY_INTEGRATED") return { kind: "already_integrated" };
+    return { kind: "error", message: data.error || "Bài tin chưa sẵn sàng để đưa vào Lesson." };
+  }
+  const err = await parseErrorMessage(res, "Không thể đưa bài tin vào Lesson.");
+  return { kind: "error", message: err.error };
 }
 
 export async function reingestNewsItem(

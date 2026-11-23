@@ -22,6 +22,7 @@
     "db:news-source-cache": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-source-cache.ts",
     "db:news-public": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-public.ts",
     "db:news-slug": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-slug.ts",
+    "db:knowledge-provenance": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-knowledge-provenance.ts",
     "db:news-publish-existing": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/publish-existing-news.ts",
     "db:import-seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-seed-lessons.ts",
     "db:flatten-sections": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/flatten-to-sections.ts",

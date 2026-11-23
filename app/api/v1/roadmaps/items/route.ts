@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
-import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
+import { createLesson } from '@/lib/roadmap/create-lesson';
+import { duplicateResponse } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
-import { sectionSpelling } from '@/lib/roadmap/sections';
-import { DEFAULT_LESSON_STATUS, LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
-import { allocateGlobalLessonSlug } from '@/lib/utils';
+import { LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
 
 // POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
@@ -23,48 +22,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
     }
 
-    const roadmap = await prisma.roadmap.findUnique({
-      where: { slug: roadmapSlug },
-      include: { items: { select: { id: true, title: true, slug: true, section: true, order: true } } },
-    });
-    if (!roadmap) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
-
-    // A lesson title appears once per topic, whatever its section
-    const duplicate = findDuplicate(roadmap.items, title);
-    if (duplicate) {
-      return duplicateResponse('item', { id: duplicate.id, title: duplicate.title, roadmapSlug: roadmap.slug });
+    const result = await createLesson(prisma, { roadmapSlug, section, title, description, content, status });
+    if (result.kind === 'roadmap_not_found') {
+      return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
-
-    const allItems = (await prisma.roadmapItem.findMany?.({ select: { slug: true } })) ?? [];
-    const redirects =
-      (await prisma.slugRedirect?.findMany?.({
-        where: { entity: 'lesson' },
-        select: { fromSlug: true },
-      })) ?? [];
-    const topicSlugs = new Set<string>(roadmap.items.map((i) => i.slug).filter(Boolean));
-    const existingSlugs = new Set<string>([
-      ...topicSlugs,
-      ...allItems.map((i) => i.slug).filter(Boolean),
-      ...redirects.map((r) => r.fromSlug).filter(Boolean),
-    ]);
-    const itemSlug = allocateGlobalLessonSlug(title.trim(), existingSlugs, roadmap.slug, topicSlugs);
-
-    const sectionName = sectionSpelling(roadmap.items.map((i) => i.section), section);
-    const order = roadmap.items.reduce((max, i) => Math.max(max, i.order), 0) + 1;
-
-    const newItem = await prisma.roadmapItem.create({
-      data: {
-        roadmapId: roadmap.id,
-        slug: itemSlug,
-        section: sectionName,
-        title: title.trim(),
-        description: description || '',
-        content: content || null,
-        order,
-        // A lesson added without a status is known (ADR-0010)
-        status: status ?? DEFAULT_LESSON_STATUS,
-      },
-    });
+    if (result.kind === 'duplicate') {
+      return duplicateResponse('item', result.existing);
+    }
+    const { item: newItem, roadmapSlug: createdRoadmapSlug } = result;
 
     notifyRoadmapChanged();
     return NextResponse.json({
@@ -75,7 +40,7 @@ export async function POST(req: NextRequest) {
         description: newItem.description,
         section: newItem.section,
         order: newItem.order,
-        roadmapSlug: roadmap.slug,
+        roadmapSlug: createdRoadmapSlug,
         createdAt: newItem.createdAt.toISOString(),
         updatedAt: newItem.updatedAt.toISOString(),
       },

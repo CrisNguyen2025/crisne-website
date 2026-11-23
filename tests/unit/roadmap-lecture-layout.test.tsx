@@ -110,6 +110,7 @@ vi.mock("@/components/roadmap/EditItemContentDrawer", () => ({
 
 vi.mock("@/logic/roadmap/roadmapService", () => ({
   fetchRoadmapBySlug: vi.fn(() => Promise.resolve({ items: [] })),
+  fetchLessonProvenance: vi.fn(() => Promise.resolve({ provenances: [], orphans: [] })),
   updateItemStatus: vi.fn(),
   createItem: vi.fn(),
   updateRoadmapBySlug: vi.fn(),

@@ -227,6 +227,8 @@ sequenceDiagram
 | `GET`    | `/api/news` · `/api/news/[id]` · `/api/news/worker-health` | Owner Only | `private-news`       | `app/api/news/**`                                                | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `PATCH`  | `/api/news/[id]` · `DELETE /api/news/[id]` · `POST /api/news/mark-read` | Owner Only | `private-news` | `app/api/news/**`                                       | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `GET/POST` | `/api/news/cron`                              | Owner / Cron Secret | `private-news`           | `app/api/news/cron/route.ts`                                     | `FLOW_NEWS_RSS_CRON_SYNC` |
+| `POST`   | `/api/news/[id]/integrate`                      | Owner Only          | `private-news`           | `app/api/news/[id]/integrate/route.ts#POST`                      | `FLOW_NEWS_ADD_TO_LESSON` |
+| `GET`    | `/api/v1/roadmaps/items/[id]/provenance`        | Owner Only          | `roadmap-learning`       | `app/api/v1/roadmaps/items/[id]/provenance/route.ts#GET`         | `FLOW_NEWS_ADD_TO_LESSON` |
 
 ---
 
@@ -244,3 +246,6 @@ sequenceDiagram
 - **ADR-0010**: Lesson Status gồm 3 trạng thái (`target`, `learning`, `known`), phản ánh tiến trình của Owner, ẩn với Visitor và mặc định là `known`.
 - **ADR-0013** (superseded by ADR-0014): URL bài học phẳng `/lessons/[lessonSlug]`. Phần `RoadmapItem.slug` duy nhất toàn cục và `SlugRedirect` vẫn giữ.
 - **ADR-0014**: Topic ở `/[topicSlug]`, Lesson ở `/[topicSlug]/[lessonSlug]#[headingSlug]`; slug Topic không trùng route gốc (`lib/roadmap/paths.ts`); URL cũ 308 về URL mới.
+- **ADR-0016**: `news-ingest-worker` là service Python riêng, chỉ trích xuất và tóm tắt từng NewsItem; mọi suy luận đối chiếu với Lesson thuộc Abot.
+- **ADR-0017**: Provenance theo từng câu: marker rỗng `<span data-provenance-ref="<uuid>">` trong `RoadmapItem.content`, metadata ở `KnowledgeProvenance`; chỉ Owner thấy, nạp phía client (`useLessonProvenance`), không vào index Abot; marker mất thì thành "Nguồn tham khảo của bài" (`FLOW_NEWS_ADD_TO_LESSON`).
+- **ADR-0018**: Site chỉ dành cho Owner, trừ `/login` và Public News `/news`; route riêng tư tự kiểm `requireWriteAccess` vì middleware cho qua request có header key.
