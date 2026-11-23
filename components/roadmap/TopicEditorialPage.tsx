@@ -17,7 +17,7 @@ import { useCanWrite } from "@/hooks/use-can-write";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
-import { cn } from "@/lib/utils";
+import { cn, getScrollBehavior } from "@/lib/utils";
 import { lessonPath } from "@/lib/roadmap/paths";
 import { CreateItemModal, type CreateItemOptions } from "./CreateItemModal";
 import { EditSectionModal } from "./EditSectionModal";
@@ -130,7 +130,7 @@ export function TopicEditorialPage({
     if (idx < 0) return;
     const el = document.getElementById(`sec-${idx + 1}`);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.scrollIntoView({ behavior: getScrollBehavior(), block: "start" });
     }
   }, [initialSelectedSection, siblingGroups]);
 
@@ -281,7 +281,7 @@ export function TopicEditorialPage({
               <Link
                 href={lessonPath(topic.slug, item.slug || item.id)}
                 prefetch={true}
-                className="group block rounded-xl border border-border bg-card p-3 transition-colors duration-150 hover:border-[var(--editorial-accent)] hover:shadow-xs"
+                className="group block rounded-xl border border-border bg-card p-3 transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
               >
                 <div className="flex items-center justify-between gap-1.5">
                   {item.status && <LessonStatusBadge status={item.status} />}
@@ -365,7 +365,7 @@ export function TopicEditorialPage({
                     type="button"
                     onClick={() => setIsReorderMode((v) => !v)}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer",
+                      "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] cursor-pointer",
                       isReorderMode
                         ? "border-[var(--editorial-accent)] bg-[var(--editorial-accent-soft)] text-[var(--editorial-accent)]"
                         : "border-border bg-card text-muted-foreground hover:border-foreground/30 hover:text-foreground"
@@ -381,7 +381,7 @@ export function TopicEditorialPage({
                     setTargetSection(null);
                     setIsCreateItemOpen(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
                 >
                   <Plus className="size-3" />
                   <span>Thêm bài</span>
@@ -414,7 +414,7 @@ export function TopicEditorialPage({
                   setTargetSection(null);
                   setIsCreateItemOpen(true);
                 }}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
               >
                 <Plus className="size-3.5" />
                 <span>Thêm bài đầu tiên</span>
@@ -422,7 +422,7 @@ export function TopicEditorialPage({
             )}
           </div>
         ) : isReorderMode && canWrite ? (
-          <div className="mt-8">
+          <div className="mt-8 motion-safe:animate-in motion-safe:fade-in duration-150">
             <RoadmapMap
               embedded
               sectionGroups={siblingGroups}
@@ -440,7 +440,7 @@ export function TopicEditorialPage({
             />
           </div>
         ) : (
-          <div className="mt-8 space-y-10">
+          <div className="mt-8 space-y-10 motion-safe:animate-in motion-safe:fade-in duration-150">
             {focusItems.length > 0 && (
               <section aria-labelledby="h-focus" className="xl:hidden">
                 <div className="flex items-center gap-2 border-t border-border pt-6">
@@ -458,7 +458,7 @@ export function TopicEditorialPage({
                       key={item.id}
                       href={lessonPath(topic.slug, item.slug || item.id)}
                       prefetch={true}
-                      className="group flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-colors duration-150 hover:border-[var(--editorial-accent)]"
+                      className="group flex flex-col justify-between rounded-xl border border-border bg-card p-4 transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2">
@@ -565,7 +565,7 @@ export function TopicEditorialPage({
                                   setIsCreateItemOpen(true);
                                 }}
                                 aria-label={`Thêm bài vào ${primary}`}
-                                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+                                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer"
                               >
                                 <Plus className="size-3.5" />
                               </button>

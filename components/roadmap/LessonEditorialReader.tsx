@@ -51,10 +51,10 @@ import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
 
 const OWNER_ACTION_CLASS =
-  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer";
+  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-[0.98] cursor-pointer";
 
 const OWNER_EDITOR_ACTION_CLASS =
-  "group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-2xs transition-colors hover:border-[var(--editorial-accent)]/50 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer";
+  "group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-2xs transition-[border-color,background-color,transform] duration-150 hover:border-[var(--editorial-accent)]/50 hover:bg-[var(--editorial-sidebar-hover)] active:scale-[0.98] cursor-pointer";
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -477,7 +477,7 @@ export function LessonEditorialReader({
                       setDraftSeed(DEFAULT_LESSON_TEMPLATE_HTML);
                       setIsContentOpen(true);
                     }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
                   >
                     <ListTree className="size-4" />
                     <span>Soạn từ mẫu chuẩn</span>
@@ -490,7 +490,7 @@ export function LessonEditorialReader({
                       setDraftSeed(undefined);
                       setIsContentOpen(true);
                     }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:border-foreground/30 hover:bg-muted cursor-pointer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-[border-color,background-color,transform] duration-150 hover:border-foreground/30 hover:bg-muted active:scale-[0.98] cursor-pointer"
                   >
                     <Edit3 className="size-4" />
                     <span>Soạn tự do</span>

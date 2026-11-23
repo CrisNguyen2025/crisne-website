@@ -76,7 +76,7 @@ export function PublicationHome({
             <div className="flex items-center gap-2">
               <Link
                 href="/news"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-accent"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
               >
                 <Newspaper className="size-3.5 text-muted-foreground" />
                 <span>News</span>
@@ -84,7 +84,7 @@ export function PublicationHome({
               <button
                 type="button"
                 onClick={() => setIsCreateTopicOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
               >
                 <Plus className="size-3.5" />
                 <span>Tạo topic</span>
@@ -114,7 +114,7 @@ export function PublicationHome({
                   key={topic.slug}
                   href={topicPath(topic.slug)}
                   prefetch={true}
-                  className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 transition-colors duration-150 hover:border-[var(--editorial-accent)] active:scale-[0.995]"
+                  className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
                 >
                   <div>
                     <div className="flex items-baseline justify-between gap-3">
@@ -158,7 +158,7 @@ export function PublicationHome({
                   key={lesson.id}
                   href={lessonPath(lesson.topicSlug, lesson.slug)}
                   prefetch={true}
-                  className="group -mx-2 flex flex-col gap-0.5 rounded-lg px-2 py-3 text-sm transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  className="group -mx-2 flex flex-col gap-0.5 rounded-lg px-2 py-3 text-sm transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] active:bg-[var(--editorial-sidebar-active)] sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
                 >
                   <div className="min-w-0 sm:truncate">
                     <span className="font-medium text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">

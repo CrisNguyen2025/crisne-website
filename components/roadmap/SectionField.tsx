@@ -225,7 +225,7 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
             }
           }}
           onKeyDown={handleKeyDown}
-          className="w-full rounded-lg border border-border bg-background py-2 pl-3 pr-14 text-xs text-foreground transition-colors focus:border-primary focus:outline-none"
+          className="w-full rounded-lg border border-border bg-background py-2 pl-3 pr-14 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-primary focus:outline-none"
         />
 
         <div className="absolute inset-y-0 right-1.5 flex items-center gap-0.5">
@@ -242,7 +242,7 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
                 setActiveIndex(0);
                 inputRef.current?.focus();
               }}
-              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+              className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
             >
               <X className="size-3.5" />
             </button>
@@ -260,10 +260,10 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
                 openListbox();
               }
             }}
-            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+            className="flex size-6 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
           >
             <ChevronDown
-              className={cn('size-3.5 transition-transform duration-150', isOpen && 'rotate-180')}
+              className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-180')}
             />
           </button>
         </div>
@@ -274,7 +274,7 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
             role="listbox"
             aria-label="Danh sách mục"
             onMouseDown={(e) => e.preventDefault()}
-            className="absolute left-0 right-0 top-full z-30 mt-1 max-h-44 overflow-y-auto rounded-xl border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg"
+            className="absolute left-0 right-0 top-full z-30 mt-1 max-h-44 origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-popover p-1 text-xs text-popover-foreground shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 duration-150 ease-out"
           >
             {options.map((opt, idx) => {
               const isSelected =

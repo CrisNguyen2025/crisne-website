@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ChevronRight, List, X } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
@@ -12,7 +12,7 @@ import type {
   SectionGroup,
 } from "@/lib/roadmap/types";
 import { Sheet } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
+import { cn, getScrollBehavior } from "@/lib/utils";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import {
   DesktopTocRail,
@@ -157,7 +157,7 @@ export function LecturePager({
           href={prev.href}
           prefetch={true}
           onClick={prev.onClick}
-          className="group flex min-w-0 flex-col justify-center rounded-xl border border-border bg-card px-4 py-3 text-left transition-colors duration-150 hover:border-[var(--editorial-accent)]"
+          className="group flex min-w-0 flex-col justify-center rounded-xl border border-border bg-card px-4 py-3 text-left transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
         >
           <span className="text-xs font-medium text-muted-foreground">
             {prev.label}
@@ -175,7 +175,7 @@ export function LecturePager({
           href={next.href}
           prefetch={true}
           onClick={next.onClick}
-          className="group flex min-w-0 flex-col justify-center rounded-xl border border-border bg-card px-4 py-3 text-right transition-colors duration-150 hover:border-[var(--editorial-accent)]"
+          className="group flex min-w-0 flex-col justify-center rounded-xl border border-border bg-card px-4 py-3 text-right transition-[border-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
         >
           <span className="text-xs font-medium text-muted-foreground">
             {next.label}
@@ -240,6 +240,7 @@ export function LectureShell({
   const scrollStorageKey = `roadmap:syllabus-scroll:${topic.slug}`;
   const sectionsStorageKey = `roadmap:syllabus-sections:${topic.slug}`;
   const syllabusScrollRef = useRef<HTMLDivElement>(null);
+  const drawerScrollRef = useRef<HTMLDivElement>(null);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const sectionOverrides = useSyncExternalStore(
@@ -322,9 +323,10 @@ export function LectureShell({
     setPersistedSectionOverrides(sectionsStorageKey, next);
     if (willOpen) {
       window.setTimeout(() => {
+        const behavior = getScrollBehavior();
         const scrollEl = syllabusScrollRef.current;
         if (!scrollEl || !scrollEl.contains(buttonEl)) {
-          buttonEl.scrollIntoView({ block: "nearest" });
+          buttonEl.scrollIntoView({ block: "nearest", behavior });
           return;
         }
         const containerRect = scrollEl.getBoundingClientRect();
@@ -333,11 +335,23 @@ export function LectureShell({
           btnRect.top < containerRect.top + 8 ||
           btnRect.bottom > containerRect.bottom - 8
         ) {
-          buttonEl.scrollIntoView({ block: "nearest" });
+          buttonEl.scrollIntoView({ block: "nearest", behavior });
         }
       }, 210);
     }
   };
+
+  useEffect(() => {
+    if (!isDrawerOpen || !activeLessonId) return;
+    const rafId = window.requestAnimationFrame(() => {
+      const container = drawerScrollRef.current;
+      const activeEl = container?.querySelector<HTMLElement>(
+        `[data-lesson-nav-id="${activeLessonId}"]`
+      );
+      activeEl?.scrollIntoView?.({ block: "center" });
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [isDrawerOpen, activeLessonId]);
 
   const handleSelectLesson = (
     lessonId: string,
@@ -386,7 +400,7 @@ export function LectureShell({
               }
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150",
+                "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150 active:bg-[var(--editorial-sidebar-active)]",
                 isActive
                   ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
                   : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)]"
@@ -437,7 +451,7 @@ export function LectureShell({
                   >
                     <ChevronRight
                       className={cn(
-                        "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+                        "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
                         isOpen && "rotate-90 text-foreground"
                       )}
                     />
@@ -471,7 +485,7 @@ export function LectureShell({
                   <div
                     inert={!isOpen || undefined}
                     className={cn(
-                      "grid transition-[grid-template-rows,opacity] duration-200 ease-out",
+                      "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
                       isOpen
                         ? "grid-rows-[1fr] opacity-100"
                         : "grid-rows-[0fr] opacity-0"
@@ -521,7 +535,7 @@ export function LectureShell({
               type="button"
               onClick={onClose}
               aria-label="Đóng danh sách bài học"
-              className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+              className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer"
             >
               <X className="size-4" />
             </button>
@@ -552,7 +566,7 @@ export function LectureShell({
               type="button"
               onClick={() => setIsDrawerOpen(true)}
               aria-label="Mở danh sách bài học"
-              className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] cursor-pointer"
+              className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] active:scale-[0.98] cursor-pointer"
             >
               <List className="size-3.5" />
               <span>Bài học</span>
@@ -611,7 +625,7 @@ export function LectureShell({
               <article
                 {...articleDataAttributes}
                 className={cn(
-                  "min-w-0 w-full max-w-[48rem] xl:max-w-[50rem] transition-opacity duration-150",
+                  "min-w-0 w-full max-w-[48rem] xl:max-w-[50rem] transition-opacity duration-200 ease-out motion-reduce:transition-none",
                   isTransitioning ? "opacity-65" : "opacity-100"
                 )}
               >
@@ -676,7 +690,7 @@ export function LectureShell({
         className="roadmap-theme max-w-[20rem] bg-[var(--editorial-sidebar)] p-0"
       >
         {renderSidebarHeader(() => setIsDrawerOpen(false))}
-        <div className="flex-1 overflow-y-auto px-3 py-3.5">
+        <div ref={drawerScrollRef} className="flex-1 overflow-y-auto overscroll-contain px-3 py-3.5">
           {renderSidebarNavigation(() => setIsDrawerOpen(false))}
         </div>
       </Sheet>

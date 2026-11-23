@@ -1,8 +1,9 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { useAnimatedPresence } from "@/hooks/use-animated-presence";
 import { useMounted, useOverlay } from "./dialog";
 
 type SheetSide = "right" | "left" | "bottom";
@@ -42,43 +43,11 @@ export function Sheet({
   label,
 }: SheetProps) {
   const isMounted = useMounted();
-  const [shouldRender, setShouldRender] = useState(open);
-  const [isVisible, setIsVisible] = useState(false);
-
-  if (open && !shouldRender) {
-    setShouldRender(true);
-  }
+  const { shouldRender, isVisible: showPanel } = useAnimatedPresence(open, SHEET_EXIT_MS, onAfterClose);
 
   useOverlay(open, onClose);
 
-  useEffect(() => {
-    if (open) {
-      let frame2 = 0;
-      const frame1 = window.requestAnimationFrame(() => {
-        frame2 = window.requestAnimationFrame(() => {
-          setIsVisible(true);
-        });
-      });
-      return () => {
-        window.cancelAnimationFrame(frame1);
-        window.cancelAnimationFrame(frame2);
-      };
-    }
-
-    const timer = window.setTimeout(() => {
-      setIsVisible(false);
-      setShouldRender(false);
-      onAfterClose?.();
-    }, SHEET_EXIT_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [open, onAfterClose]);
-
   if (!shouldRender || !isMounted) return null;
-
-  const showPanel = open && isVisible;
 
   return createPortal(
     <div

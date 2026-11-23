@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useCallback, useId, useState } from 'react';
-import { X, Check, Edit3, AlignLeft, Link2, Layers, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { X, Check, Edit3, AlignLeft, Link2, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { normalizeTitle } from '@/lib/roadmap/titles';
 import { ChecklistItem, RoadmapMeta } from '@/lib/roadmap/types';
@@ -52,10 +52,19 @@ function EditItemInfoForm({
   onSubmit: EditItemInfoDrawerProps['onSubmit'];
 }) {
   const isMobile = useMediaQuery(MOBILE_VIEWPORT_QUERY);
+  const titleInputRef = useRef<HTMLInputElement>(null);
   const topicFieldId = useId();
   const titleFieldId = useId();
   const slugFieldId = useId();
   const descriptionFieldId = useId();
+
+  useEffect(() => {
+    if (!isOpen || isMobile) return;
+    const timer = window.setTimeout(() => {
+      titleInputRef.current?.focus({ preventScroll: true });
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, isMobile]);
 
   const initialTopicSlug = currentTopicSlug ?? item.roadmapSlug ?? '';
   const [title, setTitle] = useState(item.title);
@@ -163,7 +172,7 @@ function EditItemInfoForm({
         <button
           type="button"
           onClick={onClose}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer"
           title="Đóng (Esc)"
           aria-label="Đóng"
         >
@@ -171,7 +180,7 @@ function EditItemInfoForm({
         </button>
       </div>
 
-      <form id="edit-item-info-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] p-5 space-y-4 animate-in fade-in duration-200 ease-out">
+      <form id="edit-item-info-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] p-5 space-y-4 motion-safe:animate-in motion-safe:fade-in duration-200 ease-out">
         {error && (
           <div className="p-3 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             {error}
@@ -191,7 +200,7 @@ function EditItemInfoForm({
               id={topicFieldId}
               value={topicSlug}
               onChange={(e) => handleTopicChange(e.target.value)}
-              className="w-full text-sm px-3 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none text-foreground"
+              className="w-full text-sm px-3 py-2 rounded-lg bg-background border border-border focus:border-primary focus:outline-none text-foreground transition-[border-color,box-shadow] duration-150"
             >
               {topics.map((t) => (
                 <option key={t.slug} value={t.slug}>
@@ -212,13 +221,13 @@ function EditItemInfoForm({
             Tiêu đề
           </label>
           <input
+            ref={titleInputRef}
             id={titleFieldId}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Attention mechanism"
-            autoFocus
-            className="w-full text-sm font-semibold px-3.5 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground transition-colors"
+            className="w-full text-sm font-semibold px-3.5 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground transition-[border-color,box-shadow] duration-150"
           />
         </div>
 
@@ -240,7 +249,7 @@ function EditItemInfoForm({
                   if (error) setError('');
                 }
               }}
-              className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+              className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground hover:text-foreground transition-[color,transform] duration-150 active:scale-[0.98] cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
             >
               <RefreshCw className="size-3" />
               <span>Đồng bộ từ tiêu đề</span>
@@ -255,7 +264,7 @@ function EditItemInfoForm({
               if (error) setError('');
             }}
             placeholder="attention-mechanism"
-            className="w-full text-xs font-mono px-3.5 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground transition-colors"
+            className="w-full text-xs font-mono px-3.5 py-2 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground transition-[border-color,box-shadow] duration-150"
           />
           {!rawSlug ? (
             <p className="text-[0.6875rem] text-destructive leading-relaxed">
@@ -291,7 +300,7 @@ function EditItemInfoForm({
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
             placeholder="Mô tả ngắn gọn về khái niệm trong bài học..."
-            className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground leading-relaxed resize-y transition-colors"
+            className="w-full text-xs px-3.5 py-2.5 rounded-lg bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground leading-relaxed resize-y transition-[border-color,box-shadow] duration-150"
           />
         </div>
       </form>
@@ -301,7 +310,7 @@ function EditItemInfoForm({
           type="button"
           onClick={onClose}
           disabled={isSaving}
-          className="px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-muted hover:bg-muted/80 text-foreground text-xs font-medium transition-[background-color,transform] duration-150 active:scale-[0.98] cursor-pointer disabled:pointer-events-none disabled:opacity-50"
         >
           Hủy
         </button>
@@ -309,9 +318,10 @@ function EditItemInfoForm({
           type="submit"
           form="edit-item-info-form"
           disabled={isSaving}
-          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold transition-[background-color,transform] duration-150 active:scale-[0.98] flex items-center gap-1.5 cursor-pointer disabled:pointer-events-none disabled:opacity-50"
         >
-          <Check className="size-3.5" /> {isSaving ? 'Đang lưu…' : 'Lưu thay đổi'}
+          {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}{' '}
+          {isSaving ? 'Đang lưu…' : 'Lưu thay đổi'}
         </button>
       </div>
     </Sheet>

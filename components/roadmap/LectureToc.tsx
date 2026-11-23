@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
-import { cn } from "@/lib/utils";
+import { useAnimatedPresence } from "@/hooks/use-animated-presence";
+import { cn, getScrollBehavior } from "@/lib/utils";
 
 const ACTIVE_HEADING_OFFSET = 128;
 
@@ -94,7 +95,7 @@ export function useActiveHeading(headings: ContentHeading[]) {
     if (el) {
       manualTargetRef.current = { id, until: Date.now() + 650 };
       setTrackedHeadingId(id);
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.scrollIntoView({ behavior: getScrollBehavior(), block: "start" });
       window.history.replaceState(null, "", `#${id}`);
     }
   };
@@ -170,7 +171,33 @@ export function DesktopTocRail({
   /** Shown under "On this page", set apart by a divider line */
   footer?: React.ReactNode;
 }) {
+  const navRef = useRef<HTMLElement>(null);
   const hasHeadings = headings.length > 0;
+
+  useEffect(() => {
+    if (!activeHeadingId) return;
+    const navEl = navRef.current;
+    if (!navEl || navEl.scrollHeight <= navEl.clientHeight) return;
+    const escapedId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(activeHeadingId)
+        : activeHeadingId;
+    const activeLink = navEl.querySelector<HTMLElement>(
+      `a[href="#${escapedId}"]`
+    );
+    if (!activeLink) return;
+    const navRect = navEl.getBoundingClientRect();
+    const linkRect = activeLink.getBoundingClientRect();
+    if (linkRect.top < navRect.top + 16 || linkRect.bottom > navRect.bottom - 16) {
+      const targetTop =
+        activeLink.offsetTop - navEl.clientHeight / 2 + activeLink.clientHeight / 2;
+      navEl.scrollTo?.({
+        top: Math.max(0, targetTop),
+        behavior: getScrollBehavior(),
+      });
+    }
+  }, [activeHeadingId]);
+
   return (
     <aside
       aria-hidden={(!hasHeadings && !footer) || undefined}
@@ -181,6 +208,7 @@ export function DesktopTocRail({
         <div className="sticky top-20 flex max-h-[calc(100dvh-6.5rem)] flex-col">
           {hasHeadings && (
             <nav
+              ref={navRef}
               aria-label="On this page"
               className="min-h-0 overflow-y-auto no-scrollbar"
             >
@@ -229,11 +257,11 @@ export function TabletInlineToc({
       ref={detailsRef}
       className="hidden lg:block xl:hidden group mb-6 rounded-xl border border-border bg-[var(--editorial-sidebar)] px-4 py-3 text-xs"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-foreground select-none [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-foreground transition-colors duration-150 select-none [&::-webkit-details-marker]:hidden">
         <span>On this page</span>
         <span className="inline-flex items-center gap-1.5 text-muted-foreground tabular-nums">
           <span>{headings.length}</span>
-          <ChevronRight className="size-3.5 transition-transform duration-150 group-open:rotate-90" />
+          <ChevronRight className="size-3.5 transition-transform duration-150 motion-reduce:transition-none group-open:rotate-90" />
         </span>
       </summary>
       <div className="mt-2.5 border-t border-border/80 pt-2.5">
@@ -262,6 +290,7 @@ export function MobileTocDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 150);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -283,7 +312,7 @@ export function MobileTocDropdown({
 
   const scrollToTop = () => {
     setIsOpen(false);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: getScrollBehavior() });
   };
 
   return (
@@ -292,23 +321,31 @@ export function MobileTocDropdown({
         type="button"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((v) => !v)}
-        className="inline-flex min-h-[2.75rem] items-center gap-1 px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground cursor-pointer"
+        className="inline-flex min-h-[2.75rem] items-center gap-1 px-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-[0.98] cursor-pointer"
       >
         <span>On this page</span>
         <ChevronRight
           className={cn(
-            "size-3.5 transition-transform duration-150",
+            "size-3.5 transition-transform duration-150 motion-reduce:transition-none",
             isOpen && "rotate-90 text-foreground"
           )}
         />
       </button>
 
-      {isOpen && (
-        <div className="absolute inset-x-4 top-full z-40 mt-1.5 max-h-[65dvh] overflow-y-auto rounded-xl border border-border bg-[var(--editorial-sidebar)] p-3 shadow-lg">
+      {shouldRender && (
+        <div
+          aria-hidden={!isOpen || undefined}
+          className={cn(
+            "absolute inset-x-4 top-full z-40 mt-1.5 max-h-[65dvh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-[var(--editorial-sidebar)] p-3 shadow-lg transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            isVisible
+              ? "translate-y-0 scale-100 opacity-100"
+              : "-translate-y-1 scale-[0.98] opacity-0 pointer-events-none"
+          )}
+        >
           <button
             type="button"
             onClick={scrollToTop}
-            className="mb-2 block w-full border-b border-border/80 px-2 pb-2 text-left text-xs font-medium text-[var(--editorial-accent)] cursor-pointer"
+            className="mb-2 block w-full rounded-md border-b border-border/80 px-2 pb-2 pt-1 text-left text-xs font-medium text-[var(--editorial-accent)] transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer"
           >
             Lên đầu trang ↑
           </button>

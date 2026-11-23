@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { Dialog } from '@/components/ui/dialog';
 import { SectionField } from './SectionField';
@@ -24,14 +25,18 @@ interface CreateItemModalProps {
 }
 
 function CreateItemForm({
+  isOpen,
   sections,
   targetSection,
   onClose,
+  onAfterClose,
   onSubmit,
 }: {
+  isOpen: boolean;
   sections: string[];
   targetSection: string | null;
   onClose: () => void;
+  onAfterClose: () => void;
   onSubmit: (
     section: string | null,
     title: string,
@@ -74,8 +79,9 @@ function CreateItemForm({
 
   return (
     <Dialog
-      open
+      open={isOpen}
       onClose={isSubmitting ? () => {} : onClose}
+      onAfterClose={onAfterClose}
       title="Thêm bài học"
       className="roadmap-theme"
       description={
@@ -94,7 +100,7 @@ function CreateItemForm({
             type="button"
             disabled={isSubmitting}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             Hủy
           </button>
@@ -102,7 +108,7 @@ function CreateItemForm({
             type="button"
             disabled={isSubmitting}
             onClick={() => void submitForm(true)}
-            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 cursor-pointer"
+            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             Tạo & viết nội dung
           </button>
@@ -110,9 +116,10 @@ function CreateItemForm({
             type="submit"
             form="create-item-form"
             disabled={isSubmitting}
-            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? 'Đang thêm…' : 'Thêm bài'}
+            {isSubmitting && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
+            <span>{isSubmitting ? 'Đang thêm…' : 'Thêm bài'}</span>
           </button>
         </>
       }
@@ -134,7 +141,7 @@ function CreateItemForm({
             placeholder="ví dụ: Speculative Decoding, GraphRAG…"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:border-foreground/50 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
           />
         </div>
 
@@ -145,7 +152,7 @@ function CreateItemForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground focus:border-foreground/50 focus:outline-none"
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
           />
         </div>
       </form>
@@ -160,13 +167,33 @@ export function CreateItemModal({
   onClose,
   onSubmit,
 }: CreateItemModalProps) {
-  if (!isOpen) return null;
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  const [renderedTargetSection, setRenderedTargetSection] = useState(targetSection);
+  const [sessionId, setSessionId] = useState(0);
+
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setShouldRender(true);
+      setRenderedTargetSection(targetSection);
+      setSessionId((prev) => prev + 1);
+    }
+  }
+
+  const handleAfterClose = useCallback(() => {
+    setShouldRender(false);
+  }, []);
+
+  if (!shouldRender) return null;
   return (
     <CreateItemForm
-      key={targetSection ?? '__none__'}
+      key={`${renderedTargetSection ?? '__none__'}:${sessionId}`}
+      isOpen={isOpen}
       sections={sections}
-      targetSection={targetSection}
+      targetSection={renderedTargetSection}
       onClose={onClose}
+      onAfterClose={handleAfterClose}
       onSubmit={onSubmit}
     />
   );

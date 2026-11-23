@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAnimatedPresence } from "@/hooks/use-animated-presence";
 
 const OVERLAY_INTERACTIVE_SELECTOR =
   '[aria-modal="true"], [role="listbox"], [role="menu"]';
@@ -166,9 +167,12 @@ export function useMounted() {
   return useSyncExternalStore(noopSubscribe, () => true, () => false);
 }
 
+const DIALOG_EXIT_MS = 180;
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
+  onAfterClose?: () => void;
   title: ReactNode;
   description?: ReactNode;
   icon?: ReactNode;
@@ -178,20 +182,46 @@ interface DialogProps {
 }
 
 /** Centered dialog on sm and up; a bottom sheet on phones. */
-export function Dialog({ open, onClose, title, description, icon, children, footer, className }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  onAfterClose,
+  title,
+  description,
+  icon,
+  children,
+  footer,
+  className,
+}: DialogProps) {
   const isMounted = useMounted();
+  const { shouldRender, isVisible } = useAnimatedPresence(open, DIALOG_EXIT_MS, onAfterClose);
   useOverlay(open, onClose);
-  if (!open || !isMounted) return null;
+  if (!shouldRender || !isMounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
-      <div className="absolute inset-0 bg-black/40 animate-in fade-in duration-150" onClick={onClose} />
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4",
+        !open && "pointer-events-none"
+      )}
+      aria-hidden={!open || undefined}
+    >
       <div
-        role="dialog"
-        aria-modal="true"
         className={cn(
-          "relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card text-card-foreground shadow-xl",
-          "animate-in slide-in-from-bottom-4 duration-200 sm:max-w-md sm:rounded-2xl sm:zoom-in-95 sm:slide-in-from-bottom-0",
+          "absolute inset-0 bg-black/40 backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
+          isVisible ? "opacity-100 duration-[180ms]" : "opacity-0 duration-[150ms]"
+        )}
+        onClick={open ? onClose : undefined}
+      />
+      <div
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? "true" : undefined}
+        className={cn(
+          "relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card text-card-foreground shadow-xl will-change-[transform,opacity] transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+          "sm:max-w-md sm:rounded-2xl",
+          isVisible
+            ? "translate-y-0 opacity-100 duration-[220ms] sm:scale-100"
+            : "translate-y-4 opacity-0 duration-[180ms] sm:translate-y-1 sm:scale-[0.97]",
           className
         )}
       >
@@ -205,7 +235,7 @@ export function Dialog({ open, onClose, title, description, icon, children, foot
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-mr-1 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="-mr-1 rounded-lg p-1 text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
           >
             <X className="size-4" />
           </button>

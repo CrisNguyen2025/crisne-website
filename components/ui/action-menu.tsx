@@ -1,8 +1,9 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LucideIcon, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAnimatedPresence } from "@/hooks/use-animated-presence";
 
 export interface ActionMenuItem {
   label: string;
@@ -27,10 +28,15 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
   const [confirming, setConfirming] = useState<ActionMenuItem | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  const handleAfterClose = useCallback(() => {
+    setConfirming(null);
+  }, []);
+
+  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 120, handleAfterClose);
+
   // Closing also drops a pending confirmation, so the menu opens on its items next time
   const close = () => {
     setIsOpen(false);
-    setConfirming(null);
   };
 
   useEffect(() => {
@@ -70,7 +76,7 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
         title={label}
         onClick={() => (isOpen ? close() : setIsOpen(true))}
         className={cn(
-          "relative flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95 touch-manipulation after:absolute after:-inset-2.5 after:content-['']",
+          "relative flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground active:scale-95 touch-manipulation cursor-pointer after:absolute after:-inset-2.5 after:content-['']",
           isOpen && "bg-muted text-foreground",
           triggerClassName
         )}
@@ -78,12 +84,14 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
         {icon ?? <MoreHorizontal className="size-4" />}
       </button>
 
-      {isOpen && (
+      {shouldRender && (
         <div
-          role="menu"
+          role={isOpen ? "menu" : undefined}
+          aria-hidden={!isOpen || undefined}
           className={cn(
-            "absolute top-full z-50 mt-1 w-52 rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95 duration-100",
-            align === "end" ? "right-0" : "left-0"
+            "absolute top-full z-50 mt-1 w-52 rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            align === "end" ? "right-0 origin-top-right" : "left-0 origin-top-left",
+            isVisible ? "opacity-100 scale-100 translate-y-0" : "pointer-events-none opacity-0 scale-95 -translate-y-1"
           )}
         >
           {confirming ? (
@@ -96,14 +104,14 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
                 <button
                   type="button"
                   onClick={() => setConfirming(null)}
-                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={() => run(confirming)}
-                  className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-medium text-white hover:bg-destructive/90"
+                  className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-destructive/90 active:scale-[0.98] cursor-pointer"
                 >
                   {confirming.confirm!.confirmLabel ?? "Delete"}
                 </button>
@@ -116,10 +124,10 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
                 <button
                   key={item.label}
                   type="button"
-                  role="menuitem"
+                  role={isOpen ? "menuitem" : undefined}
                   onClick={() => run(item)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors sm:py-1.5",
+                    "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-[background-color,color,transform] duration-150 active:scale-[0.99] cursor-pointer sm:py-1.5",
                     item.danger ? "text-destructive hover:bg-destructive/10" : "text-foreground hover:bg-muted"
                   )}
                 >

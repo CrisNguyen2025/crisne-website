@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import type { CreateRoadmapDto } from '@/lib/roadmap/types';
 import { Dialog } from '@/components/ui/dialog';
 
@@ -10,20 +11,21 @@ interface CreateTopicModalProps {
   onSubmit: (payload: CreateRoadmapDto) => Promise<void>;
 }
 
-/** A topic starts with its name and description; its lessons are added afterwards, with or without a section. */
-export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModalProps) {
+function CreateTopicForm({
+  isOpen,
+  onClose,
+  onAfterClose,
+  onSubmit,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onAfterClose: () => void;
+  onSubmit: (payload: CreateRoadmapDto) => Promise<void>;
+}) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  if (!isOpen) return null;
-
-  const reset = () => {
-    setName('');
-    setDescription('');
-    setError('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +37,6 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
       setIsSubmitting(true);
       setError('');
       await onSubmit({ title: name.trim(), description: description.trim() || undefined });
-      reset();
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không tạo được topic. Thử lại nhé.');
@@ -46,12 +47,9 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
 
   return (
     <Dialog
-      open
-      onClose={() => {
-        if (isSubmitting) return;
-        reset();
-        onClose();
-      }}
+      open={isOpen}
+      onClose={isSubmitting ? () => {} : onClose}
+      onAfterClose={onAfterClose}
       title="Tạo topic"
       className="roadmap-theme"
       footer={
@@ -59,11 +57,8 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
           <button
             type="button"
             disabled={isSubmitting}
-            onClick={() => {
-              reset();
-              onClose();
-            }}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
+            onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             Hủy
           </button>
@@ -71,9 +66,10 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
             type="submit"
             form="create-topic-form"
             disabled={isSubmitting}
-            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? 'Đang tạo…' : 'Tạo topic'}
+            {isSubmitting && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
+            <span>{isSubmitting ? 'Đang tạo…' : 'Tạo topic'}</span>
           </button>
         </>
       }
@@ -92,7 +88,7 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="ví dụ: AI Engineering"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground focus:border-foreground/50 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
             autoFocus
           />
         </div>
@@ -104,10 +100,41 @@ export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModal
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Tóm tắt ngắn (tuỳ chọn)…"
             rows={3}
-            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground focus:border-foreground/50 focus:outline-none"
+            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
           />
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** A topic starts with its name and description; its lessons are added afterwards, with or without a section. */
+export function CreateTopicModal({ isOpen, onClose, onSubmit }: CreateTopicModalProps) {
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  const [sessionId, setSessionId] = useState(0);
+
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setShouldRender(true);
+      setSessionId((prev) => prev + 1);
+    }
+  }
+
+  const handleAfterClose = useCallback(() => {
+    setShouldRender(false);
+  }, []);
+
+  if (!shouldRender) return null;
+
+  return (
+    <CreateTopicForm
+      key={sessionId}
+      isOpen={isOpen}
+      onClose={onClose}
+      onAfterClose={handleAfterClose}
+      onSubmit={onSubmit}
+    />
   );
 }

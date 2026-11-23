@@ -27,7 +27,7 @@ function EditorContentSkeleton() {
   return (
     <div
       aria-hidden="true"
-      className="flex flex-1 flex-col gap-5 py-2 animate-pulse"
+      className="flex flex-1 flex-col gap-5 py-2 motion-safe:animate-pulse"
     >
       <div className="flex items-center gap-2 border-b border-border/60 pb-3">
         <div className="h-6 w-14 rounded-md bg-muted/80" />
@@ -200,7 +200,7 @@ function EditItemContentForm({
                   setContent(DEFAULT_LESSON_TEMPLATE_HTML);
                   setEditorSeedVersion((v) => v + 1);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted cursor-pointer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] cursor-pointer"
               >
                 <ListTree className="size-3.5" />
                 <span>Chèn mẫu</span>
@@ -209,7 +209,7 @@ function EditItemContentForm({
             <button
               type="button"
               onClick={attemptClose}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-[background-color,color,transform] duration-150 active:scale-95 cursor-pointer"
               title="Close (Esc)"
               aria-label="Close"
             >
@@ -221,7 +221,7 @@ function EditItemContentForm({
         <div className="flex-1 flex flex-col min-h-0 bg-background overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
           <div className="flex-1 flex flex-col px-5 py-4 md:px-7 md:py-5 min-h-0">
             {isEditorReady ? (
-              <div className="flex-1 flex flex-col min-h-0 animate-in fade-in duration-200 ease-out">
+              <div className="flex-1 flex flex-col min-h-0 motion-safe:animate-in motion-safe:fade-in duration-200 ease-out">
                 <Editor
                   key={editorSeedVersion}
                   value={content}
@@ -246,7 +246,7 @@ function EditItemContentForm({
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+              className="px-5 py-2 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs transition-[background-color,transform] duration-150 active:scale-[0.98] flex items-center gap-1.5 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSaving ? (
                 <>

@@ -61,9 +61,17 @@ interface MapChipProps {
   onSelectItem?: (id: string) => void;
 }
 
-function chipClassName(hasBody: boolean, isActive: boolean, isDragging = false): string {
+function chipClassName(
+  hasBody: boolean,
+  isActive: boolean,
+  isDragging = false,
+  sortable = false
+): string {
   return cn(
-    'inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border px-3 py-1.5 text-left text-xs transition-[border-color,background-color,color,transform] duration-150 ease-out active:scale-[0.98]',
+    'inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border px-3 py-1.5 text-left text-xs ease-out',
+    sortable
+      ? 'transition-[border-color,background-color,color,box-shadow] duration-150 select-none'
+      : 'transition-[border-color,background-color,color,transform] duration-150 active:scale-[0.98]',
     hasBody
       ? 'border-border/90 bg-background/80 text-foreground shadow-[0_0.0625rem_0.0625rem_oklch(0_0_0/0.02)] hover:border-foreground/30 hover:bg-muted/50'
       : 'border-dashed border-border/90 bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground',
@@ -132,12 +140,13 @@ function SortableMapChip({
 
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
-    transition,
+    transition: isDragging ? 'none' : transition,
   };
 
   const className = cn(
-    chipClassName(hasBody, isActive, isDragging),
+    chipClassName(hasBody, isActive, isDragging, true),
     'touch-manipulation',
+    !isDragging && 'active:scale-[0.98]',
     isDragging ? 'cursor-grabbing' : 'cursor-pointer'
   );
 

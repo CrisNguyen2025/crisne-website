@@ -95,22 +95,22 @@ export function LessonStatusPicker({
             disabled={disabled}
             onClick={() => !isActive && onChange(status)}
             className={cn(
-              'inline-flex items-center text-xs font-medium transition-colors disabled:opacity-50',
+              'inline-flex items-center text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out disabled:pointer-events-none disabled:opacity-50',
               variant !== 'pill' && 'cursor-pointer',
               variant === 'pill' && [
-                'gap-1.5 rounded-full border px-3 py-1',
+                'gap-1.5 rounded-full border px-3 py-1 active:scale-[0.97]',
                 isActive
                   ? STATUS_TONE[status]
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
               ],
               variant === 'list' && [
-                'min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm',
+                'min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm active:bg-[var(--editorial-sidebar-active)]',
                 isActive
                   ? STATUS_LIST_ACTIVE[status]
                   : 'text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground',
               ],
               variant === 'tabs' && [
-                '-mb-px border-b-2 pb-2 pt-0.5',
+                '-mb-px border-b-2 pb-2 pt-0.5 active:scale-[0.98]',
                 isActive
                   ? STATUS_TAB_ACTIVE[status]
                   : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -125,7 +125,10 @@ export function LessonStatusPicker({
             {variant === 'list' && (
               <Check
                 aria-hidden="true"
-                className={cn('size-4 shrink-0 transition-opacity', isActive ? 'opacity-100' : 'opacity-0')}
+                className={cn(
+                  'size-4 shrink-0 transition-[opacity,transform] duration-150 ease-out',
+                  isActive ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                )}
               />
             )}
           </button>

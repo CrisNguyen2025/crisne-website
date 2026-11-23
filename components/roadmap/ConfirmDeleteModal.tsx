@@ -39,7 +39,7 @@ export function ConfirmDeleteModal({
             type="button"
             disabled={isLoading}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 cursor-pointer"
+            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
           >
             {cancelText}
           </button>
@@ -47,7 +47,7 @@ export function ConfirmDeleteModal({
             type="button"
             disabled={isLoading}
             onClick={onConfirm}
-            className="flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-destructive/90 disabled:opacity-60 cursor-pointer"
+            className="flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-destructive/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 cursor-pointer"
           >
             {isLoading ? (
               <>
