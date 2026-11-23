@@ -399,16 +399,6 @@ export function NewsFeedClient({
     setIsPanelOpenOnNarrow(true);
   }, []);
 
-  const handleTogglePublic = useCallback(
-    (item: NewsItemDto) =>
-      void applyItemUpdate(
-        item.id,
-        { isPublic: !item.isPublic },
-        item.isPublic ? "Đã gỡ bài khỏi trang public" : "Đã public bài cho Visitor"
-      ),
-    [applyItemUpdate]
-  );
-
   const handleToggleRead = useCallback(
     (item: NewsItemDto, nextState: "read" | "unread") => {
       if (nextState === item.readState) return;
@@ -670,7 +660,6 @@ export function NewsFeedClient({
       onDelete={handleDelete}
       onUpdateTags={handleUpdateTags}
       onSaveNote={handleSaveNote}
-      onTogglePublic={handleTogglePublic}
       onOpenExternal={handleOpenExternal}
       onOpenItem={handleOpenItem}
     />

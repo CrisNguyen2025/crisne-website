@@ -47,6 +47,13 @@ const nextConfig: NextConfig = {
       exclude: ["error"],
     },
   },
+  // The private News inbox lived at /feed-ingestion before ADR-0019; keep old bookmarks and PWA shortcuts working
+  async redirects() {
+    return [
+      { source: "/feed-ingestion", destination: "/news", permanent: true },
+      { source: "/feed-ingestion/:path*", destination: "/news/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

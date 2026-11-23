@@ -35,7 +35,8 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0015](adr/0015-abot-owner-memory.md)                         | Owner Memory xuyên Thread lưu ở Turso, cách ly hoàn toàn với Visitor | accepted               |
 | [0016](adr/0016-news-ingest-worker-separate-service.md)       | News Ingest Worker là service Python riêng, chỉ xử lý từng News Item | accepted               |
 | [0017](adr/0017-owner-only-statement-provenance.md)           | Provenance gắn theo từng câu trong Lesson, chỉ Owner thấy    | accepted               |
-| [0018](adr/0018-owner-only-site-except-public-news.md)        | Site chỉ dành cho Owner, trừ Public News                     | accepted               |
+| [0018](adr/0018-owner-only-site-except-public-news.md)        | Site chỉ dành cho Owner, trừ Public News                     | superseded by ADR-0019 |
+| [0019](adr/0019-owner-only-site-no-public-news.md)           | Site chỉ dành cho Owner, bỏ Public News                      | accepted               |
 
 ## Sơ đồ Mermaid
 

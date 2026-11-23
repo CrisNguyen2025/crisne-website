@@ -130,7 +130,6 @@ export const UpdateNewsItemSchema = z
   .object({
     readState: ReadStateSchema.optional(),
     isSaved: z.boolean().optional(),
-    isPublic: z.boolean().optional(),
     reviewStatus: ReviewStatusSchema.optional(),
     tags: z.array(z.string().trim().min(1).max(32)).max(8).optional(),
     personalNote: z.string().max(4000).nullable().optional(),
@@ -200,8 +199,6 @@ export interface NewsItemDto {
   reviewStatus: ReviewStatus;
   readState: ReadState;
   isSaved: boolean;
-  isPublic: boolean;
-  publicAt: string | null;
   extractionMethod: ExtractionMethod | null;
   extractionError: string | null;
   possibleDuplicateOfId: string | null;
@@ -330,8 +327,6 @@ export function serializeNewsItem(row: NewsItem): NewsItemDto {
     reviewStatus: (ReviewStatusSchema.safeParse(row.reviewStatus).data ?? "published") as ReviewStatus,
     readState: (ReadStateSchema.safeParse(row.readState).data ?? "unread") as ReadState,
     isSaved: row.isSaved,
-    isPublic: row.isPublic,
-    publicAt: row.publicAt ? row.publicAt.toISOString() : null,
     extractionMethod: ExtractionMethodSchema.safeParse(row.extractionMethod).data ?? null,
     extractionError: row.extractionError,
     possibleDuplicateOfId: row.possibleDuplicateOfId,

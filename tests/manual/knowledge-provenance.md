@@ -1,6 +1,6 @@
 # Knowledge Provenance: đưa News Item vào Lesson và xem nguồn trên trang Lesson
 
-Phạm vi: Phase 1 của `.handoff/PLAN-knowledge-acquisition.md` (ADR-0017, ADR-0018), gồm `TASK-knowledge-provenance-001`, `-002`, `-003`. Owner chọn ý của một News Item ở `/feed-ingestion`, lưu vào Lesson mới hoặc có sẵn; mỗi câu kèm marker Provenance; trang Lesson hiện chip nguồn cho Owner.
+Phạm vi: Phase 1 của `.handoff/PLAN-knowledge-acquisition.md` (ADR-0017, ADR-0019), gồm `TASK-knowledge-provenance-001`, `-002`, `-003`. Owner chọn ý của một News Item ở `/news`, lưu vào Lesson mới hoặc có sẵn; mỗi câu kèm marker Provenance; trang Lesson hiện chip nguồn cho Owner.
 
 File liên quan: `components/news/AddToLessonSheet.tsx`, `components/news/NewsReaderPanel.tsx`, `app/api/news/[id]/integrate/route.ts`, `app/api/v1/roadmaps/items/[id]/provenance/route.ts`, `lib/provenance/*`, `lib/roadmap/create-lesson.ts`, `components/roadmap/LessonEditorialReader.tsx`, `components/roadmap/ProvenanceChip.tsx`, `components/roadmap/LessonSources.tsx`, `components/ui/editor/nodes/ProvenanceNode.tsx`, `lib/news/ingest.ts`.
 
@@ -10,15 +10,15 @@ File liên quan: `components/news/AddToLessonSheet.tsx`, `components/news/NewsRe
 
 | ID | Bước | Kỳ vọng |
 |---|---|---|
-| P1 | Ở `/feed-ingestion`, mở một bài `ready`, bấm "Đưa vào Lesson", giữ 2 ý, chọn Topic, "Tạo bài mới", Xem trước, Lưu | Sheet báo "Đã đưa 2 ý vào Lesson.", link "Mở bài" tới `/<topic>/<slug>`; bài mới có Lesson Status `target`; `GET /api/v1/roadmaps/items/<id>/provenance` trả 2 `provenances` |
+| P1 | Ở `/news`, mở một bài `ready`, bấm "Đưa vào Lesson", giữ 2 ý, chọn Topic, "Tạo bài mới", Xem trước, Lưu | Sheet báo "Đã đưa 2 ý vào Lesson.", link "Mở bài" tới `/<topic>/<slug>`; bài mới có Lesson Status `target`; `GET /api/v1/roadmaps/items/<id>/provenance` trả 2 `provenances` |
 | P2 | Lặp lại P1 với cùng tiêu đề | Báo "Topic này đã có bài …", không tạo bài thứ hai |
 | P3 | "Nối vào bài có sẵn" vào một bài `known`, rồi nối lần hai cùng bài | Lần 1: nội dung cũ giữ nguyên, thêm các câu mới ở cuối, status vẫn `known`. Lần 2: báo "Bài tin này đã được đưa vào bài đó rồi." |
 | P4 | Mở bài ở P1 khi đã đăng nhập | Mỗi câu có chip số; bấm chip hiện tên nguồn + link, tiêu đề gốc, đoạn trích, ngày thu thập, ngày trích xuất, người viết; Esc đóng |
 | P5 | Sửa bài ở P1 bằng editor (thêm một câu khác), lưu | Chip của các câu cũ còn nguyên; trong editor, câu có nguồn có dấu ◆ |
 | P6 | Xoá hẳn một câu có chip bằng editor, lưu | Chip của câu đó mất; mục "Nguồn tham khảo của bài" hiện nguồn đó |
-| P7 | Mở bài ở P1 khi chưa đăng nhập (cửa sổ ẩn danh) | Chuyển về `/login` (ADR-0018) |
+| P7 | Mở bài ở P1 khi chưa đăng nhập (cửa sổ ẩn danh) | Chuyển về `/login` (ADR-0019) |
 | P8 | Xem mã nguồn HTML của trang ở P4 | Chỉ có `<span data-provenance-ref="<uuid>">`, không có tên nguồn, URL nguồn hay id News Item ngoài phần chip render phía client |
-| P9 | Chạy cron RSS (hoặc thêm bài `origin: cron`), chờ worker xong | Bài mới không hiện ở `/news` cho tới khi Owner bật Public; bài share/manual vẫn public như cũ |
+| P9 | Mở `/news` khi chưa đăng nhập (cửa sổ ẩn danh) | Chuyển về `/login`; không còn trang tin công khai (ADR-0019, thay case cũ "bài `cron` không lên `/news`") |
 | P10 | Bài đang `processing` hoặc đã Bỏ qua | Không có nút "Đưa vào Lesson" |
 
 ## Ghi kết quả
@@ -37,7 +37,7 @@ Môi trường: `next dev` cổng 3335, `DEV_OWNER_BYPASS=true`, `DATABASE_URL` 
 | P6 | Pass | PATCH content bỏ đoạn có marker 1: API trả `provenances` = [marker 2], `orphans` = [marker 1]; trang hiện chip "1" và mục "Nguồn tham khảo của bài" |
 | P7 | Pass (lượt 3) | Server `DEV_OWNER_BYPASS=false`: mở bài → 307 về `/login?callbackUrl=…`, trình duyệt hiện trang đăng nhập. `GET …/provenance` và `POST /api/news/[id]/integrate` trả 401 khi không đăng nhập, khi có `x-admin-key` sai và khi có `x-internal-key` bất kỳ; không ghi thêm provenance. `/news` vẫn 200 |
 | P8 | Pass | HTML trả về (cả RSC payload) không có tên nguồn, URL nguồn, `authorType`; chỉ có key của marker còn trong bài; meta description sạch |
-| P9 | Pass (lượt 3) | Thêm nguồn Vercel Blog (`https://vercel.com/atom`) qua API, chạy `POST /api/news/cron` thật: 10 bài `cron` mới đều `isPublic=false`, `publicAt=null`. Giữ 1 job, chạy worker thật (`news-ingest-worker`, cổng 8002, trỏ về server copy): bài "Vercel Board đã ra mắt…" thành `ready`, có `extractedAt`, vẫn không public. `/news` không có bài, `/news/<id>` 404. Bật Public trong Reader → bài lên `/news`. Link thêm tay (`origin: manual`) vẫn `isPublic=true` ngay khi tạo |
+| P9 | Chưa chạy. Kết quả lượt 3 bên cạnh là của case cũ, đã bị thay theo ADR-0019 | Case cũ, Pass (lượt 3): Thêm nguồn Vercel Blog (`https://vercel.com/atom`) qua API, chạy `POST /api/news/cron` thật: 10 bài `cron` mới đều `isPublic=false`, `publicAt=null`. Giữ 1 job, chạy worker thật (`news-ingest-worker`, cổng 8002, trỏ về server copy): bài "Vercel Board đã ra mắt…" thành `ready`, có `extractedAt`, vẫn không public. `/news` không có bài, `/news/<id>` 404. Bật Public trong Reader → bài lên `/news`. Link thêm tay (`origin: manual`) vẫn `isPublic=true` ngay khi tạo |
 | P10 | Pass (lượt 2) | Trong bản copy DB, đặt một bài `processing` và một bài `dismissed`: cả hai không có nút "Đưa vào Lesson" (bài processing ở tab Chờ xử lý, bài dismissed ở tab Đã bỏ qua) |
 
 Thêm: `/news` vẫn 200 và vẫn hiện bài public.

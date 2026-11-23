@@ -34,8 +34,6 @@ function makeNewsItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
     reviewStatus: "draft",
     readState: "unread",
     isSaved: false,
-    isPublic: false,
-    publicAt: null,
     extractionMethod: "article",
     extractionError: null,
     possibleDuplicateOfId: null,
@@ -102,7 +100,7 @@ describe("ShareTargetClient", () => {
     );
   });
 
-  it("redirects to /feed-ingestion after 2.5s on success", async () => {
+  it("redirects to /news after 2.5s on success", async () => {
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(newsService, "ingestNewsUrl").mockResolvedValue(makeResult());
     render(<ShareTargetClient url="https://youtube.com/watch?v=abc" />);
@@ -112,7 +110,7 @@ describe("ShareTargetClient", () => {
     const timerCall = setTimeoutSpy.mock.calls.find((call) => call[1] === 2500);
     expect(timerCall).toBeDefined();
     (timerCall![0] as () => void)();
-    expect(mockReplace).toHaveBeenCalledWith("/feed-ingestion");
+    expect(mockReplace).toHaveBeenCalledWith("/news");
   });
 
   it("shows error state on reject with retry button", async () => {

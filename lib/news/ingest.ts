@@ -62,7 +62,6 @@ export async function enqueueNewsUrl(
   }
 
   const reviewStatus = input.origin === "cron" ? "draft" : "published";
-  const isPublic = input.origin !== "cron";
   const initialTags = normalizeTagList(input.tags ?? [], 5);
   const parsedPublishedAt = input.publishedAt ? new Date(input.publishedAt) : null;
   const publishedAt =
@@ -85,11 +84,6 @@ export async function enqueueNewsUrl(
           reviewStatus,
           readState: "unread",
           isSaved: false,
-          // Links the Owner shared or added are public by default; /news only lists them once the summary
-          // is ready, and the Owner can turn Public off per post. Cron posts are drafts nobody reviewed yet,
-          // so they stay private until the Owner turns Public on. Rows created before this keep their value.
-          isPublic,
-          publicAt: isPublic ? new Date() : null,
         },
       });
       const job = await tx.ingestJob.create({

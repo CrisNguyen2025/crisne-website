@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
-import { FEED_INGESTION_PATH } from "@/lib/news/paths";
+import { NEWS_PATH } from "@/lib/news/paths";
 import { ShareTargetClient } from "@/components/news/ShareTargetClient";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +80,7 @@ export default async function SharePage({ searchParams }: SharePageProps) {
             Share target không nhận được link hợp lệ. Hãy dán URL thủ công tại trang Feed Ingestion.
           </p>
           <Link
-            href={FEED_INGESTION_PATH}
+            href={NEWS_PATH}
             className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
             Về Feed Ingestion

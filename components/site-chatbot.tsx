@@ -2,19 +2,18 @@
 
 import React, { Suspense } from "react";
 import { usePathname } from "next/navigation";
-import { isPublicPagePath } from "@/lib/auth/public-paths";
-import { FEED_INGESTION_PATH } from "@/lib/news/paths";
+import { NEWS_PATH } from "@/lib/news/paths";
 import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
 import { RoadmapAssistantChatbot } from "@/components/roadmap/RoadmapAssistantChatbotWrapper";
 
 function ChatbotInner() {
   const pathname = usePathname();
 
-  // `/news` is open to signed-out Visitors, who cannot reach the Abot proxy
+  // Abot stays off the News inbox and the share target, as before ADR-0019
   if (
-    pathname?.startsWith(FEED_INGESTION_PATH) ||
-    pathname?.startsWith("/share") ||
-    (pathname && isPublicPagePath(pathname))
+    pathname === NEWS_PATH ||
+    pathname?.startsWith(`${NEWS_PATH}/`) ||
+    pathname?.startsWith("/share")
   ) {
     return null;
   }

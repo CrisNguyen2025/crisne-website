@@ -116,21 +116,21 @@ describe("Private App Middleware Auth Guard", () => {
     expect(callbackUrl).toBe("/share?url=https%3A%2F%2Fyoutube.com%2Fwatch%3Fv%3Dabc&title=Test");
   });
 
-  it("callbackUrl for /feed-ingestion is just /feed-ingestion (no query string)", async () => {
-    const req = createRequest("/feed-ingestion");
-    const res = (await middleware(req, {} as never)) as Response;
-    expect(res.status).toBe(307);
-    const location = res.headers.get("location")!;
-    const locationUrl = new URL(location);
-    expect(locationUrl.searchParams.get("callbackUrl")).toBe("/feed-ingestion");
-  });
-
-  it("allows unauthenticated visitor access to public /news and /news/<slug>", async () => {
-    for (const path of ["/news", "/news/nextjs-cache-components-explained"]) {
+  it("redirects signed-out requests for /news pages to /login (ADR-0019: no public News)", async () => {
+    for (const path of ["/news", "/news/sources", "/news/nextjs-cache-components-explained"]) {
       const req = createRequest(path);
       const res = (await middleware(req, {} as never)) as Response;
-      expect(res.headers.get("location")).toBeNull();
+      expect(res.status).toBe(307);
+      const locationUrl = new URL(res.headers.get("location")!);
+      expect(locationUrl.pathname).toBe("/login");
+      expect(locationUrl.searchParams.get("callbackUrl")).toBe(path);
     }
+  });
+
+  it("lets the Owner open /news", async () => {
+    const req = createRequest("/news", { auth: { user: { email: "owner@example.com" } } });
+    const res = (await middleware(req, {} as never)) as Response;
+    expect(res.headers.get("location")).toBeNull();
   });
 
   describe("matcher", () => {
@@ -146,7 +146,7 @@ describe("Private App Middleware Auth Guard", () => {
     });
 
     it("still guards private pages and the share target", () => {
-      expect(runsMiddleware("/feed-ingestion")).toBe(true);
+      expect(runsMiddleware("/news")).toBe(true);
       expect(runsMiddleware("/share")).toBe(true);
       expect(runsMiddleware("/api/news")).toBe(true);
     });

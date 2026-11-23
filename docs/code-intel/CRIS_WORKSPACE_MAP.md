@@ -221,8 +221,7 @@ sequenceDiagram
 | `POST`   | `/api/roadmap-assistant/[...path]`              | None (Actor Header) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts#POST`              | Proxy to Python Service   |
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
-| `GET`    | `/feed-ingestion` · `/feed-ingestion/sources` · `/share` | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
-| `GET`    | `/news` · `/news/[slug]`                        | Public (noindex)    | `private-news`           | `app/(public-news)/**`                                           | Public News Reader        |
+| `GET`    | `/news` · `/news/sources` · `/share` | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
 | `POST`   | `/api/ingest`                                   | Owner Only          | `private-news`           | `app/api/ingest/route.ts#POST`                                   | `FLOW_NEWS_INGEST_PIPELINE` |
 | `GET`    | `/api/news` · `/api/news/[id]` · `/api/news/worker-health` | Owner Only | `private-news`       | `app/api/news/**`                                                | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `PATCH`  | `/api/news/[id]` · `DELETE /api/news/[id]` · `POST /api/news/mark-read` | Owner Only | `private-news` | `app/api/news/**`                                       | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
@@ -248,4 +247,4 @@ sequenceDiagram
 - **ADR-0014**: Topic ở `/[topicSlug]`, Lesson ở `/[topicSlug]/[lessonSlug]#[headingSlug]`; slug Topic không trùng route gốc (`lib/roadmap/paths.ts`); URL cũ 308 về URL mới.
 - **ADR-0016**: `news-ingest-worker` là service Python riêng, chỉ trích xuất và tóm tắt từng NewsItem; mọi suy luận đối chiếu với Lesson thuộc Abot.
 - **ADR-0017**: Provenance theo từng câu: marker rỗng `<span data-provenance-ref="<uuid>">` trong `RoadmapItem.content`, metadata ở `KnowledgeProvenance`; chỉ Owner thấy, nạp phía client (`useLessonProvenance`), không vào index Abot; marker mất thì thành "Nguồn tham khảo của bài" (`FLOW_NEWS_ADD_TO_LESSON`).
-- **ADR-0018**: Site chỉ dành cho Owner, trừ `/login` và Public News `/news`; route riêng tư tự kiểm `requireWriteAccess` vì middleware cho qua request có header key.
+- **ADR-0019** (thay ADR-0018): Site chỉ dành cho Owner, trừ `/login`; không còn Public News, `/feed-ingestion` redirect sang `/news`; route riêng tư tự kiểm `requireWriteAccess` vì middleware cho qua request có header key.

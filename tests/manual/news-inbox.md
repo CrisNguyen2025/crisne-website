@@ -1,6 +1,6 @@
 # Feed Ingestion: hộp chờ xử lý (bố cục A+B) và luồng thêm link
 
-Phạm vi: `/feed-ingestion` sau TASK-news-inbox-ui-001 (đổi URL từ `/news` → `/feed-ingestion`). Gồm danh sách bên trái, panel xử lý bên phải, các tab Chờ xử lý / Để sau / Bỏ qua / Tất cả, và luồng Thêm link → worker → tóm tắt.
+Phạm vi: `/news` (ADR-0019, TASK-owner-only-news-001: inbox về lại `/news`, `/feed-ingestion` redirect sang; trước đó TASK-news-inbox-ui-001 đổi `/news` → `/feed-ingestion`). Gồm danh sách bên trái, panel xử lý bên phải, các tab Chờ xử lý / Để sau / Bỏ qua / Tất cả, và luồng Thêm link → worker → tóm tắt.
 
 File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsReaderPanel.tsx`, `NewsDecisionBar.tsx`, `lib/news/queries.ts`, `lib/news/schemas.ts`, `lib/news/paths.ts`.
 
@@ -8,14 +8,29 @@ File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsRead
 
 | ID | Bước | Kỳ vọng |
 |---|---|---|
-| N1 | Mở `/feed-ingestion` ở 1280px | Danh sách 520px bên trái, panel bài đầu tiên bên phải, thanh Bỏ qua / Để sau ở đáy panel, không cuộn ngang |
+| N1 | Mở `/news` ở 1280px | Danh sách 520px bên trái, panel bài đầu tiên bên phải, thanh Bỏ qua / Để sau ở đáy panel, không cuộn ngang |
 | N2 | Trong panel bấm Để sau | PATCH `{ isSaved: true }`, bài sang tab Để sau, panel tự chuyển sang bài kế |
 | N3 | Tab Để sau → Đưa lại Chờ xử lý | PATCH `{ isSaved: false }`, số đếm về như cũ |
-| N4 | Mở `/feed-ingestion` ở 375px, chạm một bài | Danh sách ẩn, màn xử lý có "← Danh sách", nút quyết định nằm một hàng |
+| N4 | Mở `/news` ở 375px, chạm một bài | Danh sách ẩn, màn xử lý có "← Danh sách", nút quyết định nằm một hàng |
 | N5 | Thêm link `https://www.tiktok.com/@hudesign/video/7709495044721462536?is_from_webapp=1&sender_device=pc` | `/api/ingest` 202; bài hiện đầu danh sách với nhãn Trong hàng đợi → Đang tóm tắt; dải "1 link đang được tóm tắt"; xong thì có tiêu đề, TL;DR, ý chính, tag |
 | N6 | Bấm Để sau ngay khi vừa mở bài (trong 3s đầu) | Nút không bị khoá vì auto-read |
+| N11 | Mở `/feed-ingestion?view=saved` và `/feed-ingestion/sources` | 308 sang `/news?view=saved` và `/news/sources`, giữ query |
+| N12 | Mở `/news`, `/news/sources`, `/news/<slug-bất-kỳ>` khi chưa đăng nhập (cửa sổ ẩn danh) | 307 về `/login?callbackUrl=<đường dẫn>`, không còn trang tin công khai |
+| N13 | Reader của một bài `ready` | Không còn nút "Public"/"Đang public", danh sách không còn badge Public; "Đưa vào Lesson" vẫn có |
+| N14 | Shortcut PWA (cài lại app trên Android) "Feed Ingestion" và "RSS Sources" | Mở đúng `/news` và `/news/sources` |
 
 ## Ghi kết quả
+
+### Lần chạy 2026-11-23 (chưa commit, nhánh `feat/owner-only-news` @ `4a3a8a2` + working tree, TASK-owner-only-news-001)
+
+Môi trường: `yarn dev` cổng 3334, `DEV_OWNER_BYPASS`, `TURSO_DATABASE_URL` để trống, SQLite copy trong scratchpad (đã `prisma db push`, 1 bài `ready` có `isPublic=1` để kiểm UI không còn hiện).
+
+| ID | Kết quả | Ghi chú |
+|---|---|---|
+| N11 | Pass | `curl`: `/feed-ingestion?view=saved` → 308 `/news?view=saved`; `/feed-ingestion/sources` → 308 `/news/sources`; `/news`, `/news/sources` 200; `/news/<slug>` 404 |
+| N12 | Chưa chạy (trình duyệt) | Server dùng `DEV_OWNER_BYPASS`. Đã khoá bằng test: `tests/route/middleware.test.ts` › "redirects signed-out requests for /news pages to /login" |
+| N13 | Pass | Danh sách không có badge Public; reader có "Mở nguồn gốc", "Đưa vào Lesson", "Xoá", không có "Public"/"Đang public" |
+| N14 | Chưa chạy | Cần Android thật |
 
 ### Lần chạy 2026-11-22 (chưa commit, nhánh `feat/news-ingest-phase-1` @ `a968b26` + working tree)
 

@@ -36,8 +36,6 @@ function makeItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
     reviewStatus: "draft",
     readState: "read",
     isSaved: false,
-    isPublic: false,
-    publicAt: null,
     extractionMethod: "article",
     extractionError: null,
     possibleDuplicateOfId: null,
@@ -63,7 +61,6 @@ function renderPanel(item: NewsItemDto) {
       onDelete={noop}
       onUpdateTags={asyncNoop}
       onSaveNote={asyncNoop}
-      onTogglePublic={noop}
       onOpenExternal={noop}
     />
   );

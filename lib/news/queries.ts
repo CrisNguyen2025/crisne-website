@@ -282,33 +282,15 @@ export async function getNewsItemById(id: string): Promise<NewsItemDto | null> {
   return row ? serializeNewsItem(row) : null;
 }
 
-export class NewsItemNotPublishableError extends Error {
-  readonly status = 400;
-
-  constructor(message = "Chỉ public được bài đã tóm tắt xong và chưa bị bỏ qua.") {
-    super(message);
-    this.name = "NewsItemNotPublishableError";
-  }
-}
-
 export async function updateNewsItem(
   id: string,
   input: UpdateNewsItemRequest
 ): Promise<NewsItemDto | null> {
   const existing = await prisma.newsItem.findUnique({
     where: { id },
-    select: { id: true, ingestStatus: true, reviewStatus: true, isPublic: true },
+    select: { id: true },
   });
   if (!existing) return null;
-
-  // Only a finished, non-dismissed summary may go public; unpublishing is always allowed
-  const nextReviewStatus = input.reviewStatus ?? existing.reviewStatus;
-  if (
-    input.isPublic === true &&
-    (existing.ingestStatus !== "ready" || nextReviewStatus === "dismissed")
-  ) {
-    throw new NewsItemNotPublishableError();
-  }
 
   const data: Prisma.NewsItemUpdateInput = {};
   if (input.readState !== undefined) {
@@ -319,10 +301,6 @@ export async function updateNewsItem(
   }
   if (input.reviewStatus !== undefined) {
     data.reviewStatus = input.reviewStatus;
-  }
-  if (input.isPublic !== undefined && input.isPublic !== existing.isPublic) {
-    data.isPublic = input.isPublic;
-    data.publicAt = input.isPublic ? new Date() : null;
   }
   if (input.tags !== undefined) {
     data.tags = JSON.stringify(normalizeTagList(input.tags, MAX_ITEM_TAGS));

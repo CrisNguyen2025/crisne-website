@@ -49,14 +49,14 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Feed Ingestion",
         short_name: "Ingest",
         description: "Open private feed ingestion inbox",
-        url: "/feed-ingestion",
+        url: "/news",
         icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {
         name: "RSS Sources",
         short_name: "Sources",
         description: "Manage RSS & Atom news sources",
-        url: "/feed-ingestion/sources",
+        url: "/news/sources",
         icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
       },
       {

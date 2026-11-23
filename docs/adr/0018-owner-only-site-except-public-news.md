@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0019
 ---
 
 # Site chỉ dành cho Owner, trừ Public News

@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ExternalLink,
-  Globe,
   Loader2,
   Plus,
   Save,
@@ -34,7 +33,6 @@ interface NewsReaderPanelProps {
   onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
   onSaveNote: (item: NewsItemDto, note: string | null) => Promise<void>;
-  onTogglePublic: (item: NewsItemDto) => void;
   onOpenExternal: (item: NewsItemDto) => void;
   /** Opens another item by id in the reader, e.g. the possible duplicate */
   onOpenItem?: (itemId: string) => void;
@@ -80,13 +78,12 @@ export function NewsReaderPanel({
   onDelete,
   onUpdateTags,
   onSaveNote,
-  onTogglePublic,
   onOpenExternal,
   onOpenItem,
   layout = "split",
 }: NewsReaderPanelProps) {
   const isStacked = layout === "stacked";
-  const isPublishable = item.ingestStatus === "ready" && item.reviewStatus !== "dismissed";
+  const isSummaryReady = item.ingestStatus === "ready" && item.reviewStatus !== "dismissed";
   const [tagInput, setTagInput] = useState("");
   const [noteDraft, setNoteDraft] = useState(item.personalNote ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -210,26 +207,7 @@ export function NewsReaderPanel({
               <ExternalLink className="size-4" />
               Mở nguồn gốc
             </a>
-            <button
-              type="button"
-              disabled={isUpdating || (!item.isPublic && !isPublishable)}
-              onClick={() => onTogglePublic(item)}
-              aria-pressed={item.isPublic}
-              title={
-                item.isPublic
-                  ? "Gỡ bài khỏi trang public"
-                  : isPublishable
-                    ? "Cho Visitor xem bài này ở trang public"
-                    : "Chỉ public được bài đã tóm tắt xong"
-              }
-              className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm transition-[background-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${
-                item.isPublic ? "font-medium text-[var(--status-known)]" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Globe className="size-4" />
-              {item.isPublic ? "Đang public" : "Public"}
-            </button>
-            {isPublishable && <AddToLessonSheet item={item} isDisabled={isUpdating || isDeleting} />}
+            {isSummaryReady && <AddToLessonSheet item={item} isDisabled={isUpdating || isDeleting} />}
             {confirmDelete ? (
               <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
                 <button

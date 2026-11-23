@@ -102,10 +102,6 @@ Một bài hoặc link được thu thập từ News Source, do Owner chia sẻ 
 _Also_: tin
 _Avoid_: article, bookmark, acquired item
 
-**Public News**:
-Trang chỉ đọc cho Visitor, gồm những News Item mà Owner cho phép công khai; là phần duy nhất của site Visitor xem được.
-_Avoid_: picks, news feed
-
 **Provenance**:
 Nguồn gốc của một câu trong Lesson: câu đó lấy từ News Item nào, đoạn trích làm căn cứ và thời điểm thu thập. Chỉ Owner thấy.
 _Also_: nguồn gốc

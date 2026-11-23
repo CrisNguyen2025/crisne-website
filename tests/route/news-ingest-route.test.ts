@@ -132,13 +132,11 @@ describe("news ingest & job routes", () => {
     const shareData = await shareRes.json();
     expect(shareData.item.reviewStatus).toBe("published");
 
-    // Links the Owner added or shared start public; cron drafts stay private until reviewed
-    for (const data of [manualData, shareData]) {
-      expect(data.item.isPublic).toBe(true);
-      expect(data.item.publicAt).not.toBeNull();
+    // ADR-0019: News Items are never public, so the DTO no longer exposes isPublic/publicAt
+    for (const data of [manualData, shareData, cronData]) {
+      expect(data.item).not.toHaveProperty("isPublic");
+      expect(data.item).not.toHaveProperty("publicAt");
     }
-    expect(cronData.item.isPublic).toBe(false);
-    expect(cronData.item.publicAt).toBeNull();
   });
 
   it("claims a job atomically, validates summary with Zod, and detects 72h title similarity", async () => {

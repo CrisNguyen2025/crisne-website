@@ -237,21 +237,21 @@
     {
       "id": "private-news",
       "name": "Private News Reader & Ingest Pipeline",
-      "summary": "Kho đọc tin private (/feed-ingestion) chỉ dành cho Owner (noindex) và trang public /news cho Visitor. Nhận link qua Paste UI, Android PWA Share Target (/share + sw.js) và RSS/Atom Cron (ETag/304), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
+      "summary": "Kho đọc tin private (/news, /feed-ingestion redirect sang) chỉ dành cho Owner (noindex); không có trang public (ADR-0019). Nhận link qua Paste UI, Android PWA Share Target (/share + sw.js) và RSS/Atom Cron (ETag/304), validate whitelist + chống SSRF + dedupe canonical URL/tiêu đề trên Turso, xử lý qua Python worker tách riêng (news-ingest-worker/) theo 3 tầng rẻ -> đắt và LLM JSON Zod không dùng agent.",
       "cohesionScore": 0.93,
       "adrs": [
         "ADR-0005",
         "ADR-0016",
-        "ADR-0017"
+        "ADR-0017",
+        "ADR-0019"
       ],
       "glossary": [
-        "Owner",
-        "Visitor"
+        "Owner"
       ],
       "keyFiles": [
         "app/(news)/layout.tsx",
-        "app/(news)/feed-ingestion/page.tsx",
-        "app/(news)/feed-ingestion/sources/page.tsx",
+        "app/(news)/news/page.tsx",
+        "app/(news)/news/sources/page.tsx",
         "components/news/NewsFeedClient.tsx",
         "components/news/NewsCard.tsx",
         "components/news/NewsReaderPanel.tsx",
@@ -290,11 +290,6 @@
         "app/(news)/share/page.tsx",
         "components/news/ShareTargetClient.tsx",
         "public/sw.js",
-        "app/(public-news)/layout.tsx",
-        "app/(public-news)/news/page.tsx",
-        "app/(public-news)/news/[slug]/page.tsx",
-        "lib/news/public-queries.ts",
-        "lib/auth/public-paths.ts",
         "components/news/AddToLessonSheet.tsx",
         "app/api/news/[id]/integrate/route.ts",
         "lib/provenance/markers.ts"
@@ -519,12 +514,12 @@
     {
       "id": "EP_UI_NEWS",
       "type": "page",
-      "path": "/feed-ingestion",
+      "path": "/news",
       "method": "GET",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Trang đọc tin private (/feed-ingestion, noindex) bố cục 2 cột danh sách + NewsReaderPanel, 3 tab (Chờ xử lý / Đã xử lý / Tất cả), bộ lọc nuqs và modal dán URL",
-      "handler": "app/(news)/feed-ingestion/page.tsx#FeedIngestionPage",
+      "summary": "Trang đọc tin private (/news, noindex; /feed-ingestion redirect 308 sang) bố cục 2 cột danh sách + NewsReaderPanel, 3 tab (Chờ xử lý / Đã xử lý / Tất cả), bộ lọc nuqs và modal dán URL",
+      "handler": "app/(news)/news/page.tsx#FeedIngestionPage",
       "triggersFlow": "FLOW_NEWS_FEED_BROWSE_AND_STATE"
     },
     {
@@ -629,12 +624,12 @@
     {
       "id": "EP_UI_NEWS_SOURCES",
       "type": "page",
-      "path": "/feed-ingestion/sources",
+      "path": "/news/sources",
       "method": "GET",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Trang mở thẳng ngăn quản lý nguồn RSS (/feed-ingestion/sources)",
-      "handler": "app/(news)/feed-ingestion/sources/page.tsx#FeedIngestionSourcesPage",
+      "summary": "Trang mở thẳng ngăn quản lý nguồn RSS (/news/sources)",
+      "handler": "app/(news)/news/sources/page.tsx#FeedIngestionSourcesPage",
       "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
     },
     {
@@ -779,28 +774,6 @@
       "summary": "Cập nhật nội dung/trạng thái mục Owner Memory (duyệt pending -> active tự archive mục thay thế, ADR-0015)",
       "handler": "app/api/v1/memories/[id]/route.ts#PATCH",
       "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
-    },
-    {
-      "id": "EP_UI_PUBLIC_NEWS_LIST",
-      "type": "page",
-      "path": "/news",
-      "method": "GET",
-      "authRequirement": "public",
-      "domainId": "private-news",
-      "summary": "Trang public chỉ đọc (noindex) liệt kê bài Owner đã bật Public: tiêu đề, domain, ngày, TL;DR; link trỏ tới /news/[slug]",
-      "handler": "app/(public-news)/news/page.tsx#PublicNewsListPage",
-      "triggersFlow": "FLOW_NEWS_PUBLIC_READ"
-    },
-    {
-      "id": "EP_UI_PUBLIC_NEWS_DETAIL",
-      "type": "page",
-      "path": "/news/[slug]",
-      "method": "GET",
-      "authRequirement": "public",
-      "domainId": "private-news",
-      "summary": "Chi tiết bài public theo slug (hỗ trợ id cũ 308 redirect sang /news/[slug]): TL;DR, Ý chính có highlight keyword, link bài gốc, nhãn tóm tắt bằng AI; bài không public trả 404",
-      "handler": "app/(public-news)/news/[slug]/page.tsx#PublicNewsDetailPage",
-      "triggersFlow": "FLOW_NEWS_PUBLIC_READ"
     }
   ],
   "executionFlows": [
@@ -1280,7 +1253,7 @@
       "name": "Nạp URL, trích xuất 3 tầng và tóm tắt tin private",
       "domainId": "private-news",
       "actor": "Owner",
-      "trigger": "Owner dán URL tại /feed-ingestion hoặc gọi POST /api/ingest",
+      "trigger": "Owner dán URL tại /news hoặc gọi POST /api/ingest",
       "preconditions": [
         "Quyền ghi Owner (NextAuth session hoặc ADMIN_API_KEY)",
         "URL thuộc whitelist domain và không trỏ vào IP nội bộ (SSRF)"
@@ -1351,7 +1324,7 @@
       "name": "Lọc feed, đọc tóm tắt và cập nhật trạng thái NewsItem",
       "domainId": "private-news",
       "actor": "Owner",
-      "trigger": "Owner mở /feed-ingestion (tab Chờ xử lý / Đã xử lý / Tất cả), bấm dòng NewsCard mở NewsReaderPanel, quyết định Bỏ qua trên NewsDecisionBar hoặc Xoá hẳn",
+      "trigger": "Owner mở /news (tab Chờ xử lý / Đã xử lý / Tất cả), bấm dòng NewsCard mở NewsReaderPanel, quyết định Bỏ qua trên NewsDecisionBar hoặc Xoá hẳn",
       "preconditions": [
         "Quyền Owner qua Google OAuth session hoặc DEV_OWNER_BYPASS"
       ],
@@ -1401,7 +1374,7 @@
       "name": "Đưa ý của NewsItem vào Lesson kèm Provenance, xem nguồn trên trang Lesson",
       "domainId": "private-news",
       "actor": "Owner",
-      "trigger": "Owner bấm 'Đưa vào Lesson' trong NewsReaderPanel ở /feed-ingestion (chỉ với bài ready, chưa dismissed)",
+      "trigger": "Owner bấm 'Đưa vào Lesson' trong NewsReaderPanel ở /news (chỉ với bài ready, chưa dismissed)",
       "preconditions": [
         "Quyền Owner qua Google OAuth session, admin key hoặc DEV_OWNER_BYPASS",
         "NewsItem ingestStatus='ready' và reviewStatus khác 'dismissed'"
@@ -1459,7 +1432,7 @@
         "ADR-0010",
         "ADR-0014",
         "ADR-0017",
-        "ADR-0018"
+        "ADR-0019"
       ]
     },
     {
@@ -1552,7 +1525,7 @@
           "order": 4,
           "layer": "Presentation_UI",
           "component": "components/news/ShareTargetClient.tsx",
-          "action": "On mount gọi ingestNewsUrl với origin='share', spinner→thành công→redirect /feed-ingestion sau 2.5s",
+          "action": "On mount gọi ingestNewsUrl với origin='share', spinner→thành công→redirect /news sau 2.5s",
           "callsNext": "logic/news/newsService.ts#ingestNewsUrl",
           "dataPassed": "{ url, origin: 'share' }"
         },
@@ -1697,76 +1670,6 @@
         "ADR-0010",
         "ADR-0012",
         "ADR-0015"
-      ]
-    },
-    {
-      "id": "FLOW_NEWS_PUBLIC_READ",
-      "name": "Owner public từng bài News, Visitor đọc ở /news/[slug]",
-      "domainId": "private-news",
-      "actor": "Owner | Visitor",
-      "trigger": "Owner bấm Public trong NewsReaderPanel; Visitor mở /news hoặc /news/[slug]",
-      "preconditions": [
-        "Bài đã ingestStatus='ready' và chưa dismissed thì mới bật Public được"
-      ],
-      "steps": [
-        {
-          "order": 1,
-          "layer": "Presentation_UI",
-          "component": "components/news/NewsReaderPanel.tsx",
-          "action": "Owner bấm Public / Đang public",
-          "callsNext": "components/news/NewsFeedClient.tsx#handleTogglePublic",
-          "dataPassed": "{ isPublic }"
-        },
-        {
-          "order": 2,
-          "layer": "Routing_Gateway",
-          "component": "app/api/news/[id]/route.ts",
-          "functionOrMethod": "PATCH",
-          "action": "requireWriteAccess, validate UpdateNewsItemSchema, trả 400 khi bài chưa publish được",
-          "callsNext": "lib/news/queries.ts#updateNewsItem",
-          "dataPassed": "UpdateNewsItemRequest"
-        },
-        {
-          "order": 3,
-          "layer": "Domain_Logic",
-          "component": "lib/news/queries.ts",
-          "functionOrMethod": "updateNewsItem",
-          "action": "Đặt isPublic và publicAt (xoá khi gỡ), ném NewsItemNotPublishableError nếu bài chưa ready hoặc đã dismissed",
-          "callsNext": null,
-          "dataPassed": "NewsItem"
-        },
-        {
-          "order": 4,
-          "layer": "Routing_Gateway",
-          "component": "middleware.ts",
-          "action": "isPublicPagePath cho Visitor chưa đăng nhập vào đúng /news và /news/*; mọi path khác (kể cả /feed-ingestion, /picks) vẫn Owner-only",
-          "callsNext": "lib/news/public-queries.ts#listPublicNewsItems",
-          "dataPassed": "pathname"
-        },
-        {
-          "order": 5,
-          "layer": "Data_Access",
-          "component": "lib/news/public-queries.ts",
-          "functionOrMethod": "listPublicNewsItems",
-          "action": "Server Component đọc DB với select allowlist (bao gồm slug, không personalNote, tags, sourceId), lọc isPublic + ready + chưa dismissed; getPublicNewsItem tìm theo slug trước rồi fallback id (trang chi tiết permanentRedirect 308 sang /news/[slug] khi mở bằng id)",
-          "callsNext": null,
-          "dataPassed": "PublicNewsItemDto"
-        }
-      ],
-      "invariants": [
-        "Bài mới tạo qua enqueueNewsUrl (RSS, dán link, share) mặc định isPublic=true; bài tạo trước thay đổi này giữ private",
-        "Visitor không gọi API /api/news/*; trang public đọc DB trực tiếp qua select allowlist",
-        "/news giữ noindex vì nội dung là tóm tắt AI từ site khác",
-        "Abot (SiteChatbot) ẩn trên /news vì Visitor ẩn danh không gọi được proxy",
-        "NewsItem.slug được cấp duy nhất một lần khi có tiêu đề không phải URL và giữ nguyên qua reingest"
-      ],
-      "failureModes": [
-        "Bài bị gỡ public hoặc dismissed: /news/[slug] trả 404",
-        "Chưa migrate cột slug hoặc isPublic/publicAt trên Turso: query NewsItem lỗi (chạy yarn db:news-public --apply và yarn db:news-slug --apply)"
-      ],
-      "relatedAdrs": [
-        "ADR-0002",
-        "ADR-0005"
       ]
     }
   ],
@@ -1916,9 +1819,8 @@
       "invariants": [
         "canonicalUrl là duy nhất để dedupe ở mức URL",
         "Chỉ bài origin='cron' vào draft; share và manual vào published",
-        "Chỉ bài isPublic=true, ingestStatus='ready' và chưa dismissed mới hiện ở /news; publicAt đặt khi bật, xoá khi tắt",
-        "slug duy nhất toàn cục, cấp một lần từ tiêu đề (fallback domain/'news') khi complete và giữ nguyên qua reingest",
-        "Bài mới từ share/manual mặc định isPublic=true; bài cron mặc định isPublic=false cho tới khi Owner bật",
+        "slug duy nhất toàn cục, cấp một lần từ tiêu đề (fallback domain/'news') khi complete và giữ nguyên qua reingest (chưa có route dùng slug sau ADR-0019)",
+        "isPublic/publicAt còn trong schema nhưng app không đọc hay ghi (ADR-0019); giữ để không phải migration",
         "extractedAt do Next.js đóng dấu khi job complete ready/partial"
       ]
     },
@@ -2101,9 +2003,9 @@
       "summary": "Mỗi câu có nguồn trong Lesson gắn marker rỗng data-provenance-ref (UUID); metadata trong KnowledgeProvenance; chỉ Owner thấy, nạp phía client, không vào index Abot; marker mất thì giữ thành nguồn của bài."
     },
     {
-      "ruleId": "ADR-0018",
-      "title": "Owner-only site except Public News",
-      "summary": "Middleware bắt đăng nhập mọi trang trừ /login và /news; route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key."
+      "ruleId": "ADR-0019",
+      "title": "Owner-only site, no Public News",
+      "summary": "Middleware bắt đăng nhập mọi trang trừ /login (không còn trang public); route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key."
     }
   ]
 }

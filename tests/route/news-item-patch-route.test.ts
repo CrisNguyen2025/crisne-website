@@ -359,44 +359,31 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
     expect((await unreadAfter.json()).items).toHaveLength(0);
   });
 
-  it("toggles isPublic with publicAt and rejects publishing unfinished or dismissed items", async () => {
-    const createItem = (overrides: { canonicalUrl: string; ingestStatus: string; reviewStatus?: string }) =>
-      prisma.newsItem.create({
-        data: {
-          sourceUrl: overrides.canonicalUrl,
-          canonicalUrl: overrides.canonicalUrl,
-          domain: "nextjs.org",
-          platform: "article",
-          origin: "cron",
-          title: "Next.js 16.4",
-          ingestStatus: overrides.ingestStatus,
-          reviewStatus: overrides.reviewStatus ?? "draft",
-        },
-      });
-    const ready = await createItem({ canonicalUrl: "https://nextjs.org/blog/a", ingestStatus: "ready" });
-    const queued = await createItem({ canonicalUrl: "https://nextjs.org/blog/b", ingestStatus: "queued" });
-    const dismissed = await createItem({
-      canonicalUrl: "https://nextjs.org/blog/c",
-      ingestStatus: "ready",
-      reviewStatus: "dismissed",
+  it("ignores isPublic in PATCH bodies (ADR-0019)", async () => {
+    const item = await prisma.newsItem.create({
+      data: {
+        sourceUrl: "https://nextjs.org/blog/a",
+        canonicalUrl: "https://nextjs.org/blog/a",
+        domain: "nextjs.org",
+        platform: "article",
+        origin: "cron",
+        title: "Next.js 16.4",
+        ingestStatus: "ready",
+        reviewStatus: "draft",
+      },
     });
-    const patch = (id: string, body: unknown) =>
-      newsItemPatch(jsonRequest(`http://localhost/api/news/${id}`, "PATCH", body), idContext(id));
+    const patch = (body: unknown) =>
+      newsItemPatch(jsonRequest(`http://localhost/api/news/${item.id}`, "PATCH", body), idContext(item.id));
 
-    const publishRes = await patch(ready.id, { isPublic: true });
-    expect(publishRes.status).toBe(200);
-    const published = (await publishRes.json()).item;
-    expect(published.isPublic).toBe(true);
-    expect(published.publicAt).not.toBeNull();
+    // isPublic alone is stripped, leaving an empty body
+    expect((await patch({ isPublic: true })).status).toBe(400);
 
-    const unpublishRes = await patch(ready.id, { isPublic: false });
-    const unpublished = (await unpublishRes.json()).item;
-    expect(unpublished.isPublic).toBe(false);
-    expect(unpublished.publicAt).toBeNull();
-
-    expect((await patch(queued.id, { isPublic: true })).status).toBe(400);
-    expect((await patch(dismissed.id, { isPublic: true })).status).toBe(400);
-    const stillPrivate = await prisma.newsItem.findUniqueOrThrow({ where: { id: queued.id } });
-    expect(stillPrivate.isPublic).toBe(false);
+    // Alongside a real field, isPublic is dropped and the rest still applies
+    const res = await patch({ isPublic: true, isSaved: true });
+    expect(res.status).toBe(200);
+    expect((await res.json()).item.isSaved).toBe(true);
+    const stored = await prisma.newsItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(stored.isPublic).toBe(false);
+    expect(stored.publicAt).toBeNull();
   });
 });

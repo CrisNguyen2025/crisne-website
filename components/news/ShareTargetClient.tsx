@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FEED_INGESTION_PATH } from "@/lib/news/paths";
+import { NEWS_PATH } from "@/lib/news/paths";
 import { ingestNewsUrl } from "@/logic/news/newsService";
 
 type ShareState =
@@ -33,7 +33,7 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
             : "Đã thêm vào hàng đợi xử lý.";
         setState({ status: "success", message: msg });
         // Redirect to Feed Ingestion after 2.5s
-        setTimeout(() => router.replace(FEED_INGESTION_PATH), 2500);
+        setTimeout(() => router.replace(NEWS_PATH), 2500);
       })
       .catch((err: unknown) => {
         const message =
@@ -51,7 +51,7 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
             ? "Bài này đã có trong hàng đợi."
             : "Đã thêm vào hàng đợi xử lý.";
         setState({ status: "success", message: msg });
-        setTimeout(() => router.replace(FEED_INGESTION_PATH), 2500);
+        setTimeout(() => router.replace(NEWS_PATH), 2500);
       })
       .catch((err: unknown) => {
         const message =
@@ -78,7 +78,7 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
               Đang chuyển về Feed Ingestion…
             </p>
             <Link
-              href={FEED_INGESTION_PATH}
+              href={NEWS_PATH}
               className="text-xs text-primary underline underline-offset-2 transition-opacity duration-150 hover:opacity-80"
             >
               Mở ngay
@@ -100,7 +100,7 @@ export function ShareTargetClient({ url }: ShareTargetClientProps) {
                 Thử lại
               </button>
               <Link
-                href={FEED_INGESTION_PATH}
+                href={NEWS_PATH}
                 className="rounded-md border border-border px-3 py-1.5 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
               >
                 Về Feed Ingestion
