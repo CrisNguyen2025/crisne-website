@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Loader2, Plus } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import * as newsService from "@/logic/news/newsService";
 
 interface QuickPasteDialogProps {
@@ -18,6 +19,7 @@ interface PasteResultRow {
 }
 
 export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialogProps) {
+  const { toast } = useToast();
   const [urlsText, setUrlsText] = useState("");
   const [forceDeep, setForceDeep] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,14 +81,26 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
       }
     }
 
-    setResults(batchResults);
     if (anyAccepted) {
       onIngested();
     }
-    if (batchResults.every((r) => r.kind !== "error")) {
+    const allSucceeded = batchResults.length > 0 && batchResults.every((r) => r.kind !== "error");
+    if (allSucceeded) {
       setUrlsText("");
       setForceDeep(false);
+      setResults([]);
+      setIsSubmitting(false);
+      toast(
+        batchResults.length === 1
+          ? batchResults[0].message
+          : `Đã thêm ${batchResults.length} link vào kho tin`,
+        "success"
+      );
+      onClose();
+      return;
     }
+
+    setResults(batchResults);
     setIsSubmitting(false);
   };
 

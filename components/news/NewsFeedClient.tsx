@@ -43,6 +43,7 @@ import type {
 } from "@/lib/news/schemas";
 import * as newsService from "@/logic/news/newsService";
 import { useToast } from "@/components/ui/toast";
+import { MobileNewsDrawer } from "./MobileNewsDrawer";
 import { NewsCard } from "./NewsCard";
 import { NewsReaderPanel, NewsReaderSkeleton } from "./NewsReaderPanel";
 import { QuickPasteDialog } from "./QuickPasteDialog";
@@ -307,8 +308,10 @@ export function NewsFeedClient({
     return isWide ? (data.items[0] ?? null) : null;
   }, [data.items, isWide, selectedItemId]);
 
+  const isNarrowDrawerOpen =
+    !isWide && !isSwitchingView && Boolean(selectedItem) && isPanelOpenOnNarrow;
   const isPanelVisible =
-    !isSwitchingView && Boolean(selectedItem) && (isWide || isPanelOpenOnNarrow);
+    isNarrowDrawerOpen || (isWide && !isSwitchingView && Boolean(selectedItem));
 
   useLayoutEffect(() => {
     if (isWide || isPanelVisible) return;
@@ -655,9 +658,36 @@ export function NewsFeedClient({
           ? "Chưa gắn worker"
           : "Worker";
 
+  const renderReaderPanel = (item: NewsItemDto) => (
+    <NewsReaderPanel
+      key={item.id}
+      item={item}
+      duplicateTitle={
+        item.possibleDuplicateOfId ? data.duplicateTitles[item.possibleDuplicateOfId] : undefined
+      }
+      isUpdating={busyItemId === item.id}
+      isReingesting={reingestingId === item.id}
+      isDeleting={deletingId === item.id}
+      onBack={() => setIsPanelOpenOnNarrow(false)}
+      onToggleRead={handleToggleRead}
+      onToggleSave={handleToggleSave}
+      onDismiss={handleDismiss}
+      onReopen={handleReopen}
+      onDelete={handleDelete}
+      onUpdateTags={handleUpdateTags}
+      onSaveNote={handleSaveNote}
+      onReingest={handleReingest}
+      onOpenExternal={handleOpenExternal}
+    />
+  );
+
   return (
     <div className="flex h-dvh min-h-0 flex-col">
-      <header className={`${isPanelVisible ? "hidden xl:block" : ""} shrink-0 border-b border-border bg-background`}>
+      <header
+        inert={isNarrowDrawerOpen || undefined}
+        aria-hidden={isNarrowDrawerOpen || undefined}
+        className="shrink-0 border-b border-border bg-background"
+      >
         <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
           <Link
             href="/"
@@ -774,7 +804,9 @@ export function NewsFeedClient({
       <div className="flex min-h-0 flex-1">
         <section
           aria-label="Danh sách tin"
-          className={`${isPanelVisible ? "hidden xl:flex" : "flex"} w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0`}
+          inert={isNarrowDrawerOpen || undefined}
+          aria-hidden={isNarrowDrawerOpen || undefined}
+          className="flex w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0"
         >
           <div className="shrink-0 border-b border-border px-4 sm:px-5">
             <div className="flex items-center gap-2">
@@ -1077,29 +1109,8 @@ export function NewsFeedClient({
           </div>
         </section>
 
-        {isPanelVisible && selectedItem ? (
-          <NewsReaderPanel
-            key={selectedItem.id}
-            item={selectedItem}
-            duplicateTitle={
-              selectedItem.possibleDuplicateOfId
-                ? data.duplicateTitles[selectedItem.possibleDuplicateOfId]
-                : undefined
-            }
-            isUpdating={busyItemId === selectedItem.id}
-            isReingesting={reingestingId === selectedItem.id}
-            isDeleting={deletingId === selectedItem.id}
-            onBack={() => setIsPanelOpenOnNarrow(false)}
-            onToggleRead={handleToggleRead}
-            onToggleSave={handleToggleSave}
-            onDismiss={handleDismiss}
-            onReopen={handleReopen}
-            onDelete={handleDelete}
-            onUpdateTags={handleUpdateTags}
-            onSaveNote={handleSaveNote}
-            onReingest={handleReingest}
-            onOpenExternal={handleOpenExternal}
-          />
+        {isWide && !isSwitchingView && selectedItem ? (
+          renderReaderPanel(selectedItem)
         ) : (!isSwitchingView && data.items.length > 0) || (!loadError && (isSwitchingView || isLoading)) ? (
           // Shown while the list or the wide-screen check is still settling, so the panel fades in
           <NewsReaderSkeleton />
@@ -1107,6 +1118,15 @@ export function NewsFeedClient({
           <div className="hidden flex-1 bg-card xl:block" />
         )}
       </div>
+
+      <MobileNewsDrawer
+        open={isNarrowDrawerOpen}
+        item={selectedItem}
+        label={(item) => item.title}
+        onClose={() => setIsPanelOpenOnNarrow(false)}
+      >
+        {(item) => renderReaderPanel(item)}
+      </MobileNewsDrawer>
 
       <QuickPasteDialog
         open={isPasteOpen}

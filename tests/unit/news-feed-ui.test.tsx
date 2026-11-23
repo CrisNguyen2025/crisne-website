@@ -345,15 +345,16 @@ describe("news feed UI components", () => {
     expect(screen.queryByLabelText("Đang tải bài")).toBeNull();
   });
 
-  it("submits pasted URLs in QuickPasteDialog and reports results", async () => {
+  it("submits pasted URLs in QuickPasteDialog and closes modal on success", async () => {
     const queuedItem = makeItem({ id: "news-new", domain: "github.com" });
     const ingestSpy = vi
       .spyOn(newsService, "ingestNewsUrl")
       .mockResolvedValue({ status: "queued", item: queuedItem, jobId: "job-1" });
     const onIngested = vi.fn();
+    const onClose = vi.fn();
 
     render(
-      <QuickPasteDialog open={true} onClose={vi.fn()} onIngested={onIngested} />
+      <QuickPasteDialog open={true} onClose={onClose} onIngested={onIngested} />
     );
 
     const textarea = screen.getByLabelText("Danh sách URL");
@@ -370,8 +371,31 @@ describe("news feed UI components", () => {
       });
     });
 
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
     expect(onIngested).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("Đã vào hàng đợi (github.com)")).toBeTruthy();
+  });
+
+  it("keeps QuickPasteDialog open and shows error when ingest fails", async () => {
+    vi.spyOn(newsService, "ingestNewsUrl").mockRejectedValue(
+      new Error("Domain chưa nằm trong whitelist")
+    );
+    const onIngested = vi.fn();
+    const onClose = vi.fn();
+
+    render(
+      <QuickPasteDialog open={true} onClose={onClose} onIngested={onIngested} />
+    );
+
+    fireEvent.change(screen.getByLabelText("Danh sách URL"), {
+      target: { value: "https://example.com/post" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Đưa vào hàng đợi" }));
+
+    expect(await screen.findByText("Domain chưa nằm trong whitelist")).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onIngested).not.toHaveBeenCalled();
   });
 
   it("renders SourcesManagerSheet, creates a source, and triggers manual cron sync", async () => {
