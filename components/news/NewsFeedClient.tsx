@@ -200,7 +200,6 @@ export function NewsFeedClient({
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
-  const [reingestingId, setReingestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
   const [workerHealth, setWorkerHealth] = useState<NewsWorkerHealthDto | null>(() =>
@@ -509,24 +508,6 @@ export function NewsFeedClient({
     [applyItemUpdate]
   );
 
-  const handleReingest = useCallback(
-    async (item: NewsItemDto) => {
-      setReingestingId(item.id);
-      try {
-        await newsService.reingestNewsItem(item.id, true);
-        await refreshFeed();
-        toast("Đã xếp hàng phân tích sâu lại", "success");
-      } catch (error) {
-        toast(
-          error instanceof Error ? error.message : "Không thể xếp hàng phân tích lại.",
-          "error"
-        );
-      } finally {
-        setReingestingId(null);
-      }
-    },
-    [refreshFeed, toast]
-  );
 
   const handleOpenExternal = useCallback(
     (item: NewsItemDto) => {
@@ -666,7 +647,6 @@ export function NewsFeedClient({
         item.possibleDuplicateOfId ? data.duplicateTitles[item.possibleDuplicateOfId] : undefined
       }
       isUpdating={busyItemId === item.id}
-      isReingesting={reingestingId === item.id}
       isDeleting={deletingId === item.id}
       onBack={() => setIsPanelOpenOnNarrow(false)}
       onToggleRead={handleToggleRead}
@@ -676,7 +656,6 @@ export function NewsFeedClient({
       onDelete={handleDelete}
       onUpdateTags={handleUpdateTags}
       onSaveNote={handleSaveNote}
-      onReingest={handleReingest}
       onOpenExternal={handleOpenExternal}
     />
   );

@@ -18,7 +18,9 @@ Viết súc tích bằng tiếng Việt tự nhiên (giữ nguyên thuật ngữ
 Trả về JSON đúng schema yêu cầu:
 - title: Tiêu đề rõ nghĩa, trung thực, bỏ câu view (3-180 ký tự).
 - tldr: 1-2 câu cốt lõi nhất (10-400 ký tự).
-- takeaways: 1-6 gạch đầu dòng ý chính quan trọng (mỗi ý 5-240 ký tự).
+- takeaways: Các ý chính, mỗi ý là một concept hoặc luận điểm riêng có thật trong bài (mỗi ý 5-240 ký tự).
+  Số ý tuỳ theo lượng nội dung, không có số cố định: tin ngắn hoặc video ít thông tin chỉ 1-3 ý; bài dài, tutorial, release note nhiều mục có thể tới tối đa 10 ý.
+  Không độn ý cho đủ số, không lặp lại tldr, không thêm nhận xét chung chung (lượt xem, mức độ quan tâm, độ hấp dẫn).
 - tags: 1-4 tag chủ đề ngắn, chữ thường không dấu hoặc tiếng Anh chuẩn (ví dụ: ai, llm, nextjs, backend, devops). Không đưa tag loại nội dung vào đây.
 - contentType: Đúng một loại nội dung:
   - "tip": mẹo, thủ thuật áp dụng được ngay.

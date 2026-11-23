@@ -20,6 +20,20 @@ describe("news Zod schemas", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts up to 10 takeaways and rejects more", () => {
+    const points = Array.from({ length: 11 }, (_, index) => `Concept number ${index + 1}`);
+    const base = {
+      title: "Next.js 16.4 release notes",
+      tldr: "Next.js 16.4 ships many independent improvements.",
+      tags: ["nextjs"],
+      language: "en",
+    };
+    expect(NewsSummaryOutputSchema.safeParse({ ...base, takeaways: points.slice(0, 10) }).success).toBe(
+      true
+    );
+    expect(NewsSummaryOutputSchema.safeParse({ ...base, takeaways: points }).success).toBe(false);
+  });
+
   it("rejects invalid or incomplete summary payloads", () => {
     expect(
       NewsSummaryOutputSchema.safeParse({

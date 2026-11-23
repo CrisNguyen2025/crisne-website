@@ -47,6 +47,12 @@ def test_short_takeaways_are_dropped_to_match_zod_min_length() -> None:
     assert summary.takeaways == ["Retrieval improves grounding"]
 
 
+def test_takeaways_accept_up_to_ten_and_clip_the_rest() -> None:
+    points = [f"Concept number {index}" for index in range(1, 13)]
+    assert make_summary(takeaways=points[:10]).takeaways == points[:10]
+    assert make_summary(takeaways=points).takeaways == points[:10]
+
+
 def test_ready_payload_clips_author_and_drops_non_http_thumbnail() -> None:
     payload = JobCompleteReadyPayload(
         attempt=2,

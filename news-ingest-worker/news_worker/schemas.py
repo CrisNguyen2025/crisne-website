@@ -12,6 +12,7 @@ MAX_AUTHOR_CHARS = 120
 MAX_ERROR_CHARS = 500
 MIN_TAKEAWAY_CHARS = 5
 MAX_TAKEAWAY_CHARS = 240
+MAX_TAKEAWAYS = 10
 MAX_TAGS = 5
 
 # Exactly one content-type tag leads the tag list so the Owner can filter tips from news.
@@ -67,7 +68,7 @@ class ClaimedJob(BaseModel):
 class NewsSummaryOutput(BaseModel):
     title: str = Field(min_length=3, max_length=180)
     tldr: str = Field(min_length=10, max_length=400)
-    takeaways: list[str] = Field(min_length=1, max_length=6)
+    takeaways: list[str] = Field(min_length=1, max_length=MAX_TAKEAWAYS)
     tags: list[str] = Field(min_length=1, max_length=MAX_TAGS)
     language: Literal["vi", "en", "other"]
     # Merged into `tags` below and left out of the payload sent to Next.js
@@ -96,7 +97,7 @@ class NewsSummaryOutput(BaseModel):
                 for item in value
                 if len(str(item).strip()) >= MIN_TAKEAWAY_CHARS
             ]
-            return cleaned[:6]
+            return cleaned[:MAX_TAKEAWAYS]
         return value
 
     @field_validator("tags", mode="before")

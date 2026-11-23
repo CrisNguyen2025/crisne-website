@@ -95,7 +95,6 @@ describe("news feed UI components", () => {
       onDelete: vi.fn(),
       onUpdateTags: vi.fn(async () => {}),
       onSaveNote: vi.fn(async () => {}),
-      onReingest: vi.fn(),
       onOpenExternal: vi.fn(),
       ...overrides,
     };
@@ -191,7 +190,6 @@ describe("news feed UI components", () => {
         onDelete: vi.fn(),
         onUpdateTags: vi.fn(async () => {}),
         onSaveNote: vi.fn(async () => {}),
-        onReingest: vi.fn(),
         onOpenExternal: vi.fn(),
       });
 

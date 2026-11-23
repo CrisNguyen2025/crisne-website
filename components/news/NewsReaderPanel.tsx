@@ -5,12 +5,9 @@ import Image from "next/image";
 import {
   AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
-  Circle,
   ExternalLink,
   Loader2,
   Plus,
-  RotateCcw,
   Save,
   Trash2,
   X,
@@ -25,7 +22,6 @@ interface NewsReaderPanelProps {
   item: NewsItemDto;
   duplicateTitle?: string;
   isUpdating?: boolean;
-  isReingesting?: boolean;
   isDeleting?: boolean;
   onBack: () => void;
   onToggleRead: (item: NewsItemDto, nextState: "read" | "unread") => void;
@@ -35,7 +31,6 @@ interface NewsReaderPanelProps {
   onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
   onSaveNote: (item: NewsItemDto, note: string | null) => Promise<void>;
-  onReingest: (item: NewsItemDto) => void;
   onOpenExternal: (item: NewsItemDto) => void;
 }
 
@@ -68,7 +63,6 @@ export function NewsReaderPanel({
   item,
   duplicateTitle,
   isUpdating = false,
-  isReingesting = false,
   isDeleting = false,
   onBack,
   onToggleRead,
@@ -78,7 +72,6 @@ export function NewsReaderPanel({
   onDelete,
   onUpdateTags,
   onSaveNote,
-  onReingest,
   onOpenExternal,
 }: NewsReaderPanelProps) {
   const [tagInput, setTagInput] = useState("");
@@ -204,35 +197,6 @@ export function NewsReaderPanel({
               <ExternalLink className="size-4" />
               Mở nguồn gốc
             </a>
-            <button
-              type="button"
-              disabled={isUpdating}
-              onClick={() =>
-                onToggleRead(
-                  item,
-                  item.readState === "read" ? "unread" : "read"
-                )
-              }
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-            >
-              {item.readState === "read" ? (
-                <CheckCircle2 className="size-4 text-[var(--status-known)]" />
-              ) : (
-                <Circle className="size-4" />
-              )}
-              {item.readState === "read" ? "Đã đọc" : "Đánh dấu đã đọc"}
-            </button>
-            <button
-              type="button"
-              disabled={isReingesting || isWorking}
-              onClick={() => onReingest(item)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-            >
-              <RotateCcw
-                className={`size-4 ${isReingesting ? "animate-spin" : ""}`}
-              />
-              Phân tích sâu lại
-            </button>
             {confirmDelete ? (
               <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
                 <button

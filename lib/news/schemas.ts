@@ -75,7 +75,8 @@ const OptionalDateStringSchema = z
 export const NewsSummaryOutputSchema = z.object({
   title: z.string().trim().min(3).max(180),
   tldr: z.string().trim().min(10).max(400),
-  takeaways: z.array(z.string().trim().min(5).max(240)).min(1).max(6),
+  // Keep in sync with MAX_TAKEAWAYS in news-ingest-worker/news_worker/schemas.py
+  takeaways: z.array(z.string().trim().min(5).max(240)).min(1).max(10),
   tags: z.array(z.string().trim().min(1).max(32)).min(1).max(5),
   language: z.enum(["vi", "en", "other"]),
 });
