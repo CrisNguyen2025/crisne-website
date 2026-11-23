@@ -243,7 +243,8 @@
         "ADR-0005"
       ],
       "glossary": [
-        "Owner"
+        "Owner",
+        "Visitor"
       ],
       "keyFiles": [
         "app/(news)/layout.tsx",
@@ -283,7 +284,12 @@
         "news-ingest-worker/news_worker/summarizer.py",
         "app/(news)/share/page.tsx",
         "components/news/ShareTargetClient.tsx",
-        "public/sw.js"
+        "public/sw.js",
+        "app/(public-news)/layout.tsx",
+        "app/(public-news)/picks/page.tsx",
+        "app/(public-news)/picks/[id]/page.tsx",
+        "lib/news/public-queries.ts",
+        "lib/auth/public-paths.ts"
       ],
       "dataModels": [
         "NewsItem",
@@ -743,6 +749,28 @@
       "summary": "Cập nhật nội dung/trạng thái mục Owner Memory (duyệt pending -> active tự archive mục thay thế, ADR-0015)",
       "handler": "app/api/v1/memories/[id]/route.ts#PATCH",
       "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_UI_PUBLIC_NEWS_LIST",
+      "type": "page",
+      "path": "/picks",
+      "method": "GET",
+      "authRequirement": "public",
+      "domainId": "private-news",
+      "summary": "Trang public chỉ đọc (noindex) liệt kê bài Owner đã bật Public: tiêu đề, domain, ngày, TL;DR",
+      "handler": "app/(public-news)/picks/page.tsx#PublicNewsListPage",
+      "triggersFlow": "FLOW_NEWS_PUBLIC_READ"
+    },
+    {
+      "id": "EP_UI_PUBLIC_NEWS_DETAIL",
+      "type": "page",
+      "path": "/picks/[id]",
+      "method": "GET",
+      "authRequirement": "public",
+      "domainId": "private-news",
+      "summary": "Chi tiết bài public: TL;DR, Ý chính có highlight keyword, link bài gốc, nhãn tóm tắt bằng AI; bài không public trả 404",
+      "handler": "app/(public-news)/picks/[id]/page.tsx#PublicNewsDetailPage",
+      "triggersFlow": "FLOW_NEWS_PUBLIC_READ"
     }
   ],
   "executionFlows": [
@@ -1574,6 +1602,75 @@
         "ADR-0012",
         "ADR-0015"
       ]
+    },
+    {
+      "id": "FLOW_NEWS_PUBLIC_READ",
+      "name": "Owner public từng bài News, Visitor đọc ở /picks",
+      "domainId": "private-news",
+      "actor": "Owner | Visitor",
+      "trigger": "Owner bấm Public trong NewsReaderPanel; Visitor mở /picks hoặc /picks/[id]",
+      "preconditions": [
+        "Bài đã ingestStatus='ready' và chưa dismissed thì mới bật Public được"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/NewsReaderPanel.tsx",
+          "action": "Owner bấm Public / Đang public",
+          "callsNext": "components/news/NewsFeedClient.tsx#handleTogglePublic",
+          "dataPassed": "{ isPublic }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/news/[id]/route.ts",
+          "functionOrMethod": "PATCH",
+          "action": "requireWriteAccess, validate UpdateNewsItemSchema, trả 400 khi bài chưa publish được",
+          "callsNext": "lib/news/queries.ts#updateNewsItem",
+          "dataPassed": "UpdateNewsItemRequest"
+        },
+        {
+          "order": 3,
+          "layer": "Domain_Logic",
+          "component": "lib/news/queries.ts",
+          "functionOrMethod": "updateNewsItem",
+          "action": "Đặt isPublic và publicAt (xoá khi gỡ), ném NewsItemNotPublishableError nếu bài chưa ready hoặc đã dismissed",
+          "callsNext": null,
+          "dataPassed": "NewsItem"
+        },
+        {
+          "order": 4,
+          "layer": "Routing_Gateway",
+          "component": "middleware.ts",
+          "action": "isPublicPagePath cho Visitor chưa đăng nhập vào đúng /picks và /picks/*; mọi path khác vẫn Owner-only",
+          "callsNext": "lib/news/public-queries.ts#listPublicNewsItems",
+          "dataPassed": "pathname"
+        },
+        {
+          "order": 5,
+          "layer": "Data_Access",
+          "component": "lib/news/public-queries.ts",
+          "functionOrMethod": "listPublicNewsItems",
+          "action": "Server Component đọc DB với select allowlist (không personalNote, tags, sourceId), lọc isPublic + ready + chưa dismissed; getPublicNewsItem dùng cùng select cho trang chi tiết",
+          "callsNext": null,
+          "dataPassed": "PublicNewsItemDto"
+        }
+      ],
+      "invariants": [
+        "Bài mới tạo qua enqueueNewsUrl (RSS, dán link, share) mặc định isPublic=true; bài tạo trước thay đổi này giữ private",
+        "Visitor không gọi API /api/news/*; trang public đọc DB trực tiếp qua select allowlist",
+        "/picks giữ noindex vì nội dung là tóm tắt AI từ site khác",
+        "Abot (SiteChatbot) ẩn trên /picks vì Visitor ẩn danh không gọi được proxy"
+      ],
+      "failureModes": [
+        "Bài bị gỡ public hoặc dismissed: /picks/[id] trả 404",
+        "Chưa migrate cột isPublic/publicAt trên Turso: query NewsItem lỗi (chạy yarn db:news-public --apply)"
+      ],
+      "relatedAdrs": [
+        "ADR-0002",
+        "ADR-0005"
+      ]
     }
   ],
   "dataModels": [
@@ -1701,6 +1798,8 @@
         "reviewStatus",
         "readState",
         "isSaved",
+        "isPublic",
+        "publicAt",
         "extractionMethod",
         "extractionError",
         "normalizedTitle",
@@ -1715,7 +1814,8 @@
       ],
       "invariants": [
         "canonicalUrl là duy nhất để dedupe ở mức URL",
-        "Chỉ bài origin='cron' vào draft; share và manual vào published"
+        "Chỉ bài origin='cron' vào draft; share và manual vào published",
+        "Chỉ bài isPublic=true, ingestStatus='ready' và chưa dismissed mới hiện ở /picks; publicAt đặt khi bật, xoá khi tắt"
       ]
     },
     {

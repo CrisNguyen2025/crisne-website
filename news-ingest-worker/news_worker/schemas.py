@@ -78,14 +78,15 @@ class NewsSummaryOutput(BaseModel):
     @classmethod
     def trim_title(cls, value: object) -> object:
         if isinstance(value, str):
-            return value.strip()[:180]
+            # Keyword markers (**...**) belong to takeaways only; title renders as plain text
+            return value.replace("**", "").strip()[:180]
         return value
 
     @field_validator("tldr", mode="before")
     @classmethod
     def trim_tldr(cls, value: object) -> object:
         if isinstance(value, str):
-            return value.strip()[:400]
+            return value.replace("**", "").strip()[:400]
         return value
 
     @field_validator("takeaways", mode="before")

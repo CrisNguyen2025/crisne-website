@@ -2,13 +2,19 @@
 
 import React, { Suspense } from "react";
 import { usePathname } from "next/navigation";
+import { isPublicPagePath } from "@/lib/auth/public-paths";
 import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
 import { RoadmapAssistantChatbot } from "@/components/roadmap/RoadmapAssistantChatbotWrapper";
 
 function ChatbotInner() {
   const pathname = usePathname();
 
-  if (pathname?.startsWith("/news") || pathname?.startsWith("/share")) {
+  // `/picks` is open to signed-out Visitors, who cannot reach the Abot proxy
+  if (
+    pathname?.startsWith("/news") ||
+    pathname?.startsWith("/share") ||
+    (pathname && isPublicPagePath(pathname))
+  ) {
     return null;
   }
 

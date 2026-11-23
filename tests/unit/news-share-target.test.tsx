@@ -33,6 +33,8 @@ function makeNewsItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
     reviewStatus: "draft",
     readState: "unread",
     isSaved: false,
+    isPublic: false,
+    publicAt: null,
     extractionMethod: "article",
     extractionError: null,
     possibleDuplicateOfId: null,

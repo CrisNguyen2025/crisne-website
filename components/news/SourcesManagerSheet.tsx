@@ -4,18 +4,173 @@ import React, { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Loader2,
+  Pencil,
   Plus,
+  Power,
+  PowerOff,
   RefreshCw,
   Rss,
   Trash2,
   X,
 } from "lucide-react";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Sheet } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/toast";
-import type { CronSyncSummary, NewsSourceDto } from "@/lib/news/schemas";
-import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
+import type {
+  CronSyncSummary,
+  NewsSourceDto,
+  UpdateNewsSourceRequest,
+} from "@/lib/news/schemas";
+import { NEWS_CRON_SCHEDULE } from "@/lib/news/cron-schedule";
+import { dayjs, formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import * as newsService from "@/logic/news/newsService";
+
+function getFeedHost(feedUrl: string): string {
+  try {
+    return new URL(feedUrl).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function formatFeedUrl(feedUrl: string): string {
+  return feedUrl.replace(/^https?:\/\/(www\.)?/, "");
+}
+
+function formatPullTime(lastFetchedAt: string | null): string {
+  if (!lastFetchedAt) return "Chưa pull lần nào";
+  return `Pull lúc ${dayjs(lastFetchedAt).format("HH:mm DD/MM")} · ${formatFriendlyTime(lastFetchedAt)}`;
+}
+
+function parseTagsInput(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+const EDIT_INPUT_CLASS =
+  "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring";
+const EDIT_LABEL_CLASS = "mb-1 block text-[11px] font-medium text-muted-foreground";
+
+interface NewsSourceEditFormProps {
+  source: NewsSourceDto;
+  isSaving: boolean;
+  onSave: (patch: UpdateNewsSourceRequest) => void;
+  onCancel: () => void;
+}
+
+/** Inline editor for one configured source; sends only the fields that changed. */
+function NewsSourceEditForm({ source, isSaving, onSave, onCancel }: NewsSourceEditFormProps) {
+  const feedHost = getFeedHost(source.feedUrl);
+  const [name, setName] = useState(source.name);
+  const [feedUrl, setFeedUrl] = useState(source.feedUrl);
+  const [domain, setDomain] = useState(source.domain === feedHost ? "" : source.domain);
+  const [tags, setTags] = useState(source.defaultTags.join(", "));
+  const fieldId = `rss-edit-${source.id}`;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const patch: UpdateNewsSourceRequest = {};
+    const trimmedName = name.trim();
+    const trimmedFeedUrl = feedUrl.trim();
+    if (trimmedName && trimmedName !== source.name) patch.name = trimmedName;
+    if (trimmedFeedUrl && trimmedFeedUrl !== source.feedUrl) patch.feedUrl = trimmedFeedUrl;
+
+    // An empty domain falls back to the feed host, like the create form
+    const nextDomain = domain.trim() || getFeedHost(trimmedFeedUrl || source.feedUrl);
+    if (nextDomain && nextDomain !== source.domain) patch.domain = nextDomain;
+
+    const nextTags = parseTagsInput(tags);
+    if (nextTags.join(",") !== source.defaultTags.join(",")) patch.defaultTags = nextTags;
+
+    if (Object.keys(patch).length === 0) {
+      onCancel();
+      return;
+    }
+    onSave(patch);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2.5" aria-label={`Chỉnh sửa nguồn ${source.name}`}>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div>
+          <label htmlFor={`${fieldId}-name`} className={EDIT_LABEL_CLASS}>
+            Tên nguồn
+          </label>
+          <input
+            id={`${fieldId}-name`}
+            type="text"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={EDIT_INPUT_CLASS}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${fieldId}-domain`} className={EDIT_LABEL_CLASS}>
+            Domain bài viết (tuỳ chọn)
+          </label>
+          <input
+            id={`${fieldId}-domain`}
+            type="text"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+            placeholder="Tự tách từ Feed URL"
+            className={EDIT_INPUT_CLASS}
+          />
+        </div>
+      </div>
+      <div>
+        <label htmlFor={`${fieldId}-feed`} className={EDIT_LABEL_CLASS}>
+          RSS / Atom Feed URL
+        </label>
+        <input
+          id={`${fieldId}-feed`}
+          type="url"
+          required
+          value={feedUrl}
+          onChange={(e) => setFeedUrl(e.target.value)}
+          className={`${EDIT_INPUT_CLASS} font-mono`}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${fieldId}-tags`} className={EDIT_LABEL_CLASS}>
+          Tags mặc định (phân tách dấu phẩy)
+        </label>
+        <input
+          id={`${fieldId}-tags`}
+          type="text"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="nextjs, frontend"
+          className={EDIT_INPUT_CLASS}
+        />
+      </div>
+      <div className="flex justify-end gap-1.5 pt-0.5">
+        <button
+          type="button"
+          disabled={isSaving}
+          onClick={onCancel}
+          className="inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+        >
+          Huỷ
+        </button>
+        <button
+          type="submit"
+          disabled={isSaving || !name.trim() || !feedUrl.trim()}
+          className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+        >
+          {isSaving && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
+          Lưu
+        </button>
+      </div>
+    </form>
+  );
+}
 
 interface SourcesManagerSheetProps {
   open: boolean;
@@ -45,6 +200,7 @@ export function SourcesManagerSheet({
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncingSourceId, setSyncingSourceId] = useState<string | null>(null);
   const [busySourceId, setBusySourceId] = useState<string | null>(null);
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [lastSyncSummary, setLastSyncSummary] = useState<CronSyncSummary | null>(null);
 
@@ -100,6 +256,24 @@ export function SourcesManagerSheet({
     } catch (error) {
       toast(
         error instanceof Error ? error.message : "Không thể cập nhật trạng thái nguồn.",
+        "error"
+      );
+    } finally {
+      setBusySourceId(null);
+    }
+  };
+
+  const handleUpdate = async (source: NewsSourceDto, patch: UpdateNewsSourceRequest) => {
+    setBusySourceId(source.id);
+    try {
+      await newsService.updateNewsSource(source.id, patch);
+      await reloadSources();
+      onChanged();
+      setEditingSourceId(null);
+      toast(`Đã cập nhật nguồn "${patch.name ?? source.name}"`, "success");
+    } catch (error) {
+      toast(
+        error instanceof Error ? error.message : "Không thể cập nhật nguồn RSS.",
         "error"
       );
     } finally {
@@ -336,9 +510,15 @@ export function SourcesManagerSheet({
 
         {/* Configured Sources List */}
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Danh sách nguồn đã cấu hình
-          </h3>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Danh sách nguồn đã cấu hình
+            </h3>
+            <p className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Clock className="size-3" aria-hidden="true" />
+              Tự động: {NEWS_CRON_SCHEDULE.label}
+            </p>
+          </div>
 
           {sources.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-xs text-muted-foreground">
@@ -348,33 +528,43 @@ export function SourcesManagerSheet({
             sources.map((source) => {
               const isBusy =
                 busySourceId === source.id || syncingSourceId === source.id;
+              if (editingSourceId === source.id) {
+                return (
+                  <div
+                    key={source.id}
+                    className="rounded-xl border border-ring/50 bg-card px-4 py-3"
+                  >
+                    <NewsSourceEditForm
+                      source={source}
+                      isSaving={busySourceId === source.id}
+                      onSave={(patch) => void handleUpdate(source, patch)}
+                      onCancel={() => setEditingSourceId(null)}
+                    />
+                  </div>
+                );
+              }
               return (
                 <div
                   key={source.id}
-                  className="rounded-xl border border-border bg-card p-4 space-y-2.5 transition-colors duration-150 hover:border-foreground/20"
+                  className="rounded-xl border border-border bg-card px-4 py-3 transition-colors duration-150 hover:border-foreground/20"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-semibold text-foreground">
-                          {source.name}
-                        </h4>
-                        <span className="rounded-md bg-secondary px-1.5 py-0.5 font-mono text-[11px] text-secondary-foreground">
-                          {source.domain}
-                        </span>
-                        <span
-                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
-                            source.enabled
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {source.enabled ? "Đang bật" : "Đã tắt"}
-                        </span>
-                      </div>
-                      <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-                        {source.feedUrl}
-                      </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        role="img"
+                        aria-label={source.enabled ? "Đang bật" : "Đã tắt"}
+                        title={source.enabled ? "Đang bật" : "Đã tắt"}
+                        className={`size-2 shrink-0 rounded-full ${
+                          source.enabled ? "bg-emerald-500" : "bg-muted-foreground/40"
+                        }`}
+                      />
+                      <h4
+                        className={`truncate text-sm font-semibold ${
+                          source.enabled ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {source.name}
+                      </h4>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -394,54 +584,58 @@ export function SourcesManagerSheet({
                         <span>Quét</span>
                       </button>
 
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => void handleToggleEnabled(source)}
-                        className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-                      >
-                        {busySourceId === source.id && (
-                          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-                        )}
-                        {source.enabled ? "Tắt" : "Bật"}
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => void handleDelete(source)}
-                        aria-label={`Xoá nguồn ${source.name}`}
-                        title="Xoá nguồn"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {source.defaultTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {source.defaultTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground"
-                        >
-                          #{tag}
+                      {busySourceId === source.id ? (
+                        <span className="flex size-7 items-center justify-center text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" aria-label="Đang xử lý" />
                         </span>
-                      ))}
+                      ) : (
+                        <ActionMenu
+                          label={`Tuỳ chọn nguồn ${source.name}`}
+                          items={[
+                            {
+                              label: source.enabled ? "Tắt nguồn" : "Bật nguồn",
+                              icon: source.enabled ? PowerOff : Power,
+                              onSelect: () => void handleToggleEnabled(source),
+                            },
+                            {
+                              label: "Chỉnh sửa",
+                              icon: Pencil,
+                              onSelect: () => setEditingSourceId(source.id),
+                            },
+                            {
+                              label: "Xoá nguồn",
+                              icon: Trash2,
+                              danger: true,
+                              onSelect: () => void handleDelete(source),
+                              confirm: {
+                                title: `Xoá "${source.name}"?`,
+                                description: "Bài đã lấy từ nguồn này vẫn được giữ lại.",
+                                confirmLabel: "Xoá",
+                              },
+                            },
+                          ]}
+                        />
+                      )}
                     </div>
-                  )}
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                    <span>
-                      {source.lastFetchedAt
-                        ? `Quét gần nhất: ${formatFriendlyTime(source.lastFetchedAt)}`
-                        : "Chưa quét lần nào"}
-                    </span>
                   </div>
+
+                  <p
+                    className="mt-1 truncate font-mono text-[11px] text-muted-foreground"
+                    title={source.feedUrl}
+                  >
+                    {formatFeedUrl(source.feedUrl)}
+                    {source.domain !== getFeedHost(source.feedUrl) && ` → ${source.domain}`}
+                  </p>
+
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {[
+                      ...source.defaultTags.map((tag) => `#${tag}`),
+                      formatPullTime(source.lastFetchedAt),
+                    ].join(" · ")}
+                  </p>
 
                   {source.lastError && (
-                    <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
+                    <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
                       {source.lastError}
                     </p>
                   )}

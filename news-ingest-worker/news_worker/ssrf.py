@@ -42,7 +42,7 @@ def is_private_ip(raw_ip: str) -> bool:
     if isinstance(addr, ipaddress.IPv6Address):
         if addr.ipv4_mapped:
             addr = addr.ipv4_mapped
-        elif addr.sixto4 or addr.teredo:
+        elif addr.sixtofour or addr.teredo:
             return True
         elif any(addr in net for net in SPECIAL_IPV6_NETWORKS):
             return True
@@ -58,7 +58,6 @@ def is_private_ip(raw_ip: str) -> bool:
         or addr.is_multicast
         or addr.is_reserved
         or addr.is_unspecified
-        or addr.is_site_local
     )
 
 

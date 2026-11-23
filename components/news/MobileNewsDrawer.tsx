@@ -76,7 +76,8 @@ export function MobileNewsDrawer<T>({
   return createPortal(
     <div
       className={cn(
-        "fixed inset-0 z-50 xl:hidden",
+        // Portaled to <body>, outside the News layout's `roadmap-theme`; re-apply it for editorial tokens
+        "roadmap-theme fixed inset-0 z-50 xl:hidden",
         !isActive && "pointer-events-none"
       )}
       aria-hidden={!isActive || undefined}

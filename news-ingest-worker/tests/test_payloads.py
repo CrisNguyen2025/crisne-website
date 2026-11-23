@@ -47,6 +47,17 @@ def test_short_takeaways_are_dropped_to_match_zod_min_length() -> None:
     assert summary.takeaways == ["Retrieval improves grounding"]
 
 
+def test_keyword_markers_are_kept_in_takeaways_only() -> None:
+    summary = make_summary(
+        title="**Next.js 16.4** ra mắt",
+        tldr="Bản **v16.4** bật Cache Components mặc định.",
+        takeaways=["**Cache Components** thành mặc định"],
+    )
+    assert summary.title == "Next.js 16.4 ra mắt"
+    assert summary.tldr == "Bản v16.4 bật Cache Components mặc định."
+    assert summary.takeaways == ["**Cache Components** thành mặc định"]
+
+
 def test_takeaways_accept_up_to_ten_and_clip_the_rest() -> None:
     points = [f"Concept number {index}" for index in range(1, 13)]
     assert make_summary(takeaways=points[:10]).takeaways == points[:10]

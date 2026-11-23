@@ -152,6 +152,9 @@ model NewsItem {
   reviewStatus          String      @default("published") // "draft" | "published" | "dismissed"
   readState             String      @default("unread")    // "unread" | "read"
   isSaved               Boolean     @default(false)
+  // Owner opts a post into the read-only public page; independent from isSaved and reviewStatus
+  isPublic              Boolean     @default(false)
+  publicAt              DateTime?
 
   extractionMethod      String?     // "description" | "article" | "captions" | "whisper" | "vision" | "metadata_only"
   extractionError       String?
@@ -171,6 +174,7 @@ model NewsItem {
   @@index([createdAt])
   @@index([ingestStatus])
   @@index([normalizedTitle])
+  @@index([isPublic, publicAt])
 }
 
 model IngestJob {

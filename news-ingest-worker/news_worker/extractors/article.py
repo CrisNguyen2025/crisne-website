@@ -54,7 +54,9 @@ async def _safe_fetch_html(url: str) -> tuple[str, str]:
         timeout=15.0,
         follow_redirects=False,
         headers={
-            "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)"
+            "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)",
+            # Some sites (e.g. nextjs.org) negotiate text/markdown for `*/*`; ask for HTML explicitly
+            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
         },
     ) as client:
         for _ in range(MAX_REDIRECTS + 1):

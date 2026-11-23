@@ -32,6 +32,8 @@ function makeItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
     reviewStatus: "published",
     readState: "unread",
     isSaved: false,
+    isPublic: false,
+    publicAt: null,
     extractionMethod: "captions",
     extractionError: null,
     possibleDuplicateOfId: null,
@@ -95,6 +97,7 @@ describe("news feed UI components", () => {
       onDelete: vi.fn(),
       onUpdateTags: vi.fn(async () => {}),
       onSaveNote: vi.fn(async () => {}),
+      onTogglePublic: vi.fn(),
       onOpenExternal: vi.fn(),
       ...overrides,
     };
@@ -190,6 +193,7 @@ describe("news feed UI components", () => {
         onDelete: vi.fn(),
         onUpdateTags: vi.fn(async () => {}),
         onSaveNote: vi.fn(async () => {}),
+        onTogglePublic: vi.fn(),
         onOpenExternal: vi.fn(),
       });
 

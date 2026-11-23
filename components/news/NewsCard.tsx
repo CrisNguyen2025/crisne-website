@@ -142,9 +142,15 @@ export function NewsCard({
         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.extractionError}</p>
       ) : null}
 
-      {(badge || contentTypeLabel) && (
+      {(badge || contentTypeLabel || item.isPublic) && (
         <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
           {badge}
+          {item.isPublic && (
+            <span className={`${BADGE} bg-[var(--status-known-bg)] text-[var(--status-known)]`}>
+              <Globe className="size-3" aria-hidden="true" />
+              Public
+            </span>
+          )}
           {contentTypeLabel && (
             <span className={`${BADGE} bg-muted text-muted-foreground`}>{contentTypeLabel}</span>
           )}

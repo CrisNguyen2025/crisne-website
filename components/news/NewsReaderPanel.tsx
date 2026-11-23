@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ExternalLink,
+  Globe,
   Loader2,
   Plus,
   Save,
@@ -15,6 +16,7 @@ import {
 import { formatNewsContentType } from "@/lib/news/content-type";
 import type { ExtractionMethod, NewsItemDto } from "@/lib/news/schemas";
 import { dayjs } from "@/lib/roadmap/date-utils";
+import { EmphasisText } from "./EmphasisText";
 import { NewsDecisionBar } from "./NewsDecisionBar";
 import { PlatformIcon, formatNewsTitle, isPendingIngest } from "./NewsCard";
 
@@ -31,7 +33,12 @@ interface NewsReaderPanelProps {
   onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
   onSaveNote: (item: NewsItemDto, note: string | null) => Promise<void>;
+  onTogglePublic: (item: NewsItemDto) => void;
   onOpenExternal: (item: NewsItemDto) => void;
+  /** Opens another item by id in the reader, e.g. the possible duplicate */
+  onOpenItem?: (itemId: string) => void;
+  /** "split": Tag and note in a side column on wide panels; "stacked": Tag under the post, no note (drawer) */
+  layout?: "split" | "stacked";
 }
 
 const METHOD_LABELS: Record<ExtractionMethod, string> = {
@@ -72,8 +79,13 @@ export function NewsReaderPanel({
   onDelete,
   onUpdateTags,
   onSaveNote,
+  onTogglePublic,
   onOpenExternal,
+  onOpenItem,
+  layout = "split",
 }: NewsReaderPanelProps) {
+  const isStacked = layout === "stacked";
+  const isPublishable = item.ingestStatus === "ready" && item.reviewStatus !== "dismissed";
   const [tagInput, setTagInput] = useState("");
   const [noteDraft, setNoteDraft] = useState(item.personalNote ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -90,7 +102,7 @@ export function NewsReaderPanel({
     onToggleReadRef.current = onToggleRead;
   });
 
-  const { id: itemId, reviewStatus, readState } = item;
+  const { id: itemId, reviewStatus, readState, possibleDuplicateOfId } = item;
 
   // Auto-mark unread items as read after viewing the panel for 3 seconds
   useEffect(() => {
@@ -197,6 +209,25 @@ export function NewsReaderPanel({
               <ExternalLink className="size-4" />
               Mở nguồn gốc
             </a>
+            <button
+              type="button"
+              disabled={isUpdating || (!item.isPublic && !isPublishable)}
+              onClick={() => onTogglePublic(item)}
+              aria-pressed={item.isPublic}
+              title={
+                item.isPublic
+                  ? "Gỡ bài khỏi trang public"
+                  : isPublishable
+                    ? "Cho Visitor xem bài này ở trang public"
+                    : "Chỉ public được bài đã tóm tắt xong"
+              }
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm transition-[background-color,color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer ${
+                item.isPublic ? "font-medium text-[var(--status-known)]" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Globe className="size-4" />
+              {item.isPublic ? "Đang public" : "Public"}
+            </button>
             {confirmDelete ? (
               <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
                 <button
@@ -231,7 +262,11 @@ export function NewsReaderPanel({
           </div>
 
           {/* Two columns from a 672px wide panel: content on the left, Tag and note on the right */}
-          <div className="@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_15rem] @2xl:gap-8">
+          <div
+            className={
+              isStacked ? undefined : "@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_15rem] @2xl:gap-8"
+            }
+          >
             <div className="min-w-0">
               {safeThumbnailUrl && !thumbFailed && (
                 <div className="mt-5 overflow-hidden rounded-xl border border-border bg-muted">
@@ -246,15 +281,33 @@ export function NewsReaderPanel({
                   />
                 </div>
               )}
-              {item.possibleDuplicateOfId && (
+              {possibleDuplicateOfId && (
                 <div className="mt-5 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-foreground">
-                      Bài này có tiêu đề gần giống bài đã lưu trong 72h qua
+                      Bài này có tiêu đề gần giống một bài trong 72h qua
                     </p>
-                    {duplicateTitle && (
-                      <p className="mt-0.5">{duplicateTitle}</p>
+                    {duplicateTitle && onOpenItem && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenItem(possibleDuplicateOfId)}
+                        className="mt-0.5 text-left text-foreground underline decoration-border underline-offset-2 transition-colors duration-150 hover:decoration-foreground cursor-pointer"
+                      >
+                        {duplicateTitle}
+                      </button>
+                    )}
+                    {duplicateTitle && !onOpenItem && <p className="mt-0.5">{duplicateTitle}</p>}
+                    {reviewStatus !== "dismissed" && (
+                      <button
+                        type="button"
+                        disabled={isUpdating || isDeleting}
+                        onClick={() => onDismiss(item)}
+                        className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                      >
+                        <X className="size-3.5" />
+                        Bỏ qua bài này
+                      </button>
                     )}
                   </div>
                 </div>
@@ -289,7 +342,9 @@ export function NewsReaderPanel({
                   <h2 className={SECTION_LABEL}>Ý chính</h2>
                   <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground">
                     {item.takeaways.map((point, index) => (
-                      <li key={index}>{point}</li>
+                      <li key={index}>
+                        <EmphasisText text={point} />
+                      </li>
                     ))}
                   </ul>
                 </section>
@@ -297,8 +352,12 @@ export function NewsReaderPanel({
             </div>
 
             <aside
-              aria-label="Tag và ghi chú"
-              className="mt-7 @2xl:sticky @2xl:top-0 @2xl:mt-5 @2xl:self-start @2xl:border-l @2xl:border-border @2xl:pl-6"
+              aria-label={isStacked ? "Tag" : "Tag và ghi chú"}
+              className={
+                isStacked
+                  ? "mt-7 border-t border-border pb-4 pt-5"
+                  : "mt-7 @2xl:sticky @2xl:top-0 @2xl:mt-5 @2xl:self-start @2xl:border-l @2xl:border-border @2xl:pl-6"
+              }
             >
               <section>
                 <h2 className={SECTION_LABEL}>Tag</h2>
@@ -348,50 +407,52 @@ export function NewsReaderPanel({
                 </form>
               </section>
 
-              <section className="mt-7 pb-4">
-                <div className="flex items-center justify-between gap-2">
-                  <label
-                    htmlFor={`personal-note-${item.id}`}
-                    className={SECTION_LABEL}
-                  >
-                    Ghi chú cá nhân
-                  </label>
-                  {isNoteDirty && (
-                    <span className="text-xs text-[var(--editorial-accent)] motion-safe:animate-in motion-safe:fade-in duration-150">
-                      Chưa lưu
-                    </span>
-                  )}
-                </div>
-                <textarea
-                  id={`personal-note-${item.id}`}
-                  rows={4}
-                  value={noteDraft}
-                  onChange={(e) => setNoteDraft(e.target.value)}
-                  onKeyDown={handleNoteKeyDown}
-                  placeholder="Áp dụng cho dự án nào, cần thử gì"
-                  className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {isNoteDirty && (
-                  <div className="mt-2 flex items-center justify-end gap-2 motion-safe:animate-in motion-safe:fade-in duration-150">
-                    <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                      <kbd className="font-mono">⌘/Ctrl</kbd>+<kbd className="font-mono">Enter</kbd>
-                    </span>
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => void handleSaveNote()}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+              {!isStacked && (
+                <section className="mt-7 pb-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <label
+                      htmlFor={`personal-note-${item.id}`}
+                      className={SECTION_LABEL}
                     >
-                      {isUpdating ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Save className="size-3.5" />
-                      )}
-                      Lưu ghi chú
-                    </button>
+                      Ghi chú cá nhân
+                    </label>
+                    {isNoteDirty && (
+                      <span className="text-xs text-[var(--editorial-accent)] motion-safe:animate-in motion-safe:fade-in duration-150">
+                        Chưa lưu
+                      </span>
+                    )}
                   </div>
-                )}
-              </section>
+                  <textarea
+                    id={`personal-note-${item.id}`}
+                    rows={4}
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    onKeyDown={handleNoteKeyDown}
+                    placeholder="Áp dụng cho dự án nào, cần thử gì"
+                    className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {isNoteDirty && (
+                    <div className="mt-2 flex items-center justify-end gap-2 motion-safe:animate-in motion-safe:fade-in duration-150">
+                      <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                        <kbd className="font-mono">⌘/Ctrl</kbd>+<kbd className="font-mono">Enter</kbd>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isUpdating}
+                        onClick={() => void handleSaveNote()}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                      >
+                        {isUpdating ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Save className="size-3.5" />
+                        )}
+                        Lưu ghi chú
+                      </button>
+                    </div>
+                  )}
+                </section>
+              )}
             </aside>
           </div>
         </div>

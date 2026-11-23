@@ -16,7 +16,6 @@ import {
   Activity,
   ArrowLeft,
   ArrowUpDown,
-  CheckCheck,
   CircleAlert,
   Inbox,
   Loader2,
@@ -201,13 +200,30 @@ export function NewsFeedClient({
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
   const [workerHealth, setWorkerHealth] = useState<NewsWorkerHealthDto | null>(() =>
     workerConfigured ? null : { configured: false, status: "unconfigured" }
   );
   const [isCheckingWorker, setIsCheckingWorker] = useState(false);
   const listScrollRef = useRef<HTMLDivElement>(null);
   const listScrollTopRef = useRef(0);
+  const filterBarRef = useRef<HTMLDivElement>(null);
+
+  // The filter panel overlays the list, so a click outside it or Escape closes it
+  useEffect(() => {
+    if (!isFilterOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (!filterBarRef.current?.contains(e.target as Node)) setIsFilterOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFilterOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFilterOpen]);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const pendingScrollItemIdRef = useRef<string | null>(null);
 
@@ -383,6 +399,16 @@ export function NewsFeedClient({
     setIsPanelOpenOnNarrow(true);
   }, []);
 
+  const handleTogglePublic = useCallback(
+    (item: NewsItemDto) =>
+      void applyItemUpdate(
+        item.id,
+        { isPublic: !item.isPublic },
+        item.isPublic ? "Đã gỡ bài khỏi trang public" : "Đã public bài cho Visitor"
+      ),
+    [applyItemUpdate]
+  );
+
   const handleToggleRead = useCallback(
     (item: NewsItemDto, nextState: "read" | "unread") => {
       if (nextState === item.readState) return;
@@ -548,29 +574,6 @@ export function NewsFeedClient({
     void setReadState(validReadState === "unread" ? "" : "unread");
   }, [setReadState, validReadState]);
 
-  const handleMarkAllRead = useCallback(async () => {
-    setIsMarkingAllRead(true);
-    try {
-      const { updated } = await newsService.markNewsItemsAsRead({
-        view,
-        origin: currentQueryParams.origin,
-        tag: currentQueryParams.tag,
-        contentType: currentQueryParams.contentType,
-      });
-      await refreshFeed();
-      if (updated > 0) {
-        toast(`Đã đánh dấu đọc ${updated} bài`, "success");
-      }
-    } catch (error) {
-      toast(
-        error instanceof Error ? error.message : "Không thể đánh dấu đã đọc.",
-        "error"
-      );
-    } finally {
-      setIsMarkingAllRead(false);
-    }
-  }, [currentQueryParams.contentType, currentQueryParams.origin, currentQueryParams.tag, refreshFeed, toast, view]);
-
   const handleCheckWorkerHealth = useCallback(async () => {
     setIsCheckingWorker(true);
     try {
@@ -607,7 +610,6 @@ export function NewsFeedClient({
   ].filter(Boolean).length;
 
   const isTabView = TAB_VIEWS.some((tab) => tab.id === view);
-  const unreadInListCount = data.items.filter((item) => item.readState === "unread").length;
 
   const emptyMessage =
     q || activeFilterCount > 0
@@ -621,6 +623,17 @@ export function NewsFeedClient({
     void setContentType("");
     void setReadState("");
     void setSort("latest");
+  };
+
+  /** Opens another item (e.g. a possible duplicate) in the reader, widening the list when it is filtered out. */
+  const handleOpenItem = (itemId: string) => {
+    pendingScrollItemIdRef.current = itemId;
+    setSelectedItemId(itemId);
+    setIsPanelOpenOnNarrow(true);
+    if (data.items.some((row) => row.id === itemId)) return;
+    clearFilters();
+    void setQ("");
+    handleSelectView("all");
   };
 
   const chip = (isSelected: boolean) =>
@@ -639,9 +652,10 @@ export function NewsFeedClient({
           ? "Chưa gắn worker"
           : "Worker";
 
-  const renderReaderPanel = (item: NewsItemDto) => (
+  const renderReaderPanel = (item: NewsItemDto, layout: "split" | "stacked" = "split") => (
     <NewsReaderPanel
       key={item.id}
+      layout={layout}
       item={item}
       duplicateTitle={
         item.possibleDuplicateOfId ? data.duplicateTitles[item.possibleDuplicateOfId] : undefined
@@ -656,7 +670,9 @@ export function NewsFeedClient({
       onDelete={handleDelete}
       onUpdateTags={handleUpdateTags}
       onSaveNote={handleSaveNote}
+      onTogglePublic={handleTogglePublic}
       onOpenExternal={handleOpenExternal}
+      onOpenItem={handleOpenItem}
     />
   );
 
@@ -787,7 +803,7 @@ export function NewsFeedClient({
           aria-hidden={isNarrowDrawerOpen || undefined}
           className="flex w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0"
         >
-          <div className="shrink-0 border-b border-border px-4 sm:px-5">
+          <div ref={filterBarRef} className="relative z-20 shrink-0 border-b border-border px-4 sm:px-5">
             <div className="flex items-center gap-2">
               <nav className="flex min-w-0 flex-1 gap-4 overflow-x-auto [scrollbar-width:none]" aria-label="Chế độ xem">
                 {TAB_VIEWS.map((tab) => {
@@ -818,23 +834,6 @@ export function NewsFeedClient({
                   );
                 })}
               </nav>
-              {unreadInListCount > 0 && view !== "dismissed" && (
-                <button
-                  type="button"
-                  disabled={isMarkingAllRead}
-                  onClick={() => void handleMarkAllRead()}
-                  aria-label="Đánh dấu tất cả đã đọc"
-                  title="Đánh dấu tất cả đã đọc"
-                  className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-                >
-                  {isMarkingAllRead ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <CheckCheck className="size-3.5" />
-                  )}
-                  <span className="hidden sm:inline">Đọc hết</span>
-                </button>
-              )}
               <button
                 type="button"
                 onClick={() => setIsFilterOpen((open) => !open)}
@@ -852,16 +851,19 @@ export function NewsFeedClient({
               </button>
             </div>
 
+            {/* Overlays the list instead of pushing it down, so cards keep their position */}
             <div
               inert={!isFilterOpen || undefined}
               aria-hidden={!isFilterOpen || undefined}
               className={cn(
-                "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
-                isFilterOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                "absolute inset-x-0 top-full origin-top border-b border-border bg-background shadow-lg transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none",
+                isFilterOpen
+                  ? "translate-y-0 opacity-100"
+                  : "pointer-events-none -translate-y-1 opacity-0"
               )}
             >
-              <div className="overflow-hidden">
-                <div className="flex flex-col gap-2.5 border-t border-border py-3">
+              <div className="max-h-[60dvh] overflow-auto overscroll-contain px-4 sm:px-5">
+                <div className="flex flex-col gap-2.5 py-3">
                   <label className="relative block md:hidden">
                     <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <input
@@ -1104,7 +1106,7 @@ export function NewsFeedClient({
         label={(item) => item.title}
         onClose={() => setIsPanelOpenOnNarrow(false)}
       >
-        {(item) => renderReaderPanel(item)}
+        {(item) => renderReaderPanel(item, "stacked")}
       </MobileNewsDrawer>
 
       <QuickPasteDialog

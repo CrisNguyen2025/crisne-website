@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWriteAccess } from "@/lib/auth/write-access";
-import { deleteNewsItem, getNewsItemById, updateNewsItem } from "@/lib/news/queries";
+import {
+  NewsItemNotPublishableError,
+  deleteNewsItem,
+  getNewsItemById,
+  updateNewsItem,
+} from "@/lib/news/queries";
 import { UpdateNewsItemSchema } from "@/lib/news/schemas";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +66,9 @@ export async function PATCH(
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
   } catch (error) {
+    if (error instanceof NewsItemNotPublishableError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[API PATCH /api/news/[id]] Error:", error);
     return NextResponse.json({ error: "Failed to update news item" }, { status: 500 });
   }

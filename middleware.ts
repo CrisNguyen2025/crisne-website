@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
+import { isPublicPagePath } from "@/lib/auth/public-paths";
 
 function isDevOwnerBypass(): boolean {
   return process.env.NODE_ENV === "development" && process.env.DEV_OWNER_BYPASS === "true";
@@ -30,6 +31,11 @@ export default auth((req) => {
   }
 
   if (pathname === "/api/roadmap-assistant/health") {
+    return NextResponse.next();
+  }
+
+  // Public News (`/picks`): read-only pages that query only public, allowlisted fields
+  if (isPublicPagePath(pathname)) {
     return NextResponse.next();
   }
 

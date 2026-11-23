@@ -107,6 +107,8 @@ CREATE TABLE "NewsItem" (
     "reviewStatus" TEXT NOT NULL DEFAULT 'published',
     "readState" TEXT NOT NULL DEFAULT 'unread',
     "isSaved" BOOLEAN NOT NULL DEFAULT false,
+    "isPublic" BOOLEAN NOT NULL DEFAULT false,
+    "publicAt" DATETIME,
     "extractionMethod" TEXT,
     "extractionError" TEXT,
     "normalizedTitle" TEXT,
@@ -193,6 +195,9 @@ CREATE INDEX "NewsItem_ingestStatus_idx" ON "NewsItem"("ingestStatus");
 
 -- CreateIndex
 CREATE INDEX "NewsItem_normalizedTitle_idx" ON "NewsItem"("normalizedTitle");
+
+-- CreateIndex
+CREATE INDEX "NewsItem_isPublic_publicAt_idx" ON "NewsItem"("isPublic", "publicAt");
 
 -- CreateIndex
 CREATE INDEX "IngestJob_status_nextRunAt_idx" ON "IngestJob"("status", "nextRunAt");

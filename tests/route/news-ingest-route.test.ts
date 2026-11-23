@@ -131,6 +131,12 @@ describe("news ingest & job routes", () => {
     expect(shareRes.status).toBe(202);
     const shareData = await shareRes.json();
     expect(shareData.item.reviewStatus).toBe("published");
+
+    // Every new post starts public, whatever its origin
+    for (const data of [manualData, cronData, shareData]) {
+      expect(data.item.isPublic).toBe(true);
+      expect(data.item.publicAt).not.toBeNull();
+    }
   });
 
   it("claims a job atomically, validates summary with Zod, and detects 72h title similarity", async () => {

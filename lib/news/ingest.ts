@@ -83,6 +83,10 @@ export async function enqueueNewsUrl(
           reviewStatus,
           readState: "unread",
           isSaved: false,
+          // New posts are public by default; /picks only lists them once the summary is ready,
+          // and the Owner can turn Public off per post. Rows created before this stay private.
+          isPublic: true,
+          publicAt: new Date(),
         },
       });
       const job = await tx.ingestJob.create({

@@ -358,4 +358,45 @@ describe("news feed query & item [id] GET/PATCH routes", () => {
     );
     expect((await unreadAfter.json()).items).toHaveLength(0);
   });
+
+  it("toggles isPublic with publicAt and rejects publishing unfinished or dismissed items", async () => {
+    const createItem = (overrides: { canonicalUrl: string; ingestStatus: string; reviewStatus?: string }) =>
+      prisma.newsItem.create({
+        data: {
+          sourceUrl: overrides.canonicalUrl,
+          canonicalUrl: overrides.canonicalUrl,
+          domain: "nextjs.org",
+          platform: "article",
+          origin: "cron",
+          title: "Next.js 16.4",
+          ingestStatus: overrides.ingestStatus,
+          reviewStatus: overrides.reviewStatus ?? "draft",
+        },
+      });
+    const ready = await createItem({ canonicalUrl: "https://nextjs.org/blog/a", ingestStatus: "ready" });
+    const queued = await createItem({ canonicalUrl: "https://nextjs.org/blog/b", ingestStatus: "queued" });
+    const dismissed = await createItem({
+      canonicalUrl: "https://nextjs.org/blog/c",
+      ingestStatus: "ready",
+      reviewStatus: "dismissed",
+    });
+    const patch = (id: string, body: unknown) =>
+      newsItemPatch(jsonRequest(`http://localhost/api/news/${id}`, "PATCH", body), idContext(id));
+
+    const publishRes = await patch(ready.id, { isPublic: true });
+    expect(publishRes.status).toBe(200);
+    const published = (await publishRes.json()).item;
+    expect(published.isPublic).toBe(true);
+    expect(published.publicAt).not.toBeNull();
+
+    const unpublishRes = await patch(ready.id, { isPublic: false });
+    const unpublished = (await unpublishRes.json()).item;
+    expect(unpublished.isPublic).toBe(false);
+    expect(unpublished.publicAt).toBeNull();
+
+    expect((await patch(queued.id, { isPublic: true })).status).toBe(400);
+    expect((await patch(dismissed.id, { isPublic: true })).status).toBe(400);
+    const stillPrivate = await prisma.newsItem.findUniqueOrThrow({ where: { id: queued.id } });
+    expect(stillPrivate.isPublic).toBe(false);
+  });
 });
