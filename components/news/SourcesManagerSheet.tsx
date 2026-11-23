@@ -224,7 +224,7 @@ export function SourcesManagerSheet({
     setIsCreating(true);
     setFormError(null);
     try {
-      await newsService.createNewsSource({
+      const { source } = await newsService.createNewsSource({
         name: trimmedName,
         feedUrl: trimmedFeed,
         domain: domainInput.trim() || undefined,
@@ -237,7 +237,12 @@ export function SourcesManagerSheet({
       setTagsInput("");
       await reloadSources();
       onChanged();
-      toast("Đã thêm nguồn RSS mới", "success");
+      toast(
+        source.feedUrl !== trimmedFeed
+          ? `Đã tự tìm thấy RSS: ${source.feedUrl}`
+          : "Đã thêm nguồn RSS mới",
+        "success"
+      );
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Không thể thêm nguồn RSS."
@@ -266,11 +271,16 @@ export function SourcesManagerSheet({
   const handleUpdate = async (source: NewsSourceDto, patch: UpdateNewsSourceRequest) => {
     setBusySourceId(source.id);
     try {
-      await newsService.updateNewsSource(source.id, patch);
+      const { source: updated } = await newsService.updateNewsSource(source.id, patch);
       await reloadSources();
       onChanged();
       setEditingSourceId(null);
-      toast(`Đã cập nhật nguồn "${patch.name ?? source.name}"`, "success");
+      toast(
+        patch.feedUrl && updated.feedUrl !== patch.feedUrl
+          ? `Đã cập nhật và tự tìm thấy RSS: ${updated.feedUrl}`
+          : `Đã cập nhật nguồn "${patch.name ?? source.name}"`,
+        "success"
+      );
     } catch (error) {
       toast(
         error instanceof Error ? error.message : "Không thể cập nhật nguồn RSS.",
@@ -431,9 +441,12 @@ export function SourcesManagerSheet({
               required
               value={feedUrlInput}
               onChange={(e) => setFeedUrlInput(e.target.value)}
-              placeholder="https://vercel.com/atom"
+              placeholder="https://vercel.com/atom hoặc https://goonnguyen.substack.com/"
               className="h-9 w-full rounded-lg border border-input bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Dán link XML hoặc URL trang chủ blog — hệ thống tự dò RSS/Atom feed.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">

@@ -308,4 +308,96 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).totalQueued).toBe(2);
   });
+
+  it("auto-discovers RSS XML from a blog homepage URL on POST and PATCH, rejecting HTML without feeds", async () => {
+    const substackHomeHtml = `<!doctype html><html><head>
+      <link rel="alternate" type="application/rss+xml" href="/feed" title="Goon" />
+    </head><body>Blog</body></html>`;
+    const emptyHomeHtml = `<!doctype html><html><head><title>No Feed</title></head><body></body></html>`;
+    const atomXml = `<?xml version="1.0" encoding="utf-8"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <title>Updated Atom</title>
+        <entry><title>Hello</title><link rel="alternate" href="https://atom-blog.dev/hello" /></entry>
+      </feed>`;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL) => {
+        const url = String(input);
+        if (url === "https://goonnguyen.substack.com/") {
+          return new Response(substackHomeHtml, {
+            status: 200,
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        if (url === "https://goonnguyen.substack.com/feed") {
+          return new Response(SAMPLE_RSS_XML, {
+            status: 200,
+            headers: { "Content-Type": "application/xml" },
+          });
+        }
+        if (url === "https://atom-blog.dev/") {
+          return new Response(emptyHomeHtml, {
+            status: 200,
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        if (url === "https://atom-blog.dev/atom.xml") {
+          return new Response(atomXml, {
+            status: 200,
+            headers: { "Content-Type": "application/atom+xml" },
+          });
+        }
+        if (url === "https://no-rss.example/") {
+          return new Response(emptyHomeHtml, {
+            status: 200,
+            headers: { "Content-Type": "text/html" },
+          });
+        }
+        return new Response("Not Found", { status: 404 });
+      })
+    );
+
+    const createRes = await sourcesPost(
+      jsonRequest("http://localhost/api/news/sources", "POST", {
+        name: "Goon Substack",
+        feedUrl: "https://goonnguyen.substack.com/",
+      })
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()).source;
+    expect(created.feedUrl).toBe("https://goonnguyen.substack.com/feed");
+    expect(created.domain).toBe("goonnguyen.substack.com");
+
+    // Re-adding either the homepage URL or the resolved XML URL hits 409 conflict
+    const dupHomeRes = await sourcesPost(
+      jsonRequest("http://localhost/api/news/sources", "POST", {
+        name: "Goon Again",
+        feedUrl: "https://goonnguyen.substack.com/",
+      })
+    );
+    expect(dupHomeRes.status).toBe(409);
+
+    // HTML page with no discoverable feed returns 400 FEED_NOT_FOUND
+    const noFeedRes = await sourcesPost(
+      jsonRequest("http://localhost/api/news/sources", "POST", {
+        name: "No RSS",
+        feedUrl: "https://no-rss.example/",
+      })
+    );
+    expect(noFeedRes.status).toBe(400);
+    expect((await noFeedRes.json()).code).toBe("FEED_NOT_FOUND");
+
+    // PATCH with a homepage URL also auto-discovers via fallback path (/atom.xml)
+    const patchRes = await sourcePatch(
+      jsonRequest(`http://localhost/api/news/sources/${created.id}`, "PATCH", {
+        feedUrl: "https://atom-blog.dev/",
+      }),
+      idContext(created.id)
+    );
+    expect(patchRes.status).toBe(200);
+    const updated = (await patchRes.json()).source;
+    expect(updated.feedUrl).toBe("https://atom-blog.dev/atom.xml");
+    expect(updated.domain).toBe("atom-blog.dev");
+  });
 });

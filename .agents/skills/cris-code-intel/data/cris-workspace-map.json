@@ -262,6 +262,7 @@
         "lib/news/content-type.ts",
         "lib/news/queries.ts",
         "lib/news/sources.ts",
+        "lib/news/feed-discovery.ts",
         "lib/news/rss-fetcher.ts",
         "lib/news/url-guard.ts",
         "lib/news/dedupe.ts",
@@ -625,7 +626,7 @@
       "method": "POST",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Thêm nguồn RSS/Atom mới với kiểm tra DNS chống SSRF",
+      "summary": "Thêm nguồn RSS/Atom mới (hỗ trợ tự dò feed từ HTML trang chủ) với kiểm tra DNS chống SSRF",
       "handler": "app/api/news/sources/route.ts#POST",
       "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
     },
@@ -636,7 +637,7 @@
       "method": "PATCH",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Cập nhật thông tin hoặc bật/tắt nguồn RSS",
+      "summary": "Cập nhật thông tin (tự dò lại feed nếu đổi sang URL trang chủ) hoặc bật/tắt nguồn RSS",
       "handler": "app/api/news/sources/[id]/route.ts#PATCH",
       "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
     },
@@ -1381,7 +1382,7 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/news/SourcesManagerSheet.tsx",
-          "action": "Owner thêm/bật nguồn RSS hoặc bấm nút quét đồng bộ ngay; xem tổng hợp queued/duplicates/skippedErrors",
+          "action": "Owner thêm/bật nguồn RSS (hỗ trợ dán URL trang chủ để tự dò XML qua lib/news/feed-discovery.ts#resolveFeedUrl) hoặc bấm nút quét đồng bộ ngay; xem tổng hợp queued/duplicates/skippedErrors",
           "callsNext": "logic/news/newsService.ts#triggerNewsCronSync",
           "dataPassed": "{ sourceId?, maxItemsPerSource? }"
         },

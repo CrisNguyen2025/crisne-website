@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { CreateNewsSourceSchema } from "@/lib/news/schemas";
+import { FeedDiscoveryError } from "@/lib/news/feed-discovery";
 import {
   NewsSourceConflictError,
   createNewsSource,
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error) {
-    if (error instanceof UrlGuardError) {
+    if (error instanceof UrlGuardError || error instanceof FeedDiscoveryError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
         { status: error.status }

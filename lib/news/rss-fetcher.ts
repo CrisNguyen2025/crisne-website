@@ -216,7 +216,14 @@ async function readFeedBodyWithLimit(response: Response): Promise<string> {
 
 export type FeedFetchResult =
   | { kind: "not_modified"; etag: string | null; lastModified: string | null }
-  | { kind: "ok"; xml: string; etag: string | null; lastModified: string | null };
+  | {
+      kind: "ok";
+      xml: string;
+      etag: string | null;
+      lastModified: string | null;
+      finalUrl: string;
+      contentType: string | null;
+    };
 
 export async function fetchFeedWithCacheSafely(
   feedUrl: string,
@@ -225,9 +232,11 @@ export async function fetchFeedWithCacheSafely(
     fetchFn?: typeof fetch;
     etag?: string | null;
     lastModified?: string | null;
+    timeoutMs?: number;
   } = {}
 ): Promise<FeedFetchResult> {
   const fetchFn = options.fetchFn ?? fetch;
+  const timeoutMs = options.timeoutMs ?? FEED_FETCH_TIMEOUT_MS;
   let current = new URL(feedUrl.trim());
 
   for (let hop = 0; hop <= MAX_FEED_REDIRECTS; hop++) {
@@ -254,7 +263,7 @@ export async function fetchFeedWithCacheSafely(
       method: "GET",
       redirect: "manual",
       headers,
-      signal: AbortSignal.timeout(FEED_FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (response.status >= 300 && response.status < 400) {
@@ -279,6 +288,7 @@ export async function fetchFeedWithCacheSafely(
     }
 
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       throw new Error(`Tải feed thất bại với HTTP ${response.status}`);
     }
 
@@ -288,6 +298,8 @@ export async function fetchFeedWithCacheSafely(
       xml,
       etag: response.headers.get("etag"),
       lastModified: response.headers.get("last-modified"),
+      finalUrl: current.toString(),
+      contentType: response.headers.get("content-type"),
     };
   }
 

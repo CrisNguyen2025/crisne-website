@@ -477,4 +477,47 @@ describe("news feed UI components", () => {
     });
     expect(await screen.findByText(/1 link bị bỏ qua/)).toBeTruthy();
   });
+
+  it("shows auto-discovered RSS URL in toast when homepage URL resolves to XML feed", async () => {
+    const discoveredSource = {
+      id: "src-sub",
+      name: "Goon",
+      feedUrl: "https://goonnguyen.substack.com/feed",
+      domain: "goonnguyen.substack.com",
+      enabled: true,
+      defaultTags: [],
+      lastFetchedAt: null,
+      lastError: null,
+      createdAt: "2026-11-23T07:00:00.000Z",
+      updatedAt: "2026-11-23T07:00:00.000Z",
+    };
+
+    vi.spyOn(newsService, "createNewsSource").mockResolvedValue({ source: discoveredSource });
+    vi.spyOn(newsService, "fetchNewsSources").mockResolvedValue({
+      sources: [discoveredSource],
+    });
+
+    render(
+      <ToastProvider>
+        <SourcesManagerSheet
+          open={true}
+          initialSources={[]}
+          onClose={vi.fn()}
+          onChanged={vi.fn()}
+        />
+      </ToastProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText("Tên nguồn"), {
+      target: { value: "Goon" },
+    });
+    fireEvent.change(screen.getByLabelText("RSS / Atom Feed URL"), {
+      target: { value: "https://goonnguyen.substack.com/" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
+
+    expect(
+      await screen.findByText("Đã tự tìm thấy RSS: https://goonnguyen.substack.com/feed")
+    ).toBeTruthy();
+  });
 });

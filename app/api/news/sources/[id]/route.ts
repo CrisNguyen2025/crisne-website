@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { UpdateNewsSourceSchema } from "@/lib/news/schemas";
+import { FeedDiscoveryError } from "@/lib/news/feed-discovery";
 import {
   NewsSourceConflictError,
   deleteNewsSource,
@@ -43,7 +44,7 @@ export async function PATCH(
       { headers: { "Cache-Control": "no-store, max-age=0" } }
     );
   } catch (error) {
-    if (error instanceof UrlGuardError) {
+    if (error instanceof UrlGuardError || error instanceof FeedDiscoveryError) {
       return NextResponse.json(
         { error: error.message, code: error.code },
         { status: error.status }

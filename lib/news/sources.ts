@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveFeedUrl } from "./feed-discovery";
 import {
   type CreateNewsSourceRequest,
   type NewsSourceDto,
@@ -80,12 +81,18 @@ function parseAndValidateFeedUrl(rawFeedUrl: string): { feedUrl: string; hostnam
 
 export async function createNewsSource(
   input: CreateNewsSourceRequest,
-  options: { lookupFn?: HostLookupFn } = {}
+  options: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch } = {}
 ): Promise<NewsSourceDto> {
-  const { feedUrl, hostname } = parseAndValidateFeedUrl(input.feedUrl);
+  const { feedUrl: rawFeedUrl, hostname } = parseAndValidateFeedUrl(input.feedUrl);
   await assertPublicHostname(hostname, options.lookupFn);
 
-  const domain = extractSourceDomain(feedUrl, input.domain);
+  const resolved = await resolveFeedUrl(rawFeedUrl, options);
+  const feedUrl = resolved.feedUrl;
+  const domain = input.domain?.trim()
+    ? extractSourceDomain(feedUrl, input.domain)
+    : resolved.discovered
+      ? resolved.siteHost
+      : extractSourceDomain(feedUrl);
   await assertPublicHostname(domain, options.lookupFn);
 
   const defaultTags = normalizeTagList(input.defaultTags ?? [], 5);
@@ -112,16 +119,21 @@ export async function createNewsSource(
 export async function updateNewsSource(
   id: string,
   input: UpdateNewsSourceRequest,
-  options: { lookupFn?: HostLookupFn } = {}
+  options: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch } = {}
 ): Promise<NewsSourceDto | null> {
   const existing = await prisma.newsSource.findUnique({ where: { id } });
   if (!existing) return null;
 
   let nextFeedUrl = existing.feedUrl;
+  let feedDiscovered = false;
+  let resolvedSiteHost: string | undefined;
   if (input.feedUrl) {
     const validatedFeed = parseAndValidateFeedUrl(input.feedUrl);
-    nextFeedUrl = validatedFeed.feedUrl;
     await assertPublicHostname(validatedFeed.hostname, options.lookupFn);
+    const resolved = await resolveFeedUrl(validatedFeed.feedUrl, options);
+    nextFeedUrl = resolved.feedUrl;
+    feedDiscovered = resolved.discovered;
+    resolvedSiteHost = resolved.siteHost;
   }
 
   let nextDomain = existing.domain;
@@ -129,13 +141,18 @@ export async function updateNewsSource(
     nextDomain = extractSourceDomain(nextFeedUrl, input.domain);
     await assertPublicHostname(nextDomain, options.lookupFn);
   } else if (input.feedUrl) {
-    nextDomain = extractSourceDomain(nextFeedUrl);
+    nextDomain =
+      feedDiscovered && resolvedSiteHost
+        ? resolvedSiteHost
+        : extractSourceDomain(nextFeedUrl);
     await assertPublicHostname(nextDomain, options.lookupFn);
   }
 
+  const feedUrlChanged = input.feedUrl !== undefined && nextFeedUrl !== existing.feedUrl;
   const data: Prisma.NewsSourceUpdateInput = {
     ...(input.name !== undefined ? { name: input.name.trim() } : {}),
     ...(input.feedUrl !== undefined ? { feedUrl: nextFeedUrl } : {}),
+    ...(feedUrlChanged ? { etag: null, lastModified: null, lastError: null } : {}),
     ...(input.domain !== undefined || input.feedUrl !== undefined ? { domain: nextDomain } : {}),
     ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
     ...(input.defaultTags !== undefined
