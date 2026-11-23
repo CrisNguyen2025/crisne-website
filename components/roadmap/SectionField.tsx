@@ -160,24 +160,18 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
   return (
     <div ref={rootRef} className={cn('relative space-y-1.5', className)}>
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={fieldId} className="block text-xs font-medium text-foreground">
+        <label htmlFor={fieldId} className="block text-[0.8125rem] font-medium text-foreground">
           Mục
         </label>
-        {!cleaned ? (
-          <span className="text-[0.6875rem] text-muted-foreground">Mục chung</span>
-        ) : exactMatch ? (
-          exactMatch !== cleaned ? (
-            <span className="max-w-[12rem] truncate text-[0.6875rem] text-muted-foreground">
-              Khớp mục: <strong className="font-medium text-foreground">{exactMatch}</strong>
-            </span>
-          ) : (
-            <span className="text-[0.6875rem] text-muted-foreground">Mục có sẵn</span>
-          )
-        ) : (
+        {cleaned && exactMatch && exactMatch !== cleaned ? (
+          <span className="max-w-[12rem] truncate text-[0.6875rem] text-muted-foreground">
+            Khớp mục: <strong className="font-medium text-foreground">{exactMatch}</strong>
+          </span>
+        ) : cleaned && !exactMatch ? (
           <span className="rounded bg-[var(--editorial-accent-soft)] px-1.5 py-0.5 text-[0.6875rem] font-medium text-[var(--editorial-accent)]">
             Mục mới
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className="relative">
@@ -193,9 +187,7 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
           autoComplete="off"
           value={value}
           placeholder={
-            sections.length > 0
-              ? 'Tìm hoặc nhập tên mục mới (trống = Chung)…'
-              : 'Nhập tên mục mới (để trống = Chung)…'
+            sections.length > 0 ? 'Chọn hoặc nhập tên mục…' : 'Nhập tên mục mới…'
           }
           onFocus={() => {
             if (!isOpen) openListbox();
@@ -225,7 +217,7 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
             }
           }}
           onKeyDown={handleKeyDown}
-          className="w-full rounded-lg border border-border bg-background py-2 pl-3 pr-14 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-primary focus:outline-none"
+          className="h-9 w-full rounded-lg border border-input bg-background pl-3 pr-14 text-sm text-foreground placeholder:text-muted-foreground/80 transition-[border-color,box-shadow] duration-150 focus:border-[var(--ring)] focus:ring-2 focus:ring-[var(--ring)]/20 focus:outline-none"
         />
 
         <div className="absolute inset-y-0 right-1.5 flex items-center gap-0.5">

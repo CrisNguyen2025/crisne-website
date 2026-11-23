@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useId, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  ROADMAP_GHOST_BTN_CLASS,
+  ROADMAP_INPUT_CLASS,
+  ROADMAP_MODAL_TITLE_CLASS,
+  ROADMAP_PRIMARY_BTN_CLASS,
+  ROADMAP_SECONDARY_BTN_CLASS,
+  ROADMAP_TEXTAREA_CLASS,
+  RoadmapFieldLabel,
+  RoadmapFormError,
+} from './RoadmapFormPrimitives';
 import { SectionField } from './SectionField';
 import { SECTIONS_ENABLED } from './sectionsEnabled';
 
@@ -37,26 +47,27 @@ function CreateItemForm({
   targetSection: string | null;
   onClose: () => void;
   onAfterClose: () => void;
-  onSubmit: (
-    section: string | null,
-    title: string,
-    description: string,
-    options?: CreateItemOptions
-  ) => void | Promise<void>;
+  onSubmit: CreateItemModalProps['onSubmit'];
 }) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const errorId = useId();
   const [section, setSection] = useState(targetSection ?? '');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingMode, setSubmittingMode] = useState<'create' | 'create-and-edit' | null>(null);
   const [error, setError] = useState('');
 
+  const isSubmitting = submittingMode !== null;
+
   const submitForm = async (openEditor: boolean) => {
+    if (isSubmitting) return;
     if (!title.trim()) {
       setError('Nhập tên bài.');
       return;
     }
     try {
-      setIsSubmitting(true);
+      setSubmittingMode(openEditor ? 'create-and-edit' : 'create');
       setError('');
       await onSubmit(
         SECTIONS_ENABLED ? sectionSpelling(sections, section) : null,
@@ -68,7 +79,7 @@ function CreateItemForm({
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không thêm được bài học.');
     } finally {
-      setIsSubmitting(false);
+      setSubmittingMode(null);
     }
   };
 
@@ -83,24 +94,15 @@ function CreateItemForm({
       onClose={isSubmitting ? () => {} : onClose}
       onAfterClose={onAfterClose}
       title="Thêm bài học"
-      className="roadmap-theme"
-      description={
-        SECTIONS_ENABLED ? (
-          <span className="mt-0.5 truncate text-xs text-muted-foreground">
-            Mục:{' '}
-            <span className="font-medium text-foreground">
-              {sectionSpelling(sections, section) ?? 'Chung'}
-            </span>
-          </span>
-        ) : undefined
-      }
+      titleClassName={ROADMAP_MODAL_TITLE_CLASS}
+      className="roadmap-theme sm:max-w-lg"
       footer={
-        <>
+        <div className="flex w-full flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             disabled={isSubmitting}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={`${ROADMAP_GHOST_BTN_CLASS} sm:mr-auto`}
           >
             Hủy
           </button>
@@ -108,51 +110,72 @@ function CreateItemForm({
             type="button"
             disabled={isSubmitting}
             onClick={() => void submitForm(true)}
-            className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-muted active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={ROADMAP_SECONDARY_BTN_CLASS}
           >
-            Tạo & viết nội dung
+            {submittingMode === 'create-and-edit' && (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            )}
+            <span>
+              {submittingMode === 'create-and-edit' ? 'Đang mở trình soạn…' : 'Tạo & viết nội dung'}
+            </span>
           </button>
           <button
             type="submit"
             form="create-item-form"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={ROADMAP_PRIMARY_BTN_CLASS}
           >
-            {isSubmitting && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
-            <span>{isSubmitting ? 'Đang thêm…' : 'Thêm bài'}</span>
+            {submittingMode === 'create' && (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+            )}
+            <span>{submittingMode === 'create' ? 'Đang thêm…' : 'Thêm bài'}</span>
           </button>
-        </>
+        </div>
       }
     >
-      <form id="create-item-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-        {error && (
-          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+      <form id="create-item-form" noValidate onSubmit={handleSubmit} className="space-y-4">
+        <RoadmapFormError id={errorId} message={error} />
 
         {SECTIONS_ENABLED && <SectionField value={section} onChange={setSection} sections={sections} />}
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">Tên bài *</label>
+          <RoadmapFieldLabel htmlFor={titleId} required>
+            Tên bài
+          </RoadmapFieldLabel>
           <input
+            id={titleId}
             type="text"
+            required
             autoFocus
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={error ? errorId : undefined}
+            disabled={isSubmitting}
             placeholder="ví dụ: Speculative Decoding, GraphRAG…"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (error) setError('');
+            }}
+            className={ROADMAP_INPUT_CLASS}
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">Mô tả</label>
+          <RoadmapFieldLabel htmlFor={descriptionId}>Mô tả</RoadmapFieldLabel>
           <textarea
-            placeholder="Tóm tắt ngắn (tuỳ chọn)…"
+            id={descriptionId}
+            disabled={isSubmitting}
+            placeholder="Tóm tắt ngắn…"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void submitForm(false);
+              }
+            }}
             rows={3}
-            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
+            className={`${ROADMAP_TEXTAREA_CLASS} resize-none`}
           />
         </div>
       </form>

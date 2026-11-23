@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowUpDown, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { Plus, ArrowUpDown, FolderPlus, Pencil, Trash2, Ungroup } from "lucide-react";
 import { markPendingLessonWrite } from "@/lib/roadmap/pending-write";
 import { splitSectionLabel } from "@/lib/roadmap/section-label";
 import { groupBySection } from "@/lib/roadmap/sections";
@@ -150,27 +150,20 @@ export function TopicEditorialPage({
     description: string,
     options?: CreateItemOptions
   ) => {
-    try {
-      const { item } = await roadmapService.createItem({
-        roadmapSlug: topic.slug,
-        section,
-        title,
-        description,
-      });
-      invalidateStatuses();
-      window.dispatchEvent(new CustomEvent("roadmap:updated"));
-      if (options?.openEditor && item?.slug) {
-        markPendingLessonWrite(item.slug);
-        router.push(lessonPath(topic.slug, item.slug));
-        return;
-      }
-      toast(`Đã thêm bài "${title}"`, "success");
-    } catch (err) {
-      toast(
-        err instanceof Error ? err.message : "Không thêm được bài học.",
-        "error"
-      );
+    const { item } = await roadmapService.createItem({
+      roadmapSlug: topic.slug,
+      section,
+      title,
+      description,
+    });
+    invalidateStatuses();
+    window.dispatchEvent(new CustomEvent("roadmap:updated"));
+    if (options?.openEditor && item?.slug) {
+      markPendingLessonWrite(item.slug);
+      router.push(lessonPath(topic.slug, item.slug));
+      return;
     }
+    toast(`Đã thêm bài "${title}"`, "success");
   };
 
   const handleReorderSection = async (
@@ -216,13 +209,9 @@ export function TopicEditorialPage({
   };
 
   const handleRenameSection = async (from: string, to: string) => {
-    try {
-      await roadmapService.renameSection(topic.slug, { from, to });
-      toast(`Đã đổi tên mục thành "${to}"`, "success");
-      window.dispatchEvent(new CustomEvent("roadmap:updated"));
-    } catch {
-      toast("Không đổi tên được mục.", "error");
-    }
+    await roadmapService.renameSection(topic.slug, { from, to });
+    toast(`Đã đổi tên mục thành "${to}"`, "success");
+    window.dispatchEvent(new CustomEvent("roadmap:updated"));
   };
 
   const handleDissolveSection = async (section: string) => {
@@ -422,7 +411,17 @@ export function TopicEditorialPage({
             )}
           </div>
         ) : isReorderMode && canWrite ? (
-          <div className="mt-8 motion-safe:animate-in motion-safe:fade-in duration-150">
+          <div className="mt-8 space-y-4 motion-safe:animate-in motion-safe:fade-in duration-150">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+              <span>Kéo thả để đổi thứ tự bài học trong mục</span>
+              <button
+                type="button"
+                onClick={() => setIsReorderMode(false)}
+                className="font-medium text-foreground transition-colors hover:text-[var(--editorial-accent)] cursor-pointer"
+              >
+                Xong
+              </button>
+            </div>
             <RoadmapMap
               embedded
               sectionGroups={siblingGroups}
@@ -558,17 +557,50 @@ export function TopicEditorialPage({
                               {group.items.length} bài
                             </span>
                             {canWrite && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setTargetSection(group.section);
-                                  setIsCreateItemOpen(true);
-                                }}
-                                aria-label={`Thêm bài vào ${primary}`}
-                                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer"
-                              >
-                                <Plus className="size-3.5" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetSection(group.section);
+                                    setIsCreateItemOpen(true);
+                                  }}
+                                  aria-label={`Thêm bài vào ${primary}`}
+                                  title={`Thêm bài vào ${primary}`}
+                                  className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer"
+                                >
+                                  <Plus className="size-3.5" />
+                                </button>
+                                {SECTIONS_ENABLED && group.section !== null && (
+                                  <ActionMenu
+                                    label={`Thao tác mục ${primary}`}
+                                    items={[
+                                      {
+                                        label: "Thêm bài vào mục",
+                                        icon: Plus,
+                                        onSelect: () => {
+                                          setTargetSection(group.section);
+                                          setIsCreateItemOpen(true);
+                                        },
+                                      },
+                                      {
+                                        label: "Đổi tên mục",
+                                        icon: Pencil,
+                                        onSelect: () => setRenamingSection(group.section as string),
+                                      },
+                                      {
+                                        label: "Bỏ mục (về Chung)",
+                                        icon: Ungroup,
+                                        confirm: {
+                                          title: `Bỏ mục "${primary}"?`,
+                                          description: `${group.items.length} bài học sẽ chuyển về Chung.`,
+                                          confirmLabel: "Bỏ mục",
+                                        },
+                                        onSelect: () => void handleDissolveSection(group.section as string),
+                                      },
+                                    ]}
+                                  />
+                                )}
+                              </>
                             )}
                           </div>
                         </div>
@@ -641,6 +673,7 @@ export function TopicEditorialPage({
       <EditSectionModal
         isOpen={renamingSection !== null}
         section={renamingSection}
+        existingSections={namedSections}
         onClose={() => setRenamingSection(null)}
         onSubmit={handleRenameSection}
       />

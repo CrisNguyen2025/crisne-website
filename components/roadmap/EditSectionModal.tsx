@@ -1,92 +1,149 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useId, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { normalizeTitle } from '@/lib/roadmap/titles';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  ROADMAP_GHOST_BTN_CLASS,
+  ROADMAP_INPUT_CLASS,
+  ROADMAP_MODAL_TITLE_CLASS,
+  ROADMAP_PRIMARY_BTN_CLASS,
+  RoadmapFieldLabel,
+  RoadmapFormError,
+} from './RoadmapFormPrimitives';
 
 interface EditSectionModalProps {
   isOpen: boolean;
   /** The section's current name; null for the lessons outside any section (nothing to rename) */
   section: string | null;
+  existingSections?: string[];
   onClose: () => void;
   /** Renaming onto a name the topic already uses merges the two sections */
-  onSubmit: (from: string, to: string) => void;
+  onSubmit: (from: string, to: string) => void | Promise<void>;
 }
 
 function EditSectionForm({
   isOpen,
   section,
+  existingSections,
   onClose,
   onAfterClose,
   onSubmit,
 }: {
   isOpen: boolean;
   section: string;
+  existingSections?: string[];
   onClose: () => void;
   onAfterClose: () => void;
-  onSubmit: (from: string, to: string) => void;
+  onSubmit: (from: string, to: string) => void | Promise<void>;
 }) {
+  const titleId = useId();
+  const errorId = useId();
   const [title, setTitle] = useState(section);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const trimmed = title.trim();
+  const mergeTarget = trimmed
+    ? existingSections?.find(
+        (s) => s !== section && normalizeTitle(s) === normalizeTitle(trimmed)
+      )
+    : undefined;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
+    if (isSubmitting) return;
+    if (!trimmed) {
       setError('Nhập tên mục.');
       return;
     }
-    onSubmit(section, title.trim());
-    onClose();
+    if (trimmed === section) {
+      onClose();
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      setError('');
+      await onSubmit(section, trimmed);
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không đổi tên được mục. Thử lại nhé.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <Dialog
       open={isOpen}
-      onClose={onClose}
+      onClose={isSubmitting ? () => {} : onClose}
       onAfterClose={onAfterClose}
       title="Đổi tên mục"
+      titleClassName={ROADMAP_MODAL_TITLE_CLASS}
       className="roadmap-theme"
-      description="Mọi bài học trong mục sẽ chuyển sang tên mới."
       footer={
         <>
           <button
             type="button"
+            disabled={isSubmitting}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] cursor-pointer"
+            className={ROADMAP_GHOST_BTN_CLASS}
           >
             Hủy
           </button>
           <button
             type="submit"
             form="edit-section-form"
-            className="rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+            disabled={isSubmitting}
+            className={ROADMAP_PRIMARY_BTN_CLASS}
           >
-            Lưu
+            {isSubmitting && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+            <span>{isSubmitting ? 'Đang lưu…' : 'Lưu thay đổi'}</span>
           </button>
         </>
       }
     >
-      <form id="edit-section-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-        {error && (
-          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+      <form id="edit-section-form" noValidate onSubmit={handleSubmit} className="space-y-4">
+        <RoadmapFormError id={errorId} message={error} />
+
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">Tên mục *</label>
+          <RoadmapFieldLabel htmlFor={titleId} required>
+            Tên mục
+          </RoadmapFieldLabel>
           <input
+            id={titleId}
             type="text"
+            required
             autoFocus
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={error ? errorId : undefined}
+            disabled={isSubmitting}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (error) setError('');
+            }}
+            className={ROADMAP_INPUT_CLASS}
           />
+          {mergeTarget && (
+            <p className="text-xs leading-relaxed text-[var(--editorial-accent)]">
+              Trùng mục sẵn có — bài học sẽ gộp vào &ldquo;{mergeTarget}&rdquo;.
+            </p>
+          )}
         </div>
       </form>
     </Dialog>
   );
 }
 
-export function EditSectionModal({ isOpen, section, onClose, onSubmit }: EditSectionModalProps) {
+export function EditSectionModal({
+  isOpen,
+  section,
+  existingSections,
+  onClose,
+  onSubmit,
+}: EditSectionModalProps) {
   const isActive = isOpen && section !== null;
   const [renderedSection, setRenderedSection] = useState<string | null>(
     isActive ? section : null
@@ -114,6 +171,7 @@ export function EditSectionModal({ isOpen, section, onClose, onSubmit }: EditSec
       key={`${renderedSection}:${sessionId}`}
       isOpen={isActive}
       section={renderedSection}
+      existingSections={existingSections}
       onClose={onClose}
       onAfterClose={handleAfterClose}
       onSubmit={onSubmit}

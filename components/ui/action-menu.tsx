@@ -106,7 +106,7 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
                   onClick={() => setConfirming(null)}
                   className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] cursor-pointer"
                 >
-                  Cancel
+                  Hủy
                 </button>
                 <button
                   type="button"

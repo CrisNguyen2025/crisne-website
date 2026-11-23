@@ -1,8 +1,14 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  ROADMAP_DESTRUCTIVE_BTN_CLASS,
+  ROADMAP_GHOST_BTN_CLASS,
+  ROADMAP_MODAL_TITLE_CLASS,
+  RoadmapDangerIcon,
+} from './RoadmapFormPrimitives';
 
 interface ConfirmDeleteModalProps {
   isOpen: boolean;
@@ -30,16 +36,20 @@ export function ConfirmDeleteModal({
       open={isOpen}
       onClose={isLoading ? () => {} : onClose}
       title={title}
-      description={description}
+      titleClassName={ROADMAP_MODAL_TITLE_CLASS}
       className="roadmap-theme"
-      icon={<AlertTriangle className="size-4 text-destructive" />}
+      icon={
+        <RoadmapDangerIcon>
+          <AlertTriangle className="size-4" />
+        </RoadmapDangerIcon>
+      }
       footer={
         <>
           <button
             type="button"
             disabled={isLoading}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={ROADMAP_GHOST_BTN_CLASS}
           >
             {cancelText}
           </button>
@@ -47,11 +57,11 @@ export function ConfirmDeleteModal({
             type="button"
             disabled={isLoading}
             onClick={onConfirm}
-            className="flex items-center gap-1.5 rounded-lg bg-destructive px-3.5 py-1.5 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-destructive/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 cursor-pointer"
+            className={ROADMAP_DESTRUCTIVE_BTN_CLASS}
           >
             {isLoading ? (
               <>
-                <span className="size-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                 <span>Đang xử lý…</span>
               </>
             ) : (
@@ -61,7 +71,7 @@ export function ConfirmDeleteModal({
         </>
       }
     >
-      <p className="text-xs text-muted-foreground">Hành động này không thể hoàn tác.</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
     </Dialog>
   );
 }

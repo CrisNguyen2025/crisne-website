@@ -174,6 +174,7 @@ interface DialogProps {
   onClose: () => void;
   onAfterClose?: () => void;
   title: ReactNode;
+  titleClassName?: string;
   description?: ReactNode;
   icon?: ReactNode;
   children: ReactNode;
@@ -187,6 +188,7 @@ export function Dialog({
   onClose,
   onAfterClose,
   title,
+  titleClassName,
   description,
   icon,
   children,
@@ -228,7 +230,7 @@ export function Dialog({
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">
           {icon && <div className="mt-0.5 shrink-0 text-primary">{icon}</div>}
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <h2 className={cn("text-sm font-semibold text-foreground", titleClassName)}>{title}</h2>
             {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
           </div>
           <button

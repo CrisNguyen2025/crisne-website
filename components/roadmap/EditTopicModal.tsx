@@ -1,9 +1,18 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useId, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { RoadmapMeta } from '@/lib/roadmap/types';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  ROADMAP_GHOST_BTN_CLASS,
+  ROADMAP_INPUT_CLASS,
+  ROADMAP_MODAL_TITLE_CLASS,
+  ROADMAP_PRIMARY_BTN_CLASS,
+  ROADMAP_TEXTAREA_CLASS,
+  RoadmapFieldLabel,
+  RoadmapFormError,
+} from './RoadmapFormPrimitives';
 
 interface EditTopicModalProps {
   isOpen: boolean;
@@ -25,13 +34,16 @@ function EditTopicForm({
   onAfterClose: () => void;
   onSubmit: (title: string, description?: string) => Promise<void>;
 }) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const errorId = useId();
   const [title, setTitle] = useState(topic.title);
   const [description, setDescription] = useState(topic.description || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitTopic = async () => {
+    if (isSubmitting) return;
     if (!title.trim()) {
       setError('Nhập tên topic.');
       return;
@@ -50,12 +62,18 @@ function EditTopicForm({
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitTopic();
+  };
+
   return (
     <Dialog
       open={isOpen}
       onClose={isSubmitting ? () => {} : onClose}
       onAfterClose={onAfterClose}
       title="Sửa topic"
+      titleClassName={ROADMAP_MODAL_TITLE_CLASS}
       className="roadmap-theme"
       footer={
         <>
@@ -63,7 +81,7 @@ function EditTopicForm({
             type="button"
             disabled={isSubmitting}
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={ROADMAP_GHOST_BTN_CLASS}
           >
             Hủy
           </button>
@@ -71,41 +89,55 @@ function EditTopicForm({
             type="submit"
             form="edit-topic-form"
             disabled={isSubmitting}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+            className={ROADMAP_PRIMARY_BTN_CLASS}
           >
-            {isSubmitting && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
-            <span>{isSubmitting ? 'Đang lưu…' : 'Lưu'}</span>
+            {isSubmitting && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+            <span>{isSubmitting ? 'Đang lưu…' : 'Lưu thay đổi'}</span>
           </button>
         </>
       }
     >
-      <form id="edit-topic-form" onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-        {error && (
-          <div className="rounded-lg border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+      <form id="edit-topic-form" noValidate onSubmit={handleSubmit} className="space-y-4">
+        <RoadmapFormError id={errorId} message={error} />
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">Tên topic *</label>
+          <RoadmapFieldLabel htmlFor={titleId} required>
+            Tên topic
+          </RoadmapFieldLabel>
           <input
+            id={titleId}
             type="text"
+            required
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={error ? errorId : undefined}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            disabled={isSubmitting}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (error) setError('');
+            }}
             placeholder="ví dụ: AI Engineering"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
+            className={ROADMAP_INPUT_CLASS}
             autoFocus
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">Mô tả</label>
+          <RoadmapFieldLabel htmlFor={descriptionId}>Mô tả</RoadmapFieldLabel>
           <textarea
+            id={descriptionId}
             value={description}
+            disabled={isSubmitting}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Tóm tắt ngắn (tuỳ chọn)…"
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                e.preventDefault();
+                void submitTopic();
+              }
+            }}
+            placeholder="Tóm tắt ngắn…"
             rows={3}
-            className="w-full resize-none rounded-lg border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground transition-[border-color,box-shadow] duration-150 focus:border-foreground/50 focus:outline-none"
+            className={`${ROADMAP_TEXTAREA_CLASS} resize-none`}
           />
         </div>
       </form>
