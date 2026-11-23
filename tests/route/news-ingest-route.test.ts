@@ -191,6 +191,7 @@ describe("news ingest & job routes", () => {
     expect(goodComplete.status).toBe(200);
     const firstCompleted = (await goodComplete.json()).item;
     expect(firstCompleted.ingestStatus).toBe("ready");
+    expect(firstCompleted.slug).toMatch(/^[a-z0-9-]+$/);
     expect(firstCompleted.tags).toEqual(["nextjs", "frontend"]);
     expect(firstCompleted.possibleDuplicateOfId).toBeNull();
 
@@ -299,6 +300,7 @@ describe("news ingest & job routes", () => {
     expect(partialItem.ingestStatus).toBe("partial");
     expect(partialItem.extractionMethod).toBe("metadata_only");
     expect(partialItem.title).toBe("TikTok video fallback title");
+    expect(partialItem.slug).toBe("tiktok-video-fallback-title");
   });
 
   describe("job ownership guards", () => {
@@ -434,6 +436,56 @@ describe("news ingest & job routes", () => {
       expect(stale.status).toBe(409);
       const stored = await prisma.newsItem.findUniqueOrThrow({ where: { id: item.id } });
       expect(stored.ingestStatus).toBe("processing");
+    });
+
+    it("dedupes colliding titles with -2 suffix and preserves slug across reingest", async () => {
+      const first = await ingestAndClaim("https://github.com/vercel/next.js");
+      const firstComplete = await completePost(
+        jsonRequest("http://localhost/api/news/jobs/x/complete", "POST", readyPayload(first.job.attempts)),
+        idContext(first.job.jobId)
+      );
+      expect(firstComplete.status).toBe(200);
+      const firstItem = (await firstComplete.json()).item;
+      expect(firstItem.slug).toMatch(/^[a-z0-9-]+$/);
+
+      const second = await ingestAndClaim("https://github.com/vercel/turborepo");
+      const secondComplete = await completePost(
+        jsonRequest("http://localhost/api/news/jobs/x/complete", "POST", readyPayload(second.job.attempts)),
+        idContext(second.job.jobId)
+      );
+      expect(secondComplete.status).toBe(200);
+      const secondItem = (await secondComplete.json()).item;
+      expect(secondItem.slug).toBe(`${firstItem.slug}-2`);
+
+      const reingestRes = await reingestPost(
+        jsonRequest(`http://localhost/api/news/${firstItem.id}/reingest`, "POST", { forceDeep: true }),
+        idContext(firstItem.id)
+      );
+      expect(reingestRes.status).toBe(202);
+      const { jobId: newJobId } = await reingestRes.json();
+      await prisma.ingestJob.update({
+        where: { id: newJobId },
+        data: { nextRunAt: new Date(Date.now() - 1000) },
+      });
+      const claimRes = await claimPost(jsonRequest("http://localhost/api/news/jobs/claim", "POST"));
+      const reclaimed = (await claimRes.json()).job;
+      expect(reclaimed.jobId).toBe(newJobId);
+
+      const basePayload = readyPayload(reclaimed.attempts);
+      const reingestComplete = await completePost(
+        jsonRequest("http://localhost/api/news/jobs/x/complete", "POST", {
+          ...basePayload,
+          summary: {
+            ...basePayload.summary,
+            title: "Completely Different Title After Reingest",
+          },
+        }),
+        idContext(reclaimed.jobId)
+      );
+      expect(reingestComplete.status).toBe(200);
+      const reingestedItem = (await reingestComplete.json()).item;
+      expect(reingestedItem.title).toBe("Completely Different Title After Reingest");
+      expect(reingestedItem.slug).toBe(firstItem.slug);
     });
   });
 });

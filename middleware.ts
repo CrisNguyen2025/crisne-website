@@ -34,7 +34,7 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  // Public News (`/picks`): read-only pages that query only public, allowlisted fields
+  // Public News (`/news`): read-only pages that query only public, allowlisted fields
   if (isPublicPagePath(pathname)) {
     return NextResponse.next();
   }

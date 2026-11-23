@@ -15,6 +15,7 @@ import { SourcesManagerSheet } from "@/components/news/SourcesManagerSheet";
 function makeItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
   return {
     id: "news-1",
+    slug: null,
     sourceUrl: "https://youtube.com/watch?v=abc",
     canonicalUrl: "https://youtube.com/watch?v=abc",
     domain: "youtube.com",

@@ -184,6 +184,7 @@ export interface NewsItemDto {
   id: string;
   sourceUrl: string;
   canonicalUrl: string;
+  slug: string | null;
   domain: string;
   platform: NewsPlatform;
   origin: NewsOrigin;
@@ -313,6 +314,7 @@ export function serializeNewsItem(row: NewsItem): NewsItemDto {
     id: row.id,
     sourceUrl: row.sourceUrl,
     canonicalUrl: row.canonicalUrl,
+    slug: row.slug ?? null,
     domain: row.domain,
     platform: (NewsPlatformSchema.safeParse(row.platform).data ?? "article") as NewsPlatform,
     origin: (NewsOriginSchema.safeParse(row.origin).data ?? "manual") as NewsOrigin,

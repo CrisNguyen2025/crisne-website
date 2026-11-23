@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS "NewsItem" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "sourceUrl" TEXT NOT NULL,
     "canonicalUrl" TEXT NOT NULL,
+    "slug" TEXT,
     "domain" TEXT NOT NULL,
     "platform" TEXT NOT NULL,
     "origin" TEXT NOT NULL,
@@ -174,6 +175,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "NewsSource_feedUrl_key" ON "NewsSource"("feed
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "NewsItem_canonicalUrl_key" ON "NewsItem"("canonicalUrl");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "NewsItem_slug_key" ON "NewsItem"("slug");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "NewsItem_reviewStatus_readState_createdAt_idx" ON "NewsItem"("reviewStatus", "readState", "createdAt");

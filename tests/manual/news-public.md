@@ -1,10 +1,10 @@
-# Kịch bản kiểm thử: Public News cho Visitor (`/picks`)
+# Kịch bản kiểm thử: Public News cho Visitor (`/news`)
 
-Phạm vi: Owner bật/tắt **Public** cho từng bài News trong `NewsReaderPanel`; Visitor chưa đăng nhập đọc bài ở `/picks` và `/picks/[id]`, chỉ đọc. Mọi route khác vẫn chỉ Owner vào được.
+Phạm vi: Owner bật/tắt **Public** cho từng bài News trong `NewsReaderPanel`; Visitor chưa đăng nhập đọc bài ở `/news` và `/news/[slug]` (URL dùng `NewsItem.slug`, còn URL cũ dạng `/news/<id>` tự chuyển 308 sang `/news/<slug>`), chỉ đọc. Mọi route khác vẫn chỉ Owner vào được.
 
 ## Chuẩn bị
 
-1. DB local: `prisma/dev.db` đã có cột `isPublic`, `publicAt` (`yarn db:news-public --local --apply`).
+1. DB local: `prisma/dev.db` đã có cột `isPublic`, `publicAt`, `slug` (`yarn db:news-public --local --apply && yarn db:news-slug --local --apply`).
 2. Owner: chạy config `dev-local` trong `.claude/launch.json` (`DEV_OWNER_BYPASS` từ `.env.local`).
 3. Visitor: chạy config `dev-local-visitor` (`DEV_OWNER_BYPASS=false`, vẫn dùng `prisma/dev.db`). Không có cookie phiên nên mọi request là Visitor ẩn danh.
 4. Kiểm tra dữ liệu bằng `GET /api/news?view=all` (Owner) hoặc `sqlite3 prisma/dev.db`.
@@ -15,23 +15,23 @@ Phạm vi: Owner bật/tắt **Public** cho từng bài News trong `NewsReaderPa
 
 | # | Thao tác | Kết quả mong đợi |
 |---|---|---|
-| A1 | Mở bài `ready` trong `/news`, bấm **Public** | Toast "Đã public bài cho Visitor", nút đổi thành "Đang public" (xanh), card có badge "Public", API trả `isPublic: true` và `publicAt` khác null |
+| A1 | Mở bài `ready` trong `/feed-ingestion`, bấm **Public** | Toast "Đã public bài cho Visitor", nút đổi thành "Đang public" (xanh), card có badge "Public", API trả `isPublic: true` và `publicAt` khác null |
 | A2 | Bấm **Đang public** | Toast "Đã gỡ bài khỏi trang public", `isPublic: false`, `publicAt: null` |
-| A0 | Thêm link mới (dán, share hoặc RSS) | Bài mới có `isPublic: true` ngay khi tạo; chỉ hiện ở `/picks` khi đã `ready` |
+| A0 | Thêm link mới (dán, share hoặc RSS) | Bài mới có `isPublic: true` ngay khi tạo; chỉ hiện ở `/news` khi đã `ready` và nhận `slug` duy nhất |
 | A3 | Bài chưa `ready` hoặc đã bỏ qua | Nút Public bị vô hiệu; gọi thẳng `PATCH {isPublic:true}` trả 400 |
 
 ## B. Visitor đọc
 
 | # | Thao tác | Kết quả mong đợi |
 |---|---|---|
-| B1 | `GET /picks` | 200, liệt kê bài public: domain · ngày, tiêu đề, TL;DR |
-| B2 | `GET /picks/<id>` của bài public | 200: TL;DR, Ý chính có highlight keyword, nút "Đọc bài gốc trên <domain>", nhãn "Tóm tắt tự động bằng AI"; không có nút hành động, không có ghi chú/tag |
-| B3 | `GET /picks/<id-không-tồn-tại>` | 404 |
-| B4 | `GET /picksx`, `/news`, `/news/sources`, `/` | 307 sang `/login` |
+| B1 | `GET /news` | 200, liệt kê bài public: domain · ngày, tiêu đề, TL;DR; link trỏ sang `/news/<slug>` |
+| B2 | `GET /news/<slug>` của bài public (và thử `/news/<id>`) | 200: TL;DR, Ý chính có highlight keyword, nút "Đọc bài gốc trên <domain>", nhãn "Tóm tắt tự động bằng AI"; không có nút hành động, không có ghi chú/tag; `/news/<id>` redirect 308 sang `/news/<slug>` |
+| B3 | `GET /news/<slug-không-tồn-tại>` | 404 |
+| B4 | `GET /newsx`, `/feed-ingestion`, `/feed-ingestion/sources`, `/picks`, `/` | 307 sang `/login` |
 | B5 | `GET /api/news`, `/api/news/<id>` | 401 |
 | B6 | HTML của B2 | Không chứa `personalNote`, `isSaved`, `readState`; có `noindex` |
-| B7 | Mở `/picks` trong trình duyệt | Không hiện nút Abot; console không có request 4xx |
-| B8 | Gỡ public bài đang mở, reload | `/picks/<id>` trả 404, `/picks` hiện "Chưa có bài nào được chia sẻ." |
+| B7 | Mở `/news` trong trình duyệt | Không hiện nút Abot; console không có request 4xx |
+| B8 | Gỡ public bài đang mở, reload | `/news/<slug>` trả 404, `/news` hiện "Chưa có bài nào được chia sẻ." |
 
 ---
 

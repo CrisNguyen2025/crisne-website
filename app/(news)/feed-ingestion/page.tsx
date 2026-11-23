@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
+import { FEED_INGESTION_PATH } from "@/lib/news/paths";
 import { queryNewsFeed } from "@/lib/news/queries";
 import {
   NewsContentTypeTagSchema,
@@ -19,7 +20,7 @@ function isDevOwnerBypass(): boolean {
   return process.env.NODE_ENV === "development" && process.env.DEV_OWNER_BYPASS === "true";
 }
 
-interface NewsPageProps {
+interface FeedIngestionPageProps {
   searchParams: Promise<{
     view?: string;
     origin?: string;
@@ -31,11 +32,11 @@ interface NewsPageProps {
   }>;
 }
 
-export default async function NewsPage({ searchParams }: NewsPageProps) {
+export default async function FeedIngestionPage({ searchParams }: FeedIngestionPageProps) {
   if (!isDevOwnerBypass()) {
     const session = await auth();
     if (!session?.user?.email || !isOwnerEmail(session.user.email)) {
-      redirect("/login?callbackUrl=%2Fnews");
+      redirect(`/login?callbackUrl=${encodeURIComponent(FEED_INGESTION_PATH)}`);
     }
   }
 

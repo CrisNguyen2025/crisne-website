@@ -12,6 +12,7 @@ export const RESERVED_TOPIC_SLUGS: readonly string[] = [
   'portfolio',
   'login',
   'news',
+  'feed-ingestion',
   'share',
   '_next',
 ];

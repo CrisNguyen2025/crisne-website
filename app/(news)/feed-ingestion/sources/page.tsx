@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
+import { FEED_INGESTION_SOURCES_PATH } from "@/lib/news/paths";
 import { queryNewsFeed } from "@/lib/news/queries";
 import { listNewsSources } from "@/lib/news/sources";
 import { NewsFeedClient } from "@/components/news/NewsFeedClient";
@@ -12,11 +13,11 @@ function isDevOwnerBypass(): boolean {
   return process.env.NODE_ENV === "development" && process.env.DEV_OWNER_BYPASS === "true";
 }
 
-export default async function NewsSourcesPage() {
+export default async function FeedIngestionSourcesPage() {
   if (!isDevOwnerBypass()) {
     const session = await auth();
     if (!session?.user?.email || !isOwnerEmail(session.user.email)) {
-      redirect("/login?callbackUrl=%2Fnews%2Fsources");
+      redirect(`/login?callbackUrl=${encodeURIComponent(FEED_INGESTION_SOURCES_PATH)}`);
     }
   }
 

@@ -221,7 +221,8 @@ sequenceDiagram
 | `POST`   | `/api/roadmap-assistant/[...path]`              | None (Actor Header) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts#POST`              | Proxy to Python Service   |
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
-| `GET`    | `/news` · `/news/sources` · `/share`            | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
+| `GET`    | `/feed-ingestion` · `/feed-ingestion/sources` · `/share` | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
+| `GET`    | `/news` · `/news/[slug]`                        | Public (noindex)    | `private-news`           | `app/(public-news)/**`                                           | Public News Reader        |
 | `POST`   | `/api/ingest`                                   | Owner Only          | `private-news`           | `app/api/ingest/route.ts#POST`                                   | `FLOW_NEWS_INGEST_PIPELINE` |
 | `GET`    | `/api/news` · `/api/news/[id]` · `/api/news/worker-health` | Owner Only | `private-news`       | `app/api/news/**`                                                | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `PATCH`  | `/api/news/[id]` · `DELETE /api/news/[id]` · `POST /api/news/mark-read` | Owner Only | `private-news` | `app/api/news/**`                                       | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |

@@ -13,7 +13,7 @@ export default function robots(): MetadataRoute.Robots {
           "/api/", // API routes
           "/_next/", // Next.js internal
           "/static/", // Static files if any
-          "/news", // Private news reader
+          "/feed-ingestion", // Private feed ingestion inbox
           "/share", // Private PWA share target
           "/*.json$", // JSON files
           "/*.xml$", // XML files (except sitemap which is handled separately)
@@ -24,13 +24,13 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: "Googlebot",
 
         allow: "/",
-        disallow: ["/api/", "/_next/", "/news", "/share"],
+        disallow: ["/api/", "/_next/", "/feed-ingestion", "/share"],
       },
       {
         // Googlebot-Image for image indexing
         userAgent: "Googlebot-Image",
         allow: "/",
-        disallow: ["/api/", "/_next/static/", "/news", "/share"],
+        disallow: ["/api/", "/_next/static/", "/feed-ingestion", "/share"],
       },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,

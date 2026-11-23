@@ -58,6 +58,7 @@ function makeNewsItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
     takeaways: ["Ý 1"],
     tags: ["ai"],
     personalNote: null,
+    slug: null,
     ingestStatus: "ready",
     reviewStatus: "published",
     readState: "unread",

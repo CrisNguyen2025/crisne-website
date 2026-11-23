@@ -691,7 +691,9 @@ export function NewsFeedClient({
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <h1 className="font-display text-2xl font-semibold leading-none text-foreground">News</h1>
+          <h1 className="font-display text-2xl font-semibold leading-none text-foreground">
+            Feed Ingestion
+          </h1>
 
           {workerConfigured && (
             <button

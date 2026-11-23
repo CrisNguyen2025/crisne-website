@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { parseJsonStringArray } from "./schemas";
 
 /**
- * Read-only data for the Visitor page (`/picks`). Selects an explicit allowlist of fields so
+ * Read-only data for the Visitor page (`/news`). Selects an explicit allowlist of fields so
  * Owner-only data (personalNote, tags, source, review/read state) can never reach the page.
  */
 export interface PublicNewsItemDto {
   id: string;
+  slug: string;
   title: string;
   canonicalUrl: string;
   domain: string;
@@ -20,6 +21,7 @@ export interface PublicNewsItemDto {
 
 const PUBLIC_NEWS_SELECT = {
   id: true,
+  slug: true,
   title: true,
   canonicalUrl: true,
   domain: true,
@@ -43,6 +45,7 @@ type PublicNewsRow = Prisma.NewsItemGetPayload<{ select: typeof PUBLIC_NEWS_SELE
 function toPublicNewsItem(row: PublicNewsRow): PublicNewsItemDto {
   return {
     id: row.id,
+    slug: row.slug ?? row.id,
     title: row.title,
     canonicalUrl: row.canonicalUrl,
     domain: row.domain,
@@ -64,10 +67,16 @@ export async function listPublicNewsItems(): Promise<PublicNewsItemDto[]> {
   return rows.map(toPublicNewsItem);
 }
 
-export async function getPublicNewsItem(id: string): Promise<PublicNewsItemDto | null> {
-  const row = await prisma.newsItem.findFirst({
-    where: { id, ...PUBLIC_NEWS_WHERE },
+export async function getPublicNewsItem(slugOrId: string): Promise<PublicNewsItemDto | null> {
+  const bySlug = await prisma.newsItem.findFirst({
+    where: { slug: slugOrId, ...PUBLIC_NEWS_WHERE },
     select: PUBLIC_NEWS_SELECT,
   });
-  return row ? toPublicNewsItem(row) : null;
+  if (bySlug) return toPublicNewsItem(bySlug);
+
+  const byId = await prisma.newsItem.findFirst({
+    where: { id: slugOrId, ...PUBLIC_NEWS_WHERE },
+    select: PUBLIC_NEWS_SELECT,
+  });
+  return byId ? toPublicNewsItem(byId) : null;
 }

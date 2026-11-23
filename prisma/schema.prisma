@@ -133,6 +133,7 @@ model NewsItem {
   id                    String      @id @default(uuid(7))
   sourceUrl             String
   canonicalUrl          String      @unique
+  slug                  String?     @unique
   domain                String
   platform              String      // "youtube" | "tiktok" | "article" | "rss"
   origin                String      // "cron" | "share" | "manual"

@@ -12,6 +12,7 @@ async function cleanNewsTables() {
 
 const createItem = (data: {
   slug: string;
+  dbSlug?: string | null;
   isPublic: boolean;
   ingestStatus?: string;
   reviewStatus?: string;
@@ -21,6 +22,7 @@ const createItem = (data: {
     data: {
       sourceUrl: `https://nextjs.org/blog/${data.slug}`,
       canonicalUrl: `https://nextjs.org/blog/${data.slug}`,
+      slug: data.dbSlug === undefined ? `bai-${data.slug}` : data.dbSlug,
       domain: "nextjs.org",
       platform: "article",
       origin: "cron",
@@ -61,16 +63,35 @@ describe("public News queries", () => {
     const detail = await getPublicNewsItem(item.id);
     expect(detail).not.toBeNull();
     expect(Object.keys(detail ?? {}).sort()).toEqual(
-      ["author", "canonicalUrl", "domain", "id", "publicAt", "publishedAt", "takeaways", "title", "tldr"].sort()
+      ["author", "canonicalUrl", "domain", "id", "publicAt", "publishedAt", "slug", "takeaways", "title", "tldr"].sort()
     );
+    expect(detail?.slug).toBe("bai-shape");
     expect(JSON.stringify(detail)).not.toContain("Ghi chú riêng");
     expect(JSON.stringify(detail)).not.toContain("private-tag");
     expect(detail?.takeaways).toEqual(["**Cache Components** mặc định"]);
   });
 
+  it("looks up public posts by slug first and falls back to id", async () => {
+    const withSlug = await createItem({ slug: "cache-components", dbSlug: "cache-components-explained", isPublic: true });
+    const legacyWithoutSlug = await createItem({ slug: "legacy-post", dbSlug: null, isPublic: true });
+
+    const bySlug = await getPublicNewsItem("cache-components-explained");
+    expect(bySlug?.id).toBe(withSlug.id);
+    expect(bySlug?.slug).toBe("cache-components-explained");
+
+    const byId = await getPublicNewsItem(withSlug.id);
+    expect(byId?.id).toBe(withSlug.id);
+    expect(byId?.slug).toBe("cache-components-explained");
+
+    const legacy = await getPublicNewsItem(legacyWithoutSlug.id);
+    expect(legacy?.id).toBe(legacyWithoutSlug.id);
+    expect(legacy?.slug).toBe(legacyWithoutSlug.id);
+  });
+
   it("returns null for a post that is private or no longer exists", async () => {
     const privateItem = await createItem({ slug: "hidden", isPublic: false });
     expect(await getPublicNewsItem(privateItem.id)).toBeNull();
+    expect(await getPublicNewsItem("bai-hidden")).toBeNull();
     expect(await getPublicNewsItem("missing-id")).toBeNull();
   });
 });

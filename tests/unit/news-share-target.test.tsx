@@ -16,6 +16,7 @@ vi.mock("next/navigation", () => ({
 function makeNewsItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
   return {
     id: "news-1",
+    slug: null,
     sourceUrl: "https://youtube.com/watch?v=abc",
     canonicalUrl: "https://youtube.com/watch?v=abc",
     domain: "youtube.com",
@@ -101,7 +102,7 @@ describe("ShareTargetClient", () => {
     );
   });
 
-  it("redirects to /news after 2.5s on success", async () => {
+  it("redirects to /feed-ingestion after 2.5s on success", async () => {
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(newsService, "ingestNewsUrl").mockResolvedValue(makeResult());
     render(<ShareTargetClient url="https://youtube.com/watch?v=abc" />);
@@ -111,7 +112,7 @@ describe("ShareTargetClient", () => {
     const timerCall = setTimeoutSpy.mock.calls.find((call) => call[1] === 2500);
     expect(timerCall).toBeDefined();
     (timerCall![0] as () => void)();
-    expect(mockReplace).toHaveBeenCalledWith("/news");
+    expect(mockReplace).toHaveBeenCalledWith("/feed-ingestion");
   });
 
   it("shows error state on reject with retry button", async () => {

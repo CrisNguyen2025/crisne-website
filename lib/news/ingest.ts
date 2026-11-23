@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { findPossibleTitleDuplicate, normalizeTitleForCompare } from "./dedupe";
 import { queryNewsFeed } from "./queries";
+import { allocateUniqueNewsSlug, buildBaseNewsSlug, isEligibleNewsTitleForSlug } from "./slug";
 import {
   type IngestRequest,
   type JobCompleteRequest,
@@ -83,7 +84,7 @@ export async function enqueueNewsUrl(
           reviewStatus,
           readState: "unread",
           isSaved: false,
-          // New posts are public by default; /picks only lists them once the summary is ready,
+          // New posts are public by default; /news only lists them once the summary is ready,
           // and the Owner can turn Public off per post. Rows created before this stay private.
           isPublic: true,
           publicAt: new Date(),
@@ -298,6 +299,7 @@ export async function completeIngestJob(
 
   let jobData: Prisma.IngestJobUpdateManyMutationInput;
   let itemData: Prisma.NewsItemUpdateInput;
+  let slugTitleForAllocation: string | null = null;
 
   if (payload.outcome === "ready") {
     const existingTags = parseJsonStringArray(job.newsItem.tags);
@@ -308,6 +310,10 @@ export async function completeIngestJob(
       title: payload.summary.title,
     });
     const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
+
+    if (!job.newsItem.slug && isEligibleNewsTitleForSlug(payload.summary.title)) {
+      slugTitleForAllocation = payload.summary.title;
+    }
 
     itemData = {
       title: payload.summary.title,
@@ -328,6 +334,10 @@ export async function completeIngestJob(
     const resolvedTitle = payload.title?.trim() || job.newsItem.title;
     const normalizedTitle = normalizeTitleForCompare(resolvedTitle);
     const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
+
+    if (!job.newsItem.slug && isEligibleNewsTitleForSlug(resolvedTitle)) {
+      slugTitleForAllocation = resolvedTitle;
+    }
 
     itemData = {
       title: resolvedTitle,
@@ -365,18 +375,49 @@ export async function completeIngestJob(
     };
   }
 
-  const updatedItem = await prisma.$transaction(async (tx) => {
-    const claimed = await tx.ingestJob.updateMany({
-      where: { id: job.id, status: "running", attempts: job.attempts },
-      data: jobData,
-    });
-    if (claimed.count !== 1) {
-      throw new IngestJobConflictError();
+  const maxAttempts = slugTitleForAllocation ? 3 : 1;
+  for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
+    let nextSlug: string | undefined;
+    if (slugTitleForAllocation) {
+      nextSlug =
+        attemptIdx === maxAttempts - 1
+          ? `${buildBaseNewsSlug(slugTitleForAllocation, job.newsItem.domain)}-${job.newsItemId.slice(-6)}`
+          : await allocateUniqueNewsSlug(prisma, slugTitleForAllocation, {
+              fallbackDomain: job.newsItem.domain,
+              excludeId: job.newsItemId,
+            });
     }
-    return tx.newsItem.update({ where: { id: job.newsItemId }, data: itemData });
-  });
 
-  return serializeNewsItem(updatedItem);
+    try {
+      const updatedItem = await prisma.$transaction(async (tx) => {
+        const claimed = await tx.ingestJob.updateMany({
+          where: { id: job.id, status: "running", attempts: job.attempts },
+          data: jobData,
+        });
+        if (claimed.count !== 1) {
+          throw new IngestJobConflictError();
+        }
+        return tx.newsItem.update({
+          where: { id: job.newsItemId },
+          data: nextSlug ? { ...itemData, slug: nextSlug } : itemData,
+        });
+      });
+
+      return serializeNewsItem(updatedItem);
+    } catch (error) {
+      if (
+        slugTitleForAllocation &&
+        attemptIdx < maxAttempts - 1 &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Failed to allocate unique NewsItem slug");
 }
 
 export async function listNewsItemsWithCounts(limit = 50): Promise<{

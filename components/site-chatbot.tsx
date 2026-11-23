@@ -3,15 +3,16 @@
 import React, { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { isPublicPagePath } from "@/lib/auth/public-paths";
+import { FEED_INGESTION_PATH } from "@/lib/news/paths";
 import { FloatingChatBot } from "@/components/floating-bot/FloatingChatBotWrapper";
 import { RoadmapAssistantChatbot } from "@/components/roadmap/RoadmapAssistantChatbotWrapper";
 
 function ChatbotInner() {
   const pathname = usePathname();
 
-  // `/picks` is open to signed-out Visitors, who cannot reach the Abot proxy
+  // `/news` is open to signed-out Visitors, who cannot reach the Abot proxy
   if (
-    pathname?.startsWith("/news") ||
+    pathname?.startsWith(FEED_INGESTION_PATH) ||
     pathname?.startsWith("/share") ||
     (pathname && isPublicPagePath(pathname))
   ) {

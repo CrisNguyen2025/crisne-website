@@ -1,17 +1,17 @@
-# News: hộp chờ xử lý (bố cục A+B) và luồng thêm link
+# Feed Ingestion: hộp chờ xử lý (bố cục A+B) và luồng thêm link
 
-Phạm vi: `/news` sau TASK-news-inbox-ui-001. Gồm danh sách bên trái, panel xử lý bên phải, các tab Chờ xử lý / Để sau / Bỏ qua / Tất cả, và luồng Thêm link → worker → tóm tắt.
+Phạm vi: `/feed-ingestion` sau TASK-news-inbox-ui-001 (đổi URL từ `/news` → `/feed-ingestion`). Gồm danh sách bên trái, panel xử lý bên phải, các tab Chờ xử lý / Để sau / Bỏ qua / Tất cả, và luồng Thêm link → worker → tóm tắt.
 
-File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsReaderPanel.tsx`, `NewsDecisionBar.tsx`, `lib/news/queries.ts`, `lib/news/schemas.ts`.
+File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsReaderPanel.tsx`, `NewsDecisionBar.tsx`, `lib/news/queries.ts`, `lib/news/schemas.ts`, `lib/news/paths.ts`.
 
 ## Case
 
 | ID | Bước | Kỳ vọng |
 |---|---|---|
-| N1 | Mở `/news` ở 1280px | Danh sách 520px bên trái, panel bài đầu tiên bên phải, thanh Bỏ qua / Để sau ở đáy panel, không cuộn ngang |
+| N1 | Mở `/feed-ingestion` ở 1280px | Danh sách 520px bên trái, panel bài đầu tiên bên phải, thanh Bỏ qua / Để sau ở đáy panel, không cuộn ngang |
 | N2 | Trong panel bấm Để sau | PATCH `{ isSaved: true }`, bài sang tab Để sau, panel tự chuyển sang bài kế |
 | N3 | Tab Để sau → Đưa lại Chờ xử lý | PATCH `{ isSaved: false }`, số đếm về như cũ |
-| N4 | Mở `/news` ở 375px, chạm một bài | Danh sách ẩn, màn xử lý có "← Danh sách", nút quyết định nằm một hàng |
+| N4 | Mở `/feed-ingestion` ở 375px, chạm một bài | Danh sách ẩn, màn xử lý có "← Danh sách", nút quyết định nằm một hàng |
 | N5 | Thêm link `https://www.tiktok.com/@hudesign/video/7709495044721462536?is_from_webapp=1&sender_device=pc` | `/api/ingest` 202; bài hiện đầu danh sách với nhãn Trong hàng đợi → Đang tóm tắt; dải "1 link đang được tóm tắt"; xong thì có tiêu đề, TL;DR, ý chính, tag |
 | N6 | Bấm Để sau ngay khi vừa mở bài (trong 3s đầu) | Nút không bị khoá vì auto-read |
 

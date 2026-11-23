@@ -11,6 +11,7 @@ import type {
 import { formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import type { CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
+import { FEED_INGESTION_PATH } from "@/lib/news/paths";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { AbotMascot } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/AbotMascot";
@@ -75,11 +76,11 @@ export function PublicationHome({
           {canWrite && (
             <div className="flex items-center gap-2">
               <Link
-                href="/news"
+                href={FEED_INGESTION_PATH}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
               >
                 <Newspaper className="size-3.5 text-muted-foreground" />
-                <span>News</span>
+                <span>Feed Ingestion</span>
               </Link>
               <button
                 type="button"

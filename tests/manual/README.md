@@ -38,10 +38,10 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [triage-removal.md](triage-removal.md) | Xoá Knowledge Triage & Feedback Roadmap Assistant (TASK-triage-removal-001) | 2026-11-09 | 5/5 Pass |
 | [agent-handoff.md](agent-handoff.md) | Handoff v3 Claude ↔ Antigravity: baseline, check-boundary, wait-result, result.json | 2026-11-09 @ `5a75dce` | S1–S7, E1, E2, E3, E7 Pass; E4–E6, E8 chưa chạy |
 | [agent-adapter.md](agent-adapter.md) | AgentAdapter: MCP, skill, subagent, hook giữa Claude Code và Antigravity | 2026-11-09 @ `e1a7ce2` | T7, T8, T9 Pass; T5, T6 một phần; T1–T4 chưa chạy |
-| [news-inbox.md](news-inbox.md) | News hộp chờ xử lý (A+B) và luồng thêm link TikTok (TASK-news-inbox-ui-001) | 2026-11-22 lượt 2 (chưa commit) | N1, N4, N5, N7–N10 Pass |
+| [news-inbox.md](news-inbox.md) | Feed Ingestion hộp chờ xử lý (A+B) ở `/feed-ingestion` và luồng thêm link TikTok (TASK-news-inbox-ui-001) | 2026-11-22 lượt 2 (chưa commit) | N1, N4, N5, N7–N10 Pass (cần re-run sau khi đổi `/news` → `/feed-ingestion`) |
 | [abot-context-panel.md](abot-context-panel.md) | Mục Context trong menu ⋮ của Abot, concept hội thoại như Claude Code (TASK-abot-context-panel-001) | 2026-11-14 (lần 2) | C1–C7 Pass; C8 chỉ có test tự động |
 | [topic-scoped-urls.md](topic-scoped-urls.md) | URL theo Topic `/[topicSlug]/[lessonSlug]#[headingSlug]`, redirect URL cũ (ADR-0014) | 2026-11-19 (chưa commit, trên `5baadeb`) | U1–U9 Pass |
-| [news-public.md](news-public.md) | Public News cho Visitor (`/picks`), bật/tắt Public từ Reader | 2026-11-23 (chưa commit, trên `4ea8846`) | A1–A3, B1–B8 Pass |
+| [news-public.md](news-public.md) | Public News cho Visitor (`/news`, `/news/[slug]`), bật/tắt Public từ Reader | 2026-11-23 (chưa commit, trên `4ea8846`) | A1–A3, B1–B8 Pass (cần re-run sau khi đổi `/picks` → `/news/[slug]`) |
 | [owner-memory.md](owner-memory.md) | Owner Memory xuyên Thread, cache invalidate, nối tiếp Thread & cách ly Visitor (ADR-0015) | Chưa chạy | Kịch bản mới (M1–M9) |
 
 ## Cách chạy (đã kiểm chứng)

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isOwnerEmail } from "@/lib/auth/owner-access";
+import { FEED_INGESTION_PATH } from "@/lib/news/paths";
 import { ShareTargetClient } from "@/components/news/ShareTargetClient";
 
 export const dynamic = "force-dynamic";
@@ -76,13 +77,13 @@ export default async function SharePage({ searchParams }: SharePageProps) {
         <div className="w-full max-w-sm space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm text-center">
           <p className="font-medium">Không tìm thấy URL</p>
           <p className="text-sm text-muted-foreground">
-            Share target không nhận được link hợp lệ. Hãy dán URL thủ công tại trang News.
+            Share target không nhận được link hợp lệ. Hãy dán URL thủ công tại trang Feed Ingestion.
           </p>
           <Link
-            href="/news"
+            href={FEED_INGESTION_PATH}
             className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
-            Về News
+            Về Feed Ingestion
           </Link>
         </div>
       </div>

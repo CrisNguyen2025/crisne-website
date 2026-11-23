@@ -22,7 +22,7 @@ export default async function PublicNewsListPage() {
           <p className="text-xs text-muted-foreground">{formatPublicNewsMeta(item)}</p>
           <h2 className="mt-1.5">
             <Link
-              href={`${PUBLIC_NEWS_PATH}/${item.id}`}
+              href={`${PUBLIC_NEWS_PATH}/${item.slug}`}
               className="font-display text-[17px] font-semibold leading-snug text-foreground underline-offset-4 hover:underline"
             >
               {item.title}

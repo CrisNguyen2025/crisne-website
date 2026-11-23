@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { PUBLIC_NEWS_PATH } from "@/lib/auth/public-paths";
 import { getPublicNewsItem } from "@/lib/news/public-queries";
@@ -10,21 +10,24 @@ import { formatPublicNewsMeta } from "@/components/news/public-news-format";
 export const dynamic = "force-dynamic";
 
 interface PublicNewsDetailPageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({ params }: PublicNewsDetailPageProps): Promise<Metadata> {
-  const { id } = await params;
-  const item = await getPublicNewsItem(id);
+  const { slug } = await params;
+  const item = await getPublicNewsItem(slug);
   return item ? { title: item.title, description: item.tldr ?? undefined } : {};
 }
 
 const SECTION_LABEL = "text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
 export default async function PublicNewsDetailPage({ params }: PublicNewsDetailPageProps) {
-  const { id } = await params;
-  const item = await getPublicNewsItem(id);
+  const { slug } = await params;
+  const item = await getPublicNewsItem(slug);
   if (!item) notFound();
+  if (item.slug !== slug) {
+    permanentRedirect(`${PUBLIC_NEWS_PATH}/${item.slug}`);
+  }
 
   return (
     <article>
