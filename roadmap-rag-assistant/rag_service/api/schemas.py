@@ -73,6 +73,9 @@ class IndexHealthInfo(BaseModel):
     age_seconds: Optional[float] = None
     last_error: Optional[str] = None
     vectors_pending: int = 0
+    chunks: int = 0  # lesson sections indexed on their own (full-export `chunks`)
+    last_sync_ms: Optional[float] = None  # duration of the last full sync
+    version_checks_skipped: int = 0  # TTL refreshes that skipped full-export: index-version unchanged
 
 
 class HealthResponse(BaseModel):

@@ -58,17 +58,46 @@ def _embedding_key(text: str) -> str:
     return hashlib.sha1(f"{EMBEDDING_MODEL}\n{_nfc(text)[:1000]}".encode("utf-8")).hexdigest()
 
 
-def _load_embedding_cache() -> dict:
+def embedding_cache_path() -> Path:
+    """EMBEDDING_CACHE_PATH from the environment (a persistent disk on the host keeps vectors across deploys,
+    ADR-0006), else the file inside the image, which a deploy wipes."""
+    configured = os.environ.get("EMBEDDING_CACHE_PATH", "").strip()
+    return Path(configured) if configured else EMBEDDING_CACHE_PATH
+
+
+# The cache file as last read or written: parsing several MB of JSON on every sync is skipped while it is unchanged
+_cache_state: dict[str, Any] = {"path": None, "mtime": None, "data": {}}
+
+
+def _cache_mtime(path: Path) -> Optional[int]:
     try:
-        return json.loads(EMBEDDING_CACHE_PATH.read_text(encoding="utf-8"))
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def _load_embedding_cache() -> dict:
+    path = embedding_cache_path()
+    mtime = _cache_mtime(path)
+    if _cache_state["path"] == path and _cache_state["mtime"] == mtime:
+        return _cache_state["data"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if mtime is not None else {}
     except (OSError, ValueError):
-        return {}
+        data = {}
+    _cache_state.update(path=path, mtime=mtime, data=data)
+    return data
 
 
 def _save_embedding_cache(cache: dict) -> None:
+    """Atomic: a crash mid-write leaves the previous file, never a truncated one on the persistent disk."""
+    path = embedding_cache_path()
+    tmp = path.with_name(f"{path.name}.tmp")
     try:
-        EMBEDDING_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        EMBEDDING_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(cache), encoding="utf-8")
+        os.replace(tmp, path)
+        _cache_state.update(path=path, mtime=_cache_mtime(path), data=cache)
     except OSError as exc:
         print(f"[VectorStore] Could not write embedding cache: {exc}")
 

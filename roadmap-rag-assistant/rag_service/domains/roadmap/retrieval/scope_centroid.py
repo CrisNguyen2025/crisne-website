@@ -38,23 +38,32 @@ class DomainSignals:
 
 @dataclass
 class DomainCentroids:
-    centroids: Dict[str, List[float]]  # "corpus" and one per layer tag
-    vectors: Dict[str, List[float]]    # every embedded document
+    centroids: Dict[str, List[float]]  # "corpus" and one per layer tag, from topics and lessons
+    vectors: Dict[str, List[float]]    # every embedded document, lesson chunks included (the `nearest` signal)
 
     @classmethod
     def from_store(cls, store: Any) -> Optional["DomainCentroids"]:
-        """From an indexed HybridVectorStore; None when it holds no vectors (embeddings unavailable)."""
+        """From an indexed HybridVectorStore; None when it holds no vectors (embeddings unavailable).
+
+        `nearest` counts lesson chunks: a lesson's own vector covers only its first 1,000 characters, so a question
+        about a later section (often a statement added from News) would otherwise read as outside the field. Being
+        near a chunk is being near its lesson, which is what `roadmap_min` means. The centroids keep topics and
+        lessons only, so the `domain` signal stays the one the thresholds were tuned with (ADR-0004).
+        """
         docs, vectors = store._docs_map, store._vectors
         usable = {doc_id: vec for doc_id, vec in vectors.items() if doc_id in docs}
         if not usable:
             return None
+        meta = {
+            doc_id: vec for doc_id, vec in usable.items() if getattr(docs[doc_id], "doc_type", None) != "chunk"
+        } or usable
         by_layer: Dict[str, List[List[float]]] = defaultdict(list)
-        for doc_id, vec in usable.items():
+        for doc_id, vec in meta.items():
             tag = getattr(docs[doc_id], "layer_tag", None)
             if tag:
                 by_layer[tag].append(vec)
         centroids = {tag: _mean(vecs) for tag, vecs in by_layer.items()}
-        centroids["corpus"] = _mean(list(usable.values()))
+        centroids["corpus"] = _mean(list(meta.values()))
         return cls(centroids=centroids, vectors=usable)
 
     def signals(self, query_vec: List[float]) -> DomainSignals:

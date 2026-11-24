@@ -9,8 +9,12 @@ import { slugify } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// GET /api/v1/roadmaps - Get all topics with their lesson counts
-export async function GET() {
+// GET /api/v1/roadmaps - Get all topics with their lesson counts. Owner or admin key only (ADR-0018): the
+// middleware lets any request carrying a key header through without checking its value.
+export async function GET(req: NextRequest) {
+  const denied = await requireWriteAccess(req);
+  if (denied) return denied;
+
   try {
     const roadmaps = await prisma.roadmap.findMany({
       orderBy: { order: 'asc' },

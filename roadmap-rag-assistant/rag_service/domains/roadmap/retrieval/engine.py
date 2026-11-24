@@ -8,7 +8,11 @@ import re
 import time
 from typing import List, Optional, Tuple
 
-from rag_service.domains.roadmap.retrieval.ingestion import DatabaseIngestionWorker, KnowledgeDocument
+from rag_service.domains.roadmap.retrieval.ingestion import (
+    ITEM_CONTEXT_CHARS,
+    DatabaseIngestionWorker,
+    KnowledgeDocument,
+)
 from rag_service.core.retrieval.hybrid import HybridVectorStore
 
 # Next.js reports its roadmap writes (POST /internal/reindex → request_reindex). Edits that skip its API
@@ -32,9 +36,10 @@ def is_thin(doc: KnowledgeDocument) -> bool:
     return len(re.findall(r"\w+", own)) < THIN_DOC_MIN_WORDS
 
 
-# FTS5 columns of the roadmap index (the order is the table's column order)
+# FTS5 columns of the roadmap index (the order is the table's column order). The type column reads `fts_kind`,
+# which is the doc type for topics and lessons and empty for chunks.
 ROADMAP_TEXT_FIELDS = (
-    "doc_type", "title", "topic_slug", "topic_title", "section", "description", "content_text", "searchable_text",
+    "fts_kind", "title", "topic_slug", "topic_title", "section", "description", "content_text", "searchable_text",
 )
 
 
@@ -43,16 +48,52 @@ def roadmap_store(db_path: str = ":memory:") -> HybridVectorStore:
     return HybridVectorStore(db_path, thin=is_thin, text_fields=ROADMAP_TEXT_FIELDS)
 
 
-def knowledge_href(doc: KnowledgeDocument) -> str:
+def knowledge_href(doc: KnowledgeDocument, anchor: Optional[str] = None) -> str:
     """Page link for a retrieved document (ADR-0014): a lesson is /[topic_slug]/[item_slug], a topic /[topic_slug].
 
     Like lessonPath in lib/roadmap/paths.ts, a lesson without a topic slug falls back to /lessons/[item_slug],
-    which 308s to the canonical path.
+    which 308s to the canonical path. `anchor` (a heading id from full-export's chunks) links one section.
     """
     if doc.doc_type == "item" and (doc.item_slug or doc.id):
         item_slug = doc.item_slug or doc.id
-        return f"/{doc.topic_slug}/{item_slug}" if doc.topic_slug else f"/lessons/{item_slug}"
+        href = f"/{doc.topic_slug}/{item_slug}" if doc.topic_slug else f"/lessons/{item_slug}"
+        return f"{href}#{anchor}" if anchor else href
     return f"/{doc.topic_slug}"
+
+
+# Characters of a matched chunk, and of a lesson without chunks, that reach the model's context
+PASSAGE_CONTEXT_CHARS = 900  # a whole chunk (CHUNK_MAX_CHARS in lib/roadmap/content-utils.ts)
+# Chunks of one lesson quoted per answer, and how many hits to fetch before folding chunks into lessons
+MAX_PASSAGES_PER_LESSON = 2
+SEARCH_POOL_FACTOR = 3
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
+def lesson_context_lines(doc: KnowledgeDocument) -> List[str]:
+    """What the model reads of a lesson's content: its matched chunks, or the content itself
+    (shared by format_knowledge_context and profile._roadmap_document)."""
+    if doc.passages:
+        return [
+            f"Đoạn \"{passage.get('heading') or 'Mở đầu'}\": {_clip(passage.get('text') or '', PASSAGE_CONTEXT_CHARS)}"
+            for passage in doc.passages
+        ]
+    if doc.content_text:
+        return [f"Nội dung: {_clip(doc.content_text, ITEM_CONTEXT_CHARS)}"]
+    return []
+
+
+def lesson_href(doc: KnowledgeDocument) -> str:
+    """Link of a retrieved lesson: the section of its best matched chunk when it has one (ADR-0014 anchor)."""
+    anchor = doc.passages[0].get("anchor") if doc.passages else None
+    return knowledge_href(doc, anchor)
+
+
+def _is_index_meta(doc: KnowledgeDocument) -> bool:
+    """Topics and lessons; chunks only serve passage search and stay out of catalogs, vocabularies and centroids."""
+    return doc.doc_type != "chunk"
 
 
 class HybridRagEngine:
@@ -71,6 +112,20 @@ class HybridRagEngine:
         self._sync_task: Optional[asyncio.Task] = None
         self._embed_lock = asyncio.Lock()
         self._embed_task: Optional[asyncio.Task] = None
+        # Source fingerprint read before the last successful sync; None when the source cannot give one
+        self._indexed_version: Optional[str] = None
+        self._last_sync_ms: Optional[float] = None
+        self._version_checks_skipped = 0
+        self._check_task: Optional[asyncio.Task] = None
+
+    async def _source_version(self) -> Optional[str]:
+        read = getattr(self._ingestion_worker, "index_version", None)
+        if read is None:
+            return None
+        try:
+            return await read()
+        except Exception:
+            return None
 
     async def sync_live_database(self) -> int:
         """Sync and re-index all live Roadmaps, Layers, Groups, and Items.
@@ -83,6 +138,9 @@ class HybridRagEngine:
         """
         async with self._sync_lock:
             generation = self._change_generation
+            started = time.monotonic()
+            # Read before the export: a write landing mid-sync changes the version, so the next check re-syncs
+            version = await self._source_version()
             try:
                 docs = await self._ingestion_worker.ingest_all()
                 await asyncio.to_thread(self._vector_store.index_documents, docs)
@@ -92,6 +150,8 @@ class HybridRagEngine:
                 return 0
             self._is_synced = True
             self._synced_at = time.monotonic()
+            self._last_sync_ms = round((self._synced_at - started) * 1000, 1)
+            self._indexed_version = version
             self._indexed_generation = generation
             self._last_error = None
             print(f"[HybridRagEngine] Successfully indexed {len(docs)} live database documents!")
@@ -153,6 +213,9 @@ class HybridRagEngine:
             ),
             "last_error": self._last_error,
             "vectors_pending": getattr(self._vector_store, "vectors_pending", 0),
+            "chunks": sum(1 for d in getattr(self._vector_store, "_docs_map", {}).values() if d.doc_type == "chunk"),
+            "last_sync_ms": self._last_sync_ms,
+            "version_checks_skipped": self._version_checks_skipped,
         }
 
     def is_empty(self) -> bool:
@@ -163,13 +226,33 @@ class HybridRagEngine:
         """Gate for every read of the index (search, catalog, link targets).
 
         First index or a reported change: wait up to SYNC_WAIT_SECONDS for the rebuild.
-        Older than INDEX_TTL_SECONDS: answer from the current index and refresh for the next turn.
+        Older than INDEX_TTL_SECONDS: answer from the current index and, in the background, re-read the source
+        only if its version changed since the last sync (or it cannot say).
         """
         if not self.is_current():
             self._start_sync()
             await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
         elif time.monotonic() - self._synced_at > INDEX_TTL_SECONDS:
+            self._start_freshness_check()
+
+    def _start_freshness_check(self) -> None:
+        busy = lambda task: task is not None and not task.done()  # noqa: E731
+        if busy(self._sync_task) or busy(self._check_task):
+            return
+        if self._indexed_version is None:
+            # The source gave no version at the last sync (none to compare): re-read it, as before versions
             self._start_sync()
+            return
+        self._check_task = asyncio.create_task(self._check_source_version())
+
+    async def _check_source_version(self) -> None:
+        """TTL refresh: a source whose version is unchanged needs no full export; anything else re-syncs."""
+        version = await self._source_version()
+        if version is not None and version == self._indexed_version and self.is_current():
+            self._synced_at = time.monotonic()
+            self._version_checks_skipped += 1
+            return
+        self._start_sync()
 
     def _start_sync(self) -> None:
         """One sync task at a time; a change reported while it runs is picked up by the same task."""
@@ -185,9 +268,25 @@ class HybridRagEngine:
                 return
 
     async def search_live_knowledge(self, query: str, limit: int = 5) -> List[Tuple[KnowledgeDocument, float]]:
-        """Search across live database entities (Roadmaps, Layers, Items, Content)."""
+        """Search topics and lessons, every section of a lesson included.
+
+        Chunk hits are folded into their lesson: the result holds topics and lessons only, as before, and a lesson
+        found through its chunks carries them in `passages` (best first) so the answer can quote and link them.
+        A lesson ranks at its best hit, whether that was the lesson itself or one of its chunks.
+        """
         await self.ensure_fresh()
-        return self._vector_store.hybrid_search(query, limit=limit)
+        docs = self._vector_store._docs_map  # snapshot: a background re-index may swap the maps mid-search
+        if not self._has_chunks(docs):
+            # Same call as before chunks existed: a wider pool would re-weigh the RRF fusion for no gain
+            return self._vector_store.hybrid_search(query, limit=limit)
+        hits = self._vector_store.hybrid_search(query, limit=limit * SEARCH_POOL_FACTOR)
+        return fold_chunks(hits, docs, limit)
+
+    def _has_chunks(self, docs: dict) -> bool:
+        if getattr(self, "_chunks_of", None) is not docs:
+            self._chunks_present = any(d.doc_type == "chunk" for d in docs.values())
+            self._chunks_of = docs
+        return self._chunks_present
 
     def known_item_ids(self) -> set[str]:
         """Ids of every item in the current index (valid targets for `&item=` links)."""
@@ -207,7 +306,8 @@ class HybridRagEngine:
 
         words: set[str] = set()
         for doc in self._vector_store._docs_map.values():
-            words |= title_terms(doc.title)
+            if _is_index_meta(doc):
+                words |= title_terms(doc.title)
         return words
 
     def start_background_sync(self) -> None:
@@ -266,7 +366,7 @@ class HybridRagEngine:
 
         docs = self._vector_store._docs_map
         if getattr(self, "_vocabulary_of", None) is not docs:
-            self._vocabulary = corpus_vocabulary(docs.values())
+            self._vocabulary = corpus_vocabulary(d for d in docs.values() if _is_index_meta(d))
             self._vocabulary_of = docs
         return self._vocabulary
 
@@ -283,13 +383,12 @@ class HybridRagEngine:
         for doc, score in matches:
             if doc.doc_type == "item":
                 lines.append(
-                    f"\n#### 📖 Bài học: [{doc.title}]({knowledge_href(doc)})\n"
+                    f"\n#### 📖 Bài học: [{doc.title}]({lesson_href(doc)})\n"
                     f"- **Lộ trình:** {doc.topic_title} (`{doc.topic_slug}`)\n"
                     f"- **Mục:** {doc.section or 'Chung'}\n"
                     f"- **Mô tả:** {doc.description or 'Chưa có mô tả'}\n"
                 )
-                if doc.content_text:
-                    lines.append(f"- **Nội dung tóm tắt:** {doc.content_text[:300]}...")
+                lines.extend(f"- {line}" for line in lesson_context_lines(doc))
             elif doc.doc_type == "topic":
                 lines.append(
                     f"\n#### 🗺️ Lộ trình (Topic): [{doc.title}]({knowledge_href(doc)})\n"
@@ -298,6 +397,32 @@ class HybridRagEngine:
                 )
 
         return "\n".join(lines)
+
+
+def fold_chunks(
+    hits: List[Tuple[KnowledgeDocument, float]], docs: dict, limit: int
+) -> List[Tuple[KnowledgeDocument, float]]:
+    """Ranked hits → topics and lessons only, each once, at its best rank; chunks become their lesson's passages."""
+    order: List[str] = []
+    scores: dict = {}
+    passages: dict = {}
+    for doc, score in hits:
+        key = doc.parent_id if doc.doc_type == "chunk" else doc.id
+        if key not in docs:
+            continue  # a chunk whose lesson left the index in a swap
+        if key not in scores:
+            order.append(key)
+            scores[key] = score
+        if doc.doc_type == "chunk" and len(passages.setdefault(key, [])) < MAX_PASSAGES_PER_LESSON:
+            passages[key].append({"anchor": doc.anchor, "heading": doc.heading, "text": doc.content_text or ""})
+
+    results = []
+    for key in order[:limit]:
+        doc = docs[key]
+        if passages.get(key):
+            doc = doc.model_copy(update={"passages": passages[key]})
+        results.append((doc, scores[key]))
+    return results
 
 
 # Global singleton instance

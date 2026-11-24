@@ -139,8 +139,21 @@ class SqliteAdapter:
                 for row in rows
             ]
 
+    async def index_version(self) -> str:
+        """Same fingerprint as GET /api/v1/roadmaps/index-version: counts and latest updatedAt of topics and lessons."""
+        async with self._connect() as db:
+            parts = []
+            for table in ("Roadmap", "RoadmapItem"):
+                cursor = await db.execute(f"SELECT COUNT(*), MAX(updatedAt) FROM {table}")
+                count, latest = await cursor.fetchone()
+                parts += [str(count), str(latest or 0)]
+            return ".".join(parts)
+
     async def export_full_hierarchy(self) -> list[dict]:
-        """Every topic with its lessons, in page order."""
+        """Every topic with its lessons, in page order.
+
+        Lessons carry no `chunks` (Next.js computes heading anchors), so the index keeps them whole here.
+        """
         results = []
         for topic in await self.list_topics():
             full = await self.get_topic(topic["slug"])

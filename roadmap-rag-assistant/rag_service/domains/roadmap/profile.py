@@ -26,9 +26,13 @@ def _known_links() -> Callable[[str], bool]:
 
 def _roadmap_document(doc: Any, score: float) -> ContextDocument:
     """A KnowledgeDocument (rag_service.domains.roadmap.retrieval.ingestion) as one <document>; same fields as format_knowledge_context."""
-    from rag_service.domains.roadmap.retrieval.engine import knowledge_href
+    from rag_service.domains.roadmap.retrieval.engine import knowledge_href, lesson_context_lines, lesson_href
 
-    href = knowledge_href(doc) if doc.topic_slug else None
+    if not doc.topic_slug:
+        href = None
+    else:
+        # A lesson found through its sections links the best one (ADR-0014 anchor), so a citation opens it there
+        href = lesson_href(doc) if doc.doc_type == "item" else knowledge_href(doc)
     lines = [f"Loại: {_DOC_KIND.get(doc.doc_type, doc.doc_type)}", f"Tên: {doc.title}"]
     if doc.doc_type != "topic":
         lines.append(f"Thuộc lộ trình: {doc.topic_title} (`{doc.topic_slug}`)")
@@ -38,8 +42,8 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
         lines.append(f"Mô tả: {doc.description}")
     if doc.doc_type == "topic" and doc.content_text:
         lines.append(f"Cấu trúc lộ trình: {doc.content_text}")
-    if doc.doc_type == "item" and doc.content_text:
-        lines.append(f"Nội dung tóm tắt: {doc.content_text[:300]}...")
+    if doc.doc_type == "item":
+        lines.extend(lesson_context_lines(doc))
     if doc.doc_type == "item" and not doc.description and not doc.content_text:
         # Without this, a lesson created by title only reads as missing ("chưa có nội dung") instead of existing
         lines.append("Trạng thái: bài này đã có trong lộ trình nhưng chưa có mô tả hay nội dung.")

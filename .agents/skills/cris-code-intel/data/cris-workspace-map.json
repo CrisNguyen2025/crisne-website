@@ -94,7 +94,8 @@
         "app/api/v1/roadmaps/items/[id]/route.ts",
         "app/api/v1/roadmaps/items/[id]/content/route.ts",
         "app/api/v1/roadmaps/items/reorder/route.ts",
-        "app/api/v1/roadmaps/full-export/route.ts"
+        "app/api/v1/roadmaps/full-export/route.ts",
+        "app/api/v1/roadmaps/index-version/route.ts"
       ],
       "dataModels": [
         "Roadmap",
@@ -395,11 +396,33 @@
       "type": "api_route",
       "path": "/api/v1/roadmaps",
       "method": "GET",
-      "authRequirement": "none",
+      "authRequirement": "owner_only",
       "domainId": "roadmap-learning",
-      "summary": "Lấy danh sách tất cả các topic kèm số lượng bài học",
+      "summary": "Lấy danh sách tất cả các topic kèm số lượng bài học (Owner hoặc x-admin-key, ADR-0018)",
       "handler": "app/api/v1/roadmaps/route.ts#GET",
       "triggersFlow": "N/A"
+    },
+    {
+      "id": "EP_API_ROADMAP_FULL_EXPORT",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/full-export",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Mọi topic kèm bài (không có Lesson Status); mỗi bài có chunks theo heading h2/h3 kèm anchor để Abot index (Owner hoặc x-admin-key)",
+      "handler": "app/api/v1/roadmaps/full-export/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
+    },
+    {
+      "id": "EP_API_ROADMAP_INDEX_VERSION",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/index-version",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Dấu phiên bản rẻ (đếm + updatedAt mới nhất của topic và bài) để Abot chỉ kéo lại full-export khi dữ liệu đổi",
+      "handler": "app/api/v1/roadmaps/index-version/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
     },
     {
       "id": "EP_API_ROADMAP_CREATE",
@@ -829,7 +852,7 @@
           "layer": "Persistence",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
           "functionOrMethod": "HybridRagEngine.search_live_knowledge",
-          "action": "Thực hiện tìm kiếm lai (Hybrid Retrieval: BM25 FTS + cosine similarity trên Gemini 768d in-memory vectors) lấy ra top bài học liên quan",
+          "action": "Thực hiện tìm kiếm lai (Hybrid Retrieval: BM25 FTS + cosine similarity trên Gemini 768d in-memory vectors) trên topic, bài và đoạn bài (chunk theo heading từ full-export); đoạn khớp được gộp về bài cha thành passages, link trích dẫn trỏ #anchor của đoạn. Index tự làm mới khi /internal/reindex báo, hoặc sau TTL 30s nếu index-version đổi",
           "callsNext": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py#GenerationPipeline.astream",
           "dataPassed": "Retrieved chunks with relevance scores and content"
         },

@@ -140,6 +140,9 @@ Kiểm tra tên model Groq trên console.groq.com trước khi set.
 | `RAG_SEMANTIC_GROUNDING` | 🟡 | Mặc định `false` (+1 LLM call/câu) |
 | `RAG_HISTORY_DB` | 🟡 | Trống (nên để trống trên Render Free): lịch sử Thread của Owner lưu ở Turso qua Next.js (ADR-0012, cần `ADMIN_API_KEY` và đã chạy `yarn db:turso:init`), Thread của Visitor chỉ trong RAM. Chỉ set khi có Persistent Disk |
 | `RAG_ADAPTER_MODE` | 🟡 | Giữ mặc định `http` |
+| `EMBEDDING_CACHE_PATH` | 🟡 | Trống: cache embedding nằm trong image, mất sau mỗi lần deploy (mọi đoạn bài phải embed lại). Có ổ đĩa bền thì trỏ vào đó, ví dụ `/data/embedding_cache.json` (ADR-0006) |
+
+`ADMIN_API_KEY` của service này giờ cũng là điều kiện để **đọc** roadmap: `full-export`, `GET /api/v1/roadmaps` và `index-version` chỉ trả dữ liệu cho Owner hoặc `x-admin-key` đúng (ADR-0018). Thiếu hoặc lệch thì Abot không index được gì.
 
 ### Langfuse
 | ENV | | Ghi chú |

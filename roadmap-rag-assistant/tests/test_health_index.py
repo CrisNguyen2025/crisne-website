@@ -73,6 +73,10 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["current"] is True
     assert idx["documents"] == 1
     assert isinstance(idx["age_seconds"], (int, float))
+    # Sync metrics reach the response, not only index_status() (the schema used to drop unknown keys)
+    assert idx["chunks"] == 0
+    assert isinstance(idx["last_sync_ms"], (int, float))
+    assert idx["version_checks_skipped"] == 0
     assert idx["age_seconds"] >= 0
     assert idx["last_error"] is None
     assert idx["vectors_pending"] == 0

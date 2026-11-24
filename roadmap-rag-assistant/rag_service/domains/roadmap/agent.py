@@ -49,7 +49,7 @@ from rag_service.core.augmentation.history import history_store
 from rag_service.core.retrieval.rerank import rerank
 from rag_service.core.retrieval.transform import HISTORY_TURNS, plan_queries
 from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
-from rag_service.domains.roadmap.retrieval.engine import knowledge_href, rag_engine
+from rag_service.domains.roadmap.retrieval.engine import lesson_href, rag_engine
 from rag_service.domains.roadmap.router import (
     IntentClassificationResult,
     IntentRouter,
@@ -166,7 +166,7 @@ class NextGenRoadmapAgent(
             rerank=_rerank if settings.rag_rerank else None,
             rerank_needed=_rerank_needed,
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
-            href_of=knowledge_href,
+            href_of=lesson_href,  # a lesson found through a section links that section (#anchor)
             item_fields=_item_fields,
             trace_fields=_describe_document,
             # Suggests lessons that exist, never the one just searched for

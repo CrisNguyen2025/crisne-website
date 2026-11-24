@@ -51,6 +51,12 @@ class HttpApiAdapter:
         data = await self._request("GET", "/api/v1/roadmaps")
         return data.get("roadmaps", [])
 
+    async def index_version(self) -> str | None:
+        """GET /api/v1/roadmaps/index-version: fingerprint of what full-export would return (None if absent)."""
+        data = await self._request("GET", "/api/v1/roadmaps/index-version")
+        version = data.get("version")
+        return version if isinstance(version, str) and version else None
+
     async def export_full_hierarchy(self) -> list[dict]:
         """GET /api/v1/roadmaps/full-export: every topic with its lessons.
 

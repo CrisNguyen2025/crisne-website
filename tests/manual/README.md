@@ -30,7 +30,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 |---|---|---|---|
 | [assistant-sections.md](assistant-sections.md) | Section (mục) qua Abot, ADR-0009 | 2026-11-04 @ `0734cc0` | 7 lỗi, xem file |
 | [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case chat pass; 1 lỗi nhỏ (lỗi 9) |
-| [rag-index-sync.md](rag-index-sync.md) | Đồng bộ dữ liệu roadmap ↔ index RAG, kiểm tra /health, thêm/xoá bài và Lesson Status | 2026-11-05 | Chưa chạy |
+| [rag-index-sync.md](rag-index-sync.md) | Đồng bộ dữ liệu roadmap ↔ index RAG, kiểm tra /health, thêm/xoá bài và Lesson Status | 2026-11-24 (chưa commit, trên `fd46546`) | Case 6, 7, 8 Pass (case 7 pass ở lần 2, sau khi sửa lỗi 1); case 9 không test được local; case 1–5 chưa chạy |
 | [seed-import.md](seed-import.md) | Nhập bài seed vào topic AI Architecture (`target`) | 2026-11-05 (local & Turso dry-run) | Local pass; dry-run Turso pass; chờ Owner apply |
 | [lesson-status.md](lesson-status.md) | Đọc và đổi Lesson Status (ADR-0010, Step 6) | Chưa chạy | Kịch bản mới |
 | [dead-code-cleanup.md](dead-code-cleanup.md) | Dọn dẹp dead code, chip chat, sitemap, topic resolution, và xóa route thừa (TASK-dead-code-cleanup-001) | 2026-11-06 @ `a2828a5` | 5/5 Pass |
