@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { NewsItemDto } from "@/lib/news/schemas";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { NewsItemDto, NewsSourceDto } from "@/lib/news/schemas";
+import { NEWS_CRON_SCHEDULE } from "@/lib/news/cron-schedule";
 import * as newsService from "@/logic/news/newsService";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { ToastProvider } from "@/components/ui/toast";
@@ -343,10 +344,14 @@ describe("news feed UI components", () => {
       <QuickPasteDialog open={true} onClose={onClose} onIngested={onIngested} />
     );
 
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("roadmap-theme");
+
     const textarea = screen.getByLabelText("Danh sách URL");
     fireEvent.change(textarea, {
-      target: { value: "https://github.com/vercel/next.js" },
+      target: { value: "https://github.com/vercel/next.js\nhttps://github.com/vercel/next.js" },
     });
+    expect(screen.getByText("1 link")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Đưa vào hàng đợi" }));
 
     await waitFor(() => {
@@ -548,5 +553,257 @@ describe("news feed UI components", () => {
         name: "Kiểm tra trạng thái worker: Worker OK",
       })
     ).toBeTruthy();
+  });
+
+  function makeSource(overrides: Partial<NewsSourceDto> = {}): NewsSourceDto {
+    return {
+      id: "src-1",
+      name: "Vercel Blog",
+      feedUrl: "https://vercel.com/atom",
+      domain: "vercel.com",
+      enabled: true,
+      defaultTags: ["nextjs"],
+      lastFetchedAt: null,
+      lastError: null,
+      createdAt: "2026-11-22T07:00:00.000Z",
+      updatedAt: "2026-11-22T07:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("applies roadmap-theme on SourcesManagerSheet, shows cron schedule, and renders empty state", () => {
+    render(
+      <SourcesManagerSheet
+        open={true}
+        initialSources={[]}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("roadmap-theme");
+    expect(screen.getByText(`Tự động: ${NEWS_CRON_SCHEDULE.label}`)).toBeTruthy();
+    expect(screen.getByText(/Chưa có nguồn RSS nào/)).toBeTruthy();
+  });
+
+  it("shows alert error and preserves create form values when createNewsSource fails", async () => {
+    vi.spyOn(newsService, "createNewsSource").mockRejectedValue(
+      new Error("Không tìm thấy RSS/Atom hợp lệ")
+    );
+    const onChanged = vi.fn();
+
+    render(
+      <SourcesManagerSheet
+        open={true}
+        initialSources={[]}
+        onClose={vi.fn()}
+        onChanged={onChanged}
+      />
+    );
+
+    const nameField = screen.getByLabelText("Tên nguồn") as HTMLInputElement;
+    const feedField = screen.getByLabelText("RSS / Atom Feed URL") as HTMLInputElement;
+    const tagsField = screen.getByLabelText(
+      "Tags mặc định (phân tách dấu phẩy)"
+    ) as HTMLInputElement;
+
+    fireEvent.change(nameField, { target: { value: "Broken Blog" } });
+    fireEvent.change(feedField, { target: { value: "https://broken.example.com/feed" } });
+    fireEvent.change(tagsField, { target: { value: "ai, rss" } });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Không tìm thấy RSS/Atom hợp lệ");
+    expect(nameField.value).toBe("Broken Blog");
+    expect(feedField.value).toBe("https://broken.example.com/feed");
+    expect(tagsField.value).toBe("ai, rss");
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("supports lastError display, per-source sync, toggle enabled, inline edit diff, and 2-step delete", async () => {
+    const initialSource = makeSource({
+      id: "src-edit",
+      name: "Anthropic News",
+      feedUrl: "https://anthropic.com/feed.xml",
+      domain: "anthropic.com",
+      enabled: true,
+      defaultTags: ["ai"],
+      lastError: "HTTP 500 timeout khi tải feed",
+    });
+
+    const syncSpy = vi.spyOn(newsService, "triggerNewsCronSync").mockResolvedValue({
+      sourcesProcessed: 1,
+      totalQueued: 1,
+      totalDuplicates: 0,
+      results: [
+        {
+          sourceId: initialSource.id,
+          sourceName: initialSource.name,
+          queued: 1,
+          duplicates: 0,
+          skippedErrors: 0,
+          error: null,
+        },
+      ],
+    });
+    const updateSpy = vi
+      .spyOn(newsService, "updateNewsSource")
+      .mockResolvedValue({ source: initialSource });
+    const deleteSpy = vi
+      .spyOn(newsService, "deleteNewsSource")
+      .mockResolvedValue({ deleted: true });
+    vi.spyOn(newsService, "fetchNewsSources").mockResolvedValue({
+      sources: [initialSource],
+    });
+    const onChanged = vi.fn();
+
+    render(
+      <ToastProvider>
+        <SourcesManagerSheet
+          open={true}
+          initialSources={[initialSource]}
+          onClose={vi.fn()}
+          onChanged={onChanged}
+        />
+      </ToastProvider>
+    );
+
+    // lastError banner
+    expect(screen.getByText("HTTP 500 timeout khi tải feed")).toBeTruthy();
+    expect(screen.getByText("#ai")).toBeTruthy();
+
+    // Per-source sync
+    fireEvent.click(screen.getByRole("button", { name: "Quét nguồn Anthropic News" }));
+    await waitFor(() => {
+      expect(syncSpy).toHaveBeenCalledWith({ sourceId: "src-edit" });
+    });
+
+    // Toggle enabled via ActionMenu
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Tắt nguồn" }));
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith("src-edit", { enabled: false });
+    });
+
+    // Inline edit: Huỷ closes without API call; Lưu sends minimal diff
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Chỉnh sửa" }));
+
+    const editForm = screen.getByRole("form", { name: "Chỉnh sửa nguồn Anthropic News" });
+    fireEvent.click(within(editForm).getByRole("button", { name: "Huỷ" }));
+    expect(screen.queryByRole("form", { name: "Chỉnh sửa nguồn Anthropic News" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Chỉnh sửa" }));
+
+    const reopenedEditForm = screen.getByRole("form", {
+      name: "Chỉnh sửa nguồn Anthropic News",
+    });
+    fireEvent.change(within(reopenedEditForm).getByLabelText("Tên nguồn"), {
+      target: { value: "Anthropic Engineering" },
+    });
+    fireEvent.change(
+      within(reopenedEditForm).getByLabelText("Tags mặc định (phân tách dấu phẩy)"),
+      { target: { value: "ai, agents" } }
+    );
+    fireEvent.click(within(reopenedEditForm).getByRole("button", { name: "Lưu" }));
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith("src-edit", {
+        name: "Anthropic Engineering",
+        defaultTags: ["ai", "agents"],
+      });
+    });
+
+    // 2-step delete: first click asks for confirmation, second click deletes
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Xoá nguồn" }));
+    expect(deleteSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
+    await waitFor(() => {
+      expect(deleteSpy).toHaveBeenCalledWith("src-edit");
+    });
+  });
+
+  it("validates whitespace-only create inputs and renders destructive sync summary when all sources fail", async () => {
+    const createSpy = vi.spyOn(newsService, "createNewsSource");
+    const customDomain = `${"sub.".repeat(20)}example.com`;
+    const failingSource = makeSource({
+      id: "src-fail",
+      name: "Slow Feed",
+      feedUrl: "https://feed.example.com/rss.xml",
+      domain: customDomain,
+    });
+
+    let resolveSync: (value: Awaited<ReturnType<typeof newsService.triggerNewsCronSync>>) => void = () => {};
+    vi.spyOn(newsService, "triggerNewsCronSync").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSync = resolve;
+        })
+    );
+    vi.spyOn(newsService, "fetchNewsSources").mockResolvedValue({
+      sources: [failingSource],
+    });
+
+    render(
+      <ToastProvider>
+        <SourcesManagerSheet
+          open={true}
+          initialSources={[failingSource]}
+          onClose={vi.fn()}
+          onChanged={vi.fn()}
+        />
+      </ToastProvider>
+    );
+
+    // Custom domain badge truncates with full title
+    const domainBadge = screen.getByTitle(customDomain);
+    expect(domainBadge.className).toContain("max-w-[12rem]");
+    expect(domainBadge.className).toContain("truncate");
+
+    // Whitespace-only Tên nguồn triggers role="alert" without calling createNewsSource, then clears on input
+    const nameField = screen.getByLabelText("Tên nguồn");
+    const feedField = screen.getByLabelText("RSS / Atom Feed URL");
+    fireEvent.change(nameField, { target: { value: "   " } });
+    fireEvent.change(feedField, { target: { value: "https://valid.example.com/feed.xml" } });
+    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Vui lòng nhập đầy đủ tên nguồn và RSS / Atom Feed URL.");
+    expect(createSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(nameField, { target: { value: "Valid Name" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // While syncing all sources, per-source Quét button is disabled to avoid concurrent sync collisions
+    fireEvent.click(screen.getByRole("button", { name: "Quét tất cả ngay" }));
+    const perSourceBtn = screen.getByRole("button", { name: "Quét nguồn Slow Feed" }) as HTMLButtonElement;
+    expect(perSourceBtn.disabled).toBe(true);
+
+    resolveSync({
+      sourcesProcessed: 1,
+      totalQueued: 0,
+      totalDuplicates: 0,
+      results: [
+        {
+          sourceId: "src-fail",
+          sourceName: "Slow Feed",
+          queued: 0,
+          duplicates: 0,
+          skippedErrors: 0,
+          error: "HTTP 403 bị chặn bot",
+        },
+      ],
+    });
+
+    const statusBanner = await screen.findByRole("status");
+    expect(statusBanner.className).toContain("border-destructive/30");
+    expect(statusBanner.className).toContain("text-destructive");
+    expect(statusBanner.className).not.toContain("text-[var(--status-known)]");
+    expect(statusBanner.textContent).toContain("Đã quét 1 nguồn: +0 bài mới vào Chờ xử lý");
+    expect(statusBanner.textContent).toContain("Slow Feed: HTTP 403 bị chặn bot");
   });
 });

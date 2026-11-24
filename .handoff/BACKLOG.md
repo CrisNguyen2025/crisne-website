@@ -7,9 +7,10 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 - Lesson Status Step 6: Abot đọc trạng thái bài (chỉ Owner) và đổi trạng thái qua chat có Preview. Chi tiết: `.handoff/specs/TASK-lesson-status-001.md` Step 6; kịch bản test: `tests/manual/lesson-status.md`.
 - Sửa bài qua chat ("chuyển bài X sang mục Y", "đổi tên bài X thành Y"): `docs/abot-next-actions-plan.md` mục 6.
 - Siết ratchet router và thêm flow eval router vào map: `.handoff/specs/TASK-router-stress-001.md` (READY).
-- Abot đọc được toàn bộ Lesson (chia đoạn theo heading, link `#anchor`), TTL chỉ sync khi version đổi, cache embedding bền, `full-export` kiểm quyền: `.handoff/specs/TASK-abot-lesson-chunks-001.md` (đã commit trên `feat/abot-lesson-chunks`, chưa merge vào `main`; E2E case 6–8 pass. Còn: merge, `deploy_steps` trong spec, kiểm case 9 trên production).
+- Abot đọc được toàn bộ Lesson (chia đoạn theo heading, link `#anchor`), TTL chỉ sync khi version đổi, cache embedding bền, `full-export` kiểm quyền: `.handoff/specs/TASK-abot-lesson-chunks-001.md` (đã lên `main` @ `0b8626f` và push; E2E case 6–8 pass. Còn: `deploy_steps` trong spec, kiểm case 9 trên production).
 
 - Knowledge Acquisition: đưa News Item vào Lesson kèm Provenance (Phase 1), Abot nối Lesson và truy ngược nguồn (Phase 3). Phase 1 đã commit (`e83534e`) và đã chạy migration Turso (2026-11-23), còn test thủ công (`tests/manual/knowledge-provenance.md`); Phase 3 chưa bắt đầu: `.handoff/PLAN-knowledge-acquisition.md`.
+- RSS/Atom nguồn ngoài (`/news`): nâng cấp auto-discovery (platform URL pattern, JSON Feed), dry-run `/api/news/sources/preview`, phân loại lỗi, `allowExternalLinks` cho aggregator, per-source fetch cadence & runner ngoài Vercel Hobby — đề xuất chi tiết theo Tier 1–3: `.handoff/RESEARCH-external-rss-config.md` (PROPOSAL, chưa triển khai).
 
 ## Hạ tầng và deploy
 

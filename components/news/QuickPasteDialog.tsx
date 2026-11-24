@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { AlertTriangle, CheckCircle2, Clock, Loader2, Plus } from "lucide-react";
+import React, { useId, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  ROADMAP_GHOST_BTN_CLASS,
+  ROADMAP_MODAL_TITLE_CLASS,
+  ROADMAP_PRIMARY_BTN_CLASS,
+  ROADMAP_TEXTAREA_CLASS,
+  RoadmapFieldLabel,
+} from "@/components/roadmap/RoadmapFormPrimitives";
 import { useToast } from "@/components/ui/toast";
 import * as newsService from "@/logic/news/newsService";
 
@@ -18,12 +25,27 @@ interface PasteResultRow {
   message: string;
 }
 
+function parseUrlLines(raw: string): string[] {
+  return Array.from(
+    new Set(
+      raw
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialogProps) {
   const { toast } = useToast();
+  const formId = useId();
+  const textareaId = useId();
   const [urlsText, setUrlsText] = useState("");
   const [forceDeep, setForceDeep] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<PasteResultRow[]>([]);
+
+  const parsedUrls = useMemo(() => parseUrlLines(urlsText), [urlsText]);
 
   const handleClose = () => {
     if (isSubmitting) return;
@@ -32,15 +54,7 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
   };
 
   const submitUrls = async () => {
-    const lines = Array.from(
-      new Set(
-        urlsText
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean)
-      )
-    );
-    if (lines.length === 0 || isSubmitting) return;
+    if (parsedUrls.length === 0 || isSubmitting) return;
 
     setIsSubmitting(true);
     setResults([]);
@@ -48,7 +62,7 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
     const batchResults: PasteResultRow[] = [];
     let anyAccepted = false;
 
-    for (const url of lines) {
+    for (const url of parsedUrls) {
       try {
         const res = await newsService.ingestNewsUrl({
           url,
@@ -114,22 +128,55 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
       open={open}
       onClose={handleClose}
       title="Thêm link vào kho tin"
-      description="Dán một hoặc nhiều URL (mỗi dòng 1 link) thuộc whitelist YouTube, TikTok, GitHub, ArXiv, Dev.to, Substack..."
-      icon={<Plus className="size-4" />}
-      className="sm:max-w-lg"
+      titleClassName={ROADMAP_MODAL_TITLE_CLASS}
+      description="Dán một hoặc nhiều URL, mỗi dòng một link."
+      className="roadmap-theme sm:max-w-lg"
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            <kbd className="font-mono">⌘/Ctrl</kbd>+<kbd className="font-mono">Enter</kbd>
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className={ROADMAP_GHOST_BTN_CLASS}
+            >
+              Đóng
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              disabled={isSubmitting || parsedUrls.length === 0}
+              className={ROADMAP_PRIMARY_BTN_CLASS}
+            >
+              {isSubmitting && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+              <span>{isSubmitting ? "Đang đưa vào hàng đợi…" : "Đưa vào hàng đợi"}</span>
+            </button>
+          </div>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label
-            htmlFor="quick-paste-urls"
-            className="mb-1.5 block text-xs font-medium text-muted-foreground"
+      <form id={formId} noValidate onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <RoadmapFieldLabel
+            htmlFor={textareaId}
+            trailing={
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {parsedUrls.length > 0
+                  ? `${parsedUrls.length} link`
+                  : "YouTube, TikTok, GitHub, Substack…"}
+              </span>
+            }
           >
             Danh sách URL
-          </label>
+          </RoadmapFieldLabel>
           <textarea
-            id="quick-paste-urls"
+            id={textareaId}
             rows={4}
             required
+            disabled={isSubmitting}
             value={urlsText}
             onChange={(e) => setUrlsText(e.target.value)}
             onKeyDown={(e) => {
@@ -139,38 +186,46 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
               }
             }}
             placeholder={"https://www.youtube.com/watch?v=...\nhttps://vt.tiktok.com/..."}
-            className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
+            className={`${ROADMAP_TEXTAREA_CLASS} min-h-[6.5rem] resize-none font-mono text-base sm:text-[0.8125rem]`}
           />
         </div>
 
-        <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+        <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 px-3.5 py-2.5 transition-colors duration-150 hover:bg-muted/50 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={forceDeep}
+            disabled={isSubmitting}
             onChange={(e) => setForceDeep(e.target.checked)}
-            className="mt-0.5 size-3.5 rounded border-input accent-[var(--editorial-accent)]"
+            className="mt-0.5 size-4 shrink-0 rounded border-input accent-[var(--editorial-accent)] cursor-pointer"
           />
-          <span>Phân tích sâu (bỏ qua tầng description, dùng Whisper / Vision nếu cần)</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.8125rem] font-medium text-foreground">
+              Phân tích sâu
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              Bỏ qua mô tả ngắn, dùng Whisper / Vision nếu cần.
+            </span>
+          </span>
         </label>
 
         {results.length > 0 && (
-          <ul className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs motion-safe:animate-in motion-safe:fade-in duration-150">
+          <ul className="divide-y divide-border/70 rounded-xl border border-border bg-background text-xs motion-safe:animate-in motion-safe:fade-in duration-150">
             {results.map((row) => (
-              <li key={row.url} className="flex items-start gap-2">
+              <li key={row.url} className="flex items-start gap-2.5 px-3.5 py-2.5">
                 {row.kind === "error" ? (
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />
                 ) : row.kind === "duplicate" ? (
-                  <Clock className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <Clock className="mt-0.5 size-3.5 shrink-0 text-[var(--status-learning)]" aria-hidden="true" />
                 ) : (
-                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[var(--status-known)]" aria-hidden="true" />
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-[11px] text-muted-foreground">{row.url}</p>
                   <p
                     className={
                       row.kind === "error"
-                        ? "font-medium text-destructive"
-                        : "font-medium text-foreground"
+                        ? "mt-0.5 [overflow-wrap:anywhere] font-medium text-destructive"
+                        : "mt-0.5 [overflow-wrap:anywhere] font-medium text-foreground"
                     }
                   >
                     {row.message}
@@ -180,25 +235,6 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
             ))}
           </ul>
         )}
-
-        <div className="flex items-center justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="inline-flex h-9 items-center rounded-lg border border-border px-3 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-          >
-            Đóng
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting || !urlsText.trim()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-          >
-            {isSubmitting ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
-            <span>Đưa vào hàng đợi</span>
-          </button>
-        </div>
       </form>
     </Dialog>
   );
