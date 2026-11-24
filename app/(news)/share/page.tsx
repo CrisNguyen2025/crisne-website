@@ -77,13 +77,13 @@ export default async function SharePage({ searchParams }: SharePageProps) {
         <div className="w-full max-w-sm space-y-3 rounded-xl border border-border bg-card p-6 shadow-sm text-center">
           <p className="font-medium">Không tìm thấy URL</p>
           <p className="text-sm text-muted-foreground">
-            Share target không nhận được link hợp lệ. Hãy dán URL thủ công tại trang Feed Ingestion.
+            Share target không nhận được link hợp lệ. Hãy dán URL thủ công tại trang News.
           </p>
           <Link
             href={NEWS_PATH}
             className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
           >
-            Về Feed Ingestion
+            Về News
           </Link>
         </div>
       </div>

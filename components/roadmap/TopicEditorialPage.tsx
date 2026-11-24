@@ -320,6 +320,19 @@ export function TopicEditorialPage({
         }
       >
         <header>
+          <nav
+            aria-label="Breadcrumb"
+            className="mb-3 hidden lg:flex items-center gap-1.5 text-xs text-muted-foreground"
+          >
+            <Link
+              href="/"
+              prefetch={true}
+              className="inline-flex items-center gap-1 font-medium transition-colors hover:text-[var(--editorial-accent)]"
+            >
+              <span>Topics</span>
+            </Link>
+          </nav>
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums text-muted-foreground">
               <span>{items.length} bài học</span>

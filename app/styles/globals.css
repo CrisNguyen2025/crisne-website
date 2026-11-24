@@ -468,6 +468,12 @@ input[type="search"]::-webkit-search-cancel-button {
   100% { width: 100%; opacity: 0; }
 }
 
+/* Share target: thin bar that fills while waiting to redirect to News */
+@keyframes share-redirect {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
 /* Shimmer animation for smooth skeleton loaders */
 @keyframes shimmer {
   0% {

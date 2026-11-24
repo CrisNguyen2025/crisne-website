@@ -83,59 +83,68 @@ function matchesSearchQuery(item: NewsItemDto, normalizedQuery: string): boolean
 }
 
 async function computeNewsCounts(): Promise<NewsCountsDto> {
-  const [
-    total,
-    queued,
-    processing,
-    ready,
-    partial,
-    failed,
-    draft,
-    unread,
-    saved,
-    dismissed,
-    queue,
-    inbox,
-    done,
-  ] =
-    await Promise.all([
-      prisma.newsItem.count({ where: buildViewWhere("all") }),
-      prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, ingestStatus: "queued" } }),
-      prisma.newsItem.count({
-        where: { reviewStatus: { not: "dismissed" }, ingestStatus: "processing" },
-      }),
-      prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, ingestStatus: "ready" } }),
-      prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, ingestStatus: "partial" } }),
-      prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, ingestStatus: "failed" } }),
-      prisma.newsItem.count({ where: { reviewStatus: "draft" } }),
-      prisma.newsItem.count({ where: { reviewStatus: "published", readState: "unread" } }),
-      prisma.newsItem.count({ where: { reviewStatus: { not: "dismissed" }, isSaved: true } }),
-      prisma.newsItem.count({ where: buildViewWhere("dismissed") }),
-      prisma.newsItem.count({
-        where: {
-          reviewStatus: { not: "dismissed" },
-          ingestStatus: { in: ["queued", "processing", "failed"] },
-        },
-      }),
-      prisma.newsItem.count({ where: buildViewWhere("inbox") }),
-      prisma.newsItem.count({ where: buildViewWhere("done") }),
-    ]);
+  const groups = await prisma.newsItem.groupBy({
+    by: ["reviewStatus", "ingestStatus", "readState", "isSaved"],
+    _count: { _all: true },
+  });
 
-  return {
-    total,
-    queued,
-    processing,
-    ready,
-    partial,
-    failed,
-    draft,
-    unread,
-    saved,
-    dismissed,
-    queue,
-    inbox,
-    done,
+  const counts: NewsCountsDto = {
+    total: 0,
+    queued: 0,
+    processing: 0,
+    ready: 0,
+    partial: 0,
+    failed: 0,
+    draft: 0,
+    unread: 0,
+    saved: 0,
+    dismissed: 0,
+    queue: 0,
+    inbox: 0,
+    done: 0,
   };
+
+  for (const row of groups) {
+    const n = row._count._all;
+    const isDismissed = row.reviewStatus === "dismissed";
+    counts.total += n;
+
+    if (isDismissed) {
+      counts.dismissed += n;
+    } else {
+      if (row.ingestStatus === "queued") counts.queued += n;
+      else if (row.ingestStatus === "processing") counts.processing += n;
+      else if (row.ingestStatus === "ready") counts.ready += n;
+      else if (row.ingestStatus === "partial") counts.partial += n;
+      else if (row.ingestStatus === "failed") counts.failed += n;
+
+      if (
+        row.ingestStatus === "queued" ||
+        row.ingestStatus === "processing" ||
+        row.ingestStatus === "failed"
+      ) {
+        counts.queue += n;
+      }
+
+      if (row.isSaved) {
+        counts.saved += n;
+      } else {
+        counts.inbox += n;
+      }
+    }
+
+    if (row.reviewStatus === "draft") {
+      counts.draft += n;
+    }
+    if (row.reviewStatus === "published" && row.readState === "unread") {
+      counts.unread += n;
+    }
+    if (row.isSaved || isDismissed) {
+      counts.done += n;
+    }
+  }
+
+  return counts;
 }
 
 async function computeAvailableTags(where: Prisma.NewsItemWhereInput): Promise<NewsTagCountDto[]> {

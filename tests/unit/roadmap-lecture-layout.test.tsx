@@ -421,7 +421,7 @@ describe("LectureShell & editorial pages", () => {
     expect(container.querySelector("nav")).toBeNull();
   });
 
-  it("puts the Owner controls under On this page: right rail on xl, top of the article below xl", () => {
+  it("puts Topic back into desktop breadcrumb and places Owner controls in right rail on xl or inside the ⋯ menu below xl", () => {
     mockUseCanWrite.mockReturnValue(true);
     const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
     const renderLesson = () =>
@@ -438,6 +438,14 @@ describe("LectureShell & editorial pages", () => {
 
     mockUseMediaQuery.mockReturnValue(true);
     const xl = renderLesson();
+    const sidebar = xl.container.querySelector("aside");
+    expect(sidebar?.querySelector('a[href="/"]')).toBeNull();
+    const breadcrumb = xl.container.querySelector('article header nav[aria-label="Breadcrumb"]');
+    expect(breadcrumb?.parentElement?.className).toContain("hidden lg:flex");
+    expect(breadcrumb?.querySelector('a[href="/"]')?.textContent).toContain("Topics");
+    expect(breadcrumb?.textContent).toContain(TOPIC.title);
+    expect(breadcrumb?.textContent).toContain("Nền tảng");
+
     const toc = xl.container.querySelector('nav[aria-label="On this page"]');
     const status = screen.getByRole("group", { name: "Trạng thái bài học" });
     expect(toc?.closest("aside")).toBe(status.closest("aside"));
@@ -446,12 +454,27 @@ describe("LectureShell & editorial pages", () => {
     xl.unmount();
 
     mockUseMediaQuery.mockReturnValue(false);
-    const lg = renderLesson();
-    const header = lg.container.querySelector("article header");
-    expect(header?.firstElementChild?.contains(screen.getByRole("group", { name: "Trạng thái bài học" }))).toBe(true);
+    const narrow = renderLesson();
+    const articleHeader = narrow.container.querySelector("article header");
+    expect(articleHeader?.querySelector('[role="group"]')).toBeNull();
+    expect(screen.queryByRole("group", { name: "Trạng thái bài học" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sửa bài học" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Nội dung" })).toBeNull();
+
+    // Mobile sticky header hosts Topic back + the "⋯" Owner menu trigger
+    const mobileHeader = narrow.container.querySelector("header.lg\\:hidden");
+    expect(mobileHeader?.querySelector('nav[aria-label="Topic navigation"]')?.textContent).toContain(TOPIC.title);
+    const mobileMenuTrigger = mobileHeader?.querySelector('button[aria-label="Thao tác bài học"]') as HTMLButtonElement;
+    expect(mobileMenuTrigger).toBeTruthy();
+
+    fireEvent.click(mobileMenuTrigger);
+    const statusGroup = screen.getByRole("group", { name: "Trạng thái bài học" });
+    expect(statusGroup.className).toContain("flex-col");
     const editInfoBtn = screen.getByRole("button", { name: "Sửa bài học" });
     const editContentBtn = screen.getByRole("button", { name: "Nội dung" });
+    const deleteBtn = screen.getByRole("button", { name: "Xoá bài học" });
     expect(editInfoBtn.compareDocumentPosition(editContentBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(editContentBtn.compareDocumentPosition(deleteBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("extracts H2/H3 outline from DEFAULT_LESSON_TEMPLATE_HTML and lets Owner open editor from template", () => {
@@ -503,6 +526,7 @@ describe("LectureShell & editorial pages", () => {
           allTopics={[TOPIC]}
         />
       );
+      fireEvent.click(screen.getAllByRole("button", { name: "Thao tác bài học" })[0]);
       const pick = (name: string) =>
         fireEvent.click(screen.getByRole("button", { name }));
 
@@ -555,6 +579,7 @@ describe("LectureShell & editorial pages", () => {
 
     expect(screen.getByText(/4 phút ·/)).toBeTruthy();
 
+    fireEvent.click(screen.getAllByRole("button", { name: "Thao tác bài học" })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Nội dung" }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Mock Save Content" }));

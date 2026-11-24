@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Edit3, FileText, ListTree, Trash2 } from "lucide-react";
+import { ChevronRight, Edit3, FileText, ListTree, MoreHorizontal, Trash2 } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import {
   contentToHtml,
@@ -29,6 +29,7 @@ import type {
   SectionGroup,
 } from "@/lib/roadmap/types";
 import { cn } from "@/lib/utils";
+import { useAnimatedPresence } from "@/hooks/use-animated-presence";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -58,6 +59,211 @@ const OWNER_ACTION_CLASS =
 
 const OWNER_EDITOR_ACTION_CLASS =
   "group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-2xs transition-[border-color,background-color,transform] duration-150 hover:border-[var(--editorial-accent)]/50 hover:bg-[var(--editorial-sidebar-hover)] active:scale-[0.98] cursor-pointer";
+
+interface LessonControlsPanelProps {
+  currentStatus: LessonStatus;
+  hasContent: boolean;
+  headerAction?: React.ReactNode;
+  footerAction?: React.ReactNode;
+  onChangeStatus: (status: LessonStatus) => void;
+  onOpenInfo: () => void;
+  onOpenContent: () => void;
+}
+
+/** Vertical status + edit controls block shared between the desktop right rail and the mobile/tablet menu. */
+function LessonControlsPanel({
+  currentStatus,
+  hasContent,
+  headerAction,
+  footerAction,
+  onChangeStatus,
+  onOpenInfo,
+  onOpenContent,
+}: LessonControlsPanelProps) {
+  return (
+    <div className="w-full">
+      <div className="mb-1.5 flex items-center justify-between pl-2.5">
+        <p className="text-[0.6875rem] text-muted-foreground">Trạng thái</p>
+        {headerAction}
+      </div>
+      <LessonStatusPicker
+        value={currentStatus}
+        onChange={onChangeStatus}
+        variant="list"
+      />
+      <div className="mt-2.5 flex flex-col gap-1.5 border-t border-border pt-2.5">
+        <button
+          type="button"
+          onClick={onOpenInfo}
+          className={cn(OWNER_ACTION_CLASS, "w-full")}
+        >
+          <Edit3 className="size-4 shrink-0" />
+          <span>Sửa bài học</span>
+        </button>
+        <button
+          type="button"
+          onMouseEnter={preloadLessonContentEditor}
+          onFocus={preloadLessonContentEditor}
+          onClick={onOpenContent}
+          className={cn(OWNER_EDITOR_ACTION_CLASS, "w-full")}
+        >
+          <FileText className="size-4 shrink-0 text-[var(--editorial-accent)]" />
+          <span>{hasContent ? "Nội dung" : "Thêm nội dung"}</span>
+          <ChevronRight
+            aria-hidden="true"
+            className="ml-auto size-3.5 shrink-0 text-muted-foreground/70 transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--editorial-accent)]"
+          />
+        </button>
+      </div>
+      {footerAction}
+    </div>
+  );
+}
+
+interface LessonOwnerMenuProps {
+  currentStatus: LessonStatus;
+  hasContent: boolean;
+  onChangeStatus: (status: LessonStatus) => void;
+  onOpenInfo: () => void;
+  onOpenContent: () => void;
+  onDelete: () => void;
+  triggerClassName?: string;
+}
+
+/** Compact "⋯" menu on <xl viewports opening a popover mirroring the desktop right block. */
+function LessonOwnerMenu({
+  currentStatus,
+  hasContent,
+  onChangeStatus,
+  onOpenInfo,
+  onOpenContent,
+  onDelete,
+  triggerClassName,
+}: LessonOwnerMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const handleAfterClose = useCallback(() => {
+    setIsConfirmingDelete(false);
+  }, []);
+
+  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 150, handleAfterClose);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const toggleMenu = () => {
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next) preloadLessonContentEditor();
+      return next;
+    });
+  };
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-label="Thao tác bài học"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        title="Thao tác bài học"
+        onClick={toggleMenu}
+        className={cn(
+          "inline-flex touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer",
+          isOpen && "bg-[var(--editorial-sidebar-hover)] text-foreground",
+          triggerClassName
+        )}
+      >
+        <MoreHorizontal className="size-4" />
+      </button>
+
+      {shouldRender && (
+        <div
+          role={isOpen ? "menu" : undefined}
+          aria-label={isOpen ? "Thao tác bài học" : undefined}
+          aria-hidden={!isOpen || undefined}
+          className={cn(
+            "absolute right-0 top-full z-50 mt-1.5 w-64 origin-top-right rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            isVisible
+              ? "translate-y-0 scale-100 opacity-100"
+              : "-translate-y-1 scale-95 opacity-0 pointer-events-none"
+          )}
+        >
+          <LessonControlsPanel
+            currentStatus={currentStatus}
+            hasContent={hasContent}
+            onChangeStatus={onChangeStatus}
+            onOpenInfo={() => {
+              setIsOpen(false);
+              onOpenInfo();
+            }}
+            onOpenContent={() => {
+              setIsOpen(false);
+              onOpenContent();
+            }}
+            footerAction={
+              <div className="mt-2.5 border-t border-border pt-2">
+                {isConfirmingDelete ? (
+                  <div className="space-y-2 rounded-lg bg-muted/50 p-2">
+                    <p className="text-xs font-medium text-foreground">
+                      Xoá bài học này?
+                    </p>
+                    <p className="text-[0.6875rem] text-muted-foreground">
+                      Hành động này không thể hoàn tác.
+                    </p>
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingDelete(false)}
+                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] cursor-pointer"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          onDelete();
+                        }}
+                        className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-destructive/90 active:scale-[0.98] cursor-pointer"
+                      >
+                        Xoá
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingDelete(true)}
+                    className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-destructive transition-[background-color,transform] duration-150 hover:bg-destructive/10 active:scale-[0.99] cursor-pointer"
+                  >
+                    <Trash2 className="size-4 shrink-0" />
+                    <span>Xoá bài học</span>
+                  </button>
+                )}
+              </div>
+            }
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
@@ -290,7 +496,12 @@ export function LessonEditorialReader({
     }
   };
 
-  // Owner controls sit right under "On this page": in the right rail on xl, at the top of the article below it
+  const openContentEditor = () => {
+    setDraftSeed(undefined);
+    setIsContentOpen(true);
+  };
+
+  // Owner controls sit right under "On this page" in the xl right rail; on <xl they live in the "⋯" menu
   const lessonActionMenu = (
     <ActionMenu
       label="Thao tác bài học"
@@ -310,58 +521,27 @@ export function LessonEditorialReader({
     />
   );
 
-  // In the narrow rail, actions stack as full-width rows and the "…" menu moves to the heading row
-  const renderOwnerControls = (inRail: boolean) => (
-    <div className={inRail ? "w-full" : "mb-5"}>
-      {inRail && (
-        <div className="mb-1.5 flex items-center justify-between pl-2.5">
-          <p className="text-[0.6875rem] text-muted-foreground">Trạng thái</p>
-          {lessonActionMenu}
-        </div>
-      )}
-      <LessonStatusPicker
-        value={currentStatus}
-        onChange={handleChangeStatus}
-        variant={inRail ? "list" : "tabs"}
-      />
-      <div
-        className={cn(
-          inRail
-            ? "mt-2.5 flex flex-col gap-1.5 border-t border-border pt-2.5"
-            : "mt-2 flex items-center gap-1.5"
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => setIsInfoOpen(true)}
-          className={cn(OWNER_ACTION_CLASS, inRail && "w-full")}
-        >
-          <Edit3 className="size-4 shrink-0" />
-          <span>Sửa bài học</span>
-        </button>
-        <button
-          type="button"
-          onMouseEnter={preloadLessonContentEditor}
-          onFocus={preloadLessonContentEditor}
-          onClick={() => {
-            setDraftSeed(undefined);
-            setIsContentOpen(true);
-          }}
-          className={cn(OWNER_EDITOR_ACTION_CLASS, inRail && "w-full")}
-        >
-          <FileText className="size-4 shrink-0 text-[var(--editorial-accent)]" />
-          <span>{rendered.html ? "Nội dung" : "Thêm nội dung"}</span>
-          <ChevronRight
-            aria-hidden="true"
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground/70 transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--editorial-accent)]",
-              inRail && "ml-auto"
-            )}
-          />
-        </button>
-        {!inRail && <div className="ml-auto">{lessonActionMenu}</div>}
-      </div>
-    </div>
+  const desktopRailControls = (
+    <LessonControlsPanel
+      currentStatus={currentStatus}
+      hasContent={Boolean(rendered.html)}
+      headerAction={lessonActionMenu}
+      onChangeStatus={handleChangeStatus}
+      onOpenInfo={() => setIsInfoOpen(true)}
+      onOpenContent={openContentEditor}
+    />
+  );
+
+  const renderCompactOwnerMenu = (triggerClassName: string) => (
+    <LessonOwnerMenu
+      currentStatus={currentStatus}
+      hasContent={Boolean(rendered.html)}
+      onChangeStatus={handleChangeStatus}
+      onOpenInfo={() => setIsInfoOpen(true)}
+      onOpenContent={openContentEditor}
+      onDelete={handleDeleteLesson}
+      triggerClassName={triggerClassName}
+    />
   );
 
   return (
@@ -375,7 +555,12 @@ export function LessonEditorialReader({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={rendered.headings}
-        railFooter={canWrite && isXl ? renderOwnerControls(true) : undefined}
+        railFooter={canWrite && isXl ? desktopRailControls : undefined}
+        sidebarHeaderAction={
+          canWrite && !isXl
+            ? renderCompactOwnerMenu("size-9 border border-border/70 bg-card")
+            : undefined
+        }
         isTransitioning={isTransitioning}
         articleDataAttributes={{
           "data-roadmap-context": true,
@@ -410,39 +595,58 @@ export function LessonEditorialReader({
         }
       >
         <header>
-          {canWrite && !isXl && renderOwnerControls(false)}
-
-          <nav
-            aria-label="Breadcrumb"
-            className="min-w-0 truncate text-xs text-muted-foreground"
-          >
-            <Link
-              href={topicPath(topic.slug)}
-              prefetch={true}
-              className="font-medium transition-colors hover:text-[var(--editorial-accent)]"
+          <div className="hidden lg:flex items-center justify-between gap-3">
+            <nav
+              aria-label="Breadcrumb"
+              className="min-w-0 flex items-center gap-1.5 truncate text-xs text-muted-foreground"
             >
-              {topic.title}
-            </Link>
-            {lesson.section && (
-              <>
-                <span
-                  className="mx-1.5 text-muted-foreground/50"
-                  aria-hidden="true"
-                >
-                  /
-                </span>
-                <Link
-                  href={`${topicPath(topic.slug)}?section=${encodeURIComponent(lesson.section)}`}
-                  prefetch={true}
-                  className="transition-colors hover:text-[var(--editorial-accent)]"
-                >
-                  {lesson.section}
-                </Link>
-              </>
-            )}
-          </nav>
+              <Link
+                href="/"
+                prefetch={true}
+                className="inline-flex shrink-0 items-center gap-1 font-medium transition-colors hover:text-[var(--editorial-accent)]"
+              >
+                <span>Topics</span>
+              </Link>
+              <span
+                className="shrink-0 text-muted-foreground/50"
+                aria-hidden="true"
+              >
+                /
+              </span>
+              <Link
+                href={topicPath(topic.slug)}
+                prefetch={true}
+                className="shrink-0 font-medium transition-colors hover:text-[var(--editorial-accent)]"
+              >
+                {topic.title}
+              </Link>
+              {lesson.section && (
+                <>
+                  <span
+                    className="shrink-0 text-muted-foreground/50"
+                    aria-hidden="true"
+                  >
+                    /
+                  </span>
+                  <Link
+                    href={`${topicPath(topic.slug)}?section=${encodeURIComponent(lesson.section)}`}
+                    prefetch={true}
+                    className="min-w-0 truncate transition-colors hover:text-[var(--editorial-accent)]"
+                  >
+                    {lesson.section}
+                  </Link>
+                </>
+              )}
+            </nav>
 
-          <h1 className="mt-3 font-display text-[2rem] font-normal leading-[1.15] tracking-[-0.02em] text-foreground text-balance sm:text-[2.5rem]">
+            {canWrite && !isXl && (
+              <div className="xl:hidden">
+                {renderCompactOwnerMenu("size-8")}
+              </div>
+            )}
+          </div>
+
+          <h1 className="font-display text-[2rem] font-normal leading-[1.15] tracking-[-0.02em] text-foreground text-balance sm:text-[2.5rem] lg:mt-3">
             {lesson.title}
           </h1>
 

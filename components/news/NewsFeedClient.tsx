@@ -183,11 +183,15 @@ export function NewsFeedClient({
   );
 
   const [limit, setLimit] = useState(DEFAULT_PAGE_LIMIT);
+  const initialFilterKey = serializeParams({ ...initialParams, limit: DEFAULT_PAGE_LIMIT });
   const [data, setData] = useState<NewsFeedResponseDto>(initialData);
   // Filter key the current `data` belongs to; differs from `filterKey` while a tab switch loads
-  const [dataKey, setDataKey] = useState<string>(() =>
-    serializeParams({ ...initialParams, limit: DEFAULT_PAGE_LIMIT })
-  );
+  const [dataKey, setDataKey] = useState<string>(initialFilterKey);
+  // Client-side stale-while-revalidate cache so revisiting a tab/filter renders instantaneously
+  const [feedCache, setFeedCache] = useState<Record<string, NewsFeedResponseDto>>(() => ({
+    [initialFilterKey]: initialData,
+  }));
+  const cacheVersionRef = useRef(0);
   const [sources, setSources] = useState<NewsSourceDto[]>(initialSources);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -253,7 +257,14 @@ export function NewsFeedClient({
   );
 
   const filterKey = serializeParams(currentQueryParams);
-  const isSwitchingView = dataKey !== filterKey;
+  const cachedForKey = feedCache[filterKey];
+  const displayData = dataKey === filterKey ? data : (cachedForKey ?? data);
+  const isSwitchingView = dataKey !== filterKey && !cachedForKey;
+
+  const invalidateFeedCache = useCallback(() => {
+    cacheVersionRef.current += 1;
+    setFeedCache({});
+  }, []);
 
   // Polling, post-update refreshes and tab switches all fetch with the filters they started with.
   // A slow response for an old tab must never overwrite the list of the tab now on screen.
@@ -264,7 +275,11 @@ export function NewsFeedClient({
 
   const loadFeed = useCallback(async (params: NewsFeedQueryParams): Promise<void> => {
     const key = serializeParams(params);
+    const version = cacheVersionRef.current;
     const next = await newsService.fetchNewsFeed(params);
+    if (version === cacheVersionRef.current) {
+      setFeedCache((prev) => ({ ...prev, [key]: next }));
+    }
     if (key !== latestFilterKeyRef.current) return;
     setData(next);
     setDataKey(key);
@@ -272,7 +287,8 @@ export function NewsFeedClient({
   }, []);
 
   const refreshFeed = useCallback(
-    async (options: { showLoading?: boolean } = {}) => {
+    async (options: { showLoading?: boolean; invalidateCache?: boolean } = {}) => {
+      if (options.invalidateCache) invalidateFeedCache();
       if (options.showLoading) setIsLoading(true);
       try {
         await loadFeed(currentQueryParams);
@@ -285,25 +301,28 @@ export function NewsFeedClient({
         setIsLoadingMore(false);
       }
     },
-    [currentQueryParams, loadFeed]
+    [currentQueryParams, invalidateFeedCache, loadFeed]
   );
 
   // Fetch when URL filter parameters or page limit diverge from the data on screen
+  const hasCachedForKey = Boolean(cachedForKey);
   useEffect(() => {
     if (filterKey === dataKey) return;
     loadFeed(currentQueryParams)
       .catch((error: unknown) => {
         if (serializeParams(currentQueryParams) !== latestFilterKeyRef.current) return;
-        setLoadError(
-          error instanceof Error ? error.message : "Không thể tải danh sách tin."
-        );
+        if (!hasCachedForKey) {
+          setLoadError(
+            error instanceof Error ? error.message : "Không thể tải danh sách tin."
+          );
+        }
       })
       .finally(() => {
         setIsLoadingMore(false);
       });
-  }, [currentQueryParams, dataKey, filterKey, loadFeed]);
+  }, [currentQueryParams, dataKey, filterKey, hasCachedForKey, loadFeed]);
 
-  const activeJobsCount = data.counts.queued + data.counts.processing;
+  const activeJobsCount = displayData.counts.queued + displayData.counts.processing;
   useEffect(() => {
     if (activeJobsCount === 0) return;
     const timer = window.setInterval(() => {
@@ -317,11 +336,11 @@ export function NewsFeedClient({
   const isWide = useIsWide();
 
   const selectedItem = useMemo<NewsItemDto | null>(() => {
-    const picked = data.items.find((item) => item.id === selectedItemId);
+    const picked = displayData.items.find((item) => item.id === selectedItemId);
     if (picked) return picked;
     // Wide screens always show a reader, so fall back to the first item in the list
-    return isWide ? (data.items[0] ?? null) : null;
-  }, [data.items, isWide, selectedItemId]);
+    return isWide ? (displayData.items[0] ?? null) : null;
+  }, [displayData.items, isWide, selectedItemId]);
 
   const isNarrowDrawerOpen =
     !isWide && !isSwitchingView && Boolean(selectedItem) && isPanelOpenOnNarrow;
@@ -331,7 +350,7 @@ export function NewsFeedClient({
   useLayoutEffect(() => {
     if (isWide || isPanelVisible) return;
     const el = listScrollRef.current;
-    if (el && listScrollTopRef.current > 0) {
+    if (el && listScrollTopRef.current > 0 && el.scrollTop !== listScrollTopRef.current) {
       el.scrollTop = listScrollTopRef.current;
     }
   }, [isPanelVisible, isWide]);
@@ -354,14 +373,16 @@ export function NewsFeedClient({
 
   const selectByOffset = useCallback(
     (offset: 1 | -1) => {
-      if (data.items.length === 0) return;
-      const index = selectedItem ? data.items.findIndex((item) => item.id === selectedItem.id) : -1;
-      const nextIndex = Math.min(Math.max(index + offset, 0), data.items.length - 1);
-      const nextId = data.items[nextIndex].id;
+      if (displayData.items.length === 0) return;
+      const index = selectedItem
+        ? displayData.items.findIndex((item) => item.id === selectedItem.id)
+        : -1;
+      const nextIndex = Math.min(Math.max(index + offset, 0), displayData.items.length - 1);
+      const nextId = displayData.items[nextIndex].id;
       pendingScrollItemIdRef.current = nextId;
       setSelectedItemId(nextId);
     },
-    [data.items, selectedItem]
+    [displayData.items, selectedItem]
   );
 
   const applyItemUpdate = useCallback(
@@ -375,7 +396,7 @@ export function NewsFeedClient({
       if (!isBackground) setBusyItemId(id);
       try {
         await newsService.updateNewsItem(id, patch);
-        await refreshFeed();
+        await refreshFeed({ invalidateCache: true });
         if (successMessage) toast(successMessage, "success");
         return true;
       } catch (error) {
@@ -390,6 +411,10 @@ export function NewsFeedClient({
     },
     [refreshFeed, toast]
   );
+
+  const handleCloseNarrowDrawer = useCallback(() => {
+    setIsPanelOpenOnNarrow(false);
+  }, []);
 
   const handleSelectItem = useCallback((item: NewsItemDto) => {
     if (listScrollRef.current) {
@@ -414,8 +439,8 @@ export function NewsFeedClient({
       patch: Parameters<typeof newsService.updateNewsItem>[1],
       successMessage: string
     ) => {
-      const index = data.items.findIndex((row) => row.id === item.id);
-      const neighbour = data.items[index + 1] ?? data.items[index - 1] ?? null;
+      const index = displayData.items.findIndex((row) => row.id === item.id);
+      const neighbour = displayData.items[index + 1] ?? displayData.items[index - 1] ?? null;
       const wasSelected = selectedItem?.id === item.id;
       const isDone = await applyItemUpdate(item.id, patch, successMessage);
       if (!isDone || !wasSelected) return;
@@ -423,7 +448,7 @@ export function NewsFeedClient({
       setSelectedItemId(neighbour?.id ?? null);
       if (!neighbour) setIsPanelOpenOnNarrow(false);
     },
-    [applyItemUpdate, data.items, selectedItem]
+    [applyItemUpdate, displayData.items, selectedItem]
   );
 
   const handleToggleSave = useCallback(
@@ -463,13 +488,13 @@ export function NewsFeedClient({
 
   const handleDelete = useCallback(
     async (item: NewsItemDto) => {
-      const index = data.items.findIndex((row) => row.id === item.id);
-      const neighbour = data.items[index + 1] ?? data.items[index - 1] ?? null;
+      const index = displayData.items.findIndex((row) => row.id === item.id);
+      const neighbour = displayData.items[index + 1] ?? displayData.items[index - 1] ?? null;
       const wasSelected = selectedItem?.id === item.id;
       setDeletingId(item.id);
       try {
         await newsService.deleteNewsItem(item.id);
-        await refreshFeed();
+        await refreshFeed({ invalidateCache: true });
         toast("Đã xoá bài", "success");
         if (wasSelected) {
           pendingScrollItemIdRef.current = neighbour?.id ?? null;
@@ -485,7 +510,7 @@ export function NewsFeedClient({
         setDeletingId(null);
       }
     },
-    [data.items, refreshFeed, selectedItem, toast]
+    [displayData.items, refreshFeed, selectedItem, toast]
   );
 
   // Keyboard shortcuts: 'N' quick paste, 'J'/'K' navigate, 'S' toggle save
@@ -585,7 +610,7 @@ export function NewsFeedClient({
   }, []);
 
   const handleRefreshAll = useCallback(() => {
-    void refreshFeed({ showLoading: true });
+    void refreshFeed({ showLoading: true, invalidateCache: true });
     if (workerConfigured) {
       void handleCheckWorkerHealth();
     }
@@ -606,25 +631,28 @@ export function NewsFeedClient({
       ? { title: "Không tìm thấy bài nào khớp bộ lọc", hint: "Đổi từ khoá hoặc xoá bộ lọc." }
       : (EMPTY_MESSAGES[view] ?? { title: "Chưa có bài nào ở đây", hint: "Đổi tab để xem bài khác." });
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setLimit(DEFAULT_PAGE_LIMIT);
     void setOrigin("");
     void setTag("");
     void setContentType("");
     void setReadState("");
     void setSort("latest");
-  };
+  }, [setContentType, setOrigin, setReadState, setSort, setTag]);
 
   /** Opens another item (e.g. a possible duplicate) in the reader, widening the list when it is filtered out. */
-  const handleOpenItem = (itemId: string) => {
-    pendingScrollItemIdRef.current = itemId;
-    setSelectedItemId(itemId);
-    setIsPanelOpenOnNarrow(true);
-    if (data.items.some((row) => row.id === itemId)) return;
-    clearFilters();
-    void setQ("");
-    handleSelectView("all");
-  };
+  const handleOpenItem = useCallback(
+    (itemId: string) => {
+      pendingScrollItemIdRef.current = itemId;
+      setSelectedItemId(itemId);
+      setIsPanelOpenOnNarrow(true);
+      if (displayData.items.some((row) => row.id === itemId)) return;
+      clearFilters();
+      void setQ("");
+      handleSelectView("all");
+    },
+    [clearFilters, displayData.items, handleSelectView, setQ]
+  );
 
   const chip = (isSelected: boolean) =>
     `inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.97] cursor-pointer ${
@@ -642,28 +670,54 @@ export function NewsFeedClient({
           ? "Chưa gắn worker"
           : "Worker";
 
-  const renderReaderPanel = (item: NewsItemDto, layout: "split" | "stacked" = "split") => (
-    <NewsReaderPanel
-      key={item.id}
-      layout={layout}
-      item={item}
-      duplicateTitle={
-        item.possibleDuplicateOfId ? data.duplicateTitles[item.possibleDuplicateOfId] : undefined
-      }
-      isUpdating={busyItemId === item.id}
-      isDeleting={deletingId === item.id}
-      onBack={() => setIsPanelOpenOnNarrow(false)}
-      onToggleRead={handleToggleRead}
-      onToggleSave={handleToggleSave}
-      onDismiss={handleDismiss}
-      onReopen={handleReopen}
-      onDelete={handleDelete}
-      onUpdateTags={handleUpdateTags}
-      onSaveNote={handleSaveNote}
-      onOpenExternal={handleOpenExternal}
-      onOpenItem={handleOpenItem}
-    />
+  const renderReaderPanel = useCallback(
+    (item: NewsItemDto, layout: "split" | "stacked" = "split") => (
+      <NewsReaderPanel
+        key={item.id}
+        layout={layout}
+        item={item}
+        duplicateTitle={
+          item.possibleDuplicateOfId
+            ? displayData.duplicateTitles[item.possibleDuplicateOfId]
+            : undefined
+        }
+        isUpdating={busyItemId === item.id}
+        isDeleting={deletingId === item.id}
+        onBack={handleCloseNarrowDrawer}
+        onToggleRead={handleToggleRead}
+        onToggleSave={handleToggleSave}
+        onDismiss={handleDismiss}
+        onReopen={handleReopen}
+        onDelete={handleDelete}
+        onUpdateTags={handleUpdateTags}
+        onSaveNote={handleSaveNote}
+        onOpenExternal={handleOpenExternal}
+        onOpenItem={handleOpenItem}
+      />
+    ),
+    [
+      busyItemId,
+      deletingId,
+      displayData.duplicateTitles,
+      handleCloseNarrowDrawer,
+      handleDelete,
+      handleDismiss,
+      handleOpenExternal,
+      handleOpenItem,
+      handleReopen,
+      handleSaveNote,
+      handleToggleRead,
+      handleToggleSave,
+      handleUpdateTags,
+    ]
   );
+
+  const renderStackedReader = useCallback(
+    (item: NewsItemDto) => renderReaderPanel(item, "stacked"),
+    [renderReaderPanel]
+  );
+
+  const getItemLabel = useCallback((item: NewsItemDto) => item.title, []);
 
   return (
     <div className="flex h-dvh min-h-0 flex-col">
@@ -675,13 +729,14 @@ export function NewsFeedClient({
         <div className="flex items-center gap-3 px-4 py-3 sm:px-5">
           <Link
             href="/"
+            prefetch={true}
             aria-label="Về Crisne"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95"
+            className="inline-flex size-9 shrink-0 touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95"
           >
             <ArrowLeft className="size-4" />
           </Link>
           <h1 className="font-display text-2xl font-semibold leading-none text-foreground">
-            Feed Ingestion
+            News
           </h1>
 
           {workerConfigured && (
@@ -806,7 +861,7 @@ export function NewsFeedClient({
                       onClick={() => handleSelectView(tab.id)}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
-                        "relative inline-flex h-10 shrink-0 items-center gap-1.5 px-1 text-sm font-medium transition-colors duration-150 cursor-pointer",
+                        "relative inline-flex h-10 shrink-0 touch-manipulation items-center gap-1.5 px-1 text-sm font-medium transition-colors duration-150 cursor-pointer",
                         "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-center after:bg-foreground after:transition-[transform,opacity] after:duration-200 after:ease-out motion-reduce:after:transition-none",
                         isActive
                           ? "text-foreground after:scale-x-100 after:opacity-100"
@@ -819,7 +874,7 @@ export function NewsFeedClient({
                           isActive ? "text-[var(--editorial-accent)]" : "text-muted-foreground"
                         }`}
                       >
-                        {data.counts[tab.countKey]}
+                        {displayData.counts[tab.countKey]}
                       </span>
                     </button>
                   );
@@ -928,9 +983,9 @@ export function NewsFeedClient({
                       </button>
                     ))}
                   </div>
-                  {data.tags.length > 0 && (
+                  {displayData.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
-                      {data.tags.map((item) => (
+                      {displayData.tags.map((item) => (
                         <button
                           key={item.tag}
                           type="button"
@@ -1018,7 +1073,7 @@ export function NewsFeedClient({
                   </div>
                 ))}
               </div>
-            ) : !isSwitchingView && data.items.length === 0 && !loadError ? (
+            ) : !isSwitchingView && displayData.items.length === 0 && !loadError ? (
               <div className="flex flex-col items-center px-6 py-16 text-center motion-safe:animate-in motion-safe:fade-in duration-150">
                 <div className="mb-4 flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                   <Inbox className="size-5" />
@@ -1050,9 +1105,9 @@ export function NewsFeedClient({
                   </button>
                 </div>
               </div>
-            ) : !isSwitchingView && data.items.length > 0 ? (
+            ) : !isSwitchingView && displayData.items.length > 0 ? (
               <>
-                {data.items.map((item) => (
+                {displayData.items.map((item) => (
                   <NewsCard
                     key={item.id}
                     item={item}
@@ -1060,7 +1115,7 @@ export function NewsFeedClient({
                     onSelect={handleSelectItem}
                   />
                 ))}
-                {data.hasMore && (
+                {displayData.hasMore && (
                   <div className="flex justify-center border-b border-border py-4">
                     <button
                       type="button"
@@ -1083,7 +1138,7 @@ export function NewsFeedClient({
 
         {isWide && !isSwitchingView && selectedItem ? (
           renderReaderPanel(selectedItem)
-        ) : (!isSwitchingView && data.items.length > 0) || (!loadError && (isSwitchingView || isLoading)) ? (
+        ) : (!isSwitchingView && displayData.items.length > 0) || (!loadError && (isSwitchingView || isLoading)) ? (
           // Shown while the list or the wide-screen check is still settling, so the panel fades in
           <NewsReaderSkeleton />
         ) : (
@@ -1094,23 +1149,23 @@ export function NewsFeedClient({
       <MobileNewsDrawer
         open={isNarrowDrawerOpen}
         item={selectedItem}
-        label={(item) => item.title}
-        onClose={() => setIsPanelOpenOnNarrow(false)}
+        label={getItemLabel}
+        onClose={handleCloseNarrowDrawer}
       >
-        {(item) => renderReaderPanel(item, "stacked")}
+        {renderStackedReader}
       </MobileNewsDrawer>
 
       <QuickPasteDialog
         open={isPasteOpen}
         onClose={() => setIsPasteOpen(false)}
-        onIngested={() => void refreshFeed()}
+        onIngested={() => void refreshFeed({ invalidateCache: true })}
       />
 
       <SourcesManagerSheet
         open={isSourcesOpen}
         initialSources={sources}
         onClose={() => setIsSourcesOpen(false)}
-        onChanged={() => void refreshFeed()}
+        onChanged={() => void refreshFeed({ invalidateCache: true })}
       />
     </div>
   );

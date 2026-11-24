@@ -152,14 +152,16 @@ export function NewsReaderPanel({
   return (
     <article
       aria-label={item.title}
-      className="@container flex min-h-0 min-w-0 flex-1 flex-col bg-card motion-safe:animate-in motion-safe:fade-in duration-150 ease-out"
+      className={`@container flex min-h-0 min-w-0 flex-1 flex-col bg-card ${
+        isStacked ? "" : "motion-safe:animate-in motion-safe:fade-in duration-150 ease-out"
+      }`}
     >
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8 sm:py-7">
           <button
             type="button"
             onClick={onBack}
-            className="-ml-2 mb-3 inline-flex h-9 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] xl:hidden cursor-pointer"
+            className="-ml-2 mb-3 inline-flex h-9 touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] xl:hidden cursor-pointer"
           >
             <ArrowLeft className="size-4" />
             Danh sách

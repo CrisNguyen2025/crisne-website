@@ -8,8 +8,9 @@ export default function manifest(): MetadataRoute.Manifest {
       "Portfolio of Cris Nguyen featuring scalable, high-performance web solutions built with React, Next.js, and TypeScript for SaaS products, enterprise CMS, CRM, HRM, and booking systems.",
     start_url: "/",
     display: "standalone",
-    background_color: "#0a0a0a",
-    theme_color: "#6B9AC4",
+    // Match --background of .roadmap-theme (light) so Android status/nav bars blend with the app
+    background_color: "#faf9f5",
+    theme_color: "#faf9f5",
     orientation: "portrait",
     scope: "/",
     lang: "en",
@@ -46,9 +47,9 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
-        name: "Feed Ingestion",
-        short_name: "Ingest",
-        description: "Open private feed ingestion inbox",
+        name: "News",
+        short_name: "News",
+        description: "Open private news inbox",
         url: "/news",
         icons: [{ src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" }],
       },

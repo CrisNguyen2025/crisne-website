@@ -321,6 +321,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       />
     );
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Thao tác bài học' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     const slugInput = screen.getByLabelText('Slug URL');
     fireEvent.change(slugInput, { target: { value: 'knowledge-base' } });
@@ -337,6 +338,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       item: { ...LESSON_KB, title: 'Knowledge Base Updated' },
     });
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Thao tác bài học' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     const titleInput = screen.getByLabelText('Tiêu đề');
     fireEvent.change(titleInput, { target: { value: 'Knowledge Base Updated' } });
@@ -363,6 +365,7 @@ describe('SectionField 1-step Combobox & EditItemInfoDrawer / LessonEditorialRea
       />
     );
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Thao tác bài học' })[0]);
     fireEvent.click(screen.getByRole('button', { name: 'Sửa bài học' }));
     fireEvent.change(screen.getByLabelText('Topic'), { target: { value: 'db-internals' } });
     fireEvent.click(screen.getByRole('button', { name: /Lưu thay đổi/ }));

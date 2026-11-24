@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ChevronRight, List, X } from "lucide-react";
+import { BookOpen, ChevronRight, List, X } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import { splitSectionLabel } from "@/lib/roadmap/section-label";
 import type { LessonStatus } from "@/lib/roadmap/status";
@@ -419,9 +419,23 @@ export function LectureShell({
     </ul>
   );
 
+  const totalLessonsCount = siblingGroups.reduce(
+    (acc, g) => acc + g.items.length,
+    0
+  );
+
   const renderSidebarNavigation = (closeDrawer?: () => void) => (
     <nav aria-label="Bài học trong topic" className="space-y-1">
-      {siblingGroups.length > 0 &&
+      {totalLessonsCount === 0 && (
+        <div className="px-2 py-8 text-center">
+          <BookOpen aria-hidden="true" className="mx-auto mb-3 size-5 text-muted-foreground/60" />
+          <p className="text-sm font-medium text-foreground/90">Chưa có bài học nào</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Bài học của topic này sẽ hiện ở đây.
+          </p>
+        </div>
+      )}
+      {totalLessonsCount > 0 &&
         (isSingleUnscopedGroup ? (
           renderLessonItems(siblingGroups[0].items, "__none__", closeDrawer)
         ) : (
@@ -509,25 +523,20 @@ export function LectureShell({
     </nav>
   );
 
-  const totalLessonsCount = siblingGroups.reduce(
-    (acc, g) => acc + g.items.length,
-    0
-  );
-
   const renderSidebarHeader = (onClose?: () => void) => (
     <div className="shrink-0 border-b border-border/80 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
         <Link
-          href="/"
+          href={topicPath(topic.slug)}
           prefetch={true}
           onClick={onClose}
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
+          className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-foreground/90 transition-colors hover:text-[var(--editorial-accent)]"
+          title={topic.title}
         >
-          <span aria-hidden="true">←</span>
-          <span>Topics</span>
+          {topic.title}
         </Link>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium">
             {totalLessonsCount} bài
           </span>
           {onClose && (
@@ -542,51 +551,38 @@ export function LectureShell({
           )}
         </div>
       </div>
-
-      <div className="mt-2.5 flex items-center">
-        <Link
-          href={topicPath(topic.slug)}
-          prefetch={true}
-          onClick={onClose}
-          className="min-w-0 flex-1 truncate text-xs font-semibold uppercase tracking-wider text-foreground/90 transition-colors hover:text-[var(--editorial-accent)]"
-          title={topic.title}
-        >
-          {topic.title}
-        </Link>
-      </div>
     </div>
   );
 
   return (
     <div className="flex min-h-dvh w-full flex-col">
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md lg:hidden">
-        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
               aria-label="Mở danh sách bài học"
-              className="inline-flex min-h-[2.25rem] items-center gap-1.5 rounded-lg border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] active:scale-[0.98] cursor-pointer"
+              className="inline-flex size-9 shrink-0 touch-manipulation items-center justify-center rounded-lg border border-border/70 bg-card text-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)] active:scale-[0.98] cursor-pointer"
             >
-              <List className="size-3.5" />
-              <span>Bài học</span>
+              <List className="size-4" />
             </button>
 
-            <nav aria-label="Topic navigation" className="flex items-center gap-2 min-w-0 text-xs sm:text-sm">
+            <nav aria-label="Topic navigation" className="flex items-center gap-1.5 sm:gap-2 min-w-0 text-xs sm:text-sm">
               <Link
                 href="/"
                 prefetch={true}
                 className="shrink-0 font-medium text-muted-foreground transition-colors hover:text-[var(--editorial-accent)]"
               >
-                ← Topics
+                Topics
               </Link>
-              <span className="text-muted-foreground/40" aria-hidden="true">
+              <span className="shrink-0 text-muted-foreground/40" aria-hidden="true">
                 /
               </span>
               <Link
                 href={topicPath(topic.slug)}
                 prefetch={true}
-                className="truncate font-semibold tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
+                className="min-w-0 truncate font-semibold tracking-tight text-foreground transition-colors hover:text-[var(--editorial-accent)]"
               >
                 {topic.title}
               </Link>
@@ -686,6 +682,7 @@ export function LectureShell({
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         side="left"
+        swipeToClose
         label={topic.title}
         className="roadmap-theme max-w-[20rem] bg-[var(--editorial-sidebar)] p-0"
       >

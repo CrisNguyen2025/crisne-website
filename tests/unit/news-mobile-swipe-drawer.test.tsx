@@ -323,4 +323,87 @@ describe("MobileNewsDrawer & NewsFeedClient mobile swipe UX", () => {
 
     expect(screen.queryByRole("button", { name: "Danh sách" })).toBeNull();
   });
+
+  it("renders News heading, opens drawer on first animation frame without re-running stable children, and avoids layout reads during drag", () => {
+    mockMobileViewport();
+    const rafQueue: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      rafQueue.push(cb);
+      return rafQueue.length;
+    });
+
+    const item = makeItem({ id: "news-fast", title: "Bài mở mượt" });
+    const renderChild = vi.fn((row: NewsItemDto) => <article>{row.title}</article>);
+
+    render(
+      <MobileNewsDrawer open={true} item={item} label={(row) => row.title} onClose={vi.fn()}>
+        {renderChild}
+      </MobileNewsDrawer>
+    );
+
+    const dialog = screen.getByRole("dialog", { name: item.title });
+    expect(dialog.className).toContain("translate-x-full");
+    expect(renderChild).toHaveBeenCalledTimes(1);
+
+    // Single animation frame flips the panel open without re-rendering memoized children
+    expect(rafQueue).toHaveLength(1);
+    act(() => {
+      rafQueue.shift()?.(16);
+    });
+    expect(dialog.className).toContain("translate-x-0");
+    expect(renderChild).toHaveBeenCalledTimes(1);
+
+    const rectSpy = vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
+      width: 390,
+      height: 844,
+      top: 0,
+      left: 0,
+      bottom: 844,
+      right: 390,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    dialog.dispatchEvent(createTouchEvent("touchstart", 10, 200, dialog));
+    expect(rectSpy).toHaveBeenCalledTimes(1);
+    dialog.dispatchEvent(createTouchEvent("touchmove", 60, 200, dialog));
+    dialog.dispatchEvent(createTouchEvent("touchmove", 110, 200, dialog));
+    dialog.dispatchEvent(createTouchEvent("touchmove", 160, 200, dialog));
+    // Cached panel width: zero extra getBoundingClientRect calls across multiple touchmove frames
+    expect(rectSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses News as the page heading instead of Feed Ingestion", () => {
+    mockMobileViewport();
+    const counts = {
+      total: 0,
+      queued: 0,
+      processing: 0,
+      ready: 0,
+      partial: 0,
+      failed: 0,
+      draft: 0,
+      unread: 0,
+      saved: 0,
+      dismissed: 0,
+      queue: 0,
+      inbox: 0,
+      done: 0,
+    };
+
+    render(
+      <NuqsTestingAdapter hasMemory>
+        <ToastProvider>
+          <NewsFeedClient
+            initialData={{ items: [], counts, tags: [], duplicateTitles: {}, hasMore: false }}
+            initialParams={{ view: "inbox", sort: "latest" }}
+          />
+        </ToastProvider>
+      </NuqsTestingAdapter>
+    );
+
+    expect(screen.getByRole("heading", { level: 1, name: "News" })).toBeTruthy();
+    expect(screen.queryByText("Feed Ingestion")).toBeNull();
+  });
 });

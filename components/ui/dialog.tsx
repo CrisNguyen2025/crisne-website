@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useSyncExternalStore } from "react";
+import { ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,12 +23,57 @@ let lockedScrollX = 0;
 let lockedScrollY = 0;
 let lastTouchX = 0;
 let lastTouchY = 0;
+let activeTouchScrollY: HTMLElement[] = [];
+let activeTouchScrollX: HTMLElement[] = [];
 
 function isEditableElement(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function collectScrollableOverlayAncestors(target: EventTarget | null) {
+  activeTouchScrollY = [];
+  activeTouchScrollX = [];
+  if (!(target instanceof Element)) return;
+  const boundary = target.closest(OVERLAY_INTERACTIVE_SELECTOR);
+  if (!boundary) return;
+
+  let current: HTMLElement | null =
+    target instanceof HTMLElement ? target : target.parentElement;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    if (
+      (style.overflowY === "auto" || style.overflowY === "scroll") &&
+      current.scrollHeight > current.clientHeight + 1
+    ) {
+      activeTouchScrollY.push(current);
+    }
+    if (
+      (style.overflowX === "auto" || style.overflowX === "scroll") &&
+      current.scrollWidth > current.clientWidth + 1
+    ) {
+      activeTouchScrollX.push(current);
+    }
+    if (current === boundary) break;
+    current = current.parentElement;
+  }
+}
+
+function canCachedAncestorsScroll(deltaX: number, deltaY: number): boolean {
+  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+    for (const el of activeTouchScrollY) {
+      if (deltaY < 0 && el.scrollTop > 0) return true;
+      if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+    }
+    return false;
+  }
+  for (const el of activeTouchScrollX) {
+    if (deltaX < 0 && el.scrollLeft > 0) return true;
+    if (deltaX > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+  }
+  return false;
 }
 
 function canScrollInDirection(
@@ -87,18 +132,25 @@ function handleOverlayTouchStart(e: TouchEvent) {
   if (!touch) return;
   lastTouchX = touch.clientX;
   lastTouchY = touch.clientY;
+  collectScrollableOverlayAncestors(e.target);
 }
 
 function handleOverlayTouchMove(e: TouchEvent) {
+  if (e.defaultPrevented) return;
   const touch = e.touches[0];
   if (!touch) return;
   const deltaX = lastTouchX - touch.clientX;
   const deltaY = lastTouchY - touch.clientY;
   lastTouchX = touch.clientX;
   lastTouchY = touch.clientY;
-  if (!hasScrollableOverlayAncestor(e.target, deltaX, deltaY)) {
+  if (!canCachedAncestorsScroll(deltaX, deltaY)) {
     e.preventDefault();
   }
+}
+
+function handleOverlayTouchEnd() {
+  activeTouchScrollY = [];
+  activeTouchScrollX = [];
 }
 
 function handleOverlayScrollKey(e: KeyboardEvent) {
@@ -127,6 +179,8 @@ function lockPageScroll() {
     window.addEventListener("wheel", handleOverlayWheel, { passive: false });
     window.addEventListener("touchstart", handleOverlayTouchStart, { passive: true });
     window.addEventListener("touchmove", handleOverlayTouchMove, { passive: false });
+    window.addEventListener("touchend", handleOverlayTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", handleOverlayTouchEnd, { passive: true });
     window.addEventListener("keydown", handleOverlayScrollKey);
     window.addEventListener("scroll", handleOverlayWindowScroll, { passive: true });
   }
@@ -136,9 +190,13 @@ function lockPageScroll() {
 function unlockPageScroll() {
   overlayLockCount = Math.max(0, overlayLockCount - 1);
   if (overlayLockCount === 0) {
+    activeTouchScrollY = [];
+    activeTouchScrollX = [];
     window.removeEventListener("wheel", handleOverlayWheel);
     window.removeEventListener("touchstart", handleOverlayTouchStart);
     window.removeEventListener("touchmove", handleOverlayTouchMove);
+    window.removeEventListener("touchend", handleOverlayTouchEnd);
+    window.removeEventListener("touchcancel", handleOverlayTouchEnd);
     window.removeEventListener("keydown", handleOverlayScrollKey);
     window.removeEventListener("scroll", handleOverlayWindowScroll);
   }
@@ -146,10 +204,15 @@ function unlockPageScroll() {
 
 /** Close on Escape and lock page scroll while an overlay is open. */
 export function useOverlay(open: boolean, onClose: () => void) {
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     lockPageScroll();
     window.addEventListener("keydown", handleKeyDown);
@@ -157,7 +220,7 @@ export function useOverlay(open: boolean, onClose: () => void) {
       unlockPageScroll();
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, onClose]);
+  }, [open]);
 }
 
 /** Portals render only on the client, after mount. */
@@ -210,7 +273,7 @@ export function Dialog({
     >
       <div
         className={cn(
-          "absolute inset-0 bg-black/40 backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
+          "absolute inset-0 bg-black/40 sm:backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
           isVisible ? "opacity-100 duration-[180ms]" : "opacity-0 duration-[150ms]"
         )}
         onClick={open ? onClose : undefined}

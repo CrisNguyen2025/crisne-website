@@ -1,14 +1,14 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@/lib/utils";
-import { useAnimatedPresence } from "@/hooks/use-animated-presence";
+import { cn, prefersReducedMotion } from "@/lib/utils";
+import { useSwipeDrawer } from "@/hooks/use-swipe-drawer";
 import { useMounted, useOverlay } from "./dialog";
 
 type SheetSide = "right" | "left" | "bottom";
 
-const SHEET_EXIT_MS = 200;
+const SHEET_EXIT_MS = 190;
 
 const SIDE_POSITION_CLASSES: Record<SheetSide, string> = {
   right: "inset-y-0 right-0 h-full w-full max-w-xl border-l",
@@ -31,6 +31,8 @@ interface SheetProps {
   children: ReactNode;
   className?: string;
   label: string;
+  /** Touch: drag the panel back toward its edge to close (left/right sides only). */
+  swipeToClose?: boolean;
 }
 
 export function Sheet({
@@ -41,13 +43,56 @@ export function Sheet({
   children,
   className,
   label,
+  swipeToClose = false,
 }: SheetProps) {
   const isMounted = useMounted();
-  const { shouldRender, isVisible: showPanel } = useAnimatedPresence(open, SHEET_EXIT_MS, onAfterClose);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const scrimRef = useRef<HTMLDivElement>(null);
+  const [shouldRender, setShouldRender] = useState(open);
+  const [isVisible, setIsVisible] = useState(false);
+
+  if (open && !shouldRender) {
+    setShouldRender(true);
+  }
+  if (!open && isVisible) {
+    setIsVisible(false);
+  }
+
+  useEffect(() => {
+    if (open) {
+      if (panelRef.current && !prefersReducedMotion()) {
+        void panelRef.current.offsetWidth;
+      }
+      const frame = window.requestAnimationFrame(() => {
+        setIsVisible(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    if (!shouldRender) return;
+
+    const delay = prefersReducedMotion() ? 0 : SHEET_EXIT_MS;
+    const timer = window.setTimeout(() => {
+      setIsVisible(false);
+      setShouldRender(false);
+      onAfterClose?.();
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [open, shouldRender, onAfterClose]);
 
   useOverlay(open, onClose);
+  useSwipeDrawer(
+    panelRef,
+    scrimRef,
+    swipeToClose && side !== "bottom" && open && isVisible,
+    onClose,
+    side === "left" ? "left" : "right"
+  );
 
   if (!shouldRender || !isMounted) return null;
+
+  const showPanel = open && isVisible;
 
   return createPortal(
     <div
@@ -58,22 +103,24 @@ export function Sheet({
       aria-hidden={!open || undefined}
     >
       <div
+        ref={scrimRef}
         className={cn(
-          "absolute inset-0 bg-black/35 backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
-          showPanel ? "opacity-100 duration-[240ms]" : "opacity-0 duration-[180ms]"
+          "absolute inset-0 bg-black/35 md:backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
+          showPanel ? "opacity-100 duration-[220ms]" : "opacity-0 duration-[170ms]"
         )}
         onClick={open ? onClose : undefined}
       />
       <div
+        ref={panelRef}
         role={open ? "dialog" : undefined}
         aria-modal={open ? "true" : undefined}
         aria-label={open ? label : undefined}
         className={cn(
-          "absolute flex flex-col border-border bg-card text-card-foreground shadow-2xl will-change-transform transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+          "absolute flex flex-col border-border bg-card text-card-foreground shadow-2xl will-change-transform [contain:layout_style] transition-transform ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
           SIDE_POSITION_CLASSES[side],
           showPanel
-            ? "translate-x-0 translate-y-0 opacity-100 duration-[280ms]"
-            : cn(SIDE_CLOSED_TRANSFORM[side], "opacity-95 duration-[200ms]"),
+            ? "translate-x-0 translate-y-0 duration-[240ms]"
+            : cn(SIDE_CLOSED_TRANSFORM[side], "duration-[190ms]"),
           className
         )}
       >

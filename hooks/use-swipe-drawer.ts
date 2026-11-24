@@ -6,8 +6,10 @@ const COMMIT_PX = 10;
 const CLOSE_RATIO = 0.3;
 const CLOSE_VELOCITY = 0.5;
 const CLOSE_MIN_FLICK_PX = 40;
-const CLOSE_MS = 240;
-const SNAP_MS = 200;
+const CLOSE_MIN_MS = 120;
+const CLOSE_MAX_MS = 200;
+const SNAP_MIN_MS = 140;
+const SNAP_MAX_MS = 200;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 function prefersReducedMotion(): boolean {
@@ -39,12 +41,13 @@ function shouldIgnoreSwipeStart(target: EventTarget | null, panel: HTMLElement):
   return false;
 }
 
-/** Right-swipe gesture controller for dismissible overlay drawers. */
+/** Swipe-to-dismiss gesture controller for overlay drawers; `direction` is the way the panel leaves. */
 export function useSwipeDrawer(
   panelRef: React.RefObject<HTMLElement | null>,
   scrimRef: React.RefObject<HTMLElement | null>,
   enabled: boolean,
-  onSwipeClose: () => void
+  onSwipeClose: () => void,
+  direction: "right" | "left" = "right"
 ) {
   const onSwipeCloseRef = useRef(onSwipeClose);
 
@@ -55,6 +58,8 @@ export function useSwipeDrawer(
   useEffect(() => {
     const panel = panelRef.current;
     if (!enabled || !panel) return;
+    const sign = direction === "right" ? 1 : -1;
+    const closedTransform = `translateX(${sign * 100}%)`;
 
     const clearInlineMotion = () => {
       panel.style.transition = "";
@@ -75,6 +80,7 @@ export function useSwipeDrawer(
     let instantaneousVelocity = 0;
     let mode: "idle" | "pending" | "drag" | "ignore" = "idle";
     let dragX = 0;
+    let panelWidth = 0;
     let snapResetTimer = 0;
     let snapListenerPanel: HTMLElement | null = null;
     let onSnapTransitionEnd: ((e: TransitionEvent) => void) | null = null;
@@ -91,26 +97,33 @@ export function useSwipeDrawer(
       onSnapTransitionEnd = null;
     };
 
-    const width = () => panel.getBoundingClientRect().width || window.innerWidth;
+    const measureWidth = () => {
+      panelWidth = panel.getBoundingClientRect().width || window.innerWidth || 1;
+      return panelWidth;
+    };
+
+    const getWidth = () => panelWidth || measureWidth();
 
     const setDrag = (x: number) => {
       panel.style.transition = "none";
-      panel.style.transform = `translateX(${x}px)`;
+      panel.style.transform = `translateX(${sign * x}px)`;
       if (scrimRef.current) {
         scrimRef.current.style.transition = "none";
-        scrimRef.current.style.opacity = String(Math.max(0, Math.min(1, 1 - x / width())));
+        scrimRef.current.style.opacity = String(Math.max(0, Math.min(1, 1 - x / getWidth())));
       }
     };
 
     const snapBack = () => {
       cancelSnapCleanup();
       const reduced = prefersReducedMotion();
+      const progress = Math.min(1, dragX / getWidth());
+      const durationMs = Math.round(SNAP_MIN_MS + (SNAP_MAX_MS - SNAP_MIN_MS) * progress);
       panel.style.transition = reduced
         ? "none"
-        : `transform ${SNAP_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+        : `transform ${durationMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
       panel.style.transform = "translateX(0px)";
       if (scrimRef.current) {
-        scrimRef.current.style.transition = reduced ? "none" : `opacity ${SNAP_MS}ms ease-out`;
+        scrimRef.current.style.transition = reduced ? "none" : `opacity ${durationMs}ms ease-out`;
         scrimRef.current.style.opacity = "1";
       }
 
@@ -128,18 +141,24 @@ export function useSwipeDrawer(
       };
       snapListenerPanel = panel;
       panel.addEventListener("transitionend", onSnapTransitionEnd);
-      snapResetTimer = window.setTimeout(cleanup, reduced ? 0 : SNAP_MS + 32);
+      snapResetTimer = window.setTimeout(cleanup, reduced ? 0 : durationMs + 32);
     };
 
-    const animateClose = () => {
+    const animateClose = (velocity: number) => {
       cancelSnapCleanup();
       const reduced = prefersReducedMotion();
+      const remainingRatio = Math.max(0, 1 - dragX / getWidth());
+      const velocityBoost = Math.min(0.45, Math.max(0, velocity - CLOSE_VELOCITY) * 0.25);
+      const durationMs = Math.round(
+        CLOSE_MIN_MS +
+          (CLOSE_MAX_MS - CLOSE_MIN_MS) * remainingRatio * (1 - velocityBoost)
+      );
       panel.style.transition = reduced
         ? "none"
-        : `transform ${CLOSE_MS}ms cubic-bezier(0.32, 0.72, 0, 1)`;
-      panel.style.transform = "translateX(100%)";
+        : `transform ${durationMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+      panel.style.transform = closedTransform;
       if (scrimRef.current) {
-        scrimRef.current.style.transition = reduced ? "none" : `opacity ${CLOSE_MS}ms ease-out`;
+        scrimRef.current.style.transition = reduced ? "none" : `opacity ${durationMs}ms ease-out`;
         scrimRef.current.style.opacity = "0";
       }
       onSwipeCloseRef.current();
@@ -159,6 +178,7 @@ export function useSwipeDrawer(
       lastT = startT;
       instantaneousVelocity = 0;
       dragX = 0;
+      measureWidth();
       mode = "pending";
     };
 
@@ -169,12 +189,12 @@ export function useSwipeDrawer(
       const now = performance.now();
       const dt = now - lastT;
       if (dt > 16) {
-        instantaneousVelocity = (t.clientX - lastX) / dt;
+        instantaneousVelocity = (sign * (t.clientX - lastX)) / dt;
         lastX = t.clientX;
         lastT = now;
       }
 
-      const dx = t.clientX - startX;
+      const dx = sign * (t.clientX - startX);
       const dy = t.clientY - startY;
 
       if (mode === "pending") {
@@ -201,10 +221,10 @@ export function useSwipeDrawer(
       mode = "idle";
 
       if (
-        dragX > width() * CLOSE_RATIO ||
+        dragX > getWidth() * CLOSE_RATIO ||
         (velocity > CLOSE_VELOCITY && dragX > CLOSE_MIN_FLICK_PX)
       ) {
-        animateClose();
+        animateClose(velocity);
       } else {
         snapBack();
       }
@@ -221,9 +241,9 @@ export function useSwipeDrawer(
       panel.removeEventListener("touchmove", onMove);
       panel.removeEventListener("touchend", onEnd);
       panel.removeEventListener("touchcancel", onEnd);
-      if (panel.style.transform !== "translateX(100%)") {
+      if (panel.style.transform !== closedTransform) {
         clearInlineMotion();
       }
     };
-  }, [enabled, panelRef, scrimRef]);
+  }, [enabled, panelRef, scrimRef, direction]);
 }

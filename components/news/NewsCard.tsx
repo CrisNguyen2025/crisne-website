@@ -85,7 +85,7 @@ function renderStatusBadge(item: NewsItemDto): React.ReactNode {
 }
 
 /** One row of the News list: meta, title, TL;DR and status; the whole row opens the item. */
-export function NewsCard({
+export const NewsCard = React.memo(function NewsCard({
   item,
   isSelected = false,
   onSelect,
@@ -99,7 +99,7 @@ export function NewsCard({
   return (
     <article
       data-news-card-id={item.id}
-      className={`group relative cursor-pointer border-b border-border px-4 py-4 transition-[background-color,box-shadow,opacity] duration-150 ease-out sm:px-5 ${
+      className={`group relative cursor-pointer border-b border-border px-4 py-4 [contain:layout_style] transition-[background-color,box-shadow,opacity] duration-150 ease-out sm:px-5 ${
         isSelected
           ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]"
           : "hover:bg-muted/60 active:bg-muted/80"
@@ -126,7 +126,7 @@ export function NewsCard({
           type="button"
           onClick={() => onSelect(item)}
           aria-current={isSelected ? "true" : undefined}
-          className={`block w-full text-left decoration-1 underline-offset-4 transition-colors duration-150 group-hover:underline cursor-pointer after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring ${
+          className={`block w-full touch-manipulation text-left decoration-1 underline-offset-4 transition-colors duration-150 group-hover:underline cursor-pointer after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring ${
             isPending
               ? "truncate font-mono text-sm text-muted-foreground"
               : "line-clamp-2 font-display text-[17px] font-semibold leading-snug text-foreground"
@@ -152,4 +152,4 @@ export function NewsCard({
       )}
     </article>
   );
-}
+});

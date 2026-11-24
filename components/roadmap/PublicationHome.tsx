@@ -77,10 +77,11 @@ export function PublicationHome({
             <div className="flex items-center gap-2">
               <Link
                 href={NEWS_PATH}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
+                prefetch={true}
+                className="inline-flex h-9 touch-manipulation items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
               >
                 <Newspaper className="size-3.5 text-muted-foreground" />
-                <span>Feed Ingestion</span>
+                <span>News</span>
               </Link>
               <button
                 type="button"
