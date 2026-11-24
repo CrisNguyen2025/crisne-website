@@ -143,6 +143,14 @@ function handleOverlayTouchMove(e: TouchEvent) {
   const deltaY = lastTouchY - touch.clientY;
   lastTouchX = touch.clientX;
   lastTouchY = touch.clientY;
+  // Let swipe-to-dismiss drawers handle horizontal touch moves without interference
+  if (
+    Math.abs(deltaX) > Math.abs(deltaY) &&
+    e.target instanceof Element &&
+    e.target.closest("[data-swipe-drawer]")
+  ) {
+    return;
+  }
   if (!canCachedAncestorsScroll(deltaX, deltaY)) {
     e.preventDefault();
   }

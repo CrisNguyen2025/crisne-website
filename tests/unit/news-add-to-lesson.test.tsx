@@ -53,14 +53,12 @@ function renderPanel(item: NewsItemDto) {
   return render(
     <NewsReaderPanel
       item={item}
-      onBack={noop}
       onToggleRead={noop}
       onToggleSave={noop}
       onDismiss={noop}
       onReopen={noop}
       onDelete={noop}
       onUpdateTags={asyncNoop}
-      onSaveNote={asyncNoop}
       onOpenExternal={noop}
     />
   );

@@ -12,6 +12,7 @@ import {
   ReadStateSchema,
 } from "@/lib/news/schemas";
 import { listNewsSources } from "@/lib/news/sources";
+import { checkNewsWorkerHealth } from "@/lib/news/worker-health";
 import { NewsFeedClient } from "@/components/news/NewsFeedClient";
 
 export const dynamic = "force-dynamic";
@@ -57,12 +58,13 @@ export default async function FeedIngestionPage({ searchParams }: FeedIngestionP
     sort: sortParsed.success ? sortParsed.data : ("latest" as const),
   };
 
-  const [initialData, initialSources] = await Promise.all([
+  const [initialData, initialSources, initialWorkerHealth] = await Promise.all([
     queryNewsFeed({
       ...initialParams,
       limit: 60,
     }),
     listNewsSources(),
+    checkNewsWorkerHealth(1_500),
   ]);
 
   return (
@@ -71,7 +73,8 @@ export default async function FeedIngestionPage({ searchParams }: FeedIngestionP
         initialData={initialData}
         initialParams={initialParams}
         initialSources={initialSources}
-        workerConfigured={Boolean(process.env.NEWS_WORKER_URL?.trim())}
+        initialWorkerHealth={initialWorkerHealth}
+        workerConfigured={initialWorkerHealth.configured}
       />
     </Suspense>
   );

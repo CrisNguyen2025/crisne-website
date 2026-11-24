@@ -114,9 +114,9 @@ describe("useSwipeDrawer", () => {
     panel.dispatchEvent(createTouchEvent("touchstart", 10, 120, panel));
     panel.dispatchEvent(createTouchEvent("touchmove", 100, 120, panel));
 
-    expect(panel.style.transform).toBe("translateX(80px)");
+    expect(panel.style.transform).toBe("translateX(84px)");
     const opacity = parseFloat(scrim.style.opacity);
-    expect(opacity).toBeCloseTo(1 - 80 / 375, 3);
+    expect(opacity).toBeCloseTo(1 - 84 / 375, 3);
   });
 
   it("snaps back on short slow release and clears inline transform after snap settles", () => {
@@ -137,17 +137,38 @@ describe("useSwipeDrawer", () => {
     expect(scrim.style.opacity).toBe("");
   });
 
-  it("slides out and triggers close when dragged past 30% width", () => {
+  it("slides out and triggers close when dragged past 22% width or along a natural diagonal thumb arc", () => {
     const onSwipeClose = vi.fn();
     renderHook(() => useSwipeDrawer(panelRef, scrimRef, true, onSwipeClose));
 
+    // Natural diagonal thumb swipe (~35°): dx=32, dy=22 still commits drag
     panel.dispatchEvent(createTouchEvent("touchstart", 10, 120, panel));
-    panel.dispatchEvent(createTouchEvent("touchmove", 150, 120, panel));
-    panel.dispatchEvent(createTouchEvent("touchend", 150, 120, panel));
+    panel.dispatchEvent(createTouchEvent("touchmove", 42, 142, panel));
+    expect(panel.style.transform).toBe("translateX(26px)");
+    panel.dispatchEvent(createTouchEvent("touchmove", 110, 150, panel));
+    panel.dispatchEvent(createTouchEvent("touchend", 110, 150, panel));
 
     expect(panel.style.transform).toBe("translateX(100%)");
     expect(scrim.style.opacity).toBe("0");
     expect(onSwipeClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("snaps back when user flicks back toward open even past 22% width", () => {
+    const onSwipeClose = vi.fn();
+    renderHook(() => useSwipeDrawer(panelRef, scrimRef, true, onSwipeClose));
+
+    let now = 1_000;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+
+    panel.dispatchEvent(createTouchEvent("touchstart", 10, 120, panel));
+    now += 20;
+    panel.dispatchEvent(createTouchEvent("touchmove", 160, 120, panel));
+    now += 20;
+    panel.dispatchEvent(createTouchEvent("touchmove", 130, 120, panel));
+    panel.dispatchEvent(createTouchEvent("touchend", 130, 120, panel));
+
+    expect(panel.style.transform).toBe("translateX(0px)");
+    expect(onSwipeClose).not.toHaveBeenCalled();
   });
 
   it("triggers close on quick flick even below 30% width", () => {
@@ -221,6 +242,8 @@ describe("MobileNewsDrawer & NewsFeedClient mobile swipe UX", () => {
 
     const dialog = screen.getByRole("dialog", { name: item.title });
     expect(dialog.className).toContain("touch-pan-y");
+    expect(dialog.className).toContain("roadmap-theme");
+    expect(dialog.parentElement?.className).not.toContain("roadmap-theme");
     expect(screen.getByText(item.title)).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "Escape" });
@@ -405,5 +428,74 @@ describe("MobileNewsDrawer & NewsFeedClient mobile swipe UX", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "News" })).toBeTruthy();
     expect(screen.queryByText("Feed Ingestion")).toBeNull();
+  });
+
+  it("wraps long unbroken TikTok photo URLs during generation without overflowing cards or reader, and keeps Tag below content on desktop", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }))
+    );
+
+    const pendingTikTok = makeItem({
+      id: "tiktok-photo-1",
+      domain: "tiktok.com",
+      platform: "tiktok",
+      title: "https://tiktok.com/@trihuynh.dev2026/photo/7711062589299641621",
+      sourceUrl: "https://tiktok.com/@trihuynh.dev2026/photo/7711062589299641621",
+      canonicalUrl: "https://tiktok.com/@trihuynh.dev2026/photo/7711062589299641621",
+      ingestStatus: "processing",
+      tldr: null,
+      takeaways: [],
+      tags: ["tiktok"],
+    });
+    const counts = {
+      total: 1,
+      queued: 0,
+      processing: 1,
+      ready: 0,
+      partial: 0,
+      failed: 0,
+      draft: 0,
+      unread: 1,
+      saved: 0,
+      dismissed: 0,
+      queue: 1,
+      inbox: 1,
+      done: 0,
+    };
+
+    const { container } = render(
+      <NuqsTestingAdapter hasMemory>
+        <ToastProvider>
+          <NewsFeedClient
+            initialData={{ items: [pendingTikTok], counts, tags: [], duplicateTitles: {}, hasMore: false }}
+            initialParams={{ view: "inbox", sort: "latest" }}
+          />
+        </ToastProvider>
+      </NuqsTestingAdapter>
+    );
+
+    const card = container.querySelector('[data-news-card-id="tiktok-photo-1"]') as HTMLElement;
+    expect(card.className).toContain("overflow-hidden");
+    const cardButton = card.querySelector("h2 button") as HTMLButtonElement;
+    expect(cardButton.className).toContain("break-all");
+    expect(cardButton.textContent).toBe("tiktok.com/@trihuynh.dev2026/photo/7711062589299641621");
+
+    const readerHeading = screen.getByRole("heading", {
+      level: 1,
+      name: "tiktok.com/@trihuynh.dev2026/photo/7711062589299641621",
+    });
+    expect(readerHeading.className).toContain("break-all");
+    expect(readerHeading.className).toContain("[overflow-wrap:anywhere]");
+
+    // Tag section sits below the post content even on desktop (no side column)
+    const tagAside = screen.getByLabelText("Tag");
+    expect(tagAside.className).toContain("border-t");
+    expect(tagAside.className).not.toContain("@2xl:border-l");
   });
 });

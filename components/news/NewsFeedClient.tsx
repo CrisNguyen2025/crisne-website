@@ -20,7 +20,6 @@ import {
   Inbox,
   Loader2,
   Plus,
-  RefreshCw,
   RotateCcw,
   Rss,
   Search,
@@ -61,6 +60,7 @@ interface NewsFeedClientProps {
   };
   initialSources?: NewsSourceDto[];
   initialSourcesOpen?: boolean;
+  initialWorkerHealth?: NewsWorkerHealthDto;
   workerConfigured?: boolean;
 }
 
@@ -147,6 +147,7 @@ export function NewsFeedClient({
   initialParams,
   initialSources = [],
   initialSourcesOpen = false,
+  initialWorkerHealth,
   workerConfigured = false,
 }: NewsFeedClientProps) {
   const { toast } = useToast();
@@ -205,7 +206,8 @@ export function NewsFeedClient({
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [workerHealth, setWorkerHealth] = useState<NewsWorkerHealthDto | null>(() =>
-    workerConfigured ? null : { configured: false, status: "unconfigured" }
+    initialWorkerHealth ??
+    (workerConfigured ? null : { configured: false, status: "unconfigured" })
   );
   const [isCheckingWorker, setIsCheckingWorker] = useState(false);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -542,14 +544,6 @@ export function NewsFeedClient({
     [applyItemUpdate]
   );
 
-  const handleSaveNote = useCallback(
-    async (item: NewsItemDto, personalNote: string | null) => {
-      await applyItemUpdate(item.id, { personalNote }, "Đã lưu ghi chú");
-    },
-    [applyItemUpdate]
-  );
-
-
   const handleOpenExternal = useCallback(
     (item: NewsItemDto) => {
       if (item.reviewStatus !== "dismissed" && item.readState === "unread") {
@@ -609,13 +603,6 @@ export function NewsFeedClient({
       });
   }, []);
 
-  const handleRefreshAll = useCallback(() => {
-    void refreshFeed({ showLoading: true, invalidateCache: true });
-    if (workerConfigured) {
-      void handleCheckWorkerHealth();
-    }
-  }, [handleCheckWorkerHealth, refreshFeed, workerConfigured]);
-
   const activeFilterCount = [
     origin,
     tag,
@@ -670,11 +657,20 @@ export function NewsFeedClient({
           ? "Chưa gắn worker"
           : "Worker";
 
+  const workerShortLabel =
+    workerHealth?.status === "ok"
+      ? "OK"
+      : workerHealth?.status === "offline"
+        ? "Offline"
+        : workerHealth?.status === "unconfigured"
+          ? "Chưa gắn"
+          : "Worker";
+
   const renderReaderPanel = useCallback(
-    (item: NewsItemDto, layout: "split" | "stacked" = "split") => (
+    (item: NewsItemDto, animateMount = true) => (
       <NewsReaderPanel
         key={item.id}
-        layout={layout}
+        animateMount={animateMount}
         item={item}
         duplicateTitle={
           item.possibleDuplicateOfId
@@ -683,14 +679,12 @@ export function NewsFeedClient({
         }
         isUpdating={busyItemId === item.id}
         isDeleting={deletingId === item.id}
-        onBack={handleCloseNarrowDrawer}
         onToggleRead={handleToggleRead}
         onToggleSave={handleToggleSave}
         onDismiss={handleDismiss}
         onReopen={handleReopen}
         onDelete={handleDelete}
         onUpdateTags={handleUpdateTags}
-        onSaveNote={handleSaveNote}
         onOpenExternal={handleOpenExternal}
         onOpenItem={handleOpenItem}
       />
@@ -699,28 +693,26 @@ export function NewsFeedClient({
       busyItemId,
       deletingId,
       displayData.duplicateTitles,
-      handleCloseNarrowDrawer,
       handleDelete,
       handleDismiss,
       handleOpenExternal,
       handleOpenItem,
       handleReopen,
-      handleSaveNote,
       handleToggleRead,
       handleToggleSave,
       handleUpdateTags,
     ]
   );
 
-  const renderStackedReader = useCallback(
-    (item: NewsItemDto) => renderReaderPanel(item, "stacked"),
+  const renderDrawerReader = useCallback(
+    (item: NewsItemDto) => renderReaderPanel(item, false),
     [renderReaderPanel]
   );
 
   const getItemLabel = useCallback((item: NewsItemDto) => item.title, []);
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col">
+    <div className="flex h-dvh min-h-0 flex-col overflow-x-hidden">
       <header
         inert={isNarrowDrawerOpen || undefined}
         aria-hidden={isNarrowDrawerOpen || undefined}
@@ -739,31 +731,31 @@ export function NewsFeedClient({
             News
           </h1>
 
-          {workerConfigured && (
-            <button
-              type="button"
-              onClick={() => void handleCheckWorkerHealth()}
-              disabled={isCheckingWorker}
-              title="Kiểm tra trạng thái worker tóm tắt"
-              className="hidden sm:inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer"
-            >
-              <span
-                className={`size-1.5 rounded-full transition-colors duration-150 ${
-                  workerHealth?.status === "ok"
-                    ? "bg-emerald-500"
-                    : workerHealth?.status === "offline"
-                      ? "bg-destructive"
-                      : "bg-muted-foreground/50"
-                }`}
-              />
-              {isCheckingWorker ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Activity className="size-3" />
-              )}
-              <span>{workerStatusLabel}</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => void handleCheckWorkerHealth()}
+            disabled={isCheckingWorker}
+            aria-label={`Kiểm tra trạng thái worker: ${workerStatusLabel}`}
+            title={`Kiểm tra trạng thái worker tóm tắt (${workerStatusLabel})`}
+            className="inline-flex h-7 shrink-0 touch-manipulation items-center gap-1.5 rounded-md border border-border bg-card px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer"
+          >
+            <span
+              className={`size-1.5 shrink-0 rounded-full transition-colors duration-150 ${
+                workerHealth?.status === "ok"
+                  ? "bg-emerald-500"
+                  : workerHealth?.status === "offline"
+                    ? "bg-destructive"
+                    : "bg-muted-foreground/50"
+              }`}
+            />
+            {isCheckingWorker ? (
+              <Loader2 className="size-3 shrink-0 animate-spin" />
+            ) : (
+              <Activity className="size-3 shrink-0" />
+            )}
+            <span className="hidden sm:inline">{workerStatusLabel}</span>
+            <span className="sm:hidden">{workerShortLabel}</span>
+          </button>
 
           <div className="ml-auto flex min-w-0 items-center gap-2">
             <label className="relative hidden w-64 md:block">
@@ -809,16 +801,6 @@ export function NewsFeedClient({
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 md:hidden cursor-pointer"
             >
               <Search className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleRefreshAll}
-              disabled={isLoading}
-              aria-label="Làm mới"
-              title="Làm mới danh sách"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-95 disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-            >
-              <RefreshCw className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>
             <button
               type="button"
@@ -1152,7 +1134,7 @@ export function NewsFeedClient({
         label={getItemLabel}
         onClose={handleCloseNarrowDrawer}
       >
-        {renderStackedReader}
+        {renderDrawerReader}
       </MobileNewsDrawer>
 
       <QuickPasteDialog

@@ -4,11 +4,9 @@ import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
-  ArrowLeft,
   ExternalLink,
   Loader2,
   Plus,
-  Save,
   Trash2,
   X,
 } from "lucide-react";
@@ -25,19 +23,17 @@ interface NewsReaderPanelProps {
   duplicateTitle?: string;
   isUpdating?: boolean;
   isDeleting?: boolean;
-  onBack: () => void;
   onToggleRead: (item: NewsItemDto, nextState: "read" | "unread") => void;
   onToggleSave: (item: NewsItemDto) => void;
   onDismiss: (item: NewsItemDto) => void;
   onReopen: (item: NewsItemDto) => void;
   onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
-  onSaveNote: (item: NewsItemDto, note: string | null) => Promise<void>;
   onOpenExternal: (item: NewsItemDto) => void;
   /** Opens another item by id in the reader, e.g. the possible duplicate */
   onOpenItem?: (itemId: string) => void;
-  /** "split": Tag and note in a side column on wide panels; "stacked": Tag under the post, no note (drawer) */
-  layout?: "split" | "stacked";
+  /** Skip the mount fade-in when hosted inside MobileNewsDrawer so the slide transition stays crisp */
+  animateMount?: boolean;
 }
 
 const METHOD_LABELS: Record<ExtractionMethod, string> = {
@@ -70,26 +66,20 @@ export function NewsReaderPanel({
   duplicateTitle,
   isUpdating = false,
   isDeleting = false,
-  onBack,
   onToggleRead,
   onToggleSave,
   onDismiss,
   onReopen,
   onDelete,
   onUpdateTags,
-  onSaveNote,
   onOpenExternal,
   onOpenItem,
-  layout = "split",
+  animateMount = true,
 }: NewsReaderPanelProps) {
-  const isStacked = layout === "stacked";
   const isSummaryReady = item.ingestStatus === "ready" && item.reviewStatus !== "dismissed";
   const [tagInput, setTagInput] = useState("");
-  const [noteDraft, setNoteDraft] = useState(item.personalNote ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
-
-  const isNoteDirty = noteDraft.trim() !== (item.personalNote ?? "").trim();
 
   // Feed polling hands us a new `item` object every few seconds; keep the latest values in refs
   // so the auto-read timer below restarts only when the item or its read status really changes.
@@ -130,19 +120,6 @@ export function NewsReaderPanel({
     );
   };
 
-  const handleSaveNote = async () => {
-    if (!isNoteDirty || isUpdating) return;
-    const trimmed = noteDraft.trim();
-    await onSaveNote(item, trimmed ? trimmed : null);
-  };
-
-  const handleNoteKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      void handleSaveNote();
-    }
-  };
-
   const isWorking =
     item.ingestStatus === "queued" || item.ingestStatus === "processing";
   const publishedAt = item.publishedAt ?? item.createdAt;
@@ -153,20 +130,11 @@ export function NewsReaderPanel({
     <article
       aria-label={item.title}
       className={`@container flex min-h-0 min-w-0 flex-1 flex-col bg-card ${
-        isStacked ? "" : "motion-safe:animate-in motion-safe:fade-in duration-150 ease-out"
+        animateMount ? "motion-safe:animate-in motion-safe:fade-in duration-150 ease-out" : ""
       }`}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto max-w-5xl px-4 py-5 sm:px-8 sm:py-7">
-          <button
-            type="button"
-            onClick={onBack}
-            className="-ml-2 mb-3 inline-flex h-9 touch-manipulation items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] xl:hidden cursor-pointer"
-          >
-            <ArrowLeft className="size-4" />
-            Danh sách
-          </button>
-
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-5 sm:px-8 sm:py-7">
           <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <PlatformIcon platform={item.platform} />
             <span className="truncate">
@@ -189,7 +157,7 @@ export function NewsReaderPanel({
           </div>
 
           <h1
-            className={`mt-2 ${
+            className={`mt-2 [overflow-wrap:anywhere] ${
               isPendingIngest(item)
                 ? "break-all font-mono text-base text-muted-foreground"
                 : "font-display text-2xl font-semibold leading-tight text-foreground sm:text-[28px]"
@@ -243,200 +211,144 @@ export function NewsReaderPanel({
             )}
           </div>
 
-          {/* Two columns from a 672px wide panel: content on the left, Tag and note on the right */}
-          <div
-            className={
-              isStacked ? undefined : "@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_15rem] @2xl:gap-8"
-            }
-          >
-            <div className="min-w-0">
-              {safeThumbnailUrl && !thumbFailed && (
-                <div className="mt-5 overflow-hidden rounded-xl border border-border bg-muted">
-                  <Image
-                    src={safeThumbnailUrl}
-                    alt={item.title}
-                    width={960}
-                    height={540}
-                    unoptimized
-                    onError={() => setThumbFailed(true)}
-                    className="max-h-60 w-full object-cover"
-                  />
-                </div>
-              )}
-              {possibleDuplicateOfId && (
-                <div className="mt-5 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
-                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-foreground">
-                      Bài này có tiêu đề gần giống một bài trong 72h qua
-                    </p>
-                    {duplicateTitle && onOpenItem && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenItem(possibleDuplicateOfId)}
-                        className="mt-0.5 text-left text-foreground underline decoration-border underline-offset-2 transition-colors duration-150 hover:decoration-foreground cursor-pointer"
-                      >
-                        {duplicateTitle}
-                      </button>
-                    )}
-                    {duplicateTitle && !onOpenItem && <p className="mt-0.5">{duplicateTitle}</p>}
-                    {reviewStatus !== "dismissed" && (
-                      <button
-                        type="button"
-                        disabled={isUpdating || isDeleting}
-                        onClick={() => onDismiss(item)}
-                        className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-                      >
-                        <X className="size-3.5" />
-                        Bỏ qua bài này
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {item.extractionError && (
-                <div className="mt-5 rounded-lg bg-[var(--editorial-accent-soft)] px-3 py-2.5 text-sm text-destructive">
-                  {item.extractionError}
-                </div>
-              )}
-
-              {isWorking && (
-                <div className="mt-5 flex items-center gap-2 rounded-lg bg-[var(--status-learning-bg)] px-3 py-2.5 text-sm text-[var(--status-learning)]">
-                  <Loader2 className="size-4 animate-spin" />
-                  {item.ingestStatus === "processing"
-                    ? "Đang trích xuất và tóm tắt"
-                    : "Đang chờ trong hàng đợi"}
-                </div>
-              )}
-
-              {item.tldr && (
-                <section className="mt-5 border-l-2 border-[var(--editorial-accent)] pl-4">
-                  <h2 className={SECTION_LABEL}>TL;DR</h2>
-                  <p className="mt-1.5 text-[15px] leading-relaxed text-foreground">
-                    {item.tldr}
+          <div className="min-w-0">
+            {safeThumbnailUrl && !thumbFailed && (
+              <div className="mt-5 overflow-hidden rounded-xl border border-border bg-muted">
+                <Image
+                  src={safeThumbnailUrl}
+                  alt={item.title}
+                  width={960}
+                  height={540}
+                  unoptimized
+                  onError={() => setThumbFailed(true)}
+                  className="max-h-60 w-full object-cover"
+                />
+              </div>
+            )}
+            {possibleDuplicateOfId && (
+              <div className="mt-5 flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground">
+                    Bài này có tiêu đề gần giống một bài trong 72h qua
                   </p>
-                </section>
-              )}
-
-              {item.takeaways.length > 0 && (
-                <section className="mt-7">
-                  <h2 className={SECTION_LABEL}>Ý chính</h2>
-                  <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground">
-                    {item.takeaways.map((point, index) => (
-                      <li key={index}>
-                        <EmphasisText text={point} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </div>
-
-            <aside
-              aria-label={isStacked ? "Tag" : "Tag và ghi chú"}
-              className={
-                isStacked
-                  ? "mt-7 border-t border-border pb-4 pt-5"
-                  : "mt-7 @2xl:sticky @2xl:top-0 @2xl:mt-5 @2xl:self-start @2xl:border-l @2xl:border-border @2xl:pl-6"
-              }
-            >
-              <section>
-                <h2 className={SECTION_LABEL}>Tag</h2>
-                {item.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {item.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs transition-colors duration-150"
-                      >
-                        #{tag}
-                        <button
-                          type="button"
-                          disabled={isUpdating}
-                          onClick={() => void handleRemoveTag(tag)}
-                          aria-label={`Xoá tag ${tag}`}
-                          className="-mr-0.5 rounded p-0.5 text-muted-foreground transition-colors duration-150 hover:bg-background/70 hover:text-foreground disabled:pointer-events-none cursor-pointer"
-                        >
-                          <X className="size-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <form
-                  onSubmit={handleAddTag}
-                  className="mt-2.5 flex items-center gap-2"
-                >
-                  <input
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="Thêm tag (vd: ai, nextjs)..."
-                    maxLength={32}
-                    className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <button
-                    type="submit"
-                    disabled={
-                      isUpdating || !tagInput.trim() || item.tags.length >= 8
-                    }
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
-                  >
-                    <Plus className="size-3.5" />
-                    Thêm
-                  </button>
-                </form>
-              </section>
-
-              {!isStacked && (
-                <section className="mt-7 pb-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <label
-                      htmlFor={`personal-note-${item.id}`}
-                      className={SECTION_LABEL}
+                  {duplicateTitle && onOpenItem && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenItem(possibleDuplicateOfId)}
+                      className="mt-0.5 [overflow-wrap:anywhere] text-left text-foreground underline decoration-border underline-offset-2 transition-colors duration-150 hover:decoration-foreground cursor-pointer"
                     >
-                      Ghi chú cá nhân
-                    </label>
-                    {isNoteDirty && (
-                      <span className="text-xs text-[var(--editorial-accent)] motion-safe:animate-in motion-safe:fade-in duration-150">
-                        Chưa lưu
-                      </span>
-                    )}
-                  </div>
-                  <textarea
-                    id={`personal-note-${item.id}`}
-                    rows={4}
-                    value={noteDraft}
-                    onChange={(e) => setNoteDraft(e.target.value)}
-                    onKeyDown={handleNoteKeyDown}
-                    placeholder="Áp dụng cho dự án nào, cần thử gì"
-                    className="mt-2 w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  {isNoteDirty && (
-                    <div className="mt-2 flex items-center justify-end gap-2 motion-safe:animate-in motion-safe:fade-in duration-150">
-                      <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                        <kbd className="font-mono">⌘/Ctrl</kbd>+<kbd className="font-mono">Enter</kbd>
-                      </span>
+                      {duplicateTitle}
+                    </button>
+                  )}
+                  {duplicateTitle && !onOpenItem && (
+                    <p className="mt-0.5 [overflow-wrap:anywhere]">{duplicateTitle}</p>
+                  )}
+                  {reviewStatus !== "dismissed" && (
+                    <button
+                      type="button"
+                      disabled={isUpdating || isDeleting}
+                      onClick={() => onDismiss(item)}
+                      className="mt-2 inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                    >
+                      <X className="size-3.5" />
+                      Bỏ qua bài này
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {item.extractionError && (
+              <div className="mt-5 [overflow-wrap:anywhere] rounded-lg bg-[var(--editorial-accent-soft)] px-3 py-2.5 text-sm text-destructive">
+                {item.extractionError}
+              </div>
+            )}
+
+            {isWorking && (
+              <div className="mt-5 flex items-center gap-2 rounded-lg bg-[var(--status-learning-bg)] px-3 py-2.5 text-sm text-[var(--status-learning)]">
+                <Loader2 className="size-4 shrink-0 animate-spin" />
+                {item.ingestStatus === "processing"
+                  ? "Đang trích xuất và tóm tắt"
+                  : "Đang chờ trong hàng đợi"}
+              </div>
+            )}
+
+            {item.tldr && (
+              <section className="mt-5 border-l-2 border-[var(--editorial-accent)] pl-4">
+                <h2 className={SECTION_LABEL}>TL;DR</h2>
+                <p className="mt-1.5 [overflow-wrap:anywhere] text-[15px] leading-relaxed text-foreground">
+                  {item.tldr}
+                </p>
+              </section>
+            )}
+
+            {item.takeaways.length > 0 && (
+              <section className="mt-7">
+                <h2 className={SECTION_LABEL}>Ý chính</h2>
+                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                  {item.takeaways.map((point, index) => (
+                    <li key={index}>
+                      <EmphasisText text={point} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          <aside
+            aria-label="Tag"
+            className="mt-7 border-t border-border pb-4 pt-5"
+          >
+            <section>
+              <h2 className={SECTION_LABEL}>Tag</h2>
+              {item.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {item.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs transition-colors duration-150"
+                    >
+                      #{tag}
                       <button
                         type="button"
                         disabled={isUpdating}
-                        onClick={() => void handleSaveNote()}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                        onClick={() => void handleRemoveTag(tag)}
+                        aria-label={`Xoá tag ${tag}`}
+                        className="-mr-0.5 rounded p-0.5 text-muted-foreground transition-colors duration-150 hover:bg-background/70 hover:text-foreground disabled:pointer-events-none cursor-pointer"
                       >
-                        {isUpdating ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Save className="size-3.5" />
-                        )}
-                        Lưu ghi chú
+                        <X className="size-3" />
                       </button>
-                    </div>
-                  )}
-                </section>
+                    </span>
+                  ))}
+                </div>
               )}
-            </aside>
-          </div>
+              <form
+                onSubmit={handleAddTag}
+                className="mt-2.5 flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  placeholder="Thêm tag (vd: ai, nextjs)..."
+                  maxLength={32}
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button
+                  type="submit"
+                  disabled={
+                    isUpdating || !tagInput.trim() || item.tags.length >= 8
+                  }
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                >
+                  <Plus className="size-3.5" />
+                  Thêm
+                </button>
+              </form>
+            </section>
+          </aside>
         </div>
       </div>
 
@@ -462,7 +374,7 @@ export function NewsReaderSkeleton() {
       className="@container hidden min-h-0 min-w-0 flex-1 flex-col bg-card xl:flex"
     >
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto max-w-5xl px-8 py-7">
+        <div className="mx-auto w-full max-w-3xl px-8 py-7">
           <div className={`h-3 w-56 ${SKELETON_BAR}`} />
           <div className={`mt-4 h-7 w-4/5 ${SKELETON_BAR}`} />
           <div className={`mt-2 h-7 w-3/5 ${SKELETON_BAR}`} />
@@ -471,28 +383,24 @@ export function NewsReaderSkeleton() {
             <div className={`h-8 w-28 ${SKELETON_BAR}`} />
           </div>
 
-          <div className="@2xl:grid @2xl:grid-cols-[minmax(0,1fr)_15rem] @2xl:gap-8">
-            <div className="mt-6 space-y-2.5 border-l-2 border-border pl-4">
-              <div className={`h-3 w-12 ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-full ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-full ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-2/3 ${SKELETON_BAR}`} />
-              <div className="pt-5" />
-              <div className={`h-3 w-16 ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-11/12 ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-4/5 ${SKELETON_BAR}`} />
-              <div className={`h-3.5 w-5/6 ${SKELETON_BAR}`} />
-            </div>
-            <div className="mt-6 hidden space-y-2.5 border-l border-border pl-6 @2xl:block">
-              <div className={`h-3 w-10 ${SKELETON_BAR}`} />
-              <div className="flex flex-wrap gap-1.5">
-                <div className={`h-5 w-14 ${SKELETON_BAR}`} />
-                <div className={`h-5 w-20 ${SKELETON_BAR}`} />
-                <div className={`h-5 w-12 ${SKELETON_BAR}`} />
-              </div>
-              <div className="pt-5" />
-              <div className={`h-3 w-24 ${SKELETON_BAR}`} />
-              <div className={`h-20 w-full ${SKELETON_BAR}`} />
+          <div className="mt-6 space-y-2.5 border-l-2 border-border pl-4">
+            <div className={`h-3 w-12 ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-full ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-full ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-2/3 ${SKELETON_BAR}`} />
+            <div className="pt-5" />
+            <div className={`h-3 w-16 ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-11/12 ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-4/5 ${SKELETON_BAR}`} />
+            <div className={`h-3.5 w-5/6 ${SKELETON_BAR}`} />
+          </div>
+
+          <div className="mt-7 space-y-2.5 border-t border-border pt-5">
+            <div className={`h-3 w-10 ${SKELETON_BAR}`} />
+            <div className="flex flex-wrap gap-1.5">
+              <div className={`h-5 w-14 ${SKELETON_BAR}`} />
+              <div className={`h-5 w-20 ${SKELETON_BAR}`} />
+              <div className={`h-5 w-12 ${SKELETON_BAR}`} />
             </div>
           </div>
         </div>

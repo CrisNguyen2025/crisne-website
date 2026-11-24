@@ -2,14 +2,16 @@
 
 import { useEffect, useRef } from "react";
 
-const COMMIT_PX = 10;
-const CLOSE_RATIO = 0.3;
-const CLOSE_VELOCITY = 0.5;
-const CLOSE_MIN_FLICK_PX = 40;
+const COMMIT_PX = 6;
+const CLOSE_RATIO = 0.22;
+const CLOSE_VELOCITY = 0.35;
+const REOPEN_VELOCITY = -0.25;
+const CLOSE_MIN_FLICK_PX = 36;
 const CLOSE_MIN_MS = 120;
-const CLOSE_MAX_MS = 200;
+const CLOSE_MAX_MS = 190;
 const SNAP_MIN_MS = 140;
 const SNAP_MAX_MS = 200;
+const RELEASE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 function prefersReducedMotion(): boolean {
@@ -75,9 +77,10 @@ export function useSwipeDrawer(
     let startX = 0;
     let startY = 0;
     let startT = 0;
-    let lastX = 0;
-    let lastT = 0;
-    let instantaneousVelocity = 0;
+    let prevSampleX = 0;
+    let prevSampleT = 0;
+    let currSampleX = 0;
+    let currSampleT = 0;
     let mode: "idle" | "pending" | "drag" | "ignore" = "idle";
     let dragX = 0;
     let panelWidth = 0;
@@ -118,9 +121,11 @@ export function useSwipeDrawer(
       const reduced = prefersReducedMotion();
       const progress = Math.min(1, dragX / getWidth());
       const durationMs = Math.round(SNAP_MIN_MS + (SNAP_MAX_MS - SNAP_MIN_MS) * progress);
-      panel.style.transition = reduced
-        ? "none"
-        : `transform ${durationMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+      // Flush dragged transform before re-enabling transition so the browser animates instead of jumping
+      if (!reduced) {
+        void panel.offsetWidth;
+      }
+      panel.style.transition = reduced ? "none" : `transform ${durationMs}ms ${RELEASE_EASING}`;
       panel.style.transform = "translateX(0px)";
       if (scrimRef.current) {
         scrimRef.current.style.transition = reduced ? "none" : `opacity ${durationMs}ms ease-out`;
@@ -153,9 +158,10 @@ export function useSwipeDrawer(
         CLOSE_MIN_MS +
           (CLOSE_MAX_MS - CLOSE_MIN_MS) * remainingRatio * (1 - velocityBoost)
       );
-      panel.style.transition = reduced
-        ? "none"
-        : `transform ${durationMs}ms cubic-bezier(0.32, 0.72, 0, 1)`;
+      if (!reduced) {
+        void panel.offsetWidth;
+      }
+      panel.style.transition = reduced ? "none" : `transform ${durationMs}ms ${RELEASE_EASING}`;
       panel.style.transform = closedTransform;
       if (scrimRef.current) {
         scrimRef.current.style.transition = reduced ? "none" : `opacity ${durationMs}ms ease-out`;
@@ -174,9 +180,10 @@ export function useSwipeDrawer(
       startX = t.clientX;
       startY = t.clientY;
       startT = performance.now();
-      lastX = startX;
-      lastT = startT;
-      instantaneousVelocity = 0;
+      prevSampleX = startX;
+      prevSampleT = startT;
+      currSampleX = startX;
+      currSampleT = startT;
       dragX = 0;
       measureWidth();
       mode = "pending";
@@ -187,11 +194,11 @@ export function useSwipeDrawer(
       const t = e.touches[0];
       if (!t) return;
       const now = performance.now();
-      const dt = now - lastT;
-      if (dt > 16) {
-        instantaneousVelocity = (sign * (t.clientX - lastX)) / dt;
-        lastX = t.clientX;
-        lastT = now;
+      if (now - currSampleT >= 16) {
+        prevSampleX = currSampleX;
+        prevSampleT = currSampleT;
+        currSampleX = t.clientX;
+        currSampleT = now;
       }
 
       const dx = sign * (t.clientX - startX);
@@ -199,7 +206,7 @@ export function useSwipeDrawer(
 
       if (mode === "pending") {
         if (Math.abs(dx) < COMMIT_PX && Math.abs(dy) < COMMIT_PX) return;
-        mode = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.5 ? "drag" : "ignore";
+        mode = dx > 0 && Math.abs(dx) > Math.abs(dy) * 1.1 ? "drag" : "ignore";
         if (mode === "ignore") return;
       }
 
@@ -214,15 +221,23 @@ export function useSwipeDrawer(
         return;
       }
       const now = performance.now();
+      const totalDt = now - startT;
+      const sampleDt = currSampleT - prevSampleT;
+      const instantaneousVelocity =
+        sampleDt > 0 ? (sign * (currSampleX - prevSampleX)) / sampleDt : 0;
+      const avgVelocity = totalDt > 0 ? dragX / totalDt : 0;
       const velocity =
-        now - lastT > 80
+        now - currSampleT > 80 || totalDt <= 0
           ? 0
-          : Math.max(instantaneousVelocity, dragX / Math.max(1, now - startT));
+          : instantaneousVelocity < REOPEN_VELOCITY
+            ? instantaneousVelocity
+            : Math.max(instantaneousVelocity, avgVelocity);
       mode = "idle";
 
       if (
-        dragX > getWidth() * CLOSE_RATIO ||
-        (velocity > CLOSE_VELOCITY && dragX > CLOSE_MIN_FLICK_PX)
+        velocity >= REOPEN_VELOCITY &&
+        (dragX > getWidth() * CLOSE_RATIO ||
+          (velocity > CLOSE_VELOCITY && dragX > CLOSE_MIN_FLICK_PX))
       ) {
         animateClose(velocity);
       } else {

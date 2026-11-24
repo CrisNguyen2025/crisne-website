@@ -381,10 +381,35 @@ describe("Behavior Smooth enhancements", () => {
     listEl.scrollTop = 320;
 
     fireEvent.click(screen.getByRole("button", { name: "Bài một" }));
-    expect(screen.getByRole("button", { name: /Danh sách/ })).toBeTruthy();
+    const dialog = screen.getByRole("dialog", { name: "Bài một" });
+    expect(dialog).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Danh sách/ })).toBeNull();
+
+    vi.spyOn(dialog, "getBoundingClientRect").mockReturnValue({
+      width: 390,
+      height: 844,
+      top: 0,
+      left: 0,
+      bottom: 844,
+      right: 390,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
 
     listEl.scrollTop = 0;
-    fireEvent.click(screen.getByRole("button", { name: /Danh sách/ }));
+    const touch = (type: string, x: number, y: number) => {
+      const t = { clientX: x, clientY: y, identifier: 1, target: dialog } as unknown as Touch;
+      return Object.assign(new Event(type, { bubbles: true, cancelable: true }), {
+        touches: type === "touchend" ? [] : [t],
+        changedTouches: [t],
+      });
+    };
+    act(() => {
+      dialog.dispatchEvent(touch("touchstart", 12, 200));
+      dialog.dispatchEvent(touch("touchmove", 190, 204));
+      dialog.dispatchEvent(touch("touchend", 190, 204));
+    });
     expect(listEl.scrollTop).toBe(320);
 
     fireEvent.keyDown(window, { key: "j" });

@@ -88,21 +88,19 @@ describe("news feed UI components", () => {
   function renderPanel(item: NewsItemDto, overrides: Partial<React.ComponentProps<typeof NewsReaderPanel>> = {}) {
     const props: React.ComponentProps<typeof NewsReaderPanel> = {
       item,
-      onBack: vi.fn(),
       onToggleRead: vi.fn(),
       onToggleSave: vi.fn(),
       onDismiss: vi.fn(),
       onReopen: vi.fn(),
       onDelete: vi.fn(),
       onUpdateTags: vi.fn(async () => {}),
-      onSaveNote: vi.fn(async () => {}),
       onOpenExternal: vi.fn(),
       ...overrides,
     };
     return { props, ...render(<NewsReaderPanel {...props} />) };
   }
 
-  it("renders NewsReaderPanel details, thumbnail, 2-step delete, and tag/note editing", async () => {
+  it("renders NewsReaderPanel details, thumbnail, 2-step delete, and tag editing without personal note", async () => {
     const item = makeItem({
       possibleDuplicateOfId: "news-0",
       personalNote: "Note cũ",
@@ -110,13 +108,11 @@ describe("news feed UI components", () => {
       tags: ["tutorial", "ai", "architecture"],
     });
     const onUpdateTags = vi.fn(async () => {});
-    const onSaveNote = vi.fn(async () => {});
     const onDelete = vi.fn();
 
     renderPanel(item, {
       duplicateTitle: "Bài viết tương tự trước đó",
       onUpdateTags,
-      onSaveNote,
       onDelete,
     });
 
@@ -125,6 +121,7 @@ describe("news feed UI components", () => {
     expect(screen.getByAltText(item.title)).toBeTruthy();
     expect(screen.getByText("Bài viết tương tự trước đó")).toBeTruthy();
     expect(screen.getByText("Dùng schema rõ ràng.")).toBeTruthy();
+    expect(screen.queryByLabelText("Ghi chú cá nhân")).toBeNull();
 
     // Remove existing tag
     fireEvent.click(screen.getByRole("button", { name: "Xoá tag ai" }));
@@ -136,14 +133,6 @@ describe("news feed UI components", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm" }));
     await waitFor(() => {
       expect(onUpdateTags).toHaveBeenCalledWith(item, ["tutorial", "ai", "architecture", "llm"]);
-    });
-
-    // Edit & save personalNote
-    const noteBox = screen.getByLabelText("Ghi chú cá nhân");
-    fireEvent.change(noteBox, { target: { value: "Áp dụng cho pipeline ingest" } });
-    fireEvent.click(screen.getByRole("button", { name: "Lưu ghi chú" }));
-    await waitFor(() => {
-      expect(onSaveNote).toHaveBeenCalledWith(item, "Áp dụng cho pipeline ingest");
     });
 
     // 2-step delete confirmation
@@ -183,14 +172,12 @@ describe("news feed UI components", () => {
       const onToggleRead = vi.fn();
       const panelProps = (title: string): React.ComponentProps<typeof NewsReaderPanel> => ({
         item: makeItem({ title }),
-        onBack: vi.fn(),
         onToggleRead: (item: NewsItemDto, next: "read" | "unread") => onToggleRead(item, next),
         onToggleSave: vi.fn(),
         onDismiss: vi.fn(),
         onReopen: vi.fn(),
         onDelete: vi.fn(),
         onUpdateTags: vi.fn(async () => {}),
-        onSaveNote: vi.fn(async () => {}),
           onOpenExternal: vi.fn(),
       });
 
@@ -515,6 +502,51 @@ describe("news feed UI components", () => {
 
     expect(
       await screen.findByText("Đã tự tìm thấy RSS: https://goonnguyen.substack.com/feed")
+    ).toBeTruthy();
+  });
+
+  it("shows worker status badge in header (including unconfigured), re-checks on click, and omits Làm mới sync button", async () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    const emptyCounts = {
+      total: 0, queued: 0, processing: 0, ready: 0, partial: 0, failed: 0,
+      draft: 0, unread: 0, saved: 0, dismissed: 0, queue: 0, inbox: 0, done: 0,
+    };
+    const healthSpy = vi
+      .spyOn(newsService, "fetchNewsWorkerHealth")
+      .mockResolvedValue({ configured: true, status: "ok" });
+
+    render(
+      <NuqsTestingAdapter hasMemory>
+        <ToastProvider>
+          <NewsFeedClient
+            initialData={{ items: [], counts: emptyCounts, tags: [], duplicateTitles: {}, hasMore: false }}
+            initialParams={{ view: "inbox", sort: "latest" }}
+            initialWorkerHealth={{ configured: false, status: "unconfigured" }}
+          />
+        </ToastProvider>
+      </NuqsTestingAdapter>
+    );
+
+    expect(screen.queryByRole("button", { name: "Làm mới" })).toBeNull();
+
+    const workerBtn = screen.getByRole("button", {
+      name: "Kiểm tra trạng thái worker: Chưa gắn worker",
+    });
+    expect(workerBtn.textContent).toContain("Chưa gắn worker");
+
+    fireEvent.click(workerBtn);
+    await waitFor(() => {
+      expect(healthSpy).toHaveBeenCalledTimes(1);
+    });
+    expect(
+      await screen.findByRole("button", {
+        name: "Kiểm tra trạng thái worker: Worker OK",
+      })
     ).toBeTruthy();
   });
 });
