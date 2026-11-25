@@ -1,7 +1,7 @@
 # PLAN: URL theo Topic `/[topicSlug]/[lessonSlug]#[headingSlug]`
 
 - Quyết định: [ADR-0014](../docs/adr/0014-topic-scoped-urls-and-heading-anchors.md) (thay ADR-0013)
-- Trạng thái: Phase 1 và Phase 2 đã làm, chưa commit (2026-11-19). Kết quả test thủ công: `tests/manual/topic-scoped-urls.md`
+- Trạng thái: Phase 1 và Phase 2 đã làm và commit trên `main` @ `8543da4` (2026-11-19). Kết quả test thủ công: `tests/manual/topic-scoped-urls.md`
 
 ## Đang làm
 

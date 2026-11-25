@@ -1,6 +1,6 @@
 # PLAN: Skill `cris-doctor`, khám sức khoẻ code FE + BE
 
-- **Trạng thái:** `IMPLEMENTED (Phase 1–3 + job CI, chưa commit)`. Owner đồng ý thêm job CI ngày 2026-11-25 (Mục 6).
+- **Trạng thái:** `IMPLEMENTED (Phase 1–3 + job CI)`, đã commit trên `main` @ `c4703f8` (2026-11-25). Owner đồng ý thêm job CI ngày 2026-11-25 (Mục 6).
 - **Ngày lập:** 2026-11-25 · Owner duyệt plan và cho làm hết 3 phase cùng ngày.
 - **Thẩm định:** `cris-how-to-sync` cho kết luận 🟡 CẢI THIỆN. Không vi phạm ADR hay từ cấm trong Glossary. Điều kiện kèm theo: không làm lại việc của skill có sẵn, check authz theo ADR-0019, mặc định bỏ Cris AI, skill chỉ đọc.
 

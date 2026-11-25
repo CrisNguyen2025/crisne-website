@@ -1,6 +1,6 @@
 # PLAN: Cắt gọn `AGENTS.md` theo nghiên cứu về cách agent làm theo file chỉ dẫn
 
-- **Trạng thái:** Phase A đã làm trên `main` (2026-11-09, chưa commit), Owner duyệt Q1 = (b), Q2 = (b). Q3, Q4, Q5 chưa trả lời: block GitNexus giữ nguyên, chưa thêm dòng Mermaid, chưa làm Phase B.
+- **Trạng thái:** Phase A đã làm và commit trên `main` @ `b4580ac` (2026-11-09), Owner duyệt Q1 = (b), Q2 = (b). Q3, Q4, Q5 chưa trả lời: block GitNexus giữ nguyên, chưa thêm dòng Mermaid, chưa làm Phase B.
 - **Người viết:** Claude Code (Opus 5.5), 2026-11-09
 - **Phạm vi:** `AGENTS.md`, và tuỳ chọn `eslint.config.mjs` (Phase B). Không đụng code ứng dụng.
 - **Liên quan:** `.handoff/PLAN-agent-instructions-sync.md` (cấu trúc 3 tầng, đã chốt). Plan này không đổi cấu trúc đó, chỉ đổi nội dung bên trong `AGENTS.md`.

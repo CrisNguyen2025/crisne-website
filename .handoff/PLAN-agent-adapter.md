@@ -1,6 +1,6 @@
 # PLAN: AgentAdapter, một nguồn config cho nhiều coding agent
 
-- **Trạng thái:** Đã triển khai Phase 1–3 (2026-11-09) qua handoff v3 và verify; hook đã được thử trên Antigravity thật (T8 Pass). Chưa commit. Q1–Q6 theo đề xuất mặc định; còn mở: `ui-taste`, spec chạy thử, dòng `AGENTS.md`.
+- **Trạng thái:** Đã triển khai Phase 1–3 (2026-11-09) qua handoff v3 và verify; hook đã được thử trên Antigravity thật (T8 Pass). Đã commit và lên `main` @ `e1a7ce2` (2026-11-09). Q1–Q6 theo đề xuất mặc định; `ui-taste`, spec chạy thử và các dòng `AGENTS.md` đã xử lý. Còn mở: test thủ công, xem `.handoff/BACKLOG.md` (cập nhật 2026-11-25).
 - **Người viết:** Claude Code (Opus 5.5), 2026-11-09
 - **Phạm vi:** tooling cho coding agent: `scripts/agent-adapter/`, `.agents/adapter/`, các file config agent do script sinh ra, 1 script trong `package.json`, 1 step CI, 1 dòng `AGENTS.md`. Không đụng code ứng dụng, Python service, DB.
 - **Target hiện tại:** Claude Code, Antigravity. Codex thêm sau bằng một adapter mới (mục 7).

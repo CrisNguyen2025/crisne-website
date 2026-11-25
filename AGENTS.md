@@ -2,7 +2,9 @@
 
 File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phần chỉ Claude Code có nằm trong `CLAUDE.md`.
 
-**Stack:** JavaScript/TypeScript · Next.js + React + Tailwind · service Python `roadmap-rag-assistant/` (FastAPI)
+**Stack:** JavaScript/TypeScript · Next.js + React + Tailwind · service Python `roadmap-rag-assistant/` và `news-ingest-worker/` (FastAPI)
+
+**Runtime:** Node 22 (`.nvmrc`), Python 3.13 (`.python-version` trong từng service), khớp với CI.
 
 ## ✅ Commands (CI chạy đúng các lệnh này)
 
@@ -11,7 +13,8 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Schema và index: `yarn test:schema-sql --check` · `yarn check:knowledge-index`
 - Config agent: `yarn agents:sync --check` (sinh lại bằng `yarn agents:sync`)
 - Doctor (ratchet, không cho thêm finding bug/risk mới): `yarn doctor --check` (ghi lại baseline bằng `yarn doctor --update-baseline`)
-- Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate`
+- Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate` · `.venv/bin/python -m evals router-check` · `.venv/bin/python -m evals.router.holdout` · `.venv/bin/python -m evals.router.confuse`
+- Python (`cd news-ingest-worker`): `.venv/bin/python -m pytest -q`
 
 ## 📚 Skills
 
@@ -32,6 +35,13 @@ Sửa ở `.agents/adapter/`, rồi chạy `yarn agents:sync`. Không sửa file
 
 - Trước khi test thủ công hay chạy Playwright cho một tính năng: đọc `tests/manual/README.md` và kịch bản liên quan. Case `Pass` mà code liên quan chưa đổi kể từ commit của lần chạy thì không chạy lại.
 - Sau mỗi lần chạy: ghi kết quả vào kịch bản (ngày, commit, môi trường), theo quy ước trong `tests/manual/README.md`.
+
+## 🏁 Trước khi kết thúc phiên
+
+- Chạy `verify-ci` theo scope file đã đổi. Còn fail thì ghi lỗi vào spec hoặc `.handoff/BACKLOG.md`, không báo xong.
+- Việc còn mở ghi vào `.handoff/BACKLOG.md`, không chỉ để trong memory riêng của agent (agent khác không đọc được). Spec và `PLAN-*` đổi `status` đúng thực tế.
+- Không để lại code debug, file tạm hay backup ở gốc repo. Artifact chạy (`.handoff/runs/`, log) không commit.
+- Đã chạy test thủ công thì ghi kết quả theo mục trên.
 
 ## 🛡️ Safety rules
 
@@ -63,7 +73,7 @@ Chỉ ghi quy ước riêng của repo. Quy ước chung của Next.js/React/Tai
 
 This project is indexed by GitNexus as **crisne-website**. GitNexus builds a call graph and execution flows of the codebase; use it to understand code, assess impact, and navigate safely.
 
-> **Setup:** GitNexus cần Node ≥ 22.18 (dự án vẫn chạy Node 20). Index nằm ở `.gitnexus/` (đã gitignore). Khi index cũ, chạy lại **luôn kèm cờ** `gitnexus analyze --skip-agents-md`; thiếu cờ thì GitNexus chèn lại block này vào cả `AGENTS.md` lẫn `CLAUDE.md`. Đường dẫn cài đặt riêng từng máy để trong `CLAUDE.local.md`. Giấy phép của GitNexus là PolyForm Noncommercial.
+> **Setup:** GitNexus cần Node ≥ 22.18 (dự án pin Node 22 ở `.nvmrc`; bản 22 cũ hơn 22.18 thì chưa chạy được GitNexus). Index nằm ở `.gitnexus/` (đã gitignore). Khi index cũ, chạy lại **luôn kèm cờ** `gitnexus analyze --skip-agents-md`; thiếu cờ thì GitNexus chèn lại block này vào cả `AGENTS.md` lẫn `CLAUDE.md`. Đường dẫn cài đặt riêng từng máy để trong `CLAUDE.local.md`. Giấy phép của GitNexus là PolyForm Noncommercial.
 
 - **Trước khi sửa function/class/method:** chạy impact analysis, báo blast radius (direct callers, affected processes, risk level). Có tool GitNexus (MCP `gitnexus_*`) trong phiên thì dùng nó; không có thì dùng `yarn intel impact <symbol>` và nói rõ kết quả lấy từ dataset `cris-code-intel`, không phải GitNexus.
 - Risk HIGH hoặc CRITICAL: cảnh báo user trước khi sửa, không được bỏ qua.

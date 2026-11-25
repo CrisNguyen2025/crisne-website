@@ -1,6 +1,6 @@
 # PLAN: Cấu trúc instruction cho nhiều coding agent, sync giữa nhiều máy
 
-- **Trạng thái:** Phase A đã làm trên `main` (2026-11-06, chưa commit). Phase B, C chờ Owner trả lời mục 8
+- **Trạng thái:** Phase A đã làm và commit trên `main` @ `430ffc9` (2026-11-06). Phase B, C chờ Owner trả lời mục 8
 - **Người viết:** Claude Code (Opus 5.5), 2026-11-06
 - **Người verify:** Antigravity, sau đó Claude Code đối chiếu lại, 2026-11-06
 - **Phạm vi:** chỉ file instruction (`*.md`), skill, symlink, `.gitignore`. Không đụng code ứng dụng.
