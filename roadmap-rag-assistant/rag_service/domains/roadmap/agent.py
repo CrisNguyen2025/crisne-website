@@ -37,6 +37,15 @@ from rag_service.domains.roadmap.sections import SectionCommands
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.core.memory import owner_memory_store
+from rag_service.core.provenance import LessonProvenanceStore, default_provenance_api
+
+lesson_provenance_store = LessonProvenanceStore(
+    default_provenance_api(
+        endpoint_path="/api/v1/roadmaps/provenance-by-lessons",
+        query_param="lessonIds",
+        response_field="byLessonId",
+    )
+)
 from rag_service.observability import (
     current_trace,
     end_step,
@@ -174,6 +183,7 @@ class NextGenRoadmapAgent(
             retrieval_error_reply=RETRIEVAL_ERROR_REPLY,
             pipeline=generation_pipeline,
             adapter_mode=settings.rag_adapter_mode,
+            fetch_provenances=lambda ids: lesson_provenance_store.get_for_lessons(ids),
         )
 
     async def ainvoke(self, input_dict: dict, config: dict | None = None) -> dict:

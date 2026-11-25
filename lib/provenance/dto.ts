@@ -1,4 +1,5 @@
 import type { KnowledgeProvenance } from "@prisma/client";
+import type { RelatedLessonDto } from "./relations";
 
 export const PROVENANCE_AUTHOR_TYPES = ["human", "ai_generated", "ai_assisted"] as const;
 export type ProvenanceAuthorType = (typeof PROVENANCE_AUTHOR_TYPES)[number];
@@ -25,6 +26,7 @@ export interface LessonProvenanceResponse {
   provenances: ProvenanceDto[];
   /** Provenance created for this Lesson whose marker is gone (shown as the Lesson's sources) */
   orphans: ProvenanceDto[];
+  relations?: RelatedLessonDto[];
 }
 
 export function toProvenanceDto(row: KnowledgeProvenance): ProvenanceDto {

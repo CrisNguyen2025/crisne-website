@@ -63,7 +63,7 @@ _TEMPLATE_PLACEHOLDER_MARKERS = (
 )
 
 # Folded text ("them noi dung chi tiet cho bai …"): a draft verb, a content noun, then the lesson
-_VERB = r"(?:them|viet|bo\s+sung|soan|tao|mo\s+rong|lam\s+giau|dien|write|draft|expand|add|fill)"
+_VERB = r"(?:them|viet|bo\s+sung|cap\s+nhat|soan|tao|mo\s+rong|lam\s+giau|dien|write|draft|expand|add|fill|update)"
 _NOUN = r"(?:noi\s+dung|content|chi\s+tiet|phan\s+giai\s+thich)"
 CONTENT_REQUEST = re.compile(
     rf"^\s*(?:hay\s+|giup\s+(?:minh|toi|em)\s+|vui\s+long\s+)?{_VERB}\s+(?:them\s+)?{_NOUN}"
@@ -252,6 +252,8 @@ def extract_html_outline(html_text: str) -> list[tuple[int, str]]:
 
 def is_template_placeholder_only(html_text: str) -> bool:
     """True when content is empty or only contains unfilled client starter template copy."""
+    if "data-provenance-ref=" in (html_text or ""):
+        return False
     plain = fold(_plain(html_text))
     if not plain:
         return True

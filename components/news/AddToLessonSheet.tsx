@@ -2,9 +2,10 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { BookPlus, Loader2 } from "lucide-react";
+import { BookPlus, Loader2, Sparkles } from "lucide-react";
 import type { NewsItemDto } from "@/lib/news/schemas";
 import { splitEmphasis } from "@/lib/news/emphasis";
+import type { MatchLessonsResponseDto } from "@/lib/provenance/relations";
 import type { IntegrateRequest } from "@/lib/provenance/schemas";
 import { lessonPath } from "@/lib/roadmap/paths";
 import { LESSON_STATUSES, type LessonStatus } from "@/lib/roadmap/status";
@@ -74,6 +75,9 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
   const [status, setStatus] = useState<LessonStatus>("target");
   const [lessonId, setLessonId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMatching, setIsMatching] = useState(false);
+  const [advisorResult, setAdvisorResult] = useState<MatchLessonsResponseDto | null>(null);
+  const [relatedLessonIds, setRelatedLessonIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [savedPath, setSavedPath] = useState<string | null>(null);
@@ -91,6 +95,8 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
     setTitle(item.title);
     setErrorMessage(null);
     setSavedPath(null);
+    setAdvisorResult(null);
+    setRelatedLessonIds([]);
     setIsLoading(true);
     roadmapService
       .fetchAllRoadmaps()
@@ -122,15 +128,59 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
     setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
   };
 
+  const handleMatchLessons = async () => {
+    setIsMatching(true);
+    setErrorMessage(null);
+    try {
+      const matched = await newsService.matchNewsItemLessons(item.id);
+      setAdvisorResult(matched);
+      if (!topicSlug && matched.suggestedTopicSlug) {
+        setTopicSlug(matched.suggestedTopicSlug);
+        if (matched.suggestedSection) {
+          setSection(matched.suggestedSection);
+        }
+        roadmapService
+          .fetchRoadmapBySlug(matched.suggestedTopicSlug, { mode: "outline" })
+          .then((data) => {
+            setSections(data.sections.filter((s): s is string => s !== null));
+            setLessons(data.items);
+          })
+          .catch(() => {});
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Không thể lấy gợi ý Lesson từ Abot."
+      );
+    } finally {
+      setIsMatching(false);
+    }
+  };
+
+  const toggleRelatedLesson = (id: string) => {
+    setRelatedLessonIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   const buildPayload = (): IntegrateRequest => {
     const statements = selected.map((d) => ({
       text: d.text.trim(),
       excerpt: d.original,
       authorType: d.text.trim() === d.original ? ("ai_generated" as const) : ("ai_assisted" as const),
     }));
+    const relationPatch =
+      relatedLessonIds.length > 0 ? { relatedLessonIds } : {};
     return mode === "create_lesson"
-      ? { mode, roadmapSlug: topicSlug, section: section.trim() || null, title: title.trim(), status, statements }
-      : { mode, lessonId, statements };
+      ? {
+          mode,
+          roadmapSlug: topicSlug,
+          section: section.trim() || null,
+          title: title.trim(),
+          status,
+          statements,
+          ...relationPatch,
+        }
+      : { mode, lessonId, statements, ...relationPatch };
   };
 
   const handleSave = async () => {
@@ -216,28 +266,113 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
                 </section>
 
                 <section className="mt-5 space-y-3">
-                  <div className="flex gap-2" role="radiogroup" aria-label="Cách đưa vào">
-                    {(["create_lesson", "append_to_lesson"] as const).map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        role="radio"
-                        aria-checked={mode === value}
-                        onClick={() => {
-                          // An error about the previous target no longer applies
-                          setErrorMessage(null);
-                          setMode(value);
-                        }}
-                        className={`h-8 rounded-lg border px-3 text-sm transition-colors cursor-pointer ${
-                          mode === value
-                            ? "border-[var(--editorial-accent)] font-medium text-foreground"
-                            : "border-border text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {value === "create_lesson" ? "Tạo bài mới" : "Nối vào bài có sẵn"}
-                      </button>
-                    ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex gap-2" role="radiogroup" aria-label="Cách đưa vào">
+                      {(["create_lesson", "append_to_lesson"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          role="radio"
+                          aria-checked={mode === value}
+                          onClick={() => {
+                            setErrorMessage(null);
+                            setMode(value);
+                          }}
+                          className={`h-8 rounded-lg border px-3 text-sm transition-colors cursor-pointer ${
+                            mode === value
+                              ? "border-[var(--editorial-accent)] font-medium text-foreground"
+                              : "border-border text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {value === "create_lesson" ? "Tạo bài mới" : "Nối vào bài có sẵn"}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isMatching}
+                      onClick={() => void handleMatchLessons()}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                    >
+                      {isMatching ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5 text-[var(--editorial-accent)]" />
+                      )}
+                      <span>Gợi ý từ Abot</span>
+                    </button>
                   </div>
+
+                  {advisorResult && (
+                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+                      {advisorResult.suggestedTopicSlug && (
+                        <p className="text-foreground">
+                          Đề xuất đích:{" "}
+                          <span className="font-medium">
+                            {advisorResult.suggestedTopicTitle || advisorResult.suggestedTopicSlug}
+                            {advisorResult.suggestedSection ? ` › ${advisorResult.suggestedSection}` : ""}
+                          </span>
+                        </p>
+                      )}
+                      {advisorResult.matches.length === 0 ? (
+                        <p className="text-muted-foreground">Chưa thấy bài gần nghĩa trong kho.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <p className="font-medium text-muted-foreground">
+                            Bài liên quan (chọn để gắn quan hệ relates hoặc nối vào):
+                          </p>
+                          <ul className="space-y-1.5">
+                            {advisorResult.matches.map((match) => (
+                              <li
+                                key={match.lessonId}
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-background px-2.5 py-1.5"
+                              >
+                                <label className="flex min-w-0 flex-1 items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={relatedLessonIds.includes(match.lessonId)}
+                                    onChange={() => toggleRelatedLesson(match.lessonId)}
+                                    className="size-3.5 shrink-0"
+                                  />
+                                  <span className="min-w-0 truncate text-foreground">
+                                    {match.title}{" "}
+                                    <span className="text-muted-foreground">
+                                      ({match.topicTitle}
+                                      {match.section ? ` › ${match.section}` : ""})
+                                    </span>
+                                  </span>
+                                </label>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                  {match.duplicateWarning && (
+                                    <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[0.6875rem] font-medium text-destructive">
+                                      Có thể trùng
+                                    </span>
+                                  )}
+                                  {match.versionUpdateHint && (
+                                    <span className="rounded bg-[var(--status-learning-bg)] px-1.5 py-0.5 text-[0.6875rem] font-medium text-[var(--status-learning)]">
+                                      Cần cập nhật version
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setMode("append_to_lesson");
+                                      handleTopicChange(match.topicSlug);
+                                      setLessonId(match.lessonId);
+                                    }}
+                                    className="text-[0.6875rem] font-medium text-[var(--editorial-accent)] hover:underline cursor-pointer"
+                                  >
+                                    Chọn nối vào
+                                  </button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <label className="block text-sm">
                     <span className={SECTION_LABEL}>Topic</span>

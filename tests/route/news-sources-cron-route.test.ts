@@ -8,6 +8,13 @@ const writeAccess = vi.hoisted(() => ({ requireWriteAccess: vi.fn() }));
 vi.mock("@/lib/auth/write-access", () => writeAccess);
 
 import { prisma } from "@/lib/prisma";
+import { getVietnamHour } from "@/lib/news/rss-fetcher";
+import { listNewsSources } from "@/lib/news/sources";
+import {
+  NEWS_SOURCE_SCAN_HISTORY_LIMIT,
+  recordNewsSourceScans,
+} from "@/lib/news/source-scans";
+import { GET as sourceScansGet } from "@/app/api/news/sources/[id]/scans/route";
 import { PATCH as newsItemPatch } from "@/app/api/news/[id]/route";
 import { GET as cronGet, POST as cronPost } from "@/app/api/news/cron/route";
 import {
@@ -54,6 +61,7 @@ const SAMPLE_RSS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </rss>`;
 
 async function cleanNewsTables() {
+  await prisma.newsSourceScan.deleteMany();
   await prisma.ingestJob.deleteMany();
   await prisma.newsItem.deleteMany();
   await prisma.newsSource.deleteMany();
@@ -138,13 +146,14 @@ describe("news sources CRUD & cron RSS sync routes", () => {
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Custom Eng Blog",
         feedUrl: "https://www.custom-eng.blog/feed.xml",
-        defaultTags: ["Backend", "Architecture", "backend"],
       })
     );
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()).source;
     expect(created.domain).toBe("custom-eng.blog");
-    expect(created.defaultTags).toEqual(["backend", "architecture"]);
+    expect(created).not.toHaveProperty("defaultTags");
+    // No schedule given: every day at the default 07:00 (Vietnam time)
+    expect(created).toMatchObject({ fetchIntervalDays: 1, fetchHour: 7, itemCount: 0 });
     expect(created.enabled).toBe(true);
 
     // Duplicate feedUrl -> 409
@@ -193,11 +202,13 @@ describe("news sources CRUD & cron RSS sync routes", () => {
   });
 
   it("syncs enabled RSS sources into draft items, skips dismissed URLs, and isolates feed errors", async () => {
+    // The scheduled (CRON_SECRET) run only pulls sources whose fetchHour is the current Vietnam hour
+    const currentHour = getVietnamHour(Date.now());
     const createOk = await sourcesPost(
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Custom Eng Blog",
         feedUrl: "https://custom-eng.blog/feed.xml",
-        defaultTags: ["eng"],
+        fetchHour: currentHour,
       })
     );
     const okSource = (await createOk.json()).source;
@@ -206,9 +217,20 @@ describe("news sources CRUD & cron RSS sync routes", () => {
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Broken Feed",
         feedUrl: "https://broken-feed.blog/rss.xml",
+        fetchHour: currentHour,
       })
     );
     const brokenSource = (await createBroken.json()).source;
+
+    const createLater = await sourcesPost(
+      jsonRequest("http://localhost/api/news/sources", "POST", {
+        name: "Later Feed",
+        feedUrl: "https://custom-eng.blog/later.xml",
+        fetchHour: (currentHour + 1) % 24,
+      })
+    );
+    expect(createLater.status).toBe(201);
+    const laterSource = (await createLater.json()).source;
 
     // Authenticate cron using CRON_SECRET bearer header even when requireWriteAccess would reject
     vi.stubEnv("CRON_SECRET", "super-cron-secret");
@@ -227,23 +249,39 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     expect(firstCron.status).toBe(200);
     const firstSummary = await firstCron.json();
     expect(firstSummary.sourcesProcessed).toBe(2);
+    expect(
+      firstSummary.results.some((r: { sourceId: string }) => r.sourceId === laterSource.id)
+    ).toBe(false);
     expect(firstSummary.totalQueued).toBe(2);
     expect(firstSummary.totalDuplicates).toBe(0);
+
+    // The scheduled run leaves one "cron" history row per pulled source, none for the source not due
+    const firstScans = await prisma.newsSourceScan.findMany({ orderBy: { sourceId: "asc" } });
+    expect(firstScans).toHaveLength(2);
+    expect(firstScans.every((scan) => scan.trigger === "cron")).toBe(true);
+    expect(firstScans.find((scan) => scan.sourceId === okSource.id)?.queued).toBe(2);
+    expect(firstScans.find((scan) => scan.sourceId === brokenSource.id)?.error).toContain("HTTP 500");
+    expect(firstScans.some((scan) => scan.sourceId === laterSource.id)).toBe(false);
 
     const brokenResult = firstSummary.results.find(
       (r: { sourceId: string }) => r.sourceId === brokenSource.id
     );
     expect(brokenResult.error).toContain("HTTP 500");
 
-    // Verify queued items are in draft status with source's defaultTags, stripped utm_source, and pubDate preserved
+    // Verify queued items are in draft status with no source tags, stripped utm_source, and pubDate preserved
     const items = await prisma.newsItem.findMany({ orderBy: { canonicalUrl: "asc" } });
     expect(items).toHaveLength(2);
+
+    // The source list counts the items each source collected
+    const listed = await listNewsSources();
+    expect(listed.find((src: { id: string }) => src.id === okSource.id)?.itemCount).toBe(2);
+    expect(listed.find((src: { id: string }) => src.id === brokenSource.id)?.itemCount).toBe(0);
     expect(items[0].canonicalUrl).toBe("https://custom-eng.blog/posts/post-1");
     expect(items[0].reviewStatus).toBe("draft");
     expect(items[0].origin).toBe("cron");
     expect(items[0].sourceId).toBe(okSource.id);
     expect(items[0].publishedAt?.toISOString()).toBe("2026-11-22T06:00:00.000Z");
-    expect(JSON.parse(items[0].tags)).toEqual(["eng"]);
+    expect(JSON.parse(items[0].tags)).toEqual([]);
 
     // Subsequent GET /api/news/cron with CRON_SECRET uses stored ETag -> 304 Not Modified
     const cachedGetCron = await cronGet(
@@ -280,6 +318,46 @@ describe("news sources CRUD & cron RSS sync routes", () => {
     expect(secondSummary.totalQueued).toBe(0);
     expect(secondSummary.totalDuplicates).toBe(2);
     expect(await prisma.newsItem.count()).toBe(2);
+
+    // History route lists the source's scans newest first, the manual one on top
+    const scansRes = await sourceScansGet(
+      jsonRequest(`http://localhost/api/news/sources/${okSource.id}/scans`, "GET"),
+      idContext(okSource.id)
+    );
+    expect(scansRes.status).toBe(200);
+    const { scans } = await scansRes.json();
+    expect(scans[0]).toMatchObject({ trigger: "manual", queued: 0, duplicates: 2, error: null });
+    expect(scans.at(-1)).toMatchObject({ trigger: "cron", queued: 2 });
+  });
+
+  it("keeps only the latest scans per source and guards the history route", async () => {
+    const source = await prisma.newsSource.create({
+      data: { name: "History", feedUrl: "https://custom-eng.blog/history.xml", domain: "custom-eng.blog" },
+    });
+    for (let run = 0; run < NEWS_SOURCE_SCAN_HISTORY_LIMIT + 3; run++) {
+      await recordNewsSourceScans(
+        [{ sourceId: source.id, sourceName: source.name, queued: run, duplicates: 0, skippedErrors: 0, error: null }],
+        "manual_all"
+      );
+    }
+    const kept = await prisma.newsSourceScan.findMany({
+      where: { sourceId: source.id },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(kept).toHaveLength(NEWS_SOURCE_SCAN_HISTORY_LIMIT);
+    // Rows written in the same millisecond may tie on createdAt, so assert the newest survives, not the order
+    expect(Math.max(...kept.map((scan) => scan.queued))).toBe(NEWS_SOURCE_SCAN_HISTORY_LIMIT + 2);
+
+    // Deleting the source removes its history (ON DELETE CASCADE)
+    await prisma.newsSource.delete({ where: { id: source.id } });
+    expect(await prisma.newsSourceScan.count({ where: { sourceId: source.id } })).toBe(0);
+
+    writeAccess.requireWriteAccess.mockResolvedValue(new Response("Unauthorized", { status: 401 }));
+    const denied = await sourceScansGet(
+      jsonRequest(`http://localhost/api/news/sources/${source.id}/scans`, "GET"),
+      idContext(source.id)
+    );
+    expect(denied.status).toBe(401);
   });
 
   it("uses NEWS_CRON_MAX_ITEMS_PER_SOURCE when maxItemsPerSource is omitted", async () => {

@@ -45,7 +45,9 @@ model RoadmapItem {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  provenances KnowledgeProvenance[]
+  provenances   KnowledgeProvenance[]
+  relationsFrom KnowledgeRelation[] @relation("RelationFrom")
+  relationsTo   KnowledgeRelation[] @relation("RelationTo")
 
   @@unique([roadmapId, title])
   @@index([roadmapId])
@@ -120,7 +122,9 @@ model NewsSource {
   feedUrl       String     @unique
   domain        String
   enabled       Boolean    @default(true)
-  defaultTags   String     @default("[]")
+  fetchIntervalDays Int    @default(1) // cron pulls a source only when this many days passed since lastFetchedAt
+  fetchHour     Int        @default(7)  // Vietnam hour (0-23) at which the hourly cron pulls this source
+  defaultTags   String     @default("[]") // legacy, no longer read or written; kept so existing DBs need no migration
   etag          String?
   lastModified  String?
   lastFetchedAt DateTime?
@@ -129,6 +133,23 @@ model NewsSource {
   updatedAt     DateTime   @updatedAt
 
   items         NewsItem[]
+  scans         NewsSourceScan[]
+}
+
+/// One sync run of one NewsSource; only the latest NEWS_SOURCE_SCAN_HISTORY_LIMIT rows per source are kept.
+model NewsSourceScan {
+  id            String     @id @default(uuid(7))
+  sourceId      String
+  source        NewsSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  trigger       String     // cron | manual | manual_all
+  queued        Int        @default(0)
+  duplicates    Int        @default(0)
+  skippedErrors Int        @default(0)
+  notModified   Boolean    @default(false)
+  error         String?
+  createdAt     DateTime   @default(now())
+
+  @@index([sourceId, createdAt])
 }
 
 model NewsItem {
@@ -205,6 +226,20 @@ model KnowledgeProvenance {
 
   @@index([lessonId])
   @@index([newsItemId])
+}
+
+model KnowledgeRelation {
+  id           String      @id @default(uuid(7))
+  fromLessonId String
+  fromLesson   RoadmapItem @relation("RelationFrom", fields: [fromLessonId], references: [id], onDelete: Cascade)
+  toLessonId   String
+  toLesson     RoadmapItem @relation("RelationTo", fields: [toLessonId], references: [id], onDelete: Cascade)
+  relationType String      @default("relates")
+  createdAt    DateTime    @default(now())
+
+  @@unique([fromLessonId, toLessonId, relationType])
+  @@index([fromLessonId])
+  @@index([toLessonId])
 }
 
 model IngestJob {

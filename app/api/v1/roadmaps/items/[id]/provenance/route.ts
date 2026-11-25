@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { type LessonProvenanceResponse, toProvenanceDto } from "@/lib/provenance/dto";
 import { extractProvenanceKeys } from "@/lib/provenance/markers";
+import { type RelatedLessonDto, isMissingTableError } from "@/lib/provenance/relations";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,48 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }),
     ]);
 
+    let relations: RelatedLessonDto[] = [];
+    try {
+      const relRows = await prisma.knowledgeRelation.findMany({
+        where: { OR: [{ fromLessonId: lesson.id }, { toLessonId: lesson.id }] },
+        include: {
+          fromLesson: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              section: true,
+              roadmap: { select: { slug: true, title: true } },
+            },
+          },
+          toLesson: {
+            select: {
+              id: true,
+              slug: true,
+              title: true,
+              section: true,
+              roadmap: { select: { slug: true, title: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      relations = relRows.map((row) => {
+        const other = row.fromLessonId === lesson.id ? row.toLesson : row.fromLesson;
+        return {
+          lessonId: other.id,
+          lessonSlug: other.slug,
+          title: other.title,
+          roadmapSlug: other.roadmap.slug,
+          roadmapTitle: other.roadmap.title,
+          section: other.section,
+          relationType: row.relationType,
+        };
+      });
+    } catch (relError) {
+      if (!isMissingTableError(relError, "KnowledgeRelation")) throw relError;
+    }
+
     const byKey = new Map(inContent.map((row) => [row.claimRefKey, row]));
     const body: LessonProvenanceResponse = {
       provenances: keys.flatMap((key) => {
@@ -47,6 +90,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         return row ? [toProvenanceDto(row)] : [];
       }),
       orphans: orphanRows.map(toProvenanceDto),
+      ...(relations.length > 0 ? { relations } : {}),
     };
 
     return NextResponse.json(body, { headers: { "Cache-Control": "no-store, max-age=0" } });

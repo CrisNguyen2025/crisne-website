@@ -5,6 +5,7 @@ import { createLesson } from "@/lib/roadmap/create-lesson";
 import { duplicateResponse } from "@/lib/roadmap/duplicates";
 import { notifyRoadmapChanged } from "@/lib/roadmap/rag-reindex";
 import { buildStatementsHtml, createClaimRefKey } from "@/lib/provenance/markers";
+import { canonicalLessonPair, isMissingTableError } from "@/lib/provenance/relations";
 import { type IntegrateResponse, IntegrateRequestSchema } from "@/lib/provenance/schemas";
 
 export const dynamic = "force-dynamic";
@@ -126,6 +127,37 @@ export async function POST(req: NextRequest, context: RouteContext) {
           { status: 409 }
         );
       case "ok": {
+        if (body.relatedLessonIds?.length) {
+          const uniqueTargets = Array.from(
+            new Set(body.relatedLessonIds.filter((tid) => tid !== outcome.lesson.id))
+          );
+          if (uniqueTargets.length > 0) {
+            try {
+              const existingTargets = await prisma.roadmapItem.findMany({
+                where: { id: { in: uniqueTargets } },
+                select: { id: true },
+              });
+              for (const target of existingTargets) {
+                const [fromLessonId, toLessonId] = canonicalLessonPair(outcome.lesson.id, target.id);
+                await prisma.knowledgeRelation.upsert({
+                  where: {
+                    fromLessonId_toLessonId_relationType: {
+                      fromLessonId,
+                      toLessonId,
+                      relationType: "relates",
+                    },
+                  },
+                  create: { fromLessonId, toLessonId, relationType: "relates" },
+                  update: {},
+                });
+              }
+            } catch (relError) {
+              if (!isMissingTableError(relError, "KnowledgeRelation")) {
+                console.error("[API POST /api/news/[id]/integrate] Relation save warning:", relError);
+              }
+            }
+          }
+        }
         notifyRoadmapChanged();
         const response: IntegrateResponse = { lesson: outcome.lesson, provenanceCount: marked.length };
         return NextResponse.json(response, { status: 201 });

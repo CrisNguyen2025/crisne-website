@@ -4,7 +4,7 @@ branch: "feat/lesson-ui-polish"
 version: "3.0.0"
 type: "implement"
 priority: "P2"
-status: "ABORTED"
+status: "COMPLETED"
 assigned_executor: "antigravity"
 max_attempts: 3
 current_attempt: 0
@@ -40,7 +40,7 @@ verification_gate:
 
 # TASK: UI polish trang bài học (pager, header buttons, sidebar typography, TOC spacing)
 
-> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): ABORTED tại Preflight. Lệch branch (hiện tại `main`, spec yêu cầu `feat/lesson-ui-polish`) và các file trong `allowed_to_modify` (`LectureShell.tsx`, `LectureToc.tsx`, `roadmap-lecture-layout.test.tsx`) đang dirty trong working tree. Chưa tạo nhánh và chưa commit thay đổi trước đó. Claude verify (2026-11-19): ABORTED đúng SOP, Executor không sửa code. Chờ Dev commit, tạo nhánh, chạy lại `baseline.sh` rồi giao lại (`current_attempt` vẫn 0). Working tree còn thay đổi của plan topic-scoped-urls (ADR-0014, `lib/roadmap/content-utils.ts`, `tests/unit/heading-ids.test.ts`), không thuộc task này.
+> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): COMPLETED trên `main` @ `f7f90e0` (`style(roadmap): lesson page and topic home polish (buttons, sidebar type, TOC spacing)`). Lần thử đầu ABORTED tại Preflight do lệch nhánh, sau đó đã thực thi và merge lên `main`.
 
 ## 1. Context & Architectural Intent
 - **Goal**: Sửa 4 điểm lệch về kích thước nút và thứ bậc chữ trên trang bài học (`/lessons/[lessonSlug]`) và trang tổng quan topic (`/topic/[topicSlug]`), chỉ bằng thay đổi className và markup trình bày.

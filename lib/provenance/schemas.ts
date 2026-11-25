@@ -13,6 +13,7 @@ export const IntegrationStatementSchema = z.object({
 });
 
 const StatementsSchema = z.array(IntegrationStatementSchema).min(1).max(MAX_STATEMENTS_PER_INTEGRATION);
+const RelatedLessonIdsSchema = z.array(z.string().trim().min(1)).max(10).optional();
 
 /** Body of POST /api/news/[id]/integrate */
 export const IntegrateRequestSchema = z.discriminatedUnion("mode", [
@@ -25,11 +26,13 @@ export const IntegrateRequestSchema = z.discriminatedUnion("mode", [
     // New Lessons from a News Item are something the Owner wants to learn (ADR-0010)
     status: z.enum(LESSON_STATUSES).optional().default("target"),
     statements: StatementsSchema,
+    relatedLessonIds: RelatedLessonIdsSchema,
   }),
   z.object({
     mode: z.literal("append_to_lesson"),
     lessonId: z.string().trim().min(1),
     statements: StatementsSchema,
+    relatedLessonIds: RelatedLessonIdsSchema,
   }),
 ]);
 

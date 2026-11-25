@@ -11,6 +11,7 @@ import {
   Power,
   PowerOff,
   RefreshCw,
+  History,
   Rss,
   Trash2,
   X,
@@ -23,19 +24,38 @@ import {
   ROADMAP_INPUT_CLASS,
   ROADMAP_MODAL_TITLE_CLASS,
   ROADMAP_PRIMARY_BTN_CLASS,
-  ROADMAP_SECONDARY_BTN_CLASS,
   RoadmapFieldLabel,
   RoadmapFormError,
 } from "@/components/roadmap/RoadmapFormPrimitives";
+import {
+  FeedLinkField,
+  FetchScheduleFields,
+  type FetchSchedule,
+  formatFeedUrl,
+  formatFetchHour,
+  formatFetchInterval,
+  useFeedLink,
+} from "@/components/news/NewsSourceFields";
+import { NewsSourceScanHistory } from "@/components/news/NewsSourceScanHistory";
+import {
+  FetchIntervalDaysSchema,
+  NEWS_SOURCE_DEFAULT_FETCH_HOUR,
+} from "@/lib/news/schemas";
 import type {
   CronSyncSummary,
   NewsSourceDto,
+  NewsSourceScanDto,
   UpdateNewsSourceRequest,
 } from "@/lib/news/schemas";
 import { NEWS_CRON_SCHEDULE } from "@/lib/news/cron-schedule";
 import { dayjs, formatFriendlyTime } from "@/lib/roadmap/date-utils";
 import { cn } from "@/lib/utils";
 import * as newsService from "@/logic/news/newsService";
+
+const DEFAULT_FETCH_SCHEDULE: FetchSchedule = {
+  fetchIntervalDays: 1,
+  fetchHour: NEWS_SOURCE_DEFAULT_FETCH_HOUR,
+};
 
 function getFeedHost(feedUrl: string): string {
   try {
@@ -45,21 +65,17 @@ function getFeedHost(feedUrl: string): string {
   }
 }
 
-function formatFeedUrl(feedUrl: string): string {
-  return feedUrl.replace(/^https?:\/\/(www\.)?/, "");
-}
-
 function formatPullTime(lastFetchedAt: string | null): string {
   if (!lastFetchedAt) return "Chưa pull lần nào";
   return `Pull lúc ${dayjs(lastFetchedAt).format("HH:mm DD/MM")} · ${formatFriendlyTime(lastFetchedAt)}`;
 }
 
-function parseTagsInput(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((tag) => tag.trim().toLowerCase())
-    .filter(Boolean)
-    .slice(0, 5);
+function getFetchSchedule(source: NewsSourceDto): FetchSchedule {
+  const interval = FetchIntervalDaysSchema.safeParse(source.fetchIntervalDays);
+  return {
+    fetchIntervalDays: interval.success ? interval.data : DEFAULT_FETCH_SCHEDULE.fetchIntervalDays,
+    fetchHour: source.fetchHour,
+  };
 }
 
 interface NewsSourceEditFormProps {
@@ -69,32 +85,33 @@ interface NewsSourceEditFormProps {
   onCancel: () => void;
 }
 
-/** Inline editor for one configured source; sends only the fields that changed. */
+/** Inline editor for one configured source: same fields as the add form plus the name; sends only what changed. */
 function NewsSourceEditForm({ source, isSaving, onSave, onCancel }: NewsSourceEditFormProps) {
-  const feedHost = getFeedHost(source.feedUrl);
+  const initialSchedule = getFetchSchedule(source);
   const [name, setName] = useState(source.name);
-  const [feedUrl, setFeedUrl] = useState(source.feedUrl);
-  const [domain, setDomain] = useState(source.domain === feedHost ? "" : source.domain);
-  const [tags, setTags] = useState(source.defaultTags.join(", "));
+  const [schedule, setSchedule] = useState<FetchSchedule>(initialSchedule);
+  const link = useFeedLink(source.feedUrl);
   const nameId = useId();
-  const domainId = useId();
-  const feedId = useId();
-  const tagsId = useId();
+  const isBusy = isSaving || link.isPreviewing;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const patch: UpdateNewsSourceRequest = {};
     const trimmedName = name.trim();
-    const trimmedFeedUrl = feedUrl.trim();
     if (trimmedName && trimmedName !== source.name) patch.name = trimmedName;
-    if (trimmedFeedUrl && trimmedFeedUrl !== source.feedUrl) patch.feedUrl = trimmedFeedUrl;
 
-    // An empty domain falls back to the feed host, like the create form
-    const nextDomain = domain.trim() || getFeedHost(trimmedFeedUrl || source.feedUrl);
-    if (nextDomain && nextDomain !== source.domain) patch.domain = nextDomain;
+    // A detected feed brings its own site host; a typed link is resolved by the server
+    const nextFeedUrl = link.preview?.resolvedFeedUrl ?? link.value.trim();
+    if (nextFeedUrl && nextFeedUrl !== source.feedUrl) {
+      patch.feedUrl = nextFeedUrl;
+      const nextDomain = link.preview?.siteHost || getFeedHost(nextFeedUrl);
+      if (nextDomain && nextDomain !== source.domain) patch.domain = nextDomain;
+    }
 
-    const nextTags = parseTagsInput(tags);
-    if (nextTags.join(",") !== source.defaultTags.join(",")) patch.defaultTags = nextTags;
+    if (schedule.fetchIntervalDays !== initialSchedule.fetchIntervalDays) {
+      patch.fetchIntervalDays = schedule.fetchIntervalDays;
+    }
+    if (schedule.fetchHour !== initialSchedule.fetchHour) patch.fetchHour = schedule.fetchHour;
 
     if (Object.keys(patch).length === 0) {
       onCancel();
@@ -109,66 +126,23 @@ function NewsSourceEditForm({ source, isSaving, onSave, onCancel }: NewsSourceEd
       className="space-y-3"
       aria-label={`Chỉnh sửa nguồn ${source.name}`}
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <RoadmapFieldLabel htmlFor={nameId} required>
-            Tên nguồn
-          </RoadmapFieldLabel>
-          <input
-            id={nameId}
-            type="text"
-            required
-            disabled={isSaving}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <RoadmapFieldLabel htmlFor={domainId}>
-            Domain bài viết (tuỳ chọn)
-          </RoadmapFieldLabel>
-          <input
-            id={domainId}
-            type="text"
-            disabled={isSaving}
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="Tự tách từ Feed URL"
-            className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-          />
-        </div>
-      </div>
-
       <div className="space-y-1.5">
-        <RoadmapFieldLabel htmlFor={feedId} required>
-          RSS / Atom Feed URL
+        <RoadmapFieldLabel htmlFor={nameId} required>
+          Tên nguồn
         </RoadmapFieldLabel>
         <input
-          id={feedId}
-          type="url"
+          id={nameId}
+          type="text"
           required
           disabled={isSaving}
-          value={feedUrl}
-          onChange={(e) => setFeedUrl(e.target.value)}
-          className={cn(ROADMAP_INPUT_CLASS, "font-mono text-base sm:text-[0.8125rem]")}
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <RoadmapFieldLabel htmlFor={tagsId}>
-          Tags mặc định (phân tách dấu phẩy)
-        </RoadmapFieldLabel>
-        <input
-          id={tagsId}
-          type="text"
-          disabled={isSaving}
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          placeholder="nextjs, frontend"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
         />
       </div>
+
+      <FeedLinkField link={link} disabled={isSaving} />
+      <FetchScheduleFields value={schedule} onChange={setSchedule} disabled={isSaving} />
 
       <div className="flex justify-end gap-2 pt-1">
         <button
@@ -181,7 +155,7 @@ function NewsSourceEditForm({ source, isSaving, onSave, onCancel }: NewsSourceEd
         </button>
         <button
           type="submit"
-          disabled={isSaving || !name.trim() || !feedUrl.trim()}
+          disabled={isBusy || !name.trim() || !link.value.trim()}
           className={cn(ROADMAP_PRIMARY_BTN_CLASS, "h-8 px-3 text-xs")}
         >
           {isSaving && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
@@ -206,10 +180,6 @@ export function SourcesManagerSheet({
   onChanged,
 }: SourcesManagerSheetProps) {
   const { toast } = useToast();
-  const nameId = useId();
-  const domainId = useId();
-  const feedUrlId = useId();
-  const tagsId = useId();
   const createErrorId = useId();
 
   const [sources, setSources] = useState<NewsSourceDto[]>(initialSources);
@@ -218,10 +188,14 @@ export function SourcesManagerSheet({
     setPrevInitialSources(initialSources);
     setSources(initialSources);
   }
-  const [nameInput, setNameInput] = useState("");
-  const [feedUrlInput, setFeedUrlInput] = useState("");
-  const [domainInput, setDomainInput] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
+  const [createName, setCreateName] = useState("");
+  // A detected feed fills the name only while the Owner has not typed one
+  const createLink = useFeedLink("", {
+    onDetected: (preview) =>
+      setCreateName((current) => (current.trim() ? current : (preview.feedTitle ?? ""))),
+  });
+  const createNameId = useId();
+  const [createSchedule, setCreateSchedule] = useState<FetchSchedule>(DEFAULT_FETCH_SCHEDULE);
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncingSourceId, setSyncingSourceId] = useState<string | null>(null);
@@ -229,6 +203,12 @@ export function SourcesManagerSheet({
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [lastSyncSummary, setLastSyncSummary] = useState<CronSyncSummary | null>(null);
+  // Scan history of at most one source at a time; scans is null while loading
+  const [scanHistory, setScanHistory] = useState<{
+    sourceId: string;
+    scans: NewsSourceScanDto[] | null;
+    error: string | null;
+  } | null>(null);
 
   const reloadSources = async () => {
     const res = await newsService.fetchNewsSources();
@@ -237,37 +217,27 @@ export function SourcesManagerSheet({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedName = nameInput.trim();
-    const trimmedFeed = feedUrlInput.trim();
-    if (!trimmedName || !trimmedFeed) {
-      setFormError("Vui lòng nhập đầy đủ tên nguồn và RSS / Atom Feed URL.");
-      return;
-    }
-
-    const defaultTags = parseTagsInput(tagsInput);
+    if (!createLink.value.trim()) return;
 
     setIsCreating(true);
     setFormError(null);
     try {
+      // Reuse the shown preview; otherwise detect the feed now so name and domain come from it
+      const preview = createLink.preview ?? (await createLink.detect());
+      if (!preview) return;
       const { source } = await newsService.createNewsSource({
-        name: trimmedName,
-        feedUrl: trimmedFeed,
-        domain: domainInput.trim() || undefined,
+        name: (createName.trim() || preview.feedTitle?.trim() || preview.siteHost).slice(0, 120),
+        feedUrl: preview.resolvedFeedUrl,
+        domain: preview.siteHost || undefined,
         enabled: true,
-        defaultTags,
+        ...createSchedule,
       });
-      setNameInput("");
-      setFeedUrlInput("");
-      setDomainInput("");
-      setTagsInput("");
+      createLink.reset();
+      setCreateName("");
+      setCreateSchedule(DEFAULT_FETCH_SCHEDULE);
       await reloadSources();
       onChanged();
-      toast(
-        source.feedUrl !== trimmedFeed
-          ? `Đã tự tìm thấy RSS: ${source.feedUrl}`
-          : "Đã thêm nguồn RSS mới",
-        "success"
-      );
+      toast(`Đã thêm nguồn "${source.name}" (${formatFeedUrl(source.feedUrl)})`, "success");
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Không thể thêm nguồn RSS."
@@ -333,6 +303,21 @@ export function SourcesManagerSheet({
     }
   };
 
+  const loadScanHistory = async (sourceId: string) => {
+    setScanHistory({ sourceId, scans: null, error: null });
+    try {
+      const { scans } = await newsService.fetchNewsSourceScans(sourceId);
+      setScanHistory((current) =>
+        current?.sourceId === sourceId ? { sourceId, scans, error: null } : current
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không tải được lịch sử quét.";
+      setScanHistory((current) =>
+        current?.sourceId === sourceId ? { sourceId, scans: [], error: message } : current
+      );
+    }
+  };
+
   const handleSync = async (sourceId?: string) => {
     if (isSyncingAll || syncingSourceId) return;
     if (sourceId) {
@@ -348,6 +333,10 @@ export function SourcesManagerSheet({
       setLastSyncSummary(summary);
       await reloadSources();
       onChanged();
+      // An open history should show the scan that just ran
+      if (scanHistory && (!sourceId || scanHistory.sourceId === sourceId)) {
+        void loadScanHistory(scanHistory.sourceId);
+      }
       toast(
         `Đã quét ${summary.sourcesProcessed} nguồn: +${summary.totalQueued} bài vào Chờ xử lý`,
         "success"
@@ -422,87 +411,30 @@ export function SourcesManagerSheet({
             Thêm nguồn RSS / Atom mới
           </h3>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <RoadmapFieldLabel htmlFor={nameId} required>
-                Tên nguồn
-              </RoadmapFieldLabel>
-              <input
-                id={nameId}
-                type="text"
-                required
-                disabled={isCreating}
-                aria-invalid={Boolean(formError) || undefined}
-                aria-describedby={formError ? createErrorId : undefined}
-                value={nameInput}
-                onChange={(e) => {
-                  setNameInput(e.target.value);
-                  if (formError) setFormError(null);
-                }}
-                placeholder="Vercel Blog"
-                className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <RoadmapFieldLabel htmlFor={domainId}>
-                Domain bài viết (tuỳ chọn)
-              </RoadmapFieldLabel>
-              <input
-                id={domainId}
-                type="text"
-                disabled={isCreating}
-                value={domainInput}
-                onChange={(e) => setDomainInput(e.target.value)}
-                placeholder="Tự tách từ Feed URL"
-                className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-              />
-            </div>
-          </div>
-
+          <FeedLinkField link={createLink} disabled={isCreating} />
           <div className="space-y-1.5">
-            <RoadmapFieldLabel htmlFor={feedUrlId} required>
-              RSS / Atom Feed URL
-            </RoadmapFieldLabel>
+            <RoadmapFieldLabel htmlFor={createNameId}>Tên nguồn (tuỳ chọn)</RoadmapFieldLabel>
             <input
-              id={feedUrlId}
-              type="url"
-              required
+              id={createNameId}
+              type="text"
+              maxLength={120}
               disabled={isCreating}
-              aria-invalid={Boolean(formError) || undefined}
-              aria-describedby={formError ? createErrorId : undefined}
-              value={feedUrlInput}
-              onChange={(e) => {
-                setFeedUrlInput(e.target.value);
-                if (formError) setFormError(null);
-              }}
-              placeholder="https://vercel.com/atom hoặc https://goonnguyen.substack.com/"
-              className={cn(ROADMAP_INPUT_CLASS, "font-mono text-base sm:text-[0.8125rem]")}
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder={createLink.preview?.feedTitle || "Tự lấy theo tên feed"}
+              className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
             />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Dán link XML hoặc URL trang chủ blog — hệ thống tự dò RSS/Atom feed.
-            </p>
           </div>
+          <FetchScheduleFields
+            value={createSchedule}
+            onChange={setCreateSchedule}
+            disabled={isCreating}
+          />
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <RoadmapFieldLabel htmlFor={tagsId}>
-                Tags mặc định (phân tách dấu phẩy)
-              </RoadmapFieldLabel>
-              <input
-                id={tagsId}
-                type="text"
-                disabled={isCreating}
-                value={tagsInput}
-                onChange={(e) => setTagsInput(e.target.value)}
-                placeholder="nextjs, frontend"
-                className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-              />
-            </div>
-
+          <div className="flex justify-end">
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={isCreating || createLink.isPreviewing || !createLink.value.trim()}
               className={cn(ROADMAP_PRIMARY_BTN_CLASS, "shrink-0 whitespace-nowrap")}
             >
               {isCreating ? (
@@ -564,6 +496,17 @@ export function SourcesManagerSheet({
                     </span>
                   </p>
                 ))}
+                {lastSyncSummary.results
+                  .filter((r) => (r.skippedReasons?.length ?? 0) > 0)
+                  .map((src) => (
+                    <p
+                      key={`${src.sourceId}-skipped`}
+                      className="[overflow-wrap:anywhere] text-[0.6875rem] opacity-90"
+                    >
+                      {src.sourceName}: bỏ qua {src.skippedErrors} link (
+                      {Array.from(new Set(src.skippedReasons?.map((s) => s.code))).join(", ")})
+                    </p>
+                  ))}
               </div>
             </div>
           );
@@ -633,28 +576,17 @@ export function SourcesManagerSheet({
                       >
                         {source.name}
                       </h4>
+                      <span
+                        title={`${source.itemCount} bài đã lấy từ nguồn này`}
+                        aria-label={`${source.itemCount} bài`}
+                        className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] font-medium tabular-nums text-foreground/80"
+                      >
+                        {source.itemCount}
+                      </span>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => void handleSync(source.id)}
-                        aria-label={`Quét nguồn ${source.name}`}
-                        title="Quét nguồn này ngay"
-                        className={cn(ROADMAP_SECONDARY_BTN_CLASS, "h-7 px-2.5 text-xs")}
-                      >
-                        <RefreshCw
-                          className={cn(
-                            "size-3",
-                            syncingSourceId === source.id && "animate-spin"
-                          )}
-                          aria-hidden="true"
-                        />
-                        <span>Quét</span>
-                      </button>
-
-                      {busySourceId === source.id ? (
+                      {isBusy ? (
                         <span className="flex size-7 items-center justify-center text-muted-foreground">
                           <Loader2 className="size-3.5 animate-spin" aria-label="Đang xử lý" />
                         </span>
@@ -663,14 +595,30 @@ export function SourcesManagerSheet({
                           label={`Tuỳ chọn nguồn ${source.name}`}
                           items={[
                             {
-                              label: source.enabled ? "Tắt nguồn" : "Bật nguồn",
-                              icon: source.enabled ? PowerOff : Power,
-                              onSelect: () => void handleToggleEnabled(source),
-                            },
-                            {
                               label: "Chỉnh sửa",
                               icon: Pencil,
                               onSelect: () => setEditingSourceId(source.id),
+                            },
+                            {
+                              label: "Quét ngay",
+                              icon: RefreshCw,
+                              onSelect: () => void handleSync(source.id),
+                            },
+                            {
+                              label:
+                                scanHistory?.sourceId === source.id
+                                  ? "Ẩn lịch sử quét"
+                                  : "Lịch sử quét",
+                              icon: History,
+                              onSelect: () =>
+                                scanHistory?.sourceId === source.id
+                                  ? setScanHistory(null)
+                                  : void loadScanHistory(source.id),
+                            },
+                            {
+                              label: source.enabled ? "Tắt nguồn" : "Bật nguồn",
+                              icon: source.enabled ? PowerOff : Power,
+                              onSelect: () => void handleToggleEnabled(source),
                             },
                             {
                               label: "Xoá nguồn",
@@ -705,14 +653,10 @@ export function SourcesManagerSheet({
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-relaxed text-muted-foreground">
-                    {source.defaultTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="[overflow-wrap:anywhere] rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground/80"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
+                    <span>
+                      {formatFetchInterval(source.fetchIntervalDays)} ·{" "}
+                      {formatFetchHour(source.fetchHour)}
+                    </span>
                     <span className="[overflow-wrap:anywhere]">
                       {formatPullTime(source.lastFetchedAt)}
                     </span>
@@ -722,6 +666,14 @@ export function SourcesManagerSheet({
                     <p className="mt-2.5 [overflow-wrap:anywhere] rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs leading-relaxed text-destructive">
                       {source.lastError}
                     </p>
+                  )}
+
+                  {scanHistory?.sourceId === source.id && (
+                    <NewsSourceScanHistory
+                      scans={scanHistory.scans}
+                      error={scanHistory.error}
+                      onClose={() => setScanHistory(null)}
+                    />
                   )}
                 </div>
               );

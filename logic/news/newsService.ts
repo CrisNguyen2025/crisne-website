@@ -1,4 +1,5 @@
 import type { EnqueueNewsResult } from "@/lib/news/ingest";
+import type { MatchLessonsResponseDto } from "@/lib/provenance/relations";
 import type { IntegrateRequest, IntegrateResponse } from "@/lib/provenance/schemas";
 import type {
   CreateNewsSourceRequest,
@@ -9,6 +10,9 @@ import type {
   NewsItemDto,
   NewsOrigin,
   NewsSourceDto,
+  NewsSourceScanDto,
+  NewsSourcePreviewCandidateDto,
+  NewsSourcePreviewDto,
   NewsWorkerHealthDto,
   UpdateNewsItemRequest,
   UpdateNewsSourceRequest,
@@ -127,6 +131,17 @@ export async function addNewsItemToLesson(id: string, payload: IntegrateRequest)
   return { kind: "error", message: err.error };
 }
 
+export async function matchNewsItemLessons(id: string): Promise<MatchLessonsResponseDto> {
+  const res = await fetch(`/api/news/${encodeURIComponent(id)}/match-lessons`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const err = await parseErrorMessage(res, "Không thể lấy gợi ý Lesson từ Abot.");
+    throw new Error(err.error);
+  }
+  return (await res.json()) as MatchLessonsResponseDto;
+}
+
 export async function reingestNewsItem(
   id: string,
   forceDeep = true
@@ -152,6 +167,19 @@ export async function fetchNewsSources(): Promise<{ sources: NewsSourceDto[] }> 
   return (await res.json()) as { sources: NewsSourceDto[] };
 }
 
+export async function fetchNewsSourceScans(
+  sourceId: string
+): Promise<{ scans: NewsSourceScanDto[] }> {
+  const res = await fetch(`/api/news/sources/${encodeURIComponent(sourceId)}/scans`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await parseErrorMessage(res, "Không tải được lịch sử quét.");
+    throw new Error(err.error);
+  }
+  return (await res.json()) as { scans: NewsSourceScanDto[] };
+}
+
 export async function createNewsSource(
   payload: CreateNewsSourceRequest
 ): Promise<{ source: NewsSourceDto }> {
@@ -165,6 +193,41 @@ export async function createNewsSource(
     throw new Error(err.error);
   }
   return (await res.json()) as { source: NewsSourceDto };
+}
+
+/** Thrown by previewNewsSource; `suggestions` lists feeds found on pages the checked page links to. */
+export class NewsSourcePreviewError extends Error {
+  readonly code?: string;
+  readonly suggestions: NewsSourcePreviewCandidateDto[];
+
+  constructor(message: string, code?: string, suggestions: NewsSourcePreviewCandidateDto[] = []) {
+    super(message);
+    this.name = "NewsSourcePreviewError";
+    this.code = code;
+    this.suggestions = suggestions;
+  }
+}
+
+export async function previewNewsSource(feedUrl: string): Promise<NewsSourcePreviewDto> {
+  const res = await fetch("/api/news/sources/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedUrl }),
+  });
+  if (!res.ok) {
+    let body: { error?: unknown; code?: unknown; suggestions?: unknown } = {};
+    try {
+      body = (await res.json()) as typeof body;
+    } catch {
+      // Non-JSON error body: fall back to the generic message
+    }
+    throw new NewsSourcePreviewError(
+      typeof body.error === "string" && body.error ? body.error : "Không thể kiểm tra nguồn RSS.",
+      typeof body.code === "string" ? body.code : undefined,
+      Array.isArray(body.suggestions) ? (body.suggestions as NewsSourcePreviewCandidateDto[]) : []
+    );
+  }
+  return (await res.json()) as NewsSourcePreviewDto;
 }
 
 export async function updateNewsSource(

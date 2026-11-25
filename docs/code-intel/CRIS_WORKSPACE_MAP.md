@@ -226,8 +226,13 @@ sequenceDiagram
 | `GET`    | `/api/news` · `/api/news/[id]` · `/api/news/worker-health` | Owner Only | `private-news`       | `app/api/news/**`                                                | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `PATCH`  | `/api/news/[id]` · `DELETE /api/news/[id]` · `POST /api/news/mark-read` | Owner Only | `private-news` | `app/api/news/**`                                       | `FLOW_NEWS_FEED_BROWSE_AND_STATE` |
 | `GET/POST` | `/api/news/cron`                              | Owner / Cron Secret | `private-news`           | `app/api/news/cron/route.ts`                                     | `FLOW_NEWS_RSS_CRON_SYNC` |
+| `POST`   | `/api/news/sources/preview`                     | Owner Only          | `private-news`           | `app/api/news/sources/preview/route.ts#POST`                     | `FLOW_NEWS_RSS_CRON_SYNC` |
+| `GET`    | `/api/news/sources/[id]/scans`                  | Owner Only          | `private-news`           | `app/api/news/sources/[id]/scans/route.ts#GET`                   | `FLOW_NEWS_RSS_CRON_SYNC` |
 | `POST`   | `/api/news/[id]/integrate`                      | Owner Only          | `private-news`           | `app/api/news/[id]/integrate/route.ts#POST`                      | `FLOW_NEWS_ADD_TO_LESSON` |
+| `POST`   | `/api/news/[id]/match-lessons`                  | Owner Only          | `private-news`           | `app/api/news/[id]/match-lessons/route.ts#POST`                  | `FLOW_ABOT_LINKING_AND_PROVENANCE` |
 | `GET`    | `/api/v1/roadmaps/items/[id]/provenance`        | Owner Only          | `roadmap-learning`       | `app/api/v1/roadmaps/items/[id]/provenance/route.ts#GET`         | `FLOW_NEWS_ADD_TO_LESSON` |
+| `GET/POST/DELETE` | `/api/v1/roadmaps/items/[id]/relations` | Owner Only         | `roadmap-learning`       | `app/api/v1/roadmaps/items/[id]/relations/route.ts`              | `FLOW_ABOT_LINKING_AND_PROVENANCE` |
+| `GET`    | `/api/v1/roadmaps/provenance-by-lessons`        | Owner Only          | `roadmap-learning`       | `app/api/v1/roadmaps/provenance-by-lessons/route.ts#GET`         | `FLOW_ABOT_LINKING_AND_PROVENANCE` |
 
 ---
 

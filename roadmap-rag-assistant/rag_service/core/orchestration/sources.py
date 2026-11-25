@@ -13,6 +13,7 @@ from typing import Any, AsyncGenerator, Awaitable, Callable, Optional
 
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
+from rag_service.core.provenance import format_fallback_provenance_footer
 from rag_service.core.retrieval.rerank import RERANK_POOL
 from rag_service.core.retrieval.transform import QueryPlan, merge_ranked
 from rag_service.observability import current_trace, end_step, end_step_on_error, start_step
@@ -41,6 +42,7 @@ class SourceDeps:
     # Optional gate for the reranker: (query, matches) -> True when the order is uncertain enough to pay for it.
     # None reranks every question.
     rerank_needed: Optional[Callable[[str, list], bool]] = None
+    fetch_provenances: Optional[Callable[[list[str]], Awaitable[dict]]] = None
 
 
 async def stream_words(text: str, delay: float) -> AsyncGenerator[dict, None]:
@@ -151,7 +153,22 @@ async def answer_from_sources(
     )
 
     if matches:
+        lesson_provenances: dict = {}
+        if owner and deps.fetch_provenances is not None:
+            item_ids = [
+                str(doc.id)
+                for doc, _ in matches
+                if getattr(doc, "doc_type", "") == "item" and getattr(doc, "id", None)
+            ]
+            if item_ids:
+                try:
+                    lesson_provenances = await deps.fetch_provenances(item_ids) or {}
+                except Exception:
+                    lesson_provenances = {}
+
         rag_context = format_context(matches)
+        if owner and lesson_provenances:
+            rag_context += format_fallback_provenance_footer(matches, lesson_provenances)
 
         # Synthesize with LLM if available
         llm_failed = False
@@ -164,6 +181,7 @@ async def answer_from_sources(
                     sources=matches,
                     owner_memories=owner_memories if owner else (),
                     memory_scope=memory_scope,
+                    lesson_provenances=lesson_provenances if owner else {},
                 )
                 async for ev in pipeline.astream(llm, req):
                     yield ev

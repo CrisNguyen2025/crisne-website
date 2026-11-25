@@ -23,6 +23,7 @@
     "db:news-public": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-public.ts",
     "db:news-slug": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-slug.ts",
     "db:knowledge-provenance": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-knowledge-provenance.ts",
+    "db:knowledge-relations": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-knowledge-relations.ts",
     "db:import-seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-seed-lessons.ts",
     "db:flatten-sections": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/flatten-to-sections.ts",
     "db:turso:init": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/push-turso-schema.ts",

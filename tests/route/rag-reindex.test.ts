@@ -98,7 +98,7 @@ describe("requestOwnerMemoryCacheInvalidate & notifyOwnerMemoryChanged", () => {
 // The assistant indexes roadmaps, layers, groups and items. Every handler that changes them must report it,
 // so a new write route that forgets fails here.
 const ROADMAPS_DIR = path.join(process.cwd(), "app/api/v1/roadmaps");
-const NOT_INDEXED = new Set<string>();
+const NOT_INDEXED = new Set<string>(["items/[id]/relations/route.ts"]);
 
 function routeFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

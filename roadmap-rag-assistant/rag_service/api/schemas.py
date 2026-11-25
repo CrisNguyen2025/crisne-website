@@ -120,3 +120,30 @@ class PlanResponse(BaseModel):
     args: dict = Field(default_factory=dict)
     reply: str = ""
 
+
+class MatchLessonsRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    tldr: str = Field(default="", max_length=1000)
+    takeaways: list[Annotated[str, Field(max_length=400)]] = Field(default_factory=list, max_length=15)
+    tags: list[Annotated[str, Field(max_length=64)]] = Field(default_factory=list, max_length=15)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class MatchedLessonItem(BaseModel):
+    lesson_id: str
+    lesson_slug: str
+    title: str
+    topic_slug: str
+    topic_title: str
+    section: Optional[str] = None
+    score: float
+    duplicate_warning: bool = False
+    version_update_hint: bool = False
+
+
+class MatchLessonsResponse(BaseModel):
+    suggested_topic_slug: Optional[str] = None
+    suggested_topic_title: Optional[str] = None
+    suggested_section: Optional[str] = None
+    matches: list[MatchedLessonItem] = Field(default_factory=list)
+

@@ -48,6 +48,7 @@ import { LectureShell } from "./LectureShell";
 import { LessonSources } from "./LessonSources";
 import { LessonStatusPicker } from "./LessonStatus";
 import { ProvenanceChips } from "./ProvenanceChip";
+import { RelatedLessons } from "./RelatedLessons";
 import { useLessonProvenance } from "./useLessonProvenance";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
@@ -717,6 +718,7 @@ export function LessonEditorialReader({
                 container={contentElement}
                 provenances={provenance.provenances}
               />
+              <RelatedLessons relations={provenance.relations ?? []} />
               <LessonSources sources={provenance.orphans} />
             </>
           )}

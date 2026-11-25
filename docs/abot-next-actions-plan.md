@@ -89,7 +89,7 @@ Trong `core/generation/pipeline.py`, ghi khối `<conversation_history>` đã đ
 
 ## 8. Langfuse deprecation
 
-`GET /api/public/traces/{id}` đã trả 410 và sẽ bị gỡ vào 2026-11-16. Code của project không gọi endpoint này, nhưng triage có gọi `api.legacy.scoreV1.delete` (`lib/` → `listDownvotedTraces` và các hàm liên quan). Cần kiểm tra lời gọi này có nằm trong đợt gỡ bỏ không, nếu có thì chuyển sang API score mới. Liên quan tới việc bật lại 👍/👎 (`FEEDBACK_ENABLED`).
+**Đã kiểm (2026-11-25):** `api.legacy.scoreV1.delete` trong `@langfuse/client@5.13.1` gọi `DELETE /api/public/scores/{scoreId}` — đây vẫn là REST endpoint chính thức trên Langfuse v4+ (không thuộc đợt gỡ bỏ `GET /api/public/traces/{id}` hay `GET /api/public/scores` v1/v2; tag `LegacyScoreV1` chỉ là namespace sinh tự động của Fern ở JS SDK v5, sang SDK v6 chuyển thành `api.scores.delete` nhưng gọi cùng URL). `fetch-trace.ts` đã dùng `/v2/observations` và `/v3/scores`. Giữ nguyên `lib/ai/langfuse.ts` để không chạm luồng 👍/👎 của Cris AI.
 
 ## 9. Hai test đang fail sẵn
 

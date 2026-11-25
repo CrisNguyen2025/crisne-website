@@ -4,10 +4,10 @@ branch: "chore/router-stress" # Dev tạo từ main trước khi chạy baseline
 version: "3.0.0"
 type: "implement"
 priority: "P2"
-status: "READY"
+status: "COMPLETED"
 assigned_executor: "antigravity"
 max_attempts: 3
-current_attempt: 0
+current_attempt: 1
 deploy_steps: []
 
 boundaries:
@@ -70,12 +70,12 @@ verification_gate:
   - trigger `yarn eval:rag` của `FLOW_EVALS_RUN_PROBE` đang trỏ `scripts/eval-retrieval.ts` trong khi các chặng lại trỏ `retrieval_probe.py`: chỉ ghi vào Audit Log, không sửa.
 
 ## 3. Step-by-Step Implementation Checklist
-- [ ] **Step 1 — Đo**: trong `roadmap-rag-assistant/`, chạy lệnh dưới đây và ghi output vào Audit Log. Kỳ vọng xấp xỉ: `n` 504, `wrong_branch` 91, `preview_violation` 23, `missed_write` 3, `write_now_violation` 0. Lệch so với kỳ vọng mà vẫn ≤ baseline thì dùng số đo được. Lớn hơn baseline thì ESCALATE.
+- [x] **Step 1 — Đo**: trong `roadmap-rag-assistant/`, chạy lệnh dưới đây và ghi output vào Audit Log. Kỳ vọng xấp xỉ: `n` 504, `wrong_branch` 91, `preview_violation` 23, `missed_write` 3, `write_now_violation` 0. Lệch so với kỳ vọng mà vẫn ≤ baseline thì dùng số đo được. Lớn hơn baseline thì ESCALATE.
   ```bash
   .venv/bin/python -c "import asyncio,json; from evals.router.confuse import run; print(json.dumps(asyncio.run(run(False))['total']))"
   ```
-- [ ] **Step 2 — Baseline**: ghi đúng 5 khoá `n`, `write_now_violation`, `missed_write`, `wrong_branch`, `preview_violation` của Step 1 vào `roadmap-rag-assistant/evals/router/confuse_baseline.json`. Giữ thứ tự khoá và định dạng 2 space như file hiện tại.
-- [ ] **Step 3 — Flow mới**: thêm vào `executionFlows` của `.agents/skills/cris-code-intel/data/cris-workspace-map.json` một flow, theo đúng schema của `FLOW_EVALS_RUN_PROBE`:
+- [x] **Step 2 — Baseline**: ghi đúng 5 khoá `n`, `write_now_violation`, `missed_write`, `wrong_branch`, `preview_violation` của Step 1 vào `roadmap-rag-assistant/evals/router/confuse_baseline.json`. Giữ thứ tự khoá và định dạng 2 space như file hiện tại.
+- [x] **Step 3 — Flow mới**: thêm vào `executionFlows` của `.agents/skills/cris-code-intel/data/cris-workspace-map.json` một flow, theo đúng schema của `FLOW_EVALS_RUN_PROBE`:
   - `id`: `FLOW_EVALS_ROUTER_STRESS`; `domainId`: `roadmap-assistant-abot`; `actor`: `System / Developer`; `relatedAdrs`: `["ADR-0003"]`.
   - `trigger`: chạy `pytest tests/test_write_invariants.py -k stress`, hoặc `python -m evals.router.confuse`, trong `roadmap-rag-assistant/`.
   - `preconditions`: có venv Python; có bộ dữ liệu `evals/router/stress_confuse.jsonl`.
@@ -88,24 +88,26 @@ verification_gate:
     - `missed_write` và `wrong_branch` không vượt baseline;
     - baseline chỉ được hạ (ratchet), không nâng để test pass.
   - `failureModes`: số đo vượt baseline nghĩa là router regress, phải sửa router, không sửa baseline.
-- [ ] **Step 4 — Flow cũ**: trong `FLOW_EVALS_RUN_PROBE`, bỏ chữ "& Router" khỏi `name`. Chuyển invariant "Mọi thay đổi trong router/policy.py phải giữ vững baseline của held-out test sets" sang flow mới ở Step 3. Không sửa gì khác của flow này.
-- [ ] **Step 5 — Meta map**: cập nhật `headCommit` (bằng `git rev-parse --short HEAD`) và `generatedAt` (ngày chạy) của map.
-- [ ] **Step 6 — Ghi chú cũ**: ở dòng "Còn tồn đọng khác" (mục 6 của `.handoff/specs/TASK-lesson-status-001.md`), bỏ "router stress baseline: wrong_branch 107 > 103" và đổi "hai test fail có từ trước" thành "một test fail có từ trước". Không sửa chỗ nào khác của file đó.
-- [ ] **Step 7 — Kiểm intel**: chạy `yarn intel how-to-sync "router stress baseline wrong_branch"`, rồi `yarn intel trace FLOW_EVALS_ROUTER_STRESS`. Ghi vào Audit Log: how-to-sync có trả `FLOW_EVALS_ROUTER_STRESS` hay không. Không có thì ghi lại để Claude xem; không sửa script `cris-intel.ts`.
+- [x] **Step 4 — Flow cũ**: trong `FLOW_EVALS_RUN_PROBE`, bỏ chữ "& Router" khỏi `name`. Chuyển invariant "Mọi thay đổi trong router/policy.py phải giữ vững baseline của held-out test sets" sang flow mới ở Step 3. Không sửa gì khác của flow này.
+- [x] **Step 5 — Meta map**: cập nhật `headCommit` (bằng `git rev-parse --short HEAD`) và `generatedAt` (ngày chạy) của map.
+- [x] **Step 6 — Ghi chú cũ**: ở dòng "Còn tồn đọng khác" (mục 6 của `.handoff/specs/TASK-lesson-status-001.md`), bỏ "router stress baseline: wrong_branch 107 > 103" và đổi "hai test fail có từ trước" thành "một test fail có từ trước". Không sửa chỗ nào khác của file đó.
+- [x] **Step 7 — Kiểm intel**: chạy `yarn intel how-to-sync "router stress baseline wrong_branch"`, rồi `yarn intel trace FLOW_EVALS_ROUTER_STRESS`. Ghi vào Audit Log: how-to-sync có trả `FLOW_EVALS_ROUTER_STRESS` hay không. Không có thì ghi lại để Claude xem; không sửa script `cris-intel.ts`.
 
 ## 4. Verification Gate Results
 <!-- Executor điền: PENDING | PASSED | FAILED | SKIPPED -->
-- [ ] `Pytest`: PENDING
-- [ ] `Evals Validate`: PENDING
-- [ ] `Ratchet`: PENDING
-- [ ] `Intel Status`: PENDING
-- [ ] `Agents Sync`: PENDING
-- [ ] `Boundary Check`: PENDING
+- [x] `Pytest`: PASSED
+- [x] `Evals Validate`: PASSED (`484 samples in 4 datasets, 125 documents in 1 corpora`)
+- [x] `Ratchet`: PASSED (`1 passed` in `test_write_invariants.py -k stress`)
+- [x] `Intel Status`: PASSED (`209 ref map + 38 ref docs`)
+- [x] `Agents Sync`: PASSED
+- [x] `Boundary Check`: PASSED
 
 ## 5. Execution Audit Log
 <!-- Executor điền. Không commit: Dev commit sau khi Claude verify -->
 - **Result file**: `.handoff/runs/TASK-router-stress-001/result.json`
-- **Số đo Step 1**: `...`
-- **how-to-sync Step 7**: `...`
+- **Số đo Step 1**: `{"n": 504, "write_now_violation": 0, "preview_violation": 23, "missed_write": 3, "wrong_branch": 91}`
+- **how-to-sync Step 7**: Trả về đúng duy nhất `[FLOW_EVALS_ROUTER_STRESS]` (khớp keyword `"stress"`, `"router"`). Ghi nhận ngoài phạm vi: `FLOW_EVALS_RUN_PROBE` có trigger `yarn eval:rag` (`scripts/eval-retrieval.ts`) trong khi step 1 trỏ `retrieval_probe.py`.
 - **Modified Files**:
-  - `...`
+  - `roadmap-rag-assistant/evals/router/confuse_baseline.json`
+  - `.agents/skills/cris-code-intel/data/cris-workspace-map.json`
+  - `.handoff/specs/TASK-lesson-status-001.md`

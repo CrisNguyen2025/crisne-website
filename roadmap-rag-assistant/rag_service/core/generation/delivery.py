@@ -7,7 +7,7 @@ so the next turn's prompt can see it.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from rag_service.core.augmentation.documents import ContextDocument
 from rag_service.core.augmentation.history import HistoryStore, history_store
@@ -30,6 +30,7 @@ def metadata_event(
     show_scores: bool,
     cited_ids: Optional[List[str]] = None,
     citations: Optional[List[dict]] = None,
+    lesson_provenances: Optional[Dict[str, Sequence[Any]]] = None,
 ) -> dict:
     """Closing event of an LLM answer.
 
@@ -46,6 +47,12 @@ def metadata_event(
         d = by_id.get(doc_id)
         if d is None or (doc_id not in used and len(sources) >= MAX_SOURCES):
             continue
+        prov_list = (lesson_provenances or {}).get(doc_id) if show_scores else None
+        ext_sources = (
+            [p.to_dict() if hasattr(p, "to_dict") else dict(p) for p in prov_list]
+            if prov_list
+            else None
+        )
         sources.append(
             {
                 "id": d.id,
@@ -53,6 +60,7 @@ def metadata_event(
                 "href": d.href,
                 "cited": doc_id in used or (bool(d.href) and f"({d.href})" in answer),
                 **({"score": round(d.score, 4)} if show_scores else {}),
+                **({"external_sources": ext_sources} if ext_sources else {}),
             }
         )
     ev: dict = {"type": "metadata", "mode": mode, "sources": sources}

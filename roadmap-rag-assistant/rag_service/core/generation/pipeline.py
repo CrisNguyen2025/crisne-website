@@ -163,6 +163,8 @@ class GenerationPipeline:
         if selected_memory_ids:
             sections["owner_memory_ids"] = selected_memory_ids
             sections["owner_memory_count"] = len(selected_memory_ids)
+        if req.lesson_provenances and is_owner():
+            sections["provenance_lessons"] = len(req.lesson_provenances)
         if getattr(claims, "dropped", None):
             sections["dropped_claims"] = claims.dropped
         if cite and tracker:
@@ -249,6 +251,7 @@ class GenerationPipeline:
             # Ids cited inline come first; the <sources> line only adds the ones never cited inline
             cited_ids=(cite.ids + [i for i in channel.ids if i not in cite.ids]) if channel and cite else [],
             citations=tracker.citations if tracker else None,
+            lesson_provenances=req.lesson_provenances if is_owner() else None,
         )
 
 

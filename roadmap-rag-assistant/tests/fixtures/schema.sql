@@ -78,6 +78,8 @@ CREATE TABLE "NewsSource" (
     "feedUrl" TEXT NOT NULL,
     "domain" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "fetchIntervalDays" INTEGER NOT NULL DEFAULT 1,
+    "fetchHour" INTEGER NOT NULL DEFAULT 7,
     "defaultTags" TEXT NOT NULL DEFAULT '[]',
     "etag" TEXT,
     "lastModified" TEXT,
@@ -85,6 +87,20 @@ CREATE TABLE "NewsSource" (
     "lastError" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "NewsSourceScan" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "sourceId" TEXT NOT NULL,
+    "trigger" TEXT NOT NULL,
+    "queued" INTEGER NOT NULL DEFAULT 0,
+    "duplicates" INTEGER NOT NULL DEFAULT 0,
+    "skippedErrors" INTEGER NOT NULL DEFAULT 0,
+    "notModified" BOOLEAN NOT NULL DEFAULT false,
+    "error" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "NewsSourceScan_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "NewsSource" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -142,6 +158,17 @@ CREATE TABLE "KnowledgeProvenance" (
 );
 
 -- CreateTable
+CREATE TABLE "KnowledgeRelation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "fromLessonId" TEXT NOT NULL,
+    "toLessonId" TEXT NOT NULL,
+    "relationType" TEXT NOT NULL DEFAULT 'relates',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KnowledgeRelation_fromLessonId_fkey" FOREIGN KEY ("fromLessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "KnowledgeRelation_toLessonId_fkey" FOREIGN KEY ("toLessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
 CREATE TABLE "IngestJob" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "newsItemId" TEXT NOT NULL,
@@ -195,6 +222,9 @@ CREATE INDEX "OwnerMemory_kind_status_idx" ON "OwnerMemory"("kind", "status");
 CREATE UNIQUE INDEX "NewsSource_feedUrl_key" ON "NewsSource"("feedUrl");
 
 -- CreateIndex
+CREATE INDEX "NewsSourceScan_sourceId_createdAt_idx" ON "NewsSourceScan"("sourceId", "createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "NewsItem_canonicalUrl_key" ON "NewsItem"("canonicalUrl");
 
 -- CreateIndex
@@ -232,6 +262,15 @@ CREATE INDEX "KnowledgeProvenance_lessonId_idx" ON "KnowledgeProvenance"("lesson
 
 -- CreateIndex
 CREATE INDEX "KnowledgeProvenance_newsItemId_idx" ON "KnowledgeProvenance"("newsItemId");
+
+-- CreateIndex
+CREATE INDEX "KnowledgeRelation_fromLessonId_idx" ON "KnowledgeRelation"("fromLessonId");
+
+-- CreateIndex
+CREATE INDEX "KnowledgeRelation_toLessonId_idx" ON "KnowledgeRelation"("toLessonId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KnowledgeRelation_fromLessonId_toLessonId_relationType_key" ON "KnowledgeRelation"("fromLessonId", "toLessonId", "relationType");
 
 -- CreateIndex
 CREATE INDEX "IngestJob_status_nextRunAt_idx" ON "IngestJob"("status", "nextRunAt");

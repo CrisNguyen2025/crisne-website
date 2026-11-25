@@ -2,7 +2,7 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { NewsItemDto, NewsSourceDto } from "@/lib/news/schemas";
+import type { NewsItemDto, NewsSourceDto, NewsSourcePreviewDto } from "@/lib/news/schemas";
 import { NEWS_CRON_SCHEDULE } from "@/lib/news/cron-schedule";
 import * as newsService from "@/logic/news/newsService";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
@@ -396,13 +396,22 @@ describe("news feed UI components", () => {
       feedUrl: "https://vercel.com/atom",
       domain: "vercel.com",
       enabled: true,
-      defaultTags: ["nextjs"],
+      fetchIntervalDays: 1,
+      fetchHour: 11,
+      itemCount: 0,
       lastFetchedAt: null,
       lastError: null,
       createdAt: "2026-11-22T07:00:00.000Z",
       updatedAt: "2026-11-22T07:00:00.000Z",
     };
 
+    const previewSpy = vi.spyOn(newsService, "previewNewsSource").mockResolvedValue(
+      makePreview({
+        resolvedFeedUrl: "https://vercel.com/atom",
+        siteHost: "vercel.com",
+        feedTitle: "Vercel Blog",
+      })
+    );
     const createSpy = vi
       .spyOn(newsService, "createNewsSource")
       .mockResolvedValue({ source: sampleSource });
@@ -435,24 +444,30 @@ describe("news feed UI components", () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText("Tên nguồn"), {
-      target: { value: "Vercel Blog" },
+    // Only the page link is required; an empty name, the feed URL and domain come from feed detection
+    expect((screen.getByLabelText("Tên nguồn (tuỳ chọn)") as HTMLInputElement).value).toBe("");
+    expect(screen.queryByLabelText("Tags mặc định (phân tách dấu phẩy)")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Link trang hoặc feed"), {
+      target: { value: "https://vercel.com/blog" },
     });
-    fireEvent.change(screen.getByLabelText("RSS / Atom Feed URL"), {
-      target: { value: "https://vercel.com/atom" },
-    });
-    fireEvent.change(screen.getByLabelText("Tags mặc định (phân tách dấu phẩy)"), {
-      target: { value: "NextJS, Frontend" },
-    });
+    // Schedule defaults to every day at 07:00 (Vietnam time)
+    const intervalField = screen.getByLabelText("Tần suất quét tự động") as HTMLSelectElement;
+    const hourField = screen.getByLabelText("Giờ quét (giờ VN)") as HTMLSelectElement;
+    expect(intervalField.value).toBe("1");
+    expect(hourField.value).toBe("7");
+    fireEvent.change(intervalField, { target: { value: "3" } });
+    fireEvent.change(hourField, { target: { value: "8" } });
     fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
 
     await waitFor(() => {
+      expect(previewSpy).toHaveBeenCalledWith("https://vercel.com/blog");
       expect(createSpy).toHaveBeenCalledWith({
         name: "Vercel Blog",
         feedUrl: "https://vercel.com/atom",
-        domain: undefined,
+        domain: "vercel.com",
         enabled: true,
-        defaultTags: ["nextjs", "frontend"],
+        fetchIntervalDays: 3,
+        fetchHour: 8,
       });
     });
 
@@ -467,21 +482,32 @@ describe("news feed UI components", () => {
     expect(await screen.findByText(/1 link bị bỏ qua/)).toBeTruthy();
   });
 
-  it("shows auto-discovered RSS URL in toast when homepage URL resolves to XML feed", async () => {
+  it("detects the feed on paste, shows it for manual checking, and adds it without detecting again", async () => {
     const discoveredSource = {
       id: "src-sub",
       name: "Goon",
       feedUrl: "https://goonnguyen.substack.com/feed",
       domain: "goonnguyen.substack.com",
       enabled: true,
-      defaultTags: [],
+      fetchIntervalDays: 1,
+      fetchHour: 11,
+      itemCount: 0,
       lastFetchedAt: null,
       lastError: null,
       createdAt: "2026-11-23T07:00:00.000Z",
       updatedAt: "2026-11-23T07:00:00.000Z",
     };
 
-    vi.spyOn(newsService, "createNewsSource").mockResolvedValue({ source: discoveredSource });
+    const previewSpy = vi.spyOn(newsService, "previewNewsSource").mockResolvedValue(
+      makePreview({
+        resolvedFeedUrl: "https://goonnguyen.substack.com/feed",
+        siteHost: "goonnguyen.substack.com",
+        feedTitle: "Goon",
+      })
+    );
+    const createSpy = vi
+      .spyOn(newsService, "createNewsSource")
+      .mockResolvedValue({ source: discoveredSource });
     vi.spyOn(newsService, "fetchNewsSources").mockResolvedValue({
       sources: [discoveredSource],
     });
@@ -497,17 +523,74 @@ describe("news feed UI components", () => {
       </ToastProvider>
     );
 
-    fireEvent.change(screen.getByLabelText("Tên nguồn"), {
-      target: { value: "Goon" },
+    const urlField = screen.getByLabelText("Link trang hoặc feed") as HTMLInputElement;
+    fireEvent.paste(urlField, {
+      clipboardData: { getData: () => "https://goonnguyen.substack.com/" },
     });
-    fireEvent.change(screen.getByLabelText("RSS / Atom Feed URL"), {
-      target: { value: "https://goonnguyen.substack.com/" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
 
+    await waitFor(() => {
+      expect(previewSpy).toHaveBeenCalledWith("https://goonnguyen.substack.com/");
+      expect(urlField.value).toBe("https://goonnguyen.substack.com/feed");
+    });
+    expect(screen.getByRole("button", { name: "Kiểm tra feed" })).toBeTruthy();
+
+    // Detection fills the empty name; the Owner can still rename before adding
+    const nameField = screen.getByLabelText("Tên nguồn (tuỳ chọn)") as HTMLInputElement;
+    expect(nameField.value).toBe("Goon");
+    fireEvent.change(nameField, { target: { value: "Goon Weekly" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
     expect(
-      await screen.findByText("Đã tự tìm thấy RSS: https://goonnguyen.substack.com/feed")
+      await screen.findByText('Đã thêm nguồn "Goon" (goonnguyen.substack.com/feed)')
     ).toBeTruthy();
+    expect(previewSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy).toHaveBeenCalledWith({
+      name: "Goon Weekly",
+      feedUrl: "https://goonnguyen.substack.com/feed",
+      domain: "goonnguyen.substack.com",
+      enabled: true,
+      fetchIntervalDays: 1,
+      fetchHour: 7,
+    });
+  });
+
+  it("lists feeds suggested from related pages when the pasted page has none, and checks one on click", async () => {
+    const previewSpy = vi
+      .spyOn(newsService, "previewNewsSource")
+      .mockRejectedValueOnce(
+        new newsService.NewsSourcePreviewError(
+          "Trang này không có RSS/Atom/JSON feed, nhưng tìm thấy 1 feed liên quan. Chọn một feed bên dưới để kiểm tra.",
+          "FEED_NOT_FOUND",
+          [{ url: "https://openai.com/news/rss.xml", title: "OpenAI News", format: "rss" }]
+        )
+      )
+      .mockResolvedValueOnce(
+        makePreview({
+          resolvedFeedUrl: "https://openai.com/news/rss.xml",
+          siteHost: "openai.com",
+          feedTitle: "OpenAI News",
+        })
+      );
+
+    render(
+      <SourcesManagerSheet open={true} initialSources={[]} onClose={vi.fn()} onChanged={vi.fn()} />
+    );
+
+    const urlField = screen.getByLabelText("Link trang hoặc feed") as HTMLInputElement;
+    fireEvent.paste(urlField, { clipboardData: { getData: () => "https://openai.com/" } });
+
+    const group = await screen.findByRole("group", { name: "Feed gợi ý" });
+    expect(screen.getByRole("alert").textContent).toContain("tìm thấy 1 feed liên quan");
+    fireEvent.click(within(group).getByRole("button", { name: /OpenAI News/ }));
+
+    await waitFor(() => {
+      expect(previewSpy).toHaveBeenLastCalledWith("https://openai.com/news/rss.xml");
+      expect(urlField.value).toBe("https://openai.com/news/rss.xml");
+    });
+    expect(screen.queryByRole("group", { name: "Feed gợi ý" })).toBeNull();
+    expect((screen.getByLabelText("Tên nguồn (tuỳ chọn)") as HTMLInputElement).value).toBe(
+      "OpenAI News"
+    );
   });
 
   it("shows worker status badge in header (including unconfigured), re-checks on click, and omits Làm mới sync button", async () => {
@@ -562,11 +645,27 @@ describe("news feed UI components", () => {
       feedUrl: "https://vercel.com/atom",
       domain: "vercel.com",
       enabled: true,
-      defaultTags: ["nextjs"],
+      fetchIntervalDays: 1,
+      fetchHour: 11,
+      itemCount: 0,
       lastFetchedAt: null,
       lastError: null,
       createdAt: "2026-11-22T07:00:00.000Z",
       updatedAt: "2026-11-22T07:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  function makePreview(overrides: Partial<NewsSourcePreviewDto> = {}): NewsSourcePreviewDto {
+    return {
+      resolvedFeedUrl: "https://example.com/feed.xml",
+      siteHost: "example.com",
+      feedTitle: "Example",
+      format: "rss",
+      candidates: [],
+      itemCount: 3,
+      sampleItems: [],
+      warnings: [],
       ...overrides,
     };
   }
@@ -588,6 +687,9 @@ describe("news feed UI components", () => {
   });
 
   it("shows alert error and preserves create form values when createNewsSource fails", async () => {
+    vi.spyOn(newsService, "previewNewsSource").mockResolvedValue(
+      makePreview({ resolvedFeedUrl: "https://broken.example.com/feed" })
+    );
     vi.spyOn(newsService, "createNewsSource").mockRejectedValue(
       new Error("Không tìm thấy RSS/Atom hợp lệ")
     );
@@ -602,22 +704,14 @@ describe("news feed UI components", () => {
       />
     );
 
-    const nameField = screen.getByLabelText("Tên nguồn") as HTMLInputElement;
-    const feedField = screen.getByLabelText("RSS / Atom Feed URL") as HTMLInputElement;
-    const tagsField = screen.getByLabelText(
-      "Tags mặc định (phân tách dấu phẩy)"
-    ) as HTMLInputElement;
+    const feedField = screen.getByLabelText("Link trang hoặc feed") as HTMLInputElement;
 
-    fireEvent.change(nameField, { target: { value: "Broken Blog" } });
     fireEvent.change(feedField, { target: { value: "https://broken.example.com/feed" } });
-    fireEvent.change(tagsField, { target: { value: "ai, rss" } });
     fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Không tìm thấy RSS/Atom hợp lệ");
-    expect(nameField.value).toBe("Broken Blog");
     expect(feedField.value).toBe("https://broken.example.com/feed");
-    expect(tagsField.value).toBe("ai, rss");
     expect(onChanged).not.toHaveBeenCalled();
   });
 
@@ -626,9 +720,11 @@ describe("news feed UI components", () => {
       id: "src-edit",
       name: "Anthropic News",
       feedUrl: "https://anthropic.com/feed.xml",
+      itemCount: 12,
       domain: "anthropic.com",
       enabled: true,
-      defaultTags: ["ai"],
+      fetchIntervalDays: 1,
+      fetchHour: 11,
       lastError: "HTTP 500 timeout khi tải feed",
     });
 
@@ -671,16 +767,63 @@ describe("news feed UI components", () => {
 
     // lastError banner
     expect(screen.getByText("HTTP 500 timeout khi tải feed")).toBeTruthy();
-    expect(screen.getByText("#ai")).toBeTruthy();
+    // Count badge of items collected from the source
+    expect(screen.getByLabelText("12 bài").textContent).toBe("12");
 
-    // Per-source sync
-    fireEvent.click(screen.getByRole("button", { name: "Quét nguồn Anthropic News" }));
+    // Menu order: edit, scan, history, then disable and delete
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual([
+      "Chỉnh sửa",
+      "Quét ngay",
+      "Lịch sử quét",
+      "Tắt nguồn",
+      "Xoá nguồn",
+    ]);
+
+    // Scan history opens under the card from the menu
+    const scansSpy = vi.spyOn(newsService, "fetchNewsSourceScans").mockResolvedValue({
+      scans: [
+        {
+          id: "scan-2",
+          trigger: "manual",
+          queued: 0,
+          duplicates: 0,
+          skippedErrors: 0,
+          notModified: false,
+          error: "HTTP 500 timeout khi tải feed",
+          createdAt: "2026-11-25T04:05:00.000Z",
+        },
+        {
+          id: "scan-1",
+          trigger: "cron",
+          queued: 2,
+          duplicates: 1,
+          skippedErrors: 1,
+          notModified: false,
+          error: null,
+          createdAt: "2026-11-24T04:00:00.000Z",
+        },
+      ],
+    });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Lịch sử quét" }));
+    const history = await screen.findByRole("region", { name: "Lịch sử quét" });
+    expect(scansSpy).toHaveBeenCalledWith("src-edit");
+    expect(await within(history).findByText("+2 mới · 1 trùng · 1 bỏ qua")).toBeTruthy();
+    expect(within(history).getByText("Tự động")).toBeTruthy();
+    expect(within(history).getByText("HTTP 500 timeout khi tải feed")).toBeTruthy();
+
+    // Per-source sync via ActionMenu refreshes the open history
+    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Quét ngay" }));
     await waitFor(() => {
       expect(syncSpy).toHaveBeenCalledWith({ sourceId: "src-edit" });
+      expect(scansSpy).toHaveBeenCalledTimes(2);
     });
+    fireEvent.click(screen.getByRole("button", { name: "Đóng lịch sử quét" }));
+    expect(screen.queryByRole("region", { name: "Lịch sử quét" })).toBeNull();
 
     // Toggle enabled via ActionMenu
-    fireEvent.click(screen.getByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tuỳ chọn nguồn Anthropic News" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Tắt nguồn" }));
     await waitFor(() => {
       expect(updateSpy).toHaveBeenCalledWith("src-edit", { enabled: false });
@@ -700,19 +843,21 @@ describe("news feed UI components", () => {
     const reopenedEditForm = screen.getByRole("form", {
       name: "Chỉnh sửa nguồn Anthropic News",
     });
+    // Edit form shares the add form's fields, plus the name
+    expect(within(reopenedEditForm).getByLabelText("Link trang hoặc feed")).toBeTruthy();
+    expect(within(reopenedEditForm).queryByLabelText("Domain bài viết (tuỳ chọn)")).toBeNull();
     fireEvent.change(within(reopenedEditForm).getByLabelText("Tên nguồn"), {
       target: { value: "Anthropic Engineering" },
     });
-    fireEvent.change(
-      within(reopenedEditForm).getByLabelText("Tags mặc định (phân tách dấu phẩy)"),
-      { target: { value: "ai, agents" } }
-    );
+    fireEvent.change(within(reopenedEditForm).getByLabelText("Giờ quét (giờ VN)"), {
+      target: { value: "7" },
+    });
     fireEvent.click(within(reopenedEditForm).getByRole("button", { name: "Lưu" }));
 
     await waitFor(() => {
       expect(updateSpy).toHaveBeenCalledWith("src-edit", {
         name: "Anthropic Engineering",
-        defaultTags: ["ai", "agents"],
+        fetchHour: 7,
       });
     });
 
@@ -764,24 +909,17 @@ describe("news feed UI components", () => {
     expect(domainBadge.className).toContain("max-w-[12rem]");
     expect(domainBadge.className).toContain("truncate");
 
-    // Whitespace-only Tên nguồn triggers role="alert" without calling createNewsSource, then clears on input
-    const nameField = screen.getByLabelText("Tên nguồn");
-    const feedField = screen.getByLabelText("RSS / Atom Feed URL");
-    fireEvent.change(nameField, { target: { value: "   " } });
-    fireEvent.change(feedField, { target: { value: "https://valid.example.com/feed.xml" } });
-    fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
-
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("Vui lòng nhập đầy đủ tên nguồn và RSS / Atom Feed URL.");
+    // Whitespace-only link keeps "Thêm nguồn" disabled, so createNewsSource is never called
+    const feedField = screen.getByLabelText("Link trang hoặc feed");
+    fireEvent.change(feedField, { target: { value: "   " } });
+    const addBtn = screen.getByRole("button", { name: "Thêm nguồn" }) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(true);
+    fireEvent.click(addBtn);
     expect(createSpy).not.toHaveBeenCalled();
 
-    fireEvent.change(nameField, { target: { value: "Valid Name" } });
-    expect(screen.queryByRole("alert")).toBeNull();
-
-    // While syncing all sources, per-source Quét button is disabled to avoid concurrent sync collisions
+    // While syncing all sources, the per-source menu (holding "Quét ngay") is hidden to avoid concurrent sync collisions
     fireEvent.click(screen.getByRole("button", { name: "Quét tất cả ngay" }));
-    const perSourceBtn = screen.getByRole("button", { name: "Quét nguồn Slow Feed" }) as HTMLButtonElement;
-    expect(perSourceBtn.disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: "Tuỳ chọn nguồn Slow Feed" })).toBeNull();
 
     resolveSync({
       sourcesProcessed: 1,

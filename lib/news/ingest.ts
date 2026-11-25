@@ -19,6 +19,7 @@ const JOB_LEASE_DURATION_MS = 10 * 60_000;
 
 export interface EnqueueNewsOptions extends ResolveUrlOptions {
   skipWake?: boolean;
+  preloadedSourceDomains?: string[];
 }
 
 export interface EnqueueNewsResult {
@@ -43,11 +44,14 @@ export async function enqueueNewsUrl(
   input: IngestRequest,
   urlOptions: EnqueueNewsOptions = {}
 ): Promise<EnqueueNewsResult> {
-  const enabledSources = await prisma.newsSource.findMany({
-    where: { enabled: true },
-    select: { domain: true },
-  });
-  const sourceDomains = enabledSources.map((s) => s.domain);
+  const sourceDomains =
+    urlOptions.preloadedSourceDomains ??
+    (
+      await prisma.newsSource.findMany({
+        where: { enabled: true },
+        select: { domain: true },
+      })
+    ).map((s) => s.domain);
 
   const validated = await resolveAndValidateUrl(input.url, {
     ...urlOptions,

@@ -1,6 +1,6 @@
 # RESEARCH: Logic & Phương án Cấu hình RSS/Atom từ Website Bên ngoài (`/news`)
 
-- **Trạng thái:** `PROPOSAL (Research & Architecture Recommendations)`
+- **Trạng thái:** `TIER 1 IMPLEMENTED · TIER 2–3 PROPOSAL` (2026-11-25: Tier 1 đã triển khai — `platform-feeds.ts`, JSON Feed parser, deadline tổng `AbortSignal`, xoá N+1 query trong cron, phân loại mã lỗi, `POST /api/news/sources/preview` và UI kiểm tra feed trong `SourcesManagerSheet.tsx`; Tier 2–3 giữ ở mức đề xuất khi cần migration lịch quét / aggregator ngoài whitelist)
 - **Ngày lập:** 2026-11-24
 - **Nhánh đối chiếu:** `feat/abot-lesson-chunks` (sau upgrade UI `components/news/SourcesManagerSheet.tsx`)
 - **Phạm vi liên quan:** `private-news` / `knowledge-acquisition`, Next.js `/news` + `/api/news/*`, `news-ingest-worker/`

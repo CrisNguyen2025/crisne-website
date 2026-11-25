@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "generatedAt": "2026-11-22T12:19:46Z",
-  "headCommit": "2fdb93f92816afb3262dc7ef43f38410b1819f19",
+  "generatedAt": "2026-11-25T03:41:00Z",
+  "headCommit": "9ddfc67",
   "repository": "crisne-website",
   "architecture": {
     "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
@@ -491,6 +491,50 @@
       "triggersFlow": "FLOW_NEWS_ADD_TO_LESSON"
     },
     {
+      "id": "EP_API_ROADMAP_ITEM_RELATIONS_GET",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/items/[id]/relations",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Danh sách Lesson liên quan đối xứng (relates) của một Lesson, chỉ Owner thấy",
+      "handler": "app/api/v1/roadmaps/items/[id]/relations/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
+    },
+    {
+      "id": "EP_API_ROADMAP_ITEM_RELATIONS_POST",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/items/[id]/relations",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Tạo quan hệ đối xứng relates giữa hai Lesson (chuẩn hoá fromLessonId < toLessonId)",
+      "handler": "app/api/v1/roadmaps/items/[id]/relations/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
+    },
+    {
+      "id": "EP_API_ROADMAP_ITEM_RELATIONS_DELETE",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/items/[id]/relations",
+      "method": "DELETE",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Xoá quan hệ relates giữa hai Lesson",
+      "handler": "app/api/v1/roadmaps/items/[id]/relations/route.ts#DELETE",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
+    },
+    {
+      "id": "EP_API_ROADMAP_PROVENANCE_BY_LESSONS",
+      "type": "api_route",
+      "path": "/api/v1/roadmaps/provenance-by-lessons",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "API nội bộ/Owner trả nguồn ngoài gộp theo danh sách Lesson ID để Abot join sau retrieval",
+      "handler": "app/api/v1/roadmaps/provenance-by-lessons/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
+    },
+    {
       "id": "EP_API_ROADMAP_SECTIONS_PATCH",
       "type": "api_route",
       "path": "/api/v1/roadmaps/[slug]/sections",
@@ -673,9 +717,53 @@
       "method": "POST",
       "authRequirement": "owner_only",
       "domainId": "private-news",
-      "summary": "Thêm nguồn RSS/Atom mới (hỗ trợ tự dò feed từ HTML trang chủ) với kiểm tra DNS chống SSRF",
+      "summary": "Thêm nguồn RSS/Atom/JSON mới (hỗ trợ platform URL mapping và tự dò feed từ HTML) với kiểm tra DNS chống SSRF",
       "handler": "app/api/news/sources/route.ts#POST",
       "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCES_PREVIEW",
+      "type": "api_route",
+      "path": "/api/news/sources/preview",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Dry-run kiểm tra trước nguồn RSS/Atom/JSON Feed, trả danh sách candidates, bài mẫu và cảnh báo domain ngoài whitelist",
+      "handler": "app/api/news/sources/preview/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_SOURCE_SCANS",
+      "type": "api_route",
+      "path": "/api/news/sources/[id]/scans",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Lấy lịch sử các lần quét gần nhất của một nguồn RSS/Atom/JSON (NewsSourceScan)",
+      "handler": "app/api/news/sources/[id]/scans/route.ts#GET",
+      "triggersFlow": "FLOW_NEWS_RSS_CRON_SYNC"
+    },
+    {
+      "id": "EP_API_NEWS_MATCH_LESSONS",
+      "type": "api_route",
+      "path": "/api/news/[id]/match-lessons",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Gọi Abot Linking Advisor đối chiếu NewsItem với kho Lesson để gợi ý Topic/Section, cảnh báo trùng và đề xuất relates",
+      "handler": "app/api/news/[id]/match-lessons/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
+    },
+    {
+      "id": "EP_RAG_INTERNAL_MATCH_LESSONS",
+      "type": "fastapi_route",
+      "path": "/internal/match-lessons",
+      "method": "POST",
+      "authRequirement": "internal_key",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Endpoint nội bộ của Abot dùng Hybrid RAG tìm Lesson gần với NewsItem, chỉ Next.js server gọi",
+      "handler": "roadmap-rag-assistant/rag_service/api/routes.py#match_lessons_internal",
+      "triggersFlow": "FLOW_ABOT_LINKING_AND_PROVENANCE"
     },
     {
       "id": "EP_API_NEWS_SOURCES_PATCH",
@@ -1233,7 +1321,7 @@
     },
     {
       "id": "FLOW_EVALS_RUN_PROBE",
-      "name": "Chạy bộ kiểm thử tự động RAG & Router (Eval Probes)",
+      "name": "Chạy bộ kiểm thử tự động RAG (Eval Probes)",
       "domainId": "roadmap-assistant-abot",
       "actor": "System / Developer",
       "trigger": "Chạy lệnh kiểm thử độ chính xác định tuyến và tìm kiếm RAG: `yarn eval:rag`",
@@ -1261,11 +1349,61 @@
           "dataPassed": "Benchmark report"
         }
       ],
-      "invariants": [
-        "Mọi thay đổi trong router/policy.py phải giữ vững baseline của held-out test sets"
-      ],
+      "invariants": [],
       "failureModes": [
         "Độ lệch điểm precision thấp hơn ngưỡng ratchet cho phép (báo test failed)"
+      ],
+      "relatedAdrs": [
+        "ADR-0003"
+      ]
+    },
+    {
+      "id": "FLOW_EVALS_ROUTER_STRESS",
+      "name": "Kiểm thử ratchet stress router & nhiễu đầu vào (Router Stress Baseline)",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "System / Developer",
+      "trigger": "Chạy `pytest tests/test_write_invariants.py -k stress`, hoặc `python -m evals.router.confuse`, trong `roadmap-rag-assistant/`",
+      "preconditions": [
+        "Có venv Python trong `roadmap-rag-assistant/.venv`",
+        "Có bộ dữ liệu `roadmap-rag-assistant/evals/router/stress_confuse.jsonl`"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Observability",
+          "component": "roadmap-rag-assistant/evals/router/confuse.py",
+          "functionOrMethod": "run",
+          "action": "Đọc `stress_confuse.jsonl`, sinh biến thể nhiễu (`no-diacritics`, `greeting`, `emoji`, `typo`, `upper`)",
+          "callsNext": "roadmap-rag-assistant/evals/router/holdout.py#write_outcome",
+          "dataPassed": "Perturbed router stress prompts"
+        },
+        {
+          "order": 2,
+          "layer": "Domain_Logic",
+          "component": "roadmap-rag-assistant/evals/router/holdout.py",
+          "functionOrMethod": "write_outcome",
+          "action": "Router heuristic (`_router(use_llm=False)`) quyết định write `now`/`preview`/`none` và nhánh xử lý",
+          "callsNext": "roadmap-rag-assistant/tests/test_write_invariants.py#test_stress_set_offline_never_writes_at_once_and_does_not_regress",
+          "dataPassed": "(write_mode, branch_reason)"
+        },
+        {
+          "order": 3,
+          "layer": "Observability",
+          "component": "roadmap-rag-assistant/tests/test_write_invariants.py",
+          "functionOrMethod": "test_stress_set_offline_never_writes_at_once_and_does_not_regress",
+          "action": "So tổng lỗi (`total`) với `evals/router/confuse_baseline.json` để khoá ratchet",
+          "callsNext": null,
+          "dataPassed": "Stress summary metrics"
+        }
+      ],
+      "invariants": [
+        "Mọi thay đổi trong router/policy.py phải giữ vững baseline của held-out test sets",
+        "write_now_violation luôn bằng 0",
+        "missed_write và wrong_branch không vượt baseline",
+        "Baseline chỉ được hạ (ratchet), không nâng để test pass"
+      ],
+      "failureModes": [
+        "Số đo vượt baseline nghĩa là router regress, phải sửa router, không sửa baseline"
       ],
       "relatedAdrs": [
         "ADR-0003"
@@ -1694,6 +1832,71 @@
         "ADR-0012",
         "ADR-0015"
       ]
+    },
+    {
+      "id": "FLOW_ABOT_LINKING_AND_PROVENANCE",
+      "name": "Gợi ý liên kết Lesson (relates) và Abot truy ngược Provenance nguồn ngoài (Phase 3)",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner bấm 'Gợi ý từ Abot' trong AddToLessonSheet hoặc hỏi Abot về bài học có Provenance",
+      "preconditions": [
+        "Actor là Owner (requireWriteAccess / is_owner())",
+        "Service Abot và RAG_INTERNAL_KEY / ADMIN_API_KEY đã cấu hình"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/news/AddToLessonSheet.tsx",
+          "action": "Owner bấm 'Gợi ý từ Abot' để đối chiếu NewsItem với kho Lesson trước khi lưu",
+          "callsNext": "logic/news/newsService.ts#matchNewsItemLessons",
+          "dataPassed": "newsItemId"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/news/[id]/match-lessons/route.ts",
+          "functionOrMethod": "POST",
+          "action": "Kiểm quyền Owner, nạp NewsItem rồi gọi nội bộ POST /internal/match-lessons kèm x-internal-key",
+          "callsNext": "roadmap-rag-assistant/rag_service/api/routes.py#match_lessons_internal",
+          "dataPassed": "{ title, tldr, takeaways, tags }"
+        },
+        {
+          "order": 3,
+          "layer": "AI_Service",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py",
+          "functionOrMethod": "match_news_to_lessons",
+          "action": "Tìm Lesson gần nghĩa qua Hybrid RAG, phát hiện trùng tiêu đề và tín hiệu version mới, gợi ý Topic/Section và relates",
+          "callsNext": "app/api/news/[id]/integrate/route.ts#POST",
+          "dataPassed": "MatchLessonsResponse"
+        },
+        {
+          "order": 4,
+          "layer": "AI_Service",
+          "component": "roadmap-rag-assistant/rag_service/core/provenance.py",
+          "functionOrMethod": "LessonProvenanceStore",
+          "action": "Khi Owner chat với Abot, sau bước retrieval mới gọi GET /api/v1/roadmaps/provenance-by-lessons để ghép chuỗi Lesson -> External Source",
+          "callsNext": "app/api/v1/roadmaps/provenance-by-lessons/route.ts#GET",
+          "dataPassed": "{ lessonIds }"
+        }
+      ],
+      "invariants": [
+        "KnowledgeProvenance và KnowledgeRelation không bao giờ nạp vào KnowledgeDocument hay index dùng chung (ADR-0006, ADR-0017)",
+        "Visitor không bao giờ kích hoạt fetch provenance, không nhận external_sources trong prompt hay metadata",
+        "Quan hệ relates lưu đối xứng theo thứ tự chuẩn fromLessonId < toLessonId"
+      ],
+      "failureModes": [
+        "Service Abot offline khi gọi match-lessons: trả 502 rõ ràng, Owner vẫn chọn Topic/Lesson thủ công bình thường",
+        "API provenance lỗi khi chat: Abot tiếp tục trả lời từ nội dung Lesson mà không làm gãy câu trả lời"
+      ],
+      "relatedAdrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0006",
+        "ADR-0015",
+        "ADR-0016",
+        "ADR-0017"
+      ]
     }
   ],
   "dataModels": [
@@ -1744,7 +1947,9 @@
       ],
       "relations": [
         "roadmap -> Roadmap",
-        "provenances -> KnowledgeProvenance[]"
+        "provenances -> KnowledgeProvenance[]",
+        "relationsFrom -> KnowledgeRelation[]",
+        "relationsTo -> KnowledgeRelation[]"
       ],
       "invariants": [
         "slug là @unique toàn cục trên toàn bộ bảng RoadmapItem (ADR-0013, giữ nguyên ở ADR-0014)",
@@ -1904,6 +2109,28 @@
         "claimRefKey là UUID ngẫu nhiên, duy nhất toàn cục, khớp data-provenance-ref trong RoadmapItem.content",
         "Chỉ Owner đọc (ADR-0017); không vào getLessonPageData, full-export hay index Abot",
         "relationType MVP chỉ 'derived_from'; excerpt tối đa 1.000 ký tự"
+      ]
+    },
+    {
+      "id": "MODEL_KNOWLEDGE_RELATION",
+      "name": "KnowledgeRelation",
+      "source": "prisma",
+      "table": "KnowledgeRelation",
+      "domainId": "roadmap-learning",
+      "fields": [
+        "id",
+        "fromLessonId",
+        "toLessonId",
+        "relationType",
+        "createdAt"
+      ],
+      "relations": [
+        "fromLesson -> RoadmapItem (onDelete Cascade)",
+        "toLesson -> RoadmapItem (onDelete Cascade)"
+      ],
+      "invariants": [
+        "Quan hệ đối xứng relates luôn lưu theo thứ tự chuẩn fromLessonId < toLessonId",
+        "Chỉ Owner đọc và ghi; nạp phía client qua useLessonRelations, không vào SSR hay full-export"
       ]
     },
     {

@@ -1,5 +1,6 @@
 /**
- * Migrate Turso / local SQLite for NewsSource HTTP caching headers (etag, lastModified):
+ * Migrate Turso / local SQLite for NewsSource HTTP caching headers (etag, lastModified)
+ * the per-source cron schedule (fetchIntervalDays, fetchHour) and the scan history table (NewsSourceScan):
  *
  *   yarn db:news-source-cache            # dry-run on Turso if configured
  *   yarn db:news-source-cache --local    # dry-run on prisma/dev.db
@@ -18,6 +19,31 @@ const local = process.argv.includes("--local");
 const NEWS_SOURCE_COLUMNS: { name: string; sql: string }[] = [
   { name: "etag", sql: `ALTER TABLE "NewsSource" ADD COLUMN "etag" TEXT` },
   { name: "lastModified", sql: `ALTER TABLE "NewsSource" ADD COLUMN "lastModified" TEXT` },
+  {
+    name: "fetchIntervalDays",
+    sql: `ALTER TABLE "NewsSource" ADD COLUMN "fetchIntervalDays" INTEGER NOT NULL DEFAULT 1`,
+  },
+  {
+    name: "fetchHour",
+    sql: `ALTER TABLE "NewsSource" ADD COLUMN "fetchHour" INTEGER NOT NULL DEFAULT 7`,
+  },
+];
+
+// Same DDL as prisma/init-turso.sql; every statement is idempotent
+const NEWS_SOURCE_SCAN_SQL = [
+  `CREATE TABLE IF NOT EXISTS "NewsSourceScan" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "sourceId" TEXT NOT NULL,
+    "trigger" TEXT NOT NULL,
+    "queued" INTEGER NOT NULL DEFAULT 0,
+    "duplicates" INTEGER NOT NULL DEFAULT 0,
+    "skippedErrors" INTEGER NOT NULL DEFAULT 0,
+    "notModified" BOOLEAN NOT NULL DEFAULT false,
+    "error" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "NewsSourceScan_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "NewsSource" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS "NewsSourceScan_sourceId_createdAt_idx" ON "NewsSourceScan"("sourceId", "createdAt")`,
 ];
 
 function connect(): { client: Client; target: string } {
@@ -48,8 +74,10 @@ async function main() {
   for (const col of NEWS_SOURCE_COLUMNS) {
     console.log(`  NewsSource.${col.name}: ${existingCols.has(col.name) ? "already there" : "will be added"}`);
   }
+  const needsScanTable = !tables.has("NewsSourceScan");
+  console.log(`  NewsSourceScan: ${needsScanTable ? "will be created" : "already there"}`);
 
-  if (!missingCols.length) {
+  if (!missingCols.length && !needsScanTable) {
     console.log("\nSchema already up to date.");
     return;
   }
@@ -58,11 +86,12 @@ async function main() {
     return;
   }
 
-  await client.batch(
-    missingCols.map((c) => c.sql),
-    "write"
-  );
-  console.log(`applied ${missingCols.length} DDL statement(s).`);
+  const statements = [
+    ...missingCols.map((c) => c.sql),
+    ...(needsScanTable ? NEWS_SOURCE_SCAN_SQL : []),
+  ];
+  await client.batch(statements, "write");
+  console.log(`applied ${statements.length} DDL statement(s).`);
 }
 
 main().catch((err) => {

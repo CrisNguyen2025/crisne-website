@@ -1,4 +1,4 @@
-import type { NewsItem, NewsSource } from "@prisma/client";
+import type { NewsItem, NewsSource, NewsSourceScan } from "@prisma/client";
 import { z } from "zod";
 
 export const NewsOriginSchema = z.enum(["cron", "share", "manual"]);
@@ -93,14 +93,28 @@ export const IngestRequestSchema = z.object({
 });
 export type IngestRequest = z.infer<typeof IngestRequestSchema>;
 
+/** Days between automatic cron pulls of one source. */
+export const NEWS_SOURCE_FETCH_INTERVAL_DAYS = [1, 3, 7] as const;
+export const FetchIntervalDaysSchema = z.union([z.literal(1), z.literal(3), z.literal(7)]);
+
+/** Hour of day (Vietnam time, 0-23) at which the hourly cron pulls a due source. */
+export const NEWS_SOURCE_DEFAULT_FETCH_HOUR = 7;
+export const FetchHourSchema = z.number().int().min(0).max(23);
+
 export const CreateNewsSourceSchema = z.object({
   name: z.string().trim().min(1).max(120),
   feedUrl: HttpUrlSchema,
   domain: z.string().trim().min(1).max(120).optional(),
   enabled: z.boolean().optional().default(true),
-  defaultTags: z.array(z.string().trim().min(1).max(32)).max(5).optional().default([]),
+  fetchIntervalDays: FetchIntervalDaysSchema.optional(),
+  fetchHour: FetchHourSchema.optional(),
 });
 export type CreateNewsSourceRequest = z.infer<typeof CreateNewsSourceSchema>;
+
+export const PreviewNewsSourceSchema = z.object({
+  feedUrl: HttpUrlSchema,
+});
+export type PreviewNewsSourceRequest = z.infer<typeof PreviewNewsSourceSchema>;
 
 export const UpdateNewsSourceSchema = z
   .object({
@@ -108,7 +122,8 @@ export const UpdateNewsSourceSchema = z
     feedUrl: HttpUrlSchema.optional(),
     domain: z.string().trim().min(1).max(120).optional(),
     enabled: z.boolean().optional(),
-    defaultTags: z.array(z.string().trim().min(1).max(32)).max(5).optional(),
+    fetchIntervalDays: FetchIntervalDaysSchema.optional(),
+    fetchHour: FetchHourSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided",
@@ -258,11 +273,42 @@ export interface NewsSourceDto {
   feedUrl: string;
   domain: string;
   enabled: boolean;
-  defaultTags: string[];
+  fetchIntervalDays: number;
+  fetchHour: number;
+  /** NewsItems collected from this source (all origins that kept the sourceId). */
+  itemCount: number;
   lastFetchedAt: string | null;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NewsSourcePreviewCandidateDto {
+  url: string;
+  title?: string;
+  format?: "rss" | "atom" | "json";
+}
+
+export interface NewsSourcePreviewSampleItemDto {
+  title?: string;
+  url: string;
+  publishedAt?: string;
+}
+
+export interface NewsSourcePreviewDto {
+  resolvedFeedUrl: string;
+  siteHost: string;
+  feedTitle?: string;
+  format: "rss" | "atom" | "json";
+  candidates: NewsSourcePreviewCandidateDto[];
+  itemCount: number;
+  sampleItems: NewsSourcePreviewSampleItemDto[];
+  warnings: string[];
+}
+
+export interface CronSkippedReasonDto {
+  url: string;
+  code: string;
 }
 
 export interface CronSyncSourceResult {
@@ -271,8 +317,38 @@ export interface CronSyncSourceResult {
   queued: number;
   duplicates: number;
   skippedErrors: number;
+  skippedReasons?: CronSkippedReasonDto[];
   notModified?: boolean;
   error: string | null;
+}
+
+/** What started a scan: the hourly Vercel Cron, "Quét ngay" on one source, or "Quét tất cả ngay". */
+export const NewsSourceScanTriggerSchema = z.enum(["cron", "manual", "manual_all"]);
+export type NewsSourceScanTrigger = z.infer<typeof NewsSourceScanTriggerSchema>;
+
+export interface NewsSourceScanDto {
+  id: string;
+  trigger: NewsSourceScanTrigger;
+  queued: number;
+  duplicates: number;
+  skippedErrors: number;
+  notModified: boolean;
+  error: string | null;
+  createdAt: string;
+}
+
+export function serializeNewsSourceScan(row: NewsSourceScan): NewsSourceScanDto {
+  const trigger = NewsSourceScanTriggerSchema.safeParse(row.trigger);
+  return {
+    id: row.id,
+    trigger: trigger.success ? trigger.data : "manual",
+    queued: row.queued,
+    duplicates: row.duplicates,
+    skippedErrors: row.skippedErrors,
+    notModified: row.notModified,
+    error: row.error,
+    createdAt: row.createdAt.toISOString(),
+  };
 }
 
 export interface CronSyncSummary {
@@ -336,14 +412,18 @@ export function serializeNewsItem(row: NewsItem): NewsItemDto {
   };
 }
 
-export function serializeNewsSource(row: NewsSource): NewsSourceDto {
+export function serializeNewsSource(
+  row: NewsSource & { _count?: { items: number } }
+): NewsSourceDto {
   return {
     id: row.id,
     name: row.name,
     feedUrl: row.feedUrl,
     domain: row.domain,
     enabled: row.enabled,
-    defaultTags: parseJsonStringArray(row.defaultTags),
+    fetchIntervalDays: row.fetchIntervalDays,
+    fetchHour: row.fetchHour,
+    itemCount: row._count?.items ?? 0,
     lastFetchedAt: row.lastFetchedAt ? row.lastFetchedAt.toISOString() : null,
     lastError: row.lastError,
     createdAt: row.createdAt.toISOString(),

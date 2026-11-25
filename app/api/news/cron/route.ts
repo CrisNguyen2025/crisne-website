@@ -6,6 +6,7 @@ import { syncNewsSourcesCron } from "@/lib/news/rss-fetcher";
 import { CronSyncRequestSchema } from "@/lib/news/schemas";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function hasValidCronSecret(req: Request): boolean {
   const expected = process.env.CRON_SECRET?.trim();
@@ -55,7 +56,11 @@ async function authorizeCronRequest(req: NextRequest): Promise<Response | null> 
   return requireWriteAccess(req);
 }
 
-async function handleCronSync(rawPayload: unknown, method: "GET" | "POST") {
+async function handleCronSync(
+  rawPayload: unknown,
+  method: "GET" | "POST",
+  isScheduled: boolean
+) {
   const parsed = CronSyncRequestSchema.safeParse(rawPayload);
   if (!parsed.success) {
     return NextResponse.json(
@@ -68,6 +73,8 @@ async function handleCronSync(rawPayload: unknown, method: "GET" | "POST") {
     const summary = await syncNewsSourcesCron({
       sourceId: parsed.data.sourceId,
       maxItemsPerSource: parsed.data.maxItemsPerSource,
+      // The hourly Vercel Cron honours each source's fetchHour and fetchIntervalDays; "Quét tất cả ngay" from the UI pulls everything
+      onlyDue: isScheduled,
     });
     return NextResponse.json(summary, {
       headers: { "Cache-Control": "no-store, max-age=0" },
@@ -89,7 +96,7 @@ export async function GET(req: NextRequest) {
     ...(rawMax !== null && rawMax !== "" ? { maxItemsPerSource: Number(rawMax) } : {}),
   };
 
-  return handleCronSync(rawPayload, "GET");
+  return handleCronSync(rawPayload, "GET", hasValidCronSecret(req));
 }
 
 export async function POST(req: NextRequest) {
@@ -106,5 +113,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  return handleCronSync(rawBody, "POST");
+  return handleCronSync(rawBody, "POST", hasValidCronSecret(req));
 }

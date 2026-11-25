@@ -4,7 +4,7 @@ branch: "feat/roadmap-theme-clean"
 version: "3.0.0"
 type: "implement"
 priority: "P2"
-status: "READY"
+status: "ABORTED"
 assigned_executor: "antigravity"
 max_attempts: 3
 current_attempt: 0
@@ -57,7 +57,7 @@ verification_gate:
 
 # TASK: Theme clean, trực quan cho riêng các trang roadmap
 
-> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): READY. Chưa bắt đầu.
+> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): ABORTED (Superseded). Spec viết cho giao diện cũ `RoadmapWorkspace.tsx` và URL `/topic/[topicSlug]`, đã được thay thế hoàn toàn bởi Editorial refactor (`dd33543`) và URL theo Topic ADR-0014 (`8543da4`). `RoadmapWorkspace.tsx` hiện không còn được render ở bất kỳ trang nào.
 
 ## 1. Context & Architectural Intent
 

@@ -111,6 +111,8 @@ CREATE TABLE IF NOT EXISTS "NewsSource" (
     "feedUrl" TEXT NOT NULL,
     "domain" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "fetchIntervalDays" INTEGER NOT NULL DEFAULT 1,
+    "fetchHour" INTEGER NOT NULL DEFAULT 7,
     "defaultTags" TEXT NOT NULL DEFAULT '[]',
     "etag" TEXT,
     "lastModified" TEXT,
@@ -119,6 +121,23 @@ CREATE TABLE IF NOT EXISTS "NewsSource" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "NewsSourceScan" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "sourceId" TEXT NOT NULL,
+    "trigger" TEXT NOT NULL,
+    "queued" INTEGER NOT NULL DEFAULT 0,
+    "duplicates" INTEGER NOT NULL DEFAULT 0,
+    "skippedErrors" INTEGER NOT NULL DEFAULT 0,
+    "notModified" BOOLEAN NOT NULL DEFAULT false,
+    "error" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "NewsSourceScan_sourceId_fkey" FOREIGN KEY ("sourceId") REFERENCES "NewsSource" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "NewsSourceScan_sourceId_createdAt_idx" ON "NewsSourceScan"("sourceId", "createdAt");
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "NewsItem" (
@@ -172,6 +191,17 @@ CREATE TABLE IF NOT EXISTS "KnowledgeProvenance" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "KnowledgeProvenance_lessonId_fkey" FOREIGN KEY ("lessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "KnowledgeProvenance_newsItemId_fkey" FOREIGN KEY ("newsItemId") REFERENCES "NewsItem" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "KnowledgeRelation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "fromLessonId" TEXT NOT NULL,
+    "toLessonId" TEXT NOT NULL,
+    "relationType" TEXT NOT NULL DEFAULT 'relates',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KnowledgeRelation_fromLessonId_fkey" FOREIGN KEY ("fromLessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "KnowledgeRelation_toLessonId_fkey" FOREIGN KEY ("toLessonId") REFERENCES "RoadmapItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -241,3 +271,12 @@ CREATE INDEX IF NOT EXISTS "KnowledgeProvenance_lessonId_idx" ON "KnowledgeProve
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "KnowledgeProvenance_newsItemId_idx" ON "KnowledgeProvenance"("newsItemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "KnowledgeRelation_fromLessonId_toLessonId_relationType_key" ON "KnowledgeRelation"("fromLessonId", "toLessonId", "relationType");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeRelation_fromLessonId_idx" ON "KnowledgeRelation"("fromLessonId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "KnowledgeRelation_toLessonId_idx" ON "KnowledgeRelation"("toLessonId");

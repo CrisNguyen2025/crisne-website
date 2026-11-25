@@ -5,7 +5,7 @@ import {
   type CreateNewsSourceRequest,
   type NewsSourceDto,
   type UpdateNewsSourceRequest,
-  normalizeTagList,
+  NEWS_SOURCE_DEFAULT_FETCH_HOUR,
   serializeNewsSource,
 } from "./schemas";
 import { type HostLookupFn, UrlGuardError, assertPublicHostname } from "./url-guard";
@@ -55,9 +55,12 @@ export function extractSourceDomain(feedUrl: string, overrideDomain?: string): s
   return parsed.hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
 }
 
+const WITH_ITEM_COUNT = { _count: { select: { items: true } } } as const;
+
 export async function listNewsSources(): Promise<NewsSourceDto[]> {
   const rows = await prisma.newsSource.findMany({
     orderBy: { createdAt: "asc" },
+    include: WITH_ITEM_COUNT,
   });
   return rows.map(serializeNewsSource);
 }
@@ -95,8 +98,6 @@ export async function createNewsSource(
       : extractSourceDomain(feedUrl);
   await assertPublicHostname(domain, options.lookupFn);
 
-  const defaultTags = normalizeTagList(input.defaultTags ?? [], 5);
-
   try {
     const created = await prisma.newsSource.create({
       data: {
@@ -104,7 +105,11 @@ export async function createNewsSource(
         feedUrl,
         domain,
         enabled: input.enabled ?? true,
-        defaultTags: JSON.stringify(defaultTags),
+        ...(input.fetchIntervalDays !== undefined
+          ? { fetchIntervalDays: input.fetchIntervalDays }
+          : {}),
+        // Set explicitly: databases migrated earlier still carry the old column default (11)
+        fetchHour: input.fetchHour ?? NEWS_SOURCE_DEFAULT_FETCH_HOUR,
       },
     });
     return serializeNewsSource(created);
@@ -155,15 +160,17 @@ export async function updateNewsSource(
     ...(feedUrlChanged ? { etag: null, lastModified: null, lastError: null } : {}),
     ...(input.domain !== undefined || input.feedUrl !== undefined ? { domain: nextDomain } : {}),
     ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-    ...(input.defaultTags !== undefined
-      ? { defaultTags: JSON.stringify(normalizeTagList(input.defaultTags, 5)) }
+    ...(input.fetchIntervalDays !== undefined
+      ? { fetchIntervalDays: input.fetchIntervalDays }
       : {}),
+    ...(input.fetchHour !== undefined ? { fetchHour: input.fetchHour } : {}),
   };
 
   try {
     const updated = await prisma.newsSource.update({
       where: { id },
       data,
+      include: WITH_ITEM_COUNT,
     });
     return serializeNewsSource(updated);
   } catch (error) {

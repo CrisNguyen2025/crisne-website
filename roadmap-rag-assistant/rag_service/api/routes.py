@@ -16,6 +16,8 @@ from rag_service.api.schemas import (
     ChatResponse,
     ContextRequest,
     HealthResponse,
+    MatchLessonsRequest,
+    MatchLessonsResponse,
     PlanRequest,
     PlanResponse,
     ToolCallResult,
@@ -363,6 +365,20 @@ async def invalidate_memory_cache() -> dict:
 
     owner_memory_store.invalidate()
     return {"status": "invalidated"}
+
+
+@router.post("/internal/match-lessons", response_model=MatchLessonsResponse)
+async def match_lessons_internal(req: MatchLessonsRequest) -> MatchLessonsResponse:
+    from rag_service.domains.roadmap.linking_advisor import match_news_to_lessons
+
+    result = await match_news_to_lessons(
+        title=req.title,
+        tldr=req.tldr,
+        takeaways=req.takeaways,
+        tags=req.tags,
+        limit=req.limit,
+    )
+    return MatchLessonsResponse(**result)
 
 
 @router.post("/chat/confirm", response_model=ActionConfirmResponse, response_model_exclude_none=True)

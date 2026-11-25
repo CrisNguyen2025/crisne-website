@@ -1,3 +1,4 @@
+import "../setup/isolated-test-db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 

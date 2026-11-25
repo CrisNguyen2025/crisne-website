@@ -2,31 +2,25 @@
 
 Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, không chép nội dung vào đây. Việc nào xong thì xoá dòng đó; nơi chứa chi tiết cũ thì ghi rõ trong dòng.
 
-## Abot
+## Abot & Knowledge Acquisition
 
-- Lesson Status Step 6: Abot đọc trạng thái bài (chỉ Owner) và đổi trạng thái qua chat có Preview. Chi tiết: `.handoff/specs/TASK-lesson-status-001.md` Step 6; kịch bản test: `tests/manual/lesson-status.md`.
-- Sửa bài qua chat ("chuyển bài X sang mục Y", "đổi tên bài X thành Y"): `docs/abot-next-actions-plan.md` mục 6.
-- Siết ratchet router và thêm flow eval router vào map: `.handoff/specs/TASK-router-stress-001.md` (READY).
-- Abot đọc được toàn bộ Lesson (chia đoạn theo heading, link `#anchor`), TTL chỉ sync khi version đổi, cache embedding bền, `full-export` kiểm quyền: `.handoff/specs/TASK-abot-lesson-chunks-001.md` (đã lên `main` @ `0b8626f` và push; E2E case 6–8 pass. Còn: `deploy_steps` trong spec, kiểm case 9 trên production).
+- Knowledge Acquisition Phase 3 (`KnowledgeRelation` / `Related Lessons`, `POST /internal/match-lessons`, Abot truy ngược `Lesson → External Source` cho Owner): code đã triển khai (2026-11-25). Còn bước Owner review dry-run rồi chạy `yarn db:knowledge-relations --apply` lên Turso: `.handoff/PLAN-knowledge-acquisition.md`.
+- RSS/Atom nguồn ngoài (`/news`): Tier 1 (platform URL mapping, JSON Feed, dry-run `/api/news/sources/preview`, phân loại lỗi, xoá N+1 cron) đã triển khai (2026-11-25). Còn Tier 2–3 (`allowExternalLinks` + DNS pinning, per-source `fetchIntervalMinutes` & runner dày hơn 1 lần/ngày): `.handoff/RESEARCH-external-rss-config.md` (PROPOSAL).
+- Abot đọc được toàn bộ Lesson (`TASK-abot-lesson-chunks-001`, đã lên `main` @ `0b8626f`): còn `deploy_steps` trên host production (`ADMIN_API_KEY`, persistent disk `EMBEDDING_CACHE_PATH`, thứ tự deploy Next.js trước Python) và kiểm case 9 trong `tests/manual/rag-index-sync.md`.
+- Knowledge Acquisition Phase 2 (đa `sourceType`, R2 private snapshot, tách job `ingest`/`process`): hoãn tới khi Phase 1 & Phase 3 được dùng ổn định: `.handoff/PLAN-knowledge-acquisition.md`.
 
-- Knowledge Acquisition: đưa News Item vào Lesson kèm Provenance (Phase 1), Abot nối Lesson và truy ngược nguồn (Phase 3). Phase 1 đã commit (`e83534e`) và đã chạy migration Turso (2026-11-23), còn test thủ công (`tests/manual/knowledge-provenance.md`); Phase 3 chưa bắt đầu: `.handoff/PLAN-knowledge-acquisition.md`.
-- RSS/Atom nguồn ngoài (`/news`): nâng cấp auto-discovery (platform URL pattern, JSON Feed), dry-run `/api/news/sources/preview`, phân loại lỗi, `allowExternalLinks` cho aggregator, per-source fetch cadence & runner ngoài Vercel Hobby — đề xuất chi tiết theo Tier 1–3: `.handoff/RESEARCH-external-rss-config.md` (PROPOSAL, chưa triển khai).
+## Hạ tầng, Nhánh chưa merge & Test thủ công
 
-## Hạ tầng và deploy
-
-- Bỏ Public News, chuyển hộp News riêng từ `/feed-ingestion` về `/news` (ADR-0019): code xong trên `feat/owner-only-news`, chờ Owner commit: `.handoff/specs/TASK-owner-only-news-001.md`.
-
-- `GET /api/v1/roadmaps/full-export` và `GET /api/v1/roadmaps` chưa tự kiểm quyền, mà middleware cho qua mọi request chỉ cần có header key: ADR-0018 mục Consequences (ADR-0019 giữ nguyên việc này), `.handoff/PLAN-knowledge-acquisition.md` quyết định 12. Gộp vào `TASK-abot-lesson-chunks-001` (Step 2, Step 10).
-
-- Langfuse legacy API sẽ bị gỡ ngày 2026-11-16, còn gọi ở `lib/ai/langfuse.ts:134` (`api.legacy.scoreV1.delete`): `docs/abot-next-actions-plan.md` mục 8. Lưu ý: code này dùng chung với luồng 👍/👎 của Cris AI, không được đổi behavior của luồng đó.
+- Worktree / nhánh chưa merge `feat/news-security-perf` (`aa6e367`, tách từ `e89aefc`): chờ Owner quyết định cherry-pick phần còn cần hay đóng worktree `.claude/worktrees/news-security-perf` và xoá nhánh.
+- Hai nhánh cũ chưa merge vào `main` (`feat/roadmap-assistant-routing-quality`, `origin/feat/rag-layer-picker`): chờ Owner xác nhận giữ tham khảo hay dọn bỏ.
+- Kịch bản manual test chưa chạy / cần re-run trên môi trường thật (`tests/manual/README.md`): `tests/manual/owner-memory.md` (M1–M9), `tests/manual/lesson-status.md`, và re-run N1–N10, N14 của `tests/manual/news-inbox.md` trên `/news`.
 
 ## Chờ Owner quyết định
 
-- Mobile Android thật, 👍/👎 ở portfolio, gợi ý cập nhật nội dung bài, Visitor có thấy Lesson Status không: `.handoff/specs/TASK-lesson-status-001.md` mục 6.
-- Các mục khác đang chờ quyết định: `docs/abot-next-actions-plan.md` mục "Việc đang chờ quyết định".
+- Mobile Android thật, 👍/👎 ở portfolio, Visitor có thấy Lesson Status không, và dọn các giả định cũ sau ADR-0019 (sitemap/robots/JSON-LD của Lesson): `.handoff/specs/TASK-lesson-status-001.md` mục 6, `docs/adr/0019-owner-only-site-no-public-news.md`.
+- Chia chương Topic (`TASK-topic-chapters-001`, `DRAFT`): chờ chốt câu hỏi mục 0 và viết ADR: `.handoff/specs/TASK-topic-chapters-001.md`.
+- Các mục đang chờ quyết định khác (câu 3 đổi techstack, câu 7 lịch sử chat qua deploy, bật lại `FEEDBACK_ENABLED`): `.handoff/PLAN-second-brain.md`, `docs/abot-next-actions-plan.md`.
 
 ## Nội dung
 
 - Lộ trình tổng (second brain + trợ lý cá nhân): `.handoff/PLAN-second-brain.md`.
-
-- Pilot topic Next.js, 7 lesson (PROPOSED): `.handoff/specs/PLAN-nextjs-topic-pilot.md`.

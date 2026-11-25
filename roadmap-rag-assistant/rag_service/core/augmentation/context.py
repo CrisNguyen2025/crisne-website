@@ -9,12 +9,14 @@ cited, and documents far below the best match are left out.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
+from rag_service.auth import is_owner
 from rag_service.core.augmentation.documents import ContextDocument
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.augmentation.history import HistoryStore, Turn, history_store
 from rag_service.core.memory.store import format_owner_memory
+from rag_service.core.provenance import format_lesson_provenance_lines
 
 Mode = Literal["rag", "chitchat"]
 
@@ -30,6 +32,7 @@ class GenerationRequest:
     # Owner-only persistent memories applicable to this turn (ADR-0015); always empty for Visitors.
     owner_memories: Sequence[Any] = field(default_factory=list)
     memory_scope: Optional[str] = None
+    lesson_provenances: Dict[str, Sequence[Any]] = field(default_factory=dict)
 
 
 def _escape(text: str) -> str:
@@ -57,7 +60,27 @@ def select_documents(req: GenerationRequest, profile: DomainProfile) -> List[Con
     best = max(d.score for d in docs)
     if best > 0:
         docs = [d for d in docs if d.score >= best * profile.min_relative_score]
-    return docs[: profile.max_documents]
+    selected = docs[: profile.max_documents]
+    if req.lesson_provenances and is_owner():
+        enriched: List[ContextDocument] = []
+        for d in selected:
+            prov_items = req.lesson_provenances.get(d.id)
+            if prov_items:
+                prov_lines = format_lesson_provenance_lines(prov_items)
+                if prov_lines:
+                    enriched.append(
+                        ContextDocument(
+                            id=d.id,
+                            title=d.title,
+                            body=d.body + "\n" + "\n".join(prov_lines),
+                            score=d.score,
+                            href=d.href,
+                        )
+                    )
+                    continue
+            enriched.append(d)
+        return enriched
+    return selected
 
 
 def reorder_documents(docs: Sequence[ContextDocument]) -> List[ContextDocument]:

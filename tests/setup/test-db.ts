@@ -17,14 +17,17 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.
  * Vitest global setup: brings prisma/test.db up to the current schema before any test runs,
  * so DB-backed tests never write to prisma/dev.db. (Yarn 4 does not run `pretest` scripts.)
  */
-export default async function setup(): Promise<void> {
+export default async function setup(): Promise<() => void> {
   const prismaDir = path.join(rootDir, "prisma");
-  // Remove stale test DB/WAL artifacts so `db push` writes a clean schema directly into test.db
-  for (const name of fs.readdirSync(prismaDir)) {
-    if (name === "test.db" || name.startsWith("test.db-") || name.startsWith("test.db.")) {
-      fs.rmSync(path.join(prismaDir, name), { force: true });
+  const cleanArtifacts = (keepMainTestDb = false) => {
+    for (const name of fs.readdirSync(prismaDir)) {
+      if (keepMainTestDb && name === "test.db") continue;
+      if (name === "test.db" || name.startsWith("test.db-") || name.startsWith("test.db.")) {
+        fs.rmSync(path.join(prismaDir, name), { force: true });
+      }
     }
-  }
+  };
+  cleanArtifacts(false);
 
   execFileSync(
     path.join(rootDir, "node_modules/.bin/prisma"),
@@ -46,4 +49,7 @@ export default async function setup(): Promise<void> {
   }
 
   fs.copyFileSync(dbPath, path.join(prismaDir, TEST_DB_TEMPLATE_FILE));
+  return () => {
+    cleanArtifacts(false);
+  };
 }

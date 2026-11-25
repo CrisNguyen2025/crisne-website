@@ -190,4 +190,4 @@ Cấu hình service tách riêng: Language **Docker** · Root Directory `news-in
 | `MAX_VIDEO_DURATION_SECONDS` | 🟡 | Mặc định `1200` (20 phút) |
 | `MAX_VISION_FRAMES` | 🟡 | Mặc định `6` |
 
-> Lưu ý nguồn Cron RSS: repo không cố định sẵn `vercel.json` hay workflow lịch để bạn tự chọn runner (Vercel Cron gọi `GET /api/news/cron`, hoặc GitHub Actions / cron ngoài gọi `POST /api/news/cron` kèm `Authorization: Bearer <CRON_SECRET>`). Nhớ chạy `yarn db:news-source-cache --apply` lên Turso nếu nâng cấp từ bảng `NewsSource` cũ.
+> Lưu ý nguồn Cron RSS: `vercel.json` đã cấu hình sẵn Vercel Cron chạy `GET /api/news/cron` hằng ngày lúc `04:00 UTC` (11:00 VN, khớp `lib/news/cron-schedule.ts`). Nếu cần quét dày hơn, có thể bổ sung GitHub Actions hoặc cron ngoài gọi `POST /api/news/cron` kèm `Authorization: Bearer <CRON_SECRET>`. Nhớ chạy `yarn db:news-source-cache --apply` lên Turso nếu nâng cấp từ bảng `NewsSource` cũ.

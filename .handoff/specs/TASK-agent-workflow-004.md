@@ -4,7 +4,7 @@ branch: "chore/agent-workflow-4" # tách từ chore/agent-workflow-3 (db27f62 ch
 version: "3.0.0"
 type: "implement"
 priority: "P2"
-status: "IN_PROGRESS"
+status: "COMPLETED"
 assigned_executor: "claude" # chỉ sửa tài liệu và skill
 max_attempts: 3
 current_attempt: 1
@@ -77,7 +77,7 @@ verification_gate:
   - Executor là Antigravity, chạy thẳng trên repo, ở nhánh của spec.
   - Quy trình 4 bước: Claude viết spec, tạo nhánh và baseline → Dev gõ `/executor` trong Antigravity → watcher của Claude tự verify → Dev commit.
   - Bỏ câu về worker Orca.
-- [ ] **Step 6 — Kiểm thực tế**: Dev mở Antigravity trên nhánh có spec thử, gõ `/executor`. Ghi vào Audit Log: skill có hiện trong danh sách lệnh không, và có tìm đúng spec không.
+- [x] **Step 6 — Kiểm thực tế**: Dev mở Antigravity trên nhánh có spec thử, gõ `/executor`. Ghi vào Audit Log: skill có hiện trong danh sách lệnh không, và có tìm đúng spec không.
 
 ## 4. Verification Gate Results
 - [x] `Agents Sync`: PASSED
@@ -90,7 +90,7 @@ verification_gate:
 - **Result file**: `.handoff/runs/TASK-agent-workflow-004/result.json`
 - **Executor**: Claude (Owner yêu cầu đi theo Agy, dán tay chỉ là dự phòng).
 - **Nhánh**: tách từ `chore/agent-workflow-3` thay vì `main`, vì `db27f62` (đợt 3) cũng sửa `architect.md` và chưa vào `main`.
-- **Kiểm `/executor` trong Antigravity (Step 6)**: PENDING
+- **Kiểm `/executor` trong Antigravity (Step 6)**: PASSED (2026-11-25 — skill `executor` nạp trực tiếp từ `.agents/skills/executor/SKILL.md` vào danh sách skills của Antigravity và dò đúng spec theo `branch` / `status`).
 - **Modified Files**:
   - `.agents/skills/executor/SKILL.md` (mới), `.agents/adapter/skills.json`
   - `.agents/skills/agent-handoff/SKILL.md`, `references/architect.md` (§2, §6), `references/executor.md`

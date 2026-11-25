@@ -92,4 +92,4 @@ Không thuộc boundary của task này. Hỏi Owner trước khi làm.
 3. **Gợi ý cập nhật nội dung bài (bước 4 của lộ trình second brain) còn hai câu hỏi mở:** bao lâu không cập nhật thì coi là cũ; có được tìm nguồn trên web để gợi ý không. Chưa làm gì, chưa có ADR.
 4. **"Visitor không thấy Lesson Status"** là mặc định agent tự chọn khi viết ADR-0010, Owner chưa xác nhận rõ. Nếu Owner muốn công khai thì cần ADR mới (không sửa ADR-0010).
 
-Còn tồn đọng khác, đã ghi ở chỗ riêng: lỗi 2 và lỗi 8 trong `tests/manual/assistant-sections.md`; mục 5–9 trong `docs/abot-next-actions-plan.md`; hai test fail có từ trước (router stress baseline: wrong_branch 107 > 103; `test_evals_answer_target` phụ thuộc `dev.db`).
+Còn tồn đọng khác, đã ghi ở chỗ riêng: lỗi 2 và lỗi 8 trong `tests/manual/assistant-sections.md`; mục 5–9 trong `docs/abot-next-actions-plan.md`; một test fail có từ trước (`test_evals_answer_target` phụ thuộc `dev.db`).

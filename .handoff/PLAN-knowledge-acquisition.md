@@ -1,6 +1,6 @@
 # PLAN: Automated Knowledge Acquisition, Statement Provenance & PKM Integration
 
-- **Trạng thái:** `DECIDED (rev 3)`. Owner chốt 14 quyết định ngày 2026-11-23 (Mục 7). Phase 0 xong cùng ngày (ADR-0016/0017/0018, Glossary, `AGENTS.md`, `PLAN-second-brain`, BACKLOG). Phase 1 xong 2026-11-23 trên nhánh `feat/knowledge-provenance` (3 spec `COMPLETED`, Claude làm), chưa commit; còn migration Turso (`yarn db:knowledge-provenance --apply`) và chạy hết kịch bản `tests/manual/knowledge-provenance.md`.
+- **Trạng thái:** `IMPLEMENTED (Phase 1 & Phase 3)`. Owner chốt 14 quyết định ngày 2026-11-23 (Mục 7). Phase 0 và Phase 1 đã lên `main` (`e83534e`, đã chạy migration Turso `KnowledgeProvenance`, kịch bản `tests/manual/knowledge-provenance.md` P1–P10 Pass). Phase 3 (`match-lessons`, `KnowledgeRelation` / `Related Lessons`, cập nhật nội dung append bảo toàn marker, Abot chat truy ngược `Lesson → External Source` cho Owner) đã triển khai ngày 2026-11-25; còn chạy `yarn db:knowledge-relations --apply` trên Turso sau khi review dry-run. Phase 2 giữ hoãn theo quyết định 2.
 - **Ngày lập:** 2026-11-23 · **Rev 2:** 2026-11-23, theo báo cáo verify (Mục 9) · **Rev 3:** 2026-11-23, ghi quyết định của Owner
 - **Mốc codebase đối chiếu:** `main` @ `ce7564a` (`feat(news): move inbox to /feed-ingestion and serve public news at /news/[slug]`)
 - **Phạm vi liên quan:** `private-news` (tiến hóa thành `knowledge-acquisition`), `roadmap-learning`, `roadmap-assistant-abot`, `storage-media`, `auth-security`
