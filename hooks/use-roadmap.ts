@@ -142,10 +142,18 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     };
   }, [slug, loadRoadmap]);
 
-  // Re-fetch the open topic when the assistant creates/updates/deletes data
+  // Re-fetch the open topic (and evict other cached topics) when data changes
   useEffect(() => {
-    if (!slug) return;
-    const handleUpdate = () => loadRoadmap(slug, true);
+    const handleUpdate = () => {
+      for (const cachedSlug of [...topicCache.keys()]) {
+        if (cachedSlug !== slug) {
+          topicCache.delete(cachedSlug);
+        }
+      }
+      if (slug) {
+        loadRoadmap(slug, true);
+      }
+    };
     window.addEventListener('roadmap:updated', handleUpdate);
     return () => window.removeEventListener('roadmap:updated', handleUpdate);
   }, [slug, loadRoadmap]);

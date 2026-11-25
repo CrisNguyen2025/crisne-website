@@ -20,7 +20,7 @@ export const roadmapChatClient = new RoadmapChatClient({
 
 export type { ChatResponse, ToolCallResult };
 
-const ROADMAP_WRITE_TOOL_RE = /^(create|update|delete|generate|reorder|rename)_|^import_items_from_text$/;
+const ROADMAP_WRITE_TOOL_RE = /^(create|update|delete|generate|reorder|rename)_|^(import_items_from_text|mark_lesson_reviewed)$/;
 
 export function isRoadmapWriteTool(toolName: string): boolean {
   return ROADMAP_WRITE_TOOL_RE.test(toolName);

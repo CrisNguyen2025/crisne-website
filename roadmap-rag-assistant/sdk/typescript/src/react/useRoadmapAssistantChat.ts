@@ -60,7 +60,7 @@ export interface UseRoadmapAssistantChatOptions {
   threadId?: string;
   conversationId?: string;
   initialMessages?: ChatMessage[];
-  onToolExecuted?: (toolName: string, result: string) => void;
+  onToolExecuted?: (toolName: string, result: string, isFailed?: boolean) => void;
   /** Returns the page the user is viewing; read at send time. */
   getContext?: () => PageContext | undefined;
   /** Handles "/webmcp <request>" messages; returns the text to show. */
@@ -446,7 +446,7 @@ export function useRoadmapAssistantChat(
                   return { ...msg, toolCalls: updated };
                 })
               );
-              onToolExecutedRef.current?.(name, result);
+              onToolExecutedRef.current?.(name, result, isFailed);
             },
 
             onStep: (stepEvt) => {

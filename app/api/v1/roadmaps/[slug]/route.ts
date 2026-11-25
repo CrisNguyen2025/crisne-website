@@ -89,7 +89,34 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
-    await prisma.roadmap.delete({ where: { id: roadmap.id } });
+    type DeleteTopicTx = Pick<typeof prisma, 'roadmap' | 'roadmapItem' | 'slugRedirect'>;
+    const applyDelete = async (tx: DeleteTopicTx) => {
+      const childItems =
+        (await tx.roadmapItem?.findMany?.({
+          where: { roadmapId: roadmap.id },
+          select: { id: true },
+        })) ?? [];
+      const lessonIds = childItems.map((it) => it.id);
+
+      await tx.roadmap.delete({ where: { id: roadmap.id } });
+
+      const redirectWhere =
+        lessonIds.length > 0
+          ? {
+              OR: [
+                { entity: 'topic', targetId: roadmap.id },
+                { entity: 'lesson', targetId: { in: lessonIds } },
+              ],
+            }
+          : { entity: 'topic', targetId: roadmap.id };
+      await tx.slugRedirect?.deleteMany?.({ where: redirectWhere });
+    };
+
+    if (typeof prisma.$transaction === 'function') {
+      await prisma.$transaction((tx) => applyDelete(tx));
+    } else {
+      await applyDelete(prisma);
+    }
 
     notifyRoadmapChanged();
     return NextResponse.json({ success: true, deletedSlug: roadmap.slug, deletedTitle: roadmap.title });

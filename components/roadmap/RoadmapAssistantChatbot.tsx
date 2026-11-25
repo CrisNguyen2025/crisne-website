@@ -50,7 +50,7 @@ export interface RoadmapAssistantChatbotProps {
   /**
    * Optional callback fired when a tool executes.
    */
-  onToolExecuted?: (toolName: string, result: string) => void;
+  onToolExecuted?: (toolName: string, result: string, isFailed?: boolean) => void;
 }
 
 /**
@@ -76,13 +76,21 @@ export function RoadmapAssistantChatbot({
   title = "Abot",
   onToolExecuted,
 }: RoadmapAssistantChatbotProps) {
-  const handleToolExecuted = (toolName: string, result: string) => {
+  const handleToolExecuted = (
+    toolName: string,
+    result: string,
+    isFailed?: boolean
+  ) => {
     // Notify custom callback
     if (onToolExecuted) {
-      onToolExecuted(toolName, result);
+      onToolExecuted(toolName, result, isFailed);
     }
 
-    if (typeof window !== "undefined" && isRoadmapWriteTool(toolName)) {
+    if (
+      typeof window !== "undefined" &&
+      !isFailed &&
+      isRoadmapWriteTool(toolName)
+    ) {
       window.dispatchEvent(
         new CustomEvent("roadmap:updated", {
           detail: { toolName, result },

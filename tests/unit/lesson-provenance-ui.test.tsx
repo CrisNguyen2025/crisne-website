@@ -164,4 +164,20 @@ describe("Provenance on the Lesson page (ADR-0017)", () => {
     expect(screen.getByText("Turbopack ổn định.", { exact: false })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Nguồn \d/ })).toBeNull();
   });
+
+  it("clears cached provenance and reloads when roadmap:updated fires", async () => {
+    mockUseCanWrite.mockReturnValue(true);
+    service.fetchLessonProvenance.mockClear();
+    service.fetchLessonProvenance.mockResolvedValue(RESPONSE);
+
+    renderReader();
+    await waitFor(() => expect(service.fetchLessonProvenance).toHaveBeenCalledTimes(1));
+
+    const updatedResponse: LessonProvenanceResponse = { provenances: [], orphans: [] };
+    service.fetchLessonProvenance.mockResolvedValueOnce(updatedResponse);
+    window.dispatchEvent(new CustomEvent("roadmap:updated", { detail: { deletedLessonId: "l-other" } }));
+
+    await waitFor(() => expect(service.fetchLessonProvenance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText("Nguồn tham khảo của bài")).toBeNull());
+  });
 });

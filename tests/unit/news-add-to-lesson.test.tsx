@@ -14,6 +14,7 @@ vi.mock("next/link", () => ({
 
 import { AddToLessonSheet } from "@/components/news/AddToLessonSheet";
 import { NewsReaderPanel } from "@/components/news/NewsReaderPanel";
+import { consumeRoadmapRefreshPending } from "@/lib/roadmap/pending-write";
 
 function makeItem(overrides: Partial<NewsItemDto> = {}): NewsItemDto {
   return {
@@ -128,6 +129,7 @@ describe("AddToLessonSheet (ADR-0017)", () => {
       ],
     });
     expect(screen.getByRole("link", { name: "Mở bài" }).getAttribute("href")).toBe("/nextjs/next-js-16");
+    expect(consumeRoadmapRefreshPending()).toBe(true);
   });
 
   it("sends append_to_lesson without a status, only with the chosen statements", async () => {

@@ -16,6 +16,7 @@ import { DEFAULT_LESSON_TEMPLATE_HTML } from "@/lib/roadmap/lesson-template";
 import { invalidateCachedOwnerStatuses } from "@/lib/roadmap/owner-status-cache";
 import {
   clearPendingLessonWrite,
+  markRoadmapRefreshPending,
   peekPendingLessonWrite,
 } from "@/lib/roadmap/pending-write";
 import {
@@ -50,6 +51,7 @@ import { LessonStatusPicker } from "./LessonStatus";
 import { ProvenanceChips } from "./ProvenanceChip";
 import { RelatedLessons } from "./RelatedLessons";
 import { useLessonProvenance } from "./useLessonProvenance";
+import { usePendingRoadmapRefresh } from "./usePendingRoadmapRefresh";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
 /** Tailwind `xl`: "On this page" moves to the right rail */
@@ -291,8 +293,9 @@ export function LessonEditorialReader({
   const { toast } = useToast();
   const canWrite = useCanWrite();
   const isXl = useMediaQuery(XL_VIEWPORT_QUERY);
+  usePendingRoadmapRefresh(lessonPath(topic.slug, lesson.slug));
   const { ownerStatusById, setOptimisticStatus, invalidateStatuses } =
-    useTopicOwnerStatuses(topic.slug, canWrite);
+    useTopicOwnerStatuses(topic.slug, canWrite, lesson.id);
 
   const activeSectionKey = lesson.section ?? "__none__";
 
@@ -447,6 +450,11 @@ export function LessonEditorialReader({
     const nextTopicSlug = options?.roadmapSlug || topic.slug;
     const urlChanged = nextSlug !== lesson.slug || nextTopicSlug !== topic.slug;
     toast("Đã lưu thông tin bài học", "success");
+    if (urlChanged) {
+      markRoadmapRefreshPending({
+        originRouteKey: lessonPath(topic.slug, lesson.slug),
+      });
+    }
     window.dispatchEvent(
       new CustomEvent("roadmap:updated", {
         detail: { skipRefresh: urlChanged },
@@ -473,8 +481,14 @@ export function LessonEditorialReader({
       await roadmapService.deleteItem(lesson.id);
       invalidateStatuses();
       toast(`Đã xoá bài "${lesson.title}"`, "success");
+      markRoadmapRefreshPending({
+        deletedLessonId: lesson.id,
+        originRouteKey: lessonPath(topic.slug, lesson.slug),
+      });
       window.dispatchEvent(
-        new CustomEvent("roadmap:updated", { detail: { skipRefresh: true } })
+        new CustomEvent("roadmap:updated", {
+          detail: { skipRefresh: true, deletedLessonId: lesson.id },
+        })
       );
       router.push(topicPath(topic.slug));
     } catch {

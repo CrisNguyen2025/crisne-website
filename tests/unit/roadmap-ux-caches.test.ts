@@ -6,9 +6,19 @@ import {
   setCachedOwnerStatuses,
 } from '@/lib/roadmap/owner-status-cache';
 import {
+  clearDeletedTopicSlug,
   clearPendingLessonWrite,
+  consumeRoadmapRefreshPending,
+  getDeletedLessonIdsSnapshot,
+  getDeletedTopicSlugsSnapshot,
+  getRoadmapMutationVersion,
   markPendingLessonWrite,
+  markRoadmapRefreshPending,
   peekPendingLessonWrite,
+  reconcileDeletedLessonIds,
+  reconcileDeletedTopicSlugs,
+  recordPendingDeletion,
+  subscribePendingWrites,
 } from '@/lib/roadmap/pending-write';
 import { splitSectionLabel } from '@/lib/roadmap/section-label';
 
@@ -53,6 +63,55 @@ describe('pending-write', () => {
 
     clearPendingLessonWrite('speculative-decoding');
     expect(peekPendingLessonWrite('speculative-decoding')).toBe(false);
+  });
+
+  it('tracks pending refresh flag once, bumps mutation version, and reconciles tombstones', () => {
+    consumeRoadmapRefreshPending();
+    reconcileDeletedLessonIds([]);
+    reconcileDeletedTopicSlugs([]);
+
+    const events: number[] = [];
+    const unsubscribe = subscribePendingWrites(() => {
+      events.push(getDeletedLessonIdsSnapshot().size + getDeletedTopicSlugsSnapshot().size);
+    });
+
+    const v0 = getRoadmapMutationVersion();
+    expect(consumeRoadmapRefreshPending()).toBe(false);
+
+    markRoadmapRefreshPending({ deletedLessonId: 'l-deleted', deletedTopicSlug: 't-deleted' });
+    expect(getRoadmapMutationVersion()).toBeGreaterThan(v0);
+    expect(getDeletedLessonIdsSnapshot().has('l-deleted')).toBe(true);
+    expect(getDeletedTopicSlugsSnapshot().has('t-deleted')).toBe(true);
+
+    // Consumes refresh flag exactly once, but ignores when still on origin route
+    expect(consumeRoadmapRefreshPending()).toBe(true);
+    expect(consumeRoadmapRefreshPending()).toBe(false);
+
+    markRoadmapRefreshPending({ originRouteKey: '/ai/lesson-1' });
+    expect(consumeRoadmapRefreshPending('/ai/lesson-1')).toBe(false);
+    expect(consumeRoadmapRefreshPending('/ai/lesson-2')).toBe(false);
+
+    markRoadmapRefreshPending({ originRouteKey: '/ai/lesson-1' });
+    expect(consumeRoadmapRefreshPending('/ai/lesson-2')).toBe(true);
+
+    // Keeps tombstones while stale props still include them; prunes once fresh props arrive
+    reconcileDeletedLessonIds(['l-deleted', 'l-other']);
+    expect(getDeletedLessonIdsSnapshot().has('l-deleted')).toBe(true);
+    reconcileDeletedLessonIds(['l-other']);
+    expect(getDeletedLessonIdsSnapshot().has('l-deleted')).toBe(false);
+
+    reconcileDeletedTopicSlugs(['t-deleted']);
+    expect(getDeletedTopicSlugsSnapshot().has('t-deleted')).toBe(true);
+    clearDeletedTopicSlug('t-deleted');
+    expect(getDeletedTopicSlugsSnapshot().has('t-deleted')).toBe(false);
+
+    recordPendingDeletion({ deletedTopicSlug: 't-temp' });
+    expect(getDeletedTopicSlugsSnapshot().has('t-temp')).toBe(true);
+    reconcileDeletedTopicSlugs([]);
+    expect(getDeletedTopicSlugsSnapshot().has('t-temp')).toBe(false);
+
+    expect(events.length).toBeGreaterThanOrEqual(3);
+    unsubscribe();
   });
 });
 

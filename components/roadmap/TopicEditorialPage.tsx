@@ -1,12 +1,24 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, ArrowUpDown, FolderPlus, Pencil, Trash2, Ungroup } from "lucide-react";
-import { markPendingLessonWrite } from "@/lib/roadmap/pending-write";
+import {
+  getDeletedLessonIdsSnapshot,
+  getEmptyPendingSet,
+  markPendingLessonWrite,
+  markRoadmapRefreshPending,
+  reconcileDeletedLessonIds,
+  subscribePendingWrites,
+} from "@/lib/roadmap/pending-write";
 import { splitSectionLabel } from "@/lib/roadmap/section-label";
-import { groupBySection } from "@/lib/roadmap/sections";
+import { groupBySection, sectionsInOrder } from "@/lib/roadmap/sections";
 import type { LessonStatus } from "@/lib/roadmap/status";
 import type {
   ChecklistItem,
@@ -18,7 +30,7 @@ import { ActionMenu } from "@/components/ui/action-menu";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { cn, getScrollBehavior } from "@/lib/utils";
-import { lessonPath } from "@/lib/roadmap/paths";
+import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { CreateItemModal, type CreateItemOptions } from "./CreateItemModal";
 import { EditSectionModal } from "./EditSectionModal";
 import { EditTopicModal } from "./EditTopicModal";
@@ -26,6 +38,7 @@ import { LectureShell } from "./LectureShell";
 import { LessonStatusBadge } from "./LessonStatus";
 import { RoadmapMap } from "./RoadmapMap";
 import { SECTIONS_ENABLED } from "./sectionsEnabled";
+import { usePendingRoadmapRefresh } from "./usePendingRoadmapRefresh";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
 interface TopicEditorialPageProps {
@@ -55,6 +68,33 @@ export function TopicEditorialPage({
     canWrite
   );
 
+  usePendingRoadmapRefresh(topicPath(topic.slug));
+  const deletedLessonIds = useSyncExternalStore(
+    subscribePendingWrites,
+    getDeletedLessonIdsSnapshot,
+    getEmptyPendingSet
+  );
+
+  useEffect(() => {
+    reconcileDeletedLessonIds(initialItems.map((it) => it.id));
+  }, [initialItems]);
+
+  const visibleInitialItems = useMemo(
+    () =>
+      deletedLessonIds.size === 0
+        ? initialItems
+        : initialItems.filter((it) => !deletedLessonIds.has(it.id)),
+    [initialItems, deletedLessonIds]
+  );
+
+  const visibleSections = useMemo(
+    () =>
+      visibleInitialItems.length === initialItems.length
+        ? initialSections
+        : sectionsInOrder(visibleInitialItems),
+    [visibleInitialItems, initialItems.length, initialSections]
+  );
+
   const [optimisticOrder, setOptimisticOrder] = useState<{
     baseKey: string;
     items: ChecklistItem[];
@@ -67,34 +107,40 @@ export function TopicEditorialPage({
 
   const baseKey = useMemo(
     () =>
-      initialItems
+      visibleInitialItems
         .map((it) => `${it.id}:${it.section ?? ""}:${it.order}`)
         .join("|"),
-    [initialItems]
+    [visibleInitialItems]
   );
 
   const items = useMemo<ChecklistItem[]>(() => {
     const sourceItems =
       optimisticOrder && optimisticOrder.baseKey === baseKey
         ? optimisticOrder.items
-        : initialItems;
+        : visibleInitialItems;
     if (!canWrite) return sourceItems;
     return sourceItems.map((it) =>
       ownerStatusById[it.id] ? { ...it, status: ownerStatusById[it.id] } : it
     );
-  }, [initialItems, optimisticOrder, baseKey, canWrite, ownerStatusById]);
+  }, [
+    visibleInitialItems,
+    optimisticOrder,
+    baseKey,
+    canWrite,
+    ownerStatusById,
+  ]);
 
   const namedSections = useMemo(
-    () => initialSections.filter((s): s is string => s !== null),
-    [initialSections]
+    () => visibleSections.filter((s): s is string => s !== null),
+    [visibleSections]
   );
 
   const siblingGroups = useMemo<SectionGroup[]>(() => {
     if (!SECTIONS_ENABLED) {
       return [{ section: null, items }];
     }
-    return groupBySection(items, initialSections);
-  }, [items, initialSections]);
+    return groupBySection(items, visibleSections);
+  }, [items, visibleSections]);
 
   const flatLessons = useMemo(
     () => siblingGroups.flatMap((g) => g.items),
@@ -157,9 +203,17 @@ export function TopicEditorialPage({
       description,
     });
     invalidateStatuses();
-    window.dispatchEvent(new CustomEvent("roadmap:updated"));
-    if (options?.openEditor && item?.slug) {
+    const shouldOpenEditor = Boolean(options?.openEditor && item?.slug);
+    if (shouldOpenEditor && item?.slug) {
+      markRoadmapRefreshPending({ originRouteKey: topicPath(topic.slug) });
       markPendingLessonWrite(item.slug);
+    }
+    window.dispatchEvent(
+      new CustomEvent("roadmap:updated", {
+        detail: { skipRefresh: shouldOpenEditor },
+      })
+    );
+    if (shouldOpenEditor && item?.slug) {
       router.push(lessonPath(topic.slug, item.slug));
       return;
     }
@@ -201,8 +255,16 @@ export function TopicEditorialPage({
       await roadmapService.deleteRoadmapBySlug(topic.slug);
       invalidateStatuses();
       toast(`Đã xoá topic "${topic.title}"`, "success");
+      markRoadmapRefreshPending({
+        deletedTopicSlug: topic.slug,
+        originRouteKey: topicPath(topic.slug),
+      });
+      window.dispatchEvent(
+        new CustomEvent("roadmap:updated", {
+          detail: { skipRefresh: true, deletedTopicSlug: topic.slug },
+        })
+      );
       router.push("/");
-      router.refresh();
     } catch {
       toast("Không xoá được topic.", "error");
     }

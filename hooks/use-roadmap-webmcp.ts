@@ -2,6 +2,10 @@
 
 import { useEffect } from 'react';
 import {
+  clearDeletedTopicSlug,
+  recordPendingDeletion,
+} from '@/lib/roadmap/pending-write';
+import {
   createItem,
   createRoadmap,
   deleteItem,
@@ -58,10 +62,16 @@ function typedTool<TArgs>(
   };
 }
 
-// Notify the workspace (app/page.tsx) to refresh after any write, same as the chatbot does.
-function notifyUpdated<T>(result: T): T {
+// Notify the workspace to refresh after any write, same as the chatbot does.
+function notifyUpdated<T>(
+  result: T,
+  detail?: { deletedLessonId?: string; deletedTopicSlug?: string },
+): T {
+  recordPendingDeletion(detail);
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('roadmap:updated'));
+    window.dispatchEvent(
+      new CustomEvent('roadmap:updated', detail ? { detail } : undefined),
+    );
   }
   return result;
 }
@@ -112,7 +122,13 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['title'],
     },
-    execute: async (args) => notifyUpdated(await createRoadmap(args)),
+    execute: async (args) => {
+      const created = await createRoadmap(args);
+      if (created?.roadmap?.slug) {
+        clearDeletedTopicSlug(created.roadmap.slug);
+      }
+      return notifyUpdated(created);
+    },
   }),
   typedTool<{ slug: string } & Parameters<typeof updateRoadmapBySlug>[1]>({
     name: 'update_roadmap',
@@ -140,7 +156,10 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
     execute: async ({ slug, ...args }) => {
       requireConfirm(args);
       await deleteRoadmapBySlug(slug);
-      return notifyUpdated({ success: true, deletedSlug: slug });
+      return notifyUpdated(
+        { success: true, deletedSlug: slug },
+        { deletedTopicSlug: slug },
+      );
     },
   }),
   typedTool<Parameters<typeof createItem>[0]>({
@@ -210,7 +229,10 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
     execute: async ({ id, ...args }) => {
       requireConfirm(args);
       await deleteItem(id);
-      return notifyUpdated({ success: true, deletedId: id });
+      return notifyUpdated(
+        { success: true, deletedId: id },
+        { deletedLessonId: id },
+      );
     },
   }),
   typedTool<Parameters<typeof reorderItems>[0]>({

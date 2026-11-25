@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Newspaper, Plus } from "lucide-react";
@@ -13,9 +13,22 @@ import type { CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { NEWS_PATH } from "@/lib/news/paths";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
+import {
+  clearDeletedTopicSlug,
+  getDeletedLessonIdsSnapshot,
+  getDeletedTopicSlugsSnapshot,
+  getEmptyPendingSet,
+  markRoadmapRefreshPending,
+  reconcileDeletedLessonIds,
+  reconcileDeletedTopicSlugs,
+  recordPendingDeletion,
+  subscribePendingWrites,
+} from "@/lib/roadmap/pending-write";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { AbotMascot } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/AbotMascot";
 import { CreateTopicModal } from "./CreateTopicModal";
+import { usePendingRoadmapRefresh } from "./usePendingRoadmapRefresh";
+import type { RoadmapUpdatedEventDetail } from "./useTopicOwnerStatuses";
 
 interface PublicationHomeProps {
   topics: PublicationTopicSummary[];
@@ -32,9 +45,73 @@ export function PublicationHome({
   const canWrite = useCanWrite();
   const [isCreateTopicOpen, setIsCreateTopicOpen] = useState(false);
 
+  usePendingRoadmapRefresh("/");
+  const deletedLessonIds = useSyncExternalStore(
+    subscribePendingWrites,
+    getDeletedLessonIdsSnapshot,
+    getEmptyPendingSet
+  );
+  const deletedTopicSlugs = useSyncExternalStore(
+    subscribePendingWrites,
+    getDeletedTopicSlugsSnapshot,
+    getEmptyPendingSet
+  );
+
+  useEffect(() => {
+    reconcileDeletedTopicSlugs(topics.map((t) => t.slug));
+  }, [topics]);
+
+  const prevRecentRef = useRef(recentLessons);
+  useEffect(() => {
+    if (prevRecentRef.current === recentLessons) return;
+    prevRecentRef.current = recentLessons;
+    reconcileDeletedLessonIds(recentLessons.map((l) => l.id));
+  }, [recentLessons]);
+
+  const visibleTopics = useMemo(
+    () =>
+      deletedTopicSlugs.size === 0
+        ? topics
+        : topics.filter((t) => !deletedTopicSlugs.has(t.slug)),
+    [topics, deletedTopicSlugs]
+  );
+
+  const visibleRecentLessons = useMemo(
+    () =>
+      deletedTopicSlugs.size === 0 && deletedLessonIds.size === 0
+        ? recentLessons
+        : recentLessons.filter(
+            (l) =>
+              !deletedTopicSlugs.has(l.topicSlug) &&
+              !deletedLessonIds.has(l.id)
+          ),
+    [recentLessons, deletedTopicSlugs, deletedLessonIds]
+  );
+
+  const removedLessonCount = useMemo(() => {
+    if (deletedTopicSlugs.size === 0 && deletedLessonIds.size === 0) return 0;
+    const removedByTopic = topics.reduce(
+      (sum, t) => (deletedTopicSlugs.has(t.slug) ? sum + t.lessonCount : sum),
+      0
+    );
+    const removedStandaloneLessons = recentLessons.reduce(
+      (sum, l) =>
+        !deletedTopicSlugs.has(l.topicSlug) && deletedLessonIds.has(l.id)
+          ? sum + 1
+          : sum,
+      0
+    );
+    return removedByTopic + removedStandaloneLessons;
+  }, [topics, recentLessons, deletedTopicSlugs, deletedLessonIds]);
+
+  const visibleTotalLessons = Math.max(0, totalLessons - removedLessonCount);
+
   useEffect(() => {
     const handleUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ skipRefresh?: boolean } | undefined>).detail;
+      const detail = (
+        event as CustomEvent<RoadmapUpdatedEventDetail | undefined>
+      ).detail;
+      recordPendingDeletion(detail);
       if (detail?.skipRefresh) return;
       router.refresh();
     };
@@ -44,7 +121,15 @@ export function PublicationHome({
 
   const handleCreateTopic = async (payload: CreateRoadmapDto) => {
     const { roadmap: created } = await roadmapService.createRoadmap(payload);
-    window.dispatchEvent(new CustomEvent("roadmap:updated"));
+    if (created?.slug) {
+      clearDeletedTopicSlug(created.slug);
+      markRoadmapRefreshPending({ originRouteKey: "/" });
+    }
+    window.dispatchEvent(
+      new CustomEvent("roadmap:updated", {
+        detail: { skipRefresh: Boolean(created?.slug) },
+      })
+    );
     if (created?.slug) {
       router.push(topicPath(created.slug));
     }
@@ -68,7 +153,7 @@ export function PublicationHome({
                 Crisne
               </h1>
               <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-                {topics.length} topics · {totalLessons} bài học
+                {visibleTopics.length} topics · {visibleTotalLessons} bài học
               </p>
             </div>
           </div>
@@ -103,7 +188,7 @@ export function PublicationHome({
             Topics
           </h2>
 
-          {topics.length === 0 ? (
+          {visibleTopics.length === 0 ? (
             <div className="mt-4 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 Chưa có Topic nào.
@@ -111,7 +196,7 @@ export function PublicationHome({
             </div>
           ) : (
             <div className="mt-4 grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {topics.map((topic) => (
+              {visibleTopics.map((topic) => (
                 <Link
                   key={topic.slug}
                   href={topicPath(topic.slug)}
@@ -142,7 +227,7 @@ export function PublicationHome({
           )}
         </section>
 
-        {recentLessons.length > 0 && (
+        {visibleRecentLessons.length > 0 && (
           <section
             className="mt-12 max-w-3xl"
             aria-labelledby="recent-lessons-heading"
@@ -155,7 +240,7 @@ export function PublicationHome({
             </h2>
 
             <div className="mt-3 divide-y divide-border border-t border-border">
-              {recentLessons.map((lesson) => (
+              {visibleRecentLessons.map((lesson) => (
                 <Link
                   key={lesson.id}
                   href={lessonPath(lesson.topicSlug, lesson.slug)}

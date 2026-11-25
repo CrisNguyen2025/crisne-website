@@ -141,9 +141,9 @@ export interface ChatbotConfig {
   initialMessages?: ChatMessage[];
 
   /**
-   * Callback fired whenever the agent invokes a tool successfully.
+   * Callback fired whenever the agent invokes a tool. `isFailed` is true when execution failed.
    */
-  onToolExecuted?: (toolName: string, result: string) => void;
+  onToolExecuted?: (toolName: string, result: string, isFailed?: boolean) => void;
 
   /**
    * Callback fired with the last vote on an answer (1 for like, 0 for unlike, null when taken back),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchRoadmapBySlug = vi.hoisted(() => vi.fn());
 vi.mock("@/logic/roadmap/roadmapService", () => ({ fetchRoadmapBySlug }));
@@ -19,6 +19,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => fetchRoadmapBySlug.mockReset());
+afterEach(() => cleanup());
 
 describe("useRoadmap: a missing topic is reported for that topic only", () => {
   it("loads nothing while no topic is open (Home)", () => {
@@ -68,5 +69,23 @@ describe("useRoadmap: a missing topic is reported for that topic only", () => {
     fetchRoadmapBySlug.mockRejectedValueOnce(notFound());
     const { result } = renderHook(() => useRoadmap("deleted"));
     await waitFor(() => expect(result.current.isNotFound).toBe(true));
+  });
+
+  it("evicts cached other topics on roadmap:updated even from Home", async () => {
+    fetchRoadmapBySlug
+      .mockResolvedValueOnce({ roadmap: { id: "ai", slug: "ai", title: "Old Title", order: 1 }, items: [], sections: [] })
+      .mockResolvedValueOnce({ roadmap: { id: "ai", slug: "ai", title: "Fresh Title", order: 1 }, items: [], sections: [] });
+
+    const { result, rerender } = renderHook(({ slug }) => useRoadmap(slug), {
+      initialProps: { slug: "ai" },
+    });
+    await waitFor(() => expect(result.current.roadmapMeta?.title).toBe("Old Title"));
+
+    rerender({ slug: "" });
+    window.dispatchEvent(new CustomEvent("roadmap:updated"));
+
+    rerender({ slug: "ai" });
+    await waitFor(() => expect(result.current.roadmapMeta?.title).toBe("Fresh Title"));
+    expect(fetchRoadmapBySlug).toHaveBeenCalledTimes(2);
   });
 });

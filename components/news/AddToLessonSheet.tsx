@@ -8,6 +8,7 @@ import { splitEmphasis } from "@/lib/news/emphasis";
 import type { MatchLessonsResponseDto } from "@/lib/provenance/relations";
 import type { IntegrateRequest } from "@/lib/provenance/schemas";
 import { lessonPath } from "@/lib/roadmap/paths";
+import { markRoadmapRefreshPending } from "@/lib/roadmap/pending-write";
 import { LESSON_STATUSES, type LessonStatus } from "@/lib/roadmap/status";
 import type { ChecklistItem, RoadmapMeta } from "@/lib/roadmap/types";
 import { Sheet } from "@/components/ui/sheet";
@@ -190,6 +191,7 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
     setIsSubmitting(false);
     switch (result.kind) {
       case "created":
+        markRoadmapRefreshPending();
         setSavedPath(lessonPath(result.lesson.roadmapSlug, result.lesson.slug));
         setStep("done");
         break;

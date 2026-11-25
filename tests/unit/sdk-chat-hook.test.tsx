@@ -201,4 +201,35 @@ describe("useRoadmapAssistantChat", () => {
       );
     });
   });
+
+  describe("onToolExecuted isFailed flag", () => {
+    it("forwards isFailed=true when tool_end reports failure and false when succeeded", async () => {
+      const onToolExecuted = vi.fn();
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(c) {
+              const enc = new TextEncoder();
+              c.enqueue(enc.encode(sse("tool_start", { name: "delete_item" })));
+              c.enqueue(enc.encode(sse("tool_end", { name: "delete_item", result: "Lỗi DB", is_error: true })));
+              c.enqueue(enc.encode(sse("tool_start", { name: "mark_lesson_reviewed" })));
+              c.enqueue(enc.encode(sse("tool_end", { name: "mark_lesson_reviewed", result: "Đã ôn xong", is_error: false })));
+              c.enqueue(enc.encode(sse("done", { message: "Xong" })));
+              c.close();
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+      const { result } = renderHook(() =>
+        useRoadmapAssistantChat({ baseUrl: BASE, onToolExecuted })
+      );
+      await act(() => result.current.sendMessage("xoá bài"));
+      await settle(result);
+
+      expect(onToolExecuted).toHaveBeenNthCalledWith(1, "delete_item", "Lỗi DB", true);
+      expect(onToolExecuted).toHaveBeenNthCalledWith(2, "mark_lesson_reviewed", "Đã ôn xong", false);
+    });
+  });
 });

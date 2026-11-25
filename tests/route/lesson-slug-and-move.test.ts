@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   roadmap: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
+    delete: vi.fn(),
   },
   roadmapItem: {
     findUnique: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth/write-access', () => writeAccessMock);
 vi.mock('@/lib/roadmap/rag-reindex', () => ({ notifyRoadmapChanged: notifyMock }));
 
+import { DELETE as deleteTopic } from '@/app/api/v1/roadmaps/[slug]/route';
 import { PATCH } from '@/app/api/v1/roadmaps/items/[id]/route';
 import { resolveLessonGlobal } from '@/lib/roadmap/resolveRoadmap';
 import { getRoadmapPageContext, isRoadmapWriteTool } from '@/logic/roadmap/roadmapAssistantService';
@@ -260,5 +262,43 @@ describe('PATCH /api/v1/roadmaps/items/[id] slug, redirect, and topic move', () 
       where: { id: 'item-1' },
       data: { title: 'old title' },
     });
+  });
+
+  it('DELETE /api/v1/roadmaps/[slug] cleans up SlugRedirect rows for the topic and its lessons', async () => {
+    const txSpy = vi.fn(async (fn: (tx: typeof prismaMock) => Promise<unknown>) => fn(prismaMock));
+    (prismaMock as Record<string, unknown>).$transaction = txSpy;
+
+    try {
+      prismaMock.roadmap.findUnique.mockResolvedValueOnce({
+        id: 'topic-1',
+        slug: 'backend',
+        title: 'Backend',
+      });
+      prismaMock.roadmapItem.findMany.mockResolvedValueOnce([
+        { id: 'item-1' },
+        { id: 'item-2' },
+      ]);
+      prismaMock.roadmap.delete.mockResolvedValueOnce({ id: 'topic-1' });
+      prismaMock.slugRedirect.deleteMany.mockResolvedValueOnce({ count: 3 });
+
+      const req = new NextRequest('http://localhost/api/v1/roadmaps/backend', {
+        method: 'DELETE',
+      });
+      const res = await deleteTopic(req, { params: Promise.resolve({ slug: 'backend' }) });
+      expect(res.status).toBe(200);
+      expect(txSpy).toHaveBeenCalledOnce();
+      expect(prismaMock.roadmap.delete).toHaveBeenCalledWith({ where: { id: 'topic-1' } });
+      expect(prismaMock.slugRedirect.deleteMany).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { entity: 'topic', targetId: 'topic-1' },
+            { entity: 'lesson', targetId: { in: ['item-1', 'item-2'] } },
+          ],
+        },
+      });
+      expect(notifyMock).toHaveBeenCalledOnce();
+    } finally {
+      delete (prismaMock as Record<string, unknown>).$transaction;
+    }
   });
 });
