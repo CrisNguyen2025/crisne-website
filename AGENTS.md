@@ -22,6 +22,7 @@ Skill dự án nằm thật ở `.agents/skills/` (Claude Code, Codex, Antigravi
 - **`design-doc-mermaid`:** chỉ dùng cho sơ đồ commit trong file `.md` của repo; quy ước repo nằm đầu `SKILL.md`. Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
 - **`verify-ci`:** dùng sau khi sửa code; subagent `verifier` của Claude Code chạy skill này.
 - **`cris-doctor`:** chỉ đọc, CLI `yarn doctor`. Chạy `--scope <vùng>` trước khi lập plan cho vùng đó. Sửa xong finding thì chạy `--update-baseline` và commit `.handoff/doctor/baseline.json` cùng thay đổi.
+- **`sonar-clean-code`:** chuẩn Sonar Clean Code Concept (Consistent, Intentional, Adaptable, Responsible) kết hợp AST (`eslint-plugin-sonarjs` + `ruff` Sonar rules) và audit ngữ nghĩa để detect và refactor theo batch nhỏ, giữ nguyên behavior và ranh giới `AGENTS.md`.
 
 ## 🤖 Config agent (MCP, subagent, hook)
 

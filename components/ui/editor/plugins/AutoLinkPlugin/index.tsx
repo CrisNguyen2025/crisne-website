@@ -2,14 +2,65 @@ import type { JSX } from 'react';
 
 import {
   AutoLinkPlugin as LexicalAutoLinkPlugin,
-  createLinkMatcherWithRegExp,
 } from '@lexical/react/LexicalAutoLinkPlugin';
 
 const URL_REGEX =
-  /((https?:\/\/(www\.)?)|(www\.))[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)(?<![-.+():%])/;
+  /((https?:\/\/(www\.)?)|(www\.))[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&=]*)(?<![-.+():%])/;
 
-const EMAIL_REGEX =
-  /(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))/; // NOSONAR: regex accepted for email auto-link
+const EMAIL_LOCAL_BOUNDARY = /[\s<>()[\]\\,;:@"]/;
+const DOMAIN_LABEL_REGEX = /^[a-z0-9-]+$/i;
+const TLD_REGEX = /^[a-z]{2,}$/i;
+
+function findEmailStart(text: string, atIndex: number): number {
+  let start = atIndex;
+  while (start > 0 && !EMAIL_LOCAL_BOUNDARY.test(text[start - 1])) {
+    start--;
+  }
+  while (start < atIndex && text[start] === '.') {
+    start++;
+  }
+  return start;
+}
+
+function findEmailDomainEnd(text: string, domainStart: number): number {
+  let end = domainStart;
+  while (end < text.length && /[a-z0-9.-]/i.test(text[end])) {
+    end++;
+  }
+  while (end > domainStart && text[end - 1] === '.') {
+    end--;
+  }
+  const domain = text.slice(domainStart, end);
+  const labels = domain.split('.');
+  if (labels.length < 2) return -1;
+  if (!TLD_REGEX.test(labels[labels.length - 1])) return -1;
+  if (labels.some((label) => !DOMAIN_LABEL_REGEX.test(label))) return -1;
+  return end;
+}
+
+function matchEmailInText(text: string) {
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const atIndex = text.indexOf('@', searchFrom);
+    if (atIndex === -1) return null;
+
+    const start = findEmailStart(text, atIndex);
+    const local = text.slice(start, atIndex);
+    const domainEnd = findEmailDomainEnd(text, atIndex + 1);
+
+    if (local && !local.endsWith('.') && domainEnd > atIndex + 1) {
+      const matched = text.slice(start, domainEnd);
+      return {
+        index: start,
+        length: matched.length,
+        text: matched,
+        url: `mailto:${matched}`,
+      };
+    }
+    searchFrom = atIndex + 1;
+  }
+  return null;
+}
 
 const MATCHERS = [
   (text: string) => {
@@ -26,9 +77,7 @@ const MATCHERS = [
       },
     };
   },
-  createLinkMatcherWithRegExp(EMAIL_REGEX, text => {
-    return `mailto:${text}`;
-  }),
+  matchEmailInText,
 ];
 
 export function AutoLinkPlugin(): JSX.Element {

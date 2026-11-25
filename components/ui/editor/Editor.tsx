@@ -175,7 +175,9 @@ export default function Editor({
         className={cn(
           'editor-shell',
           'relative flex flex-col overflow-hidden',
-          isFullscreen ? 'h-dvh rounded-none' : fillHeight ? 'h-full flex-1 rounded-none border-0 shadow-none' : 'rounded-3xl',
+          isFullscreen && 'h-dvh rounded-none',
+          !isFullscreen && fillHeight && 'h-full flex-1 rounded-none border-0 shadow-none',
+          !isFullscreen && !fillHeight && 'rounded-3xl',
           disabled && 'editor-shell-disabled',
           shellClassName,
         )}

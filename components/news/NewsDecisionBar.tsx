@@ -18,6 +18,20 @@ const OUTLINE =
 const SAVED_BTN =
   "inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--status-known-border)] bg-[var(--status-known-bg)] px-3 text-sm font-medium text-[var(--status-known)] transition-[opacity,transform] duration-150 ease-out hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
 
+function ActionButtonIcon({
+  isLoading,
+  icon: Icon,
+}: {
+  isLoading: boolean;
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
+}) {
+  return isLoading ? (
+    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+  ) : (
+    <Icon className="size-4" aria-hidden="true" />
+  );
+}
+
 /** True once the item has left the inbox: saved by the Owner or dismissed. */
 export function isNewsItemDone(item: NewsItemDto): boolean {
   return item.isSaved || item.reviewStatus === "dismissed";
@@ -34,6 +48,8 @@ export function NewsDecisionBar({
   const [activeAction, setActiveAction] = useState<"save" | "dismiss" | "reopen" | null>(null);
   const currentAction = isBusy ? activeAction : null;
   const isDismissed = item.reviewStatus === "dismissed";
+  const isSavedActive = item.isSaved && !isDismissed;
+  const saveIcon = isSavedActive ? BookmarkCheck : Bookmark;
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
@@ -44,16 +60,10 @@ export function NewsDecisionBar({
           setActiveAction("save");
           onToggleSave(item);
         }}
-        className={item.isSaved && !isDismissed ? SAVED_BTN : OUTLINE}
+        className={isSavedActive ? SAVED_BTN : OUTLINE}
       >
-        {currentAction === "save" ? (
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        ) : item.isSaved && !isDismissed ? (
-          <BookmarkCheck className="size-4" aria-hidden="true" />
-        ) : (
-          <Bookmark className="size-4" aria-hidden="true" />
-        )}
-        {item.isSaved && !isDismissed ? "Đã lưu" : "Lưu"}
+        <ActionButtonIcon isLoading={currentAction === "save"} icon={saveIcon} />
+        {isSavedActive ? "Đã lưu" : "Lưu"}
       </button>
 
       {isDismissed ? (
@@ -66,11 +76,7 @@ export function NewsDecisionBar({
           }}
           className={OUTLINE}
         >
-          {currentAction === "reopen" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Inbox className="size-4" aria-hidden="true" />
-          )}
+          <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
           Đưa lại Chờ xử lý
         </button>
       ) : (
@@ -84,11 +90,7 @@ export function NewsDecisionBar({
             }}
             className={OUTLINE}
           >
-            {currentAction === "dismiss" ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <X className="size-4" aria-hidden="true" />
-            )}
+            <ActionButtonIcon isLoading={currentAction === "dismiss"} icon={X} />
             Bỏ qua
           </button>
           {item.isSaved && (
@@ -101,11 +103,7 @@ export function NewsDecisionBar({
               }}
               className={OUTLINE}
             >
-              {currentAction === "reopen" ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Inbox className="size-4" aria-hidden="true" />
-              )}
+              <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
               Đưa lại Chờ xử lý
             </button>
           )}

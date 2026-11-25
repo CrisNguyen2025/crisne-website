@@ -404,7 +404,7 @@ export function TopicEditorialPage({
           )}
         </header>
 
-        {items.length === 0 ? (
+        {items.length === 0 && (
           <div className="mt-10 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
             <p className="text-sm text-muted-foreground">
               Topic này chưa có bài học nào.
@@ -423,7 +423,9 @@ export function TopicEditorialPage({
               </button>
             )}
           </div>
-        ) : isReorderMode && canWrite ? (
+        )}
+
+        {items.length > 0 && isReorderMode && canWrite && (
           <div className="mt-8 space-y-4 motion-safe:animate-in motion-safe:fade-in duration-150">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
               <span>Kéo thả để đổi thứ tự bài học trong mục</span>
@@ -451,7 +453,9 @@ export function TopicEditorialPage({
               onReorderSection={handleReorderSection}
             />
           </div>
-        ) : (
+        )}
+
+        {items.length > 0 && !(isReorderMode && canWrite) && (
           <div className="mt-8 space-y-10 motion-safe:animate-in motion-safe:fade-in duration-150">
             {focusItems.length > 0 && (
               <section aria-labelledby="h-focus" className="xl:hidden">

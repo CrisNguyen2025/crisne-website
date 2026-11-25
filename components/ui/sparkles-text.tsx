@@ -30,19 +30,25 @@ interface SparklesTextProps {
 
 const DEFAULT_COLORS = { first: "#A07CFE", second: "#FE8FB5" };
 
+function randomUnit(): number {
+  const arr = new Uint32Array(1);
+  crypto.getRandomValues(arr);
+  return arr[0] / 0x1_0000_0000;
+}
+
 function generateSparkle(colors: {
   readonly first: string;
   readonly second: string;
 }): Sparkle {
   return {
-    id: Math.random().toString(36).slice(2),
-    x: `${Math.random() * 100}%`,
-    y: `${Math.random() * 100}%`,
-    size: Math.random() * 16 + 14,
-    delay: Math.random() * 2,
-    duration: Math.random() * 1.3 + 1.5,
-    rotation: Math.random() * 360,
-    color: Math.random() > 0.5 ? colors.first : colors.second,
+    id: crypto.randomUUID(),
+    x: `${randomUnit() * 100}%`,
+    y: `${randomUnit() * 100}%`,
+    size: randomUnit() * 16 + 14,
+    delay: randomUnit() * 2,
+    duration: randomUnit() * 1.3 + 1.5,
+    rotation: randomUnit() * 360,
+    color: randomUnit() > 0.5 ? colors.first : colors.second,
   };
 }
 
@@ -99,7 +105,7 @@ export function SparklesText({
       intervalRef.current = setInterval(() => {
         setSparkles((prev) => {
           const next = [...prev];
-          const idx = Math.floor(Math.random() * next.length);
+          const idx = Math.floor(randomUnit() * next.length);
           next[idx] = generateSparkle(colors);
           return next;
         });

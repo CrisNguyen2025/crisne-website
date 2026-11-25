@@ -155,17 +155,9 @@ class LessonProvenanceStore:
         self._local.clear()
         self.invalidate()
 
-    async def get_for_lessons(self, doc_ids: Sequence[str]) -> Dict[str, List[ExternalSourceItem]]:
-        if not is_owner():
-            return {}
-        clean_ids = list(dict.fromkeys(i.strip() for i in doc_ids if isinstance(i, str) and i.strip()))[:10]
-        if not clean_ids:
-            return {}
-
-        if self._api is None:
-            return {did: list(self._local[did]) for did in clean_ids if did in self._local and self._local[did]}
-
-        now = time.monotonic()
+    def _read_cached_provenances(
+        self, clean_ids: Sequence[str], now: float
+    ) -> tuple[Dict[str, List[ExternalSourceItem]], List[str]]:
         result: Dict[str, List[ExternalSourceItem]] = {}
         missing: List[str] = []
         for did in clean_ids:
@@ -175,15 +167,30 @@ class LessonProvenanceStore:
                     result[did] = list(cached[1])
             else:
                 missing.append(did)
+        return result, missing
 
-        if missing:
-            fetched = await self._api.fetch_by_lessons(missing)
-            if fetched is not None:
-                for did in missing:
-                    items = fetched.get(did, [])
-                    self._cache[did] = (now, items)
-                    if items:
-                        result[did] = list(items)
+    async def get_for_lessons(self, doc_ids: Sequence[str]) -> Dict[str, List[ExternalSourceItem]]:
+        if not is_owner():
+            return {}
+        clean_ids = list(dict.fromkeys(i.strip() for i in doc_ids if isinstance(i, str) and i.strip()))[:10]
+        if not clean_ids:
+            return {}
+
+        if self._api is None:
+            return {did: list(self._local[did]) for did in clean_ids if self._local.get(did)}
+
+        now = time.monotonic()
+        result, missing = self._read_cached_provenances(clean_ids, now)
+        if not missing:
+            return result
+
+        fetched = await self._api.fetch_by_lessons(missing)
+        if fetched is not None:
+            for did in missing:
+                items = fetched.get(did, [])
+                self._cache[did] = (now, items)
+                if items:
+                    result[did] = list(items)
 
         return result
 

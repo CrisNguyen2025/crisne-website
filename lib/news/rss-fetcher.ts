@@ -97,7 +97,7 @@ function readNodeText(node: unknown): string {
 function cleanEntryTitle(raw: string): string | undefined {
   if (!raw) return undefined;
   const withoutTags = raw
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<[^<>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   return withoutTags ? withoutTags.slice(0, 240) : undefined;
@@ -141,33 +141,26 @@ function sortEntriesNewestFirst(entries: ParsedFeedEntry[]): ParsedFeedEntry[] {
   return indexed.map((item) => item.entry);
 }
 
+function pickCandidateHref(candidate: unknown, alternateOnly: boolean): string | null {
+  if (typeof candidate === "string") {
+    return alternateOnly ? candidate : null;
+  }
+  if (!candidate || typeof candidate !== "object") return null;
+  const rec = candidate as Record<string, unknown>;
+  const rel = typeof rec["@_rel"] === "string" ? rec["@_rel"].toLowerCase() : "alternate";
+  if (alternateOnly && rel !== "alternate" && rec["@_rel"]) return null;
+  const href = typeof rec["@_href"] === "string" ? rec["@_href"] : readNodeText(rec);
+  return href || null;
+}
+
 function extractAtomEntryUrl(linkNode: unknown, baseFeedUrl?: string): string | null {
   const links = asArray(linkNode);
-  for (const candidate of links) {
-    if (typeof candidate === "string") {
-      const url = resolveHttpUrl(candidate, baseFeedUrl);
+  for (const alternateOnly of [true, false]) {
+    for (const candidate of links) {
+      const href = pickCandidateHref(candidate, alternateOnly);
+      if (!href) continue;
+      const url = resolveHttpUrl(href, baseFeedUrl);
       if (url) return url;
-      continue;
-    }
-    if (candidate && typeof candidate === "object") {
-      const rec = candidate as Record<string, unknown>;
-      const rel = typeof rec["@_rel"] === "string" ? rec["@_rel"].toLowerCase() : "alternate";
-      const href = typeof rec["@_href"] === "string" ? rec["@_href"] : readNodeText(rec);
-      if ((rel === "alternate" || !rec["@_rel"]) && href) {
-        const url = resolveHttpUrl(href, baseFeedUrl);
-        if (url) return url;
-      }
-    }
-  }
-
-  for (const candidate of links) {
-    if (candidate && typeof candidate === "object") {
-      const rec = candidate as Record<string, unknown>;
-      const href = typeof rec["@_href"] === "string" ? rec["@_href"] : readNodeText(rec);
-      if (href) {
-        const url = resolveHttpUrl(href, baseFeedUrl);
-        if (url) return url;
-      }
     }
   }
   return null;
@@ -206,6 +199,16 @@ export function isJsonFeedDocument(body: string): boolean {
   }
 }
 
+function resolveJsonItemUrl(item: Record<string, unknown>, baseFeedUrl?: string): string | null {
+  for (const field of ["url", "external_url", "id"] as const) {
+    const raw = item[field];
+    if (typeof raw !== "string") continue;
+    const resolved = resolveHttpUrl(raw, baseFeedUrl);
+    if (resolved) return resolved;
+  }
+  return null;
+}
+
 export function parseJsonFeed(
   raw: string,
   baseFeedUrl?: string
@@ -226,20 +229,13 @@ export function parseJsonFeed(
   for (const rawItem of parsed.items) {
     if (!rawItem || typeof rawItem !== "object") continue;
     const item = rawItem as Record<string, unknown>;
-    const candidateUrl =
-      (typeof item.url === "string" && resolveHttpUrl(item.url, baseFeedUrl)) ||
-      (typeof item.external_url === "string" && resolveHttpUrl(item.external_url, baseFeedUrl)) ||
-      (typeof item.id === "string" && resolveHttpUrl(item.id, baseFeedUrl)) ||
-      null;
+    const candidateUrl = resolveJsonItemUrl(item, baseFeedUrl);
     if (!candidateUrl || seenUrls.has(candidateUrl)) continue;
     seenUrls.add(candidateUrl);
 
-    const rawTitle =
-      typeof item.title === "string" && item.title.trim()
-        ? item.title
-        : typeof item.summary === "string"
-          ? item.summary
-          : "";
+    const hasTitle = typeof item.title === "string" && item.title.trim();
+    const fallbackTitle = typeof item.summary === "string" ? item.summary : "";
+    const rawTitle = hasTitle ? (item.title as string) : fallbackTitle;
     entries.push({
       url: candidateUrl,
       title: cleanEntryTitle(rawTitle),
@@ -248,6 +244,19 @@ export function parseJsonFeed(
   }
 
   return { title: feedTitle, entries: sortEntriesNewestFirst(entries) };
+}
+
+function collectXmlRecordEntries(
+  rawItems: unknown,
+  extractUrl: (record: Record<string, unknown>) => string | null,
+  extractDate: (record: Record<string, unknown>) => unknown,
+  pushEntry: (url: string | null, rawTitle: unknown, rawDate: unknown) => void
+): void {
+  for (const rawItem of asArray(rawItems)) {
+    if (!rawItem || typeof rawItem !== "object") continue;
+    const record = rawItem as Record<string, unknown>;
+    pushEntry(extractUrl(record), record.title, extractDate(record));
+  }
 }
 
 function parseXmlFeedInternal(
@@ -279,12 +288,12 @@ function parseXmlFeedInternal(
   if (channel) {
     matchedRoot = true;
     feedTitle = cleanEntryTitle(readNodeText(channel.title));
-    for (const rawItem of asArray(channel.item)) {
-      if (!rawItem || typeof rawItem !== "object") continue;
-      const item = rawItem as Record<string, unknown>;
-      const url = extractRssItemUrl(item, baseFeedUrl);
-      pushEntry(url, item.title, item.pubDate ?? item["dc:date"] ?? item.published);
-    }
+    collectXmlRecordEntries(
+      channel.item,
+      (item) => extractRssItemUrl(item, baseFeedUrl),
+      (item) => item.pubDate ?? item["dc:date"] ?? item.published,
+      pushEntry
+    );
   }
 
   const rdf = (doc["rdf:RDF"] ?? doc.RDF) as Record<string, unknown> | undefined;
@@ -292,12 +301,12 @@ function parseXmlFeedInternal(
     matchedRoot = true;
     const rdfChannel = rdf.channel as Record<string, unknown> | undefined;
     feedTitle ??= cleanEntryTitle(readNodeText(rdfChannel?.title));
-    for (const rawItem of asArray(rdf.item)) {
-      if (!rawItem || typeof rawItem !== "object") continue;
-      const item = rawItem as Record<string, unknown>;
-      const url = extractRssItemUrl(item, baseFeedUrl);
-      pushEntry(url, item.title, item["dc:date"] ?? item.pubDate);
-    }
+    collectXmlRecordEntries(
+      rdf.item,
+      (item) => extractRssItemUrl(item, baseFeedUrl),
+      (item) => item["dc:date"] ?? item.pubDate,
+      pushEntry
+    );
   }
 
   const feed = doc.feed as Record<string, unknown> | undefined;
@@ -305,12 +314,12 @@ function parseXmlFeedInternal(
     matchedRoot = true;
     format = "atom";
     feedTitle ??= cleanEntryTitle(readNodeText(feed.title));
-    for (const rawEntry of asArray(feed.entry)) {
-      if (!rawEntry || typeof rawEntry !== "object") continue;
-      const entry = rawEntry as Record<string, unknown>;
-      const url = extractAtomEntryUrl(entry.link, baseFeedUrl);
-      pushEntry(url, entry.title, entry.published ?? entry.updated);
-    }
+    collectXmlRecordEntries(
+      feed.entry,
+      (entry) => extractAtomEntryUrl(entry.link, baseFeedUrl),
+      (entry) => entry.published ?? entry.updated,
+      pushEntry
+    );
   }
 
   return {
@@ -346,12 +355,12 @@ const FEED_TOO_LARGE_MESSAGE = "Feed vượt quá giới hạn 2MB.";
 
 function detectCharset(contentType: string | null, firstChunk: Uint8Array | undefined): string {
   if (contentType) {
-    const match = contentType.match(/charset\s*=\s*["']?([a-zA-Z0-9._-]+)["']?/i);
+    const match = contentType.match(/charset\s*=\s*["']?([a-z0-9._-]+)["']?/i);
     if (match?.[1]) return match[1].toLowerCase();
   }
   if (firstChunk && firstChunk.byteLength > 0) {
     const asciiPrefix = new TextDecoder("latin1").decode(firstChunk.subarray(0, 256));
-    const xmlMatch = asciiPrefix.match(/<\?xml[^>]*encoding\s*=\s*["']([a-zA-Z0-9._-]+)["']/i);
+    const xmlMatch = asciiPrefix.match(/<\?xml[^<>]*encoding\s*=\s*["']([a-z0-9._-]+)["']/i);
     if (xmlMatch?.[1]) return xmlMatch[1].toLowerCase();
   }
   return "utf-8";
@@ -393,11 +402,46 @@ async function readFeedBodyWithLimit(response: Response): Promise<string> {
   return decoder ? text + decoder.decode() : "";
 }
 
-export function classifyFeedError(error: unknown): {
+type ClassifiedFeedError = {
   code: FeedErrorCode;
   status: 400 | 403 | 429 | 502;
   message: string;
-} {
+};
+
+function classifyFeedHttpError(error: FeedFetchHttpError): ClassifiedFeedError {
+  if (error.status === 429) {
+    const retryNote = error.retryAfter ? ` (Retry-After: ${error.retryAfter}s)` : "";
+    return {
+      code: "RATE_LIMITED",
+      status: 429,
+      message: `[RATE_LIMITED] Nguồn giới hạn tần suất (HTTP 429)${retryNote}. Hãy giãn lịch quét hoặc thử lại sau.`,
+    };
+  }
+  if (error.status === 404 || error.status === 410) {
+    return {
+      code: "NOT_FOUND",
+      status: 400,
+      message: `[NOT_FOUND] Không tìm thấy feed tại URL này (HTTP ${error.status}). Hãy kiểm tra lại đường dẫn.`,
+    };
+  }
+  if (error.status === 403 || error.status === 401) {
+    const isCloudflare = error.cfMitigated || Boolean(error.server && /cloudflare/i.test(error.server));
+    return {
+      code: "BOT_BLOCKED",
+      status: 403,
+      message: isCloudflare
+        ? `[BOT_BLOCKED] Site chặn bot tự động (HTTP ${error.status} Cloudflare) — thử RSSHub hoặc dán bài lẻ qua Quick Paste.`
+        : `[BOT_BLOCKED] Tải feed thất bại với HTTP ${error.status} (bị từ chối truy cập hoặc chặn bot).`,
+    };
+  }
+  return {
+    code: "UPSTREAM_ERROR",
+    status: 502,
+    message: `[UPSTREAM_ERROR] Tải feed thất bại với HTTP ${error.status}.`,
+  };
+}
+
+export function classifyFeedError(error: unknown): ClassifiedFeedError {
   if (error instanceof UrlGuardError) {
     return {
       code: error.code === "SSRF_BLOCKED" ? "SSRF_BLOCKED" : "MALFORMED_XML",
@@ -406,70 +450,18 @@ export function classifyFeedError(error: unknown): {
     };
   }
   if (error instanceof FeedFetchHttpError) {
-    if (error.status === 429) {
-      const retryNote = error.retryAfter ? ` (Retry-After: ${error.retryAfter}s)` : "";
-      return {
-        code: "RATE_LIMITED",
-        status: 429,
-        message: `[RATE_LIMITED] Nguồn giới hạn tần suất (HTTP 429)${retryNote}. Hãy giãn lịch quét hoặc thử lại sau.`,
-      };
-    }
-    if (
-      (error.status === 403 || error.status === 401) &&
-      (error.cfMitigated || (error.server && /cloudflare/i.test(error.server)))
-    ) {
-      return {
-        code: "BOT_BLOCKED",
-        status: 403,
-        message: `[BOT_BLOCKED] Site chặn bot tự động (HTTP ${error.status} Cloudflare) — thử RSSHub hoặc dán bài lẻ qua Quick Paste.`,
-      };
-    }
-    if (error.status === 404 || error.status === 410) {
-      return {
-        code: "NOT_FOUND",
-        status: 400,
-        message: `[NOT_FOUND] Không tìm thấy feed tại URL này (HTTP ${error.status}). Hãy kiểm tra lại đường dẫn.`,
-      };
-    }
-    if (error.status === 403 || error.status === 401) {
-      return {
-        code: "BOT_BLOCKED",
-        status: 403,
-        message: `[BOT_BLOCKED] Tải feed thất bại với HTTP ${error.status} (bị từ chối truy cập hoặc chặn bot).`,
-      };
-    }
-    return {
-      code: "UPSTREAM_ERROR",
-      status: 502,
-      message: `[UPSTREAM_ERROR] Tải feed thất bại với HTTP ${error.status}.`,
-    };
+    return classifyFeedHttpError(error);
   }
   if (error instanceof Error) {
     if (error.message.includes("2MB")) {
-      return {
-        code: "TOO_LARGE",
-        status: 400,
-        message: `[TOO_LARGE] ${FEED_TOO_LARGE_MESSAGE}`,
-      };
+      return { code: "TOO_LARGE", status: 400, message: `[TOO_LARGE] ${FEED_TOO_LARGE_MESSAGE}` };
     }
     if (error.name === "TimeoutError" || error.name === "AbortError") {
-      return {
-        code: "TIMEOUT",
-        status: 502,
-        message: "[TIMEOUT] Quá thời gian chờ phản hồi từ nguồn tin.",
-      };
+      return { code: "TIMEOUT", status: 502, message: "[TIMEOUT] Quá thời gian chờ phản hồi từ nguồn tin." };
     }
-    return {
-      code: "UPSTREAM_ERROR",
-      status: 502,
-      message: error.message.slice(0, 500),
-    };
+    return { code: "UPSTREAM_ERROR", status: 502, message: error.message.slice(0, 500) };
   }
-  return {
-    code: "UPSTREAM_ERROR",
-    status: 502,
-    message: "Lỗi không xác định khi quét feed.",
-  };
+  return { code: "UPSTREAM_ERROR", status: 502, message: "Lỗi không xác định khi quét feed." };
 }
 
 function looksLikeHtmlPayload(body: string, contentType: string | null): boolean {
@@ -491,6 +483,39 @@ export type FeedFetchResult =
       contentType: string | null;
     };
 
+function validateFeedHopUrl(url: URL): void {
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Feed URL phải dùng http hoặc https.");
+  }
+  if (url.username || url.password) {
+    throw new UrlGuardError("INVALID_URL", 400, "Feed URL không được chứa thông tin đăng nhập.");
+  }
+}
+
+function buildFeedHeaders(etag?: string | null, lastModified?: string | null): Record<string, string> {
+  return {
+    Accept:
+      "application/feed+json, application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+    "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)",
+    ...(etag ? { "If-None-Match": etag } : {}),
+    ...(lastModified ? { "If-Modified-Since": lastModified } : {}),
+  };
+}
+
+async function resolveFeedRedirectHop(
+  response: Response,
+  current: URL,
+  hop: number
+): Promise<URL> {
+  const location = response.headers.get("location");
+  await response.body?.cancel();
+  if (!location) throw new Error(`Feed redirect (${response.status}) thiếu Location header.`);
+  if (hop === MAX_FEED_REDIRECTS) {
+    throw new UrlGuardError("TOO_MANY_REDIRECTS", 400, "Feed URL chuyển hướng quá nhiều lần.");
+  }
+  return new URL(location, current);
+}
+
 export async function fetchFeedWithCacheSafely(
   feedUrl: string,
   options: {
@@ -504,28 +529,12 @@ export async function fetchFeedWithCacheSafely(
 ): Promise<FeedFetchResult> {
   const fetchFn = options.fetchFn ?? fetch;
   const timeoutMs = options.timeoutMs ?? FEED_FETCH_TIMEOUT_MS;
+  const headers = buildFeedHeaders(options.etag, options.lastModified);
   let current = new URL(feedUrl.trim());
 
   for (let hop = 0; hop <= MAX_FEED_REDIRECTS; hop++) {
-    if (current.protocol !== "http:" && current.protocol !== "https:") {
-      throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Feed URL phải dùng http hoặc https.");
-    }
-    if (current.username || current.password) {
-      throw new UrlGuardError("INVALID_URL", 400, "Feed URL không được chứa thông tin đăng nhập.");
-    }
+    validateFeedHopUrl(current);
     await assertPublicHostname(current.hostname, options.lookupFn);
-
-    const headers: Record<string, string> = {
-      Accept:
-        "application/feed+json, application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-      "User-Agent": "Mozilla/5.0 (compatible; CrisneNewsBot/1.0; +https://crisne.blog)",
-    };
-    if (options.etag) {
-      headers["If-None-Match"] = options.etag;
-    }
-    if (options.lastModified) {
-      headers["If-Modified-Since"] = options.lastModified;
-    }
 
     const hopSignal = options.signal
       ? AbortSignal.any([AbortSignal.timeout(timeoutMs), options.signal])
@@ -538,24 +547,17 @@ export async function fetchFeedWithCacheSafely(
       signal: hopSignal,
     });
 
-    if (response.status >= 300 && response.status < 400) {
-      if (response.status === 304) {
-        await response.body?.cancel();
-        return {
-          kind: "not_modified",
-          etag: response.headers.get("etag") ?? options.etag ?? null,
-          lastModified: response.headers.get("last-modified") ?? options.lastModified ?? null,
-        };
-      }
-      const location = response.headers.get("location");
+    if (response.status === 304) {
       await response.body?.cancel();
-      if (!location) {
-        throw new Error(`Feed redirect (${response.status}) thiếu Location header.`);
-      }
-      if (hop === MAX_FEED_REDIRECTS) {
-        throw new UrlGuardError("TOO_MANY_REDIRECTS", 400, "Feed URL chuyển hướng quá nhiều lần.");
-      }
-      current = new URL(location, current);
+      return {
+        kind: "not_modified",
+        etag: response.headers.get("etag") ?? options.etag ?? null,
+        lastModified: response.headers.get("last-modified") ?? options.lastModified ?? null,
+      };
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      current = await resolveFeedRedirectHop(response, current, hop);
       continue;
     }
 
@@ -624,6 +626,152 @@ export function isNewsSourceDue(
   return elapsedMs >= source.fetchIntervalDays * DAY_MS - FETCH_INTERVAL_SLACK_MS;
 }
 
+interface SyncSourceInput {
+  id: string;
+  name: string;
+  feedUrl: string;
+  domain: string;
+  etag: string | null;
+  lastModified: string | null;
+}
+
+interface SyncSourceOptions {
+  preloadedSourceDomains: string[];
+  maxItems: number;
+  lookupFn?: HostLookupFn;
+  fetchFn?: typeof fetch;
+}
+
+async function ingestFeedEntriesForSource(
+  source: SyncSourceInput,
+  entries: ParsedFeedEntry[],
+  opts: SyncSourceOptions
+): Promise<{ queued: number; duplicates: number; skippedErrors: number; skippedReasons: CronSkippedReasonDto[] }> {
+  const feedHost = new URL(source.feedUrl).hostname.toLowerCase().replace(/^www\./, "");
+  let queued = 0;
+  let duplicates = 0;
+  let skippedErrors = 0;
+  const skippedReasons: CronSkippedReasonDto[] = [];
+
+  for (const entry of entries) {
+    try {
+      const res = await enqueueNewsUrl(
+        {
+          url: entry.url,
+          title: entry.title,
+          origin: "cron",
+          sourceId: source.id,
+          publishedAt: entry.publishedAt,
+        },
+        {
+          preloadedSourceDomains: opts.preloadedSourceDomains,
+          extraAllowedDomains: [source.domain, feedHost],
+          lookupFn: opts.lookupFn,
+          fetchFn: opts.fetchFn,
+          skipWake: true,
+        }
+      );
+      if (res.status === "queued") queued++;
+      else duplicates++;
+    } catch (entryError) {
+      skippedErrors++;
+      if (skippedReasons.length < 5) {
+        skippedReasons.push({
+          url: entry.url,
+          code: entryError instanceof UrlGuardError ? entryError.code : "INGEST_REJECTED",
+        });
+      }
+    }
+  }
+  return { queued, duplicates, skippedErrors, skippedReasons };
+}
+
+async function syncSingleNewsSource(
+  source: SyncSourceInput,
+  opts: SyncSourceOptions
+): Promise<CronSyncSourceResult> {
+  let queued = 0;
+  let duplicates = 0;
+  let skippedErrors = 0;
+  let skippedReasons: CronSkippedReasonDto[] = [];
+  let notModified = false;
+  let sourceError: string | null = null;
+
+  try {
+    const feedRes = await fetchFeedWithCacheSafely(source.feedUrl, {
+      lookupFn: opts.lookupFn,
+      fetchFn: opts.fetchFn,
+      etag: source.etag,
+      lastModified: source.lastModified,
+    });
+
+    if (feedRes.kind === "not_modified") {
+      notModified = true;
+      await prisma.newsSource.update({
+        where: { id: source.id },
+        data: {
+          etag: feedRes.etag ?? source.etag,
+          lastModified: feedRes.lastModified ?? source.lastModified,
+          lastFetchedAt: new Date(),
+          lastError: null,
+        },
+      });
+    } else {
+      const isJson = isJsonFeedDocument(feedRes.xml);
+      const xmlParsed = isJson ? null : parseXmlFeedInternal(feedRes.xml, source.feedUrl);
+      if (!isJson && !xmlParsed?.matchedRoot && looksLikeHtmlPayload(feedRes.xml, feedRes.contentType)) {
+        sourceError =
+          "[BOT_BLOCKED] Nguồn trả về trang HTML thay vì RSS/Atom/JSON Feed (có thể bị chặn bot hoặc đổi URL).";
+        await prisma.newsSource.update({
+          where: { id: source.id },
+          data: { lastFetchedAt: new Date(), lastError: sourceError },
+        });
+      } else {
+        const parsedEntries = isJson
+          ? parseJsonFeed(feedRes.xml, source.feedUrl).entries
+          : (xmlParsed?.entries ?? []);
+        const counts = await ingestFeedEntriesForSource(source, parsedEntries.slice(0, opts.maxItems), opts);
+        queued = counts.queued;
+        duplicates = counts.duplicates;
+        skippedErrors = counts.skippedErrors;
+        skippedReasons = counts.skippedReasons;
+
+        await prisma.newsSource.update({
+          where: { id: source.id },
+          data: {
+            etag: feedRes.etag ?? null,
+            lastModified: feedRes.lastModified ?? null,
+            lastFetchedAt: new Date(),
+            lastError: null,
+          },
+        });
+      }
+    }
+  } catch (error) {
+    sourceError = classifyFeedError(error).message;
+    await prisma.newsSource.update({
+      where: { id: source.id },
+      data: { lastFetchedAt: new Date(), lastError: sourceError },
+    });
+  }
+
+  return {
+    sourceId: source.id,
+    sourceName: source.name,
+    queued,
+    duplicates,
+    skippedErrors,
+    ...(skippedReasons.length > 0 ? { skippedReasons } : {}),
+    ...(notModified ? { notModified: true } : {}),
+    error: sourceError,
+  };
+}
+
+function resolveCronScanMode(options: { onlyDue?: boolean; sourceId?: string }): "cron" | "manual" | "manual_all" {
+  if (options.onlyDue) return "cron";
+  return options.sourceId ? "manual" : "manual_all";
+}
+
 export async function syncNewsSourcesCron(
   options: {
     sourceId?: string;
@@ -637,10 +785,7 @@ export async function syncNewsSourcesCron(
 ): Promise<CronSyncSummary> {
   const startedAt = Date.now();
   const timeBudgetMs = options.timeBudgetMs ?? DEFAULT_CRON_TIME_BUDGET_MS;
-  const maxItems = Math.min(
-    Math.max(1, options.maxItemsPerSource ?? resolveDefaultCronMaxItems()),
-    30
-  );
+  const maxItems = Math.min(Math.max(1, options.maxItemsPerSource ?? resolveDefaultCronMaxItems()), 30);
   const [candidateSources, allEnabledSources] = await Promise.all([
     prisma.newsSource.findMany({
       where: options.sourceId ? { id: options.sourceId } : { enabled: true },
@@ -655,16 +800,15 @@ export async function syncNewsSourcesCron(
     options.onlyDue && !options.sourceId
       ? candidateSources.filter((source) => isNewsSourceDue(source, startedAt))
       : candidateSources;
-  const preloadedSourceDomains = allEnabledSources.map((s) => s.domain);
+  const syncOpts: SyncSourceOptions = {
+    preloadedSourceDomains: allEnabledSources.map((s) => s.domain),
+    maxItems,
+    lookupFn: options.lookupFn,
+    fetchFn: options.fetchFn,
+  };
 
   const results: Array<CronSyncSourceResult | undefined> = new Array(sources.length);
-  let totalQueued = 0;
-  let totalDuplicates = 0;
-
-  const processOneSource = async (
-    source: (typeof sources)[number],
-    index: number
-  ): Promise<void> => {
+  const processOneSource = async (source: (typeof sources)[number], index: number): Promise<void> => {
     if (index > 0 && Date.now() - startedAt >= timeBudgetMs) {
       results[index] = {
         sourceId: source.id,
@@ -676,145 +820,24 @@ export async function syncNewsSourcesCron(
       };
       return;
     }
-
-    let queued = 0;
-    let duplicates = 0;
-    let skippedErrors = 0;
-    const skippedReasons: CronSkippedReasonDto[] = [];
-    let notModified = false;
-    let sourceError: string | null = null;
-
-    try {
-      const feedRes = await fetchFeedWithCacheSafely(source.feedUrl, {
-        lookupFn: options.lookupFn,
-        fetchFn: options.fetchFn,
-        etag: source.etag,
-        lastModified: source.lastModified,
-      });
-
-      if (feedRes.kind === "not_modified") {
-        notModified = true;
-        await prisma.newsSource.update({
-          where: { id: source.id },
-          data: {
-            etag: feedRes.etag ?? source.etag,
-            lastModified: feedRes.lastModified ?? source.lastModified,
-            lastFetchedAt: new Date(),
-            lastError: null,
-          },
-        });
-      } else {
-        const isJson = isJsonFeedDocument(feedRes.xml);
-        const xmlParsed = isJson ? null : parseXmlFeedInternal(feedRes.xml, source.feedUrl);
-        if (
-          !isJson &&
-          !xmlParsed?.matchedRoot &&
-          looksLikeHtmlPayload(feedRes.xml, feedRes.contentType)
-        ) {
-          sourceError =
-            "[BOT_BLOCKED] Nguồn trả về trang HTML thay vì RSS/Atom/JSON Feed (có thể bị chặn bot hoặc đổi URL).";
-          await prisma.newsSource.update({
-            where: { id: source.id },
-            data: {
-              lastFetchedAt: new Date(),
-              lastError: sourceError,
-            },
-          });
-        } else {
-          const parsedEntries = isJson
-            ? parseJsonFeed(feedRes.xml, source.feedUrl).entries
-            : (xmlParsed?.entries ?? []);
-          const entries = parsedEntries.slice(0, maxItems);
-          const feedHost = new URL(source.feedUrl).hostname.toLowerCase().replace(/^www\./, "");
-
-          for (const entry of entries) {
-            try {
-              const res = await enqueueNewsUrl(
-                {
-                  url: entry.url,
-                  title: entry.title,
-                  origin: "cron",
-                  sourceId: source.id,
-                  publishedAt: entry.publishedAt,
-                },
-                {
-                  preloadedSourceDomains,
-                  extraAllowedDomains: [source.domain, feedHost],
-                  lookupFn: options.lookupFn,
-                  fetchFn: options.fetchFn,
-                  skipWake: true,
-                }
-              );
-              if (res.status === "queued") {
-                queued++;
-                totalQueued++;
-              } else {
-                duplicates++;
-                totalDuplicates++;
-              }
-            } catch (entryError) {
-              skippedErrors++;
-              if (skippedReasons.length < 5) {
-                skippedReasons.push({
-                  url: entry.url,
-                  code:
-                    entryError instanceof UrlGuardError ? entryError.code : "INGEST_REJECTED",
-                });
-              }
-            }
-          }
-
-          await prisma.newsSource.update({
-            where: { id: source.id },
-            data: {
-              etag: feedRes.etag ?? null,
-              lastModified: feedRes.lastModified ?? null,
-              lastFetchedAt: new Date(),
-              lastError: null,
-            },
-          });
-        }
-      }
-    } catch (error) {
-      sourceError = classifyFeedError(error).message;
-      await prisma.newsSource.update({
-        where: { id: source.id },
-        data: {
-          lastFetchedAt: new Date(),
-          lastError: sourceError,
-        },
-      });
-    }
-
-    results[index] = {
-      sourceId: source.id,
-      sourceName: source.name,
-      queued,
-      duplicates,
-      skippedErrors,
-      ...(skippedReasons.length > 0 ? { skippedReasons } : {}),
-      ...(notModified ? { notModified: true } : {}),
-      error: sourceError,
-    };
+    results[index] = await syncSingleNewsSource(source, syncOpts);
   };
 
   for (let i = 0; i < sources.length; i += CRON_SOURCE_CONCURRENCY) {
     const batch = sources.slice(i, i + CRON_SOURCE_CONCURRENCY);
-    await Promise.allSettled(
-      batch.map((source, offset) => processOneSource(source, i + offset))
-    );
+    await Promise.allSettled(batch.map((source, offset) => processOneSource(source, i + offset)));
   }
+
+  const finalResults = results.filter((item): item is CronSyncSourceResult => Boolean(item));
+  const totalQueued = finalResults.reduce((acc, r) => acc + r.queued, 0);
+  const totalDuplicates = finalResults.reduce((acc, r) => acc + r.duplicates, 0);
 
   if (totalQueued > 0) {
     notifyNewsWorker();
   }
 
-  const finalResults = results.filter((item): item is CronSyncSourceResult => Boolean(item));
   try {
-    await recordNewsSourceScans(
-      finalResults,
-      options.onlyDue ? "cron" : options.sourceId ? "manual" : "manual_all"
-    );
+    await recordNewsSourceScans(finalResults, resolveCronScanMode(options));
   } catch (error) {
     // History is best-effort: a failed write must not fail a sync that already queued items
     console.error("[news] Failed to record source scan history:", error);

@@ -1,3 +1,31 @@
+import { trimChar } from '@/lib/utils';
+
+const CALLOUT_TYPES = new Set(['success', 'info', 'warning', 'error']);
+
+function extractLeadingCalloutType(inner: string): string | null {
+  let cursor = 0;
+  while (cursor < inner.length) {
+    while (cursor < inner.length && /\s/.test(inner[cursor])) cursor++;
+    if (inner[cursor] === '<') {
+      const close = inner.indexOf('>', cursor + 1);
+      if (close === -1) break;
+      cursor = close + 1;
+      continue;
+    }
+    break;
+  }
+  const rest = inner.slice(cursor);
+  if (!rest.startsWith('[!')) return null;
+  const endBracket = rest.indexOf(']', 2);
+  if (endBracket === -1) return null;
+  const candidate = rest.slice(2, endBracket).toLowerCase();
+  return CALLOUT_TYPES.has(candidate) ? candidate : null;
+}
+
+function stripCalloutMarkers(inner: string): string {
+  return inner.replace(/\[!(?:success|info|warning|error)\][ \t]*/gi, '');
+}
+
 /**
  * Utility to convert raw content (HTML or plain text) into formatted HTML 
  * with support for Notion-style Callout boxes ([!info], [!success], [!warning], [!error])
@@ -26,20 +54,12 @@ export function contentToHtml(content: string): string {
   html = html.replace(
     /<blockquote([^>]*)>([\s\S]*?)<\/blockquote>/gi,
     (_match, attrs: string, inner: string) => {
-      let type: string | null = null;
-      const typeAttrMatch = attrs.match(/data-callout-type="(success|info|warning|error)"/i);
-      if (typeAttrMatch) {
-        type = typeAttrMatch[1].toLowerCase();
-      } else {
-        const markerMatch = inner.match(/^\s*(?:<[^>]+>)*\s*\[!(success|info|warning|error)\]/i);
-        if (markerMatch) {
-          type = markerMatch[1].toLowerCase();
-        }
-      }
+      const typeAttrMatch = /data-callout-type="(success|info|warning|error)"/i.exec(attrs);
+      const type = typeAttrMatch ? typeAttrMatch[1].toLowerCase() : extractLeadingCalloutType(inner);
 
       if (type) {
         // Clean all duplicate or lingering markers like [!error] while preserving opening tags
-        const cleanInner = inner.replace(/((?:<[^>]+>)*)\s*\[!(?:success|info|warning|error)\]\s*/gi, '$1');
+        const cleanInner = stripCalloutMarkers(inner);
         return `<div class="callout callout-${type}"><div class="callout-content">${cleanInner}</div></div>`;
       }
       return `<blockquote${attrs}>${inner}</blockquote>`;
@@ -48,10 +68,12 @@ export function contentToHtml(content: string): string {
 
   // Also handle plain text with [!type] markers (not in blockquote)
   html = html.replace(
-    /(<p[^>]*>)\s*\[!(success|info|warning|error)\]\s*([\s\S]*?)(<\/p>)/gi,
-    (_match, _openTag, type, innerContent) => {
-      const cleanInner = innerContent.replace(/(?:<[^>]+>)*\s*\[!(?:success|info|warning|error)\]\s*/gi, '');
-      return `<div class="callout callout-${type.toLowerCase()}"><div class="callout-content">${cleanInner}</div></div>`;
+    /(<p[^<>]*>)([\s\S]*?)(<\/p>)/gi,
+    (fullMatch, _openTag: string, inner: string) => {
+      const markerType = /^\s*\[!(success|info|warning|error)\]\s*/i.exec(inner);
+      if (!markerType) return fullMatch;
+      const cleanInner = stripCalloutMarkers(inner.slice(markerType[0].length));
+      return `<div class="callout callout-${markerType[1].toLowerCase()}"><div class="callout-content">${cleanInner}</div></div>`;
     }
   );
 
@@ -74,13 +96,15 @@ export function contentToHtml(content: string): string {
   // Ensure all images have exact constrained sizing and square borders matching edit mode
   html = html.replace(/<img\b([^>]*)>/gi, (_match, attrs: string) => {
     // Extract existing width/height from style or attributes if present
-    const widthMatch = attrs.match(/width:\s*([0-9]+)px/i) || attrs.match(/\bwidth=["']?([0-9]+)["']?/i);
-    const heightMatch = attrs.match(/height:\s*([0-9]+)px/i) || attrs.match(/\bheight=["']?([0-9]+)["']?/i);
+    const widthMatch = /width:\s*(\d+)px/i.exec(attrs) || /\bwidth=["']?(\d+)["']?/i.exec(attrs);
+    const heightMatch = /height:\s*(\d+)px/i.exec(attrs) || /\bheight=["']?(\d+)["']?/i.exec(attrs);
 
-    let cleanAttrs = attrs
-      .replace(/\s*style\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/\s*width\s*=\s*["']?[^"'\s>]*["']?/gi, '')
-      .replace(/\s*height\s*=\s*["']?[^"'\s>]*["']?/gi, '');
+    const strippedAttrs = attrs
+      .replace(/(?:^|\s)style\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/(?:^|\s)width\s*=\s*["']?[^"'\s>]*["']?/gi, '')
+      .replace(/(?:^|\s)height\s*=\s*["']?[^"'\s>]*["']?/gi, '')
+      .trim();
+    const cleanAttrs = strippedAttrs ? ` ${strippedAttrs}` : '';
 
     let style = 'max-width:100%;object-fit:contain;border-radius:0;display:block;margin:0.5rem 0;cursor:zoom-in;';
     if (widthMatch && Number(widthMatch[1]) > 0) {
@@ -94,8 +118,7 @@ export function contentToHtml(content: string): string {
       style += 'max-height:320px;height:auto;';
     }
 
-    cleanAttrs += ` style="${style}"`;
-    return `<img${cleanAttrs}>`;
+    return `<img${cleanAttrs} style="${style}">`;
   });
 
   // Sanitize dangerous HTML elements and event handlers
@@ -119,7 +142,7 @@ export function sanitizeDangerousHtml(rawHtml: string): string {
   safe = safe.replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form>/gi, '');
 
   // Remove dangerous inline event handlers (e.g. onclick=, onerror=, onload=)
-  safe = safe.replace(/\s+on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
+  safe = safe.replace(/(?<=\s)on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
 
   // Remove javascript: or unsafe data: URIs in href or src (allow safe data:image/)
   safe = safe.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, 'href="#"');
@@ -138,7 +161,7 @@ const WORDS_PER_MINUTE = 200;
 
 function plainText(html: string): string {
   return html
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<[^<>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
@@ -179,13 +202,13 @@ export function readingMinutes(content?: string | null): number {
 
 /** Anchor slug of a heading's text (ADR-0014): no Vietnamese diacritics, lowercase, kebab-case. */
 function headingSlug(text: string): string {
-  return text
+  const normalized = text
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g, '-');
+  return trimChar(normalized, '-');
 }
 
 /**
@@ -201,7 +224,11 @@ export function withHeadingIds(html: string): { html: string; headings: ContentH
     if (!text) return _m;
     const base = headingSlug(text) || 'section';
     let id = base;
-    for (let n = 2; usedIds.has(id); n++) id = `${base}-${n}`;
+    let n = 2;
+    while (usedIds.has(id)) {
+      id = `${base}-${n}`;
+      n += 1;
+    }
     usedIds.add(id);
     headings.push({ id, text, level: Number(lvl) as 2 | 3 });
     const cleanAttrs = attrs.replace(/\sid="[^"]*"/i, '');

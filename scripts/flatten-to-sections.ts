@@ -45,47 +45,27 @@ async function backup(client: Client, file: string): Promise<void> {
   fs.writeFileSync(file, JSON.stringify({ takenAt: new Date().toISOString(), tables: dump }, null, 2));
 }
 
-async function main() {
-  const { client, target } = connect();
-  console.log(`target: ${target}${apply ? "  (APPLY)" : "  (dry-run)"}`);
-
-  const layers = (await client.execute('SELECT id, roadmapId, "order", title FROM RoadmapLayer')).rows as unknown as LayerRow[];
-  const groups = (await client.execute('SELECT id, layerId, "order", title FROM RoadmapGroup')).rows as unknown as GroupRow[];
-  const items = (await client.execute('SELECT id, groupId, "order", title FROM RoadmapItem')).rows as unknown as ItemRow[];
-  // Turso never got ADR-0008, so groupTitle may be missing and the old level column may still be there
+async function readTriageRows(
+  client: Client
+): Promise<{ triage: TriageRow[]; triageHasLayer: boolean; triageColumns: string[] }> {
   const triageColumns = await columns(client, "KnowledgeTriage");
   const triageHasLayer = triageColumns.includes("layerId");
+  if (!triageHasLayer) {
+    return { triage: [], triageHasLayer: false, triageColumns };
+  }
   const groupTitleSql = triageColumns.includes("groupTitle") ? "groupTitle" : "NULL AS groupTitle";
-  const triage = triageHasLayer
-    ? ((await client.execute(`SELECT id, layerId, ${groupTitleSql} FROM KnowledgeTriage`)).rows as unknown as TriageRow[])
-    : [];
+  const triage = (await client.execute(`SELECT id, layerId, ${groupTitleSql} FROM KnowledgeTriage`))
+    .rows as unknown as TriageRow[];
+  return { triage, triageHasLayer: true, triageColumns };
+}
 
-  const plan = planFlatten({
-    layers: layers.map((l) => ({ ...l, order: Number(l.order), roadmapId: String(l.roadmapId) })),
-    groups: groups.map((g) => ({ ...g, order: Number(g.order) })),
-    items: items.map((i) => ({ ...i, order: Number(i.order) })),
-    triage,
-  });
-
-  console.log(`layers ${layers.length} → sections; groups ${groups.length} → merged; lessons ${items.length}; triage ${triage.length}`);
-  const sections = new Set(plan.items.map((i) => `${i.roadmapId}: ${i.section}`));
-  for (const s of sections) console.log(`  section  ${s}`);
-  if (plan.conflicts.length) {
-    console.error("\nSTOP: lesson names clash inside one topic. Rename them, then run again:");
-    for (const c of plan.conflicts) console.error(`  - ${c}`);
-    process.exit(1);
-  }
-  if (!apply) {
-    console.log("\nDry-run only. Nothing written. Re-run with --apply after reviewing the plan.");
-    return;
-  }
-
-  const backupFile = path.join(__dirname, `../flatten-backup-${Date.now()}.json`);
-  await backup(client, backupFile);
-  console.log(`backup: ${backupFile}`);
-
-  // Lesson rows are rebuilt with the new columns; their content is carried over as is
-  const itemById = new Map((await client.execute("SELECT * FROM RoadmapItem")).rows.map((r) => [String(r.id), r]));
+function buildFlattenStatements(
+  itemById: Map<string, Record<string, unknown>>,
+  plan: ReturnType<typeof planFlatten>,
+  triageHasLayer: boolean,
+  triage: TriageRow[],
+  triageColumns: string[]
+): InStatement[] {
   const sectionById = new Map(plan.items.map((u) => [u.id, u]));
   const statements: InStatement[] = [
     `CREATE TABLE "RoadmapItem_new" (
@@ -120,11 +100,10 @@ async function main() {
     `CREATE UNIQUE INDEX "RoadmapItem_roadmapId_title_key" ON "RoadmapItem"("roadmapId", "title")`,
     `DROP TABLE "RoadmapGroup"`,
     `DROP TABLE "RoadmapLayer"`,
+    // Roadmap loses shortCode. Dropped as a column, not by rebuilding the table: DROP TABLE "Roadmap" would
+    // cascade-delete the lessons that reference it (foreign keys are on), so the table stays.
+    `ALTER TABLE "Roadmap" DROP COLUMN "shortCode"`
   );
-
-  // Roadmap loses shortCode. Dropped as a column, not by rebuilding the table: DROP TABLE "Roadmap" would
-  // cascade-delete the lessons that reference it (foreign keys are on), so the table stays.
-  statements.push(`ALTER TABLE "Roadmap" DROP COLUMN "shortCode"`);
 
   // KnowledgeTriage: the three layer/group targets become one section, dropped as columns (no foreign keys)
   if (triageHasLayer) {
@@ -137,6 +116,46 @@ async function main() {
       statements.push(`ALTER TABLE "KnowledgeTriage" DROP COLUMN "${col}"`);
     }
   }
+  return statements;
+}
+
+async function main() {
+  const { client, target } = connect();
+  console.log(`target: ${target}${apply ? "  (APPLY)" : "  (dry-run)"}`);
+
+  const layers = (await client.execute('SELECT id, roadmapId, "order", title FROM RoadmapLayer')).rows as unknown as LayerRow[];
+  const groups = (await client.execute('SELECT id, layerId, "order", title FROM RoadmapGroup')).rows as unknown as GroupRow[];
+  const items = (await client.execute('SELECT id, groupId, "order", title FROM RoadmapItem')).rows as unknown as ItemRow[];
+  // Turso never got ADR-0008, so groupTitle may be missing and the old level column may still be there
+  const { triage, triageHasLayer, triageColumns } = await readTriageRows(client);
+
+  const plan = planFlatten({
+    layers: layers.map((l) => ({ ...l, order: Number(l.order), roadmapId: String(l.roadmapId) })),
+    groups: groups.map((g) => ({ ...g, order: Number(g.order) })),
+    items: items.map((i) => ({ ...i, order: Number(i.order) })),
+    triage,
+  });
+
+  console.log(`layers ${layers.length} → sections; groups ${groups.length} → merged; lessons ${items.length}; triage ${triage.length}`);
+  const sections = new Set(plan.items.map((i) => `${i.roadmapId}: ${i.section}`));
+  for (const s of sections) console.log(`  section  ${s}`);
+  if (plan.conflicts.length) {
+    console.error("\nSTOP: lesson names clash inside one topic. Rename them, then run again:");
+    for (const c of plan.conflicts) console.error(`  - ${c}`);
+    process.exit(1);
+  }
+  if (!apply) {
+    console.log("\nDry-run only. Nothing written. Re-run with --apply after reviewing the plan.");
+    return;
+  }
+
+  const backupFile = path.join(__dirname, `../flatten-backup-${Date.now()}.json`);
+  await backup(client, backupFile);
+  console.log(`backup: ${backupFile}`);
+
+  // Lesson rows are rebuilt with the new columns; their content is carried over as is
+  const itemById = new Map((await client.execute("SELECT * FROM RoadmapItem")).rows.map((r) => [String(r.id), r]));
+  const statements = buildFlattenStatements(itemById, plan, triageHasLayer, triage, triageColumns);
 
   await client.batch(statements, "write");
   const left = (await client.execute("SELECT COUNT(*) AS n FROM RoadmapItem")).rows[0].n;

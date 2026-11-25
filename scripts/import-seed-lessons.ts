@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createClient, type Client, type InStatement } from "@libsql/client";
 import { INITIAL_ROADMAP_DATA } from "../lib/roadmap/data";
-import { allocateGlobalLessonSlug } from "../lib/utils";
+import { allocateGlobalLessonSlug, trimTrailingChar } from "../lib/utils";
 import { planSeedImport, type ExistingLesson } from "./lib/seed-import-plan";
 
 const envPath = path.join(__dirname, "../.env.local");
@@ -32,7 +32,7 @@ async function notifyReindex(): Promise<void> {
     return;
   }
   try {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/internal/reindex`, {
+    const res = await fetch(`${trimTrailingChar(baseUrl, "/")}/internal/reindex`, {
       method: "POST",
       headers: { "x-internal-key": internalKey },
       signal: AbortSignal.timeout(5000),

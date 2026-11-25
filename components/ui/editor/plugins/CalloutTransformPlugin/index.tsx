@@ -89,42 +89,49 @@ export function CalloutTransformPlugin() {
     );
   }, [editor]);
 
+function $canExitLastCalloutBlock(anchorNode: LexicalNode): boolean {
+  let currentBlock: LexicalNode | null = anchorNode;
+  while (currentBlock !== null && currentBlock.getParent()?.getKey() !== 'root') {
+    currentBlock = currentBlock.getParent();
+  }
+  if (!currentBlock) return false;
+  const root = $getRoot();
+  return (
+    currentBlock === root.getLastChild() &&
+    $isCalloutNode(currentBlock) &&
+    currentBlock.getNextSibling() === null
+  );
+}
+
+function $focusOrAppendTrailingParagraph(lastChild: LexicalNode): void {
+  if ($isParagraphNode(lastChild) && lastChild.getTextContent().trim() === '') {
+    lastChild.selectEnd();
+    return;
+  }
+  const paragraph = $createParagraphNode();
+  $getRoot().append(paragraph);
+  paragraph.selectEnd();
+}
+
+function isEditorSurfaceTarget(target: HTMLElement, rootElement: HTMLElement): boolean {
+  return target.classList.contains('editor-canvas') || target === rootElement || target.contains(rootElement);
+}
+
   // Handle ArrowDown key when at the end of a block that has no next sibling
   useEffect(() => {
     return editor.registerCommand(
       KEY_DOWN_COMMAND,
       (event: KeyboardEvent) => {
-        if (event.key === 'ArrowDown') {
-          const selection = $getSelection();
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            const anchorNode = anchor.getNode();
+        if (event.key !== 'ArrowDown') return false;
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+        if (!$canExitLastCalloutBlock(selection.anchor.getNode())) return false;
 
-            // Find top-level parent block
-            let currentBlock: LexicalNode | null = anchorNode;
-            while (currentBlock !== null && currentBlock.getParent()?.getKey() !== 'root') {
-              currentBlock = currentBlock.getParent();
-            }
-
-            if (currentBlock !== null) {
-              const root = $getRoot();
-              const lastChild = root.getLastChild();
-
-              // If cursor is in the last child block and it's a Callout or special block
-              if (currentBlock === lastChild && $isCalloutNode(currentBlock)) {
-                // If there is no next block, create one and navigate to it
-                if (currentBlock.getNextSibling() === null) {
-                  const paragraph = $createParagraphNode();
-                  root.append(paragraph);
-                  paragraph.select();
-                  event.preventDefault();
-                  return true;
-                }
-              }
-            }
-          }
-        }
-        return false;
+        const paragraph = $createParagraphNode();
+        $getRoot().append(paragraph);
+        paragraph.select();
+        event.preventDefault();
+        return true;
       },
       COMMAND_PRIORITY_LOW,
     );
@@ -136,38 +143,14 @@ export function CalloutTransformPlugin() {
       CLICK_COMMAND,
       (event: MouseEvent) => {
         const rootElement = editor.getRootElement();
-        if (!rootElement) return false;
-
         const target = event.target as HTMLElement | null;
-        if (!target) return false;
-
-        // Check if the click happened directly on contenteditable container or canvas
-        const isCanvas = target.classList.contains('editor-canvas');
-        const isRoot = target === rootElement || target.contains(rootElement);
-
-        if (isCanvas || isRoot) {
+        if (rootElement && target && isEditorSurfaceTarget(target, rootElement)) {
           editor.update(() => {
-            const root = $getRoot();
-            const lastChild = root.getLastChild();
-            if (!lastChild) return;
-
-            const lastElement = editor.getElementByKey(lastChild.getKey());
-            if (!lastElement) return;
-
-            const lastRect = lastElement.getBoundingClientRect();
-
-            // If clicked below the bottom of the last element
-            if (event.clientY > lastRect.bottom) {
-              // If the last child is already an empty paragraph, focus it
-              if ($isParagraphNode(lastChild) && lastChild.getTextContent().trim() === '') {
-                lastChild.selectEnd();
-                return;
-              }
-
-              // Otherwise append a new paragraph and focus it
-              const paragraph = $createParagraphNode();
-              root.append(paragraph);
-              paragraph.selectEnd();
+            const lastChild = $getRoot().getLastChild();
+            const lastElement = lastChild ? editor.getElementByKey(lastChild.getKey()) : null;
+            if (!lastChild || !lastElement) return;
+            if (event.clientY > lastElement.getBoundingClientRect().bottom) {
+              $focusOrAppendTrailingParagraph(lastChild);
             }
           });
         }

@@ -2,6 +2,40 @@ import { AgentAdapter, GeneratedOutput } from '../../core/adapter';
 import { Hook, McpServer } from '../../core/model';
 import { ANTIGRAVITY_TOOL_MAP } from './maps';
 
+function collectAntigravityToolNames(tools?: Hook['tools']): string[] {
+  if (!tools || tools.length === 0) return [];
+  const toolNames: string[] = [];
+  for (const cat of tools) {
+    for (const t of ANTIGRAVITY_TOOL_MAP[cat] || []) {
+      if (!toolNames.includes(t)) {
+        toolNames.push(t);
+      }
+    }
+  }
+  return toolNames;
+}
+
+function buildAntigravityHookPayload(h: Hook): unknown {
+  const command = `node ../scripts/agent-adapter/hook-runner.js ${h.id} --agent=antigravity`;
+  const action: { command: string; timeout?: number } = { command };
+  if (h.timeout !== undefined) {
+    action.timeout = h.timeout;
+  }
+
+  if (h.event === 'SessionStart' || h.event === 'Stop') {
+    return action;
+  }
+
+  const toolNames = collectAntigravityToolNames(h.tools);
+  const entry: { matcher?: string; hooks: Array<{ command: string; timeout?: number }> } = {
+    hooks: [action],
+  };
+  if (toolNames.length > 0) {
+    entry.matcher = toolNames.join('|');
+  }
+  return entry;
+}
+
 export function renderAntigravityHooks(hooks: Hook[]): GeneratedOutput[] {
   const targetHooks = hooks.filter(h => !h.targets || h.targets.includes('antigravity'));
   if (targetHooks.length === 0) {
@@ -15,44 +49,10 @@ export function renderAntigravityHooks(hooks: Hook[]): GeneratedOutput[] {
   }
 
   const rendered: Record<string, Record<string, unknown[]>> = {};
-
   for (const h of targetHooks) {
-    const command = `node ../scripts/agent-adapter/hook-runner.js ${h.id} --agent=antigravity`;
-    const action: { command: string; timeout?: number } = { command };
-    if (h.timeout !== undefined) {
-      action.timeout = h.timeout;
-    }
-
-    if (!rendered[h.id]) {
-      rendered[h.id] = {};
-    }
-    if (!rendered[h.id][h.event]) {
-      rendered[h.id][h.event] = [];
-    }
-
-    if (h.event === 'SessionStart' || h.event === 'Stop') {
-      rendered[h.id][h.event].push(action);
-    } else {
-      const toolNames: string[] = [];
-      if (h.tools && h.tools.length > 0) {
-        for (const cat of h.tools) {
-          for (const t of ANTIGRAVITY_TOOL_MAP[cat] || []) {
-            if (!toolNames.includes(t)) {
-              toolNames.push(t);
-            }
-          }
-        }
-      }
-
-      const entry: { matcher?: string; hooks: Array<{ command: string; timeout?: number }> } = {
-        hooks: [action],
-      };
-      if (toolNames.length > 0) {
-        entry.matcher = toolNames.join('|');
-      }
-
-      rendered[h.id][h.event].push(entry);
-    }
+    rendered[h.id] ??= {};
+    rendered[h.id][h.event] ??= [];
+    rendered[h.id][h.event].push(buildAntigravityHookPayload(h));
   }
 
   const content = JSON.stringify(rendered, null, 2) + '\n';

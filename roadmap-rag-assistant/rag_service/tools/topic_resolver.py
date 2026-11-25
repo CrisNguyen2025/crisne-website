@@ -101,30 +101,36 @@ async def resolve_topic(identifier: str | None) -> TopicResolution:
     return TopicResolution("not_found", candidates=rows)
 
 
+async def _load_all_lessons() -> list[dict]:
+    from rag_service.tools import get_adapter
+
+    lessons: list[dict] = []
+    adapter = get_adapter()
+    for topic in await adapter.list_topics():
+        slug = topic.get("slug")
+        if not slug:
+            continue
+        detail = await adapter.get_topic(slug) or {}
+        for item in detail.get("items") or []:
+            lessons.append({
+                "id": item.get("id", ""),
+                "title": (item.get("title") or "").strip(),
+                "section": item.get("section"),
+                "topic_slug": slug,
+            })
+    return lessons
+
+
 async def resolve_lesson(name: str | None, topic_slug: str | None = None) -> LessonResolution:
     """The lesson a change names: exact id → exact title → whole-word title match.
 
     A tier with several matches is ambiguous (narrowed to `topic_slug` first), never a guess.
     """
-    from rag_service.tools import get_adapter
-
     raw = (name or "").strip()
     if not raw:
         return LessonResolution("not_found")
     try:
-        lessons: list[dict] = []
-        for topic in await get_adapter().list_topics():
-            slug = topic.get("slug")
-            if not slug:
-                continue
-            detail = await get_adapter().get_topic(slug) or {}
-            for item in detail.get("items") or []:
-                lessons.append({
-                    "id": item.get("id", ""),
-                    "title": (item.get("title") or "").strip(),
-                    "section": item.get("section"),
-                    "topic_slug": slug,
-                })
+        lessons = await _load_all_lessons()
     except Exception as exc:
         print(f"[resolve_lesson] Could not load lessons for '{raw}': {exc}")
         return LessonResolution("unavailable")

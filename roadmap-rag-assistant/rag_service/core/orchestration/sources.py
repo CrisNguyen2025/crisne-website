@@ -67,6 +67,125 @@ def llm_fallback_reason(llm: Any, failed: bool | str) -> Optional[str]:
     return "llm_error" if failed else "rate_limited"
 
 
+async def _retrieve_candidate_docs(
+    llm: Any,
+    query: str,
+    session_id: str,
+    deps: SourceDeps,
+) -> tuple[list[tuple[Any, float]], QueryPlan, int]:
+    plan = await deps.plan(llm, query, session_id) if deps.plan else QueryPlan(query)
+    queries = plan.queries()
+    pool = RERANK_POOL if deps.rerank else 4
+    if len(queries) == 1:
+        matches = await deps.search(query, limit=pool)
+    else:
+        results = await asyncio.gather(*(deps.search(q, limit=pool) for q in queries))
+        matches = merge_ranked(results, pool)
+    if deps.rerank and (deps.rerank_needed is None or deps.rerank_needed(query, matches)):
+        matches = (await deps.rerank(llm, query, matches))[:4]
+    elif deps.rerank:
+        matches = matches[:4]
+    before_gate = len(matches)
+    if deps.accept:
+        # A rewrite resolved "bài đó" to a name, so the check also accepts the rewrite's words;
+        # other variants are not used here, so a drifting phrasing cannot let an unrelated match through.
+        gate_query = f"{query} {plan.variants[0]}" if plan.rewritten and plan.variants else query
+        matches = deps.accept(gate_query, matches)
+    if (trace := current_trace()) is not None:
+        trace.flags["queries"] = len(queries)
+        trace.flags["rewritten"] = plan.rewritten
+    return matches, plan, before_gate
+
+
+async def _fetch_lesson_provenances_safe(
+    matches: list[tuple[Any, float]],
+    owner: bool,
+    deps: SourceDeps,
+) -> dict:
+    if not owner or deps.fetch_provenances is None:
+        return {}
+    item_ids = [
+        str(doc.id)
+        for doc, _ in matches
+        if getattr(doc, "doc_type", "") == "item" and getattr(doc, "id", None)
+    ]
+    if not item_ids:
+        return {}
+    try:
+        return await deps.fetch_provenances(item_ids) or {}
+    except Exception:
+        return {}
+
+
+def _build_retrieval_done_event(
+    matches: list[tuple[Any, float]],
+    plan: Any,
+    before_gate: int,
+    deps: SourceDeps,
+    owner: bool,
+) -> dict:
+    return step_event(
+        "retrieve",
+        "retrieval",
+        "done",
+        count=len(matches),
+        detail=f"{len(matches)} tài liệu",
+        queries=len(plan.queries()),
+        rewritten=plan.rewritten or None,
+        before_gate=before_gate if before_gate != len(matches) else None,
+        items=[
+            {**deps.item_fields(doc), "href": deps.href_of(doc), **({"score": round(score, 4)} if owner else {})}
+            for doc, score in matches
+        ],
+    )
+
+
+async def _stream_answer_body(
+    *,
+    query: str,
+    session_id: str,
+    owner: bool,
+    delay: float,
+    llm: Any,
+    deps: SourceDeps,
+    matches: list[tuple[Any, float]],
+    owner_memories: tuple[Any, ...] | list[Any],
+    memory_scope: Optional[str],
+) -> AsyncGenerator[dict, None]:
+    lesson_provenances = await _fetch_lesson_provenances_safe(matches, owner, deps)
+    rag_context = deps.format_context(matches)
+    if owner and lesson_provenances:
+        rag_context += format_fallback_provenance_footer(matches, lesson_provenances)
+
+    llm_failed: bool | str = False
+    if deps.pipeline.available(llm):
+        try:
+            req = GenerationRequest(
+                mode="rag",
+                query=query,
+                thread_id=session_id,
+                sources=matches,
+                owner_memories=owner_memories if owner else (),
+                memory_scope=memory_scope,
+                lesson_provenances=lesson_provenances if owner else {},
+            )
+            async for ev in deps.pipeline.astream(llm, req):
+                yield ev
+            return
+        except GenerationFailed as exc:
+            llm_failed = exc.reason
+
+    yield step_event(
+        "answer",
+        "generation",
+        "done",
+        mode="context",
+        fallback_reason=llm_fallback_reason(llm, llm_failed),
+    )
+    async for ev in stream_words(rag_context, delay):
+        yield ev
+
+
 async def answer_from_sources(
     *,
     query: str,
@@ -79,49 +198,25 @@ async def answer_from_sources(
     memory_scope: Optional[str] = None,
 ) -> AsyncGenerator[dict, None]:
     """Retrieve for `query`, then answer from what was found (LLM), fall back to the formatted sources, or say nothing matched."""
-    search, format_context, href_of = deps.search, deps.format_context, deps.href_of
-    item_fields, trace_fields = deps.item_fields, deps.trace_fields
-    no_match_reply, retrieval_error_reply, pipeline = deps.no_match_reply, deps.retrieval_error_reply, deps.pipeline
-    tool_name, scoring, adapter_mode = deps.tool_name, deps.scoring, deps.adapter_mode
-    yield {"type": "tool_start", "name": tool_name, "args": {"query": query}}
+    yield {"type": "tool_start", "name": deps.tool_name, "args": {"query": query}}
     yield step_event("retrieve", "retrieval", "running")
     retrieval_step = start_step(
         "retrieve-live-knowledge",
         "retriever",
         input={"query": query, "limit": 4},
-        metadata={"adapter_mode": adapter_mode, "scoring": scoring},
+        metadata={"adapter_mode": deps.adapter_mode, "scoring": deps.scoring},
     )
     try:
-        plan = await deps.plan(llm, query, session_id) if deps.plan else QueryPlan(query)
-        queries = plan.queries()
-        pool = RERANK_POOL if deps.rerank else 4
-        if len(queries) == 1:
-            matches = await search(query, limit=pool)
-        else:
-            results = await asyncio.gather(*(search(q, limit=pool) for q in queries))
-            matches = merge_ranked(results, pool)
-        if deps.rerank and (deps.rerank_needed is None or deps.rerank_needed(query, matches)):
-            matches = (await deps.rerank(llm, query, matches))[:4]
-        elif deps.rerank:
-            matches = matches[:4]
-        before_gate = len(matches)
-        if deps.accept:
-            # A rewrite resolved "bài đó" to a name, so the check also accepts the rewrite's words;
-            # other variants are not used here, so a drifting phrasing cannot let an unrelated match through.
-            gate_query = f"{query} {plan.variants[0]}" if plan.rewritten and plan.variants else query
-            matches = deps.accept(gate_query, matches)
-        if (trace := current_trace()) is not None:
-            trace.flags["queries"] = len(queries)
-            trace.flags["rewritten"] = plan.rewritten
+        matches, plan, before_gate = await _retrieve_candidate_docs(llm, query, session_id, deps)
     except Exception as exc:
         # Index/adapter failure is not "no match": say so instead of the no-result reply.
         print(f"[Agent] Retrieval error ({type(exc).__name__}: {exc}).")
         end_step(retrieval_step, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
         if (trace := current_trace()) is not None:
             trace.flags["retrieval_error"] = True
-        yield {"type": "tool_end", "name": tool_name, "result": "Lỗi tra cứu", "is_error": True}
+        yield {"type": "tool_end", "name": deps.tool_name, "result": "Lỗi tra cứu", "is_error": True}
         yield step_event("retrieve", "retrieval", "error")
-        async for ev in stream_words(retrieval_error_reply, delay):
+        async for ev in stream_words(deps.retrieval_error_reply, delay):
             yield ev
         return
     except BaseException as exc:  # client disconnected while searching
@@ -130,79 +225,31 @@ async def answer_from_sources(
     end_step(
         retrieval_step,
         output=[
-            {"rank": i + 1, "score": round(score, 4), **trace_fields(doc)}
+            {"rank": i + 1, "score": round(score, 4), **deps.trace_fields(doc)}
             for i, (doc, score) in enumerate(matches)
         ],
     )
     if (trace := current_trace()) is not None:
         trace.flags["retrieved"] = len(matches)
-    yield {"type": "tool_end", "name": tool_name, "result": f"Tìm thấy {len(matches)} tài liệu", "is_error": False}
-    yield step_event(
-        "retrieve",
-        "retrieval",
-        "done",
-        count=len(matches),
-        detail=f"{len(matches)} tài liệu",
-        queries=len(queries),
-        rewritten=plan.rewritten or None,
-        before_gate=before_gate if before_gate != len(matches) else None,
-        items=[
-            {**item_fields(doc), "href": href_of(doc), **({"score": round(score, 4)} if owner else {})}
-            for doc, score in matches
-        ],
-    )
+    yield {"type": "tool_end", "name": deps.tool_name, "result": f"Tìm thấy {len(matches)} tài liệu", "is_error": False}
+    yield _build_retrieval_done_event(matches, plan, before_gate, deps, owner)
 
-    if matches:
-        lesson_provenances: dict = {}
-        if owner and deps.fetch_provenances is not None:
-            item_ids = [
-                str(doc.id)
-                for doc, _ in matches
-                if getattr(doc, "doc_type", "") == "item" and getattr(doc, "id", None)
-            ]
-            if item_ids:
-                try:
-                    lesson_provenances = await deps.fetch_provenances(item_ids) or {}
-                except Exception:
-                    lesson_provenances = {}
-
-        rag_context = format_context(matches)
-        if owner and lesson_provenances:
-            rag_context += format_fallback_provenance_footer(matches, lesson_provenances)
-
-        # Synthesize with LLM if available
-        llm_failed: bool | str = False
-        if pipeline.available(llm):
-            try:
-                req = GenerationRequest(
-                    mode="rag",
-                    query=query,
-                    thread_id=session_id,
-                    sources=matches,
-                    owner_memories=owner_memories if owner else (),
-                    memory_scope=memory_scope,
-                    lesson_provenances=lesson_provenances if owner else {},
-                )
-                async for ev in pipeline.astream(llm, req):
-                    yield ev
-                return
-            except GenerationFailed as exc:
-                llm_failed = exc.reason
-
-        # Fallback directly to formatted markdown context
-        yield step_event(
-            "answer",
-            "generation",
-            "done",
-            mode="context",
-            fallback_reason=llm_fallback_reason(llm, llm_failed),
-        )
-        async for ev in stream_words(rag_context, delay):
-            yield ev
-        return
-    else:
-        resp = no_match_reply(owner)
+    if not matches:
+        resp = deps.no_match_reply(owner)
         yield step_event("answer", "generation", "done", mode="no_match")
         async for ev in stream_words(resp, delay):
             yield ev
         return
+
+    async for ev in _stream_answer_body(
+        query=query,
+        session_id=session_id,
+        owner=owner,
+        delay=delay,
+        llm=llm,
+        deps=deps,
+        matches=matches,
+        owner_memories=owner_memories,
+        memory_scope=memory_scope,
+    ):
+        yield ev

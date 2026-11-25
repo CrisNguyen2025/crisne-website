@@ -35,28 +35,34 @@ interface PageProps {
   }>;
 }
 
+async function resolveLegacyRedirectUrl(
+  topic: string,
+  item?: string,
+  section?: string,
+): Promise<string | null> {
+  const topicRes = await resolveTopicGlobal(topic);
+  if (topicRes.kind === 'redirect') {
+    const query = section ? `?section=${encodeURIComponent(section)}` : '';
+    return `${topicPath(topicRes.toSlug)}${query}`;
+  }
+  if (topicRes.kind !== 'found') return null;
+
+  if (item) {
+    const resolvedItem = await findItemBySlug(topicRes.topic.id, item);
+    if (resolvedItem?.slug) {
+      return lessonPath(topicRes.topic.slug, resolvedItem.slug);
+    }
+  }
+  const query = section ? `?section=${encodeURIComponent(section)}` : '';
+  return `${topicPath(topicRes.topic.slug)}${query}`;
+}
+
 export default async function Home({ searchParams }: PageProps) {
   const { topic, item, section } = await searchParams;
 
   if (topic) {
-    const topicRes = await resolveTopicGlobal(topic);
-    const resolvedSlug =
-      topicRes.kind === 'found'
-        ? topicRes.topic.slug
-        : topicRes.kind === 'redirect'
-          ? topicRes.toSlug
-          : null;
-
-    if (resolvedSlug) {
-      if (item && topicRes.kind === 'found') {
-        const resolvedItem = await findItemBySlug(topicRes.topic.id, item);
-        if (resolvedItem?.slug) {
-          permanentRedirect(lessonPath(topicRes.topic.slug, resolvedItem.slug));
-        }
-      }
-      const query = section ? `?section=${encodeURIComponent(section)}` : '';
-      permanentRedirect(`${topicPath(resolvedSlug)}${query}`);
-    }
+    const redirectUrl = await resolveLegacyRedirectUrl(topic, item, section);
+    if (redirectUrl) permanentRedirect(redirectUrl);
   }
 
   const data = await getPublicationHomeData();

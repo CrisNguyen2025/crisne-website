@@ -433,7 +433,11 @@ export default function ImageComponent({
             <BrokenImage />
           ) : (
             <LazyImage
-              className={isFocused ? `focused ${isInNodeSelection ? 'draggable' : ''}` : null}
+              className={
+                [isFocused && 'focused', isFocused && isInNodeSelection && 'draggable']
+                  .filter(Boolean)
+                  .join(' ') || null
+              }
               src={getMediaUrl({ url: src })}
               altText={altText}
               imageRef={imageRef}

@@ -6,6 +6,16 @@ export function isChatMessages(contents: LlmGenerateParams["contents"]): content
   return Array.isArray(contents) && contents.length > 0 && "content" in contents[0];
 }
 
+function appendTurnText(turns: LlmMessage[], role: "user" | "model", text: string): void {
+  if (!text || (turns.length === 0 && role === "model")) return;
+  const last = turns[turns.length - 1];
+  if (last && last.role === role) {
+    last.parts.push({ text });
+    return;
+  }
+  turns.push({ role, parts: [{ text }] });
+}
+
 /**
  * Text turns starting with a user turn and alternating roles (required by Gemini): drops
  * leading assistant turns and blank text, merges consecutive same-role turns. Non-text
@@ -17,16 +27,8 @@ export function toAlternatingTurns(messages: ChatMessage[]): LlmMessage[] {
     if (message.role === "tool") continue;
     const role = message.role === "assistant" ? "model" : "user";
     for (const part of message.content) {
-      const text = part.type === "text" ? part.text.trim() : "";
-      if (!text) continue;
-      if (turns.length === 0 && role === "model") continue;
-
-      const last = turns[turns.length - 1];
-      if (last && last.role === role) {
-        last.parts.push({ text });
-      } else {
-        turns.push({ role, parts: [{ text }] });
-      }
+      if (part.type !== "text") continue;
+      appendTurnText(turns, role, part.text.trim());
     }
   }
   return turns;

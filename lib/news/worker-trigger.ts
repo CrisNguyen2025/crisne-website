@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { trimTrailingChar } from "@/lib/utils";
 
 const WAKE_TIMEOUT_MS = 10_000;
 
@@ -12,7 +13,7 @@ export async function requestNewsWorkerWake(jobId?: string): Promise<void> {
   if (!baseUrl || !internalKey) return;
 
   try {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/internal/wake`, {
+    const res = await fetch(`${trimTrailingChar(baseUrl, "/")}/internal/wake`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

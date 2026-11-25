@@ -17,6 +17,7 @@ import {
   getDOMSelection,
   KEY_ESCAPE_COMMAND,
   LexicalEditor,
+  LexicalNode,
   SELECTION_CHANGE_COMMAND,
 } from 'lexical';
 import * as React from 'react';
@@ -29,6 +30,38 @@ import { setFloatingElemPositionForLinkEditor } from '../../utils/setFloatingEle
 
 function preventDefault(event: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLElement>): void {
   event.preventDefault();
+}
+
+function createHoveredTargetRect(element: HTMLElement): DOMRect {
+  const rect = element.getBoundingClientRect();
+  return {
+    top: rect.top + rect.height + 4,
+    left: rect.left,
+    bottom: rect.bottom + 4,
+    right: rect.right,
+    width: rect.width,
+    height: rect.height,
+    x: rect.x,
+    y: rect.y + rect.height + 4,
+    toJSON: () => {},
+  } as DOMRect;
+}
+
+function $resolveLinkNode(node: LexicalNode | null): LinkNode | null {
+  if (!node) return null;
+  const linkParent = $findMatchingParent(node, $isLinkNode);
+  if ($isLinkNode(linkParent)) return linkParent;
+  return $isLinkNode(node) ? node : null;
+}
+
+function $findActiveOrHoveredLinkNode(hoveredNodeKey?: string): LinkNode | null {
+  if (hoveredNodeKey) {
+    const hoveredNode = $getNodeByKey(hoveredNodeKey);
+    if ($isLinkNode(hoveredNode)) return hoveredNode;
+  }
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return null;
+  return $resolveLinkNode(getSelectedNode(selection));
 }
 
 function getUrlFromSelection(selection: BaseSelection | null): string | null {
@@ -165,36 +198,25 @@ function FloatingLinkEditor({
         hoverShowTimerRef.current = setTimeout(() => {
           editor.getEditorState().read(() => {
             const node = $getNearestNodeFromDOMNode(linkElem);
-            if (!node) return;
-            const linkNode = $findMatchingParent(node, $isLinkNode);
-            const targetNode = $isLinkNode(linkNode) ? linkNode : ($isLinkNode(node) ? node : null);
-            if (targetNode) {
-              const url = targetNode.getURL();
-              setHoveredLink({
-                url,
-                nodeKey: targetNode.getKey(),
-                element: linkElem,
-              });
-              if (!isInputFocusedRef.current) {
-                setInputValue(url);
-              }
+            const targetNode = $resolveLinkNode(node);
+            if (!targetNode) return;
+            const url = targetNode.getURL();
+            setHoveredLink({
+              url,
+              nodeKey: targetNode.getKey(),
+              element: linkElem,
+            });
+            if (!isInputFocusedRef.current) {
+              setInputValue(url);
+            }
 
-              const editorElem = editorRef.current;
-              if (editorElem) {
-                const rect = linkElem.getBoundingClientRect();
-                const targetRect = {
-                  top: rect.top + rect.height + 4,
-                  left: rect.left,
-                  bottom: rect.bottom + 4,
-                  right: rect.right,
-                  width: rect.width,
-                  height: rect.height,
-                  x: rect.x,
-                  y: rect.y + rect.height + 4,
-                  toJSON: () => {},
-                } as DOMRect;
-                setFloatingElemPositionForLinkEditor(targetRect, editorElem, anchorElem);
-              }
+            const editorElem = editorRef.current;
+            if (editorElem) {
+              setFloatingElemPositionForLinkEditor(
+                createHoveredTargetRect(linkElem),
+                editorElem,
+                anchorElem,
+              );
             }
           });
         }, 200);
@@ -362,22 +384,7 @@ function FloatingLinkEditor({
     }
 
     editor.update(() => {
-      let targetNode: LinkNode | null = null;
-      if (hoveredLink) {
-        const node = $getNodeByKey(hoveredLink.nodeKey);
-        if ($isLinkNode(node)) {
-          targetNode = node;
-        }
-      }
-      if (!targetNode) {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          const node = getSelectedNode(selection);
-          const linkParent = $findMatchingParent(node, $isLinkNode);
-          targetNode = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
-        }
-      }
-
+      const targetNode = $findActiveOrHoveredLinkNode(hoveredLink?.nodeKey);
       if (targetNode) {
         targetNode.setURL(formattedUrl);
         targetNode.setTarget('_blank');
@@ -394,22 +401,7 @@ function FloatingLinkEditor({
 
   const handleClear = () => {
     editor.update(() => {
-      let targetNode: LinkNode | null = null;
-      if (hoveredLink) {
-        const node = $getNodeByKey(hoveredLink.nodeKey);
-        if ($isLinkNode(node)) {
-          targetNode = node;
-        }
-      }
-      if (!targetNode) {
-        const selection = $getSelection();
-        if ($isRangeSelection(selection)) {
-          const node = getSelectedNode(selection);
-          const linkParent = $findMatchingParent(node, $isLinkNode);
-          targetNode = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
-        }
-      }
-
+      const targetNode = $findActiveOrHoveredLinkNode(hoveredLink?.nodeKey);
       if (targetNode) {
         const textNode = $createTextNode(targetNode.getTextContent());
         targetNode.replace(textNode);

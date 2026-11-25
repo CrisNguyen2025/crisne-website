@@ -14,6 +14,24 @@ const SNAP_MAX_MS = 200;
 const RELEASE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
+function computeSwipeVelocity(
+  now: number,
+  startT: number,
+  currSampleT: number,
+  prevSampleT: number,
+  currSampleX: number,
+  prevSampleX: number,
+  sign: number,
+  dragX: number
+): number {
+  const totalDt = now - startT;
+  if (now - currSampleT > 80 || totalDt <= 0) return 0;
+  const sampleDt = currSampleT - prevSampleT;
+  const instantaneous = sampleDt > 0 ? (sign * (currSampleX - prevSampleX)) / sampleDt : 0;
+  if (instantaneous < REOPEN_VELOCITY) return instantaneous;
+  return Math.max(instantaneous, dragX / totalDt);
+}
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -123,7 +141,7 @@ export function useSwipeDrawer(
       const durationMs = Math.round(SNAP_MIN_MS + (SNAP_MAX_MS - SNAP_MIN_MS) * progress);
       // Flush dragged transform before re-enabling transition so the browser animates instead of jumping
       if (!reduced) {
-        void panel.offsetWidth;
+        panel.getBoundingClientRect();
       }
       panel.style.transition = reduced ? "none" : `transform ${durationMs}ms ${RELEASE_EASING}`;
       panel.style.transform = "translateX(0px)";
@@ -159,7 +177,7 @@ export function useSwipeDrawer(
           (CLOSE_MAX_MS - CLOSE_MIN_MS) * remainingRatio * (1 - velocityBoost)
       );
       if (!reduced) {
-        void panel.offsetWidth;
+        panel.getBoundingClientRect();
       }
       panel.style.transition = reduced ? "none" : `transform ${durationMs}ms ${RELEASE_EASING}`;
       panel.style.transform = closedTransform;
@@ -221,17 +239,7 @@ export function useSwipeDrawer(
         return;
       }
       const now = performance.now();
-      const totalDt = now - startT;
-      const sampleDt = currSampleT - prevSampleT;
-      const instantaneousVelocity =
-        sampleDt > 0 ? (sign * (currSampleX - prevSampleX)) / sampleDt : 0;
-      const avgVelocity = totalDt > 0 ? dragX / totalDt : 0;
-      const velocity =
-        now - currSampleT > 80 || totalDt <= 0
-          ? 0
-          : instantaneousVelocity < REOPEN_VELOCITY
-            ? instantaneousVelocity
-            : Math.max(instantaneousVelocity, avgVelocity);
+      const velocity = computeSwipeVelocity(now, startT, currSampleT, prevSampleT, currSampleX, prevSampleX, sign, dragX);
       mode = "idle";
 
       if (

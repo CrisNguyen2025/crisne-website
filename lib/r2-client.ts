@@ -1,5 +1,6 @@
 import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import { randomUUID } from 'node:crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -72,7 +73,7 @@ export async function uploadToStorage(
  */
 export function generateFilename(originalName: string): string {
   const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 9);
+  const random = randomUUID().replace(/-/g, '').slice(0, 8);
   const ext = originalName.split('.').pop() || 'png';
   const sanitized = originalName
     .replace(/\.[^/.]+$/, '') // Remove extension

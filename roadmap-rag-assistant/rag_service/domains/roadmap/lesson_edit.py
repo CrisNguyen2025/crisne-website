@@ -101,6 +101,38 @@ def _is_general_section(name: str) -> bool:
     return fold(name).lower().strip() in ("", "chung", "none")
 
 
+def _build_section_move_edit(src: Optional[str], sec: str, topic: Optional[str]) -> Optional[dict]:
+    if src is None or not sec:
+        return None
+    clear = _is_general_section(sec)
+    return {
+        "src": src,
+        "new_title": None,
+        "new_section": None if clear else sec,
+        "clear_section": clear,
+        "topic": topic,
+    }
+
+
+def _match_lesson_edit_clauses(cleaned: str, topic: Optional[str]) -> Optional[dict]:
+    if (m := _MOVE_SECTION.match(cleaned)) is not None:
+        return _build_section_move_edit(_clean_source(m.group("src")), _clean_text(m.group("sec")), topic)
+    if (m := _CLEAR_SECTION.match(cleaned)) is not None:
+        src = _clean_source(m.group("src"))
+        if src is None:
+            return None
+        return {"src": src, "new_title": None, "new_section": None, "clear_section": True, "topic": topic}
+    if (m := _RENAME_LESSON.match(cleaned)) is not None:
+        src = _clean_source(m.group("src"))
+        dst = _clean_text(m.group("dst"))
+        if src is None or not dst or _DISALLOWED_DST_PREFIX.match(dst):
+            return None
+        if (sec_m := _SECTION_DST_PREFIX.match(dst)) is not None:
+            return _build_section_move_edit(src, _clean_text(sec_m.group("sec")), topic)
+        return {"src": src, "new_title": dst, "new_section": None, "clear_section": False, "topic": topic}
+    return None
+
+
 def parse_lesson_edit(text: str) -> Optional[dict]:
     """Parse a lesson rename or section move command, or None when the message is something else."""
     raw = normalize_vietnamese(text).strip()
@@ -110,9 +142,7 @@ def parse_lesson_edit(text: str) -> Optional[dict]:
     u = understand(raw)
     if u.write_blocker or u.act.value in ("question", "plan") or u.target.value == "off_topic":
         return None
-    if _MULTI_CLAUSE_RE.search(raw):
-        return None
-    if parse_status_change_request(raw) is not None or legacy_level_reply(raw) is not None:
+    if _MULTI_CLAUSE_RE.search(raw) or parse_status_change_request(raw) is not None or legacy_level_reply(raw) is not None:
         return None
 
     cleaned = clean_conversational_fillers(raw)
@@ -127,58 +157,7 @@ def parse_lesson_edit(text: str) -> Optional[dict]:
     if parse_status_change_request(cleaned) is not None:
         return None
 
-    if (m := _MOVE_SECTION.match(cleaned)) is not None:
-        src = _clean_source(m.group("src"))
-        sec = _clean_text(m.group("sec"))
-        if src is None or not sec:
-            return None
-        clear = _is_general_section(sec)
-        return {
-            "src": src,
-            "new_title": None,
-            "new_section": None if clear else sec,
-            "clear_section": clear,
-            "topic": topic,
-        }
-
-    if (m := _CLEAR_SECTION.match(cleaned)) is not None:
-        src = _clean_source(m.group("src"))
-        if src is None:
-            return None
-        return {
-            "src": src,
-            "new_title": None,
-            "new_section": None,
-            "clear_section": True,
-            "topic": topic,
-        }
-
-    if (m := _RENAME_LESSON.match(cleaned)) is not None:
-        src = _clean_source(m.group("src"))
-        dst = _clean_text(m.group("dst"))
-        if src is None or not dst or _DISALLOWED_DST_PREFIX.match(dst):
-            return None
-        if (sec_m := _SECTION_DST_PREFIX.match(dst)) is not None:
-            sec = _clean_text(sec_m.group("sec"))
-            if not sec:
-                return None
-            clear = _is_general_section(sec)
-            return {
-                "src": src,
-                "new_title": None,
-                "new_section": None if clear else sec,
-                "clear_section": clear,
-                "topic": topic,
-            }
-        return {
-            "src": src,
-            "new_title": dst,
-            "new_section": None,
-            "clear_section": False,
-            "topic": topic,
-        }
-
-    return None
+    return _match_lesson_edit_clauses(cleaned, topic)
 
 
 def _unresolved_lesson_reply(name: str, candidates: list[dict]) -> str:
@@ -244,150 +223,177 @@ async def _find_topic_and_lesson(
     return None
 
 
+async def _locate_active_lesson_for_edit(
+    adapter, page_slug: Optional[str], page_item_id: str, session_ctx, target_topic: Optional[dict]
+) -> tuple[Optional[dict], Optional[dict], Optional[str]]:
+    active_item_ref = page_item_id or (session_ctx.active_lesson_id or "").strip()
+    if not active_item_ref:
+        return None, None, "Chưa xác định được bài học bạn đang mở. Hãy mở trang bài học hoặc nêu rõ tên bài cần sửa."
+    if target_topic is not None:
+        lesson = next((i for i in target_topic.get("items") or [] if matches_page_item(i, active_item_ref)), None)
+        return (target_topic, lesson, None) if lesson else (None, None, "Không tìm thấy bài học bạn đang mở. Vui lòng nêu rõ tên bài cần sửa.")
+
+    preferred_slug = page_slug or session_ctx.active_topic_slug
+    if preferred_slug and (detail := await adapter.get_topic(preferred_slug)):
+        found = next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)
+        if found is not None:
+            return detail, found, None
+    for t in await adapter.list_topics():
+        slug = t.get("slug")
+        if not slug or slug == preferred_slug:
+            continue
+        detail = await adapter.get_topic(slug)
+        if detail and (found := next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)):
+            return detail, found, None
+    return None, None, "Không tìm thấy bài học bạn đang mở. Vui lòng nêu rõ tên bài cần sửa."
+
+
+async def _resolve_lesson_edit_target(
+    edit: dict, adapter, page_slug: Optional[str], page_item_id: str, session_ctx
+) -> tuple[Optional[dict], Optional[dict], Optional[str]]:
+    target_topic: Optional[dict] = None
+    if edit["topic"]:
+        found_topic = await resolve_topic(edit["topic"])
+        if found_topic.status != "found" or not found_topic.slug:
+            msg = (
+                "⚠️ Hiện chưa tải được danh sách topic. Bạn thử lại sau ít phút nhé."
+                if found_topic.status == "unavailable"
+                else describe_unresolved_topic(edit["topic"], found_topic)
+            )
+            return None, None, msg
+        target_topic = await adapter.get_topic(found_topic.slug)
+        if target_topic is None:
+            return None, None, f"⚠️ Không tìm thấy topic `{edit['topic']}`."
+
+    if edit["src"] == "":
+        return await _locate_active_lesson_for_edit(adapter, page_slug, page_item_id, session_ctx, target_topic)
+    if target_topic is not None:
+        lesson, candidates = _match_lesson_in_topic(target_topic, edit["src"])
+        if lesson is None:
+            return None, None, _unresolved_lesson_reply(edit["src"], candidates)
+        return target_topic, lesson, None
+
+    preferred_slug = page_slug or session_ctx.active_topic_slug
+    found_lesson = await resolve_lesson(edit["src"], topic_slug=preferred_slug)
+    if found_lesson.status != "found" or not found_lesson.lesson_id:
+        msg = (
+            "⚠️ Hiện chưa tải được danh sách bài học. Bạn thử lại sau ít phút nhé."
+            if found_lesson.status == "unavailable"
+            else _unresolved_lesson_reply(edit["src"], found_lesson.candidates)
+        )
+        return None, None, msg
+    located = await _find_topic_and_lesson(found_lesson.lesson_id, [page_slug, session_ctx.active_topic_slug])
+    if located is None:
+        return None, None, _unresolved_lesson_reply(edit["src"], [])
+    return located[0], located[1], None
+
+
+def _compute_proposed_edit(edit: dict, topic: dict, lesson: dict) -> tuple[str, Optional[str], str, Optional[str]]:
+    old_title = (lesson.get("title") or "").strip()
+    old_section = lesson.get("section") or None
+    existing_sections = [s for s in (topic.get("sections") or []) if s]
+    proposed_title = edit["new_title"] if edit["new_title"] is not None else old_title
+    if edit["clear_section"]:
+        proposed_section = None
+    elif edit["new_section"] is not None:
+        wanted_sec = normalize_title(edit["new_section"])
+        proposed_section = next((s for s in existing_sections if normalize_title(s) == wanted_sec), None) or edit["new_section"]
+    else:
+        proposed_section = old_section
+    return old_title, old_section, proposed_title, proposed_section
+
+
+def _find_duplicate_lesson_title(
+    topic: dict, lesson_id: object, old_title: str, proposed_title: str
+) -> Optional[dict]:
+    if proposed_title == old_title:
+        return None
+    norm = normalize_title(proposed_title)
+    for item in topic.get("items") or []:
+        if item.get("id") != lesson_id and normalize_title(item.get("title") or "") == norm:
+            return item
+    return None
+
+
+def _build_lesson_edit_preview(
+    topic_title: str,
+    old_title: str,
+    old_section: Optional[str],
+    proposed_title: str,
+    proposed_section: Optional[str],
+) -> str:
+    old_sec_label = old_section or GENERAL_SECTION
+    new_sec_label = proposed_section or GENERAL_SECTION
+    title_line = (
+        f"- Tên bài: `{old_title}` → `{proposed_title}`"
+        if proposed_title != old_title
+        else f"- Tên bài: `{old_title}` _(giữ nguyên, có thể sửa bên dưới)_"
+    )
+    section_line = (
+        f"- Mục: `{old_sec_label}` → `{new_sec_label}`"
+        if proposed_section != old_section
+        else f"- Mục: `{old_sec_label}` _(giữ nguyên, có thể sửa bên dưới)_"
+    )
+    return (
+        f"✏️ **CHỈNH SỬA BÀI HỌC**\n\n"
+        f"- Topic: **{topic_title}**\n"
+        f"{title_line}\n"
+        f"{section_line}\n\n"
+        "👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
+    )
+
+
 class LessonEditCommands(AgentHostMixin):
-    async def handle_lesson_edit(
-        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
-    ) -> AsyncGenerator[dict, None]:
-        """Preview renaming a lesson or moving it to another section. Runs before the router."""
+    async def _resolve_valid_lesson_edit(
+        self, content: str, page_context, session_ctx
+    ) -> tuple[bool, Optional[dict], Optional[dict], Optional[tuple[str, Optional[str], str, Optional[str]]], Optional[str]]:
         edit = parse_lesson_edit(content)
         if edit is None:
-            return
-        outcome["handled"] = True
-
+            return False, None, None, None, None
         if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
+            return True, None, None, None, OWNER_ONLY_MESSAGE
 
         adapter = get_adapter()
         page_slug = (page_context or {}).get("roadmapSlug")
         page_item_id = ((page_context or {}).get("itemId") or "").strip()
+        topic, lesson, err_msg = await _resolve_lesson_edit_target(edit, adapter, page_slug, page_item_id, session_ctx)
+        if topic is None or lesson is None:
+            return True, None, None, None, err_msg or ""
 
-        target_topic: Optional[dict] = None
-        if edit["topic"]:
-            found_topic = await resolve_topic(edit["topic"])
-            if found_topic.status != "found" or not found_topic.slug:
-                msg = (
-                    "⚠️ Hiện chưa tải được danh sách topic. Bạn thử lại sau ít phút nhé."
-                    if found_topic.status == "unavailable"
-                    else describe_unresolved_topic(edit["topic"], found_topic)
-                )
-                async for ev in self._stream_text(msg, delay):
-                    yield ev
-                return
-            target_topic = await adapter.get_topic(found_topic.slug)
-            if target_topic is None:
-                async for ev in self._stream_text(f"⚠️ Không tìm thấy topic `{edit['topic']}`.", delay):
-                    yield ev
-                return
-
-        topic: Optional[dict] = None
-        lesson: Optional[dict] = None
-
-        if edit["src"] == "":
-            active_item_ref = page_item_id or (session_ctx.active_lesson_id or "").strip()
-            if not active_item_ref:
-                async for ev in self._stream_text(
-                    "Chưa xác định được bài học bạn đang mở. Hãy mở trang bài học hoặc nêu rõ tên bài cần sửa.",
-                    delay,
-                ):
-                    yield ev
-                return
-            preferred_slug = page_slug or session_ctx.active_topic_slug
-            if target_topic is not None:
-                topic = target_topic
-                lesson = next((i for i in topic.get("items") or [] if matches_page_item(i, active_item_ref)), None)
-            elif preferred_slug:
-                detail = await adapter.get_topic(preferred_slug)
-                if detail:
-                    topic = detail
-                    lesson = next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)
-            if lesson is None and target_topic is None:
-                for t in await adapter.list_topics():
-                    slug = t.get("slug")
-                    if not slug or slug == preferred_slug:
-                        continue
-                    detail = await adapter.get_topic(slug)
-                    if not detail:
-                        continue
-                    found_item = next((i for i in detail.get("items") or [] if matches_page_item(i, active_item_ref)), None)
-                    if found_item is not None:
-                        topic, lesson = detail, found_item
-                        break
-            if lesson is None or topic is None:
-                async for ev in self._stream_text(
-                    "Không tìm thấy bài học bạn đang mở. Vui lòng nêu rõ tên bài cần sửa.", delay
-                ):
-                    yield ev
-                return
-        elif target_topic is not None:
-            topic = target_topic
-            lesson, candidates = _match_lesson_in_topic(topic, edit["src"])
-            if lesson is None:
-                async for ev in self._stream_text(_unresolved_lesson_reply(edit["src"], candidates), delay):
-                    yield ev
-                return
-        else:
-            preferred_slug = page_slug or session_ctx.active_topic_slug
-            found_lesson = await resolve_lesson(edit["src"], topic_slug=preferred_slug)
-            if found_lesson.status != "found" or not found_lesson.lesson_id:
-                msg = (
-                    "⚠️ Hiện chưa tải được danh sách bài học. Bạn thử lại sau ít phút nhé."
-                    if found_lesson.status == "unavailable"
-                    else _unresolved_lesson_reply(edit["src"], found_lesson.candidates)
-                )
-                async for ev in self._stream_text(msg, delay):
-                    yield ev
-                return
-            located = await _find_topic_and_lesson(
-                found_lesson.lesson_id, [page_slug, session_ctx.active_topic_slug]
-            )
-            if located is None:
-                async for ev in self._stream_text(_unresolved_lesson_reply(edit["src"], []), delay):
-                    yield ev
-                return
-            topic, lesson = located
-
-        topic_slug = topic.get("slug") or ""
-        topic_title = topic.get("title") or topic_slug
-        old_title = (lesson.get("title") or "").strip()
-        old_section = lesson.get("section") or None
-        existing_sections = [s for s in (topic.get("sections") or []) if s]
-
-        proposed_title = edit["new_title"] if edit["new_title"] is not None else old_title
-        if edit["clear_section"]:
-            proposed_section = None
-        elif edit["new_section"] is not None:
-            wanted_sec = normalize_title(edit["new_section"])
-            matched_sec = next((s for s in existing_sections if normalize_title(s) == wanted_sec), None)
-            proposed_section = matched_sec or edit["new_section"]
-        else:
-            proposed_section = old_section
-
+        old_title, old_section, proposed_title, proposed_section = _compute_proposed_edit(edit, topic, lesson)
         if proposed_title == old_title and proposed_section == old_section:
-            async for ev in self._stream_text(
-                f"Bài **{old_title}** đã có đúng tên và mục này rồi nên mình chưa đổi gì.", delay
-            ):
+            return True, topic, lesson, None, f"Bài **{old_title}** đã có đúng tên và mục này rồi nên mình chưa đổi gì."
+
+        dup = _find_duplicate_lesson_title(topic, lesson.get("id"), old_title, proposed_title)
+        if dup is not None:
+            topic_title = topic.get("title") or (topic.get("slug") or "")
+            return (
+                True,
+                topic,
+                lesson,
+                None,
+                f"ℹ️ Topic **{topic_title}** đã có bài **{dup.get('title')}**, không thể đổi trùng tên.",
+            )
+        return True, topic, lesson, (old_title, old_section, proposed_title, proposed_section), None
+
+    async def handle_lesson_edit(
+        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Preview renaming a lesson or moving it to another section. Runs before the router."""
+        handled, topic, lesson, proposal, err_msg = await self._resolve_valid_lesson_edit(
+            content, page_context, session_ctx
+        )
+        if not handled:
+            return
+        outcome["handled"] = True
+        if err_msg is not None or topic is None or lesson is None or proposal is None:
+            async for ev in self._stream_text(err_msg or "", delay):
                 yield ev
             return
 
-        if proposed_title != old_title:
-            dup = next(
-                (
-                    item for item in topic.get("items") or []
-                    if item.get("id") != lesson.get("id")
-                    and normalize_title(item.get("title") or "") == normalize_title(proposed_title)
-                ),
-                None,
-            )
-            if dup is not None:
-                async for ev in self._stream_text(
-                    f"ℹ️ Topic **{topic_title}** đã có bài **{dup.get('title')}**, không thể đổi trùng tên.",
-                    delay,
-                ):
-                    yield ev
-                return
-
+        old_title, old_section, proposed_title, proposed_section = proposal
+        topic_slug = topic.get("slug") or ""
+        topic_title = topic.get("title") or topic_slug
         session_ctx.pending_lesson_edit = {
             "item_id": lesson.get("id"),
             "topic_slug": topic_slug,
@@ -398,25 +404,7 @@ class LessonEditCommands(AgentHostMixin):
             "new_section": proposed_section,
         }
 
-        old_sec_label = old_section or GENERAL_SECTION
-        new_sec_label = proposed_section or GENERAL_SECTION
-        title_line = (
-            f"- Tên bài: `{old_title}` → `{proposed_title}`"
-            if proposed_title != old_title
-            else f"- Tên bài: `{old_title}` _(giữ nguyên, có thể sửa bên dưới)_"
-        )
-        section_line = (
-            f"- Mục: `{old_sec_label}` → `{new_sec_label}`"
-            if proposed_section != old_section
-            else f"- Mục: `{old_sec_label}` _(giữ nguyên, có thể sửa bên dưới)_"
-        )
-        preview = (
-            f"✏️ **CHỈNH SỬA BÀI HỌC**\n\n"
-            f"- Topic: **{topic_title}**\n"
-            f"{title_line}\n"
-            f"{section_line}\n\n"
-            "👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-        )
+        preview = _build_lesson_edit_preview(topic_title, old_title, old_section, proposed_title, proposed_section)
         yield {
             "type": "action_preview",
             "action_id": session_ctx.session_id,

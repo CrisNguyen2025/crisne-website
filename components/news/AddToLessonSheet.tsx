@@ -448,9 +448,14 @@ export function AddToLessonSheet({ item, isDisabled = false }: AddToLessonSheetP
               <section aria-label="Xem trước">
                 <h3 className={SECTION_LABEL}>Xem trước</h3>
                 <p className="mt-2 text-sm text-foreground">
-                  {mode === "create_lesson"
-                    ? `Tạo bài "${title.trim()}" trong ${topicTitle}${section.trim() ? ` › ${section.trim()}` : ""} (${STATUS_LABEL[status]}).`
-                    : `Nối vào cuối bài "${lessonTitle}" trong ${topicTitle}.`}
+                  {mode === "create_lesson" && (
+                    <>
+                      {`Tạo bài "${title.trim()}" trong ${topicTitle}`}
+                      {section.trim() ? ` › ${section.trim()}` : ""}
+                      {` (${STATUS_LABEL[status]}).`}
+                    </>
+                  )}
+                  {mode !== "create_lesson" && `Nối vào cuối bài "${lessonTitle}" trong ${topicTitle}.`}
                 </p>
                 <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-foreground">
                   {selected.map((draft, index) => (

@@ -35,6 +35,34 @@ const MEMORY_SELECT = {
   lastUsedAt: true,
 } as const;
 
+function buildMemoryUpdateData(
+  body: Record<string, unknown>
+): { data: Prisma.OwnerMemoryUpdateInput } | { error: string } {
+  const data: Prisma.OwnerMemoryUpdateInput = {};
+  if (body.kind !== undefined) {
+    if (!isOwnerMemoryKind(body.kind)) return { error: 'Invalid kind' };
+    data.kind = body.kind;
+  }
+  if (body.content !== undefined) {
+    const content = cleanMemoryContent(body.content);
+    if (!content) return { error: 'content must be 1..300 characters' };
+    data.content = content;
+  }
+  if (body.scopeTopicSlug !== undefined) {
+    const scopeTopicSlug = parseScopeTopicSlug(body.scopeTopicSlug);
+    if (scopeTopicSlug === undefined) return { error: 'Invalid scopeTopicSlug' };
+    data.scopeTopicSlug = scopeTopicSlug;
+  }
+  if (body.status !== undefined) {
+    if (!isOwnerMemoryStatus(body.status)) return { error: 'Invalid status' };
+    data.status = body.status;
+  }
+  if (Object.keys(data).length === 0) {
+    return { error: 'At least one updatable field is required' };
+  }
+  return { data };
+}
+
 // PATCH /api/v1/memories/[id] - Update fields or transition status (pending -> active archives replacesMemoryId).
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
@@ -51,44 +79,17 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     if (!parsedBody.success) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: NO_STORE });
     }
-    const body = parsedBody.data;
 
     const existing = await prisma.ownerMemory.findUnique({ where: { id }, select: MEMORY_SELECT });
     if (!existing) {
       return NextResponse.json({ error: 'Memory not found' }, { status: 404, headers: NO_STORE });
     }
 
-    const data: Prisma.OwnerMemoryUpdateInput = {};
-    if (body.kind !== undefined) {
-      if (!isOwnerMemoryKind(body.kind)) {
-        return NextResponse.json({ error: 'Invalid kind' }, { status: 400, headers: NO_STORE });
-      }
-      data.kind = body.kind;
+    const updateResult = buildMemoryUpdateData(parsedBody.data);
+    if ('error' in updateResult) {
+      return NextResponse.json({ error: updateResult.error }, { status: 400, headers: NO_STORE });
     }
-    if (body.content !== undefined) {
-      const content = cleanMemoryContent(body.content);
-      if (!content) {
-        return NextResponse.json({ error: 'content must be 1..300 characters' }, { status: 400, headers: NO_STORE });
-      }
-      data.content = content;
-    }
-    if (body.scopeTopicSlug !== undefined) {
-      const scopeTopicSlug = parseScopeTopicSlug(body.scopeTopicSlug);
-      if (scopeTopicSlug === undefined) {
-        return NextResponse.json({ error: 'Invalid scopeTopicSlug' }, { status: 400, headers: NO_STORE });
-      }
-      data.scopeTopicSlug = scopeTopicSlug;
-    }
-    if (body.status !== undefined) {
-      if (!isOwnerMemoryStatus(body.status)) {
-        return NextResponse.json({ error: 'Invalid status' }, { status: 400, headers: NO_STORE });
-      }
-      data.status = body.status;
-    }
-
-    if (Object.keys(data).length === 0) {
-      return NextResponse.json({ error: 'At least one updatable field is required' }, { status: 400, headers: NO_STORE });
-    }
+    const { data } = updateResult;
 
     // Approving a pending replacement archives the superseded memory in the same transaction
     const shouldArchiveReplaced =

@@ -147,27 +147,22 @@ class IntentRouter:
             return False
         if row.target is not None and u.target != row.target:
             return False
-        if row.needs == "search_word":
-            return u.has_search_word
-        if row.needs == "opens_with_greeting":
-            return u.opens_with_greeting
-        if row.needs == "write_blocker":
-            return u.write_blocker is not None
-        if row.needs == "advice":
-            return u.advice
-        if row.needs == "how_to":
-            return u.how_to
-        if row.needs == "show_request":
-            return u.show_request
-        if row.needs == "lesson_status_cue":
-            return matches_lesson_status(u)
-        if row.needs == "catalog_list":
-            return matches_catalog_list(u, text)
-        if row.needs == "catalog_cue":
-            return matches_catalog_cue(u)
-        if row.needs == "known_title":  # checked last: it reads the title vocabulary
-            return self.names_known_lesson(text)
-        return row.needs is None
+        if row.needs is None:
+            return True
+        checks = {
+            "search_word": lambda: u.has_search_word,
+            "opens_with_greeting": lambda: u.opens_with_greeting,
+            "write_blocker": lambda: u.write_blocker is not None,
+            "advice": lambda: u.advice,
+            "how_to": lambda: u.how_to,
+            "show_request": lambda: u.show_request,
+            "lesson_status_cue": lambda: matches_lesson_status(u),
+            "catalog_list": lambda: matches_catalog_list(u, text),
+            "catalog_cue": lambda: matches_catalog_cue(u),
+            "known_title": lambda: self.names_known_lesson(text),
+        }
+        check = checks.get(row.needs)
+        return check() if check is not None else False
 
     def decide(self, text: str) -> Decision:
         """Apply the policy decision table (policy.py section 3) to the message's act × target. Sub-5ms, no LLM."""

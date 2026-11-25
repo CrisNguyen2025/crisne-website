@@ -21,6 +21,60 @@ type TxOutcome =
   | { kind: "duplicate"; existing: { id: string; title: string; roadmapSlug: string } }
   | { kind: "already_integrated" };
 
+async function linkRelatedLessons(lessonId: string, relatedLessonIds: string[] | undefined): Promise<void> {
+  if (!relatedLessonIds?.length) return;
+  const uniqueTargets = Array.from(new Set(relatedLessonIds.filter((tid) => tid !== lessonId)));
+  if (uniqueTargets.length === 0) return;
+
+  try {
+    const existingTargets = await prisma.roadmapItem.findMany({
+      where: { id: { in: uniqueTargets } },
+      select: { id: true },
+    });
+    if (existingTargets.length === 0) return;
+
+    const pairs = existingTargets.map((target) => canonicalLessonPair(lessonId, target.id));
+    const existingRelations = await prisma.knowledgeRelation.findMany({
+      where: {
+        relationType: "relates",
+        OR: pairs.map(([fromLessonId, toLessonId]) => ({ fromLessonId, toLessonId })),
+      },
+      select: { fromLessonId: true, toLessonId: true },
+    });
+    const existingKeys = new Set(existingRelations.map((rel) => `${rel.fromLessonId}\0${rel.toLessonId}`));
+    const missingPairs = pairs.filter(([fromLessonId, toLessonId]) => !existingKeys.has(`${fromLessonId}\0${toLessonId}`));
+    if (missingPairs.length === 0) return;
+
+    await prisma.knowledgeRelation.createMany({
+      data: missingPairs.map(([fromLessonId, toLessonId]) => ({
+        fromLessonId,
+        toLessonId,
+        relationType: "relates",
+      })),
+    });
+  } catch (relError) {
+    if (!isMissingTableError(relError, "KnowledgeRelation")) {
+      console.error("[API POST /api/news/[id]/integrate] Relation save warning:", relError);
+    }
+  }
+}
+
+function outcomeErrorResponse(outcome: Exclude<TxOutcome, { kind: "ok" }>): NextResponse {
+  switch (outcome.kind) {
+    case "roadmap_not_found":
+      return NextResponse.json({ error: "Roadmap not found" }, { status: 404 });
+    case "lesson_not_found":
+      return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
+    case "duplicate":
+      return duplicateResponse("item", outcome.existing);
+    case "already_integrated":
+      return NextResponse.json(
+        { error: "This news item is already in that lesson", code: "ALREADY_INTEGRATED" },
+        { status: 409 }
+      );
+  }
+}
+
 /**
  * POST /api/news/[id]/integrate — Owner only. Puts the statements the Owner picked from a News Item into a
  * new or existing Lesson, each sentence followed by a Provenance marker (ADR-0017). The Lesson and every
@@ -114,72 +168,14 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return { kind: "ok", lesson };
     });
 
-    switch (outcome.kind) {
-      case "roadmap_not_found":
-        return NextResponse.json({ error: "Roadmap not found" }, { status: 404 });
-      case "lesson_not_found":
-        return NextResponse.json({ error: "Lesson not found" }, { status: 404 });
-      case "duplicate":
-        return duplicateResponse("item", outcome.existing);
-      case "already_integrated":
-        return NextResponse.json(
-          { error: "This news item is already in that lesson", code: "ALREADY_INTEGRATED" },
-          { status: 409 }
-        );
-      case "ok": {
-        if (body.relatedLessonIds?.length) {
-          const uniqueTargets = Array.from(
-            new Set(body.relatedLessonIds.filter((tid) => tid !== outcome.lesson.id))
-          );
-          if (uniqueTargets.length > 0) {
-            try {
-              const existingTargets = await prisma.roadmapItem.findMany({
-                where: { id: { in: uniqueTargets } },
-                select: { id: true },
-              });
-              if (existingTargets.length > 0) {
-                const pairs = existingTargets.map((target) =>
-                  canonicalLessonPair(outcome.lesson.id, target.id)
-                );
-                const existingRelations = await prisma.knowledgeRelation.findMany({
-                  where: {
-                    relationType: "relates",
-                    OR: pairs.map(([fromLessonId, toLessonId]) => ({
-                      fromLessonId,
-                      toLessonId,
-                    })),
-                  },
-                  select: { fromLessonId: true, toLessonId: true },
-                });
-                const existingKeys = new Set(
-                  existingRelations.map((rel) => `${rel.fromLessonId}\0${rel.toLessonId}`)
-                );
-                const missingPairs = pairs.filter(
-                  ([fromLessonId, toLessonId]) =>
-                    !existingKeys.has(`${fromLessonId}\0${toLessonId}`)
-                );
-                if (missingPairs.length > 0) {
-                  await prisma.knowledgeRelation.createMany({
-                    data: missingPairs.map(([fromLessonId, toLessonId]) => ({
-                      fromLessonId,
-                      toLessonId,
-                      relationType: "relates",
-                    })),
-                  });
-                }
-              }
-            } catch (relError) {
-              if (!isMissingTableError(relError, "KnowledgeRelation")) {
-                console.error("[API POST /api/news/[id]/integrate] Relation save warning:", relError);
-              }
-            }
-          }
-        }
-        notifyRoadmapChanged();
-        const response: IntegrateResponse = { lesson: outcome.lesson, provenanceCount: marked.length };
-        return NextResponse.json(response, { status: 201 });
-      }
+    if (outcome.kind !== "ok") {
+      return outcomeErrorResponse(outcome);
     }
+
+    await linkRelatedLessons(outcome.lesson.id, body.relatedLessonIds);
+    notifyRoadmapChanged();
+    const response: IntegrateResponse = { lesson: outcome.lesson, provenanceCount: marked.length };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     console.error("[API POST /api/news/[id]/integrate] Error:", error);
     return NextResponse.json({ error: "Failed to add news item to lesson" }, { status: 500 });

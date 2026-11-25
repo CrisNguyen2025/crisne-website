@@ -292,11 +292,9 @@ export function RoadmapMap({
               {currentRoadmap?.title || (isLoading ? '…' : 'Roadmap')}
             </h1>
             <p className="text-xs text-muted-foreground tabular-nums">
-              {isLoading
-                ? 'Loading…'
-                : SECTIONS_ENABLED
-                  ? `${stats.total} bài · ${sectionCount} mục`
-                  : `${stats.total} bài`}
+              {isLoading && 'Loading…'}
+              {!isLoading && SECTIONS_ENABLED && `${stats.total} bài · ${sectionCount} mục`}
+              {!isLoading && !SECTIONS_ENABLED && `${stats.total} bài`}
             </p>
           </div>
           {onViewChange && <ViewToggle value={view} onChange={onViewChange} />}

@@ -1,3 +1,4 @@
+import { trimTrailingChar } from "@/lib/utils";
 import {
   type FeedFormat,
   extractYouTubeChannelFeedFromHtml,
@@ -144,15 +145,43 @@ export function isHtmlDocument(body: string, contentType?: string | null): boole
   return /^(?:<!doctype\s+html\b|<html(?=[\s>])|<head(?=[\s>]))/i.test(headSlice);
 }
 
+function readAttributeValue(attrText: string, start: number): { value: string; nextIndex: number } {
+  let pos = start;
+  while (pos < attrText.length && /\s/.test(attrText[pos])) pos++;
+  if (attrText[pos] !== "=") {
+    return { value: "", nextIndex: pos };
+  }
+  pos++;
+  while (pos < attrText.length && /\s/.test(attrText[pos])) pos++;
+  const quote = attrText[pos];
+  if (quote === '"' || quote === "'") {
+    const endQuote = attrText.indexOf(quote, pos + 1);
+    const valEnd = endQuote === -1 ? attrText.length : endQuote;
+    return { value: attrText.slice(pos + 1, valEnd), nextIndex: endQuote === -1 ? attrText.length : endQuote + 1 };
+  }
+  let valEnd = pos;
+  while (valEnd < attrText.length && !/[\s"'=<>`]/.test(attrText[valEnd])) valEnd++;
+  return { value: attrText.slice(pos, valEnd), nextIndex: valEnd };
+}
+
 function parseLinkAttributes(attrText: string): Record<string, string> {
   const attrs: Record<string, string> = {};
-  const attrRegex =
-    /([a-zA-Z_:][-a-zA-Z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
-  let match: RegExpExecArray | null;
-  while ((match = attrRegex.exec(attrText)) !== null) {
-    const key = match[1].toLowerCase();
-    const rawValue = match[2] ?? match[3] ?? match[4] ?? "";
-    attrs[key] = decodeHtmlEntities(rawValue).trim();
+  let pos = 0;
+  const len = attrText.length;
+
+  while (pos < len) {
+    while (pos < len && /[\s/]/.test(attrText[pos])) pos++;
+    if (pos >= len) break;
+    const keyStart = pos;
+    while (pos < len && /[a-zA-Z0-9_.:-]/.test(attrText[pos])) pos++;
+    if (pos === keyStart) {
+      pos++;
+      continue;
+    }
+    const key = attrText.slice(keyStart, pos).toLowerCase();
+    const { value, nextIndex } = readAttributeValue(attrText, pos);
+    attrs[key] = decodeHtmlEntities(value).trim();
+    pos = nextIndex;
   }
   return attrs;
 }
@@ -192,6 +221,43 @@ function scoreCandidate(url: string, mimeType: string, title: string): number {
   return 3;
 }
 
+interface ScoredAlternateCandidate {
+  url: string;
+  title?: string;
+  format?: FeedFormat;
+  score: number;
+  order: number;
+}
+
+function parseAlternateLinkCandidate(
+  attrText: string,
+  baseUrl: string,
+  order: number
+): ScoredAlternateCandidate | null {
+  const attrs = parseLinkAttributes(attrText);
+  const relTokens = (attrs.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!relTokens.includes("alternate") || !attrs.href) return null;
+  if (!isFeedMimeType(attrs.type ?? "", attrs.href)) return null;
+
+  let resolved: URL;
+  try {
+    resolved = new URL(attrs.href, baseUrl);
+  } catch {
+    return null;
+  }
+  if (resolved.protocol !== "http:" && resolved.protocol !== "https:") return null;
+
+  const resolvedUrl = resolved.toString();
+  const cleanTitle = (attrs.title ?? "").trim() || undefined;
+  return {
+    url: resolvedUrl,
+    title: cleanTitle,
+    format: inferMimeFormat(attrs.type ?? ""),
+    score: scoreCandidate(resolvedUrl, attrs.type ?? "", attrs.title ?? ""),
+    order,
+  };
+}
+
 export function extractAlternateFeedCandidatesFromHtml(
   html: string,
   baseUrl: string
@@ -203,40 +269,14 @@ export function extractAlternateFeedCandidatesFromHtml(
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ");
 
-  const scored: {
-    url: string;
-    title?: string;
-    format?: FeedFormat;
-    score: number;
-    order: number;
-  }[] = [];
+  const scored: ScoredAlternateCandidate[] = [];
   const linkTagRegex = /<link\b([^>]*)>/gi;
   let match: RegExpExecArray | null;
   let order = 0;
 
   while ((match = linkTagRegex.exec(sanitizedHead)) !== null) {
-    const attrs = parseLinkAttributes(match[1]);
-    const relTokens = (attrs.rel ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-    if (!relTokens.includes("alternate")) continue;
-    if (!attrs.href) continue;
-    if (!isFeedMimeType(attrs.type ?? "", attrs.href)) continue;
-
-    let resolved: URL;
-    try {
-      resolved = new URL(attrs.href, baseUrl);
-    } catch {
-      continue;
-    }
-    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") continue;
-
-    const cleanTitle = (attrs.title ?? "").trim() || undefined;
-    scored.push({
-      url: resolved.toString(),
-      title: cleanTitle,
-      format: inferMimeFormat(attrs.type ?? ""),
-      score: scoreCandidate(resolved.toString(), attrs.type ?? "", attrs.title ?? ""),
-      order: order++,
-    });
+    const candidate = parseAlternateLinkCandidate(match[1], baseUrl, order++);
+    if (candidate) scored.push(candidate);
   }
 
   scored.sort((a, b) => a.score - b.score || a.order - b.order);
@@ -257,6 +297,73 @@ export function extractAlternateFeedCandidatesFromHtml(
 
 export function extractAlternateFeedLinksFromHtml(html: string, baseUrl: string): string[] {
   return extractAlternateFeedCandidatesFromHtml(html, baseUrl).map((item) => item.url);
+}
+
+function tryAddGithubSuggestion(
+  segments: string[],
+  siteName: string,
+  seen: Set<string>,
+  githubRepos: string[]
+): void {
+  if (segments.length < 2) return;
+  const repoUrl = `https://github.com/${segments[0]}/${segments[1].replace(/\.git$/i, "")}`;
+  const key = repoUrl.toLowerCase();
+  if (seen.has(key) || !key.includes(siteName.toLowerCase())) return;
+  if (resolvePlatformFeedCandidates(repoUrl).length === 0) return;
+  seen.add(key);
+  githubRepos.push(repoUrl);
+}
+
+function resolveSectionPageUrl(
+  url: URL,
+  host: string,
+  pageHost: string,
+  segments: string[]
+): string | null {
+  if (host === pageHost && segments.length === 1 && SECTION_NAME_REGEX.test(segments[0])) {
+    return `${url.origin}/${segments[0]}/`;
+  }
+  if (host.endsWith(`.${pageHost}`) && segments.length === 0) {
+    const label = host.slice(0, -(pageHost.length + 1));
+    if (SECTION_NAME_REGEX.test(label)) return `${url.origin}/`;
+  }
+  return null;
+}
+
+function classifySuggestionAnchor(
+  attrText: string,
+  pageUrl: string,
+  pageHost: string,
+  siteName: string,
+  seen: Set<string>,
+  sectionPages: string[],
+  githubRepos: string[]
+): void {
+  const href = parseLinkAttributes(attrText).href;
+  if (!href) return;
+  let url: URL;
+  try {
+    url = new URL(href, pageUrl);
+  } catch {
+    return;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return;
+  url.hash = "";
+  url.search = "";
+  const host = normalizeHost(url.toString());
+  const segments = url.pathname.split("/").filter(Boolean);
+
+  if (host === "github.com") {
+    tryAddGithubSuggestion(segments, siteName, seen, githubRepos);
+    return;
+  }
+
+  const sectionPage = resolveSectionPageUrl(url, host, pageHost, segments);
+  if (!sectionPage) return;
+  const key = sectionPage.toLowerCase();
+  if (seen.has(key) || seen.has(trimTrailingChar(key, "/"))) return;
+  seen.add(key);
+  sectionPages.push(sectionPage);
 }
 
 /**
@@ -284,43 +391,7 @@ export function extractFeedSuggestionPagesFromHtml(
   let match: RegExpExecArray | null;
 
   while ((match = anchorRegex.exec(sanitized)) !== null) {
-    const href = parseLinkAttributes(match[1]).href;
-    if (!href) continue;
-    let url: URL;
-    try {
-      url = new URL(href, pageUrl);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== "http:" && url.protocol !== "https:") continue;
-    url.hash = "";
-    url.search = "";
-    const host = normalizeHost(url.toString());
-    const segments = url.pathname.split("/").filter(Boolean);
-
-    if (host === "github.com") {
-      if (segments.length < 2) continue;
-      const repoUrl = `https://github.com/${segments[0]}/${segments[1].replace(/\.git$/i, "")}`;
-      const key = repoUrl.toLowerCase();
-      if (seen.has(key) || !key.includes(siteName.toLowerCase())) continue;
-      if (resolvePlatformFeedCandidates(repoUrl).length === 0) continue;
-      seen.add(key);
-      githubRepos.push(repoUrl);
-      continue;
-    }
-
-    let sectionPage: string | null = null;
-    if (host === pageHost && segments.length === 1 && SECTION_NAME_REGEX.test(segments[0])) {
-      sectionPage = `${url.origin}/${segments[0]}/`;
-    } else if (host.endsWith(`.${pageHost}`) && segments.length === 0) {
-      const label = host.slice(0, -(pageHost.length + 1));
-      if (SECTION_NAME_REGEX.test(label)) sectionPage = `${url.origin}/`;
-    }
-    if (!sectionPage) continue;
-    const key = sectionPage.toLowerCase();
-    if (seen.has(key) || seen.has(key.replace(/\/$/, ""))) continue;
-    seen.add(key);
-    sectionPages.push(sectionPage);
+    classifySuggestionAnchor(match[1], pageUrl, pageHost, siteName, seen, sectionPages, githubRepos);
   }
 
   return {
@@ -331,7 +402,7 @@ export function extractFeedSuggestionPagesFromHtml(
 
 export function buildCommonFeedCandidates(pageUrl: string): string[] {
   const parsed = new URL(pageUrl);
-  const basePath = parsed.pathname.replace(/\/+$/, "");
+  const basePath = trimTrailingChar(parsed.pathname, "/");
   const candidates: string[] = [];
 
   if (basePath) {
@@ -429,7 +500,7 @@ async function findFeedOnPage(
   }
 
   // Only the section's own paths (/news/rss.xml, ...); the site root was already tried
-  const hasPath = new URL(res.finalUrl).pathname.replace(/\/+$/, "") !== "";
+  const hasPath = trimTrailingChar(new URL(res.finalUrl).pathname, "/") !== "";
   if (!hasPath) return null;
   const sectionCandidates = buildCommonFeedCandidates(res.finalUrl).slice(0, 3);
   const probed = await Promise.all(
@@ -471,6 +542,66 @@ export async function suggestFeedsFromHtml(
   return suggestions;
 }
 
+type ProbeSharedOptions = { lookupFn?: HostLookupFn; fetchFn?: typeof fetch; signal: AbortSignal };
+
+async function probeCommonCandidatesBatch(
+  candidates: string[],
+  sharedOptions: ProbeSharedOptions
+): Promise<{ feedUrl: string; body: string } | null> {
+  for (let i = 0; i < candidates.length; i += PROBE_BATCH_SIZE) {
+    const batch = candidates.slice(i, i + PROBE_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((candidate) => probeFeedCandidate(candidate, sharedOptions))
+    );
+    for (const probed of results) {
+      if (probed && "feedUrl" in probed) {
+        return { feedUrl: probed.feedUrl, body: probed.body };
+      }
+    }
+  }
+  return null;
+}
+
+async function resolveHtmlFeedCandidates(
+  initialRes: { xml: string; finalUrl: string },
+  finalHost: string,
+  sharedOptions: ProbeSharedOptions
+): Promise<string> {
+  if (finalHost === "youtube.com" || finalHost === "m.youtube.com") {
+    const ytFeed = extractYouTubeChannelFeedFromHtml(initialRes.xml);
+    if (ytFeed) {
+      const probedYt = await probeFeedCandidate(ytFeed, sharedOptions);
+      if (probedYt && "feedUrl" in probedYt) return probedYt.feedUrl;
+    }
+  }
+
+  const alternateLinks = extractAlternateFeedLinksFromHtml(
+    initialRes.xml,
+    initialRes.finalUrl
+  ).slice(0, MAX_ALTERNATE_CANDIDATES);
+  let explicitSsrfError: UrlGuardError | null = null;
+
+  for (const candidate of alternateLinks) {
+    const probed = await probeFeedCandidate(candidate, sharedOptions);
+    if (!probed) continue;
+    if ("ssrfError" in probed) {
+      explicitSsrfError ??= probed.ssrfError;
+      continue;
+    }
+    return probed.feedUrl;
+  }
+
+  const alternateSet = new Set(alternateLinks);
+  const commonCandidates = buildCommonFeedCandidates(initialRes.finalUrl).filter(
+    (url) => !alternateSet.has(url)
+  );
+  const commonMatch = await probeCommonCandidatesBatch(commonCandidates, sharedOptions);
+  if (commonMatch) return commonMatch.feedUrl;
+
+  if (explicitSsrfError) throw explicitSsrfError;
+  throw new FeedDiscoveryError();
+}
+
 export async function resolveFeedUrl(
   rawUrl: string,
   options: {
@@ -485,14 +616,13 @@ export async function resolveFeedUrl(
   const inputHost = normalizeHost(normalizedInput);
   const deadlineSignal =
     options.signal ?? AbortSignal.timeout(options.deadlineMs ?? DEFAULT_DISCOVERY_DEADLINE_MS);
-  const sharedOptions = {
+  const sharedOptions: ProbeSharedOptions = {
     lookupFn: options.lookupFn,
     fetchFn: options.fetchFn,
     signal: deadlineSignal,
   };
 
-  const platformCandidates = resolvePlatformFeedCandidates(normalizedInput);
-  for (const candidate of platformCandidates.slice(0, 3)) {
+  for (const candidate of resolvePlatformFeedCandidates(normalizedInput).slice(0, 3)) {
     const probed = await probeFeedCandidate(candidate.url, sharedOptions);
     if (!probed) continue;
     if ("ssrfError" in probed) throw probed.ssrfError;
@@ -519,7 +649,6 @@ export async function resolveFeedUrl(
   }
 
   const finalHost = normalizeHost(initialRes.finalUrl);
-
   if (isFeedDocument(initialRes.xml, initialRes.finalUrl, initialRes.contentType)) {
     return {
       feedUrl: initialRes.finalUrl,
@@ -527,56 +656,12 @@ export async function resolveFeedUrl(
       siteHost: finalHost,
     };
   }
-
   if (!isHtmlDocument(initialRes.xml, initialRes.contentType)) {
     return { feedUrl: normalizedInput, discovered: false, siteHost: inputHost };
   }
 
-  if (finalHost === "youtube.com" || finalHost === "m.youtube.com") {
-    const ytFeed = extractYouTubeChannelFeedFromHtml(initialRes.xml);
-    if (ytFeed) {
-      const probedYt = await probeFeedCandidate(ytFeed, sharedOptions);
-      if (probedYt && "feedUrl" in probedYt) {
-        return { feedUrl: probedYt.feedUrl, discovered: true, siteHost: finalHost };
-      }
-    }
-  }
-
-  const alternateLinks = extractAlternateFeedLinksFromHtml(
-    initialRes.xml,
-    initialRes.finalUrl
-  ).slice(0, MAX_ALTERNATE_CANDIDATES);
-  let explicitSsrfError: UrlGuardError | null = null;
-
-  for (const candidate of alternateLinks) {
-    const probed = await probeFeedCandidate(candidate, sharedOptions);
-    if (!probed) continue;
-    if ("ssrfError" in probed) {
-      explicitSsrfError ??= probed.ssrfError;
-      continue;
-    }
-    return { feedUrl: probed.feedUrl, discovered: true, siteHost: finalHost };
-  }
-
-  const alternateSet = new Set(alternateLinks);
-  const commonCandidates = buildCommonFeedCandidates(initialRes.finalUrl).filter(
-    (url) => !alternateSet.has(url)
-  );
-
-  for (let i = 0; i < commonCandidates.length; i += PROBE_BATCH_SIZE) {
-    const batch = commonCandidates.slice(i, i + PROBE_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map((candidate) => probeFeedCandidate(candidate, sharedOptions))
-    );
-    for (const probed of results) {
-      if (probed && "feedUrl" in probed) {
-        return { feedUrl: probed.feedUrl, discovered: true, siteHost: finalHost };
-      }
-    }
-  }
-
-  if (explicitSsrfError) throw explicitSsrfError;
-  throw new FeedDiscoveryError();
+  const discoveredUrl = await resolveHtmlFeedCandidates(initialRes, finalHost, sharedOptions);
+  return { feedUrl: discoveredUrl, discovered: true, siteHost: finalHost };
 }
 
 function buildPreviewWarnings(
@@ -617,14 +702,27 @@ function buildPreviewWarnings(
   return warnings;
 }
 
-export async function previewFeedSource(
-  rawUrl: string,
-  options: {
-    lookupFn?: HostLookupFn;
-    fetchFn?: typeof fetch;
-    deadlineMs?: number;
-  } = {}
-): Promise<NewsSourcePreviewDto> {
+function buildPreviewDto(
+  feedUrl: string,
+  body: string,
+  siteHost: string,
+  candidates?: NewsSourcePreviewCandidateDto[],
+  fallbackTitle?: string
+): NewsSourcePreviewDto {
+  const parsed = parseFeedDocument(body, feedUrl);
+  return {
+    resolvedFeedUrl: feedUrl,
+    siteHost,
+    feedTitle: parsed.title ?? fallbackTitle,
+    format: parsed.format,
+    candidates: candidates ?? [{ url: feedUrl, title: parsed.title, format: parsed.format }],
+    itemCount: parsed.entries.length,
+    sampleItems: parsed.entries.slice(0, 5),
+    warnings: buildPreviewWarnings(parsed.entries, siteHost, feedUrl),
+  };
+}
+
+function validatePreviewInputUrl(rawUrl: string): URL {
   const normalizedInput = rawUrl.trim();
   let parsedUrl: URL;
   try {
@@ -638,60 +736,134 @@ export async function previewFeedSource(
   if (parsedUrl.username || parsedUrl.password) {
     throw new UrlGuardError("INVALID_URL", 400, "Feed URL không được chứa thông tin đăng nhập.");
   }
+  return parsedUrl;
+}
 
-  await assertPublicHostname(parsedUrl.hostname, options.lookupFn);
-
-  const deadlineSignal = AbortSignal.timeout(options.deadlineMs ?? DEFAULT_DISCOVERY_DEADLINE_MS);
-  const sharedOptions = {
-    lookupFn: options.lookupFn,
-    fetchFn: options.fetchFn,
-    signal: deadlineSignal,
-  };
-  const inputHost = normalizeHost(normalizedInput);
-
+async function previewPlatformFeeds(
+  normalizedInput: string,
+  inputHost: string,
+  sharedOptions: ProbeSharedOptions
+): Promise<NewsSourcePreviewDto | null> {
   const platformCandidates = resolvePlatformFeedCandidates(normalizedInput);
-  if (platformCandidates.length > 0) {
-    const verifiedPlatform: Array<{
-      candidate: NewsSourcePreviewCandidateDto;
-      body: string;
-      finalUrl: string;
-    }> = [];
-    for (const candidate of platformCandidates.slice(0, 3)) {
-      const probed = await probeFeedCandidate(candidate.url, sharedOptions);
-      if (!probed) continue;
-      if ("ssrfError" in probed) throw probed.ssrfError;
-      verifiedPlatform.push({
-        candidate: {
-          url: probed.feedUrl,
-          title: candidate.title,
-          format: candidate.format,
-        },
-        body: probed.body,
-        finalUrl: probed.feedUrl,
-      });
-    }
-    if (verifiedPlatform.length > 0) {
-      const primary = verifiedPlatform[0];
-      const parsed = parseFeedDocument(primary.body, primary.finalUrl);
-      return {
-        resolvedFeedUrl: primary.finalUrl,
-        siteHost: inputHost,
-        feedTitle: parsed.title ?? primary.candidate.title,
-        format: parsed.format,
-        candidates: verifiedPlatform.map((item) => item.candidate),
-        itemCount: parsed.entries.length,
-        sampleItems: parsed.entries.slice(0, 5),
-        warnings: buildPreviewWarnings(parsed.entries, inputHost, primary.finalUrl),
-      };
+  if (platformCandidates.length === 0) return null;
+
+  const verifiedPlatform: Array<{
+    candidate: NewsSourcePreviewCandidateDto;
+    body: string;
+    finalUrl: string;
+  }> = [];
+  for (const candidate of platformCandidates.slice(0, 3)) {
+    const probed = await probeFeedCandidate(candidate.url, sharedOptions);
+    if (!probed) continue;
+    if ("ssrfError" in probed) throw probed.ssrfError;
+    verifiedPlatform.push({
+      candidate: { url: probed.feedUrl, title: candidate.title, format: candidate.format },
+      body: probed.body,
+      finalUrl: probed.feedUrl,
+    });
+  }
+  if (verifiedPlatform.length === 0) return null;
+
+  const primary = verifiedPlatform[0];
+  return buildPreviewDto(
+    primary.finalUrl,
+    primary.body,
+    inputHost,
+    verifiedPlatform.map((item) => item.candidate),
+    primary.candidate.title
+  );
+}
+
+async function previewHtmlAlternatesAndCommon(
+  xml: string,
+  finalUrl: string,
+  finalHost: string,
+  sharedOptions: ProbeSharedOptions,
+  suggestionOptions: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch }
+): Promise<NewsSourcePreviewDto> {
+  const htmlCandidates = extractAlternateFeedCandidatesFromHtml(xml, finalUrl).slice(
+    0,
+    MAX_ALTERNATE_CANDIDATES
+  );
+  if (finalHost === "youtube.com" || finalHost === "m.youtube.com") {
+    const ytFeed = extractYouTubeChannelFeedFromHtml(xml);
+    if (ytFeed && !htmlCandidates.some((c) => c.url === ytFeed)) {
+      htmlCandidates.unshift({ url: ytFeed, title: "YouTube Channel Feed", format: "atom" });
     }
   }
 
+  let explicitSsrfError: UrlGuardError | null = null;
+  const verifiedAlternates: Array<{ candidate: NewsSourcePreviewCandidateDto; body: string; finalUrl: string }> = [];
+
+  for (const candidate of htmlCandidates) {
+    const probed = await probeFeedCandidate(candidate.url, sharedOptions);
+    if (!probed) continue;
+    if ("ssrfError" in probed) {
+      explicitSsrfError ??= probed.ssrfError;
+      continue;
+    }
+    const doc = parseFeedDocument(probed.body, probed.feedUrl);
+    verifiedAlternates.push({
+      candidate: { url: probed.feedUrl, title: candidate.title ?? doc.title, format: doc.format },
+      body: probed.body,
+      finalUrl: probed.feedUrl,
+    });
+  }
+
+  if (verifiedAlternates.length > 0) {
+    const primary = verifiedAlternates[0];
+    return buildPreviewDto(
+      primary.finalUrl,
+      primary.body,
+      finalHost,
+      verifiedAlternates.map((item) => item.candidate),
+      primary.candidate.title
+    );
+  }
+
+  const alternateSet = new Set(htmlCandidates.map((c) => c.url));
+  const commonCandidates = buildCommonFeedCandidates(finalUrl).filter((url) => !alternateSet.has(url));
+  const commonMatch = await probeCommonCandidatesBatch(commonCandidates, sharedOptions);
+  if (commonMatch) return buildPreviewDto(commonMatch.feedUrl, commonMatch.body, finalHost);
+
+  if (explicitSsrfError) throw explicitSsrfError;
+  const suggestions = await suggestFeedsFromHtml(xml, finalUrl, suggestionOptions);
+  if (suggestions.length > 0) {
+    throw new FeedDiscoveryError(
+      `Trang này không có RSS/Atom/JSON feed, nhưng tìm thấy ${suggestions.length} feed liên quan. Chọn một feed bên dưới để kiểm tra.`,
+      "FEED_NOT_FOUND",
+      400,
+      suggestions
+    );
+  }
+  throw new FeedDiscoveryError();
+}
+
+export async function previewFeedSource(
+  rawUrl: string,
+  options: {
+    lookupFn?: HostLookupFn;
+    fetchFn?: typeof fetch;
+    deadlineMs?: number;
+  } = {}
+): Promise<NewsSourcePreviewDto> {
+  const normalizedInput = rawUrl.trim();
+  const parsedUrl = validatePreviewInputUrl(normalizedInput);
+  await assertPublicHostname(parsedUrl.hostname, options.lookupFn);
+
+  const sharedOptions: ProbeSharedOptions = {
+    lookupFn: options.lookupFn,
+    fetchFn: options.fetchFn,
+    signal: AbortSignal.timeout(options.deadlineMs ?? DEFAULT_DISCOVERY_DEADLINE_MS),
+  };
+  const inputHost = normalizeHost(normalizedInput);
+
+  const platformPreview = await previewPlatformFeeds(normalizedInput, inputHost, sharedOptions);
+  if (platformPreview) return platformPreview;
+
   let initialRes;
   try {
-    initialRes = await fetchFeedWithCacheSafely(normalizedInput, {
-      ...sharedOptions,
-      timeoutMs: 8_000,
-    });
+    initialRes = await fetchFeedWithCacheSafely(normalizedInput, { ...sharedOptions, timeoutMs: 8_000 });
   } catch (error) {
     if (error instanceof UrlGuardError) throw error;
     const classified = classifyFeedError(error);
@@ -703,27 +875,9 @@ export async function previewFeedSource(
   }
 
   const finalHost = normalizeHost(initialRes.finalUrl);
-
   if (isFeedDocument(initialRes.xml, initialRes.finalUrl, initialRes.contentType)) {
-    const parsed = parseFeedDocument(initialRes.xml, initialRes.finalUrl);
-    return {
-      resolvedFeedUrl: initialRes.finalUrl,
-      siteHost: finalHost,
-      feedTitle: parsed.title,
-      format: parsed.format,
-      candidates: [
-        {
-          url: initialRes.finalUrl,
-          title: parsed.title,
-          format: parsed.format,
-        },
-      ],
-      itemCount: parsed.entries.length,
-      sampleItems: parsed.entries.slice(0, 5),
-      warnings: buildPreviewWarnings(parsed.entries, finalHost, initialRes.finalUrl),
-    };
+    return buildPreviewDto(initialRes.finalUrl, initialRes.xml, finalHost);
   }
-
   if (!isHtmlDocument(initialRes.xml, initialRes.contentType)) {
     throw new FeedDiscoveryError(
       "[MALFORMED_XML] URL này không phải RSS, Atom hay JSON Feed hợp lệ.",
@@ -732,108 +886,8 @@ export async function previewFeedSource(
     );
   }
 
-  const htmlCandidates = extractAlternateFeedCandidatesFromHtml(
-    initialRes.xml,
-    initialRes.finalUrl
-  ).slice(0, MAX_ALTERNATE_CANDIDATES);
-
-  if (finalHost === "youtube.com" || finalHost === "m.youtube.com") {
-    const ytFeed = extractYouTubeChannelFeedFromHtml(initialRes.xml);
-    if (ytFeed && !htmlCandidates.some((c) => c.url === ytFeed)) {
-      htmlCandidates.unshift({
-        url: ytFeed,
-        title: "YouTube Channel Feed",
-        format: "atom",
-      });
-    }
-  }
-
-  let explicitSsrfError: UrlGuardError | null = null;
-  const verifiedAlternates: Array<{
-    candidate: NewsSourcePreviewCandidateDto;
-    body: string;
-    finalUrl: string;
-  }> = [];
-
-  for (const candidate of htmlCandidates) {
-    const probed = await probeFeedCandidate(candidate.url, sharedOptions);
-    if (!probed) continue;
-    if ("ssrfError" in probed) {
-      explicitSsrfError ??= probed.ssrfError;
-      continue;
-    }
-    const doc = parseFeedDocument(probed.body, probed.feedUrl);
-    verifiedAlternates.push({
-      candidate: {
-        url: probed.feedUrl,
-        title: candidate.title ?? doc.title,
-        format: doc.format,
-      },
-      body: probed.body,
-      finalUrl: probed.feedUrl,
-    });
-  }
-
-  if (verifiedAlternates.length > 0) {
-    const primary = verifiedAlternates[0];
-    const parsed = parseFeedDocument(primary.body, primary.finalUrl);
-    return {
-      resolvedFeedUrl: primary.finalUrl,
-      siteHost: finalHost,
-      feedTitle: parsed.title ?? primary.candidate.title,
-      format: parsed.format,
-      candidates: verifiedAlternates.map((item) => item.candidate),
-      itemCount: parsed.entries.length,
-      sampleItems: parsed.entries.slice(0, 5),
-      warnings: buildPreviewWarnings(parsed.entries, finalHost, primary.finalUrl),
-    };
-  }
-
-  const alternateSet = new Set(htmlCandidates.map((c) => c.url));
-  const commonCandidates = buildCommonFeedCandidates(initialRes.finalUrl).filter(
-    (url) => !alternateSet.has(url)
-  );
-
-  for (let i = 0; i < commonCandidates.length; i += PROBE_BATCH_SIZE) {
-    const batch = commonCandidates.slice(i, i + PROBE_BATCH_SIZE);
-    const results = await Promise.all(
-      batch.map((candidate) => probeFeedCandidate(candidate, sharedOptions))
-    );
-    for (const probed of results) {
-      if (probed && "feedUrl" in probed) {
-        const parsed = parseFeedDocument(probed.body, probed.feedUrl);
-        return {
-          resolvedFeedUrl: probed.feedUrl,
-          siteHost: finalHost,
-          feedTitle: parsed.title,
-          format: parsed.format,
-          candidates: [
-            {
-              url: probed.feedUrl,
-              title: parsed.title,
-              format: parsed.format,
-            },
-          ],
-          itemCount: parsed.entries.length,
-          sampleItems: parsed.entries.slice(0, 5),
-          warnings: buildPreviewWarnings(parsed.entries, finalHost, probed.feedUrl),
-        };
-      }
-    }
-  }
-
-  if (explicitSsrfError) throw explicitSsrfError;
-  const suggestions = await suggestFeedsFromHtml(initialRes.xml, initialRes.finalUrl, {
+  return previewHtmlAlternatesAndCommon(initialRes.xml, initialRes.finalUrl, finalHost, sharedOptions, {
     lookupFn: options.lookupFn,
     fetchFn: options.fetchFn,
   });
-  if (suggestions.length > 0) {
-    throw new FeedDiscoveryError(
-      `Trang này không có RSS/Atom/JSON feed, nhưng tìm thấy ${suggestions.length} feed liên quan. Chọn một feed bên dưới để kiểm tra.`,
-      "FEED_NOT_FOUND",
-      400,
-      suggestions
-    );
-  }
-  throw new FeedDiscoveryError();
 }

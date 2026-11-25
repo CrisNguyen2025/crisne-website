@@ -61,7 +61,7 @@ export function Sheet({
   useEffect(() => {
     if (open) {
       if (panelRef.current && !prefersReducedMotion()) {
-        void panelRef.current.offsetWidth;
+        panelRef.current.getBoundingClientRect();
       }
       const frame = window.requestAnimationFrame(() => {
         setIsVisible(true);

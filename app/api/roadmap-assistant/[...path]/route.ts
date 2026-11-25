@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { hasWriteAccess } from "@/lib/auth/write-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { JsonObjectSchema } from "@/lib/roadmap/schemas";
+import { trimTrailingChar } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 // Streams the agent's answer (SSE); the Python service may also need a cold start
@@ -36,6 +37,34 @@ const scopeThreadId = (id: string, actor: Actor) => (id.startsWith(`${actor}:`) 
 const ownThreadId = (id: unknown): string =>
   typeof id === "string" && id.trim() && id.trim().toLowerCase() !== "default" ? id : crypto.randomUUID();
 
+type PreparedPostBody =
+  | { ok: true; body: string; threadId: string }
+  | { ok: false; response: Response };
+
+async function preparePostBody(req: NextRequest, actor: Actor): Promise<PreparedPostBody> {
+  let payload: unknown;
+  try {
+    payload = await req.json();
+  } catch {
+    return { ok: false, response: jsonError("Invalid JSON body.", 400) };
+  }
+  const parsedPayload = JsonObjectSchema.safeParse(payload);
+  if (!parsedPayload.success) {
+    return { ok: false, response: jsonError("Invalid JSON body.", 400) };
+  }
+  // Same limit as the widget input and the service; refused here before any work is done
+  const message = parsedPayload.data.message;
+  if (typeof message === "string" && message.length > MAX_MESSAGE_LENGTH) {
+    return { ok: false, response: jsonError("Câu hỏi quá dài. Bạn rút gọn giúp mình nhé.", 413) };
+  }
+
+  const scoped: Record<string, unknown> = { ...parsedPayload.data };
+  const threadId = ownThreadId(scoped.thread_id);
+  scoped.thread_id = scopeThreadId(threadId, actor);
+  if (typeof scoped.action_id === "string") scoped.action_id = scopeThreadId(scoped.action_id, actor);
+  return { ok: true, body: JSON.stringify(scoped), threadId };
+}
+
 async function forward(req: NextRequest, context: RouteContext, allowedPaths: Set<string>) {
   const path = (await context.params).path.join("/");
   if (!allowedPaths.has(path)) return jsonError("Not found", 404);
@@ -58,32 +87,15 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
   let body: string | undefined;
   let threadId: string | undefined;
   if (req.method === "POST") {
-    let payload: unknown;
-    try {
-      payload = await req.json();
-    } catch {
-      return jsonError("Invalid JSON body.", 400);
-    }
-    const parsedPayload = JsonObjectSchema.safeParse(payload);
-    if (!parsedPayload.success) {
-      return jsonError("Invalid JSON body.", 400);
-    }
-    // Same limit as the widget input and the service; refused here before any work is done
-    const message = parsedPayload.data.message;
-    if (typeof message === "string" && message.length > MAX_MESSAGE_LENGTH) {
-      return jsonError("Câu hỏi quá dài. Bạn rút gọn giúp mình nhé.", 413);
-    }
-
-    const scoped: Record<string, unknown> = { ...parsedPayload.data };
-    threadId = ownThreadId(scoped.thread_id);
-    scoped.thread_id = scopeThreadId(threadId, actor);
-    if (typeof scoped.action_id === "string") scoped.action_id = scopeThreadId(scoped.action_id, actor);
-    body = JSON.stringify(scoped);
+    const prepared = await preparePostBody(req, actor);
+    if (!prepared.ok) return prepared.response;
+    body = prepared.body;
+    threadId = prepared.threadId;
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${baseUrl.replace(/\/+$/, "")}/${path}`, {
+    upstream = await fetch(`${trimTrailingChar(baseUrl, "/")}/${path}`, {
       method: req.method,
       headers: { "Content-Type": "application/json", "x-internal-key": internalKey, "x-actor": actor },
       body,

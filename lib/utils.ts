@@ -26,23 +26,41 @@ export function getMediaUrl({ url }: { url: string }): string {
   return url.startsWith("/") ? url : `/${url}`;
 }
 
+export function trimChar(value: string, char: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === char) start++;
+  while (end > start && value[end - 1] === char) end--;
+  return value.slice(start, end);
+}
+
+export function trimTrailingChar(value: string, char: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === char) end--;
+  return end === value.length ? value : value.slice(0, end);
+}
+
 export function slugify(text: string): string {
-  return text
+  const cleaned = text
     .toLowerCase()
     .trim()
     .replace(/đ/g, "d") // NFD does not split "đ", so the accent strip below dropped it ("mặc định" → "mac-inh")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // remove accents
     .replace(/[^\w\s-]/g, "") // remove invalid chars
-    .replace(/[\s_-]+/g, "-") // collapse whitespace and replace by -
-    .replace(/^-+|-+$/g, ""); // trim - from ends
+    .replace(/[\s_-]+/g, "-"); // collapse whitespace and replace by -
+  return trimChar(cleaned, "-");
 }
 
 /** Slug of a lesson title not in `used` (adds -2, -3...), and records it in `used`. */
 export function uniqueSlug(title: string, used: Set<string>): string {
   const base = slugify(title) || "lesson";
   let slug = base;
-  for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+  let n = 2;
+  while (used.has(slug)) {
+    slug = `${base}-${n}`;
+    n += 1;
+  }
   used.add(slug);
   return slug;
 }

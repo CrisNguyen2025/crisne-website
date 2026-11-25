@@ -72,9 +72,12 @@ PUBLIC_PATHS = {"/health"}
 
 @app.middleware("http")
 async def require_internal_key(request: Request, call_next):
-    if request.method != "OPTIONS" and request.url.path not in PUBLIC_PATHS:
-        if not is_valid_internal_key(request.headers.get("x-internal-key"), settings.internal_api_key):
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if (
+        request.method != "OPTIONS"
+        and request.url.path not in PUBLIC_PATHS
+        and not is_valid_internal_key(request.headers.get("x-internal-key"), settings.internal_api_key)
+    ):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
     # The proxy decides who the caller is; route handlers read it via rag_service.auth
     set_actor(parse_actor(request.headers.get("x-actor")))
     return await call_next(request)
@@ -90,6 +93,6 @@ app.add_middleware(
 )
 
 # Mount routes
-from rag_service.api.routes import router  # noqa: E402
+from rag_service.api.routes import router
 
 app.include_router(router)

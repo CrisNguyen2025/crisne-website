@@ -20,8 +20,20 @@ import { cn } from "@/lib/utils";
 import * as newsService from "@/logic/news/newsService";
 
 const FETCH_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-// A bare domain or URL with no spaces; anything else is pasted as plain text
-const PASTED_LINK_REGEX = /^(https?:\/\/)?[^\s/]+\.[^\s]+$/i;
+
+function isPastedLink(value: string): boolean {
+  if (!value || /\s/.test(value)) return false;
+  const lower = value.toLowerCase();
+  let rest = value;
+  if (lower.startsWith("https://")) {
+    rest = value.slice("https://".length);
+  } else if (lower.startsWith("http://")) {
+    rest = value.slice("http://".length);
+  }
+  const dotIndex = rest.indexOf(".");
+  if (dotIndex <= 0 || dotIndex >= rest.length - 1) return false;
+  return !rest.slice(0, dotIndex).includes("/");
+}
 
 export function formatFeedUrl(feedUrl: string): string {
   return feedUrl.replace(/^https?:\/\/(www\.)?/, "");
@@ -126,7 +138,7 @@ export function FeedLinkField({ link, disabled = false }: FeedLinkFieldProps) {
           onChange={(e) => link.change(e.target.value)}
           onPaste={(e) => {
             const pasted = e.clipboardData.getData("text").trim();
-            if (!PASTED_LINK_REGEX.test(pasted)) return;
+            if (!isPastedLink(pasted)) return;
             // A pasted link replaces the field and is detected right away
             e.preventDefault();
             link.change(pasted);

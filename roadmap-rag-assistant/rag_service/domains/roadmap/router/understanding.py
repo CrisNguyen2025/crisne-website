@@ -203,6 +203,89 @@ def strip_noise(lower: str) -> str:
     return s or lower.strip()
 
 
+def _resolve_understanding_target(
+    lower: str,
+    flat: str,
+    after_greeting: str,
+    has_object: bool,
+    asks_usage: bool,
+) -> Target:
+    if _has_cue(OFF_TOPIC_STRONG_HINTS, lower, flat) or (not has_object and _has_cue(OFF_TOPIC_HINTS, lower, flat)):
+        return Target.OFF_TOPIC
+    if (
+        (SUGGESTION.search(lower) and not re.search(r"\bvề\b", lower))
+        or ABOUT_ASSISTANT.search(after_greeting)
+        or asks_usage
+    ):
+        return Target.ASSISTANT
+    return Target.ROADMAP if has_object else Target.NONE
+
+
+def _resolve_understanding_act(
+    *,
+    raw: str,
+    lower: str,
+    flat: str,
+    head: str,
+    cue_head: str,
+    after_greeting: str,
+    accented: bool,
+    end_question: re.Pattern[str],
+    yes_no: re.Pattern[str],
+    request_cue: re.Pattern[str],
+    has_verb: bool,
+    has_object: bool,
+    has_search: bool,
+    imperative: bool,
+    capability: bool,
+    write_blocker: Optional[str],
+) -> SpeechAct:
+    if imperative and has_object:
+        ending = end_question.search(cue_head)
+        if ending and fold(ending.group(0)).strip(" ?!.") == "nao":
+            ending = re.search(r"\b(?:topic|layer|bai|nhom|muc|item|group)\s+nao\s*[?!.]*$", fold(cue_head))
+        asks = "?" in head or bool(ending)
+    else:
+        asks = (
+            is_question_text(lower, flat)
+            or capability
+            or (not accented and bool(END_QUESTION_FOLDED.search(flat)))
+            or asks_mid_sentence(lower, flat, accented)
+        )
+    if write_blocker == "negation" and "?" not in lower and not has_search and yes_no.search(lower) is None:
+        asks = False
+
+    polite = has_verb and has_object and not has_search and (
+        (yes_no.search(lower) is not None and request_cue.search(lower) is not None)
+        or EN_POLITE_REQUEST.search(flat) is not None
+    )
+    conditional = has_verb and has_object and CONDITIONAL_REQUEST.search(flat) is not None
+    learning_plan = PLAN_REQUEST.search(flat) is not None or (
+        LEARNING_PLAN_GOAL.search(flat) is not None
+        and LEARNING_PLAN_NOUN.search(flat) is not None
+        and not CREATE_ROADMAP.search(flat)
+    )
+    thanks = THANKS.match(raw) is not None and "?" not in raw and not has_object and (
+        not has_search or PRAISE.search(lower) is not None
+    )
+
+    if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(k in lower for k in PLAN_PHRASES) or learning_plan:
+        return SpeechAct.PLAN
+    if (CONVERSATION_RECALL.search(lower) and not (has_object and has_search)) or (
+        not has_object and (IDENTITY_STATEMENT.match(raw) or SELF_DISCLOSURE.search(raw))
+    ):
+        return SpeechAct.RECALL
+    if (after_greeting != raw and not after_greeting.strip(" ?!.,")) or thanks:
+        return SpeechAct.GREETING
+    if polite or conditional:
+        return SpeechAct.REQUEST
+    if asks:
+        return SpeechAct.QUESTION
+    if has_verb or imperative:
+        return SpeechAct.COMMAND
+    return SpeechAct.STATEMENT
+
+
 def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -> Understanding:
     """Read the act and the target of a message. Sub-millisecond, no LLM.
 
@@ -216,105 +299,46 @@ def understand(text: str, known_place: Optional[Callable[[str], bool]] = None) -
     accented = lower != flat
     how_to, end_question = (HOW_TO, END_QUESTION) if accented else (HOW_TO_FOLDED, END_QUESTION_FOLDED)
 
-    # A verb in code ("db.items.remove(…)", `DELETE FROM …`) is not the user's
     code_free = fold(strip_code(lower))
     has_verb = any(re.search(rf"\b{re.escape(v)}\b", code_free) for v in CUD_VERBS)
-    # P3: a roadmap noun names this roadmap's object unless it sits in code or in another place (object_sense.py)
     has_object = _has_any(ENTITY_PATTERNS, strip_code(FALSE_OBJECT.sub(" ", fold(lower)))) and not names_another_place(lower, known_place)
     has_search = _has_phrase(SEARCH_WORDS, flat)
     imperative = bool(IMPERATIVE_START.search(flat))
     head = NAMED_PART.sub(" ", lower).strip()
     cue_head = head if accented else fold(head)
-    # Greetings are read on the original message: noise stripping removes them from `lower`
     after_greeting = GREETING_PREFIX.sub("", raw, count=1)
 
-    # A question about using the assistant: what it can do, or how to make a roadmap change.
-    # A command whose name holds how-to words ("thêm bài Làm sao deploy vào layer X") is not one.
     capability = not has_verb and CAPABILITY_QUESTION.search(flat) is not None
     usage_how_to = (
         has_verb and has_object and how_to.search(cue_head if imperative else (lower if accented else flat)) is not None
         and (not imperative or end_question.search(cue_head) is not None)
     )
     syntax = (SYNTAX_QUESTION.search(lower) if accented else SYNTAX_QUESTION_FOLDED.search(flat)) is not None
-    # "tôi cần hỗ trợ học tập": asks for help and names nothing to search, so it gets the command list
     help_request = not has_verb and HELP_REQUEST.search(flat) is not None
     asks_usage = capability or usage_how_to or syntax or help_request
-    # P2: is the named change asked for? (polarity.py)
     polarity = polarity_of(lower).value if has_verb else NO_POLARITY
     write_blocker = BLOCKER_OF.get(polarity)
 
-    # ── Target: off-topic first, then the assistant, then the roadmap ──
-    if _has_cue(OFF_TOPIC_STRONG_HINTS, lower, flat) or (not has_object and _has_cue(OFF_TOPIC_HINTS, lower, flat)):
-        target = Target.OFF_TOPIC
-    elif (
-        (SUGGESTION.search(lower) and not re.search(r"\bvề\b", lower))
-        or ABOUT_ASSISTANT.search(after_greeting)
-        or asks_usage
-    ):
-        target = Target.ASSISTANT
-    elif has_object:
-        target = Target.ROADMAP
-    else:
-        target = Target.NONE
-
-    # ── Speech act ──
-    if imperative and has_object:
-        # A command names its object after the verb, and the name may hold question words
-        # ("tạo topic tên là Tại sao Docker", "thêm bài Làm sao deploy vào layer X"): only "?" or a
-        # question word ending the message ("tạo topic như thế nào") outside the name makes it a question.
-        # A final "nào" after a command is a particle ("tạo topic Rust nào"); it asks only after a roadmap noun
-        # ("xóa bài nào")
-        ending = end_question.search(cue_head)
-        if ending and fold(ending.group(0)).strip(" ?!.") == "nao":
-            ending = re.search(r"\b(?:topic|layer|bai|nhom|muc|item|group)\s+nao\s*[?!.]*$", fold(cue_head))
-        asks = "?" in head or bool(ending)
-    else:
-        # "có thể thao tác gì ở dự án này": the capability cue is the question, even with "gì" mid-sentence
-        asks = (
-            is_question_text(lower, flat) or capability or (not accented and bool(END_QUESTION_FOLDED.search(flat)))
-            or asks_mid_sentence(lower, flat, accented)
-        )
+    target = _resolve_understanding_target(lower, flat, after_greeting, has_object, asks_usage)
     yes_no, request_cue = (END_YES_NO, REQUEST_CUE) if accented else (END_YES_NO_FOLDED, REQUEST_CUE_FOLDED)
-    # "không cần thêm bài nào nữa đâu" declines a change; "nào … đâu" is emphasis, not a question.
-    # A real question stays one: "đừng xóa bài X k", "đừng xóa bài X, rồi tìm bài về Docker".
-    if write_blocker == "negation" and "?" not in lower and not has_search and yes_no.search(lower) is None:
-        asks = False
-    polite = (
-        has_verb and has_object and not has_search
-        and (
-            (yes_no.search(lower) is not None and request_cue.search(lower) is not None)
-            # "Can you add a new group called 'Testing'…?": asked, so it runs only after the preview
-            or EN_POLITE_REQUEST.search(flat) is not None
-        )
+    act = _resolve_understanding_act(
+        raw=raw,
+        lower=lower,
+        flat=flat,
+        head=head,
+        cue_head=cue_head,
+        after_greeting=after_greeting,
+        accented=accented,
+        end_question=end_question,
+        yes_no=yes_no,
+        request_cue=request_cue,
+        has_verb=has_verb,
+        has_object=has_object,
+        has_search=has_search,
+        imperative=imperative,
+        capability=capability,
+        write_blocker=write_blocker,
     )
-    conditional = has_verb and has_object and CONDITIONAL_REQUEST.search(flat) is not None
-
-    learning_plan = PLAN_REQUEST.search(flat) is not None or (
-        LEARNING_PLAN_GOAL.search(flat) is not None and LEARNING_PLAN_NOUN.search(flat) is not None
-        and not CREATE_ROADMAP.search(flat)
-    )
-    thanks = THANKS.match(raw) is not None and "?" not in raw and not has_object and (
-        not has_search or PRAISE.search(lower) is not None
-    )
-
-    # The removed /plan and /goal commands still read as a learning-plan question
-    if any(lower.startswith(p) for p in ["/plan", "/goal"]) or any(k in lower for k in PLAN_PHRASES) or learning_plan:
-        act = SpeechAct.PLAN
-    # A recall word next to a roadmap listing or search ("liệt kê bài … tôi tên gì nhỉ") is the roadmap request
-    elif (CONVERSATION_RECALL.search(lower) and not (has_object and has_search)) or (
-        not has_object and (IDENTITY_STATEMENT.match(raw) or SELF_DISCLOSURE.search(raw))
-    ):
-        act = SpeechAct.RECALL
-    elif (after_greeting != raw and not after_greeting.strip(" ?!.,")) or thanks:
-        act = SpeechAct.GREETING
-    elif polite or conditional:
-        act = SpeechAct.REQUEST
-    elif asks:
-        act = SpeechAct.QUESTION
-    elif has_verb or imperative:
-        act = SpeechAct.COMMAND
-    else:
-        act = SpeechAct.STATEMENT
 
     return Understanding(
         act=act,

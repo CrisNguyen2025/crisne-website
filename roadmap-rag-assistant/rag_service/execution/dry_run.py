@@ -24,7 +24,7 @@ class DryRunValidator:
             ActionType.CREATE: ("➕ TẠO MỚI", "Sẽ tạo mới"),
             ActionType.DELETE: ("🗑️ XÓA DỮ LIỆU", "Sẽ xóa vĩnh viễn"),
         }
-        badge, desc = action_verbs.get(action.action, ("📋 THAO TÁC", "Sẽ thực hiện"))
+        badge, _desc = action_verbs.get(action.action, ("📋 THAO TÁC", "Sẽ thực hiện"))
 
         lines = [
             f"**{badge} {len(action.entities)} {action.entity_level.value.upper()}**",

@@ -213,6 +213,75 @@ def format_memory_list_reply(active: Sequence[OwnerMemoryItem], pending_count: i
 
 
 class MemoryCommands(AgentHostMixin):
+    async def _handle_memory_create(self, req, page_context, session_ctx, delay: float) -> AsyncGenerator[dict, None]:
+        kind = infer_memory_kind(req.content)
+        scope_slug: Optional[str] = None
+        if req.use_current_topic:
+            scope_slug = ((page_context or {}).get("roadmapSlug") or "").strip() or session_ctx.active_topic_slug
+        elif req.topic_hint:
+            found = await resolve_topic(req.topic_hint)
+            if found.status == "found" and found.slug:
+                scope_slug = found.slug
+            else:
+                async for ev in self._stream_text(
+                    f"Không tìm thấy topic `{req.topic_hint}` để gắn phạm vi bộ nhớ. "
+                    "Bạn hãy kiểm tra lại tên topic hoặc bỏ tên topic để lưu toàn cục.",
+                    delay,
+                ):
+                    yield ev
+                return
+
+        session_ctx.clear_pending()
+        session_ctx.pending_memory_change = {
+            "op": "create",
+            "kind": kind,
+            "content": req.content,
+            "scope_topic_slug": scope_slug,
+        }
+        scope_label = f"Topic `{scope_slug}`" if scope_slug else "Toàn cục (mọi Topic)"
+        preview_text = (
+            "🧠 **Lưu vào Bộ nhớ Owner**\n\n"
+            f"- **Loại:** {KIND_LABELS.get(kind, kind)} (`{kind}`)\n"
+            f"- **Phạm vi:** {scope_label}\n"
+            f"- **Nội dung:** {req.content}\n\n"
+            "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để lưu, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
+        )
+        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        async for ev in self._stream_text(preview_text, delay):
+            yield ev
+
+    async def _handle_memory_archive(self, req, session_ctx, delay: float) -> AsyncGenerator[dict, None]:
+        active = await owner_memory_store.list_active()
+        match = find_matching_memory(req.content, active)
+        if match is None:
+            reply = (
+                f"Mình không tìm thấy mục bộ nhớ nào khớp với **{req.content}**.\n\n"
+                + (format_memory_list_reply(active) if active else "Bộ nhớ Owner hiện đang trống.")
+            )
+            async for ev in self._stream_text(reply, delay):
+                yield ev
+            return
+
+        session_ctx.clear_pending()
+        session_ctx.pending_memory_change = {
+            "op": "archive",
+            "memory_id": match.id,
+            "kind": match.kind,
+            "content": match.content,
+            "scope_topic_slug": match.scope,
+        }
+        scope_label = f"Topic `{match.scope}`" if match.scope else "Toàn cục"
+        preview_text = (
+            "🗑️ **Gỡ khỏi Bộ nhớ Owner**\n\n"
+            f"- **Loại:** {KIND_LABELS.get(match.kind, match.kind)} (`{match.kind}`)\n"
+            f"- **Phạm vi:** {scope_label}\n"
+            f"- **Nội dung:** {match.content}\n\n"
+            "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để gỡ, hoặc bấm **[❌ Hủy bỏ]** để giữ lại."
+        )
+        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        async for ev in self._stream_text(preview_text, delay):
+            yield ev
+
     async def handle_memory_command(
         self,
         *,
@@ -241,83 +310,9 @@ class MemoryCommands(AgentHostMixin):
             yield {"type": "tool_end", "name": "list_owner_memories", "result": f"{len(active)} active, {len(pending)} pending"}
             async for ev in self._stream_text(reply, delay):
                 yield ev
-            return
-
-        if req.action == "create":
-            kind = infer_memory_kind(req.content)
-            scope_slug: Optional[str] = None
-            if req.use_current_topic:
-                scope_slug = ((page_context or {}).get("roadmapSlug") or "").strip() or session_ctx.active_topic_slug
-            elif req.topic_hint:
-                found = await resolve_topic(req.topic_hint)
-                if found.status == "found" and found.slug:
-                    scope_slug = found.slug
-                else:
-                    async for ev in self._stream_text(
-                        f"Không tìm thấy topic `{req.topic_hint}` để gắn phạm vi bộ nhớ. "
-                        "Bạn hãy kiểm tra lại tên topic hoặc bỏ tên topic để lưu toàn cục.",
-                        delay,
-                    ):
-                        yield ev
-                    return
-
-            session_ctx.clear_pending()
-            session_ctx.pending_memory_change = {
-                "op": "create",
-                "kind": kind,
-                "content": req.content,
-                "scope_topic_slug": scope_slug,
-            }
-            scope_label = f"Topic `{scope_slug}`" if scope_slug else "Toàn cục (mọi Topic)"
-            preview_text = (
-                "🧠 **Lưu vào Bộ nhớ Owner**\n\n"
-                f"- **Loại:** {KIND_LABELS.get(kind, kind)} (`{kind}`)\n"
-                f"- **Phạm vi:** {scope_label}\n"
-                f"- **Nội dung:** {req.content}\n\n"
-                "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để lưu, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
-            )
-            yield {
-                "type": "action_preview",
-                "action_id": session_ctx.session_id,
-                "preview": preview_text,
-            }
-            async for ev in self._stream_text(preview_text, delay):
+        elif req.action == "create":
+            async for ev in self._handle_memory_create(req, page_context, session_ctx, delay):
                 yield ev
-            return
-
-        if req.action == "archive":
-            active = await owner_memory_store.list_active()
-            match = find_matching_memory(req.content, active)
-            if match is None:
-                reply = (
-                    f"Mình không tìm thấy mục bộ nhớ nào khớp với **{req.content}**.\n\n"
-                    + (format_memory_list_reply(active) if active else "Bộ nhớ Owner hiện đang trống.")
-                )
-                async for ev in self._stream_text(reply, delay):
-                    yield ev
-                return
-
-            session_ctx.clear_pending()
-            session_ctx.pending_memory_change = {
-                "op": "archive",
-                "memory_id": match.id,
-                "kind": match.kind,
-                "content": match.content,
-                "scope_topic_slug": match.scope,
-            }
-            scope_label = f"Topic `{match.scope}`" if match.scope else "Toàn cục"
-            preview_text = (
-                "🗑️ **Gỡ khỏi Bộ nhớ Owner**\n\n"
-                f"- **Loại:** {KIND_LABELS.get(match.kind, match.kind)} (`{match.kind}`)\n"
-                f"- **Phạm vi:** {scope_label}\n"
-                f"- **Nội dung:** {match.content}\n\n"
-                "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để gỡ, hoặc bấm **[❌ Hủy bỏ]** để giữ lại."
-            )
-            yield {
-                "type": "action_preview",
-                "action_id": session_ctx.session_id,
-                "preview": preview_text,
-            }
-            async for ev in self._stream_text(preview_text, delay):
+        elif req.action == "archive":
+            async for ev in self._handle_memory_archive(req, session_ctx, delay):
                 yield ev
-            return

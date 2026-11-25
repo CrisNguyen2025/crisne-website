@@ -35,6 +35,90 @@ interface ItemRow {
   slug?: string | null;
 }
 
+interface SlugUpdate {
+  id: string;
+  title: string;
+  newSlug: string;
+  roadmapId: string;
+}
+
+function collectSlugUpdatesForRoadmap(roadmapId: string, items: ItemRow[]): SlugUpdate[] {
+  const usedSlugs = new Set<string>();
+  for (const it of items) {
+    const trimmed = it.slug?.trim();
+    if (trimmed) usedSlugs.add(trimmed);
+  }
+
+  const updates: SlugUpdate[] = [];
+  for (const it of items) {
+    if (it.slug?.trim()) continue;
+    const base = slugify(it.title) || "lesson";
+    let candidate = base;
+    let counter = 2;
+    while (usedSlugs.has(candidate)) {
+      candidate = `${base}-${counter}`;
+      counter++;
+    }
+    usedSlugs.add(candidate);
+    updates.push({ id: it.id, title: it.title, newSlug: candidate, roadmapId });
+  }
+  return updates;
+}
+
+function planMissingItemSlugs(rows: ItemRow[]): SlugUpdate[] {
+  const byRoadmap = new Map<string, ItemRow[]>();
+  for (const item of rows) {
+    const list = byRoadmap.get(item.roadmapId) || [];
+    list.push(item);
+    byRoadmap.set(item.roadmapId, list);
+  }
+
+  const updates: SlugUpdate[] = [];
+  for (const [roadmapId, items] of byRoadmap.entries()) {
+    updates.push(...collectSlugUpdatesForRoadmap(roadmapId, items));
+  }
+  return updates;
+}
+
+function logSampleUpdates(updates: SlugUpdate[]): void {
+  console.log(`Lessons needing slug update: ${updates.length}`);
+  if (updates.length === 0) return;
+
+  console.log("\nSample updates:");
+  for (const u of updates.slice(0, 10)) {
+    console.log(`  [${u.id}] "${u.title}" -> "${u.newSlug}" (topic: ${u.roadmapId})`);
+  }
+  if (updates.length > 10) {
+    console.log(`  ... and ${updates.length - 10} more`);
+  }
+}
+
+async function applySlugMigration(client: Client, updates: SlugUpdate[]): Promise<void> {
+  // Backup table first
+  const fullRows = (await client.execute('SELECT * FROM "RoadmapItem"')).rows.map((r) =>
+    Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "bigint" ? Number(v) : v]))
+  );
+  const backupDir = fs.existsSync(path.join(__dirname, "../.handoff/runs"))
+    ? path.join(__dirname, "../.handoff/runs")
+    : "/tmp";
+  const backupFile = path.join(backupDir, `roadmap-item-backup-${Date.now()}.json`);
+  fs.writeFileSync(backupFile, JSON.stringify({ takenAt: new Date().toISOString(), RoadmapItem: fullRows }, null, 2));
+  console.log(`Backup saved to: ${backupFile}`);
+
+  // Apply updates in batch
+  const statements: InStatement[] = updates.map((u) => ({
+    sql: 'UPDATE "RoadmapItem" SET "slug" = ? WHERE id = ?',
+    args: [u.newSlug, u.id],
+  }));
+  statements.push({
+    sql: 'CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug")',
+    args: [],
+  });
+
+  await client.batch(statements, "write");
+  console.log(`Successfully updated ${updates.length} lessons with slugs and created unique index.`);
+}
+
 async function main() {
   const { client, target } = connect();
   console.log(`target: ${target}${apply ? "  (APPLY)" : "  (dry-run)"}`);
@@ -58,57 +142,8 @@ async function main() {
   const rows = (await client.execute(query)).rows as unknown as ItemRow[];
   console.log(`Total lessons: ${rows.length}`);
 
-  // Group items by roadmapId
-  const byRoadmap = new Map<string, ItemRow[]>();
-  for (const item of rows) {
-    const list = byRoadmap.get(item.roadmapId) || [];
-    list.push(item);
-    byRoadmap.set(item.roadmapId, list);
-  }
-
-  const updates: { id: string; title: string; newSlug: string; roadmapId: string }[] = [];
-
-  for (const [roadmapId, items] of byRoadmap.entries()) {
-    const usedSlugs = new Set<string>();
-
-    // First collect existing non-empty slugs
-    for (const it of items) {
-      if (it.slug && it.slug.trim()) {
-        usedSlugs.add(it.slug.trim());
-      }
-    }
-
-    // Now generate slugs for those missing
-    for (const it of items) {
-      if (!it.slug || !it.slug.trim()) {
-        const base = slugify(it.title) || "lesson";
-        let candidate = base;
-        let counter = 2;
-        while (usedSlugs.has(candidate)) {
-          candidate = `${base}-${counter}`;
-          counter++;
-        }
-        usedSlugs.add(candidate);
-        updates.push({
-          id: it.id,
-          title: it.title,
-          newSlug: candidate,
-          roadmapId,
-        });
-      }
-    }
-  }
-
-  console.log(`Lessons needing slug update: ${updates.length}`);
-  if (updates.length > 0) {
-    console.log("\nSample updates:");
-    for (const u of updates.slice(0, 10)) {
-      console.log(`  [${u.id}] "${u.title}" -> "${u.newSlug}" (topic: ${u.roadmapId})`);
-    }
-    if (updates.length > 10) {
-      console.log(`  ... and ${updates.length - 10} more`);
-    }
-  }
+  const updates = planMissingItemSlugs(rows);
+  logSampleUpdates(updates);
 
   if (updates.length === 0 && hasSlugColumn) {
     console.log("\nAll items have slugs. Ensuring unique index exists...");
@@ -126,30 +161,7 @@ async function main() {
     return;
   }
 
-  // Backup table first
-  const fullRows = (await client.execute('SELECT * FROM "RoadmapItem"')).rows.map((r) =>
-    Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "bigint" ? Number(v) : v]))
-  );
-  const backupDir = fs.existsSync(path.join(__dirname, "../.handoff/runs"))
-    ? path.join(__dirname, "../.handoff/runs")
-    : "/tmp";
-  const backupFile = path.join(backupDir, `roadmap-item-backup-${Date.now()}.json`);
-  fs.writeFileSync(backupFile, JSON.stringify({ takenAt: new Date().toISOString(), RoadmapItem: fullRows }, null, 2));
-  console.log(`Backup saved to: ${backupFile}`);
-
-  // Apply updates in batch
-  const statements: InStatement[] = updates.map((u) => ({
-    sql: 'UPDATE "RoadmapItem" SET "slug" = ? WHERE id = ?',
-    args: [u.newSlug, u.id],
-  }));
-
-  statements.push({
-    sql: 'CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_roadmapId_slug_key" ON "RoadmapItem"("roadmapId", "slug")',
-    args: [],
-  });
-
-  await client.batch(statements, "write");
-  console.log(`Successfully updated ${updates.length} lessons with slugs and created unique index.`);
+  await applySlugMigration(client, updates);
 }
 
 main().catch((err) => {

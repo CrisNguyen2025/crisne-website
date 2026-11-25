@@ -82,6 +82,40 @@ function matchesSearchQuery(item: NewsItemDto, normalizedQuery: string): boolean
   return haystacks.some((text) => normalizeTitleForCompare(text).includes(normalizedQuery));
 }
 
+const INGEST_STATUS_COUNT_KEYS = new Set<keyof NewsCountsDto>([
+  "queued",
+  "processing",
+  "ready",
+  "partial",
+  "failed",
+]);
+
+function accumulateNewsCountGroup(
+  counts: NewsCountsDto,
+  row: { reviewStatus: string; ingestStatus: string; readState: string; isSaved: boolean; _count: { _all: number } }
+): void {
+  const n = row._count._all;
+  const isDismissed = row.reviewStatus === "dismissed";
+  counts.total += n;
+
+  if (isDismissed) {
+    counts.dismissed += n;
+  } else {
+    if (INGEST_STATUS_COUNT_KEYS.has(row.ingestStatus as keyof NewsCountsDto)) {
+      counts[row.ingestStatus as "queued" | "processing" | "ready" | "partial" | "failed"] += n;
+    }
+    if (row.ingestStatus === "queued" || row.ingestStatus === "processing" || row.ingestStatus === "failed") {
+      counts.queue += n;
+    }
+    if (row.isSaved) counts.saved += n;
+    else counts.inbox += n;
+  }
+
+  if (row.reviewStatus === "draft") counts.draft += n;
+  if (row.reviewStatus === "published" && row.readState === "unread") counts.unread += n;
+  if (row.isSaved || isDismissed) counts.done += n;
+}
+
 async function computeNewsCounts(): Promise<NewsCountsDto> {
   const groups = await prisma.newsItem.groupBy({
     by: ["reviewStatus", "ingestStatus", "readState", "isSaved"],
@@ -105,43 +139,7 @@ async function computeNewsCounts(): Promise<NewsCountsDto> {
   };
 
   for (const row of groups) {
-    const n = row._count._all;
-    const isDismissed = row.reviewStatus === "dismissed";
-    counts.total += n;
-
-    if (isDismissed) {
-      counts.dismissed += n;
-    } else {
-      if (row.ingestStatus === "queued") counts.queued += n;
-      else if (row.ingestStatus === "processing") counts.processing += n;
-      else if (row.ingestStatus === "ready") counts.ready += n;
-      else if (row.ingestStatus === "partial") counts.partial += n;
-      else if (row.ingestStatus === "failed") counts.failed += n;
-
-      if (
-        row.ingestStatus === "queued" ||
-        row.ingestStatus === "processing" ||
-        row.ingestStatus === "failed"
-      ) {
-        counts.queue += n;
-      }
-
-      if (row.isSaved) {
-        counts.saved += n;
-      } else {
-        counts.inbox += n;
-      }
-    }
-
-    if (row.reviewStatus === "draft") {
-      counts.draft += n;
-    }
-    if (row.reviewStatus === "published" && row.readState === "unread") {
-      counts.unread += n;
-    }
-    if (row.isSaved || isDismissed) {
-      counts.done += n;
-    }
+    accumulateNewsCountGroup(counts, row);
   }
 
   return counts;
@@ -173,6 +171,21 @@ async function computeAvailableTags(where: Prisma.NewsItemWhereInput): Promise<N
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
     .slice(0, MAX_RETURNED_TAGS);
+}
+
+function appendQueryMatches(
+  rows: Prisma.NewsItemGetPayload<object>[],
+  normalizedQuery: string,
+  limit: number,
+  matches: NewsItemDto[]
+): boolean {
+  for (const row of rows) {
+    const item = serializeNewsItem(row);
+    if (!matchesSearchQuery(item, normalizedQuery)) continue;
+    matches.push(item);
+    if (matches.length >= limit) return true;
+  }
+  return false;
 }
 
 /**
@@ -208,14 +221,8 @@ async function collectFeedItems(
     });
     if (rows.length === 0) break;
     scanned += rows.length;
-    for (const row of rows) {
-      const item = serializeNewsItem(row);
-      if (matchesSearchQuery(item, normalizedQuery)) {
-        matches.push(item);
-        if (matches.length >= limit) break;
-      }
-    }
-    if (rows.length < SEARCH_BATCH_SIZE) break;
+    const reachedLimit = appendQueryMatches(rows, normalizedQuery, limit, matches);
+    if (reachedLimit || rows.length < SEARCH_BATCH_SIZE) break;
     cursorId = rows[rows.length - 1].id;
   }
   return matches;

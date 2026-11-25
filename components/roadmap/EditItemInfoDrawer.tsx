@@ -41,6 +41,165 @@ interface EditItemInfoDrawerProps {
   ) => void | Promise<void>;
 }
 
+function resolveTopicSections(
+  topics: RoadmapMeta[] | undefined,
+  topicSlug: string,
+  initialTopicSlug: string,
+  fallbackSections: string[]
+): string[] {
+  const found = topics?.find((t) => t.slug === topicSlug);
+  if (found?.sectionNames) return found.sectionNames;
+  return topicSlug === initialTopicSlug ? fallbackSections : [];
+}
+
+function resolveSectionOnTopicSwitch(
+  currentSection: string,
+  nextTopicSections: string[],
+  nextTopicSlug: string,
+  initialTopicSlug: string,
+  originalSection: string | null | undefined
+): string {
+  const matchedInTarget = currentSection.trim()
+    ? nextTopicSections.find((s) => normalizeTitle(s) === normalizeTitle(currentSection))
+    : undefined;
+  if (matchedInTarget) return matchedInTarget;
+  return nextTopicSlug === initialTopicSlug ? (originalSection ?? '') : '';
+}
+
+function validateEditItemInfo(
+  title: string,
+  rawSlug: string,
+  normalizedSlug: string
+): string | null {
+  if (!title.trim()) return 'Nhập tiêu đề bài học.';
+  if (!rawSlug) {
+    return 'Slug URL không được để trống. Nhập slug hoặc bấm "Đồng bộ từ tiêu đề".';
+  }
+  if (!normalizedSlug) return 'Slug URL không hợp lệ.';
+  return null;
+}
+
+function buildEditItemOptions(
+  topicChanged: boolean,
+  slugChanged: boolean,
+  topicSlug: string,
+  normalizedSlug: string
+): EditItemInfoSubmitOptions | undefined {
+  if (!topicChanged && !slugChanged) return undefined;
+  return {
+    ...(topicChanged ? { roadmapSlug: topicSlug } : {}),
+    ...(slugChanged ? { slug: normalizedSlug } : {}),
+  };
+}
+
+function SlugStatusHint({
+  rawSlug,
+  normalizedSlug,
+  hasPathChanged,
+  topicSlug,
+  initialTopicSlug,
+  originalSlug,
+}: {
+  rawSlug: string;
+  normalizedSlug: string;
+  hasPathChanged: boolean;
+  topicSlug: string;
+  initialTopicSlug: string;
+  originalSlug: string;
+}) {
+  if (!rawSlug) {
+    return (
+      <p className="text-[0.6875rem] leading-relaxed text-destructive">
+        Slug URL đang để trống — nhập slug hoặc bấm &ldquo;Đồng bộ từ tiêu đề&rdquo;.
+      </p>
+    );
+  }
+  if (!normalizedSlug) {
+    return (
+      <p className="text-[0.6875rem] leading-relaxed text-destructive">
+        Slug URL không hợp lệ (cần chứa chữ cái hoặc chữ số).
+      </p>
+    );
+  }
+  if (hasPathChanged) {
+    return (
+      <div className="space-y-0.5 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-[0.6875rem] leading-relaxed">
+        <p className="break-all font-mono text-foreground/90">
+          {lessonPath(topicSlug, normalizedSlug)}
+        </p>
+        <p className="text-muted-foreground">
+          Tự động chuyển hướng 308 từ {lessonPath(initialTopicSlug, originalSlug)}.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <p className="break-all font-mono text-[0.6875rem] text-muted-foreground">
+      {lessonPath(topicSlug, normalizedSlug)}
+    </p>
+  );
+}
+
+function normalizeSaveErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Không lưu được thay đổi. Vui lòng thử lại.';
+}
+
+async function runItemInfoSubmit({
+  onSubmit,
+  item,
+  title,
+  description,
+  nextSection,
+  shouldSendSection,
+  options,
+  onClose,
+  setIsSaving,
+  setError,
+}: {
+  onSubmit: EditItemInfoDrawerProps['onSubmit'];
+  item: ChecklistItem;
+  title: string;
+  description: string;
+  nextSection: string | null;
+  shouldSendSection: boolean;
+  options: EditItemInfoSubmitOptions | undefined;
+  onClose: () => void;
+  setIsSaving: (saving: boolean) => void;
+  setError: (msg: string) => void;
+}) {
+  try {
+    setIsSaving(true);
+    setError('');
+    await onSubmit(
+      item.id,
+      title.trim(),
+      description.trim(),
+      shouldSendSection ? nextSection : undefined,
+      options
+    );
+    onClose();
+  } catch (err) {
+    setError(normalizeSaveErrorMessage(err));
+  } finally {
+    setIsSaving(false);
+  }
+}
+
+const NOOP = () => {};
+
+function useDelayedFocusOnOpen(
+  inputRef: React.RefObject<HTMLInputElement | null>,
+  shouldFocus: boolean
+) {
+  useEffect(() => {
+    if (!shouldFocus) return;
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus({ preventScroll: true });
+    }, 280);
+    return () => window.clearTimeout(timer);
+  }, [inputRef, shouldFocus]);
+}
+
 function EditItemInfoForm({
   isOpen,
   item,
@@ -69,13 +228,7 @@ function EditItemInfoForm({
   const descriptionFieldId = useId();
   const errorId = useId();
 
-  useEffect(() => {
-    if (!isOpen || isMobile) return;
-    const timer = window.setTimeout(() => {
-      titleInputRef.current?.focus({ preventScroll: true });
-    }, 280);
-    return () => window.clearTimeout(timer);
-  }, [isOpen, isMobile]);
+  useDelayedFocusOnOpen(titleInputRef, isOpen && !isMobile);
 
   const initialTopicSlug = currentTopicSlug ?? item.roadmapSlug ?? '';
   const [title, setTitle] = useState(item.title);
@@ -92,9 +245,7 @@ function EditItemInfoForm({
     }
   }, [error]);
 
-  const selectedTopic = topics?.find((t) => t.slug === topicSlug);
-  const activeSections =
-    selectedTopic?.sectionNames ?? (topicSlug === initialTopicSlug ? sections : []);
+  const activeSections = resolveTopicSections(topics, topicSlug, initialTopicSlug, sections);
 
   const rawSlug = slug.trim();
   const normalizedSlug = slugify(rawSlug);
@@ -105,36 +256,28 @@ function EditItemInfoForm({
 
   const handleTopicChange = (nextTopicSlug: string) => {
     setTopicSlug(nextTopicSlug);
-    const nextTopic = topics?.find((t) => t.slug === nextTopicSlug);
-    const nextTopicSections =
-      nextTopic?.sectionNames ?? (nextTopicSlug === initialTopicSlug ? sections : []);
-    const matchedInTarget = section.trim()
-      ? nextTopicSections.find((s) => normalizeTitle(s) === normalizeTitle(section))
-      : undefined;
-
-    if (matchedInTarget) {
-      setSection(matchedInTarget);
-    } else if (nextTopicSlug === initialTopicSlug) {
-      setSection(item.section ?? '');
-    } else {
-      setSection('');
-    }
+    const nextTopicSections = resolveTopicSections(
+      topics,
+      nextTopicSlug,
+      initialTopicSlug,
+      sections
+    );
+    setSection(
+      resolveSectionOnTopicSwitch(
+        section,
+        nextTopicSections,
+        nextTopicSlug,
+        initialTopicSlug,
+        item.section
+      )
+    );
   };
 
   const submitInfo = async () => {
     if (isSaving) return;
-    if (!title.trim()) {
-      setError('Nhập tiêu đề bài học.');
-      return;
-    }
-
-    if (!rawSlug) {
-      setError('Slug URL không được để trống. Nhập slug hoặc bấm "Đồng bộ từ tiêu đề".');
-      return;
-    }
-
-    if (!normalizedSlug) {
-      setError('Slug URL không hợp lệ.');
+    const validationError = validateEditItemInfo(title, rawSlug, normalizedSlug);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -142,31 +285,20 @@ function EditItemInfoForm({
     const sectionChanged = nextSection !== (item.section ?? null);
     const topicChanged = Boolean(topicSlug && initialTopicSlug && topicSlug !== initialTopicSlug);
     const slugChanged = Boolean(normalizedSlug && normalizedSlug !== item.slug);
+    const options = buildEditItemOptions(topicChanged, slugChanged, topicSlug, normalizedSlug);
 
-    const options: EditItemInfoSubmitOptions | undefined =
-      topicChanged || slugChanged
-        ? {
-            ...(topicChanged ? { roadmapSlug: topicSlug } : {}),
-            ...(slugChanged ? { slug: normalizedSlug } : {}),
-          }
-        : undefined;
-
-    try {
-      setIsSaving(true);
-      setError('');
-      await onSubmit(
-        item.id,
-        title.trim(),
-        description.trim(),
-        sectionChanged || topicChanged ? nextSection : undefined,
-        options
-      );
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không lưu được thay đổi. Vui lòng thử lại.');
-    } finally {
-      setIsSaving(false);
-    }
+    await runItemInfoSubmit({
+      onSubmit,
+      item,
+      title,
+      description,
+      nextSection,
+      shouldSendSection: sectionChanged || topicChanged,
+      options,
+      onClose,
+      setIsSaving,
+      setError,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -177,7 +309,7 @@ function EditItemInfoForm({
   return (
     <Sheet
       open={isOpen}
-      onClose={isSaving ? () => {} : onClose}
+      onClose={isSaving ? NOOP : onClose}
       onAfterClose={onAfterClose}
       side={isMobile ? 'bottom' : 'right'}
       label="Chỉnh sửa bài học"
@@ -293,28 +425,14 @@ function EditItemInfoForm({
             placeholder="attention-mechanism"
             className={`${ROADMAP_INPUT_CLASS} font-mono text-[0.8125rem]`}
           />
-          {!rawSlug ? (
-            <p className="text-[0.6875rem] leading-relaxed text-destructive">
-              Slug URL đang để trống — nhập slug hoặc bấm &ldquo;Đồng bộ từ tiêu đề&rdquo;.
-            </p>
-          ) : !normalizedSlug ? (
-            <p className="text-[0.6875rem] leading-relaxed text-destructive">
-              Slug URL không hợp lệ (cần chứa chữ cái hoặc chữ số).
-            </p>
-          ) : hasPathChanged ? (
-            <div className="space-y-0.5 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-[0.6875rem] leading-relaxed">
-              <p className="break-all font-mono text-foreground/90">
-                {lessonPath(topicSlug, normalizedSlug)}
-              </p>
-              <p className="text-muted-foreground">
-                Tự động chuyển hướng 308 từ {lessonPath(initialTopicSlug, item.slug)}.
-              </p>
-            </div>
-          ) : (
-            <p className="break-all font-mono text-[0.6875rem] text-muted-foreground">
-              {lessonPath(topicSlug, normalizedSlug)}
-            </p>
-          )}
+          <SlugStatusHint
+            rawSlug={rawSlug}
+            normalizedSlug={normalizedSlug}
+            hasPathChanged={hasPathChanged}
+            topicSlug={topicSlug}
+            initialTopicSlug={initialTopicSlug}
+            originalSlug={item.slug}
+          />
         </div>
 
         <div className="space-y-1.5">

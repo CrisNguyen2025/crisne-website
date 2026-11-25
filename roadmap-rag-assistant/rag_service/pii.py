@@ -23,7 +23,13 @@ CARD_PATTERN = re.compile(r"(?<![\w.-])\d(?:[ -]?\d){12,18}(?![\w-])")
 # Vietnamese citizen ID (CCCD): exactly 12 digits standing alone.
 CCCD_PATTERN = re.compile(r"(?<![\w.-])\d{12}(?![\w.-])")
 
-EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+EMAIL_PATTERN = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+
+
+def _mask_email(m: re.Match) -> str:
+    value = m.group(0)
+    tld = value.rsplit(".", 1)[-1]
+    return "[email]" if len(tld) >= 2 and tld.isalpha() else value
 
 # Vietnamese numbers: 0xxx / 84xxx / +84xxx, 9–11 digits, optional space/dot/dash separators.
 # Must start with 0 or 84 directly followed by 1–9, so decimals like retrieval scores (0.8067…) never match.
@@ -49,7 +55,7 @@ def _mask_card(m: re.Match) -> str:
 
 def mask_pii(text: str) -> str:
     text = SECRET_PATTERN.sub("[secret]", text)
-    text = EMAIL_PATTERN.sub("[email]", text)
+    text = EMAIL_PATTERN.sub(_mask_email, text)
     text = CARD_PATTERN.sub(_mask_card, text)
     text = CCCD_PATTERN.sub("[cccd]", text)
     text = VN_PHONE_PATTERN.sub("[phone]", text)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass, field
 import json
 from typing import Any, AsyncGenerator
 
@@ -45,6 +47,198 @@ def _actor_of(request: Request) -> Actor:
     return parse_actor(request.headers.get("x-actor"))
 
 
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+_SKIP_MEMORY_TOOLS = {
+    "save_owner_memory",
+    "archive_owner_memory",
+    "list_owner_memories",
+    "start_lesson_quiz",
+    "grade_lesson_quiz",
+    "mark_lesson_reviewed",
+}
+
+
+@dataclass
+class _SseTurnState:
+    accumulated_tokens: list[str] = field(default_factory=list)
+    executed_tools: list[dict] = field(default_factory=list)
+    steps: dict[str, dict] = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
+    changes: list[dict] = field(default_factory=list)
+    had_preview: bool = False
+    trace_id: str | None = None
+
+
+def _sse_line(event: str, payload: Any) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
+    ev_type = ev.get("type")
+    if ev_type == "tool_start":
+        return _sse_line("tool_start", {"name": ev.get("name"), "args": ev.get("args", {})})
+    if ev_type == "tool_end":
+        tool_record: dict[str, Any] = {"name": ev.get("name"), "result": ev.get("result", "")}
+        if "is_error" in ev:
+            tool_record["is_error"] = bool(ev["is_error"])
+        state.executed_tools.append(tool_record)
+        return _sse_line("tool_end", tool_record)
+    if ev_type == "token":
+        delta = ev.get("delta", "")
+        state.accumulated_tokens.append(delta)
+        return _sse_line("token", {"delta": delta})
+    if ev_type == "step":
+        payload = {k: v for k, v in ev.items() if k != "type"}
+        state.steps[payload["id"]] = {**state.steps.get(payload["id"], {}), **payload}
+        return _sse_line("step", payload)
+    if ev_type == "change_review":
+        payload = {k: v for k, v in ev.items() if k != "type"}
+        state.changes.append(payload)
+        return _sse_line("change_review", payload)
+    if ev_type == "action_preview":
+        state.had_preview = True
+        return _sse_line("action_preview", {k: v for k, v in ev.items() if k != "type"})
+    if ev_type == "metadata":
+        state.metadata.update({k: v for k, v in ev.items() if k != "type"})
+        return None
+    if ev_type == "trace":
+        state.trace_id = ev.get("trace_id")
+        return f"event: trace\ndata: {json.dumps({'trace_id': state.trace_id})}\n\n"
+    return None
+
+
+async def _stream_fallback_sse(
+    f_agent: FallbackAgent,
+    message: str,
+    context: dict | None,
+    extra_input: dict,
+    config: dict,
+    state: _SseTurnState,
+) -> AsyncGenerator[str, None]:
+    async for ev in f_agent.astream_events(
+        {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
+        config=config,
+    ):
+        chunk = _dispatch_fallback_event(ev, state)
+        if chunk is not None:
+            yield chunk
+
+
+def _dispatch_langgraph_event(event: dict, state: _SseTurnState) -> str | None:
+    event_name = event.get("event")
+    if event_name == "on_tool_start":
+        name = event.get("name", "tool")
+        args = event.get("data", {}).get("input", {})
+        return _sse_line("tool_start", {"name": name, "args": args})
+    if event_name == "on_tool_end":
+        name = event.get("name", "tool")
+        raw_output = event.get("data", {}).get("output", "")
+        tool_record: dict[str, Any] = {"name": name, "result": str(raw_output)}
+        # LangChain marks a failed tool call on its ToolMessage
+        status = getattr(raw_output, "status", None)
+        if status in ("success", "error"):
+            tool_record["is_error"] = status == "error"
+        state.executed_tools.append(tool_record)
+        return _sse_line("tool_end", tool_record)
+    if event_name == "on_chat_model_stream":
+        chunk = event.get("data", {}).get("chunk")
+        delta = getattr(chunk, "content", None) if chunk else None
+        if isinstance(delta, str) and delta:
+            state.accumulated_tokens.append(delta)
+            return _sse_line("token", {"delta": delta})
+    return None
+
+
+def _build_done_payload(state: _SseTurnState) -> dict[str, Any]:
+    done_payload: dict[str, Any] = {
+        "message": "".join(state.accumulated_tokens),
+        "tool_calls": state.executed_tools,
+        "steps": list(state.steps.values()),
+    }
+    if state.metadata:
+        done_payload["metadata"] = state.metadata
+    if state.changes:
+        done_payload["changes"] = state.changes
+    if state.trace_id:
+        done_payload["trace_id"] = state.trace_id
+    return done_payload
+
+
+def _maybe_schedule_memory_extraction(
+    agent: Any,
+    message: str,
+    final_message: str,
+    thread_id: str,
+    context: dict | None,
+    state: _SseTurnState,
+) -> None:
+    # Background Owner Memory auto-suggestion (ADR-0015 Phase 2): strictly Owner-only, non-blocking,
+    # skipped on explicit memory/CUD/preview/quiz turns to avoid redundant LLM calls.
+    if (
+        not is_owner()
+        or state.had_preview
+        or state.changes
+        or any(t.get("name") in _SKIP_MEMORY_TOOLS for t in state.executed_tools)
+    ):
+        return
+    from rag_service.core.memory import has_memory_signal, maybe_suggest_memories
+    from rag_service.state import session_store
+
+    extract_llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
+    if extract_llm is None or not has_memory_signal(message):
+        return
+    ctx_topic = ((context or {}).get("roadmapSlug") or "").strip() or session_store.get_or_create(
+        thread_id
+    ).active_topic_slug
+    task = asyncio.create_task(
+        maybe_suggest_memories(
+            extract_llm,
+            user_message=message,
+            assistant_reply=final_message,
+            scope=ctx_topic,
+        )
+    )
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
+def _build_sse_extra_input(titles: list[str] | None, target: dict | None) -> dict:
+    extra_input: dict = {}
+    if titles:
+        extra_input["titles"] = titles
+    if target is not None:
+        extra_input["target"] = target
+    return extra_input
+
+
+async def _stream_sse_agent_events(
+    agent: Any,
+    message: str,
+    context: dict | None,
+    extra_input: dict,
+    config: dict,
+    state: _SseTurnState,
+) -> AsyncGenerator[str, None]:
+    if isinstance(agent, FallbackAgent):
+        async for chunk in _stream_fallback_sse(agent, message, context, extra_input, config, state):
+            yield chunk
+        return
+    try:
+        async for event in agent.astream_events(
+            {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
+            config=config,
+            version="v2",
+        ):
+            sse_chunk = _dispatch_langgraph_event(event, state)
+            if sse_chunk is not None:
+                yield sse_chunk
+    except Exception as gemini_err:
+        print(f"[Routes] Gemini API error ({gemini_err}). Gracefully falling back to NLP agent...")
+        fallback = FallbackAgent(tools=ALL_TOOLS)
+        async for chunk in _stream_fallback_sse(fallback, message, context, extra_input, config, state):
+            yield chunk
+
+
 async def _sse_stream_generator(
     message: str,
     thread_id: str,
@@ -58,163 +252,23 @@ async def _sse_stream_generator(
     if actor is not None:
         set_actor(actor)
     agent = _get_agent()
-    accumulated_tokens: list[str] = []
-    executed_tools: list[dict] = []
-    # Latest state of each step, in the order steps started (see rag_service/steps.py)
-    steps: dict[str, dict] = {}
-    # Closing metadata of an LLM answer (sources, usage, grounding), sent with `done`
-    metadata: dict = {}
-    # What the turn's actions wrote (see rag_service/execution/changes.py), also sent with `done`
-    changes: list[dict] = []
-    # True when this turn yielded a Preview (explicit command/write; skip background memory extraction)
-    had_preview = False
-    # Langfuse trace of the turn (None when tracing is off), sent with `done` for 👍/👎 feedback
-    trace_id: str | None = None
-
+    state = _SseTurnState()
     config = {"configurable": {"thread_id": thread_id}}
     # Only sent with a confirmation that edits names or target; other agents never see the keys
-    extra_input: dict = {}
-    if titles:
-        extra_input["titles"] = titles
-    if target is not None:
-        extra_input["target"] = target
-
-    async def _stream_from_fallback(f_agent: FallbackAgent):
-        nonlocal trace_id, had_preview
-        async for ev in f_agent.astream_events(
-            {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
-            config=config,
-        ):
-            ev_type = ev.get("type")
-            if ev_type == "tool_start":
-                payload = {"name": ev.get("name"), "args": ev.get("args", {})}
-                yield f"event: tool_start\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            elif ev_type == "tool_end":
-                tool_record = {"name": ev.get("name"), "result": ev.get("result", "")}
-                # Only when the agent knows the outcome; the client falls back otherwise
-                if "is_error" in ev:
-                    tool_record["is_error"] = bool(ev["is_error"])
-                executed_tools.append(tool_record)
-                yield f"event: tool_end\ndata: {json.dumps(tool_record, ensure_ascii=False)}\n\n"
-            elif ev_type == "token":
-                delta = ev.get("delta", "")
-                accumulated_tokens.append(delta)
-                yield f"event: token\ndata: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
-            elif ev_type == "step":
-                payload = {k: v for k, v in ev.items() if k != "type"}
-                steps[payload["id"]] = {**steps.get(payload["id"], {}), **payload}
-                yield f"event: step\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            elif ev_type == "change_review":
-                payload = {k: v for k, v in ev.items() if k != "type"}
-                changes.append(payload)
-                yield f"event: change_review\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            elif ev_type == "action_preview":
-                had_preview = True
-                payload = {k: v for k, v in ev.items() if k != "type"}
-                yield f"event: action_preview\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            elif ev_type == "metadata":
-                metadata.update({k: v for k, v in ev.items() if k != "type"})
-            elif ev_type == "trace":
-                trace_id = ev.get("trace_id")
-                # Sent first, so a reply stopped before `done` can still be rated
-                yield f"event: trace\ndata: {json.dumps({'trace_id': trace_id})}\n\n"
+    extra_input = _build_sse_extra_input(titles, target)
 
     try:
-        if isinstance(agent, FallbackAgent):
-            async for chunk in _stream_from_fallback(agent):
-                yield chunk
-        else:
-            # LangGraph / LangChain Gemini Agent
-            try:
-                async for event in agent.astream_events(
-                    {"messages": [{"role": "user", "content": message}], "context": context, **extra_input},
-                    config=config,
-                    version="v2",
-                ):
-                    event_name = event.get("event")
+        async for chunk in _stream_sse_agent_events(agent, message, context, extra_input, config, state):
+            yield chunk
 
-                    if event_name == "on_tool_start":
-                        name = event.get("name", "tool")
-                        args = event.get("data", {}).get("input", {})
-                        yield f"event: tool_start\ndata: {json.dumps({'name': name, 'args': args}, ensure_ascii=False)}\n\n"
-
-                    elif event_name == "on_tool_end":
-                        name = event.get("name", "tool")
-                        raw_output = event.get("data", {}).get("output", "")
-                        output = str(raw_output)
-                        tool_record = {"name": name, "result": output}
-                        # LangChain marks a failed tool call on its ToolMessage
-                        status = getattr(raw_output, "status", None)
-                        if status in ("success", "error"):
-                            tool_record["is_error"] = status == "error"
-                        executed_tools.append(tool_record)
-                        yield f"event: tool_end\ndata: {json.dumps(tool_record, ensure_ascii=False)}\n\n"
-
-                    elif event_name == "on_chat_model_stream":
-                        chunk = event.get("data", {}).get("chunk")
-                        if chunk and hasattr(chunk, "content"):
-                            delta = chunk.content
-                            if isinstance(delta, str) and delta:
-                                accumulated_tokens.append(delta)
-                                yield f"event: token\ndata: {json.dumps({'delta': delta}, ensure_ascii=False)}\n\n"
-            except Exception as gemini_err:
-                print(f"[Routes] Gemini API error ({gemini_err}). Gracefully falling back to NLP agent...")
-                fallback = FallbackAgent(tools=ALL_TOOLS)
-                async for chunk in _stream_from_fallback(fallback):
-                    yield chunk
-
-        # Final done event
-        final_message = "".join(accumulated_tokens)
-        done_payload: dict[str, Any] = {
-            "message": final_message,
-            "tool_calls": executed_tools,
-            "steps": list(steps.values()),
-        }
-        if metadata:
-            done_payload["metadata"] = metadata
-        if changes:
-            done_payload["changes"] = changes
-        if trace_id:
-            done_payload["trace_id"] = trace_id
-        yield f"event: done\ndata: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
-
-        # Background Owner Memory auto-suggestion (ADR-0015 Phase 2): strictly Owner-only, non-blocking,
-        # skipped on explicit memory/CUD/preview/quiz turns to avoid redundant LLM calls.
-        _skip_tools = {
-            "save_owner_memory",
-            "archive_owner_memory",
-            "list_owner_memories",
-            "start_lesson_quiz",
-            "grade_lesson_quiz",
-            "mark_lesson_reviewed",
-        }
-        if (
-            is_owner()
-            and not had_preview
-            and not changes
-            and not any(t.get("name") in _skip_tools for t in executed_tools)
-        ):
-            import asyncio
-            from rag_service.core.memory import has_memory_signal, maybe_suggest_memories
-            from rag_service.state import session_store
-
-            extract_llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
-            if extract_llm is not None and has_memory_signal(message):
-                ctx_topic = ((context or {}).get("roadmapSlug") or "").strip() or session_store.get_or_create(
-                    thread_id
-                ).active_topic_slug
-                asyncio.create_task(
-                    maybe_suggest_memories(
-                        extract_llm,
-                        user_message=message,
-                        assistant_reply=final_message,
-                        scope=ctx_topic,
-                    )
-                )
+        done_payload = _build_done_payload(state)
+        yield _sse_line("done", done_payload)
+        _maybe_schedule_memory_extraction(
+            agent, message, done_payload["message"], thread_id, context, state
+        )
 
     except Exception as exc:
-        err_payload = {"error": str(exc)}
-        yield f"event: error\ndata: {json.dumps(err_payload, ensure_ascii=False)}\n\n"
+        yield _sse_line("error", {"error": str(exc)})
 
 
 @router.post("/chat/stream")

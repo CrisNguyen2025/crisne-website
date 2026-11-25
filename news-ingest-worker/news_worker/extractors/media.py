@@ -62,9 +62,12 @@ def _download_direct_media_sync(
                     continue
                 response.raise_for_status()
                 declared_length = response.headers.get("content-length")
-                if declared_length and declared_length.strip().isdigit():
-                    if int(declared_length.strip()) > MAX_MEDIA_DOWNLOAD_BYTES:
-                        raise RuntimeError("File media vượt giới hạn kích thước tải (100MB).")
+                if (
+                    declared_length
+                    and declared_length.strip().isdigit()
+                    and int(declared_length.strip()) > MAX_MEDIA_DOWNLOAD_BYTES
+                ):
+                    raise RuntimeError("File media vượt giới hạn kích thước tải (100MB).")
 
                 received = 0
                 with dest_path.open("wb") as out:
@@ -204,43 +207,34 @@ async def transcribe_audio_with_whisper(
     )
 
 
-def _extract_slides_vision_sync(
+def _acquire_video_file_sync(
     url: str,
-    tmp_dir: str,
+    tmp_path: Path,
     settings: Settings,
-    duration: float | None = None,
-    media_url: str | None = None,
-) -> str:
-    gemini_keys = settings.get_gemini_keys()
-    if not gemini_keys:
-        raise RuntimeError("Thiếu GEMINI_API_KEY cho bước Vision.")
-    if duration is not None and duration > settings.max_video_duration_seconds:
-        raise RuntimeError(
-            f"Video dài {int(duration)}s vượt giới hạn {settings.max_video_duration_seconds}s."
-        )
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if ffmpeg_bin is None:
-        raise RuntimeError("Không tìm thấy ffmpeg trên máy để trích xuất frame.")
-
-    tmp_path = Path(tmp_dir)
+    media_url: str | None,
+) -> Path:
     if media_url:
-        video_file = _download_direct_media_sync(
-            media_url, tmp_path / "video_src.mp4", settings=settings
-        )
-    else:
-        assert_public_url(url)
-        ydl_opts = _build_ydl_opts(
-            settings,
-            max_filesize=MAX_MEDIA_DOWNLOAD_BYTES,
-            format="bestvideo[height<=720][ext=mp4]/best[height<=720]/best",
-            outtmpl=str(tmp_path / "video_src.%(ext)s"),
-        )
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        video_file = _find_downloaded_file(tmp_path, "video_src")
+        return _download_direct_media_sync(media_url, tmp_path / "video_src.mp4", settings=settings)
+    assert_public_url(url)
+    ydl_opts = _build_ydl_opts(
+        settings,
+        max_filesize=MAX_MEDIA_DOWNLOAD_BYTES,
+        format="bestvideo[height<=720][ext=mp4]/best[height<=720]/best",
+        outtmpl=str(tmp_path / "video_src.%(ext)s"),
+    )
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    return _find_downloaded_file(tmp_path, "video_src")
 
+
+def _extract_video_frames_sync(
+    ffmpeg_bin: str,
+    video_file: Path,
+    tmp_path: Path,
+    duration: float | None,
+    settings: Settings,
+) -> list[Path]:
     scene_pattern = str(tmp_path / "slide_%02d.jpg")
-
     subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
         [
             ffmpeg_bin,
@@ -266,33 +260,57 @@ def _extract_slides_vision_sync(
     )
 
     frame_paths = sorted(tmp_path.glob("slide_*.jpg"))
-    if len(frame_paths) < 2:
-        for old in frame_paths:
-            old.unlink(missing_ok=True)
-        step_sec = max(1, int(max(duration or 18, 6) / settings.max_vision_frames))
-        subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
-            [
-                ffmpeg_bin,
-                "-nostdin",
-                "-y",
-                "-protocol_whitelist",
-                "file,pipe",
-                "-i",
-                str(video_file),
-                "-vf",
-                f"fps=1/{step_sec},scale='min(1024,iw)':-2",
-                "-frames:v",
-                str(settings.max_vision_frames),
-                "-q:v",
-                "4",
-                scene_pattern,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        frame_paths = sorted(tmp_path.glob("slide_*.jpg"))
+    if len(frame_paths) >= 2:
+        return frame_paths
 
+    for old in frame_paths:
+        old.unlink(missing_ok=True)
+    step_sec = max(1, int(max(duration or 18, 6) / settings.max_vision_frames))
+    subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
+        [
+            ffmpeg_bin,
+            "-nostdin",
+            "-y",
+            "-protocol_whitelist",
+            "file,pipe",
+            "-i",
+            str(video_file),
+            "-vf",
+            f"fps=1/{step_sec},scale='min(1024,iw)':-2",
+            "-frames:v",
+            str(settings.max_vision_frames),
+            "-q:v",
+            "4",
+            scene_pattern,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    return sorted(tmp_path.glob("slide_*.jpg"))
+
+
+def _extract_slides_vision_sync(
+    url: str,
+    tmp_dir: str,
+    settings: Settings,
+    duration: float | None = None,
+    media_url: str | None = None,
+) -> str:
+    gemini_keys = settings.get_gemini_keys()
+    if not gemini_keys:
+        raise RuntimeError("Thiếu GEMINI_API_KEY cho bước Vision.")
+    if duration is not None and duration > settings.max_video_duration_seconds:
+        raise RuntimeError(
+            f"Video dài {int(duration)}s vượt giới hạn {settings.max_video_duration_seconds}s."
+        )
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if ffmpeg_bin is None:
+        raise RuntimeError("Không tìm thấy ffmpeg trên máy để trích xuất frame.")
+
+    tmp_path = Path(tmp_dir)
+    video_file = _acquire_video_file_sync(url, tmp_path, settings, media_url)
+    frame_paths = _extract_video_frames_sync(ffmpeg_bin, video_file, tmp_path, duration, settings)
     if not frame_paths:
         raise RuntimeError("Không cắt được frame nào từ video.")
 

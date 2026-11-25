@@ -72,16 +72,40 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
   }, []);
 
   // 1. Fetch a topic and its lessons by slug
+  const applyTopicState = useCallback(
+    (state: TopicState, silent: boolean) => {
+      setRoadmapMeta(state.roadmap);
+      setItems(state.items);
+      setSections(state.sections);
+      if (!silent) {
+        setActiveItemId(pickActive(state.items));
+      }
+    },
+    [pickActive]
+  );
+
+  const handleLoadError = useCallback(
+    (err: unknown, targetSlug: string, hasHit: boolean, silent: boolean) => {
+      // Also on a silent refresh: the cached copy of a deleted topic must not stay on screen
+      if ((err as { status?: number }).status === 404) {
+        topicCache.delete(targetSlug);
+        setNotFoundSlug(targetSlug);
+        return;
+      }
+      if (currentSlugRef.current !== targetSlug) return;
+      console.error('[useRoadmap] Failed to load roadmap:', err);
+      if (!hasHit && !silent) {
+        setIsError(true);
+      }
+    },
+    []
+  );
+
   const loadRoadmap = useCallback(async (targetSlug: string, silent: boolean = false) => {
     const hit = topicCache.get(targetSlug);
     if (hit) {
-      setRoadmapMeta(hit.roadmap);
-      setItems(hit.items);
-      setSections(hit.sections);
-      if (!silent) {
-        setIsLoading(false);
-        setActiveItemId(pickActive(hit.items));
-      }
+      applyTopicState(hit, silent);
+      if (!silent) setIsLoading(false);
     } else if (!silent) {
       setIsLoading(true);
       setActiveItemId('');
@@ -89,35 +113,20 @@ export function useRoadmap(slug: string, initialActiveItemId?: string) {
     setIsError(false);
     setNotFoundSlug(null);
 
-    const isCurrent = () => currentSlugRef.current === targetSlug;
     try {
       const data: GetRoadmapResponseDto = await roadmapService.fetchRoadmapBySlug(targetSlug);
       const state: TopicState = { roadmap: data.roadmap, items: data.items, sections: data.sections };
       topicCache.set(targetSlug, state);
-      if (!isCurrent()) return;
-
-      setRoadmapMeta(state.roadmap);
-      setItems(state.items);
-      setSections(state.sections);
-      if (!silent) setActiveItemId(pickActive(state.items));
+      if (currentSlugRef.current !== targetSlug) return;
+      applyTopicState(state, silent);
     } catch (err) {
-      // Also on a silent refresh: the cached copy of a deleted topic must not stay on screen
-      if ((err as { status?: number }).status === 404) {
-        topicCache.delete(targetSlug);
-        setNotFoundSlug(targetSlug);
-        return;
-      }
-      if (!isCurrent()) return;
-      console.error('[useRoadmap] Failed to load roadmap:', err);
-      if (!hit && !silent) {
-        setIsError(true);
-      }
+      handleLoadError(err, targetSlug, Boolean(hit), silent);
     } finally {
-      if (!silent && isCurrent()) {
+      if (!silent && currentSlugRef.current === targetSlug) {
         setIsLoading(false);
       }
     }
-  }, [pickActive]);
+  }, [applyTopicState, handleLoadError]);
 
   useEffect(() => {
     if (!slug) return;

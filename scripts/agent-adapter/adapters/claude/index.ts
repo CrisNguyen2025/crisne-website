@@ -2,6 +2,42 @@ import { AgentAdapter, GeneratedOutput } from '../../core/adapter';
 import { Hook, McpServer, SkillLink, Subagent } from '../../core/model';
 import { CLAUDE_MODEL_MAP, CLAUDE_TOOL_MAP } from './maps';
 
+function collectClaudeToolNames(tools?: Hook['tools']): string[] {
+  if (!tools || tools.length === 0) return [];
+  const toolNames: string[] = [];
+  for (const cat of tools) {
+    for (const t of CLAUDE_TOOL_MAP[cat] || []) {
+      if (!toolNames.includes(t)) {
+        toolNames.push(t);
+      }
+    }
+  }
+  return toolNames;
+}
+
+function buildClaudeHookEntry(h: Hook): {
+  matcher?: string;
+  hooks: Array<{ type: 'command'; command: string; timeout?: number }>;
+} {
+  const command = `node "\${CLAUDE_PROJECT_DIR}/scripts/agent-adapter/hook-runner.js" ${h.id} --agent=claude`;
+  const action: { type: 'command'; command: string; timeout?: number } = {
+    type: 'command',
+    command,
+  };
+  if (h.timeout !== undefined) {
+    action.timeout = h.timeout;
+  }
+
+  const entry: { matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> } = {
+    hooks: [action],
+  };
+  const toolNames = collectClaudeToolNames(h.tools);
+  if (toolNames.length > 0) {
+    entry.matcher = toolNames.join('|');
+  }
+  return entry;
+}
+
 export function renderClaudeHooks(hooks: Hook[]): GeneratedOutput[] {
   const targetHooks = hooks.filter(h => !h.targets || h.targets.includes('claude'));
   if (targetHooks.length === 0) {
@@ -14,37 +50,8 @@ export function renderClaudeHooks(hooks: Hook[]): GeneratedOutput[] {
   > = {};
 
   for (const h of targetHooks) {
-    const toolNames: string[] = [];
-    if (h.tools && h.tools.length > 0) {
-      for (const cat of h.tools) {
-        for (const t of CLAUDE_TOOL_MAP[cat] || []) {
-          if (!toolNames.includes(t)) {
-            toolNames.push(t);
-          }
-        }
-      }
-    }
-
-    const command = `node "\${CLAUDE_PROJECT_DIR}/scripts/agent-adapter/hook-runner.js" ${h.id} --agent=claude`;
-    const action: { type: 'command'; command: string; timeout?: number } = {
-      type: 'command',
-      command,
-    };
-    if (h.timeout !== undefined) {
-      action.timeout = h.timeout;
-    }
-
-    const entry: { matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> } = {
-      hooks: [action],
-    };
-    if (toolNames.length > 0) {
-      entry.matcher = toolNames.join('|');
-    }
-
-    if (!renderedHooks[h.event]) {
-      renderedHooks[h.event] = [];
-    }
-    renderedHooks[h.event].push(entry);
+    renderedHooks[h.event] ??= [];
+    renderedHooks[h.event].push(buildClaudeHookEntry(h));
   }
 
   return [

@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { slugify } from "../utils";
+import { slugify, trimTrailingChar } from "../utils";
 
 const MAX_NEWS_SLUG_LENGTH = 90;
 
@@ -13,7 +13,7 @@ function trimSlugToLength(slug: string, maxLength: number): string {
   const cut = slug.slice(0, maxLength);
   const lastHyphen = cut.lastIndexOf("-");
   const trimmed = lastHyphen >= Math.floor(maxLength / 2) ? cut.slice(0, lastHyphen) : cut;
-  return trimmed.replace(/-+$/g, "") || cut;
+  return trimTrailingChar(trimmed, "-") || cut;
 }
 
 export function buildBaseNewsSlug(title: string, fallbackDomain?: string): string {
@@ -25,8 +25,10 @@ export function buildBaseNewsSlug(title: string, fallbackDomain?: string): strin
 
 export function pickUniqueNewsSlug(base: string, used: Set<string>): string {
   let candidate = base;
-  for (let suffix = 2; used.has(candidate); suffix++) {
+  let suffix = 2;
+  while (used.has(candidate)) {
     candidate = `${base}-${suffix}`;
+    suffix += 1;
   }
   used.add(candidate);
   return candidate;

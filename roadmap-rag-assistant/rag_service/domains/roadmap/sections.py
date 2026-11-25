@@ -147,6 +147,40 @@ class SectionCommands(AgentHostMixin):
             yield ev
         return
 
+    def _build_section_rename_preview(
+        self, rename: dict, topic: dict, session_ctx
+    ) -> tuple[str | None, dict | None]:
+        title = topic.get("title") or topic.get("slug")
+        rows = [(name, n) for name, n in section_counts(topic) if name]
+        src_key, dst_key = normalize_title(rename["src"]), normalize_title(rename["dst"])
+        source = next(((name, n) for name, n in rows if normalize_title(name) == src_key), None)
+        if source is None:
+            existing = ", ".join(f"`{name}`" for name, _ in rows) or "_(chưa có mục nào)_"
+            return (
+                f"Topic **{title}** không có mục `{rename['src']}` nên mình chưa đổi gì. Các mục hiện có: {existing}.",
+                None,
+            )
+        if src_key == dst_key and source[0] == rename["dst"]:
+            return f"Mục `{source[0]}` đã có đúng tên này nên mình chưa đổi gì.", None
+        merge = next((name for name, _ in rows if normalize_title(name) == dst_key and name != source[0]), None)
+        session_ctx.pending_section_rename = {
+            "topic": topic.get("slug"), "title": title, "from": source[0], "to": rename["dst"],
+            "count": source[1], "merge": merge,
+        }
+        note = f"\n\n⚠️ Topic đã có mục `{merge}`: hai mục sẽ được gộp làm một." if merge else ""
+        preview = (
+            f"✏️ **ĐỔI TÊN MỤC**\n\n- Topic: **{title}**\n- `{source[0]}` → `{merge or rename['dst']}` "
+            f"({source[1]} bài){note}\n\n"
+            "👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
+        )
+        preview_ev = {
+            "type": "action_preview",
+            "action_id": session_ctx.session_id,
+            "preview": preview,
+            "editable_titles": [merge or rename["dst"]],
+        }
+        return preview, preview_ev
+
     async def handle_section_rename(
         self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:
@@ -169,38 +203,9 @@ class SectionCommands(AgentHostMixin):
                 yield ev
             return
 
-        title = topic.get("title") or topic.get("slug")
-        rows = [(name, n) for name, n in section_counts(topic) if name]
-        src_key, dst_key = normalize_title(rename["src"]), normalize_title(rename["dst"])
-        source = next(((name, n) for name, n in rows if normalize_title(name) == src_key), None)
-        if source is None:
-            existing = ", ".join(f"`{name}`" for name, _ in rows) or "_(chưa có mục nào)_"
-            reply = f"Topic **{title}** không có mục `{rename['src']}` nên mình chưa đổi gì. Các mục hiện có: {existing}."
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-        if src_key == dst_key and source[0] == rename["dst"]:
-            async for ev in self._stream_text(f"Mục `{source[0]}` đã có đúng tên này nên mình chưa đổi gì.", delay):
-                yield ev
-            return
-        merge = next((name for name, _ in rows if normalize_title(name) == dst_key and name != source[0]), None)
-
-        session_ctx.pending_section_rename = {
-            "topic": topic.get("slug"), "title": title, "from": source[0], "to": rename["dst"],
-            "count": source[1], "merge": merge,
-        }
-        note = f"\n\n⚠️ Topic đã có mục `{merge}`: hai mục sẽ được gộp làm một." if merge else ""
-        preview = (
-            f"✏️ **ĐỔI TÊN MỤC**\n\n- Topic: **{title}**\n- `{source[0]}` → `{merge or rename['dst']}` "
-            f"({source[1]} bài){note}\n\n"
-            "👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-        )
-        yield {
-            "type": "action_preview",
-            "action_id": session_ctx.session_id,
-            "preview": preview,
-            "editable_titles": [merge or rename["dst"]],
-        }
-        async for ev in self._stream_text(preview, delay):
+        reply, preview_ev = self._build_section_rename_preview(rename, topic, session_ctx)
+        if preview_ev is not None:
+            yield preview_ev
+        async for ev in self._stream_text(reply or "", delay):
             yield ev
         # The confirmed rename runs in commands.handle_pending, the decision point that grants writes

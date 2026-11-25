@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { $createLinkNode, $isLinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
+import { $createLinkNode, $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
 import {
   $isListNode,
   INSERT_ORDERED_LIST_COMMAND,
@@ -61,6 +61,73 @@ import { getSelectedNode } from '../../utils/getSelectedNode';
 import { INSERT_IMAGE_COMMAND } from '../ImagesPlugin';
 
 export const OPEN_LINK_MODAL_COMMAND: LexicalCommand<void> = createCommand('OPEN_LINK_MODAL_COMMAND');
+
+function $resolveToolbarLinkNode(node: LexicalNode): LinkNode | null {
+  const linkParent = $findMatchingParent(node, $isLinkNode);
+  if ($isLinkNode(linkParent)) return linkParent;
+  return $isLinkNode(node) ? node : null;
+}
+
+function $applyToolbarLinkUpdate(
+  editor: LexicalEditor,
+  formattedUrl: string,
+  displayText: string,
+  trimmedLinkText: string,
+  targetLinkKey: string | null,
+): void {
+  if (targetLinkKey) {
+    const existingNode = $getNodeByKey(targetLinkKey);
+    if ($isLinkNode(existingNode)) {
+      existingNode.setURL(formattedUrl);
+      existingNode.setTarget('_blank');
+      existingNode.setRel('noopener noreferrer');
+      if (displayText !== existingNode.getTextContent()) {
+        existingNode.clear();
+        existingNode.append($createTextNode(displayText));
+      }
+      return;
+    }
+  }
+
+  const linkAttributes = { target: '_blank', rel: 'noopener noreferrer' };
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
+    const root = $getRoot();
+    const linkNode = $createLinkNode(formattedUrl, linkAttributes);
+    linkNode.append($createTextNode(displayText));
+    const lastChild = root.getLastChild();
+    if ($isElementNode(lastChild)) {
+      lastChild.append(linkNode);
+    } else {
+      const p = $createParagraphNode();
+      p.append(linkNode);
+      root.append(p);
+    }
+    return;
+  }
+
+  if (selection.isCollapsed()) {
+    const linkNode = $createLinkNode(formattedUrl, linkAttributes);
+    linkNode.append($createTextNode(displayText));
+    selection.insertNodes([linkNode]);
+    const spaceNode = $createTextNode(' ');
+    linkNode.insertAfter(spaceNode);
+    spaceNode.select();
+    return;
+  }
+
+  if (trimmedLinkText && trimmedLinkText !== selection.getTextContent()) {
+    const linkNode = $createLinkNode(formattedUrl, linkAttributes);
+    linkNode.append($createTextNode(displayText));
+    selection.insertNodes([linkNode]);
+    return;
+  }
+
+  editor.dispatchCommand(TOGGLE_LINK_COMMAND, {
+    url: formattedUrl,
+    ...linkAttributes,
+  });
+}
 
 export const BlockTypeToBlockName = {
   paragraph: 'Normal',
@@ -147,10 +214,6 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
         blockType = element.getTag() as BlockTypeKey;
       } else if ($isQuoteNode(element)) {
         blockType = 'quote';
-      } else if ($isListNode(element)) {
-        blockType = 'paragraph';
-      } else {
-        blockType = 'paragraph';
       }
     }
 
@@ -216,9 +279,9 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
             if (inList) return;
 
             const inlineFormats: TextFormatType[] = ['bold', 'italic', 'underline', 'strikethrough', 'code'];
-            inlineFormats.forEach(format => {
+            for (const format of inlineFormats) {
               if (selection.hasFormat(format)) selection.formatText(format);
-            });
+            }
 
             const selectedNode = getSelectedNode(selection);
             const selectedParent = selectedNode.getParent();
@@ -382,8 +445,7 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
 
       if ($isRangeSelection(selection)) {
         const node = getSelectedNode(selection);
-        const linkParent = $findMatchingParent(node, $isLinkNode);
-        const targetLink = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
+        const targetLink = $resolveToolbarLinkNode(node);
         if (targetLink) {
           isExisting = true;
           url = targetLink.getURL();
@@ -453,55 +515,7 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
     const displayText = linkText.trim() || formattedUrl;
 
     editor.update(() => {
-      if (targetLinkKey) {
-        const existingNode = $getNodeByKey(targetLinkKey);
-        if ($isLinkNode(existingNode)) {
-          existingNode.setURL(formattedUrl);
-          existingNode.setTarget('_blank');
-          existingNode.setRel('noopener noreferrer');
-          if (displayText !== existingNode.getTextContent()) {
-            existingNode.clear();
-            existingNode.append($createTextNode(displayText));
-          }
-          return;
-        }
-      }
-
-      const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        if (selection.isCollapsed()) {
-          const linkNode = $createLinkNode(formattedUrl, { target: '_blank', rel: 'noopener noreferrer' });
-          linkNode.append($createTextNode(displayText));
-          selection.insertNodes([linkNode]);
-          const spaceNode = $createTextNode(' ');
-          linkNode.insertAfter(spaceNode);
-          spaceNode.select();
-        } else {
-          if (linkText.trim() && linkText.trim() !== selection.getTextContent()) {
-            const linkNode = $createLinkNode(formattedUrl, { target: '_blank', rel: 'noopener noreferrer' });
-            linkNode.append($createTextNode(displayText));
-            selection.insertNodes([linkNode]);
-          } else {
-            editor.dispatchCommand(TOGGLE_LINK_COMMAND, {
-              url: formattedUrl,
-              target: '_blank',
-              rel: 'noopener noreferrer',
-            });
-          }
-        }
-      } else {
-        const root = $getRoot();
-        const linkNode = $createLinkNode(formattedUrl, { target: '_blank', rel: 'noopener noreferrer' });
-        linkNode.append($createTextNode(displayText));
-        const lastChild = root.getLastChild();
-        if ($isElementNode(lastChild)) {
-          lastChild.append(linkNode);
-        } else {
-          const p = $createParagraphNode();
-          p.append(linkNode);
-          root.append(p);
-        }
-      }
+      $applyToolbarLinkUpdate(editor, formattedUrl, displayText, linkText.trim(), targetLinkKey);
     });
 
     setIsLinkModalOpen(false);
@@ -523,8 +537,7 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
         const node = getSelectedNode(selection);
-        const linkParent = $findMatchingParent(node, $isLinkNode);
-        const targetLink = $isLinkNode(linkParent) ? linkParent : ($isLinkNode(node) ? node : null);
+        const targetLink = $resolveToolbarLinkNode(node);
         if (targetLink) {
           const textNode = $createTextNode(targetLink.getTextContent());
           targetLink.replace(textNode);

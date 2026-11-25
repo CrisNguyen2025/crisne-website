@@ -44,11 +44,9 @@ function useTypingEffect(
     const currentText = texts[currentIndex];
     const hasFinishedTyping =
       !isDeleting && displayText.length === currentText.length;
-    const delay = hasFinishedTyping
-      ? pauseTime
-      : isDeleting
-        ? deletingSpeed
-        : typingSpeed;
+    let delay = typingSpeed;
+    if (hasFinishedTyping) delay = pauseTime;
+    else if (isDeleting) delay = deletingSpeed;
     const timer = setTimeout(() => {
       if (hasFinishedTyping) {
         setIsDeleting(true);

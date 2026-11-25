@@ -86,6 +86,76 @@ async def _extract_video_tiers(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+async def _try_youtube_oembed_and_captions(
+    url: str,
+    job: ClaimedJob,
+    settings: Settings,
+) -> tuple[str | None, str | None, str | None, ExtractionResult | None]:
+    oembed = await youtube.fetch_youtube_oembed(url)
+    title = oembed.get("title")
+    author = oembed.get("author")
+    thumbnail_url = oembed.get("thumbnail_url")
+
+    video_id = youtube.extract_youtube_video_id(url)
+    if video_id and not job.forceDeep:
+        captions = await youtube.fetch_youtube_captions(video_id)
+        if has_meaningful_text(captions, settings.min_description_chars):
+            return (
+                title,
+                author,
+                thumbnail_url,
+                ExtractionResult(
+                    text=captions or "",
+                    method="captions",
+                    title=title,
+                    author=author,
+                    thumbnail_url=thumbnail_url,
+                    published_at=None,
+                ),
+            )
+    return title, author, thumbnail_url, None
+
+
+async def _handle_metadata_error(
+    url: str,
+    job: ClaimedJob,
+    settings: Settings,
+    exc: Exception,
+    title: str | None,
+    author: str | None,
+    thumbnail_url: str | None,
+    published_at: str | None,
+    errors: list[str],
+) -> tuple[str | None, ExtractionResult | None]:
+    if job.platform != "tiktok" or not tiktok.is_permanent_media_block_error(exc):
+        errors.append(f"Metadata: {exc}")
+        return None, None
+
+    if not job.forceDeep and has_meaningful_text(title, settings.min_description_chars):
+        return None, ExtractionResult(
+            text=(title or "").strip(),
+            method="description",
+            title=title,
+            author=author,
+            thumbnail_url=thumbnail_url,
+            published_at=published_at,
+        )
+
+    media_url = await tiktok.resolve_tiktok_via_fallback_api(url, settings)
+    if media_url:
+        return media_url, None
+
+    return None, ExtractionResult(
+        text="",
+        method="metadata_only",
+        title=title,
+        author=author,
+        thumbnail_url=thumbnail_url,
+        published_at=published_at,
+        error=tiktok.format_blocked_error(exc),
+    )
+
+
 async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResult:
     url = job.canonicalUrl
 
@@ -102,23 +172,11 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
     media_url: str | None = None
 
     if job.platform == "youtube":
-        oembed = await youtube.fetch_youtube_oembed(url)
-        title = oembed.get("title") or title
-        author = oembed.get("author") or author
-        thumbnail_url = oembed.get("thumbnail_url") or thumbnail_url
-
-        video_id = youtube.extract_youtube_video_id(url)
-        if video_id and not job.forceDeep:
-            captions = await youtube.fetch_youtube_captions(video_id)
-            if has_meaningful_text(captions, settings.min_description_chars):
-                return ExtractionResult(
-                    text=captions or "",
-                    method="captions",
-                    title=title,
-                    author=author,
-                    thumbnail_url=thumbnail_url,
-                    published_at=published_at,
-                )
+        title, author, thumbnail_url, early = await _try_youtube_oembed_and_captions(
+            url, job, settings
+        )
+        if early is not None:
+            return early
     elif job.platform == "tiktok":
         oembed = await tiktok.fetch_tiktok_oembed(url)
         title = oembed.get("title") or title
@@ -135,29 +193,11 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
         raw_duration = meta.get("duration")
         duration = float(raw_duration) if isinstance(raw_duration, (int, float)) else None
     except Exception as exc:
-        if job.platform == "tiktok" and tiktok.is_permanent_media_block_error(exc):
-            if not job.forceDeep and has_meaningful_text(title, settings.min_description_chars):
-                return ExtractionResult(
-                    text=(title or "").strip(),
-                    method="description",
-                    title=title,
-                    author=author,
-                    thumbnail_url=thumbnail_url,
-                    published_at=published_at,
-                )
-            media_url = await tiktok.resolve_tiktok_via_fallback_api(url, settings)
-            if not media_url:
-                return ExtractionResult(
-                    text="",
-                    method="metadata_only",
-                    title=title,
-                    author=author,
-                    thumbnail_url=thumbnail_url,
-                    published_at=published_at,
-                    error=tiktok.format_blocked_error(exc),
-                )
-        else:
-            errors.append(f"Metadata: {exc}")
+        media_url, fallback_result = await _handle_metadata_error(
+            url, job, settings, exc, title, author, thumbnail_url, published_at, errors
+        )
+        if fallback_result is not None:
+            return fallback_result
 
     if not job.forceDeep and has_meaningful_text(description, settings.min_description_chars):
         return ExtractionResult(

@@ -3,8 +3,9 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { AlertCircle, RefreshCw, Home } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export default function Error({
+export default function TopicError({
   error,
   reset,
 }: {
@@ -27,14 +28,14 @@ export default function Error({
         Đã xảy ra lỗi trong quá trình tải dữ liệu lộ trình. Vui lòng thử lại hoặc quay về trang chủ.
       </p>
       <div className="flex items-center gap-3">
-        <button
+        <Button
           type="button"
           onClick={() => reset()}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
+          className="h-auto cursor-pointer gap-2 rounded-xl px-4 py-2 text-xs"
         >
           <RefreshCw className="size-3.5" />
           <span>Thử lại</span>
-        </button>
+        </Button>
         <Link
           href="/"
           className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"

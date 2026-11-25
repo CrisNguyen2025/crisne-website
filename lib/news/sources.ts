@@ -82,6 +82,16 @@ function parseAndValidateFeedUrl(rawFeedUrl: string): { feedUrl: string; hostnam
   return { feedUrl, hostname: parsedFeed.hostname };
 }
 
+function resolveCreatedSourceDomain(
+  feedUrl: string,
+  explicitDomain: string | undefined,
+  resolved: { discovered: boolean; siteHost?: string }
+): string {
+  if (explicitDomain?.trim()) return extractSourceDomain(feedUrl, explicitDomain);
+  if (resolved.discovered && resolved.siteHost) return resolved.siteHost;
+  return extractSourceDomain(feedUrl);
+}
+
 export async function createNewsSource(
   input: CreateNewsSourceRequest,
   options: { lookupFn?: HostLookupFn; fetchFn?: typeof fetch } = {}
@@ -91,11 +101,7 @@ export async function createNewsSource(
 
   const resolved = await resolveFeedUrl(rawFeedUrl, options);
   const feedUrl = resolved.feedUrl;
-  const domain = input.domain?.trim()
-    ? extractSourceDomain(feedUrl, input.domain)
-    : resolved.discovered
-      ? resolved.siteHost
-      : extractSourceDomain(feedUrl);
+  const domain = resolveCreatedSourceDomain(feedUrl, input.domain, resolved);
   await assertPublicHostname(domain, options.lookupFn);
 
   try {
@@ -121,6 +127,23 @@ export async function createNewsSource(
   }
 }
 
+function buildSourceUpdateData(
+  input: UpdateNewsSourceRequest,
+  nextFeedUrl: string,
+  feedUrlChanged: boolean,
+  nextDomain: string
+): Prisma.NewsSourceUpdateInput {
+  return {
+    ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+    ...(input.feedUrl !== undefined ? { feedUrl: nextFeedUrl } : {}),
+    ...(feedUrlChanged ? { etag: null, lastModified: null, lastError: null } : {}),
+    ...(input.domain !== undefined || input.feedUrl !== undefined ? { domain: nextDomain } : {}),
+    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+    ...(input.fetchIntervalDays !== undefined ? { fetchIntervalDays: input.fetchIntervalDays } : {}),
+    ...(input.fetchHour !== undefined ? { fetchHour: input.fetchHour } : {}),
+  };
+}
+
 export async function updateNewsSource(
   id: string,
   input: UpdateNewsSourceRequest,
@@ -142,29 +165,16 @@ export async function updateNewsSource(
   }
 
   let nextDomain = existing.domain;
-  if (input.domain !== undefined) {
-    nextDomain = extractSourceDomain(nextFeedUrl, input.domain);
-    await assertPublicHostname(nextDomain, options.lookupFn);
-  } else if (input.feedUrl) {
-    nextDomain =
-      feedDiscovered && resolvedSiteHost
-        ? resolvedSiteHost
-        : extractSourceDomain(nextFeedUrl);
+  if (input.domain !== undefined || input.feedUrl) {
+    nextDomain = resolveCreatedSourceDomain(nextFeedUrl, input.domain, {
+      discovered: feedDiscovered,
+      siteHost: resolvedSiteHost,
+    });
     await assertPublicHostname(nextDomain, options.lookupFn);
   }
 
   const feedUrlChanged = input.feedUrl !== undefined && nextFeedUrl !== existing.feedUrl;
-  const data: Prisma.NewsSourceUpdateInput = {
-    ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-    ...(input.feedUrl !== undefined ? { feedUrl: nextFeedUrl } : {}),
-    ...(feedUrlChanged ? { etag: null, lastModified: null, lastError: null } : {}),
-    ...(input.domain !== undefined || input.feedUrl !== undefined ? { domain: nextDomain } : {}),
-    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-    ...(input.fetchIntervalDays !== undefined
-      ? { fetchIntervalDays: input.fetchIntervalDays }
-      : {}),
-    ...(input.fetchHour !== undefined ? { fetchHour: input.fetchHour } : {}),
-  };
+  const data = buildSourceUpdateData(input, nextFeedUrl, feedUrlChanged, nextDomain);
 
   try {
     const updated = await prisma.newsSource.update({

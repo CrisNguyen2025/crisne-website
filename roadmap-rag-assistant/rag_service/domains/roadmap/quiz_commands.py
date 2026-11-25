@@ -103,6 +103,22 @@ def strip_html_for_quiz(raw_html: str, max_chars: int = MAX_QUIZ_SOURCE_CHARS) -
     return compact[:max_chars].strip()
 
 
+def _extract_quiz_topic_tail(rest_orig: str, rest_flat: str) -> tuple[Optional[str], str, str]:
+    tm = _TOPIC_TAIL_RE.search(rest_flat)
+    if not tm:
+        return None, rest_orig, rest_flat
+    tail_words = rest_flat[tm.start("topic") :].strip(" .?!\"“”")
+    orig_tm = re.search(
+        r"\s+(?:trong|ở|o|thuộc|thuoc|của|cua|in)\s+(?:topic\s+|chủ\s+đề\s+|lộ\s+trình\s+)?(?P<topic>.+)$",
+        rest_orig,
+        flags=re.IGNORECASE,
+    )
+    if not orig_tm:
+        return None, rest_orig, rest_flat
+    topic_hint = orig_tm.group("topic").strip(" .?!\"“”") or tail_words or None
+    return topic_hint, rest_orig[: orig_tm.start()].strip(), rest_flat[: tm.start()].strip()
+
+
 def parse_quiz_request(text: str) -> Optional[QuizRequest]:
     """Parse an explicit Active Recall / Quiz start command, or return None."""
     cleaned = normalize_vietnamese(text or "").strip()
@@ -133,19 +149,7 @@ def parse_quiz_request(text: str) -> Optional[QuizRequest]:
         rest_flat = rest_flat[count_m.end() :].strip()
         rest_orig = re.sub(r"^[1-5]\s+c[âa]u(?:\s+(?:v[ềe]|cho|c[ủu]a))?\s*", "", rest_orig, flags=re.IGNORECASE).strip()
 
-    topic_hint: Optional[str] = None
-    if tm := _TOPIC_TAIL_RE.search(rest_flat):
-        # Find the same suffix on original text
-        tail_words = rest_flat[tm.start("topic") :].strip(" .?!\"“”")
-        orig_tm = re.search(
-            r"\s+(?:trong|ở|o|thuộc|thuoc|của|cua|in)\s+(?:topic\s+|chủ\s+đề\s+|lộ\s+trình\s+)?(?P<topic>.+)$",
-            rest_orig,
-            flags=re.IGNORECASE,
-        )
-        if orig_tm:
-            topic_hint = orig_tm.group("topic").strip(" .?!\"“”") or tail_words or None
-            rest_orig = rest_orig[: orig_tm.start()].strip()
-            rest_flat = rest_flat[: tm.start()].strip()
+    topic_hint, rest_orig, rest_flat = _extract_quiz_topic_tail(rest_orig, rest_flat)
 
     if _OVERDUE_TARGET_RE.search(rest_flat):
         return QuizRequest(lesson="", topic_hint=topic_hint, use_overdue_review=True, num_questions=num_q)
@@ -337,6 +341,93 @@ def _find_lesson_in_items(items: Sequence[dict], lesson_name: str, fallback_item
 
 
 class QuizCommands(AgentHostMixin):
+    async def _maybe_suggest_quiz_gap_note(self, quiz: dict, gaps: list[str]) -> bool:
+        if not gaps:
+            return False
+        try:
+            existing_pending = await owner_memory_store.list_pending()
+            if len(existing_pending) < MAX_PENDING_MEMORIES:
+                gap_summary = "; ".join(gaps[:2])
+                note_content = f"Bài {quiz['lesson_title']} — cần chú ý: {gap_summary}"[:300]
+                await owner_memory_store.create(
+                    kind="learning_note",
+                    content=note_content,
+                    scope=quiz.get("topic_slug"),
+                    source="suggested",
+                    status="pending",
+                )
+                return True
+        except Exception as exc:
+            log.debug("quiz_commands: failed to create pending learning_note (%s)", exc)
+        return False
+
+    def _prepare_quiz_status_preview(self, quiz: dict, session_id: str, session_ctx) -> tuple[str, dict]:
+        curr_status = quiz.get("lesson_status") or "known"
+        session_ctx.clear_pending()
+        if curr_status != "known":
+            old_label = LESSON_STATUS_LABEL.get(curr_status, curr_status)
+            session_ctx.pending_status_change = {
+                "item_id": quiz["lesson_id"],
+                "item_title": quiz["lesson_title"],
+                "topic_slug": quiz.get("topic_slug"),
+                "old_status": curr_status,
+                "new_status": "known",
+                "mark_reviewed": False,
+            }
+            preview_text = (
+                f"🔄 **Đề xuất cập nhật trạng thái bài học**\n\n"
+                f"- **Bài:** {quiz['lesson_title']}\n"
+                f"- **Trạng thái:** {old_label} → **Đã nắm**\n\n"
+                "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để cập nhật, hoặc bấm **[❌ Hủy bỏ]** để giữ nguyên."
+            )
+        else:
+            session_ctx.pending_status_change = {
+                "item_id": quiz["lesson_id"],
+                "item_title": quiz["lesson_title"],
+                "topic_slug": quiz.get("topic_slug"),
+                "old_status": "known",
+                "new_status": "known",
+                "mark_reviewed": True,
+            }
+            preview_text = (
+                f"📌 **Đánh dấu đã ôn hôm nay**\n\n"
+                f"- **Bài:** {quiz['lesson_title']} *(Đã nắm)*\n"
+                "- Cập nhật mốc ôn tập lên hôm nay để ưu tiên các bài lâu chưa ôn khác.\n\n"
+                "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để ghi nhận, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
+            )
+        return preview_text, {"type": "action_preview", "action_id": session_id, "preview": preview_text}
+
+    async def _finish_active_quiz_turn(
+        self,
+        quiz: dict,
+        results: list[dict],
+        reply_parts: list[str],
+        total: int,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        session_ctx.active_quiz = None
+        passed_count = sum(1 for r in results if r.get("passed"))
+        pass_threshold = max(1, math.ceil(total * 2 / 3))
+        gaps = [r["gap"] for r in results if r.get("gap")]
+        reply_parts.append(f"\n---\n🏁 **Hoàn thành ôn tập bài `{quiz['lesson_title']}`:** **{passed_count}/{total}** câu đạt.")
+
+        if await self._maybe_suggest_quiz_gap_note(quiz, gaps):
+            reply_parts.append(
+                "🧠 Mình đã tạo 1 gợi ý ghi nhớ (`learning_note`) vào tab **Chờ duyệt** trong mục **Bộ nhớ** để bạn duyệt lưu."
+            )
+
+        preview_payload: Optional[dict] = None
+        if passed_count >= pass_threshold:
+            preview_text, preview_payload = self._prepare_quiz_status_preview(quiz, session_id, session_ctx)
+            reply_parts.append("\n" + preview_text)
+
+        if preview_payload:
+            yield preview_payload
+        async for ev in self._stream_text("\n".join(reply_parts), delay):
+            yield ev
+
     async def handle_active_quiz_turn(
         self,
         *,
@@ -393,7 +484,6 @@ class QuizCommands(AgentHostMixin):
         badge = "✅ **Đạt**" if grade["passed"] else "⚠️ **Cần bổ sung**"
         reply_parts = [f"{badge} (Câu {idx + 1}/{total}): {grade['feedback']}"]
 
-        # More questions left -> advance index and refresh TTL
         if idx + 1 < total:
             next_idx = idx + 1
             session_ctx.active_quiz = {**quiz, "index": next_idx, "results": results}
@@ -405,85 +495,46 @@ class QuizCommands(AgentHostMixin):
                 yield ev
             return
 
-        # Quiz finished -> clear RAM quiz state and connect to Owner Memory + Lesson Status
-        session_ctx.active_quiz = None
-        passed_count = sum(1 for r in results if r.get("passed"))
-        pass_threshold = max(1, math.ceil(total * 2 / 3))
-        gaps = [r["gap"] for r in results if r.get("gap")]
-
-        reply_parts.append(f"\n---\n🏁 **Hoàn thành ôn tập bài `{quiz['lesson_title']}`:** **{passed_count}/{total}** câu đạt.")
-
-        # 1. Knowledge gaps -> suggest 1 pending OwnerMemory (`learning_note`) for Owner approval
-        saved_pending_note = False
-        if gaps:
-            try:
-                existing_pending = await owner_memory_store.list_pending()
-                if len(existing_pending) < MAX_PENDING_MEMORIES:
-                    gap_summary = "; ".join(gaps[:2])
-                    note_content = f"Bài {quiz['lesson_title']} — cần chú ý: {gap_summary}"[:300]
-                    await owner_memory_store.create(
-                        kind="learning_note",
-                        content=note_content,
-                        scope=quiz.get("topic_slug"),
-                        source="suggested",
-                        status="pending",
-                    )
-                    saved_pending_note = True
-            except Exception as exc:
-                log.debug("quiz_commands: failed to create pending learning_note (%s)", exc)
-
-        if saved_pending_note:
-            reply_parts.append(
-                "🧠 Mình đã tạo 1 gợi ý ghi nhớ (`learning_note`) vào tab **Chờ duyệt** trong mục **Bộ nhớ** để bạn duyệt lưu."
-            )
-
-        # 2. Good score -> Preview Lesson Status upgrade (`known`) or mark reviewed today (`markReviewed: true`)
-        preview_payload: Optional[dict] = None
-        if passed_count >= pass_threshold:
-            curr_status = quiz.get("lesson_status") or "known"
-            session_ctx.clear_pending()
-            if curr_status != "known":
-                old_label = LESSON_STATUS_LABEL.get(curr_status, curr_status)
-                session_ctx.pending_status_change = {
-                    "item_id": quiz["lesson_id"],
-                    "item_title": quiz["lesson_title"],
-                    "topic_slug": quiz.get("topic_slug"),
-                    "old_status": curr_status,
-                    "new_status": "known",
-                    "mark_reviewed": False,
-                }
-                preview_text = (
-                    f"🔄 **Đề xuất cập nhật trạng thái bài học**\n\n"
-                    f"- **Bài:** {quiz['lesson_title']}\n"
-                    f"- **Trạng thái:** {old_label} → **Đã nắm**\n\n"
-                    "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để cập nhật, hoặc bấm **[❌ Hủy bỏ]** để giữ nguyên."
-                )
-            else:
-                session_ctx.pending_status_change = {
-                    "item_id": quiz["lesson_id"],
-                    "item_title": quiz["lesson_title"],
-                    "topic_slug": quiz.get("topic_slug"),
-                    "old_status": "known",
-                    "new_status": "known",
-                    "mark_reviewed": True,
-                }
-                preview_text = (
-                    f"📌 **Đánh dấu đã ôn hôm nay**\n\n"
-                    f"- **Bài:** {quiz['lesson_title']} *(Đã nắm)*\n"
-                    "- Cập nhật mốc ôn tập lên hôm nay để ưu tiên các bài lâu chưa ôn khác.\n\n"
-                    "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để ghi nhận, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
-                )
-            reply_parts.append("\n" + preview_text)
-            preview_payload = {
-                "type": "action_preview",
-                "action_id": session_id,
-                "preview": preview_text,
-            }
-
-        if preview_payload:
-            yield preview_payload
-        async for ev in self._stream_text("\n".join(reply_parts), delay):
+        async for ev in self._finish_active_quiz_turn(
+            quiz, results, reply_parts, total, session_id, session_ctx, delay
+        ):
             yield ev
+
+    async def _pick_overdue_quiz_lesson(
+        self, adapter, req: QuizRequest, content: str, page_context, session_ctx
+    ) -> tuple[Optional[dict], Optional[str], Optional[str]]:
+        topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
+        if topic:
+            candidates = filter_and_sort_review_lessons(topic.get("items") or [])
+            topic_slug, topic_title = topic.get("slug"), topic.get("title")
+        else:
+            candidates = filter_and_sort_review_lessons(await _all_owner_items(adapter))
+            topic_slug, topic_title = None, None
+        lesson = next(
+            (cand for cand in candidates if len(strip_html_for_quiz(cand.get("content") or "")) >= MIN_LESSON_CHARS),
+            candidates[0] if candidates else None,
+        )
+        if lesson is not None:
+            topic_slug = topic_slug or lesson.get("topic_slug") or lesson.get("roadmapSlug")
+            topic_title = topic_title or lesson.get("topic_title")
+        return lesson, topic_slug, topic_title
+
+    async def _pick_named_quiz_lesson(
+        self, adapter, req: QuizRequest, content: str, page_context, session_ctx
+    ) -> tuple[Optional[dict], Optional[str], Optional[str]]:
+        topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
+        fallback_item_id = ((page_context or {}).get("itemId") or "").strip() or (session_ctx.active_lesson_id or "").strip()
+        if topic:
+            return (
+                _find_lesson_in_items(topic.get("items") or [], req.lesson, fallback_item_id),
+                topic.get("slug"),
+                topic.get("title"),
+            )
+        if req.lesson:
+            lesson = _find_lesson_in_items(await _all_owner_items(adapter), req.lesson, "")
+            if lesson:
+                return lesson, lesson.get("topic_slug") or lesson.get("roadmapSlug"), lesson.get("topic_title")
+        return None, None, None
 
     async def handle_quiz_command(
         self,
@@ -507,60 +558,25 @@ class QuizCommands(AgentHostMixin):
             return
 
         adapter = get_adapter()
-        lesson: Optional[dict] = None
-        topic_slug: Optional[str] = None
-        topic_title: Optional[str] = None
-
         if req.use_overdue_review:
-            topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
-            if topic:
-                candidates = filter_and_sort_review_lessons(topic.get("items") or [])
-                topic_slug = topic.get("slug")
-                topic_title = topic.get("title")
-            else:
-                all_items = await _all_owner_items(adapter)
-                candidates = filter_and_sort_review_lessons(all_items)
-            # Pick the most overdue lesson that actually has content to quiz on
-            for cand in candidates:
-                if len(strip_html_for_quiz(cand.get("content") or "")) >= MIN_LESSON_CHARS:
-                    lesson = cand
-                    topic_slug = topic_slug or cand.get("topic_slug") or cand.get("roadmapSlug")
-                    topic_title = topic_title or cand.get("topic_title")
-                    break
-            if lesson is None and candidates:
-                lesson = candidates[0]
-                topic_slug = topic_slug or lesson.get("topic_slug") or lesson.get("roadmapSlug")
-                topic_title = topic_title or lesson.get("topic_title")
-            if lesson is None:
-                async for ev in self._stream_text(
-                    "Hiện chưa có bài nào ở trạng thái **Đã nắm** để ôn tập. Bạn có thể chỉ định tên bài cụ thể, ví dụ: `quiz bài Hybrid Search`.",
-                    delay,
-                ):
-                    yield ev
-                return
+            lesson, topic_slug, topic_title = await self._pick_overdue_quiz_lesson(
+                adapter, req, content, page_context, session_ctx
+            )
+            empty_msg = "Hiện chưa có bài nào ở trạng thái **Đã nắm** để ôn tập. Bạn có thể chỉ định tên bài cụ thể, ví dụ: `quiz bài Hybrid Search`."
         else:
-            topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
-            fallback_item_id = ((page_context or {}).get("itemId") or "").strip() or (session_ctx.active_lesson_id or "").strip()
-            if topic:
-                topic_slug = topic.get("slug")
-                topic_title = topic.get("title")
-                lesson = _find_lesson_in_items(topic.get("items") or [], req.lesson, fallback_item_id)
-            elif req.lesson:
-                all_items = await _all_owner_items(adapter)
-                lesson = _find_lesson_in_items(all_items, req.lesson, "")
-                if lesson:
-                    topic_slug = lesson.get("topic_slug") or lesson.get("roadmapSlug")
-                    topic_title = lesson.get("topic_title")
+            lesson, topic_slug, topic_title = await self._pick_named_quiz_lesson(
+                adapter, req, content, page_context, session_ctx
+            )
+            empty_msg = (
+                f"Mình chưa tìm thấy bài **{req.lesson}** để tạo quiz."
+                if req.lesson
+                else "Hãy mở một bài học hoặc nêu tên bài bạn muốn ôn, ví dụ: `quiz bài Hybrid Search` hoặc `quiz bài cần ôn nhất`."
+            )
 
-            if lesson is None:
-                msg = (
-                    f"Mình chưa tìm thấy bài **{req.lesson}** để tạo quiz."
-                    if req.lesson
-                    else "Hãy mở một bài học hoặc nêu tên bài bạn muốn ôn, ví dụ: `quiz bài Hybrid Search` hoặc `quiz bài cần ôn nhất`."
-                )
-                async for ev in self._stream_text(msg, delay):
-                    yield ev
-                return
+        if lesson is None:
+            async for ev in self._stream_text(empty_msg, delay):
+                yield ev
+            return
 
         plain_text = strip_html_for_quiz(lesson.get("content") or "")
         if len(plain_text) < MIN_LESSON_CHARS:

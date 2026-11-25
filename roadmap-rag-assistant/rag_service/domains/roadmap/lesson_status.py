@@ -294,6 +294,47 @@ class LessonStatusCommands(AgentHostMixin):
                 log.debug("Topic fallback lookup failed for %r: %s", ref, exc)
         return None
 
+    def _find_lesson_for_status(
+        self, items: list[dict], req, page_context, session_ctx
+    ) -> Optional[dict]:
+        if req.lesson:
+            wanted = fold(req.lesson).lower()
+            for item in items:
+                title_flat = fold(item.get("title", "")).lower()
+                if title_flat == wanted or wanted in title_flat:
+                    return item
+            return None
+        current_item_id = ((page_context or {}).get("itemId") or "").strip() or (
+            session_ctx.active_lesson_id or ""
+        ).strip()
+        if not current_item_id:
+            return None
+        return next((i for i in items if matches_page_item(i, current_item_id)), None)
+
+    async def _resolve_status_change_target(
+        self, req, content: str, page_context, session_ctx
+    ) -> tuple[Optional[dict], Optional[dict], Optional[str]]:
+        topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
+        if not topic:
+            return (
+                None,
+                None,
+                "Chưa xác định được topic để đổi trạng thái bài. Hãy mở topic trên trang hoặc nêu tên topic trong câu lệnh.",
+            )
+        lesson = self._find_lesson_for_status(topic.get("items") or [], req, page_context, session_ctx)
+        if not lesson:
+            msg = (
+                f"Không tìm thấy bài '{req.lesson}' trong topic '{topic.get('title')}'"
+                if req.lesson
+                else "Chưa xác định được bài học cần đổi trạng thái"
+            )
+            return topic, None, msg + ". Vui lòng kiểm tra lại tên bài."
+        current_status = _status_of(lesson)
+        if current_status == req.new_status:
+            curr_label = LESSON_STATUS_LABEL.get(current_status, current_status)
+            return topic, lesson, f"Bài **{lesson.get('title')}** đã ở trạng thái **{curr_label}** rồi, không cần đổi."
+        return topic, lesson, None
+
     async def handle_status_change(
         self,
         *,
@@ -308,79 +349,66 @@ class LessonStatusCommands(AgentHostMixin):
         Sets outcome["handled"] = True when handled.
         """
         req = parse_status_change_request(content)
-        if req is not None:
-            outcome["handled"] = True
-            if not is_owner():
-                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                    yield ev
-                return
-
-            topic = await self._resolve_target_topic(req.topic_hint, content, page_context, session_ctx)
-            if not topic:
-                async for ev in self._stream_text(
-                    "Chưa xác định được topic để đổi trạng thái bài. Hãy mở topic trên trang hoặc nêu tên topic trong câu lệnh.",
-                    delay,
-                ):
-                    yield ev
-                return
-
-            items = topic.get("items") or []
-            lesson = None
-            if req.lesson:
-                wanted = fold(req.lesson).lower()
-                for item in items:
-                    title_flat = fold(item.get("title", "")).lower()
-                    if title_flat == wanted or wanted in title_flat:
-                        lesson = item
-                        break
-            else:
-                current_item_id = ((page_context or {}).get("itemId") or "").strip() or (session_ctx.active_lesson_id or "").strip()
-                if current_item_id:
-                    lesson = next((i for i in items if matches_page_item(i, current_item_id)), None)
-
-            if not lesson:
-                msg = f"Không tìm thấy bài '{req.lesson}' trong topic '{topic.get('title')}'" if req.lesson else "Chưa xác định được bài học cần đổi trạng thái"
-                async for ev in self._stream_text(msg + ". Vui lòng kiểm tra lại tên bài.", delay):
-                    yield ev
-                return
-
-            current_status = _status_of(lesson)
-            if current_status == req.new_status:
-                curr_label = LESSON_STATUS_LABEL.get(current_status, current_status)
-                async for ev in self._stream_text(
-                    f"Bài **{lesson.get('title')}** đã ở trạng thái **{curr_label}** rồi, không cần đổi.", delay
-                ):
-                    yield ev
-                return
-
-            old_label = LESSON_STATUS_LABEL.get(current_status, current_status)
-            new_label = LESSON_STATUS_LABEL.get(req.new_status, req.new_status)
-
-            session_ctx.pending_status_change = {
-                "item_id": lesson.get("id"),
-                "item_title": lesson.get("title"),
-                "topic_slug": topic.get("slug"),
-                "old_status": current_status,
-                "new_status": req.new_status,
-            }
-
-            preview_text = (
-                f"🔄 **Đổi trạng thái bài học**\n\n"
-                f"- **Bài:** {lesson.get('title')}\n"
-                f"- **Topic:** {topic.get('title')}\n"
-                f"- **Trạng thái cũ:** {old_label}\n"
-                f"- **Trạng thái mới:** {new_label}\n\n"
-                f"👉 Gõ **ok** để xác nhận thực hiện hoặc **hủy** để hủy bỏ."
-            )
-
-            yield {
-                "type": "action_preview",
-                "action_id": session_ctx.session_id,
-                "preview": preview_text,
-            }
-            async for ev in self._stream_text(preview_text, delay):
+        if req is None:
+            return
+        outcome["handled"] = True
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
+
+        topic, lesson, err_msg = await self._resolve_status_change_target(req, content, page_context, session_ctx)
+        if err_msg is not None or topic is None or lesson is None:
+            async for ev in self._stream_text(err_msg or "", delay):
+                yield ev
+            return
+
+        current_status = _status_of(lesson)
+        old_label = LESSON_STATUS_LABEL.get(current_status, current_status)
+        new_label = LESSON_STATUS_LABEL.get(req.new_status, req.new_status)
+        session_ctx.pending_status_change = {
+            "item_id": lesson.get("id"),
+            "item_title": lesson.get("title"),
+            "topic_slug": topic.get("slug"),
+            "old_status": current_status,
+            "new_status": req.new_status,
+        }
+        preview_text = (
+            f"🔄 **Đổi trạng thái bài học**\n\n"
+            f"- **Bài:** {lesson.get('title')}\n"
+            f"- **Topic:** {topic.get('title')}\n"
+            f"- **Trạng thái cũ:** {old_label}\n"
+            f"- **Trạng thái mới:** {new_label}\n\n"
+            f"👉 Gõ **ok** để xác nhận thực hiện hoặc **hủy** để hủy bỏ."
+        )
+        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        async for ev in self._stream_text(preview_text, delay):
+            yield ev
+
+    async def _build_status_query_reply(
+        self,
+        adapter,
+        content: str,
+        page_context,
+        session_ctx,
+        is_kwn: bool,
+        is_rev: bool,
+    ) -> tuple[str, str]:
+        topic = await self._resolve_target_topic(None, content, page_context, session_ctx)
+        items = topic.get("items") or [] if topic else await _all_owner_items(adapter)
+        topic_title = topic.get("title") if topic else None
+        if is_kwn:
+            scope_label = str(topic_title or (topic.get("slug") if topic else "") or "toàn bộ kho kiến thức")
+            learning, target = filter_and_sort_next_lessons(items)
+            return "what_i_know", format_what_i_know_reply(filter_known_lessons(items), scope_label, learning, target)
+        if is_rev:
+            sorted_review = filter_and_sort_review_lessons(items)
+            return "review", format_review_reply(sorted_review, topic_title) if topic else format_review_reply(sorted_review)
+        learning, target = filter_and_sort_next_lessons(items)
+        return (
+            "next_learning",
+            format_next_learning_reply(learning, target, topic_title) if topic else format_next_learning_reply(learning, target),
+        )
 
     async def handle_lesson_status_query(
         self,
@@ -409,62 +437,10 @@ class LessonStatusCommands(AgentHostMixin):
                 yield ev
             return
 
-        adapter = get_adapter()
-
-        # (a) What do I know about X
-        if is_kwn:
-            topic = await self._resolve_target_topic(None, content, page_context, session_ctx)
-            if topic:
-                items = topic.get("items") or []
-                known = filter_known_lessons(items)
-                learning, target = filter_and_sort_next_lessons(items)
-                reply = format_what_i_know_reply(
-                    known, str(topic.get("title") or topic.get("slug") or ""), learning, target
-                )
-            else:
-                all_items = await _all_owner_items(adapter)
-                known = filter_known_lessons(all_items)
-                learning, target = filter_and_sort_next_lessons(all_items)
-                reply = format_what_i_know_reply(known, "toàn bộ kho kiến thức", learning, target)
-
-            yield {"type": "tool_start", "name": "get_lesson_status", "args": {"query": "what_i_know"}}
-            yield {"type": "tool_end", "name": "get_lesson_status", "result": reply}
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        # (c) What lessons need review
-        if is_rev:
-            topic = await self._resolve_target_topic(None, content, page_context, session_ctx)
-            if topic:
-                items = topic.get("items") or []
-                sorted_review = filter_and_sort_review_lessons(items)
-                reply = format_review_reply(sorted_review, topic.get("title"))
-            else:
-                all_items = await _all_owner_items(adapter)
-                sorted_review = filter_and_sort_review_lessons(all_items)
-                reply = format_review_reply(sorted_review)
-
-            yield {"type": "tool_start", "name": "get_lesson_status", "args": {"query": "review"}}
-            yield {"type": "tool_end", "name": "get_lesson_status", "result": reply}
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        # (b) What to learn next
-        if is_nxt:
-            topic = await self._resolve_target_topic(None, content, page_context, session_ctx)
-            if topic:
-                items = topic.get("items") or []
-                learning, target = filter_and_sort_next_lessons(items)
-                reply = format_next_learning_reply(learning, target, topic.get("title"))
-            else:
-                all_items = await _all_owner_items(adapter)
-                learning, target = filter_and_sort_next_lessons(all_items)
-                reply = format_next_learning_reply(learning, target)
-
-            yield {"type": "tool_start", "name": "get_lesson_status", "args": {"query": "next_learning"}}
-            yield {"type": "tool_end", "name": "get_lesson_status", "result": reply}
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
+        query_kind, reply = await self._build_status_query_reply(
+            get_adapter(), content, page_context, session_ctx, is_kwn, is_rev
+        )
+        yield {"type": "tool_start", "name": "get_lesson_status", "args": {"query": query_kind}}
+        yield {"type": "tool_end", "name": "get_lesson_status", "result": reply}
+        async for ev in self._stream_text(reply, delay):
+            yield ev

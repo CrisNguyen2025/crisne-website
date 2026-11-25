@@ -136,11 +136,12 @@ export const NewsCard = React.memo(function NewsCard({
         </button>
       </h2>
 
-      {item.tldr ? (
+      {item.tldr && (
         <p className="mt-1 line-clamp-2 [overflow-wrap:anywhere] text-sm leading-relaxed text-muted-foreground">{item.tldr}</p>
-      ) : item.extractionError ? (
+      )}
+      {!item.tldr && item.extractionError && (
         <p className="mt-1 line-clamp-2 [overflow-wrap:anywhere] text-sm text-muted-foreground">{item.extractionError}</p>
-      ) : null}
+      )}
 
       {(badge || contentTypeLabel) && (
         <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">

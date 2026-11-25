@@ -58,6 +58,14 @@ from rag_service.tools.topic_resolver import (
 )
 from rag_service.write_grant import write_granted
 
+_COMMAND_BG_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _schedule_rag_sync() -> None:
+    task = asyncio.create_task(rag_engine.sync_live_database())
+    _COMMAND_BG_TASKS.add(task)
+    task.add_done_callback(_COMMAND_BG_TASKS.discard)
+
 
 CONFIRM_WORDS = ("ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn")
 CANCEL_WORDS = ("hủy", "huỷ", "cancel", "không", "no", "bỏ qua", "thôi")
@@ -184,411 +192,473 @@ class RoadmapCommands(AgentHostMixin):
         async for ev in self._stream_text(full_reply, delay):
             yield ev
 
+    async def _handle_pending_memory(
+        self, mem_change: dict, lower: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        if lower not in CONFIRM_WORDS:
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác bộ nhớ theo yêu cầu của bạn.", delay):
+                    yield ev
+            return
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        from rag_service.core.memory import KIND_LABELS, owner_memory_store
+
+        op = mem_change.get("op")
+        tool_name = "save_owner_memory" if op == "create" else "archive_owner_memory"
+        yield {"type": "tool_start", "name": tool_name, "args": {"op": op, "confirmed": True}}
+        try:
+            if op == "create":
+                saved = await owner_memory_store.create(
+                    kind=mem_change["kind"],
+                    content=mem_change["content"],
+                    scope=mem_change.get("scope_topic_slug"),
+                    source="explicit",
+                    status="active",
+                )
+                kind_label = KIND_LABELS.get(saved.kind, saved.kind)
+                scope = f" *(topic: `{saved.scope}`)*" if saved.scope else ""
+                res_msg = f"✅ Đã lưu vào Bộ nhớ Owner (**{kind_label}**{scope}): {saved.content}"
+                ok = True
+            else:
+                archived = await owner_memory_store.archive(mem_change["memory_id"])
+                if archived:
+                    res_msg = f"🗑️ Đã gỡ khỏi Bộ nhớ Owner: {mem_change['content']}"
+                    ok = True
+                else:
+                    res_msg = "⚠️ Không tìm thấy mục bộ nhớ này (có thể đã được gỡ trước đó)."
+                    ok = False
+        except Exception as exc:
+            ok, res_msg = False, f"❌ Lỗi khi cập nhật Bộ nhớ Owner: {exc}"
+        yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    async def _handle_pending_content_draft(
+        self, draft: dict, lower: str, session_id: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        if lower not in CONFIRM_WORDS:
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã bỏ bản nháp, bài học không thay đổi.", delay):
+                    yield ev
+            return
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        args = {
+            "topic": draft["topic"],
+            "item_id": draft["item_id"],
+            "html": draft["html"],
+            "write_mode": draft.get("write_mode", "append"),
+            "target_h2": draft.get("target_h2"),
+        }
+        yield {
+            "type": "tool_start",
+            "name": "update_item_content",
+            "args": {"topic": draft["topic"], "item_id": draft["item_id"], "confirmed": True},
+        }
+        try:
+            with write_granted("confirmed lesson content draft"):
+                res_msg = await update_item_content.coroutine(**args)
+            ok = res_msg.startswith("✅")
+            if ok:
+                session_store.set_active_lesson(
+                    session_id,
+                    draft["item_id"],
+                    draft.get("title") or "",
+                    topic_slug=draft.get("topic"),
+                    topic_title=draft.get("topic_title"),
+                )
+        except Exception as exc:
+            ok, res_msg = False, f"❌ Lỗi khi ghi nội dung bài: {exc}"
+        yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    def _validate_pending_section_title(
+        self, rename: dict, titles: Optional[list[str]], session_ctx
+    ) -> bool:
+        if titles is None:
+            return True
+        cleaned_name = (
+            re.sub(r"\s+", " ", (titles[0] or "")).strip().strip("\"'`“”‘’")
+            if len(titles) == 1
+            else ""
+        )
+        if len(titles) != 1 or not cleaned_name or cleaned_name.lower() in POINTING_WORDS:
+            session_ctx.pending_section_rename = rename
+            return False
+        rename["to"] = cleaned_name
+        return True
+
+    async def _execute_pending_section_rename(
+        self, rename: dict, args: dict, session_id: str
+    ) -> tuple[bool, str]:
+        try:
+            with write_granted("confirmed section rename"):
+                res_msg = await rename_section.coroutine(**args)
+            ok = res_msg.startswith("✅")
+            if ok and rename.get("topic"):
+                session_store.set_active_topic(session_id, rename["topic"], rename.get("title") or "")
+            return ok, res_msg
+        except Exception as exc:
+            return False, f"❌ Lỗi khi đổi tên mục: {exc}"
+
+    async def _handle_pending_section_rename(
+        self,
+        rename: dict,
+        lower: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+    ) -> AsyncGenerator[dict, None]:
+        if lower not in CONFIRM_WORDS:
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
+                    yield ev
+            return
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        if not self._validate_pending_section_title(rename, titles, session_ctx):
+            async for ev in self._reprompt_pending_preview(
+                session_id,
+                EDITED_TITLES_REJECTED_REPLY,
+                delay,
+                editable_titles=[rename.get("merge") or rename["to"]],
+            ):
+                yield ev
+            return
+
+        args = {"topic": rename["topic"], "from_name": rename["from"], "to_name": rename["to"]}
+        yield {"type": "tool_start", "name": "rename_section", "args": {**args, "confirmed": True}}
+        ok, res_msg = await self._execute_pending_section_rename(rename, args, session_id)
+        yield {"type": "tool_end", "name": "rename_section", "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    async def _apply_pending_lesson_edit_inputs(
+        self,
+        edit: dict,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> tuple[bool, Optional[dict]]:
+        if titles is not None:
+            cleaned_title = self.extractor.clean_title(titles[0]) if len(titles) == 1 else ""
+            if len(titles) != 1 or not cleaned_title or cleaned_title.lower() in POINTING_WORDS:
+                session_ctx.pending_lesson_edit = edit
+                return False, {
+                    "editable_titles": [edit["new_title"]],
+                    "editable_target": {"section": edit.get("new_section") or ""},
+                }
+            edit["new_title"] = cleaned_title
+        if target is not None and "section" in target:
+            raw_sec = re.sub(r"\s+", " ", (target.get("section") or "")).strip().strip("\"'`“”‘’")
+            edit["new_section"] = None if (not raw_sec or raw_sec.lower() == "chung") else raw_sec
+        return True, None
+
+    @staticmethod
+    def _build_lesson_edit_kwargs(
+        old_title: str, new_title: str, old_section: Optional[str], new_section: Optional[str]
+    ) -> dict:
+        update_kwargs: dict = {}
+        if new_title != old_title:
+            update_kwargs["title"] = new_title
+        if (new_section or None) != (old_section or None) or (
+            new_section is not None and old_section is not None and new_section != old_section
+        ):
+            update_kwargs["section"] = new_section
+        return update_kwargs
+
+    @staticmethod
+    def _format_lesson_edit_success(
+        res: object, update_kwargs: dict, old_title: str, new_title: str, new_section: Optional[str]
+    ) -> tuple[str, str]:
+        final_title = (res.get("title") if isinstance(res, dict) else None) or new_title
+        final_sec = (
+            res.get("section") if isinstance(res, dict) and "section" in res else new_section
+        ) or GENERAL_SECTION
+        if "title" in update_kwargs and "section" in update_kwargs:
+            return final_title, f"✅ Đã cập nhật bài **{old_title}** → **{final_title}** (mục `{final_sec}`)."
+        if "title" in update_kwargs:
+            return final_title, f"✅ Đã đổi tên bài **{old_title}** → **{final_title}**."
+        return final_title, f"✅ Đã chuyển bài **{final_title}** sang mục `{final_sec}`."
+
+    async def _execute_pending_lesson_edit(
+        self, edit: dict, item_id: Any, update_kwargs: dict, session_id: str
+    ) -> tuple[bool, str]:
+        old_title = edit["old_title"]
+        new_title, new_section = edit["new_title"], edit.get("new_section")
+        try:
+            with write_granted("confirmed lesson edit"):
+                res = await get_adapter().update_item(item_id, **update_kwargs)
+            _schedule_rag_sync()
+            final_title, res_msg = self._format_lesson_edit_success(
+                res, update_kwargs, old_title, new_title, new_section
+            )
+            session_store.set_active_lesson(
+                session_id,
+                item_id,
+                final_title,
+                section=new_section if "section" in update_kwargs else None,
+                topic_slug=edit.get("topic"),
+                topic_title=edit.get("topic_title"),
+            )
+            return True, res_msg
+        except DuplicateEntityError as dup:
+            return False, f"ℹ️ Topic đã có bài **{dup.title}**, không đổi tên."
+        except Exception as exc:
+            return False, f"❌ Lỗi khi cập nhật bài học: {exc}"
+
+    @staticmethod
+    def _pending_confirm_guard(lower: str, cancel_msg: str) -> tuple[bool, Optional[str]]:
+        if lower not in CONFIRM_WORDS:
+            return False, (cancel_msg if lower in CANCEL_WORDS else None)
+        if not is_owner():
+            return False, OWNER_ONLY_MESSAGE
+        return True, None
+
+    async def _handle_pending_lesson_edit(
+        self,
+        edit: dict,
+        lower: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> AsyncGenerator[dict, None]:
+        proceed, guard_msg = self._pending_confirm_guard(lower, "Đã hủy bỏ thao tác theo yêu cầu của bạn.")
+        if not proceed:
+            if guard_msg is not None:
+                async for ev in self._stream_text(guard_msg, delay):
+                    yield ev
+            return
+        valid, reprompt_kwargs = await self._apply_pending_lesson_edit_inputs(
+            edit, session_id, session_ctx, delay, titles, target
+        )
+        if not valid and reprompt_kwargs is not None:
+            async for ev in self._reprompt_pending_preview(
+                session_id, EDITED_TITLES_REJECTED_REPLY, delay, **reprompt_kwargs
+            ):
+                yield ev
+            return
+
+        old_title, old_section = edit["old_title"], edit.get("old_section")
+        new_title, new_section = edit["new_title"], edit.get("new_section")
+        update_kwargs = self._build_lesson_edit_kwargs(old_title, new_title, old_section, new_section)
+        if not update_kwargs:
+            async for ev in self._stream_text(
+                f"Bài **{old_title}** đã có đúng tên và mục này rồi nên mình chưa đổi gì.", delay
+            ):
+                yield ev
+            return
+
+        item_id = edit["item_id"]
+        yield {"type": "tool_start", "name": "update_item", "args": {"item_id": item_id, **update_kwargs, "confirmed": True}}
+        ok, res_msg = await self._execute_pending_lesson_edit(edit, item_id, update_kwargs, session_id)
+        yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    async def _handle_pending_status_change(
+        self, status_change: dict, lower: str, session_id: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        if lower not in CONFIRM_WORDS:
+            if lower in CANCEL_WORDS:
+                async for ev in self._stream_text("Đã hủy bỏ thao tác đổi trạng thái theo yêu cầu của bạn.", delay):
+                    yield ev
+            return
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        item_id, item_title = status_change["item_id"], status_change["item_title"]
+        new_status = status_change["new_status"]
+        mark_reviewed = bool(status_change.get("mark_reviewed"))
+        tool_name = "mark_lesson_reviewed" if mark_reviewed else "update_item"
+        tool_args = (
+            {"item_id": item_id, "markReviewed": True, "confirmed": True}
+            if mark_reviewed
+            else {"item_id": item_id, "status": new_status, "confirmed": True}
+        )
+        yield {"type": "tool_start", "name": tool_name, "args": tool_args}
+        try:
+            from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
+
+            with write_granted("confirmed lesson review" if mark_reviewed else "confirmed lesson status change"):
+                if mark_reviewed:
+                    res = await get_adapter().update_item(item_id, markReviewed=True)
+                else:
+                    res = await get_adapter().update_item(item_id, status=new_status)
+            label = LESSON_STATUS_LABEL.get(new_status, new_status)
+            title = res.get("title", item_title) if isinstance(res, dict) else item_title
+            res_msg = (
+                f"✅ Đã đánh dấu đã ôn hôm nay cho bài '{title}'."
+                if mark_reviewed
+                else f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
+            )
+            ok = True
+            session_store.set_active_lesson(session_id, item_id, title, topic_slug=status_change.get("topic_slug"))
+        except Exception as exc:
+            ok, res_msg = False, f"❌ Lỗi khi cập nhật trạng thái bài: {exc}"
+        yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    def _preview_retry_args(self, pending_act: StructuredRoadmapAction) -> tuple[Optional[list[str]], Optional[dict]]:
+        retry_titles = (
+            [ent.title for ent in pending_act.entities]
+            if pending_act.action == ActionType.CREATE
+            else None
+        )
+        retry_target = (
+            {
+                "topic": pending_act.target_parent_identifier or "",
+                "section": (pending_act.entities[0].section if pending_act.entities else None) or "",
+            }
+            if pending_act.action == ActionType.CREATE and pending_act.entity_level == EntityLevel.ITEM
+            else None
+        )
+        return retry_titles, retry_target
+
+    async def _apply_confirmation_overrides(
+        self,
+        pending_act: StructuredRoadmapAction,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> tuple[Optional[StructuredRoadmapAction], Optional[str]]:
+        if titles is not None:
+            edited = self._with_edited_titles(pending_act, titles)
+            if edited is None:
+                return None, EDITED_TITLES_REJECTED_REPLY
+            pending_act = edited
+        if target is not None:
+            edited_act, err_msg = await self._with_edited_target(pending_act, target)
+            if err_msg is not None or edited_act is None:
+                return None, err_msg or EDITED_TARGET_REJECTED_REPLY
+            pending_act = edited_act
+        return pending_act, None
+
+    async def _handle_pending_confirmation_confirm(
+        self,
+        pending_act: StructuredRoadmapAction,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> AsyncGenerator[dict, None]:
+        if not is_owner():
+            session_ctx.pending_confirmation = None
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        updated_act, override_err = await self._apply_confirmation_overrides(pending_act, titles, target)
+        if override_err is not None or updated_act is None:
+            retry_titles, retry_target = self._preview_retry_args(pending_act)
+            async for ev in self._reprompt_pending_preview(
+                session_id,
+                override_err or EDITED_TARGET_REJECTED_REPLY,
+                delay,
+                editable_titles=retry_titles,
+                editable_target=retry_target,
+            ):
+                yield ev
+            return
+        pending_act = updated_act
+        session_ctx.pending_confirmation = None
+        tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
+        yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
+        changes = ChangeSet.of(pending_act)
+        ok, res_msg = await self._execute_change(
+            pending_act, session_id, session_ctx, changes, "confirmed preview"
+        )
+        yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    def _pop_simple_pending_stream(
+        self,
+        lower: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> Optional[AsyncGenerator[dict, None]]:
+        if mem_change := session_ctx.fresh_pending("pending_memory_change"):
+            session_ctx.pending_memory_change = None
+            return self._handle_pending_memory(mem_change, lower, delay)
+        if draft := session_ctx.fresh_pending("pending_content_draft"):
+            session_ctx.pending_content_draft = None
+            return self._handle_pending_content_draft(draft, lower, session_id, delay)
+        if rename := session_ctx.fresh_pending("pending_section_rename"):
+            session_ctx.pending_section_rename = None
+            return self._handle_pending_section_rename(rename, lower, session_id, session_ctx, delay, titles)
+        if edit := session_ctx.fresh_pending("pending_lesson_edit"):
+            session_ctx.pending_lesson_edit = None
+            return self._handle_pending_lesson_edit(edit, lower, session_id, session_ctx, delay, titles, target)
+        if status_change := session_ctx.fresh_pending("pending_status_change"):
+            session_ctx.pending_status_change = None
+            return self._handle_pending_status_change(status_change, lower, session_id, delay)
+        return None
+
+    async def _resolve_pending_confirmation_turn(
+        self,
+        lower: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        if lower in CONFIRM_WORDS:
+            async for ev in self._handle_pending_confirmation_confirm(
+                session_ctx.pending_confirmation, session_id, session_ctx, delay, titles, target
+            ):
+                yield ev
+            outcome["handled"] = True
+            return
+        if lower in CANCEL_WORDS:
+            session_ctx.pending_confirmation = None
+            async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
+                yield ev
+            outcome["handled"] = True
+            return
+        # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
+        session_ctx.pending_confirmation = None
+
     async def handle_pending(
         self, *, content: str, lower: str, session_id: str, session_ctx, delay: float, outcome: dict,
         titles: Optional[list[str]] = None,
         target: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
-        # A previewed Owner Memory create/archive (memory_commands.py, ADR-0015): "ok" applies it
-        if mem_change := session_ctx.fresh_pending("pending_memory_change"):
-            session_ctx.pending_memory_change = None
-            if lower in CONFIRM_WORDS:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                else:
-                    from rag_service.core.memory import KIND_LABELS, owner_memory_store
-
-                    op = mem_change.get("op")
-                    tool_name = "save_owner_memory" if op == "create" else "archive_owner_memory"
-                    yield {"type": "tool_start", "name": tool_name, "args": {"op": op, "confirmed": True}}
-                    try:
-                        if op == "create":
-                            saved = await owner_memory_store.create(
-                                kind=mem_change["kind"],
-                                content=mem_change["content"],
-                                scope=mem_change.get("scope_topic_slug"),
-                                source="explicit",
-                                status="active",
-                            )
-                            kind_label = KIND_LABELS.get(saved.kind, saved.kind)
-                            scope = f" *(topic: `{saved.scope}`)*" if saved.scope else ""
-                            res_msg = f"✅ Đã lưu vào Bộ nhớ Owner (**{kind_label}**{scope}): {saved.content}"
-                            ok = True
-                        else:
-                            archived = await owner_memory_store.archive(mem_change["memory_id"])
-                            if archived:
-                                res_msg = f"🗑️ Đã gỡ khỏi Bộ nhớ Owner: {mem_change['content']}"
-                                ok = True
-                            else:
-                                res_msg = "⚠️ Không tìm thấy mục bộ nhớ này (có thể đã được gỡ trước đó)."
-                                ok = False
-                    except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi cập nhật Bộ nhớ Owner: {exc}"
-                    yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
-                    async for ev in self._stream_text(res_msg, delay):
-                        yield ev
-                outcome["handled"] = True
-                return
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác bộ nhớ theo yêu cầu của bạn.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else drops the preview
-            return
-        # A previewed lesson body (lesson_content.py): "ok" adds it to the end of the lesson
-        if draft := session_ctx.fresh_pending("pending_content_draft"):
-            session_ctx.pending_content_draft = None
-            if lower in CONFIRM_WORDS:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                else:
-                    args = {
-                        "topic": draft["topic"],
-                        "item_id": draft["item_id"],
-                        "html": draft["html"],
-                        "write_mode": draft.get("write_mode", "append"),
-                        "target_h2": draft.get("target_h2"),
-                    }
-                    yield {"type": "tool_start", "name": "update_item_content",
-                           "args": {"topic": draft["topic"], "item_id": draft["item_id"], "confirmed": True}}
-                    try:
-                        with write_granted("confirmed lesson content draft"):
-                            res_msg = await update_item_content.coroutine(**args)
-                        ok = res_msg.startswith("✅")
-                        if ok:
-                            session_store.set_active_lesson(
-                                session_id,
-                                draft["item_id"],
-                                draft.get("title") or "",
-                                topic_slug=draft.get("topic"),
-                                topic_title=draft.get("topic_title"),
-                            )
-                    except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi ghi nội dung bài: {exc}"
-                    yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
-                    async for ev in self._stream_text(res_msg, delay):
-                        yield ev
-                outcome["handled"] = True
-                return
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã bỏ bản nháp, bài học không thay đổi.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else drops the draft
-            return
-        # A previewed section rename (sections.py): same words, its own pending field
-        if rename := session_ctx.fresh_pending("pending_section_rename"):
-            session_ctx.pending_section_rename = None
-            if lower in CONFIRM_WORDS:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                else:
-                    if titles is not None:
-                        if len(titles) != 1:
-                            session_ctx.pending_section_rename = rename
-                            async for ev in self._reprompt_pending_preview(
-                                session_id,
-                                EDITED_TITLES_REJECTED_REPLY,
-                                delay,
-                                editable_titles=[rename.get("merge") or rename["to"]],
-                            ):
-                                yield ev
-                            outcome["handled"] = True
-                            return
-                        cleaned_name = re.sub(r"\s+", " ", (titles[0] or "")).strip().strip("\"'`“”‘’")
-                        if not cleaned_name or cleaned_name.lower() in POINTING_WORDS:
-                            session_ctx.pending_section_rename = rename
-                            async for ev in self._reprompt_pending_preview(
-                                session_id,
-                                EDITED_TITLES_REJECTED_REPLY,
-                                delay,
-                                editable_titles=[rename.get("merge") or rename["to"]],
-                            ):
-                                yield ev
-                            outcome["handled"] = True
-                            return
-                        rename["to"] = cleaned_name
-                    args = {"topic": rename["topic"], "from_name": rename["from"], "to_name": rename["to"]}
-                    yield {"type": "tool_start", "name": "rename_section", "args": {**args, "confirmed": True}}
-                    try:
-                        with write_granted("confirmed section rename"):
-                            res_msg = await rename_section.coroutine(**args)
-                        ok = res_msg.startswith("✅")
-                        if ok and rename.get("topic"):
-                            session_store.set_active_topic(session_id, rename["topic"], rename.get("title") or "")
-                    except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi đổi tên mục: {exc}"
-                    yield {"type": "tool_end", "name": "rename_section", "result": res_msg, "is_error": not ok}
-                    async for ev in self._stream_text(res_msg, delay):
-                        yield ev
-                outcome["handled"] = True
-                return
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else drops the preview, like a pending create or delete below
-            return
-        # A previewed lesson title/section edit (lesson_edit.py): "ok" applies it via adapter.update_item
-        if edit := session_ctx.fresh_pending("pending_lesson_edit"):
-            session_ctx.pending_lesson_edit = None
-            if lower in CONFIRM_WORDS:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                else:
-                    if titles is not None:
-                        if len(titles) != 1:
-                            session_ctx.pending_lesson_edit = edit
-                            async for ev in self._reprompt_pending_preview(
-                                session_id,
-                                EDITED_TITLES_REJECTED_REPLY,
-                                delay,
-                                editable_titles=[edit["new_title"]],
-                                editable_target={"section": edit.get("new_section") or ""},
-                            ):
-                                yield ev
-                            outcome["handled"] = True
-                            return
-                        cleaned_title = self.extractor.clean_title(titles[0])
-                        if not cleaned_title or cleaned_title.lower() in POINTING_WORDS:
-                            session_ctx.pending_lesson_edit = edit
-                            async for ev in self._reprompt_pending_preview(
-                                session_id,
-                                EDITED_TITLES_REJECTED_REPLY,
-                                delay,
-                                editable_titles=[edit["new_title"]],
-                                editable_target={"section": edit.get("new_section") or ""},
-                            ):
-                                yield ev
-                            outcome["handled"] = True
-                            return
-                        edit["new_title"] = cleaned_title
-                    if target is not None and "section" in target:
-                        raw_sec = re.sub(r"\s+", " ", (target.get("section") or "")).strip().strip("\"'`“”‘’")
-                        edit["new_section"] = None if (not raw_sec or raw_sec.lower() == "chung") else raw_sec
-
-                    old_title = edit["old_title"]
-                    old_section = edit.get("old_section")
-                    new_title = edit["new_title"]
-                    new_section = edit.get("new_section")
-
-                    update_kwargs: dict = {}
-                    if new_title != old_title:
-                        update_kwargs["title"] = new_title
-                    if (new_section or None) != (old_section or None) or (
-                        new_section is not None and old_section is not None and new_section != old_section
-                    ):
-                        update_kwargs["section"] = new_section
-
-                    if not update_kwargs:
-                        async for ev in self._stream_text(
-                            f"Bài **{old_title}** đã có đúng tên và mục này rồi nên mình chưa đổi gì.", delay
-                        ):
-                            yield ev
-                        outcome["handled"] = True
-                        return
-
-                    item_id = edit["item_id"]
-                    yield {
-                        "type": "tool_start",
-                        "name": "update_item",
-                        "args": {"item_id": item_id, **update_kwargs, "confirmed": True},
-                    }
-                    try:
-                        with write_granted("confirmed lesson edit"):
-                            res = await get_adapter().update_item(item_id, **update_kwargs)
-                        asyncio.create_task(rag_engine.sync_live_database())
-                        final_title = (res.get("title") if isinstance(res, dict) else None) or new_title
-                        final_sec = (
-                            res.get("section") if isinstance(res, dict) and "section" in res else new_section
-                        ) or GENERAL_SECTION
-                        if "title" in update_kwargs and "section" in update_kwargs:
-                            res_msg = f"✅ Đã cập nhật bài **{old_title}** → **{final_title}** (mục `{final_sec}`)."
-                        elif "title" in update_kwargs:
-                            res_msg = f"✅ Đã đổi tên bài **{old_title}** → **{final_title}**."
-                        else:
-                            res_msg = f"✅ Đã chuyển bài **{final_title}** sang mục `{final_sec}`."
-                        ok = True
-                        session_store.set_active_lesson(
-                            session_id,
-                            item_id,
-                            final_title,
-                            section=new_section if "section" in update_kwargs else None,
-                            topic_slug=edit.get("topic"),
-                            topic_title=edit.get("topic_title"),
-                        )
-                    except DuplicateEntityError as dup:
-                        ok, res_msg = False, f"ℹ️ Topic đã có bài **{dup.title}**, không đổi tên."
-                    except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi cập nhật bài học: {exc}"
-                    yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
-                    async for ev in self._stream_text(res_msg, delay):
-                        yield ev
-                outcome["handled"] = True
-                return
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else drops the preview
-            return
-        # A previewed lesson status change (lesson_status.py): "ok" applies it via adapter.update_item
-        if status_change := session_ctx.fresh_pending("pending_status_change"):
-            session_ctx.pending_status_change = None
-            if lower in CONFIRM_WORDS:
-                if not is_owner():
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                else:
-                    item_id = status_change["item_id"]
-                    item_title = status_change["item_title"]
-                    new_status = status_change["new_status"]
-                    mark_reviewed = bool(status_change.get("mark_reviewed"))
-                    tool_name = "mark_lesson_reviewed" if mark_reviewed else "update_item"
-                    tool_args = (
-                        {"item_id": item_id, "markReviewed": True, "confirmed": True}
-                        if mark_reviewed
-                        else {"item_id": item_id, "status": new_status, "confirmed": True}
-                    )
-                    yield {
-                        "type": "tool_start",
-                        "name": tool_name,
-                        "args": tool_args,
-                    }
-                    try:
-                        from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
-
-                        with write_granted("confirmed lesson review" if mark_reviewed else "confirmed lesson status change"):
-                            if mark_reviewed:
-                                res = await get_adapter().update_item(item_id, markReviewed=True)
-                            else:
-                                res = await get_adapter().update_item(item_id, status=new_status)
-                        label = LESSON_STATUS_LABEL.get(new_status, new_status)
-                        title = res.get("title", item_title) if isinstance(res, dict) else item_title
-                        res_msg = (
-                            f"✅ Đã đánh dấu đã ôn hôm nay cho bài '{title}'."
-                            if mark_reviewed
-                            else f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
-                        )
-                        ok = True
-                        session_store.set_active_lesson(
-                            session_id,
-                            item_id,
-                            title,
-                            topic_slug=status_change.get("topic_slug"),
-                        )
-                    except Exception as exc:
-                        ok, res_msg = False, f"❌ Lỗi khi cập nhật trạng thái bài: {exc}"
-                    yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
-                    async for ev in self._stream_text(res_msg, delay):
-                        yield ev
-                outcome["handled"] = True
-                return
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác đổi trạng thái theo yêu cầu của bạn.", delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else drops the preview, like other pending actions
+        if stream := self._pop_simple_pending_stream(lower, session_id, session_ctx, delay, titles, target):
+            async for ev in stream:
+                yield ev
+            outcome["handled"] = lower in CONFIRM_WORDS or lower in CANCEL_WORDS
             return
         # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
         if session_ctx.fresh_pending("pending_confirmation"):
-            if lower in CONFIRM_WORDS:
-                pending_act = session_ctx.pending_confirmation
-                if not is_owner():
-                    session_ctx.pending_confirmation = None
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                    outcome["handled"] = True
-                    return
-                if titles is not None:
-                    edited = self._with_edited_titles(pending_act, titles)
-                    if edited is None:
-                        # The preview stays pending: re-emit the preview so the Owner can fix the inputs and confirm again
-                        retry_titles = (
-                            [ent.title for ent in pending_act.entities]
-                            if pending_act.action == ActionType.CREATE
-                            else None
-                        )
-                        retry_target = (
-                            {
-                                "topic": pending_act.target_parent_identifier or "",
-                                "section": (pending_act.entities[0].section if pending_act.entities else None) or "",
-                            }
-                            if pending_act.action == ActionType.CREATE and pending_act.entity_level == EntityLevel.ITEM
-                            else None
-                        )
-                        async for ev in self._reprompt_pending_preview(
-                            session_id,
-                            EDITED_TITLES_REJECTED_REPLY,
-                            delay,
-                            editable_titles=retry_titles,
-                            editable_target=retry_target,
-                        ):
-                            yield ev
-                        outcome["handled"] = True
-                        return
-                    pending_act = edited
-                if target is not None:
-                    edited_act, err_msg = await self._with_edited_target(pending_act, target)
-                    if err_msg is not None or edited_act is None:
-                        retry_titles = (
-                            [ent.title for ent in pending_act.entities]
-                            if pending_act.action == ActionType.CREATE
-                            else None
-                        )
-                        retry_target = (
-                            {
-                                "topic": pending_act.target_parent_identifier or "",
-                                "section": (pending_act.entities[0].section if pending_act.entities else None) or "",
-                            }
-                            if pending_act.action == ActionType.CREATE and pending_act.entity_level == EntityLevel.ITEM
-                            else None
-                        )
-                        async for ev in self._reprompt_pending_preview(
-                            session_id,
-                            err_msg or EDITED_TARGET_REJECTED_REPLY,
-                            delay,
-                            editable_titles=retry_titles,
-                            editable_target=retry_target,
-                        ):
-                            yield ev
-                        outcome["handled"] = True
-                        return
-                    pending_act = edited_act
-                session_ctx.pending_confirmation = None
-                tool_name = f"{pending_act.action.value}_{pending_act.entity_level.value}"
-                yield {"type": "tool_start", "name": tool_name, "args": {"confirmed": True}}
-                changes = ChangeSet.of(pending_act)
-                ok, res_msg = await self._execute_change(
-                    pending_act, session_id, session_ctx, changes, "confirmed preview"
-                )
-                yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
-                if changes:
-                    yield changes.event()
-                async for ev in self._stream_text(res_msg, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            elif lower in CANCEL_WORDS:
-                session_ctx.pending_confirmation = None
-                cancel_msg = "Đã hủy bỏ thao tác theo yêu cầu của bạn."
-                async for ev in self._stream_text(cancel_msg, delay):
-                    yield ev
-                outcome["handled"] = True
-                return
-            # Anything else: drop the pending action so a later "ok" cannot run a stale delete.
-            session_ctx.pending_confirmation = None
-        elif lower in CONFIRM_WORDS:
+            async for ev in self._resolve_pending_confirmation_turn(
+                lower, session_id, session_ctx, delay, titles, target, outcome
+            ):
+                yield ev
+            return
+        if lower in CONFIRM_WORDS:
             # 2026-11-04, live: an "ok" after the preview was dropped went to chitchat, which answered
             # "Đã xóa bài học Reranking" from the history while nothing was deleted.
             async for ev in self._stream_text(NOTHING_PENDING_REPLY, delay):
@@ -670,32 +740,83 @@ class RoadmapCommands(AgentHostMixin):
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 
-    async def handle_cud(
-        self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float,
-        gate: Optional[WriteGate] = None,
-        verdict=None,
-    ) -> AsyncGenerator[dict, None]:
-        """Roadmap create/delete: extract the action, ask back when a target is unclear, then confirm or run it.
+    async def _resolve_delete_item_for_cud(
+        self, resolved_action: StructuredRoadmapAction, page_context
+    ) -> tuple[bool, Optional[str], Optional[dict]]:
+        if resolved_action.is_batch or len(resolved_action.entities) != 1:
+            return False, batch_entity_delete_reply("bài học"), None
+        name = resolved_action.entities[0].title
+        page_slug = (page_context or {}).get("roadmapSlug")
+        found = await resolve_lesson(name, topic_slug=page_slug)
+        if found.status != "found" or not found.lesson_id:
+            return False, unresolved_entity_reply("bài học", name, found.candidates), None
+        resolved_action.target_parent_identifier = found.lesson_id
+        resolved_action.entities[0].title = found.title or name
+        item_snapshot = await snapshot_before_delete(get_adapter(), "item", found.lesson_id, topic_slug=page_slug)
+        if item_snapshot:
+            resolved_action.entities[0].section = item_snapshot.get("section")
+        return True, None, item_snapshot
 
-        `gate` is the route-level write decision (write_gate.gate_route); gate_action refines it for the extracted change.
-        """
+    async def _resolve_create_item_parent_topic(
+        self,
+        resolved_action: StructuredRoadmapAction,
+        content: str,
+        note: Optional[str],
+        page_context,
+        session_ctx,
+    ) -> tuple[bool, Optional[str], Optional[str]]:
+        topic_ref = resolved_action.target_parent_identifier
+        if not topic_ref or topic_ref in ANAPHORA_TARGETS:
+            topic_ref = (
+                await topic_named_in_message(content)
+                or (page_context or {}).get("roadmapSlug")
+                or session_ctx.active_topic_slug
+            )
+        found_topic = await resolve_topic(topic_ref) if topic_ref else None
+        if found_topic is not None and found_topic.status == "not_found" and names_section(content, topic_ref):
+            for ent in resolved_action.entities:
+                ent.section = ent.section or topic_ref
+            topic_ref = (
+                await topic_named_in_message(content)
+                or (page_context or {}).get("roadmapSlug")
+                or session_ctx.active_topic_slug
+            )
+            found_topic = await resolve_topic(topic_ref) if topic_ref else None
+            if found_topic is None:
+                return False, None, note
+        if found_topic is not None and found_topic.status == "found" and found_topic.slug:
+            topic_ref = found_topic.slug
+            if note == "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic.":
+                note = None
+            elif note and note.startswith("Tự động gắn vào topic:") and found_topic.title:
+                note = f"Tự động gắn vào topic: **{found_topic.title}**"
+        elif found_topic is not None and found_topic.status in ("not_found", "ambiguous"):
+            return False, topic_ref, note
+        if not topic_ref or not await self._topic_known(topic_ref):
+            return False, topic_ref, note
+        resolved_action.target_parent_identifier = topic_ref
+        return True, None, note
+
+    async def _extract_and_gate_cud(
+        self,
+        *,
+        content: str,
+        lower: str,
+        page_context,
+        session_id: str,
+        gate: Optional[WriteGate],
+        verdict,
+    ) -> tuple[StructuredRoadmapAction, Any, WriteGate, Optional[str]]:
         gate = gate or WriteGate(WRITE_ALLOW)
-        # Visitors may read roadmaps but never change them (writes use ADMIN_API_KEY)
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
-        # System 2 already read the change (router/verifier.py): reuse it, no second extraction call.
         verified = getattr(verdict, "change", None) if verdict is not None and verdict.is_roadmap_change else None
-        if verified is not None and verified.entities:
-            action: StructuredRoadmapAction = self.extractor.from_verified(verified, text=content)
-        else:
-            action = await self.extractor.aextract(content, page_context=build_grounding(page_context))
+        action = (
+            self.extractor.from_verified(verified, text=content)
+            if verified is not None and verified.entities
+            else await self.extractor.aextract(content, page_context=build_grounding(page_context))
+        )
         resolved_action, note = AnaphoraResolver.resolve_action(
             action, session_id=session_id, page_context=page_context
         )
-
-        # One write decision for this change (write_gate.py): denied changes stop here with the reason as reply
         gate = gate_action(gate, resolved_action, content, lower)
         if gate.denied:
             reply = {
@@ -705,104 +826,37 @@ class RoadmapCommands(AgentHostMixin):
                 ACTION_NOT_ASKED: ACTION_NOT_ASKED_REPLY,
                 TARGET_MISSING: TARGET_MISSING_REPLY,
             }.get(gate.reason or "", BLOCKED_CHANGE_REPLY)
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        # The executor runs create and delete only: a change it cannot run is answered, never previewed
+            return resolved_action, note, gate, reply
         if resolved_action.action == ActionType.UPDATE:
-            async for ev in self._stream_text(UPDATE_NOT_SUPPORTED_REPLY, delay):
-                yield ev
-            return
+            return resolved_action, note, gate, UPDATE_NOT_SUPPORTED_REPLY
+        return resolved_action, note, gate, None
 
-        # A lesson to delete is named, but the API takes its id: resolve it before the preview names it
+    async def _prepare_cud_delete(
+        self, resolved_action: StructuredRoadmapAction, note, page_context
+    ) -> tuple[Optional[str], Any, Optional[dict]]:
         item_snapshot = None
-        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.ITEM:
-            if resolved_action.is_batch or len(resolved_action.entities) != 1:
-                async for ev in self._stream_text(batch_entity_delete_reply("bài học"), delay):
-                    yield ev
-                return
-            name = resolved_action.entities[0].title
-            page_slug = (page_context or {}).get("roadmapSlug")
-            found = await resolve_lesson(name, topic_slug=page_slug)
-            if found.status != "found" or not found.lesson_id:
-                async for ev in self._stream_text(unresolved_entity_reply("bài học", name, found.candidates), delay):
-                    yield ev
-                return
-            resolved_action.target_parent_identifier = found.lesson_id
-            resolved_action.entities[0].title = found.title or name
-            note = None  # the topic the anaphora resolver filled in is not where the delete goes
-            item_snapshot = await snapshot_before_delete(get_adapter(), "item", found.lesson_id, topic_slug=page_slug)
-            if item_snapshot:
-                resolved_action.entities[0].section = item_snapshot.get("section")
-
-        # A topic delete names the topic: resolve it so the preview names the right one
-        if resolved_action.action == ActionType.DELETE and resolved_action.entity_level == EntityLevel.TOPIC:
+        if resolved_action.entity_level == EntityLevel.ITEM:
+            ok_item, err_reply, item_snapshot = await self._resolve_delete_item_for_cud(resolved_action, page_context)
+            if not ok_item:
+                return err_reply or "", None, None
+            return None, None, item_snapshot
+        if resolved_action.entity_level == EntityLevel.TOPIC:
             ref = resolved_action.target_parent_identifier or (
                 resolved_action.entities[0].title if resolved_action.entities else ""
             )
             deleted_topic = await resolve_topic(ref)
             if deleted_topic.status == "found" and deleted_topic.slug:
                 resolved_action.target_parent_identifier = deleted_topic.slug
+        return None, note, item_snapshot
 
-        # A delete to confirm is previewed once its target is resolved (the preview names it)
-        if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
-            async for ev in self._ask_confirmation(
-                resolved_action, note, session_id, session_ctx, delay, snapshot=item_snapshot
-            ):
-                yield ev
-            return
-
-        # A lesson needs a topic: the one named in the message, the open page, or the session's; else ask.
-        is_item_create = resolved_action.entity_level == EntityLevel.ITEM and resolved_action.action == ActionType.CREATE
-        if is_item_create:
-            topic_ref = resolved_action.target_parent_identifier
-            if not topic_ref or topic_ref in ANAPHORA_TARGETS:
-                topic_ref = (
-                    await topic_named_in_message(content)
-                    or (page_context or {}).get("roadmapSlug")
-                    or session_ctx.active_topic_slug
-                )
-            # The extracted topic is often its title ("QA Sandbox") and the API takes the slug: resolve it.
-            # A name that matches no topic, or several, is asked back; an unavailable list leaves it to the check below.
-            found_topic = await resolve_topic(topic_ref) if topic_ref else None
-            # "thêm bài X mục Tools": the extractor may take the section for the topic. A name that is no topic
-            # and follows "mục" in the message is the section; the topic then comes from the message, page or session.
-            if found_topic is not None and found_topic.status == "not_found" and names_section(content, topic_ref):
-                for ent in resolved_action.entities:
-                    ent.section = ent.section or topic_ref
-                topic_ref = (
-                    await topic_named_in_message(content)
-                    or (page_context or {}).get("roadmapSlug")
-                    or session_ctx.active_topic_slug
-                )
-                found_topic = await resolve_topic(topic_ref) if topic_ref else None
-                if found_topic is None:
-                    async for ev in self._ask_topic_choice(resolved_action, None, delay):
-                        yield ev
-                    return
-            if found_topic is not None and found_topic.status == "found" and found_topic.slug:
-                topic_ref = found_topic.slug
-                if note == "Chưa có topic nào được chọn. Vui lòng chỉ định rõ tên topic.":
-                    note = None
-                elif note and note.startswith("Tự động gắn vào topic:") and found_topic.title:
-                    note = f"Tự động gắn vào topic: **{found_topic.title}**"
-            elif found_topic is not None and found_topic.status in ("not_found", "ambiguous"):
-                async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
-                    yield ev
-                return
-            if not topic_ref or not await self._topic_known(topic_ref):
-                async for ev in self._ask_topic_choice(resolved_action, topic_ref, delay):
-                    yield ev
-                return
-            resolved_action.target_parent_identifier = topic_ref
-
-        # Every create and every polite/conditional change shows a preview card with editable inputs first
-        if gate.mode == WRITE_CONFIRM or resolved_action.action == ActionType.CREATE:
-            async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
-                yield ev
-            return
-
+    async def _execute_and_stream_cud(
+        self,
+        resolved_action: StructuredRoadmapAction,
+        note,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
         if resolved_action.is_batch and resolved_action.entity_level == EntityLevel.ITEM:
             tool_name = f"{resolved_action.action.value}_items_batch"
         else:
@@ -824,10 +878,91 @@ class RoadmapCommands(AgentHostMixin):
         if changes:
             yield changes.event()
 
-        full_reply = result_msg
-        if note:
-            full_reply = f"> 💡 _{note}_\n\n" + full_reply
-
+        full_reply = f"> 💡 _{note}_\n\n{result_msg}" if note else result_msg
         async for ev in self._stream_text(full_reply, delay):
             yield ev
-        return
+
+    async def _run_prepared_cud(
+        self,
+        *,
+        resolved_action: StructuredRoadmapAction,
+        note,
+        gate: WriteGate,
+        item_snapshot: Optional[dict],
+        content: str,
+        page_context,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:
+            async for ev in self._ask_confirmation(
+                resolved_action, note, session_id, session_ctx, delay, snapshot=item_snapshot
+            ):
+                yield ev
+            return
+
+        if resolved_action.entity_level == EntityLevel.ITEM and resolved_action.action == ActionType.CREATE:
+            ok_topic, bad_ref, note = await self._resolve_create_item_parent_topic(
+                resolved_action, content, note, page_context, session_ctx
+            )
+            if not ok_topic:
+                async for ev in self._ask_topic_choice(resolved_action, bad_ref, delay):
+                    yield ev
+                return
+
+        if gate.mode == WRITE_CONFIRM or resolved_action.action == ActionType.CREATE:
+            async for ev in self._ask_confirmation(resolved_action, note, session_id, session_ctx, delay):
+                yield ev
+            return
+
+        async for ev in self._execute_and_stream_cud(resolved_action, note, session_id, session_ctx, delay):
+            yield ev
+
+    async def handle_cud(
+        self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float,
+        gate: Optional[WriteGate] = None,
+        verdict=None,
+    ) -> AsyncGenerator[dict, None]:
+        """Roadmap create/delete: extract the action, ask back when a target is unclear, then confirm or run it.
+
+        `gate` is the route-level write decision (write_gate.gate_route); gate_action refines it for the extracted change.
+        """
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+
+        resolved_action, note, gate, block_reply = await self._extract_and_gate_cud(
+            content=content,
+            lower=lower,
+            page_context=page_context,
+            session_id=session_id,
+            gate=gate,
+            verdict=verdict,
+        )
+        if block_reply is not None:
+            async for ev in self._stream_text(block_reply, delay):
+                yield ev
+            return
+
+        item_snapshot = None
+        if resolved_action.action == ActionType.DELETE:
+            err_reply, note, item_snapshot = await self._prepare_cud_delete(resolved_action, note, page_context)
+            if err_reply is not None:
+                async for ev in self._stream_text(err_reply, delay):
+                    yield ev
+                return
+
+        async for ev in self._run_prepared_cud(
+            resolved_action=resolved_action,
+            note=note,
+            gate=gate,
+            item_snapshot=item_snapshot,
+            content=content,
+            page_context=page_context,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+        ):
+            yield ev

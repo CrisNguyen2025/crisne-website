@@ -9,6 +9,17 @@ const STATIC_GENERATED_FILES = [
   '.agents/hooks.json',
 ];
 
+function hasGeneratedMarker(fullPath) {
+  if (!fs.existsSync(fullPath)) return false;
+  try {
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    const lines = content.split('\n').slice(0, 40);
+    return lines.some((line) => line.trim().startsWith(GENERATED_MARKER));
+  } catch {
+    return false;
+  }
+}
+
 function isGeneratedFile(repoRoot, relPath) {
   const normalized = path.posix.normalize(relPath.replace(/\\/g, '/')).replace(/^\.\//, '');
   const lower = normalized.toLowerCase();
@@ -17,27 +28,14 @@ function isGeneratedFile(repoRoot, relPath) {
     return true;
   }
 
-  if (lower.startsWith('.claude/agents/') && lower.endsWith('.md')) {
-    const parts = normalized.split('/');
-    if (parts.length === 3) {
-      const fullPath = path.resolve(repoRoot, normalized);
-      if (fs.existsSync(fullPath)) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const lines = content.split('\n').slice(0, 40);
-          for (const line of lines) {
-            if (line.trim().startsWith(GENERATED_MARKER)) {
-              return true;
-            }
-          }
-        } catch {
-          return false;
-        }
-      }
-    }
+  if (!lower.startsWith('.claude/agents/') || !lower.endsWith('.md')) {
+    return false;
   }
-
-  return false;
+  const parts = normalized.split('/');
+  if (parts.length !== 3) {
+    return false;
+  }
+  return hasGeneratedMarker(path.resolve(repoRoot, normalized));
 }
 
 module.exports = {

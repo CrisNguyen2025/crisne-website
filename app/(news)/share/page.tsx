@@ -49,21 +49,30 @@ interface SharePageProps {
   }>;
 }
 
+async function buildShareCallbackUrl(
+  searchParams: SharePageProps["searchParams"]
+): Promise<string> {
+  const sp = await searchParams;
+  const qs = new URLSearchParams();
+  if (sp.url) qs.set("url", sp.url);
+  if (sp.title) qs.set("title", sp.title);
+  if (sp.text) qs.set("text", sp.text);
+  const qsStr = qs.toString();
+  return qsStr ? `/share?${qsStr}` : "/share";
+}
+
+async function ensureShareOwnerAccess(
+  searchParams: SharePageProps["searchParams"]
+): Promise<void> {
+  if (isDevOwnerBypass()) return;
+  const session = await auth();
+  if (session?.user?.email && isOwnerEmail(session.user.email)) return;
+  const callbackUrl = await buildShareCallbackUrl(searchParams);
+  redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+}
+
 export default async function SharePage({ searchParams }: SharePageProps) {
-  if (!isDevOwnerBypass()) {
-    const session = await auth();
-    if (!session?.user?.email || !isOwnerEmail(session.user.email)) {
-      const sp = await searchParams;
-      // Build callbackUrl with full query string so middleware can redirect back
-      const qs = new URLSearchParams();
-      if (sp.url) qs.set("url", sp.url);
-      if (sp.title) qs.set("title", sp.title);
-      if (sp.text) qs.set("text", sp.text);
-      const qs_str = qs.toString();
-      const callbackUrl = qs_str ? `/share?${qs_str}` : "/share";
-      redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-    }
-  }
+  await ensureShareOwnerAccess(searchParams);
 
   const sp = await searchParams;
 

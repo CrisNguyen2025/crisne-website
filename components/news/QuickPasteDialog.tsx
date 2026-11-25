@@ -212,11 +212,13 @@ export function QuickPasteDialog({ open, onClose, onIngested }: QuickPasteDialog
           <ul className="divide-y divide-border/70 rounded-xl border border-border bg-background text-xs motion-safe:animate-in motion-safe:fade-in duration-150">
             {results.map((row) => (
               <li key={row.url} className="flex items-start gap-2.5 px-3.5 py-2.5">
-                {row.kind === "error" ? (
+                {row.kind === "error" && (
                   <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-                ) : row.kind === "duplicate" ? (
+                )}
+                {row.kind === "duplicate" && (
                   <Clock className="mt-0.5 size-3.5 shrink-0 text-[var(--status-learning)]" aria-hidden="true" />
-                ) : (
+                )}
+                {row.kind !== "error" && row.kind !== "duplicate" && (
                   <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[var(--status-known)]" aria-hidden="true" />
                 )}
                 <div className="min-w-0 flex-1">

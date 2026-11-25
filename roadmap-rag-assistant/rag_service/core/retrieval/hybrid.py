@@ -300,32 +300,46 @@ class HybridVectorStore:
         self.conn, self._docs_map, self._vectors = conn, docs_map, vectors
         return self._generation
 
+    def _apply_cached_vector_if_current(
+        self,
+        doc_id: str,
+        key: str,
+        vec: list[float],
+        generation: Optional[int],
+    ) -> bool:
+        if generation is not None and self._generation != generation:
+            return False
+        cur_doc = self._docs_map.get(doc_id)
+        if cur_doc is None or _embedding_key(cur_doc.searchable_text) != key:
+            return False
+        self._vectors[doc_id] = vec
+        return True
+
+    def _hydrate_vectors_from_cache(
+        self,
+        cache: dict[str, list[float]],
+        generation: Optional[int],
+    ) -> list[tuple[str, str, str]]:
+        missing: list[tuple[str, str, str]] = []
+        for doc_id, doc in list(self._docs_map.items()):
+            if doc_id in self._vectors:
+                continue
+            key = _embedding_key(doc.searchable_text)
+            if key in cache and self._apply_cached_vector_if_current(
+                doc_id, key, cache[key], generation
+            ):
+                continue
+            missing.append((doc_id, key, _nfc(doc.searchable_text)[:1000]))
+        return missing
+
     def embed_missing_documents(self, generation: Optional[int] = None) -> int:
         """Phase 2: Embed documents whose vectors are missing from cache."""
         embedder = self._get_embedder()
-        if embedder is None:
-            return 0
-
-        if generation is not None and self._generation != generation:
+        if embedder is None or (generation is not None and self._generation != generation):
             return 0
 
         cache = _load_embedding_cache()
-
-        for doc_id, doc in list(self._docs_map.items()):
-            if doc_id not in self._vectors:
-                key = _embedding_key(doc.searchable_text)
-                if key in cache:
-                    if generation is None or self._generation == generation:
-                        cur_doc = self._docs_map.get(doc_id)
-                        if cur_doc is not None and _embedding_key(cur_doc.searchable_text) == key:
-                            self._vectors[doc_id] = cache[key]
-
-        missing: list[tuple[str, str, str]] = []
-        for doc_id, doc in list(self._docs_map.items()):
-            if doc_id not in self._vectors:
-                key = _embedding_key(doc.searchable_text)
-                missing.append((doc_id, key, _nfc(doc.searchable_text)[:1000]))
-
+        missing = self._hydrate_vectors_from_cache(cache, generation)
         if not missing:
             return 0
 
@@ -334,22 +348,16 @@ class HybridVectorStore:
             for n, (doc_id, key, text) in enumerate(missing, start=1):
                 if generation is not None and self._generation != generation:
                     break
-
-                if key in cache:
-                    vec = cache[key]
-                else:
+                vec = cache.get(key)
+                if vec is None:
                     vec = _embed_with_quota_retry(embedder, text)
                     cache[key] = vec
                     if n % 20 == 0:
                         _save_embedding_cache(cache)
                     if n < len(missing):
                         time.sleep(EMBEDDING_REQUEST_INTERVAL)
-
-                if generation is None or self._generation == generation:
-                    cur_doc = self._docs_map.get(doc_id)
-                    if cur_doc is not None and _embedding_key(cur_doc.searchable_text) == key:
-                        self._vectors[doc_id] = vec
-                        embedded_count += 1
+                if self._apply_cached_vector_if_current(doc_id, key, vec, generation):
+                    embedded_count += 1
             _save_embedding_cache(cache)
         except Exception:
             _save_embedding_cache(cache)

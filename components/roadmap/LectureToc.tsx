@@ -131,24 +131,7 @@ function LectureTocLinks({
             <a
               href={`#${h.id}`}
               onClick={(e) => onJump(e, h.id)}
-              className={cn(
-                "block font-normal leading-snug transition-colors duration-150",
-                isRail
-                  ? cn(
-                      "-ml-[0.0625rem] border-l-2 py-0.5",
-                      h.level === 3 ? "pl-5" : "pl-3.5",
-                      isActive
-                        ? "border-[var(--editorial-accent)] text-[var(--editorial-accent)]"
-                        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-                    )
-                  : cn(
-                      "rounded-md py-1 px-2",
-                      h.level === 3 && "pl-5",
-                      isActive
-                        ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
-                        : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
-                    )
-              )}
+              className={getTocLinkClass(isRail, h.level, isActive)}
             >
               {h.text}
             </a>
@@ -156,6 +139,28 @@ function LectureTocLinks({
         );
       })}
     </ul>
+  );
+}
+
+function getTocLinkClass(isRail: boolean, level: number, isActive: boolean): string {
+  const base = "block font-normal leading-snug transition-colors duration-150";
+  if (isRail) {
+    return cn(
+      base,
+      "-ml-[0.0625rem] border-l-2 py-0.5",
+      level === 3 ? "pl-5" : "pl-3.5",
+      isActive
+        ? "border-[var(--editorial-accent)] text-[var(--editorial-accent)]"
+        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
+    );
+  }
+  return cn(
+    base,
+    "rounded-md py-1 px-2",
+    level === 3 && "pl-5",
+    isActive
+      ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
+      : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
   );
 }
 

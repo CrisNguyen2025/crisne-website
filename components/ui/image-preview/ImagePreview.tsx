@@ -241,6 +241,9 @@ export function ImagePreview({
 
   if (!shouldRender) return null;
 
+  let containerCursor = 'default';
+  if (scale > 1) containerCursor = isDragging ? 'grabbing' : 'grab';
+
   return (
     <div
       aria-hidden={!visible || undefined}
@@ -373,7 +376,7 @@ export function ImagePreview({
         onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
         style={{
-          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
+          cursor: containerCursor,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- interactive zoom/pan/rotate fullscreen preview for arbitrary image URLs */}

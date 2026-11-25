@@ -101,62 +101,41 @@ def is_write_candidate(gate: WriteGate) -> bool:
     return gate.mode in (WRITE_ALLOW, WRITE_CONFIRM) or (gate.denied and gate.reason == UNCONFIRMED_GUESS)
 
 
-async def decide_route(
-    router: IntentRouter,
+async def _check_scope_route(
+    decision,
     content: str,
-    history: Sequence[Any] = (),
-    *,
-    verifier_llm: Any = None,
-    catalog: Optional[Catalog] = None,
-    page_context: Optional[dict] = None,
-    owner: bool = True,
-    scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]] = None,
-) -> RouteOutcome:
-    # P3 reads a place named without its noun ("layer trong fe") against the roadmap's own topics and layers
-    if catalog is not None:
-        router.known_place = catalog.has_place
-    decision = router.decide(content)
-    # A declined change ("thôi khỏi tạo topic X", "đừng xóa bài Y") is settled by the heuristics: nothing is
-    # changed and the reply says so, with no LLM router call. Hypothetical or reported changes are often real
-    # questions ("nếu xóa layer 1 thì sao?"), so they keep routing.
-    if decision.write == WRITE_DENY and decision.understanding.write_blocker == "negation":
-        declined = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
-        return RouteOutcome(declined, "heuristic", decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE))
-    # P8: a change that cannot be made as asked is answered here, with no model call: its content names no kind
-    # of entity ("tạo thông tin cho topic"), or it asks for a description update, which is set at create only
-    unsupported = _unsupported_change(decision.understanding)
-    if unsupported is not None:
-        ask = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
-        return RouteOutcome(ask, "heuristic", decision, WriteGate(WRITE_DENY, unsupported))
-    scope: Optional[ScopeResult] = None
+    scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]],
+) -> tuple[Optional[ScopeResult], Optional[RouteOutcome]]:
     # Keywords named no target: read it from the roadmap's data (scope.py). An outside topic is answered
     # "out of scope" here, before the LLM router, retrieval or System 2 is called.
-    # A Lesson Status or catalog question is about the Owner's data or the roadmap's structure, not a topic of the
-    # field: the table already read it, so it skips the scope check (one embedding call saved, no "out of scope")
     if (
-        scope_fn is not None
-        and decision.understanding.target == Target.NONE
-        and decision.sub_intent not in (KnowledgeSubIntent.LESSON_STATUS, KnowledgeSubIntent.CATALOG)
+        scope_fn is None
+        or decision.understanding.target != Target.NONE
+        or decision.sub_intent in (KnowledgeSubIntent.LESSON_STATUS, KnowledgeSubIntent.CATALOG)
     ):
-        scope = await scope_fn(content)
-        if out_of_scope_act(decision.understanding.act.value, scope.scope):
-            out = IntentClassificationResult(intent=IntentType.OUT_OF_SCOPE, confidence=0.9, needs_cud_extraction=False)
-            return RouteOutcome(out, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
-        # A question about the roadmap's field that the heuristics left open: a search, no LLM router needed
-        if decision.intent is None and search_act(decision.understanding.act.value, scope.scope):
-            found = IntentClassificationResult(intent=IntentType.KNOWLEDGE_QUERY, confidence=0.85, needs_cud_extraction=False)
-            return RouteOutcome(found, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
-    intent_res, method = await router.aroute(content, history)
-    gate = gate_route(
-        intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write
-    )
-    if not is_write_candidate(gate):
-        return RouteOutcome(intent_res, method, decision, gate, scope=scope)
-    # A visitor can never write: the change handler answers "owner only" before extracting anything,
-    # so System 2 is not called (a visitor sending change-like messages cannot spend the model's quota)
-    if not owner:
-        return RouteOutcome(intent_res, method, decision, gate, scope=scope)
+        return None, None
+    scope = await scope_fn(content)
+    if out_of_scope_act(decision.understanding.act.value, scope.scope):
+        out = IntentClassificationResult(intent=IntentType.OUT_OF_SCOPE, confidence=0.9, needs_cud_extraction=False)
+        return scope, RouteOutcome(out, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
+    if decision.intent is None and search_act(decision.understanding.act.value, scope.scope):
+        found = IntentClassificationResult(intent=IntentType.KNOWLEDGE_QUERY, confidence=0.85, needs_cud_extraction=False)
+        return scope, RouteOutcome(found, "scope", decision, WriteGate(WRITE_NONE), scope=scope)
+    return scope, None
 
+
+async def _finalize_write_route(
+    intent_res: IntentClassificationResult,
+    method: str,
+    decision,
+    gate: WriteGate,
+    scope: Optional[ScopeResult],
+    verifier_llm: Any,
+    content: str,
+    history: Sequence[Any],
+    catalog: Optional[Catalog],
+    page_context: Optional[dict],
+) -> RouteOutcome:
     verdict = await verify_write(verifier_llm, content, history, build_grounding(page_context))
     grounding = (
         ground_change(verdict, catalog or Catalog(), page_context)
@@ -178,8 +157,10 @@ async def decide_route(
             needs_cud_extraction=True,
             needs_confirmation=mode == WRITE_CONFIRM,
         )
-        return RouteOutcome(cud, method, decision, WriteGate(mode, None if mode == WRITE_ALLOW else plan.reason),
-                            plan, verdict, grounding, scope=scope)
+        return RouteOutcome(
+            cud, method, decision, WriteGate(mode, None if mode == WRITE_ALLOW else plan.reason),
+            plan, verdict, grounding, scope=scope,
+        )
     if plan.outcome == KEEP:
         return RouteOutcome(intent_res, method, decision, gate, plan, verdict, grounding, scope=scope)
     if plan.outcome == BLOCKED:
@@ -192,3 +173,40 @@ async def decide_route(
         needs_cud_extraction=False,
     )
     return RouteOutcome(rerouted, f"{method}+reroute", decision, WriteGate(WRITE_NONE), plan, verdict, grounding, scope=scope)
+
+
+async def decide_route(
+    router: IntentRouter,
+    content: str,
+    history: Sequence[Any] = (),
+    *,
+    verifier_llm: Any = None,
+    catalog: Optional[Catalog] = None,
+    page_context: Optional[dict] = None,
+    owner: bool = True,
+    scope_fn: Optional[Callable[[str], Awaitable[ScopeResult]]] = None,
+) -> RouteOutcome:
+    if catalog is not None:
+        router.known_place = catalog.has_place
+    decision = router.decide(content)
+    if decision.write == WRITE_DENY and decision.understanding.write_blocker == "negation":
+        declined = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
+        return RouteOutcome(declined, "heuristic", decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE))
+    if (unsupported := _unsupported_change(decision.understanding)) is not None:
+        ask = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
+        return RouteOutcome(ask, "heuristic", decision, WriteGate(WRITE_DENY, unsupported))
+
+    scope, scope_outcome = await _check_scope_route(decision, content, scope_fn)
+    if scope_outcome is not None:
+        return scope_outcome
+
+    intent_res, method = await router.aroute(content, history)
+    gate = gate_route(
+        intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write
+    )
+    if not is_write_candidate(gate) or not owner:
+        return RouteOutcome(intent_res, method, decision, gate, scope=scope)
+
+    return await _finalize_write_route(
+        intent_res, method, decision, gate, scope, verifier_llm, content, history, catalog, page_context
+    )

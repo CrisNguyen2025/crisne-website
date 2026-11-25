@@ -61,19 +61,22 @@ function collectScrollableOverlayAncestors(target: EventTarget | null) {
   }
 }
 
-function canCachedAncestorsScroll(deltaX: number, deltaY: number): boolean {
-  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-    for (const el of activeTouchScrollY) {
-      if (deltaY < 0 && el.scrollTop > 0) return true;
-      if (deltaY > 0 && el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
-    }
-    return false;
-  }
-  for (const el of activeTouchScrollX) {
-    if (deltaX < 0 && el.scrollLeft > 0) return true;
-    if (deltaX > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+function canElementsScrollAxis(elements: HTMLElement[], delta: number, axis: "x" | "y"): boolean {
+  for (const el of elements) {
+    const pos = axis === "y" ? el.scrollTop : el.scrollLeft;
+    const viewport = axis === "y" ? el.clientHeight : el.clientWidth;
+    const total = axis === "y" ? el.scrollHeight : el.scrollWidth;
+    if (delta < 0 && pos > 0) return true;
+    if (delta > 0 && pos + viewport < total - 1) return true;
   }
   return false;
+}
+
+function canCachedAncestorsScroll(deltaX: number, deltaY: number): boolean {
+  if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+    return canElementsScrollAxis(activeTouchScrollY, deltaY, "y");
+  }
+  return canElementsScrollAxis(activeTouchScrollX, deltaX, "x");
 }
 
 function canScrollInDirection(

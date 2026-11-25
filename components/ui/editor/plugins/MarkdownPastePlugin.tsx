@@ -32,149 +32,155 @@ export function MarkdownPastePlugin() {
         event.preventDefault();
         event.stopPropagation();
 
+function $tryCreateHeadingNode(line: string): LexicalNode | null {
+  const prefixes: Array<{ prefix: string; tag: 'h1' | 'h2' | 'h3' }> = [
+    { prefix: '### ', tag: 'h3' },
+    { prefix: '## ', tag: 'h2' },
+    { prefix: '# ', tag: 'h1' },
+  ];
+  for (const { prefix, tag } of prefixes) {
+    if (line.startsWith(prefix)) {
+      const headingNode = $createHeadingNode(tag);
+      headingNode.append($createTextNode(line.substring(prefix.length).trim()));
+      return headingNode;
+    }
+  }
+  return null;
+}
+
+function consumeFencedCodeBlock(lines: string[], startIndex: number): { code: string; nextIndex: number } {
+  const codeLines: string[] = [];
+  let i = startIndex + 1;
+  while (i < lines.length && !lines[i].trim().startsWith('```')) {
+    codeLines.push(lines[i]);
+    i++;
+  }
+  if (i < lines.length) i++;
+  return { code: codeLines.join('\n'), nextIndex: i };
+}
+
+function isImplicitCodeBlockStart(trimmed: string, nextLine?: string): boolean {
+  const prefixes = ['interface ', 'type ', 'enum ', 'function ', 'curl ', 'Example curl:', 'Example:'];
+  if (prefixes.some(prefix => trimmed.startsWith(prefix))) return true;
+  return trimmed.startsWith('{') && Boolean(nextLine?.trim().includes(':'));
+}
+
+function shouldStopImplicitCodeBlock(
+  currentLine: string,
+  currentTrimmed: string,
+  firstCodeLine: string | undefined,
+  nextLineTrimmed: string,
+  hasBraces: boolean,
+  bracesCount: number,
+): boolean {
+  if (currentLine.startsWith('### ') || currentLine.startsWith('## ') || currentLine.startsWith('# ')) {
+    return true;
+  }
+  if (hasBraces && bracesCount <= 0) return true;
+  const isCurl = firstCodeLine?.trim().startsWith('curl');
+  if (isCurl && !currentTrimmed.endsWith('\\') && !currentTrimmed.includes('curl ')) {
+    if (!nextLineTrimmed.startsWith('-H') && !nextLineTrimmed.startsWith('-X') && !nextLineTrimmed.startsWith('--')) {
+      return true;
+    }
+  }
+  return !hasBraces && currentTrimmed === '';
+}
+
+function consumeImplicitCodeBlock(lines: string[], startIndex: number): { node: LexicalNode | null; nextIndex: number } {
+  const codeLines: string[] = [];
+  let i = startIndex;
+  let bracesCount = 0;
+  let hasBraces = false;
+
+  while (i < lines.length) {
+    const currentLine = lines[i];
+    const currentTrimmed = currentLine.trim();
+    if (currentLine.startsWith('### ') || currentLine.startsWith('## ') || currentLine.startsWith('# ')) {
+      break;
+    }
+    if (currentTrimmed.includes('{')) {
+      bracesCount += (currentTrimmed.match(/{/g) || []).length;
+      hasBraces = true;
+    }
+    if (currentTrimmed.includes('}')) {
+      bracesCount -= (currentTrimmed.match(/}/g) || []).length;
+    }
+
+    codeLines.push(currentLine);
+    i++;
+
+    const nextTrimmed = lines[i]?.trim() || '';
+    if (shouldStopImplicitCodeBlock(currentLine, currentTrimmed, codeLines[0], nextTrimmed, hasBraces, bracesCount)) {
+      break;
+    }
+  }
+
+  while (codeLines.length > 0 && codeLines[codeLines.length - 1].trim() === '') {
+    codeLines.pop();
+  }
+
+  if (codeLines.length === 0) return { node: null, nextIndex: i };
+  const codeNode = $createCodeNode();
+  codeNode.append($createTextNode(codeLines.join('\n')));
+  return { node: codeNode, nextIndex: i };
+}
+
+function $parseMarkdownPasteToNodes(text: string): LexicalNode[] {
+  const lines = text.split(/\r?\n/);
+  const nodesToInsert: LexicalNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    const headingNode = $tryCreateHeadingNode(line);
+    if (headingNode) {
+      nodesToInsert.push(headingNode);
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith('```')) {
+      const fenced = consumeFencedCodeBlock(lines, i);
+      const codeNode = $createCodeNode();
+      codeNode.append($createTextNode(fenced.code));
+      nodesToInsert.push(codeNode);
+      i = fenced.nextIndex;
+      continue;
+    }
+
+    if (trimmed === 'Example:' || trimmed === 'Example curl:') {
+      const labelNode = $createParagraphNode();
+      labelNode.append($createTextNode(line));
+      nodesToInsert.push(labelNode);
+      i++;
+      continue;
+    }
+
+    if (isImplicitCodeBlockStart(trimmed, lines[i + 1])) {
+      const block = consumeImplicitCodeBlock(lines, i);
+      if (block.node) nodesToInsert.push(block.node);
+      i = block.nextIndex;
+      continue;
+    }
+
+    if (trimmed !== '') {
+      const paragraph = $createParagraphNode();
+      paragraph.append($createTextNode(line));
+      nodesToInsert.push(paragraph);
+    }
+    i++;
+  }
+
+  return nodesToInsert;
+}
+
         editor.update(() => {
           const selection = $getSelection();
           if (!$isRangeSelection(selection)) return;
 
-          const lines = text.split(/\r?\n/);
-          const nodesToInsert: LexicalNode[] = [];
-          
-          let i = 0;
-          while (i < lines.length) {
-            const line = lines[i];
-            const trimmed = line.trim();
-
-            // 1. Heading 3 (### Header)
-            if (line.startsWith('### ')) {
-              const headingNode = $createHeadingNode('h3');
-              headingNode.append($createTextNode(line.substring(4).trim()));
-              nodesToInsert.push(headingNode);
-              i++;
-              continue;
-            }
-
-            // 2. Heading 2 (## Header)
-            if (line.startsWith('## ')) {
-              const headingNode = $createHeadingNode('h2');
-              headingNode.append($createTextNode(line.substring(3).trim()));
-              nodesToInsert.push(headingNode);
-              i++;
-              continue;
-            }
-
-            // 3. Heading 1 (# Header)
-            if (line.startsWith('# ')) {
-              const headingNode = $createHeadingNode('h1');
-              headingNode.append($createTextNode(line.substring(2).trim()));
-              nodesToInsert.push(headingNode);
-              i++;
-              continue;
-            }
-
-            // 3. Code block with explicit markdown fence (```)
-            if (trimmed.startsWith('```')) {
-              const codeLines: string[] = [];
-              i++; // skip fence line
-              while (i < lines.length && !lines[i].trim().startsWith('```')) {
-                codeLines.push(lines[i]);
-                i++;
-              }
-              if (i < lines.length) i++; // skip ending fence line
-              
-              const codeNode = $createCodeNode();
-              codeNode.append($createTextNode(codeLines.join('\n')));
-              nodesToInsert.push(codeNode);
-              continue;
-            }
-
-            // 4. Implicit code block detection (e.g. interface, type, enum, function, JSON, curl block)
-            const isCodeStart = 
-              trimmed.startsWith('interface ') || 
-              trimmed.startsWith('type ') || 
-              trimmed.startsWith('enum ') || 
-              trimmed.startsWith('function ') || 
-              trimmed.startsWith('curl ') ||
-              trimmed.startsWith('Example curl:') ||
-              trimmed.startsWith('Example:') ||
-              (trimmed.startsWith('{') && lines[i+1]?.trim().includes(':')); // JSON start
-
-            if (isCodeStart) {
-              const codeLines: string[] = [];
-              
-              if (trimmed === 'Example:' || trimmed === 'Example curl:') {
-                const labelNode = $createParagraphNode();
-                labelNode.append($createTextNode(line));
-                nodesToInsert.push(labelNode);
-                i++;
-                continue;
-              }
-
-              let bracesCount = 0;
-              let hasBraces = false;
-
-              while (i < lines.length) {
-                const currentLine = lines[i];
-                const currentTrimmed = currentLine.trim();
-
-                // Stop conditions for code blocks
-                if (currentLine.startsWith('### ') || currentLine.startsWith('## ') || currentLine.startsWith('# ')) {
-                  break;
-                }
-                
-                // Track curly braces to make sure we include the entire interface/class/JSON block
-                if (currentTrimmed.includes('{')) {
-                  bracesCount += (currentTrimmed.match(/{/g) || []).length;
-                  hasBraces = true;
-                }
-                if (currentTrimmed.includes('}')) {
-                  bracesCount -= (currentTrimmed.match(/}/g) || []).length;
-                }
-
-                codeLines.push(currentLine);
-                i++;
-
-                // If we started with braces and closed all of them, the block is finished
-                if (hasBraces && bracesCount <= 0) {
-                  break;
-                }
-
-                // If it is a curl command block (usually continued with \ at the end of line)
-                const isCurl = codeLines[0]?.trim().startsWith('curl');
-                if (isCurl && !currentTrimmed.endsWith('\\') && !currentTrimmed.includes('curl ')) {
-                  const nextLine = lines[i]?.trim() || '';
-                  if (!nextLine.startsWith('-H') && !nextLine.startsWith('-X') && !nextLine.startsWith('--')) {
-                    break;
-                  }
-                }
-
-                // If it's a plain block without braces, stop at empty line
-                if (!hasBraces && currentTrimmed === '') {
-                  break;
-                }
-              }
-
-              // Remove trailing empty lines from code block
-              while (codeLines.length > 0 && codeLines[codeLines.length - 1].trim() === '') {
-                codeLines.pop();
-              }
-
-              if (codeLines.length > 0) {
-                const codeNode = $createCodeNode();
-                codeNode.append($createTextNode(codeLines.join('\n')));
-                nodesToInsert.push(codeNode);
-              }
-              continue;
-            }
-
-            // 5. Default: paragraph
-            if (trimmed !== '') {
-              const paragraph = $createParagraphNode();
-              paragraph.append($createTextNode(line));
-              nodesToInsert.push(paragraph);
-            }
-            i++;
-          }
-
+          const nodesToInsert = $parseMarkdownPasteToNodes(text);
           if (nodesToInsert.length > 0) {
             selection.insertNodes(nodesToInsert);
           }

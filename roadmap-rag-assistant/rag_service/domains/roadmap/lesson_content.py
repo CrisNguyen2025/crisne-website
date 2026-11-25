@@ -169,71 +169,96 @@ def _inline(text: str) -> str:
     return re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2">\1</a>', text)
 
 
+def _consume_fenced_code_block(lines: list[str], start_idx: int) -> tuple[str, int]:
+    lang = lines[start_idx].strip()[3:].strip()
+    body: list[str] = []
+    idx = start_idx + 1
+    while idx < len(lines) and not lines[idx].strip().startswith("```"):
+        body.append(lines[idx])
+        idx += 1
+    cls = f' class="language-{html_lib.escape(lang)}"' if lang else ""
+    return f"<pre><code{cls}>{html_lib.escape(chr(10).join(body))}</code></pre>", idx + 1
+
+
+def _flush_paragraph(out: list[str], para: list[str]) -> None:
+    if para:
+        out.append(f"<p>{_inline(' '.join(para))}</p>")
+        para.clear()
+
+
+def _close_html_list(out: list[str], cur_tag: Optional[str]) -> Optional[str]:
+    if cur_tag:
+        out.append(f"</{cur_tag}>")
+    return None
+
+
+def _append_list_item(out: list[str], li: re.Match[str], list_tag: Optional[str]) -> str:
+    tag = "ol" if li.group(1) else "ul"
+    if list_tag != tag:
+        _close_html_list(out, list_tag)
+        out.append(f"<{tag}>")
+    out.append(f"<li>{_inline(li.group(2))}</li>")
+    return tag
+
+
+def _append_block_line(
+    stripped: str,
+    out: list[str],
+    para: list[str],
+    list_tag: Optional[str],
+) -> Optional[str]:
+    if not stripped:
+        _flush_paragraph(out, para)
+        return _close_html_list(out, list_tag)
+    if h := re.match(r"^(#{1,4})\s+(.*)$", stripped):
+        _flush_paragraph(out, para)
+        list_tag = _close_html_list(out, list_tag)
+        level = min(max(len(h.group(1)), 2), 4)  # the lesson title is the page's h1
+        out.append(f"<h{level}>{_inline(h.group(2).strip())}</h{level}>")
+        return list_tag
+    if li := re.match(r"^(?:[-*+]|(\d+)[.)])\s+(.*)$", stripped):
+        _flush_paragraph(out, para)
+        return _append_list_item(out, li, list_tag)
+    if stripped.startswith(">"):
+        _flush_paragraph(out, para)
+        list_tag = _close_html_list(out, list_tag)
+        out.append(f"<blockquote><p>{_inline(stripped.lstrip('> ').strip())}</p></blockquote>")
+        return list_tag
+    if re.fullmatch(r"-{3,}|\*{3,}", stripped):
+        _flush_paragraph(out, para)
+        list_tag = _close_html_list(out, list_tag)
+        out.append("<hr>")
+        return list_tag
+    list_tag = _close_html_list(out, list_tag)
+    para.append(stripped)
+    return list_tag
+
+
 def markdown_to_html(markdown: str) -> str:
     """The small Markdown the draft prompt asks for (headings, lists, code, quotes, paragraphs) as HTML."""
     out: list[str] = []
     lines = markdown.replace("\r\n", "\n").split("\n")
     para: list[str] = []
     list_tag: Optional[str] = None
-
-    def flush_para() -> None:
-        if para:
-            out.append(f"<p>{_inline(' '.join(para))}</p>")
-            para.clear()
-
-    def close_list() -> None:
-        nonlocal list_tag
-        if list_tag:
-            out.append(f"</{list_tag}>")
-            list_tag = None
-
     i = 0
     while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
+        stripped = lines[i].strip()
         if stripped.startswith("```"):
-            flush_para()
-            close_list()
-            lang = stripped[3:].strip()
-            body: list[str] = []
-            i += 1
-            while i < len(lines) and not lines[i].strip().startswith("```"):
-                body.append(lines[i])
-                i += 1
-            cls = f' class="language-{html_lib.escape(lang)}"' if lang else ""
-            out.append(f"<pre><code{cls}>{html_lib.escape(chr(10).join(body))}</code></pre>")
-            i += 1
+            if para:
+                out.append(f"<p>{_inline(' '.join(para))}</p>")
+                para.clear()
+            if list_tag:
+                out.append(f"</{list_tag}>")
+                list_tag = None
+            block, i = _consume_fenced_code_block(lines, i)
+            out.append(block)
             continue
-        if not stripped:
-            flush_para()
-            close_list()
-        elif h := re.match(r"^(#{1,4})\s+(.*)$", stripped):
-            flush_para()
-            close_list()
-            level = min(max(len(h.group(1)), 2), 4)  # the lesson title is the page's h1
-            out.append(f"<h{level}>{_inline(h.group(2).strip())}</h{level}>")
-        elif li := re.match(r"^(?:[-*+]|(\d+)[.)])\s+(.*)$", stripped):
-            flush_para()
-            tag = "ol" if li.group(1) else "ul"
-            if list_tag != tag:
-                close_list()
-                out.append(f"<{tag}>")
-                list_tag = tag
-            out.append(f"<li>{_inline(li.group(2))}</li>")
-        elif stripped.startswith(">"):
-            flush_para()
-            close_list()
-            out.append(f"<blockquote><p>{_inline(stripped.lstrip('> ').strip())}</p></blockquote>")
-        elif re.fullmatch(r"-{3,}|\*{3,}", stripped):
-            flush_para()
-            close_list()
-            out.append("<hr>")
-        else:
-            close_list()
-            para.append(stripped)
+        list_tag = _append_block_line(stripped, out, para, list_tag)
         i += 1
-    flush_para()
-    close_list()
+    if para:
+        out.append(f"<p>{_inline(' '.join(para))}</p>")
+    if list_tag:
+        out.append(f"</{list_tag}>")
     return "".join(out)
 
 
@@ -381,31 +406,15 @@ class LessonContentCommands(AgentHostMixin):
                 return None
         return None
 
-    async def handle_lesson_content(
-        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
-    ) -> AsyncGenerator[dict, None]:
-        """Draft a body for a lesson and preview it with its On this page outline."""
-        request = parse_content_request(content)
-        if request is None:
-            return
-        outcome["handled"] = True
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
-
-        topic = await self._content_topic(request.topic, content, page_context, session_ctx)
-        if topic is None:
-            reply = "Mình chưa biết bài này thuộc topic nào. Bạn gửi lại kèm tên topic, ví dụ:\n\n" + example_blocks(
-                f"thêm nội dung chi tiết cho bài \"{request.lesson or '…'}\" trong topic …"
-            )
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        topic_title = str(topic.get("title") or topic.get("slug") or "")
+    def _select_target_lesson(
+        self,
+        request,
+        topic: dict,
+        topic_title: str,
+        page_context,
+        session_ctx,
+    ) -> tuple[Optional[dict], Optional[str]]:
         lessons = topic.get("items") or []
-        lesson = None
         if request.lesson:
             wanted = fold(request.lesson)
             exact = [i for i in lessons if fold(i.get("title") or "") == wanted]
@@ -413,57 +422,36 @@ class LessonContentCommands(AgentHostMixin):
             matches = exact or partial
             if len(matches) > 1:
                 names = ", ".join(f"**{i.get('title')}**" for i in matches[:6])
-                async for ev in self._stream_text(
-                    f"Topic **{topic_title}** có nhiều bài khớp: {names}. Bạn ghi đúng tên bài giúp mình.", delay
-                ):
-                    yield ev
-                return
+                return None, f"Topic **{topic_title}** có nhiều bài khớp: {names}. Bạn ghi đúng tên bài giúp mình."
             lesson = matches[0] if matches else None
         else:
             page_item = ((page_context or {}).get("itemId") or "").strip()
+            lesson = None
             if (page_context or {}).get("roadmapSlug") == topic.get("slug") and page_item:
                 lesson = next((i for i in lessons if matches_page_item(i, page_item)), None)
             if lesson is None and session_ctx.active_lesson_id:
                 lesson = next((i for i in lessons if matches_page_item(i, session_ctx.active_lesson_id)), None)
-        if lesson is None:
-            listing = ", ".join(f"**{i.get('title')}**" for i in lessons[:8]) or "_(topic chưa có bài nào)_"
-            what = f"bài **{request.lesson}**" if request.lesson else "bài bạn đang nói tới"
-            reply = (
-                f"Mình không tìm thấy {what} trong topic **{topic_title}** nên chưa viết gì. "
-                f"Các bài hiện có: {listing}."
-            )
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
 
-        if self.llm is None:
-            async for ev in self._stream_text(
-                "Mình chưa viết được nháp lúc này vì mô hình ngôn ngữ chưa sẵn sàng. Bạn thử lại sau nhé.", delay
-            ):
-                yield ev
-            return
+        if lesson is not None:
+            return lesson, None
+        listing = ", ".join(f"**{i.get('title')}**" for i in lessons[:8]) or "_(topic chưa có bài nào)_"
+        what = f"bài **{request.lesson}**" if request.lesson else "bài bạn đang nói tới"
+        return (
+            None,
+            f"Mình không tìm thấy {what} trong topic **{topic_title}** nên chưa viết gì. Các bài hiện có: {listing}.",
+        )
 
-        template_kind = detect_template_kind(content)
-        existing_raw = (lesson.get("content") or "").strip()
-        has_real_content = bool(existing_raw) and not is_template_placeholder_only(existing_raw)
-        if request.target_h2:
-            write_mode: WriteMode = "fill_h2_section"
-        elif has_real_content:
-            write_mode = "append"
-        else:
-            write_mode = "create_or_replace_empty"
-
-        yield {
-            "type": "tool_start",
-            "name": "draft_item_content",
-            "args": {
-                "topic": topic.get("slug"),
-                "item": lesson.get("id"),
-                "template_kind": template_kind,
-                "write_mode": write_mode,
-            },
-        }
-
+    async def _generate_validated_draft(
+        self,
+        *,
+        topic: dict,
+        topic_title: str,
+        lesson: dict,
+        content: str,
+        template_kind: TemplateKind,
+        write_mode: WriteMode,
+        target_h2: Optional[str],
+    ) -> tuple[str, str, Optional[str]]:
         from rag_service.core.memory import format_owner_memory, owner_memory_store
 
         topic_slug = topic.get("slug")
@@ -477,8 +465,6 @@ class LessonContentCommands(AgentHostMixin):
             max_chars=800,
         )
 
-        markdown = ""
-        draft_html = ""
         guard_error: Optional[str] = None
         for attempt in range(2):
             try:
@@ -491,7 +477,7 @@ class LessonContentCommands(AgentHostMixin):
                             topic_description=(topic.get("description") or "").strip(),
                             template_kind=template_kind,
                             write_mode=write_mode,
-                            target_h2=request.target_h2,
+                            target_h2=target_h2,
                             strict_retry_reason=guard_error if attempt == 1 else None,
                             owner_memory_block=owner_memory_block,
                         )
@@ -503,30 +489,63 @@ class LessonContentCommands(AgentHostMixin):
                 print(f"[lesson_content] Draft failed: {exc}")
                 candidate = ""
             if not candidate:
-                markdown = ""
-                break
+                return "", "", guard_error
             candidate = re.sub(r"^```(?:markdown|md)?\s*\n(.*)\n```\s*$", r"\1", candidate, flags=re.DOTALL)
             candidate_html = markdown_to_html(candidate)
             ok, guard_error = validate_lesson_draft(candidate_html)
             if ok:
-                markdown = candidate
-                draft_html = candidate_html
-                break
+                return candidate, candidate_html, None
+        return "", "", guard_error
 
-        yield {
-            "type": "tool_end",
-            "name": "draft_item_content",
-            "result": "ok" if draft_html else "failed",
-            "is_error": not draft_html,
-        }
-        if not draft_html:
-            reason = f" ({guard_error})" if guard_error else " (mô hình không trả lời)"
-            async for ev in self._stream_text(
-                f"Mình chưa tạo được bản nháp đạt chuẩn{reason}. Bạn thử lại nhé.", delay
-            ):
-                yield ev
-            return
+    @staticmethod
+    def _resolve_content_write_mode(content: str, lesson: dict, target_h2: Optional[str]) -> tuple[TemplateKind, WriteMode]:
+        template_kind = detect_template_kind(content)
+        existing_raw = (lesson.get("content") or "").strip()
+        has_real_content = bool(existing_raw) and not is_template_placeholder_only(existing_raw)
+        if target_h2:
+            return template_kind, "fill_h2_section"
+        if has_real_content:
+            return template_kind, "append"
+        return template_kind, "create_or_replace_empty"
 
+
+    async def _resolve_content_target(
+        self, request, content: str, page_context, session_ctx
+    ) -> tuple[Optional[dict], Optional[dict], Optional[str]]:
+        if not is_owner():
+            return None, None, OWNER_ONLY_MESSAGE
+        topic = await self._content_topic(request.topic, content, page_context, session_ctx)
+        if topic is None:
+            reply = "Mình chưa biết bài này thuộc topic nào. Bạn gửi lại kèm tên topic, ví dụ:\n\n" + example_blocks(
+                f"thêm nội dung chi tiết cho bài \"{request.lesson or '…'}\" trong topic …"
+            )
+            return None, None, reply
+        topic_title = str(topic.get("title") or topic.get("slug") or "")
+        lesson, err_reply = self._select_target_lesson(request, topic, topic_title, page_context, session_ctx)
+        if lesson is None:
+            return topic, None, err_reply or ""
+        if self.llm is None:
+            return (
+                topic,
+                lesson,
+                "Mình chưa viết được nháp lúc này vì mô hình ngôn ngữ chưa sẵn sàng. Bạn thử lại sau nhé.",
+            )
+        return topic, lesson, None
+
+    async def _emit_content_draft_preview(
+        self,
+        *,
+        session_ctx,
+        topic: dict,
+        topic_title: str,
+        lesson: dict,
+        markdown: str,
+        draft_html: str,
+        template_kind: TemplateKind,
+        write_mode: WriteMode,
+        target_h2: Optional[str],
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
         session_ctx.pending_content_draft = {
             "topic": topic.get("slug"),
             "topic_title": topic_title,
@@ -534,14 +553,13 @@ class LessonContentCommands(AgentHostMixin):
             "title": lesson.get("title"),
             "html": draft_html,
             "write_mode": write_mode,
-            "target_h2": request.target_h2,
+            "target_h2": target_h2,
         }
-
         outline = extract_html_outline(draft_html)
         outline_lines = "\n".join(("  " if lvl == 3 else "") + f"- {txt}" for lvl, txt in outline)
-        if write_mode == "fill_h2_section" and request.target_h2:
-            mode_label = f'Điền mục "{request.target_h2}"'
-            where = f'cập nhật mục "{request.target_h2}" của bài'
+        if write_mode == "fill_h2_section" and target_h2:
+            mode_label = f'Điền mục "{target_h2}"'
+            where = f'cập nhật mục "{target_h2}" của bài'
         elif write_mode == "append":
             mode_label = "Bổ sung cuối bài"
             where = "thêm vào cuối nội dung đang có"
@@ -558,5 +576,69 @@ class LessonContentCommands(AgentHostMixin):
         )
         yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview}
         async for ev in self._stream_text(preview, delay):
+            yield ev
+
+    async def handle_lesson_content(
+        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Draft a body for a lesson and preview it with its On this page outline."""
+        request = parse_content_request(content)
+        if request is None:
+            return
+        outcome["handled"] = True
+        topic, lesson, err_msg = await self._resolve_content_target(request, content, page_context, session_ctx)
+        if err_msg is not None or topic is None or lesson is None:
+            async for ev in self._stream_text(err_msg or "", delay):
+                yield ev
+            return
+
+        topic_title = str(topic.get("title") or topic.get("slug") or "")
+        template_kind, write_mode = self._resolve_content_write_mode(content, lesson, request.target_h2)
+
+        yield {
+            "type": "tool_start",
+            "name": "draft_item_content",
+            "args": {
+                "topic": topic.get("slug"),
+                "item": lesson.get("id"),
+                "template_kind": template_kind,
+                "write_mode": write_mode,
+            },
+        }
+        markdown, draft_html, guard_error = await self._generate_validated_draft(
+            topic=topic,
+            topic_title=topic_title,
+            lesson=lesson,
+            content=content,
+            template_kind=template_kind,
+            write_mode=write_mode,
+            target_h2=request.target_h2,
+        )
+        yield {
+            "type": "tool_end",
+            "name": "draft_item_content",
+            "result": "ok" if draft_html else "failed",
+            "is_error": not draft_html,
+        }
+        if not draft_html:
+            reason = f" ({guard_error})" if guard_error else " (mô hình không trả lời)"
+            async for ev in self._stream_text(
+                f"Mình chưa tạo được bản nháp đạt chuẩn{reason}. Bạn thử lại nhé.", delay
+            ):
+                yield ev
+            return
+
+        async for ev in self._emit_content_draft_preview(
+            session_ctx=session_ctx,
+            topic=topic,
+            topic_title=topic_title,
+            lesson=lesson,
+            markdown=markdown,
+            draft_html=draft_html,
+            template_kind=template_kind,
+            write_mode=write_mode,
+            target_h2=request.target_h2,
+            delay=delay,
+        ):
             yield ev
         # The confirmed write runs in commands.handle_pending, the decision point that grants writes

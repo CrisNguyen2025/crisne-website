@@ -10,6 +10,44 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function buildSourcesForLesson<Row extends {
+  lessonId: string;
+  sourceName: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  relationType: string;
+  collectedAt: Date;
+}>(
+  lessonId: string,
+  keys: string[],
+  rows: Row[],
+  rowByKey: Map<string, Row>
+): LessonExternalSourceDto[] {
+  const seen = new Set<string>();
+  const sources: LessonExternalSourceDto[] = [];
+  const pushRow = (row: Row) => {
+    const dedupeKey = `${row.sourceUrl}::${row.sourceTitle}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    sources.push({
+      sourceName: row.sourceName,
+      sourceUrl: row.sourceUrl,
+      sourceTitle: row.sourceTitle,
+      relationType: row.relationType,
+      collectedAt: row.collectedAt.toISOString(),
+    });
+  };
+
+  for (const key of keys) {
+    const matched = rowByKey.get(key);
+    if (matched) pushRow(matched);
+  }
+  for (const row of rows) {
+    if (row.lessonId === lessonId) pushRow(row);
+  }
+  return sources;
+}
+
 export async function GET(req: NextRequest) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
@@ -57,29 +95,12 @@ export async function GET(req: NextRequest) {
     const byLessonId: Record<string, LessonExternalSourceDto[]> = {};
 
     for (const lesson of lessons) {
-      const seen = new Set<string>();
-      const sources: LessonExternalSourceDto[] = [];
-      const pushRow = (row: (typeof rows)[number]) => {
-        const dedupeKey = `${row.sourceUrl}::${row.sourceTitle}`;
-        if (seen.has(dedupeKey)) return;
-        seen.add(dedupeKey);
-        sources.push({
-          sourceName: row.sourceName,
-          sourceUrl: row.sourceUrl,
-          sourceTitle: row.sourceTitle,
-          relationType: row.relationType,
-          collectedAt: row.collectedAt.toISOString(),
-        });
-      };
-
-      for (const key of keysByLesson.get(lesson.id) ?? []) {
-        const matched = rowByKey.get(key);
-        if (matched) pushRow(matched);
-      }
-      for (const row of rows) {
-        if (row.lessonId === lesson.id) pushRow(row);
-      }
-
+      const sources = buildSourcesForLesson(
+        lesson.id,
+        keysByLesson.get(lesson.id) ?? [],
+        rows,
+        rowByKey
+      );
       if (sources.length > 0) {
         byLessonId[lesson.id] = sources;
       }

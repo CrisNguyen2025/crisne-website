@@ -354,6 +354,129 @@ export class IngestJobConflictError extends Error {
   }
 }
 
+interface IngestOutcomeBuild {
+  jobData: Prisma.IngestJobUpdateManyMutationInput;
+  itemData: Prisma.NewsItemUpdateInput;
+  slugTitleForAllocation: string | null;
+}
+
+async function buildIngestOutcomeUpdate(
+  job: { id: string; attempts: number; maxAttempts: number; newsItemId: string; newsItem: { tags: string; title: string; author: string | null; thumbnailUrl: string | null; slug: string | null; normalizedTitle: string | null; publishedAt: Date | null } },
+  payload: JobCompleteRequest
+): Promise<IngestOutcomeBuild> {
+  if (payload.outcome === "ready") {
+    const existingTags = parseJsonStringArray(job.newsItem.tags);
+    const normalizedTags = normalizeTagList([...payload.summary.tags, ...existingTags], 8);
+    const normalizedTitle = normalizeTitleForCompare(payload.summary.title);
+    const possibleDuplicateOfId = await findPossibleTitleDuplicate({
+      excludeId: job.newsItemId,
+      title: payload.summary.title,
+    });
+    const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
+    const slugTitleForAllocation =
+      !job.newsItem.slug && isEligibleNewsTitleForSlug(payload.summary.title) ? payload.summary.title : null;
+
+    return {
+      slugTitleForAllocation,
+      itemData: {
+        title: payload.summary.title,
+        author: payload.author ?? job.newsItem.author,
+        thumbnailUrl: payload.thumbnailUrl ?? job.newsItem.thumbnailUrl,
+        tldr: payload.summary.tldr,
+        takeaways: JSON.stringify(payload.summary.takeaways),
+        tags: JSON.stringify(normalizedTags),
+        extractionMethod: payload.extractionMethod,
+        extractionError: null,
+        ingestStatus: "ready",
+        extractedAt: new Date(),
+        normalizedTitle,
+        possibleDuplicateOfId,
+        publishedAt: publishedAt ?? job.newsItem.publishedAt,
+      },
+      jobData: { status: "done", stage: "done", lockedUntil: null, lastError: null },
+    };
+  }
+
+  if (payload.outcome === "partial") {
+    const resolvedTitle = payload.title?.trim() || job.newsItem.title;
+    const normalizedTitle = normalizeTitleForCompare(resolvedTitle);
+    const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
+    const slugTitleForAllocation =
+      !job.newsItem.slug && isEligibleNewsTitleForSlug(resolvedTitle) ? resolvedTitle : null;
+
+    return {
+      slugTitleForAllocation,
+      itemData: {
+        title: resolvedTitle,
+        author: payload.author ?? job.newsItem.author,
+        thumbnailUrl: payload.thumbnailUrl ?? job.newsItem.thumbnailUrl,
+        extractionMethod: payload.extractionMethod,
+        extractionError: payload.extractionError,
+        ingestStatus: "partial",
+        extractedAt: new Date(),
+        normalizedTitle: normalizedTitle || job.newsItem.normalizedTitle,
+        publishedAt: publishedAt ?? job.newsItem.publishedAt,
+      },
+      jobData: { status: "done", stage: "partial", lockedUntil: null, lastError: payload.extractionError },
+    };
+  }
+
+  if (payload.retryable && job.attempts < job.maxAttempts) {
+    const backoffMs = Math.max(1, job.attempts) * 60_000;
+    return {
+      slugTitleForAllocation: null,
+      itemData: { ingestStatus: "queued", extractionError: payload.error },
+      jobData: {
+        status: "pending",
+        stage: "retry_scheduled",
+        lockedUntil: null,
+        nextRunAt: new Date(Date.now() + backoffMs),
+        lastError: payload.error,
+      },
+    };
+  }
+
+  return {
+    slugTitleForAllocation: null,
+    itemData: { ingestStatus: "failed", extractionError: payload.error },
+    jobData: { status: "failed", stage: "failed", lockedUntil: null, lastError: payload.error },
+  };
+}
+
+async function commitIngestOutcomeAttempt(
+  job: { id: string; attempts: number; newsItemId: string; newsItem: { domain: string } },
+  outcome: IngestOutcomeBuild,
+  attemptIdx: number,
+  maxAttempts: number
+): Promise<NewsItemDto> {
+  let nextSlug: string | undefined;
+  if (outcome.slugTitleForAllocation) {
+    nextSlug =
+      attemptIdx === maxAttempts - 1
+        ? `${buildBaseNewsSlug(outcome.slugTitleForAllocation, job.newsItem.domain)}-${job.newsItemId.slice(-6)}`
+        : await allocateUniqueNewsSlug(prisma, outcome.slugTitleForAllocation, {
+            fallbackDomain: job.newsItem.domain,
+            excludeId: job.newsItemId,
+          });
+  }
+
+  const updatedItem = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.ingestJob.updateMany({
+      where: { id: job.id, status: "running", attempts: job.attempts },
+      data: outcome.jobData,
+    });
+    if (claimed.count !== 1) {
+      throw new IngestJobConflictError();
+    }
+    return tx.newsItem.update({
+      where: { id: job.newsItemId },
+      data: nextSlug ? { ...outcome.itemData, slug: nextSlug } : outcome.itemData,
+    });
+  });
+
+  return serializeNewsItem(updatedItem);
+}
+
 /**
  * Applies a worker's result to a job it holds. Throws `IngestJobConflictError` when the job is no
  * longer `running` or the reported attempt is stale (lease reclaimed, superseded by reingest, or a
@@ -376,125 +499,19 @@ export async function completeIngestJob(
     throw new IngestJobConflictError();
   }
 
-  let jobData: Prisma.IngestJobUpdateManyMutationInput;
-  let itemData: Prisma.NewsItemUpdateInput;
-  let slugTitleForAllocation: string | null = null;
+  const outcome = await buildIngestOutcomeUpdate(job, payload);
+  const maxAttempts = outcome.slugTitleForAllocation ? 3 : 1;
 
-  if (payload.outcome === "ready") {
-    const existingTags = parseJsonStringArray(job.newsItem.tags);
-    const normalizedTags = normalizeTagList([...payload.summary.tags, ...existingTags], 8);
-    const normalizedTitle = normalizeTitleForCompare(payload.summary.title);
-    const possibleDuplicateOfId = await findPossibleTitleDuplicate({
-      excludeId: job.newsItemId,
-      title: payload.summary.title,
-    });
-    const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
-
-    if (!job.newsItem.slug && isEligibleNewsTitleForSlug(payload.summary.title)) {
-      slugTitleForAllocation = payload.summary.title;
-    }
-
-    itemData = {
-      title: payload.summary.title,
-      author: payload.author ?? job.newsItem.author,
-      thumbnailUrl: payload.thumbnailUrl ?? job.newsItem.thumbnailUrl,
-      tldr: payload.summary.tldr,
-      takeaways: JSON.stringify(payload.summary.takeaways),
-      tags: JSON.stringify(normalizedTags),
-      extractionMethod: payload.extractionMethod,
-      extractionError: null,
-      ingestStatus: "ready",
-      extractedAt: new Date(),
-      normalizedTitle,
-      possibleDuplicateOfId,
-      publishedAt: publishedAt ?? job.newsItem.publishedAt,
-    };
-    jobData = { status: "done", stage: "done", lockedUntil: null, lastError: null };
-  } else if (payload.outcome === "partial") {
-    const resolvedTitle = payload.title?.trim() || job.newsItem.title;
-    const normalizedTitle = normalizeTitleForCompare(resolvedTitle);
-    const publishedAt = payload.publishedAt ? new Date(payload.publishedAt) : null;
-
-    if (!job.newsItem.slug && isEligibleNewsTitleForSlug(resolvedTitle)) {
-      slugTitleForAllocation = resolvedTitle;
-    }
-
-    itemData = {
-      title: resolvedTitle,
-      author: payload.author ?? job.newsItem.author,
-      thumbnailUrl: payload.thumbnailUrl ?? job.newsItem.thumbnailUrl,
-      extractionMethod: payload.extractionMethod,
-      extractionError: payload.extractionError,
-      ingestStatus: "partial",
-      extractedAt: new Date(),
-      normalizedTitle: normalizedTitle || job.newsItem.normalizedTitle,
-      publishedAt: publishedAt ?? job.newsItem.publishedAt,
-    };
-    jobData = {
-      status: "done",
-      stage: "partial",
-      lockedUntil: null,
-      lastError: payload.extractionError,
-    };
-  } else if (payload.retryable && job.attempts < job.maxAttempts) {
-    const backoffMs = Math.max(1, job.attempts) * 60_000;
-    itemData = { ingestStatus: "queued", extractionError: payload.error };
-    jobData = {
-      status: "pending",
-      stage: "retry_scheduled",
-      lockedUntil: null,
-      nextRunAt: new Date(Date.now() + backoffMs),
-      lastError: payload.error,
-    };
-  } else {
-    itemData = { ingestStatus: "failed", extractionError: payload.error };
-    jobData = {
-      status: "failed",
-      stage: "failed",
-      lockedUntil: null,
-      lastError: payload.error,
-    };
-  }
-
-  const maxAttempts = slugTitleForAllocation ? 3 : 1;
   for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
-    let nextSlug: string | undefined;
-    if (slugTitleForAllocation) {
-      nextSlug =
-        attemptIdx === maxAttempts - 1
-          ? `${buildBaseNewsSlug(slugTitleForAllocation, job.newsItem.domain)}-${job.newsItemId.slice(-6)}`
-          : await allocateUniqueNewsSlug(prisma, slugTitleForAllocation, {
-              fallbackDomain: job.newsItem.domain,
-              excludeId: job.newsItemId,
-            });
-    }
-
     try {
-      const updatedItem = await prisma.$transaction(async (tx) => {
-        const claimed = await tx.ingestJob.updateMany({
-          where: { id: job.id, status: "running", attempts: job.attempts },
-          data: jobData,
-        });
-        if (claimed.count !== 1) {
-          throw new IngestJobConflictError();
-        }
-        return tx.newsItem.update({
-          where: { id: job.newsItemId },
-          data: nextSlug ? { ...itemData, slug: nextSlug } : itemData,
-        });
-      });
-
-      return serializeNewsItem(updatedItem);
+      return await commitIngestOutcomeAttempt(job, outcome, attemptIdx, maxAttempts);
     } catch (error) {
-      if (
-        slugTitleForAllocation &&
+      const canRetrySlugCollision =
+        Boolean(outcome.slugTitleForAllocation) &&
         attemptIdx < maxAttempts - 1 &&
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
-        continue;
-      }
-      throw error;
+        error.code === "P2002";
+      if (!canRetrySlugCollision) throw error;
     }
   }
 

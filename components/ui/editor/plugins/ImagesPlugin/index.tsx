@@ -31,11 +31,131 @@ import {
   isHTMLElement,
   LexicalCommand,
   LexicalEditor,
+  LexicalNode,
 } from 'lexical';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input } from 'antd';
 import { $createImageNode, $isImageNode, ImageNode, ImagePayload } from '../../nodes/ImageNode';
+
+function $selectImageNodeWithEvent(imageNode: ImageNode, event: KeyboardEvent): true {
+  event.preventDefault();
+  const nodeSelection = $createNodeSelection();
+  nodeSelection.add(imageNode.getKey());
+  $setSelection(nodeSelection);
+  return true;
+}
+
+function $findEdgeImageInNode(node: LexicalNode | null, edge: 'first' | 'last'): ImageNode | null {
+  if (!node) return null;
+  if ($isImageNode(node)) return node;
+  if (!$isElementNode(node)) return null;
+  const child = edge === 'first' ? node.getFirstChild() : node.getLastChild();
+  return $isImageNode(child) ? child : null;
+}
+
+function $tryDeleteSelectedImage(event: KeyboardEvent): boolean {
+  const selection = $getSelection();
+  if (!$isNodeSelection(selection)) return false;
+  const imageNode = selection.getNodes().find($isImageNode);
+  if (!imageNode) return false;
+  event.preventDefault();
+  imageNode.remove();
+  return true;
+}
+
+function $handleImageBackspaceKey(event: KeyboardEvent): boolean {
+  if ($tryDeleteSelectedImage(event)) return true;
+
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+
+  const { anchor } = selection;
+  const anchorNode = anchor.getNode();
+
+  if ($isElementNode(anchorNode)) {
+    const childBefore = anchorNode.getChildAtIndex(anchor.offset - 1);
+    if ($isImageNode(childBefore)) return $selectImageNodeWithEvent(childBefore, event);
+  }
+
+  if (anchor.offset !== 0) return false;
+
+  const prevSibling = anchorNode.getPreviousSibling();
+  if ($isImageNode(prevSibling)) return $selectImageNodeWithEvent(prevSibling, event);
+
+  const element = anchorNode.getTopLevelElement();
+  const targetImageNode = $findEdgeImageInNode(element?.getPreviousSibling() ?? null, 'last');
+  if (!element || !targetImageNode) return false;
+
+  if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
+    element.remove();
+  }
+  return $selectImageNodeWithEvent(targetImageNode, event);
+}
+
+function $handleImageDeleteKey(event: KeyboardEvent): boolean {
+  if ($tryDeleteSelectedImage(event)) return true;
+
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+
+  const { anchor } = selection;
+  const anchorNode = anchor.getNode();
+  if (anchor.offset !== anchorNode.getTextContentSize()) return false;
+
+  const element = anchorNode.getTopLevelElement();
+  const targetImageNode = $findEdgeImageInNode(element?.getNextSibling() ?? null, 'first');
+  if (!element || !targetImageNode) return false;
+
+  if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
+    element.remove();
+  }
+  return $selectImageNodeWithEvent(targetImageNode, event);
+}
+
+function $moveOutOfSelectedImage(imageNode: ImageNode, direction: 'prev' | 'next', event: KeyboardEvent): true {
+  event.preventDefault();
+  const parent = imageNode.getParent();
+  const singleChildParent = parent && parent.getChildrenSize() === 1 ? parent : null;
+  const targetRef = singleChildParent ?? imageNode;
+  const sibling = direction === 'next' ? targetRef.getNextSibling() : targetRef.getPreviousSibling();
+
+  if (sibling) {
+    if (direction === 'next') sibling.selectStart();
+    else sibling.selectEnd();
+    return true;
+  }
+
+  const newParagraph = $createParagraphNode();
+  if (direction === 'next') targetRef.insertAfter(newParagraph);
+  else targetRef.insertBefore(newParagraph);
+  newParagraph.select();
+  return true;
+}
+
+function $handleImageArrowKey(event: KeyboardEvent, direction: 'prev' | 'next'): boolean {
+  const selection = $getSelection();
+  if ($isNodeSelection(selection)) {
+    const imageNode = selection.getNodes().find($isImageNode);
+    if (imageNode) return $moveOutOfSelectedImage(imageNode, direction, event);
+  }
+
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+
+  const { anchor } = selection;
+  const anchorNode = anchor.getNode();
+  const atBoundary =
+    direction === 'next' ? anchor.offset === anchorNode.getTextContentSize() : anchor.offset === 0;
+  if (!atBoundary) return false;
+
+  const topElement = anchorNode.getTopLevelElement();
+  if (!topElement) return false;
+
+  const adjacentTop = direction === 'next' ? topElement.getNextSibling() : topElement.getPreviousSibling();
+  const edge = direction === 'next' ? 'first' : 'last';
+  const targetImageNode = $findEdgeImageInNode(adjacentTop, edge);
+  return targetImageNode ? $selectImageNodeWithEvent(targetImageNode, event) : false;
+}
 
 export type InsertImagePayload = Readonly<ImagePayload>;
 export type ImagePickerRenderer = (props: {
@@ -157,406 +277,26 @@ export function ImagesPlugin({ captionsEnabled }: { captionsEnabled?: boolean })
         },
         COMMAND_PRIORITY_EDITOR,
       ),
-      editor.registerCommand<KeyboardEvent>(
-        KEY_BACKSPACE_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an image is explicitly selected via NodeSelection, delete it
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              imageNode.remove();
-              return true;
-            }
-          }
-
-          // 2. If cursor is a collapsed RangeSelection (text cursor)
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            const anchorNode = anchor.getNode();
-
-            // Case A: Cursor is inside the element containing the ImageNode (e.g. <p><ImageNode/>|</p> where offset >= 1)
-            if ($isElementNode(anchorNode)) {
-              const childBefore = anchorNode.getChildAtIndex(anchor.offset - 1);
-              if ($isImageNode(childBefore)) {
-                event.preventDefault();
-                const nodeSelection = $createNodeSelection();
-                nodeSelection.add(childBefore.getKey());
-                $setSelection(nodeSelection);
-                return true;
-              }
-            }
-
-            // Case B: Sibling before text node is an ImageNode
-            const prevSibling = anchorNode.getPreviousSibling();
-            if ($isImageNode(prevSibling) && anchor.offset === 0) {
-              event.preventDefault();
-              const nodeSelection = $createNodeSelection();
-              nodeSelection.add(prevSibling.getKey());
-              $setSelection(nodeSelection);
-              return true;
-            }
-
-            // Case C: Cursor is at offset 0 of any child node / line below an image block
-            if (anchor.offset === 0) {
-              const element = anchorNode.getTopLevelElement();
-              if (element) {
-                const prevElement = element.getPreviousSibling();
-                if (prevElement) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(prevElement)) {
-                    targetImageNode = prevElement;
-                  } else if ($isElementNode(prevElement)) {
-                    const lastChild = prevElement.getLastChild();
-                    if ($isImageNode(lastChild)) {
-                      targetImageNode = lastChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    // If current line is empty, delete this empty line
-                    if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
-                      element.remove();
-                    }
-                    // Select the image instead of deleting it immediately
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
-        COMMAND_PRIORITY_EDITOR,
-      ),
-      editor.registerCommand<KeyboardEvent>(
-        KEY_DELETE_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an image is explicitly selected via NodeSelection, delete it
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              imageNode.remove();
-              return true;
-            }
-          }
-
-          // 2. If cursor is at the end of a line right above an image
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            const anchorNode = anchor.getNode();
-            if (anchor.offset === anchorNode.getTextContentSize()) {
-              const element = anchorNode.getTopLevelElement();
-              if (element) {
-                const nextSibling = element.getNextSibling();
-                if (nextSibling) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(nextSibling)) {
-                    targetImageNode = nextSibling;
-                  } else if ($isElementNode(nextSibling)) {
-                    const firstChild = nextSibling.getFirstChild();
-                    if ($isImageNode(firstChild)) {
-                      targetImageNode = firstChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    if (element.getTextContent().trim().length === 0 && element.getChildrenSize() <= 1) {
-                      element.remove();
-                    }
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
-        COMMAND_PRIORITY_EDITOR,
-      ),
+      editor.registerCommand<KeyboardEvent>(KEY_BACKSPACE_COMMAND, $handleImageBackspaceKey, COMMAND_PRIORITY_EDITOR),
+      editor.registerCommand<KeyboardEvent>(KEY_DELETE_COMMAND, $handleImageDeleteKey, COMMAND_PRIORITY_EDITOR),
       editor.registerCommand<KeyboardEvent>(
         KEY_ARROW_RIGHT_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an Image is selected via NodeSelection -> move cursor to after image
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              const parent = imageNode.getParent();
-              const nextSibling =
-                parent && parent.getChildrenSize() === 1
-                  ? parent.getNextSibling()
-                  : imageNode.getNextSibling();
-
-              if (nextSibling) {
-                nextSibling.selectStart();
-              } else {
-                const newParagraph = $createParagraphNode();
-                if (parent && parent.getChildrenSize() === 1) {
-                  parent.insertAfter(newParagraph);
-                } else {
-                  imageNode.insertAfter(newParagraph);
-                }
-                newParagraph.select();
-              }
-              return true;
-            }
-          }
-
-          // 2. If cursor is at the end of block before an image -> select image
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            const anchorNode = anchor.getNode();
-            if (anchor.offset === anchorNode.getTextContentSize()) {
-              const topElement = anchorNode.getTopLevelElement();
-              if (topElement) {
-                const nextTopElement = topElement.getNextSibling();
-                if (nextTopElement) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(nextTopElement)) {
-                    targetImageNode = nextTopElement;
-                  } else if ($isElementNode(nextTopElement)) {
-                    const firstChild = nextTopElement.getFirstChild();
-                    if ($isImageNode(firstChild)) {
-                      targetImageNode = firstChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
+        event => $handleImageArrowKey(event, 'next'),
         COMMAND_PRIORITY_EDITOR,
       ),
       editor.registerCommand<KeyboardEvent>(
         KEY_ARROW_DOWN_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an Image is selected via NodeSelection -> move cursor to after image
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              const parent = imageNode.getParent();
-              const nextSibling =
-                parent && parent.getChildrenSize() === 1
-                  ? parent.getNextSibling()
-                  : imageNode.getNextSibling();
-
-              if (nextSibling) {
-                nextSibling.selectStart();
-              } else {
-                const newParagraph = $createParagraphNode();
-                if (parent && parent.getChildrenSize() === 1) {
-                  parent.insertAfter(newParagraph);
-                } else {
-                  imageNode.insertAfter(newParagraph);
-                }
-                newParagraph.select();
-              }
-              return true;
-            }
-          }
-
-          // 2. If cursor is at the end of block before an image -> select image
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            const anchorNode = anchor.getNode();
-            if (anchor.offset === anchorNode.getTextContentSize()) {
-              const topElement = anchorNode.getTopLevelElement();
-              if (topElement) {
-                const nextTopElement = topElement.getNextSibling();
-                if (nextTopElement) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(nextTopElement)) {
-                    targetImageNode = nextTopElement;
-                  } else if ($isElementNode(nextTopElement)) {
-                    const firstChild = nextTopElement.getFirstChild();
-                    if ($isImageNode(firstChild)) {
-                      targetImageNode = firstChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
+        event => $handleImageArrowKey(event, 'next'),
         COMMAND_PRIORITY_EDITOR,
       ),
       editor.registerCommand<KeyboardEvent>(
         KEY_ARROW_LEFT_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an Image is selected via NodeSelection -> move cursor to before image
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              const parent = imageNode.getParent();
-              const prevSibling =
-                parent && parent.getChildrenSize() === 1
-                  ? parent.getPreviousSibling()
-                  : imageNode.getPreviousSibling();
-
-              if (prevSibling) {
-                prevSibling.selectEnd();
-              } else {
-                const newParagraph = $createParagraphNode();
-                if (parent && parent.getChildrenSize() === 1) {
-                  parent.insertBefore(newParagraph);
-                } else {
-                  imageNode.insertBefore(newParagraph);
-                }
-                newParagraph.select();
-              }
-              return true;
-            }
-          }
-
-          // 2. If cursor is at offset 0 of block after an image -> select image
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            if (anchor.offset === 0) {
-              const anchorNode = anchor.getNode();
-              const topElement = anchorNode.getTopLevelElement();
-              if (topElement) {
-                const prevTopElement = topElement.getPreviousSibling();
-                if (prevTopElement) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(prevTopElement)) {
-                    targetImageNode = prevTopElement;
-                  } else if ($isElementNode(prevTopElement)) {
-                    const lastChild = prevTopElement.getLastChild();
-                    if ($isImageNode(lastChild)) {
-                      targetImageNode = lastChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
+        event => $handleImageArrowKey(event, 'prev'),
         COMMAND_PRIORITY_EDITOR,
       ),
       editor.registerCommand<KeyboardEvent>(
         KEY_ARROW_UP_COMMAND,
-        event => {
-          const selection = $getSelection();
-
-          // 1. If an Image is selected via NodeSelection -> move cursor to before image
-          if ($isNodeSelection(selection)) {
-            const nodes = selection.getNodes();
-            const imageNode = nodes.find($isImageNode);
-            if (imageNode) {
-              event.preventDefault();
-              const parent = imageNode.getParent();
-              const prevSibling =
-                parent && parent.getChildrenSize() === 1
-                  ? parent.getPreviousSibling()
-                  : imageNode.getPreviousSibling();
-
-              if (prevSibling) {
-                prevSibling.selectEnd();
-              } else {
-                const newParagraph = $createParagraphNode();
-                if (parent && parent.getChildrenSize() === 1) {
-                  parent.insertBefore(newParagraph);
-                } else {
-                  imageNode.insertBefore(newParagraph);
-                }
-                newParagraph.select();
-              }
-              return true;
-            }
-          }
-
-          // 2. If cursor is at offset 0 of block after an image -> select image
-          if ($isRangeSelection(selection) && selection.isCollapsed()) {
-            const anchor = selection.anchor;
-            if (anchor.offset === 0) {
-              const anchorNode = anchor.getNode();
-              const topElement = anchorNode.getTopLevelElement();
-              if (topElement) {
-                const prevTopElement = topElement.getPreviousSibling();
-                if (prevTopElement) {
-                  let targetImageNode: ImageNode | null = null;
-                  if ($isImageNode(prevTopElement)) {
-                    targetImageNode = prevTopElement;
-                  } else if ($isElementNode(prevTopElement)) {
-                    const lastChild = prevTopElement.getLastChild();
-                    if ($isImageNode(lastChild)) {
-                      targetImageNode = lastChild;
-                    }
-                  }
-
-                  if (targetImageNode) {
-                    event.preventDefault();
-                    const nodeSelection = $createNodeSelection();
-                    nodeSelection.add(targetImageNode.getKey());
-                    $setSelection(nodeSelection);
-                    return true;
-                  }
-                }
-              }
-            }
-          }
-
-          return false;
-        },
+        event => $handleImageArrowKey(event, 'prev'),
         COMMAND_PRIORITY_EDITOR,
       ),
       editor.registerCommand<DragEvent>(

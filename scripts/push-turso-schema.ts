@@ -2,29 +2,39 @@ import { createClient } from "@libsql/client";
 import * as fs from "fs";
 import * as path from "path";
 
+function parseEnvEntry(line: string): [string, string] | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const eqIdx = trimmed.indexOf("=");
+  if (eqIdx <= 0) return null;
+
+  const key = trimmed.slice(0, eqIdx).trim();
+  let val = trimmed.slice(eqIdx + 1).trim();
+  const isDoubleQuoted = val.startsWith('"') && val.endsWith('"');
+  const isSingleQuoted = val.startsWith("'") && val.endsWith("'");
+  if (isDoubleQuoted || isSingleQuoted) {
+    val = val.slice(1, -1);
+  }
+  return [key, val];
+}
+
+function loadEnvFile(fullPath: string): void {
+  if (!fs.existsSync(fullPath)) return;
+  const content = fs.readFileSync(fullPath, "utf8");
+  for (const line of content.split("\n")) {
+    const entry = parseEnvEntry(line);
+    if (!entry) continue;
+    const [key, val] = entry;
+    if (!process.env[key]) {
+      process.env[key] = val;
+    }
+  }
+}
+
 // Tự động load biến môi trường từ .env.local và .env khi chạy bằng ts-node/node độc lập
 function loadEnv() {
-  const envFiles = [".env.local", ".env"];
-  for (const file of envFiles) {
-    const fullPath = path.join(__dirname, "..", file);
-    if (fs.existsSync(fullPath)) {
-      const content = fs.readFileSync(fullPath, "utf8");
-      for (const line of content.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const eqIdx = trimmed.indexOf("=");
-        if (eqIdx > 0) {
-          const key = trimmed.slice(0, eqIdx).trim();
-          let val = trimmed.slice(eqIdx + 1).trim();
-          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1);
-          }
-          if (!process.env[key]) {
-            process.env[key] = val;
-          }
-        }
-      }
-    }
+  for (const file of [".env.local", ".env"]) {
+    loadEnvFile(path.join(__dirname, "..", file));
   }
 }
 

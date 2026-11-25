@@ -68,10 +68,7 @@ class Catalog:
         """
         flat = " " + re.sub(r"[^\w\s-]", " ", fold(text or "")) + " "
         flat = re.sub(r"\s+", " ", flat)
-        for name in self.mention_names():
-            if f" {name} " in flat:
-                return True
-        return False
+        return any(f" {name} " in flat for name in self.mention_names())
 
     def mention_names(self) -> set[str]:
         cached = getattr(self, "_mention_names", None)

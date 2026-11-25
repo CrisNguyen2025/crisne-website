@@ -265,32 +265,7 @@ class NextGenRoadmapAgent(
         ):
             yield ev
 
-    async def _astream_events_impl(
-        self, input_dict: dict, config: dict | None = None
-    ) -> AsyncGenerator[dict, None]:
-        raw_content = input_dict.get("messages", [{}])[-1].get("content", "").strip()
-        page_context = input_dict.get("context")
-        # Typing effect only for streaming clients; fast=True (sync /chat) skips it entirely.
-        delay = 0.0 if input_dict.get("fast") else self.typing_delay
-        content = normalize_vietnamese(raw_content)
-        session_id = (config or {}).get("configurable", {}).get("thread_id", "default")
-        lower = content.lower()
-        session_ctx = session_store.get_or_create(session_id)
-
-        # ── Input guard: empty or oversized messages never reach routing ─────
-        problem = input_problem(content)
-        if problem:
-            reply = empty_message_reply(is_owner()) if problem == "empty" else TOO_LONG_REPLY
-            if (trace := current_trace()) is not None:
-                trace.flags["guard"] = problem
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        # An Owner's thread kept in Turso (ADR-0012), its history and open Topic/Lesson focus, is read once,
-        # before anything below reads either; the two reads run together so a cold start waits for one round trip
-        await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
-
+    def _sync_page_focus(self, session_id: str, session_ctx, page_context: dict | None) -> str:
         # Keep Thread focus in sync with the open page so subsequent turns outside the page retain context
         page_slug = ((page_context or {}).get("roadmapSlug") or "").strip()
         page_item = ((page_context or {}).get("itemId") or "").strip()
@@ -302,35 +277,104 @@ class NextGenRoadmapAgent(
                 )
         elif page_slug and session_ctx.active_topic_slug != page_slug:
             session_store.set_active_topic(session_id, page_slug)
+        return page_slug
 
-        # ── 0. Pending roadmap change: confirmation (roadmap domain) ──
-        outcome = {"handled": False}
-        async for ev in self.handle_pending(
-            content=content, lower=lower, session_id=session_id, session_ctx=session_ctx, delay=delay, outcome=outcome,
-            titles=input_dict.get("titles"),
-            target=input_dict.get("target"),
+    async def _run_pre_router_domain_handlers(
+        self,
+        *,
+        content: str,
+        raw_content: str,
+        lower: str,
+        page_context: dict | None,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        handlers = (
+            self.handle_section_rename(
+                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_lesson_edit(
+                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_lesson_content(
+                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_status_change(
+                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_memory_command(
+                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_quiz_command(
+                content=raw_content,
+                page_context=page_context,
+                session_id=session_id,
+                session_ctx=session_ctx,
+                delay=delay,
+                outcome=outcome,
+            ),
+        )
+        for gen in handlers:
+            async for ev in gen:
+                yield ev
+            if outcome["handled"]:
+                return
+
+        if self.bulk_import_applies(raw_content, lower, page_context):
+            outcome["handled"] = True
+            async for ev in self.handle_bulk_import(
+                raw_content=raw_content, lower=lower, page_context=page_context, delay=delay
+            ):
+                yield ev
+
+    def _record_route_flags(self, route_outcome, intent_res, decision, route_gate, method: str) -> None:
+        if (trace := current_trace()) is None:
+            return
+        understood = decision.understanding
+        trace.flags["act"] = understood.act.value
+        trace.flags["target"] = understood.target.value
+        trace.flags["intent"] = intent_res.intent.value
+        if intent_res.sub_intent is not None:
+            trace.flags["sub_intent"] = intent_res.sub_intent.value
+        trace.flags["write"] = route_gate.mode
+        if route_outcome.scope is not None:
+            trace.flags["scope"] = route_outcome.scope.scope.value
+        if not is_owner() and route_gate.mode != WRITE_NONE:
+            trace.flags["visitor_write_attempt"] = True
+        if method.startswith(("rate_limited", "llm_error")):
+            trace.flags["router_llm_unavailable"] = True
+        if route_outcome.plan is not None:
+            trace.flags["write_plan"] = route_outcome.plan.outcome
+            if route_outcome.verdict is None:
+                trace.flags["system2_unavailable"] = True
+            # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
+            if method == "heuristic" and route_outcome.plan.outcome in ("reroute", "blocked"):
+                trace.flags["router_disagreement"] = True
+
+    async def _run_entry_guards(
+        self,
+        *,
+        raw_content: str,
+        content: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        for guard_fn, flag_name, reply_text in (
+            (lambda c: is_sensitive_request(c, instruction=instruction_part(c)), "sensitive", sensitive_reply()),
+            (is_harmful_request, "harmful", harmful_reply()),
         ):
-            yield ev
-        if outcome["handled"]:
-            return
+            if guard_fn(content):
+                outcome["handled"] = True
+                if (trace := current_trace()) is not None:
+                    trace.flags["guard"] = flag_name
+                async for ev in self._stream_text(reply_text, delay):
+                    yield ev
+                return
 
-        # ── 0c. Sensitive guard: secrets, system prompt, prompt injection ─────
-        if is_sensitive_request(content, instruction=instruction_part(content)):
-            if (trace := current_trace()) is not None:
-                trace.flags["guard"] = "sensitive"
-            async for ev in self._stream_text(sensitive_reply(), delay):
-                yield ev
-            return
-        # Breaking into someone's account or system: refuse before scope, which may call it "the field, no lesson"
-        if is_harmful_request(content):
-            if (trace := current_trace()) is not None:
-                trace.flags["guard"] = "harmful"
-            async for ev in self._stream_text(harmful_reply(), delay):
-                yield ev
-            return
-
-        # ── 0b. Active Recall quiz turn: grade Owner's answer while a quiz session is open ──
-        outcome = {"handled": False}
         async for ev in self.handle_active_quiz_turn(
             content=raw_content,
             session_id=session_id,
@@ -339,77 +383,43 @@ class NextGenRoadmapAgent(
             outcome=outcome,
         ):
             yield ev
-        if outcome["handled"]:
-            return
 
-        # ── 0d. A create that names nothing ("tôi có thể tạo topic mới không?"): ask for the name ──
+    async def _run_syntax_guards(
+        self,
+        *,
+        content: str,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
         if (unnamed := unnamed_create_reply(content)) is not None:
+            outcome["handled"] = True
             async for ev in self._stream_text(unnamed if is_owner() else OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
 
-        # ── 0e. Names a layer or group (removed, ADR-0009): suggest the topic/section syntax, change nothing ──
         if (legacy := legacy_level_reply(content, self.router.known_place)) is not None:
+            outcome["handled"] = True
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "legacy_level"
             async for ev in self._stream_text(legacy, delay):
                 yield ev
-            return
 
-        # ── 1b. A section rename: preview, "ok" applies it (roadmap domain: sections.py). It writes, so it runs
-        #        before the router; listing topics and sections, a read, is answered after it (step 5) ──
-        outcome = {"handled": False}
-        async for ev in self.handle_section_rename(
-            content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1b2. A lesson rename or section move: preview, "ok" applies it (roadmap domain: lesson_edit.py) ──
-        async for ev in self.handle_lesson_edit(
-            content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1c. A drafted body for a lesson: preview, "ok" adds it (roadmap domain: lesson_content.py) ──
-        async for ev in self.handle_lesson_content(
-            content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1d. A lesson status change: preview, "ok" applies it (lesson_status.py, ADR-0010). It writes, so it runs
-        #        before the router; the status questions (a)-(c) are answered after it (step 5) ──
-        async for ev in self.handle_status_change(
+    async def _run_domain_or_mixed_guards(
+        self,
+        *,
+        content: str,
+        raw_content: str,
+        lower: str,
+        page_context: dict | None,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        async for ev in self._run_pre_router_domain_handlers(
             content=content,
-            page_context=page_context,
-            session_ctx=session_ctx,
-            delay=delay,
-            outcome=outcome,
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1e. Explicit Owner Memory commands: remember/forget (preview -> "ok") or inspect (ADR-0015) ──
-        async for ev in self.handle_memory_command(
-            content=raw_content,
-            page_context=page_context,
-            session_ctx=session_ctx,
-            delay=delay,
-            outcome=outcome,
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        # ── 1f. Active Recall Quiz & Review commands (Owner-only, quiz_commands.py) ──
-        async for ev in self.handle_quiz_command(
-            content=raw_content,
+            raw_content=raw_content,
+            lower=lower,
             page_context=page_context,
             session_id=session_id,
             session_ctx=session_ctx,
@@ -420,30 +430,282 @@ class NextGenRoadmapAgent(
         if outcome["handled"]:
             return
 
-        # ── 2b. Bulk import of a pasted list (roadmap domain: rag_service/domains/roadmap/commands.py) ──
-        if self.bulk_import_applies(raw_content, lower, page_context):
-            async for ev in self.handle_bulk_import(raw_content=raw_content, lower=lower, page_context=page_context, delay=delay):
-                yield ev
-            return
-
-        # ── 2c. Several requests in one message: ask for one at a time ────────
         if mixed_steps := self.router.mixed_intent_steps(content):
+            outcome["handled"] = True
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "mixed_intents"
             async for ev in self._stream_text(mixed_intent_reply(mixed_steps), delay):
                 yield ev
+
+    async def _run_pre_route_stage(
+        self,
+        *,
+        raw_content: str,
+        content: str,
+        lower: str,
+        page_context: dict | None,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        input_dict: dict,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        async for ev in self.handle_pending(
+            content=content,
+            lower=lower,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+            titles=input_dict.get("titles"),
+            target=input_dict.get("target"),
+        ):
+            yield ev
+        if outcome["handled"]:
             return
 
-        # ── 3. Classify Intent via IntentRouter ───────────────────────────────
-        yield step_event("route", "routing", "running")
+        async for ev in self._run_entry_guards(
+            raw_content=raw_content,
+            content=content,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        async for ev in self._run_syntax_guards(content=content, delay=delay, outcome=outcome):
+            yield ev
+        if outcome["handled"]:
+            return
+
+        async for ev in self._run_domain_or_mixed_guards(
+            content=content,
+            raw_content=raw_content,
+            lower=lower,
+            page_context=page_context,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=outcome,
+        ):
+            yield ev
+
+    async def _handle_route_gate_blocks(
+        self,
+        *,
+        intent_res: IntentClassificationResult,
+        route_gate,
+        lower: str,
+        page_context: dict | None,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        if intent_res.intent == IntentType.OUT_OF_SCOPE:
+            outcome["handled"] = True
+            async for ev in self._stream_text(out_of_scope_reply(is_owner()), delay):
+                yield ev
+            return
+
+        if intent_res.intent == IntentType.UNCLEAR or route_gate.denied:
+            outcome["handled"] = True
+            blocked = route_gate.reason == BLOCKED_CHANGE
+            if (trace := current_trace()) is not None and route_gate.denied:
+                trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
+            if route_gate.reason == CONTENT_UNCLEAR:
+                # The page the user is on names the topic before the thread's last one (trace 860725dc…)
+                reply = content_unclear_reply(await self._page_topic_title(page_context) or session_ctx.active_topic_title or "")
+            elif route_gate.reason == DESCRIPTION_UNSUPPORTED:
+                reply = DESCRIPTION_UNSUPPORTED_REPLY
+            else:
+                reply = BLOCKED_CHANGE_REPLY if blocked else unclear_reply(is_owner())
+            yield step_event("answer", "generation", "done", mode="blocked" if blocked else "unclear", fallback_reason=None)
+            async for ev in self._stream_text(reply, delay):
+                yield ev
+            return
+
+        if route_gate.mode != WRITE_NONE and not session_ctx.active_topic_slug and (
+            TOPIC_REFERENCE.search(lower) or TOPIC_REFERENCE_FOLDED.search(fold(lower))
+        ):
+            outcome["handled"] = True
+            yield step_event("answer", "generation", "done", mode="unclear", fallback_reason=None)
+            async for ev in self._stream_text(NO_TOPIC_REPLY, delay):
+                yield ev
+
+    async def _try_handle_catalog_or_status(
+        self,
+        *,
+        intent_res: IntentClassificationResult,
+        content: str,
+        raw_content: str,
+        lower: str,
+        page_context: dict | None,
+        session_ctx,
+        delay: float,
+        answered: dict,
+    ) -> AsyncGenerator[dict, None]:
+        if intent_res.sub_intent == KnowledgeSubIntent.CATALOG:
+            async for ev in self.handle_catalog(
+                content=content,
+                lower=lower,
+                raw_content=raw_content,
+                page_context=page_context,
+                session_ctx=session_ctx,
+                delay=delay,
+                outcome=answered,
+            ):
+                yield ev
+            if not answered["handled"] and (trace := current_trace()) is not None:
+                trace.flags["catalog_fallback"] = True
+        elif intent_res.sub_intent == KnowledgeSubIntent.LESSON_STATUS:
+            if not is_owner():
+                async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                    yield ev
+                answered["owner_denied"] = True
+                return
+            async for ev in self.handle_lesson_status_query(
+                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=answered
+            ):
+                yield ev
+
+    async def _handle_knowledge_or_plan(
+        self,
+        *,
+        intent_res: IntentClassificationResult,
+        route_outcome,
+        content: str,
+        raw_content: str,
+        lower: str,
+        page_slug: str,
+        page_context: dict | None,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
+            answered = {"handled": False}
+            async for ev in self._try_handle_catalog_or_status(
+                intent_res=intent_res,
+                content=content,
+                raw_content=raw_content,
+                lower=lower,
+                page_context=page_context,
+                session_ctx=session_ctx,
+                delay=delay,
+                answered=answered,
+            ):
+                yield ev
+            if answered["handled"] or answered.get("owner_denied"):
+                return
+
+        deps = self._source_deps(content)
+        if (
+            intent_res.intent == IntentType.KNOWLEDGE_QUERY
+            and route_outcome.scope is not None
+            and route_outcome.scope.scope == Scope.DOMAIN_GAP
+        ):
+            # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
+            focus_topic = focus_written(content) or route_outcome.scope.focus
+            deps = dataclasses.replace(
+                deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
+            )
+        active_topic = page_slug or session_ctx.active_topic_slug
+        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
+        async for ev in answer_from_sources(
+            query=content,
+            session_id=session_id,
+            owner=is_owner(),
+            delay=delay,
+            llm=self.llm,
+            deps=deps,
+            owner_memories=owner_memories,
+            memory_scope=active_topic,
+        ):
+            yield ev
+
+    async def _handle_chitchat_turn(
+        self,
+        *,
+        content: str,
+        page_slug: str,
+        session_id: str,
+        session_ctx,
+        understood,
+        intent_res: IntentClassificationResult,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        # "làm được gì", "cách thêm bài vào topic": the command list, not an LLM answer that may refuse or invent syntax
+        if understood.asks_usage:
+            yield step_event("answer", "generation", "done", mode="help")
+            async for ev in self._stream_text(await self._help_reply(), delay):
+                yield ev
+            return
+
+        outcome = {"handled": False, "llm_failed": False}
+        active_topic = page_slug or session_ctx.active_topic_slug
+        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
+        async for ev in answer_with_llm(
+            llm=self.llm,
+            pipeline=generation_pipeline,
+            mode="chitchat",
+            query=content,
+            session_id=session_id,
+            outcome=outcome,
+            owner_memories=owner_memories,
+            memory_scope=active_topic,
+        ):
+            yield ev
+        if outcome["handled"]:
+            return
+        llm_failed = outcome["llm_failed"]
+
+        # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
+        if intent_res.confidence < UNCLEAR_CONFIDENCE:
+            yield step_event(
+                "answer", "generation", "done", mode="unclear", fallback_reason=self._llm_fallback_reason(llm_failed)
+            )
+            async for ev in self._stream_text(unclear_reply(is_owner()), delay):
+                yield ev
+            return
+
+        resp = await self._greeting_reply()
+        yield step_event(
+            "answer",
+            "generation",
+            "done",
+            mode="template",
+            fallback_reason=self._llm_fallback_reason(llm_failed),
+        )
+        async for ev in self._stream_text(resp, delay):
+            yield ev
+
+    async def _emit_input_problem_if_any(self, content: str, delay: float) -> AsyncGenerator[dict, None]:
+        problem = input_problem(content)
+        if not problem:
+            return
+        reply = empty_message_reply(is_owner()) if problem == "empty" else TOO_LONG_REPLY
+        if (trace := current_trace()) is not None:
+            trace.flags["guard"] = problem
+        async for ev in self._stream_text(reply, delay):
+            yield ev
+
+    async def _decide_route_traced(
+        self, content: str, page_context: dict | None, session_ctx, session_id: str
+    ):
         router_step = start_step("intent-router", input={"message": content})
-        intent_res: IntentClassificationResult
         recent = history_store.get_recent(session_id, HISTORY_TURNS)
         try:
             # System 1, the write gate, and for a write candidate System 2 + grounding (router/route_decision.py)
             route_outcome = await decide_route(
-                self.router, content, recent,
-                verifier_llm=self.router_llm, catalog=await rag_engine.catalog(), page_context=page_context,
+                self.router,
+                content,
+                recent,
+                verifier_llm=self.router_llm,
+                catalog=await rag_engine.catalog(),
+                page_context=page_context,
                 owner=is_owner(),
                 scope_fn=lambda text: classify_for_routing(text, rag_engine, rag_engine.query_vector),
             )
@@ -471,6 +733,114 @@ class NextGenRoadmapAgent(
                 "active_lesson_id": session_ctx.active_lesson_id,
             },
         )
+        return route_outcome
+
+    async def _dispatch_routed_turn(
+        self,
+        *,
+        intent_res: IntentClassificationResult,
+        route_outcome,
+        route_gate,
+        understood,
+        content: str,
+        raw_content: str,
+        lower: str,
+        page_slug: str,
+        page_context: dict | None,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        if route_gate.mode != WRITE_NONE:
+            async for ev in self.handle_cud(
+                content=content,
+                lower=lower,
+                page_context=page_context,
+                session_id=session_id,
+                session_ctx=session_ctx,
+                delay=delay,
+                gate=route_gate,
+                verdict=route_outcome.verdict,
+            ):
+                yield ev
+            return
+
+        if intent_res.intent in (IntentType.KNOWLEDGE_QUERY, IntentType.PLAN_GOAL):
+            async for ev in self._handle_knowledge_or_plan(
+                intent_res=intent_res,
+                route_outcome=route_outcome,
+                content=content,
+                raw_content=raw_content,
+                lower=lower,
+                page_slug=page_slug,
+                page_context=page_context,
+                session_id=session_id,
+                session_ctx=session_ctx,
+                delay=delay,
+            ):
+                yield ev
+            return
+
+        async for ev in self._handle_chitchat_turn(
+            content=content,
+            page_slug=page_slug,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            understood=understood,
+            intent_res=intent_res,
+            delay=delay,
+        ):
+            yield ev
+
+    async def _astream_events_impl(
+        self, input_dict: dict, config: dict | None = None
+    ) -> AsyncGenerator[dict, None]:
+        raw_content = input_dict.get("messages", [{}])[-1].get("content", "").strip()
+        page_context = input_dict.get("context")
+        # Typing effect only for streaming clients; fast=True (sync /chat) skips it entirely.
+        delay = 0.0 if input_dict.get("fast") else self.typing_delay
+        content = normalize_vietnamese(raw_content)
+        session_id = (config or {}).get("configurable", {}).get("thread_id", "default")
+        lower = content.lower()
+        session_ctx = session_store.get_or_create(session_id)
+
+        # ── Input guard: empty or oversized messages never reach routing ─────
+        if input_problem(content):
+            async for ev in self._emit_input_problem_if_any(content, delay):
+                yield ev
+            return
+
+        # An Owner's thread kept in Turso (ADR-0012), its history and open Topic/Lesson focus, is read once,
+        # before anything below reads either; the two reads run together so a cold start waits for one round trip
+        await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
+        page_slug = self._sync_page_focus(session_id, session_ctx, page_context)
+
+        pre_outcome = {"handled": False}
+        async for ev in self._run_pre_route_stage(
+            raw_content=raw_content,
+            content=content,
+            lower=lower,
+            page_context=page_context,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            input_dict=input_dict,
+            outcome=pre_outcome,
+        ):
+            yield ev
+        if pre_outcome["handled"]:
+            return
+
+        # ── 3. Classify Intent via IntentRouter ───────────────────────────────
+        yield step_event("route", "routing", "running")
+        route_outcome = await self._decide_route_traced(content, page_context, session_ctx, session_id)
+        intent_res, method, decision, route_gate = (
+            route_outcome.intent_res,
+            route_outcome.method,
+            route_outcome.decision,
+            route_outcome.gate,
+        )
+        understood = decision.understanding
         yield step_event(
             "route",
             "routing",
@@ -485,158 +855,36 @@ class NextGenRoadmapAgent(
             rule=decision.row,
             write=route_gate.mode,
         )
-        if (trace := current_trace()) is not None:
-            trace.flags["act"] = understood.act.value
-            trace.flags["target"] = understood.target.value
-            trace.flags["intent"] = intent_res.intent.value
-            if intent_res.sub_intent is not None:
-                trace.flags["sub_intent"] = intent_res.sub_intent.value
-            trace.flags["write"] = route_gate.mode
-            if route_outcome.scope is not None:
-                trace.flags["scope"] = route_outcome.scope.scope.value
-            if not is_owner() and route_gate.mode != WRITE_NONE:
-                trace.flags["visitor_write_attempt"] = True
-            if method.startswith(("rate_limited", "llm_error")):
-                trace.flags["router_llm_unavailable"] = True
-            if route_outcome.plan is not None:
-                trace.flags["write_plan"] = route_outcome.plan.outcome
-                if route_outcome.verdict is None:
-                    trace.flags["system2_unavailable"] = True
-                # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
-                if method == "heuristic" and route_outcome.plan.outcome in ("reroute", "blocked"):
-                    trace.flags["router_disagreement"] = True
+        self._record_route_flags(route_outcome, intent_res, decision, route_gate, method)
 
-        # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
-        if intent_res.intent == IntentType.OUT_OF_SCOPE:
-            async for ev in self._stream_text(out_of_scope_reply(is_owner()), delay):
-                yield ev
-            return
-
-        # ── 3c. Write gate (write_gate.py): a denied change, or an unclear message, gets an ask-back ──
-        if intent_res.intent == IntentType.UNCLEAR or route_gate.denied:
-            blocked = route_gate.reason == BLOCKED_CHANGE
-            if (trace := current_trace()) is not None and route_gate.denied:
-                trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
-            if route_gate.reason == CONTENT_UNCLEAR:
-                # The page the user is on names the topic before the thread's last one (trace 860725dc…)
-                reply = content_unclear_reply(await self._page_topic_title(page_context) or session_ctx.active_topic_title or "")
-            elif route_gate.reason == DESCRIPTION_UNSUPPORTED:
-                reply = DESCRIPTION_UNSUPPORTED_REPLY
-            else:
-                reply = BLOCKED_CHANGE_REPLY if blocked else unclear_reply(is_owner())
-            yield step_event("answer", "generation", "done", mode="blocked" if blocked else "unclear", fallback_reason=None)
-            async for ev in self._stream_text(reply, delay):
-                yield ev
-            return
-
-        # ── 3d. "topic vừa tạo" with no topic open in this conversation: ask which one, never guess ──
-        if route_gate.mode != WRITE_NONE and not session_ctx.active_topic_slug and (
-            TOPIC_REFERENCE.search(lower) or TOPIC_REFERENCE_FOLDED.search(fold(lower))
-        ):
-            yield step_event("answer", "generation", "done", mode="unclear", fallback_reason=None)
-            async for ev in self._stream_text(NO_TOPIC_REPLY, delay):
-                yield ev
-            return
-
-        # ── 4. ROADMAP CUD OPERATIONS (roadmap domain: rag_service/domains/roadmap/commands.py) ──
-        if route_gate.mode != WRITE_NONE:
-            async for ev in self.handle_cud(
-                content=content, lower=lower, page_context=page_context,
-                session_id=session_id, session_ctx=session_ctx, delay=delay, gate=route_gate,
-                verdict=route_outcome.verdict,
-            ):
-                yield ev
-            return
-
-        # ── 5. KNOWLEDGE QUERY: live retrieval, then an answer from the sources (core: core/orchestration/sources.py) ──
-        if intent_res.intent == IntentType.KNOWLEDGE_QUERY:
-            # The sub-intent picks a read-only handler; one that does not read the message leaves it to the search
-            answered = {"handled": False}
-            if intent_res.sub_intent == KnowledgeSubIntent.CATALOG:
-                async for ev in self.handle_catalog(
-                    content=content, lower=lower, raw_content=raw_content, page_context=page_context,
-                    session_ctx=session_ctx, delay=delay, outcome=answered,
-                ):
-                    yield ev
-                if not answered["handled"] and (trace := current_trace()) is not None:
-                    trace.flags["catalog_fallback"] = True  # counts, positions: no handler yet, the search answers
-            elif intent_res.sub_intent == KnowledgeSubIntent.LESSON_STATUS:
-                if not is_owner():  # ADR-0010: only the Owner sees lesson status; nothing is searched for a visitor
-                    async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                        yield ev
-                    return
-                async for ev in self.handle_lesson_status_query(
-                    content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=answered,
-                ):
-                    yield ev
-            if answered["handled"]:
-                return
-            deps = self._source_deps(content)
-            if route_outcome.scope is not None and route_outcome.scope.scope == Scope.DOMAIN_GAP:
-                # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
-                focus_topic = focus_written(content) or route_outcome.scope.focus  # folded focus is for matching only
-                deps = dataclasses.replace(
-                    deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
-                )
-            active_topic = page_slug or session_ctx.active_topic_slug
-            owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
-            async for ev in answer_from_sources(
-                query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=deps, owner_memories=owner_memories, memory_scope=active_topic,
-            ):
-                yield ev
-            return
-
-        # ── 5b. LEARNING PLAN: answered from the owner's own lessons, never from a ready-made template ──
-        # Without this branch a plan request fell through to chitchat, where the model wrote a plan from nothing.
-        if intent_res.intent == IntentType.PLAN_GOAL:
-            active_topic = page_slug or session_ctx.active_topic_slug
-            owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
-            async for ev in answer_from_sources(
-                query=content, session_id=session_id, owner=is_owner(), delay=delay,
-                llm=self.llm, deps=self._source_deps(content), owner_memories=owner_memories, memory_scope=active_topic,
-            ):
-                yield ev
-            return
-
-        # ── 6. CHITCHAT / GENERAL ASSISTANT ───────────────────────────────────
-        # "làm được gì", "cách thêm bài vào topic": the command list, not an LLM answer that may refuse or invent syntax
-        if understood.asks_usage:
-            yield step_event("answer", "generation", "done", mode="help")
-            async for ev in self._stream_text(await self._help_reply(), delay):
-                yield ev
-            return
-
-        outcome = {"handled": False, "llm_failed": False}
-        active_topic = page_slug or session_ctx.active_topic_slug
-        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
-        async for ev in answer_with_llm(
-            llm=self.llm, pipeline=generation_pipeline, mode="chitchat", query=content, session_id=session_id, outcome=outcome,
-            owner_memories=owner_memories, memory_scope=active_topic,
+        gate_outcome = {"handled": False}
+        async for ev in self._handle_route_gate_blocks(
+            intent_res=intent_res,
+            route_gate=route_gate,
+            lower=lower,
+            page_context=page_context,
+            session_ctx=session_ctx,
+            delay=delay,
+            outcome=gate_outcome,
         ):
             yield ev
-        if outcome["handled"]:
-            return
-        llm_failed = outcome["llm_failed"]
-
-        # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
-        if intent_res.confidence < UNCLEAR_CONFIDENCE:
-            yield step_event(
-                "answer", "generation", "done", mode="unclear", fallback_reason=self._llm_fallback_reason(llm_failed)
-            )
-            async for ev in self._stream_text(unclear_reply(is_owner()), delay):
-                yield ev
+        if gate_outcome["handled"]:
             return
 
-        resp = await self._greeting_reply()
-        yield step_event(
-            "answer",
-            "generation",
-            "done",
-            mode="template",
-            fallback_reason=self._llm_fallback_reason(llm_failed),
-        )
-        async for ev in self._stream_text(resp, delay):
+        async for ev in self._dispatch_routed_turn(
+            intent_res=intent_res,
+            route_outcome=route_outcome,
+            route_gate=route_gate,
+            understood=understood,
+            content=content,
+            raw_content=raw_content,
+            lower=lower,
+            page_slug=page_slug,
+            page_context=page_context,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+        ):
             yield ev
 
 

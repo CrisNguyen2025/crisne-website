@@ -72,6 +72,20 @@ function isGoogleDocCheckboxImg(img: HTMLImageElement): boolean {
   );
 }
 
+function parseImageDimension(
+  styleMatch: RegExpMatchArray | null,
+  attrValue: string | null,
+): number | 'inherit' {
+  if (styleMatch) {
+    return parseInt(styleMatch[1], 10);
+  }
+  const numeric = Number(attrValue);
+  if (attrValue && !isNaN(numeric) && numeric > 0) {
+    return numeric;
+  }
+  return 'inherit';
+}
+
 function $convertImageElement(domNode: Node): null | DOMConversionOutput {
   const img = domNode as HTMLImageElement;
   const src = img.getAttribute('src');
@@ -82,26 +96,11 @@ function $convertImageElement(domNode: Node): null | DOMConversionOutput {
 
   // Check inline style first (e.g. style="width: 250px; height: 180px")
   const styleAttr = img.getAttribute('style') || '';
-  const styleWidthMatch = styleAttr.match(/width:\s*([0-9]+)px/i);
-  const styleHeightMatch = styleAttr.match(/height:\s*([0-9]+)px/i);
+  const styleWidthMatch = styleAttr.match(/width:\s*(\d+)px/i);
+  const styleHeightMatch = styleAttr.match(/height:\s*(\d+)px/i);
 
-  const attrWidth = img.getAttribute('width');
-  const attrHeight = img.getAttribute('height');
-
-  const parsedWidth = styleWidthMatch
-    ? parseInt(styleWidthMatch[1], 10)
-    : attrWidth && !isNaN(Number(attrWidth)) && Number(attrWidth) > 0
-    ? Number(attrWidth)
-    : undefined;
-
-  const parsedHeight = styleHeightMatch
-    ? parseInt(styleHeightMatch[1], 10)
-    : attrHeight && !isNaN(Number(attrHeight)) && Number(attrHeight) > 0
-    ? Number(attrHeight)
-    : undefined;
-
-  const width = parsedWidth !== undefined ? parsedWidth : 'inherit';
-  const height = parsedHeight !== undefined ? parsedHeight : 'inherit';
+  const width = parseImageDimension(styleWidthMatch, img.getAttribute('width'));
+  const height = parseImageDimension(styleHeightMatch, img.getAttribute('height'));
   const node = $createImageNode({ altText, height, src, width });
   return { node };
 }

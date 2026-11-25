@@ -135,8 +135,8 @@ export function parseKnipJson(json: string): Finding[] {
 
 // ── ruff ───────────────────────────────────────────────────────────────────────
 
-/** Pyflakes errors, syntax errors, bugbear, blocking calls in async code and bandit security rules */
-export const RUFF_RULES = "F,E9,B,ASYNC,S";
+/** Pyflakes errors, syntax errors, bugbear, blocking calls in async code, bandit security, plus Sonar-aligned complexity/simplification/async task safety */
+export const RUFF_RULES = "F,E9,B,ASYNC,S,C901,SIM,RUF006,RUF019,RUF059,RUF100";
 
 interface RuffMessage {
   code: string | null;
@@ -147,7 +147,7 @@ interface RuffMessage {
 
 function ruffSeverity(code: string): Severity {
   if (/^(F82[123]|E9)/.test(code)) return "bug";
-  if (/^(F|ASYNC|S)/.test(code)) return "risk";
+  if (/^(F|ASYNC|S|RUF006)/.test(code)) return "risk";
   return "nit";
 }
 

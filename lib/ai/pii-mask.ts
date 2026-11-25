@@ -18,7 +18,14 @@ const CARD_PATTERN = /(?<![\w.-])\d(?:[ -]?\d){12,18}(?![\w-])/g;
 // Vietnamese citizen ID (CCCD): exactly 12 digits standing alone.
 const CCCD_PATTERN = /(?<![\w.-])\d{12}(?![\w.-])/g;
 
-const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const EMAIL_PATTERN = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
+
+function hasAlphaTld(email: string): boolean {
+  const lastDot = email.lastIndexOf(".");
+  if (lastDot < 0) return false;
+  const tld = email.slice(lastDot + 1);
+  return tld.length >= 2 && /^[A-Za-z]+$/.test(tld);
+}
 
 // Vietnamese numbers: 0xxx / 84xxx / +84xxx, 9–11 digits, optional space/dot/dash separators.
 // Must start with 0 or 84 directly followed by 1–9, so decimals like retrieval scores (0.8067…) never match.
@@ -44,7 +51,7 @@ function luhnOk(digits: string): boolean {
 export function maskPII(text: string): string {
   return text
     .replace(SECRET_PATTERN, "[secret]")
-    .replace(EMAIL_PATTERN, "[email]")
+    .replace(EMAIL_PATTERN, (m) => (hasAlphaTld(m) ? "[email]" : m))
     .replace(CARD_PATTERN, (m) => (luhnOk(m.replace(/\D/g, "")) ? "[card]" : m))
     .replace(CCCD_PATTERN, "[cccd]")
     .replace(VN_PHONE_PATTERN, "[phone]")

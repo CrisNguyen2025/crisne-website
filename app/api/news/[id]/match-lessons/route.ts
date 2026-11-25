@@ -4,6 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { parseJsonStringArray } from "@/lib/news/schemas";
 import { prisma } from "@/lib/prisma";
 import type { MatchLessonsResponseDto } from "@/lib/provenance/relations";
+import { trimTrailingChar } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "News item not found" }, { status: 404 });
     }
 
-    const upstream = await fetch(`${baseUrl.replace(/\/+$/, "")}/internal/match-lessons`, {
+    const upstream = await fetch(`${trimTrailingChar(baseUrl, "/")}/internal/match-lessons`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

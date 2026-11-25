@@ -61,11 +61,15 @@ describe("tool output parsers", () => {
     const json = JSON.stringify([
       { code: "F821", message: "Undefined name `x`", filename: "/repo/svc/a.py", location: { row: 4 } },
       { code: "S608", message: "Possible SQL injection", filename: "/repo/svc/a.py", location: { row: 8 } },
+      { code: "RUF006", message: "Store a reference to asyncio.create_task", filename: "/repo/svc/a.py", location: { row: 11 } },
+      { code: "C901", message: "Function is too complex", filename: "/repo/svc/a.py", location: { row: 14 } },
       { code: "B905", message: "zip() without strict", filename: "/repo/svc/a.py", location: { row: 9 } },
     ]);
     expect(parseRuffJson(json, ROOT).map((f) => [f.file, f.severity])).toEqual([
       ["svc/a.py", "bug"],
       ["svc/a.py", "risk"],
+      ["svc/a.py", "risk"],
+      ["svc/a.py", "nit"],
       ["svc/a.py", "nit"],
     ]);
   });

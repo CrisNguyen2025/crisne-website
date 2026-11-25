@@ -32,6 +32,38 @@ async def _run_job_with_semaphore(
         semaphore.release()
 
 
+async def _drain_claim_queue(
+    app: FastAPI,
+    active_settings: Settings,
+    client: NextJsJobClient,
+    semaphore: asyncio.Semaphore,
+    in_flight: set[asyncio.Task[None]],
+) -> bool:
+    claimed_any = False
+    try:
+        while not getattr(app.state, "stopping", False) and active_settings.admin_api_key:
+            await semaphore.acquire()
+            try:
+                job = await client.claim_next_job()
+            except Exception:
+                semaphore.release()
+                raise
+            if not job:
+                semaphore.release()
+                break
+            claimed_any = True
+            task = asyncio.create_task(
+                _run_job_with_semaphore(semaphore, job, client, active_settings)
+            )
+            in_flight.add(task)
+            task.add_done_callback(in_flight.discard)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        print(f"[news-worker] poll error: {exc}")
+    return claimed_any
+
+
 async def _worker_loop(
     app: FastAPI,
     active_settings: Settings,
@@ -48,32 +80,7 @@ async def _worker_loop(
     try:
         while not getattr(app.state, "stopping", False):
             wake_event.clear()
-            claimed_any = False
-            try:
-                while not getattr(app.state, "stopping", False):
-                    if not active_settings.admin_api_key:
-                        break
-                    await semaphore.acquire()
-                    try:
-                        job = await client.claim_next_job()
-                    except Exception:
-                        semaphore.release()
-                        raise
-                    if not job:
-                        semaphore.release()
-                        break
-                    claimed_any = True
-                    task = asyncio.create_task(
-                        _run_job_with_semaphore(semaphore, job, client, active_settings)
-                    )
-                    in_flight.add(task)
-                    task.add_done_callback(in_flight.discard)
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                print(f"[news-worker] poll error: {exc}")
-
-            if claimed_any:
+            if await _drain_claim_queue(app, active_settings, client, semaphore, in_flight):
                 continue
 
             with suppress(TimeoutError):

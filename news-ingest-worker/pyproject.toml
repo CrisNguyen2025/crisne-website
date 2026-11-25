@@ -3,3 +3,9 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["F", "E9", "B", "ASYNC", "S", "C901", "SIM", "RUF006", "RUF019", "RUF059", "RUF100"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10

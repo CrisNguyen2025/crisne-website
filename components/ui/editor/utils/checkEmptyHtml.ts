@@ -7,7 +7,7 @@ export function checkEmptyHtml(value: string | undefined): boolean {
   }
 
   const textContent = value
-    .replaceAll(/<[^>]+>/g, '')
+    .replaceAll(/<[^<>]+>/g, '')
     .replaceAll(/&nbsp;/g, ' ')
     .replaceAll(/\s+/g, '')
     .trim();

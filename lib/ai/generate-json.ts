@@ -7,11 +7,16 @@ export type JsonResult<T> =
   | { ok: false; error: unknown; text?: string };
 
 // Models sometimes wrap JSON in a ```json fence even in JSON mode; inner fences are kept
-const FENCED = /^```(?:json)?\s*([\s\S]*?)\s*```$/i;
-
 export function stripCodeFence(text: string): string {
   const trimmed = text.trim();
-  return trimmed.match(FENCED)?.[1] ?? trimmed;
+  if (!trimmed.startsWith("```") || !trimmed.endsWith("```") || trimmed.length < 6) {
+    return trimmed;
+  }
+  const openTagEnd = trimmed.search(/\s/);
+  if (openTagEnd === -1) return trimmed;
+  const openTag = trimmed.slice(3, openTagEnd).toLowerCase();
+  if (openTag && openTag !== "json") return trimmed;
+  return trimmed.slice(openTagEnd, -3).trim();
 }
 
 function parseJsonAnswer<T>(

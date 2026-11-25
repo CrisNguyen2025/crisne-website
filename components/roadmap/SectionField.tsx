@@ -163,15 +163,16 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
         <label htmlFor={fieldId} className="block text-[0.8125rem] font-medium text-foreground">
           Mục
         </label>
-        {cleaned && exactMatch && exactMatch !== cleaned ? (
+        {cleaned && exactMatch && exactMatch !== cleaned && (
           <span className="max-w-[12rem] truncate text-[0.6875rem] text-muted-foreground">
             Khớp mục: <strong className="font-medium text-foreground">{exactMatch}</strong>
           </span>
-        ) : cleaned && !exactMatch ? (
+        )}
+        {cleaned && !exactMatch && (
           <span className="rounded bg-[var(--editorial-accent-soft)] px-1.5 py-0.5 text-[0.6875rem] font-medium text-[var(--editorial-accent)]">
             Mục mới
           </span>
-        ) : null}
+        )}
       </div>
 
       <div className="relative">
@@ -270,11 +271,8 @@ export function SectionField({ value, onChange, sections, className }: SectionFi
           >
             {options.map((opt, idx) => {
               const isSelected =
-                opt.kind === 'none'
-                  ? !cleaned
-                  : opt.kind === 'existing'
-                    ? exactMatch === opt.value
-                    : false;
+                (opt.kind === 'none' && !cleaned) ||
+                (opt.kind === 'existing' && exactMatch === opt.value);
               const isActive = idx === clampedActiveIndex;
 
               return (

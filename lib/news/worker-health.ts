@@ -1,3 +1,4 @@
+import { trimTrailingChar } from "@/lib/utils";
 import type { NewsWorkerHealthDto } from "./schemas";
 
 /** Checks whether NEWS_WORKER_URL is configured and reachable via `/health`. */
@@ -10,7 +11,7 @@ export async function checkNewsWorkerHealth(
   }
 
   try {
-    const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/health`, {
+    const res = await fetch(`${trimTrailingChar(baseUrl, "/")}/health`, {
       method: "GET",
       cache: "no-store",
       signal: AbortSignal.timeout(timeoutMs),

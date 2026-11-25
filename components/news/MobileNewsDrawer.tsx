@@ -53,7 +53,7 @@ export function MobileNewsDrawer<T>({
       }
       // Commit the initial off-screen transform before flipping so the transition starts on frame 1
       if (panelRef.current) {
-        void panelRef.current.offsetWidth;
+        panelRef.current.getBoundingClientRect();
       }
       const frame = window.requestAnimationFrame(() => {
         setIsVisible(true);

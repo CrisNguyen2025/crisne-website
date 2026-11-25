@@ -116,10 +116,7 @@ def _is_inside_topic(text: str, match: re.Match, known_topics: Optional[Iterable
 
     # 3. If the entire text being matched is itself a topic name or matches a known topic
     cleaned = text.strip()
-    if cleaned and any(cleaned.lower() == t.lower() for t in all_known):
-        return True
-
-    return False
+    return bool(cleaned and any(cleaned.lower() == t.lower() for t in all_known))
 
 
 def _section_match(text: str, lesson: bool, known_topics: Optional[Iterable[str]] = None) -> Optional[re.Match]:
@@ -273,6 +270,29 @@ class StructuredEntityExtractor:
         candidate = clean_conversational_fillers(candidate)
         return candidate if candidate else cleaned
 
+    def _detect_parent_topic(
+        self, text: str, lower: str, level: EntityLevel, default_parent: Optional[str]
+    ) -> Optional[str]:
+        if level == EntityLevel.TOPIC:
+            return None
+        if any(w in lower for w in ["vào đó", "trong đó", "cho nó", "to it", "in it"]):
+            return "CONTEXT_ACTIVE"
+        m_parent = re.search(
+            r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=$)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        found: Optional[str] = None
+        m_prefix = re.search(r"\btopics?c*\s+([a-zA-Z0-9_-]+)", text, flags=re.IGNORECASE)
+        if m_prefix:
+            found = _clean_parent(m_prefix.group(1)) or found
+        if m_parent:
+            found = _clean_parent(m_parent.group(1)) or found
+        m_suffix = re.search(r"\b([a-zA-Z0-9_-]+)\s+topics?c*\b", text, flags=re.IGNORECASE)
+        if m_suffix and found is None:
+            found = _clean_parent(m_suffix.group(1))
+        return found or default_parent
+
     def _deterministic_extract(
         self, prompt: str, default_parent: Optional[str] = None
     ) -> StructuredRoadmapAction:
@@ -285,11 +305,9 @@ class StructuredEntityExtractor:
         text = text.rstrip("?!.").strip()
         lower = text.lower()
 
-        # 1. Extract and strip the section a lesson goes into ('… vào mục X')
         entity_section = named_section(text)
         text = strip_section_clause(text)
 
-        # 2. Determine action (matched folded, so "xoa bai" and "xóa bài" are the same request)
         flat = fold(lower)
         action = ActionType.CREATE
         if "gỡ" in lower or any(re.search(rf"\b{w}\b", flat) for w in ["xoa", "delete", "remove"]):
@@ -297,54 +315,24 @@ class StructuredEntityExtractor:
         elif any(re.search(rf"\b{w}\b", flat) for w in ["sua", "doi ten", "rename", "update", "cap nhat", "dieu chinh"]):
             action = ActionType.UPDATE
 
-        # 3. Determine entity level
-        level = EntityLevel.TOPIC
-        if any(re.search(rf"\b{p}\b", flat) for p in [r"items?m*", r"bai(?:\s+hoc)?", r"lessons?"]):
-            level = EntityLevel.ITEM
+        level = (
+            EntityLevel.ITEM
+            if any(re.search(rf"\b{p}\b", flat) for p in [r"items?m*", r"bai(?:\s+hoc)?", r"lessons?"])
+            else EntityLevel.TOPIC
+        )
+        parent = self._detect_parent_topic(text, lower, level, default_parent)
 
-        # 4. Parent topic: only a lesson has one
-        parent = None if level == EntityLevel.TOPIC else default_parent
-        if level != EntityLevel.TOPIC:
-            if any(w in lower for w in ["vào đó", "trong đó", "cho nó", "to it", "in it"]):
-                parent = "CONTEXT_ACTIVE"
-            else:
-                m_parent = re.search(
-                    r"\b(?:trong|vào|vao|cho|on|in|to|into|under)\s+(?:topics?c*|chủ\s+đề|lộ\s+trình)?\s*([a-zA-Z0-9_ -]+?)(?=$)",
-                    text,
-                    flags=re.IGNORECASE,
-                )
-                found: Optional[str] = None
-                m_prefix = re.search(r"\btopics?c*\s+([a-zA-Z0-9_-]+)", text, flags=re.IGNORECASE)
-                if m_prefix:
-                    found = _clean_parent(m_prefix.group(1)) or found
-                if m_parent:
-                    found = _clean_parent(m_parent.group(1)) or found
-                m_suffix = re.search(r"\b([a-zA-Z0-9_-]+)\s+topics?c*\b", text, flags=re.IGNORECASE)
-                if m_suffix and found is None:
-                    found = _clean_parent(m_suffix.group(1))
-                if found:
-                    parent = found
-
-        # 5. Raw titles and enumerations ("mock 1 và 2" -> ["mock 1", "mock 2"])
         raw_titles = self._extract_raw_titles(text, level)
-
+        section_val = entity_section or None if level == EntityLevel.ITEM else None
         entities: list[SingleEntity] = []
         for t in raw_titles:
             clean_t = self._sanitize_title(t).lstrip(": -").strip()
-            if not clean_t:
-                continue
-            entities.append(
-                SingleEntity(title=clean_t, section=entity_section or None if level == EntityLevel.ITEM else None)
-            )
+            if clean_t:
+                entities.append(SingleEntity(title=clean_t, section=section_val))
 
         if not entities:
             clean_t = self._sanitize_title(text).lstrip(": -").strip()
-            entities.append(
-                SingleEntity(
-                    title=clean_t or "Untitled",
-                    section=entity_section or None if level == EntityLevel.ITEM else None,
-                )
-            )
+            entities.append(SingleEntity(title=clean_t or "Untitled", section=section_val))
 
         summary = f"{action.value.upper()} {len(entities)} {level.value}(s)"
         if parent:

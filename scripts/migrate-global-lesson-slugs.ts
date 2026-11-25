@@ -34,6 +34,101 @@ interface JoinedLessonRow {
   slug: string | null;
 }
 
+interface SlugUpdatePlan {
+  id: string;
+  oldSlug: string;
+  newSlug: string;
+  title: string;
+  topicSlug: string;
+}
+
+interface SlugRedirectPlan {
+  fromSlug: string;
+  targetId: string;
+}
+
+function buildGlobalSlugPlan(rows: JoinedLessonRow[]): {
+  updates: SlugUpdatePlan[];
+  redirects: SlugRedirectPlan[];
+} {
+  const usedSlugs = new Set<string>();
+  const usedByTopic = new Map<string, Set<string>>();
+  const updates: SlugUpdatePlan[] = [];
+  const redirects: SlugRedirectPlan[] = [];
+
+  for (const row of rows) {
+    let topicUsed = usedByTopic.get(row.roadmapId);
+    if (!topicUsed) {
+      topicUsed = new Set<string>();
+      usedByTopic.set(row.roadmapId, topicUsed);
+    }
+    const current = (row.slug ?? "").trim();
+    if (current && !usedSlugs.has(current)) {
+      usedSlugs.add(current);
+      topicUsed.add(current);
+      continue;
+    }
+    const nextSlug = allocateGlobalLessonSlug(row.title, usedSlugs, row.topicSlug, topicUsed);
+    updates.push({
+      id: row.id,
+      oldSlug: current,
+      newSlug: nextSlug,
+      title: row.title,
+      topicSlug: row.topicSlug,
+    });
+    if (current && current !== nextSlug && !redirects.some((r) => r.fromSlug === current)) {
+      redirects.push({ fromSlug: current, targetId: row.id });
+    }
+  }
+
+  return { updates, redirects };
+}
+
+function buildGlobalSlugStatements(
+  updates: SlugUpdatePlan[],
+  redirects: SlugRedirectPlan[]
+): InStatement[] {
+  const statements: InStatement[] = [
+    {
+      sql: `CREATE TABLE IF NOT EXISTS "SlugRedirect" (
+        "fromSlug" TEXT NOT NULL PRIMARY KEY,
+        "entity" TEXT NOT NULL,
+        "targetId" TEXT NOT NULL,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      args: [],
+    },
+    {
+      sql: 'CREATE INDEX IF NOT EXISTS "SlugRedirect_entity_targetId_idx" ON "SlugRedirect"("entity", "targetId")',
+      args: [],
+    },
+    {
+      sql: 'DROP INDEX IF EXISTS "RoadmapItem_roadmapId_slug_key"',
+      args: [],
+    },
+  ];
+
+  for (const u of updates) {
+    statements.push({
+      sql: 'UPDATE "RoadmapItem" SET "slug" = ? WHERE id = ?',
+      args: [u.newSlug, u.id],
+    });
+  }
+
+  for (const r of redirects) {
+    statements.push({
+      sql: `INSERT OR IGNORE INTO "SlugRedirect" ("fromSlug", "entity", "targetId") VALUES (?, 'lesson', ?)`,
+      args: [r.fromSlug, r.targetId],
+    });
+  }
+
+  statements.push({
+    sql: 'CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_slug_key" ON "RoadmapItem"("slug")',
+    args: [],
+  });
+  return statements;
+}
+
 async function main() {
   const { client, target } = connect();
   console.log(`target: ${target}${apply ? "  (APPLY)" : "  (dry-run)"}`);
@@ -48,47 +143,17 @@ async function main() {
       )
     ).rows as unknown as JoinedLessonRow[];
 
-    const usedSlugs = new Set<string>();
-    const usedByTopic = new Map<string, Set<string>>();
-    const updates: { id: string; oldSlug: string; newSlug: string; title: string; topicSlug: string }[] = [];
-    const redirects: { fromSlug: string; targetId: string }[] = [];
-
-    for (const row of rows) {
-      let topicUsed = usedByTopic.get(row.roadmapId);
-      if (!topicUsed) {
-        topicUsed = new Set<string>();
-        usedByTopic.set(row.roadmapId, topicUsed);
-      }
-      const current = (row.slug ?? "").trim();
-      if (current && !usedSlugs.has(current)) {
-        usedSlugs.add(current);
-        topicUsed.add(current);
-        continue;
-      }
-      const nextSlug = allocateGlobalLessonSlug(row.title, usedSlugs, row.topicSlug, topicUsed);
-      updates.push({
-        id: row.id,
-        oldSlug: current,
-        newSlug: nextSlug,
-        title: row.title,
-        topicSlug: row.topicSlug,
-      });
-      if (current && current !== nextSlug && !redirects.some((r) => r.fromSlug === current)) {
-        redirects.push({ fromSlug: current, targetId: row.id });
-      }
-    }
+    const { updates, redirects } = buildGlobalSlugPlan(rows);
 
     console.log(`Total lessons: ${rows.length}`);
     console.log(`Lessons needing global slug update: ${updates.length}`);
     console.log(`SlugRedirect entries to record: ${redirects.length}`);
 
-    if (updates.length > 0) {
-      for (const u of updates.slice(0, 15)) {
-        console.log(`  [${u.topicSlug}] "${u.title}": "${u.oldSlug || "(empty)"}" -> "${u.newSlug}"`);
-      }
-      if (updates.length > 15) {
-        console.log(`  ... and ${updates.length - 15} more`);
-      }
+    for (const u of updates.slice(0, 15)) {
+      console.log(`  [${u.topicSlug}] "${u.title}": "${u.oldSlug || "(empty)"}" -> "${u.newSlug}"`);
+    }
+    if (updates.length > 15) {
+      console.log(`  ... and ${updates.length - 15} more`);
     }
 
     if (!apply) {
@@ -106,45 +171,7 @@ async function main() {
     fs.writeFileSync(backupFile, JSON.stringify({ takenAt: new Date().toISOString(), RoadmapItem: fullRows }, null, 2));
     console.log(`Backup saved to: ${backupFile}`);
 
-    const statements: InStatement[] = [
-      {
-        sql: `CREATE TABLE IF NOT EXISTS "SlugRedirect" (
-          "fromSlug" TEXT NOT NULL PRIMARY KEY,
-          "entity" TEXT NOT NULL,
-          "targetId" TEXT NOT NULL,
-          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )`,
-        args: [],
-      },
-      {
-        sql: 'CREATE INDEX IF NOT EXISTS "SlugRedirect_entity_targetId_idx" ON "SlugRedirect"("entity", "targetId")',
-        args: [],
-      },
-      {
-        sql: 'DROP INDEX IF EXISTS "RoadmapItem_roadmapId_slug_key"',
-        args: [],
-      },
-    ];
-
-    for (const u of updates) {
-      statements.push({
-        sql: 'UPDATE "RoadmapItem" SET "slug" = ? WHERE id = ?',
-        args: [u.newSlug, u.id],
-      });
-    }
-
-    for (const r of redirects) {
-      statements.push({
-        sql: `INSERT OR IGNORE INTO "SlugRedirect" ("fromSlug", "entity", "targetId") VALUES (?, 'lesson', ?)`,
-        args: [r.fromSlug, r.targetId],
-      });
-    }
-
-    statements.push({
-      sql: 'CREATE UNIQUE INDEX IF NOT EXISTS "RoadmapItem_slug_key" ON "RoadmapItem"("slug")',
-      args: [],
-    });
-
+    const statements = buildGlobalSlugStatements(updates, redirects);
     await client.batch(statements, "write");
     console.log("Successfully migrated RoadmapItem slugs to global uniqueness and created SlugRedirect.");
   } finally {

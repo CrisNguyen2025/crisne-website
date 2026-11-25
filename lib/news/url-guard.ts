@@ -155,6 +155,16 @@ export function assertNoUrlCredentials(
   }
 }
 
+function isSpecialIpv4Octets(first: number, second: number, third: number): boolean {
+  if (first === 192 && second === 0) return third === 0 || third === 2; // 192.0.0.0/24, 192.0.2.0/24
+  if (first === 192 && second === 88 && third === 99) return true; // 192.88.99.0/24 6to4 relay
+  if (first === 192 && second === 168) return true; // 192.168.0.0/16
+  if (first === 198 && (second === 18 || second === 19)) return true; // 198.18.0.0/15 benchmark
+  if (first === 198 && second === 51 && third === 100) return true; // 198.51.100.0/24 TEST-NET-2
+  if (first === 203 && second === 0 && third === 113) return true; // 203.0.113.0/24 TEST-NET-3
+  return false;
+}
+
 function isPrivateIpv4(ip: string): boolean {
   const num = parseIpv4ToInt(ip);
   if (num === null) return true;
@@ -162,21 +172,30 @@ function isPrivateIpv4(ip: string): boolean {
   const second = (num >>> 16) & 0xff;
   const third = (num >>> 8) & 0xff;
 
-  if (first === 0) return true; // 0.0.0.0/8
-  if (first === 10) return true; // 10.0.0.0/8
+  if (first === 0 || first === 10 || first === 127 || first >= 224) return true;
   if (first === 100 && second >= 64 && second <= 127) return true; // 100.64.0.0/10 CGNAT
-  if (first === 127) return true; // 127.0.0.0/8 loopback
   if (first === 169 && second === 254) return true; // 169.254.0.0/16 link-local / metadata
   if (first === 172 && second >= 16 && second <= 31) return true; // 172.16.0.0/12
-  if (first === 192 && second === 0 && third === 0) return true; // 192.0.0.0/24
-  if (first === 192 && second === 0 && third === 2) return true; // 192.0.2.0/24 TEST-NET-1
-  if (first === 192 && second === 88 && third === 99) return true; // 192.88.99.0/24 6to4 relay
-  if (first === 192 && second === 168) return true; // 192.168.0.0/16
-  if (first === 198 && (second === 18 || second === 19)) return true; // 198.18.0.0/15 benchmark
-  if (first === 198 && second === 51 && third === 100) return true; // 198.51.100.0/24 TEST-NET-2
-  if (first === 203 && second === 0 && third === 113) return true; // 203.0.113.0/24 TEST-NET-3
-  if (first >= 224) return true; // multicast & reserved (224.0.0.0/4, 240.0.0.0/4)
-  return false;
+  return isSpecialIpv4Octets(first, second, third);
+}
+
+function parseIpv6Segment(part: string): number[] | null {
+  if (!part) return [];
+  const tokens = part.split(":");
+  const words: number[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.includes(".")) {
+      if (i !== tokens.length - 1) return null;
+      const ipv4Int = parseIpv4ToInt(token);
+      if (ipv4Int === null) return null;
+      words.push((ipv4Int >>> 16) & 0xffff, ipv4Int & 0xffff);
+    } else {
+      if (!/^[0-9a-fA-F]{1,4}$/.test(token)) return null;
+      words.push(parseInt(token, 16));
+    }
+  }
+  return words;
 }
 
 function expandIpv6Words(ip: string): number[] | null {
@@ -184,73 +203,51 @@ function expandIpv6Words(ip: string): number[] | null {
   const halves = withoutZone.split("::");
   if (halves.length > 2) return null;
 
-  const parsePart = (part: string): number[] | null => {
-    if (!part) return [];
-    const tokens = part.split(":");
-    const words: number[] = [];
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
-      if (token.includes(".")) {
-        if (i !== tokens.length - 1) return null;
-        const ipv4Int = parseIpv4ToInt(token);
-        if (ipv4Int === null) return null;
-        words.push((ipv4Int >>> 16) & 0xffff, ipv4Int & 0xffff);
-      } else {
-        if (!/^[0-9a-fA-F]{1,4}$/.test(token)) return null;
-        words.push(parseInt(token, 16));
-      }
-    }
-    return words;
-  };
-
   if (halves.length === 1) {
-    const words = parsePart(halves[0]);
+    const words = parseIpv6Segment(halves[0]);
     return words && words.length === 8 ? words : null;
   }
 
-  const left = parsePart(halves[0]);
-  const right = parsePart(halves[1]);
+  const left = parseIpv6Segment(halves[0]);
+  const right = parseIpv6Segment(halves[1]);
   if (!left || !right) return null;
   const missing = 8 - (left.length + right.length);
   if (missing < 1) return null;
   return [...left, ...Array<number>(missing).fill(0), ...right];
 }
 
-function isPrivateIpv6(ip: string): boolean {
-  const words = expandIpv6Words(ip);
-  if (!words) return true;
+function mappedIpv4FromWords(hi: number, lo: number): string {
+  return `${(hi >>> 8) & 0xff}.${hi & 0xff}.${(lo >>> 8) & 0xff}.${lo & 0xff}`;
+}
 
-  if (words.slice(0, 6).every((w) => w === 0)) return true;
-
-  // IPv4-mapped IPv6 (::ffff:0:0/96)
-  const isIpv4Mapped = words.slice(0, 5).every((w) => w === 0) && words[5] === 0xffff;
-  if (isIpv4Mapped) {
-    const hi = words[6];
-    const lo = words[7];
-    const mappedIpv4 = `${(hi >>> 8) & 0xff}.${hi & 0xff}.${(lo >>> 8) & 0xff}.${lo & 0xff}`;
-    return isPrivateIpv4(mappedIpv4);
-  }
-
-  // NAT64 (64:ff9b::/96 and 64:ff9b:1::/48)
-  if (words[0] === 0x0064 && words[1] === 0xff9b && words.slice(2, 6).every((w) => w === 0)) {
-    const hi = words[6];
-    const lo = words[7];
-    const mappedIpv4 = `${(hi >>> 8) & 0xff}.${hi & 0xff}.${(lo >>> 8) & 0xff}.${lo & 0xff}`;
-    return isPrivateIpv4(mappedIpv4);
-  }
+function isReservedIpv6Prefix(words: number[]): boolean {
   if (words[0] === 0x0064 && words[1] === 0xff9b && words[2] === 0x0001) return true;
-
   if (words[0] === 0x0100 && words[1] === 0 && words[2] === 0 && words[3] === 0) return true;
   if (words[0] === 0x2001 && words[1] === 0x0000) return true;
   if (words[0] === 0x2001 && words[1] === 0x0002 && words[2] === 0) return true;
   if (words[0] === 0x2001 && words[1] === 0x0db8) return true;
   if (words[0] === 0x2002) return true;
 
-  if ((words[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 Unique Local
-  if ((words[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 Link-local
-  if ((words[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 Site-local
-  if ((words[0] & 0xff00) === 0xff00) return true; // ff00::/8 Multicast
-  return false;
+  return (
+    (words[0] & 0xfe00) === 0xfc00 || // fc00::/7 Unique Local
+    (words[0] & 0xffc0) === 0xfe80 || // fe80::/10 Link-local
+    (words[0] & 0xffc0) === 0xfec0 || // fec0::/10 Site-local
+    (words[0] & 0xff00) === 0xff00 // ff00::/8 Multicast
+  );
+}
+
+function isPrivateIpv6(ip: string): boolean {
+  const words = expandIpv6Words(ip);
+  if (!words) return true;
+  if (words.slice(0, 6).every((w) => w === 0)) return true;
+
+  // IPv4-mapped IPv6 (::ffff:0:0/96) and NAT64 (64:ff9b::/96)
+  const isIpv4Mapped = words.slice(0, 5).every((w) => w === 0) && words[5] === 0xffff;
+  const isNat64 = words[0] === 0x0064 && words[1] === 0xff9b && words.slice(2, 6).every((w) => w === 0);
+  if (isIpv4Mapped || isNat64) {
+    return isPrivateIpv4(mappedIpv4FromWords(words[6], words[7]));
+  }
+  return isReservedIpv6Prefix(words);
 }
 
 export function isPrivateIp(rawIp: string): boolean {
@@ -333,6 +330,23 @@ function extractYoutubeVideoId(url: URL, domain: string): string | null {
   return null;
 }
 
+function stripTrackingQueryParams(cleanUrl: URL): void {
+  for (const key of Array.from(cleanUrl.searchParams.keys())) {
+    const lower = key.toLowerCase();
+    if (lower.startsWith("utm_") || TRACKING_QUERY_PARAMS.has(lower)) {
+      cleanUrl.searchParams.delete(key);
+    }
+  }
+  cleanUrl.searchParams.sort();
+}
+
+function stripTrailingPathSlashes(pathname: string): string {
+  if (pathname.length <= 1 || !pathname.endsWith("/")) return pathname;
+  let end = pathname.length;
+  while (end > 1 && pathname[end - 1] === "/") end--;
+  return pathname.slice(0, end);
+}
+
 export function normalizeCanonicalUrl(rawUrl: string): {
   canonicalUrl: string;
   domain: string;
@@ -383,18 +397,8 @@ export function normalizeCanonicalUrl(rawUrl: string): {
   cleanUrl.username = "";
   cleanUrl.password = "";
   cleanUrl.hash = "";
-
-  for (const key of Array.from(cleanUrl.searchParams.keys())) {
-    const lower = key.toLowerCase();
-    if (lower.startsWith("utm_") || TRACKING_QUERY_PARAMS.has(lower)) {
-      cleanUrl.searchParams.delete(key);
-    }
-  }
-  cleanUrl.searchParams.sort();
-
-  if (cleanUrl.pathname.length > 1 && cleanUrl.pathname.endsWith("/")) {
-    cleanUrl.pathname = cleanUrl.pathname.replace(/\/+$/, "");
-  }
+  stripTrackingQueryParams(cleanUrl);
+  cleanUrl.pathname = stripTrailingPathSlashes(cleanUrl.pathname);
 
   return {
     canonicalUrl: cleanUrl.toString(),
@@ -408,6 +412,64 @@ function isShortLinkHostname(hostname: string): boolean {
   return SHORT_LINK_DOMAINS.some((d) => clean === d || clean.endsWith(`.${d}`));
 }
 
+async function probeRedirectResponse(currentUrl: URL, fetchFn: typeof fetch): Promise<Response | null> {
+  try {
+    let response = await fetchFn(currentUrl.toString(), {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS),
+    });
+
+    const shouldRetryWithGet =
+      response.status === 405 ||
+      response.status === 501 ||
+      (response.status === 403 && isShortLinkHostname(currentUrl.hostname));
+    if (shouldRetryWithGet) {
+      await response.body?.cancel();
+      response = await fetchFn(currentUrl.toString(), {
+        method: "GET",
+        headers: { Range: "bytes=0-0" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS),
+      });
+    }
+    await response.body?.cancel();
+    return response;
+  } catch {
+    return null;
+  }
+}
+
+async function validateRedirectTarget(
+  location: string,
+  current: URL,
+  allowedDomains: string[],
+  lookupFn: HostLookupFn
+): Promise<URL> {
+  let nextUrl: URL;
+  try {
+    nextUrl = new URL(location, current);
+  } catch {
+    throw new UrlGuardError("INVALID_URL", 400, "Redirect trả về URL đích không hợp lệ.");
+  }
+
+  if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+    throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Redirect tới protocol không được hỗ trợ.");
+  }
+  assertNoUrlCredentials(nextUrl, "Redirect trả về URL chứa thông tin đăng nhập không hợp lệ.");
+
+  await assertPublicHostname(nextUrl.hostname, lookupFn);
+  // Chained short links (t.co → bit.ly → …) are allowed as hops; the final target is checked by the caller
+  if (!isShortLinkHostname(nextUrl.hostname) && !isDomainAllowed(nextUrl.hostname, allowedDomains)) {
+    throw new UrlGuardError(
+      "DOMAIN_NOT_ALLOWED",
+      403,
+      `Domain đích "${nextUrl.hostname}" không nằm trong whitelist.`
+    );
+  }
+  return nextUrl;
+}
+
 async function followRedirectsSafely(
   initialUrl: URL,
   allowedDomains: string[],
@@ -417,68 +479,16 @@ async function followRedirectsSafely(
   let current = initialUrl;
 
   for (let hop = 0; hop <= MAX_REDIRECT_HOPS; hop++) {
-    let response: Response;
-    try {
-      response = await fetchFn(current.toString(), {
-        method: "HEAD",
-        redirect: "manual",
-        signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS),
-      });
-
-      const shouldRetryWithGet =
-        response.status === 405 ||
-        response.status === 501 ||
-        (response.status === 403 && isShortLinkHostname(current.hostname));
-      if (shouldRetryWithGet) {
-        await response.body?.cancel();
-        response = await fetchFn(current.toString(), {
-          method: "GET",
-          headers: { Range: "bytes=0-0" },
-          redirect: "manual",
-          signal: AbortSignal.timeout(REDIRECT_TIMEOUT_MS),
-        });
-      }
-      await response.body?.cancel();
-    } catch {
-      // Transient fetch failure on an already-validated whitelisted host falls back to current URL
-      return current;
-    }
-
-    if (response.status < 300 || response.status >= 400) {
-      return current;
-    }
+    const response = await probeRedirectResponse(current, fetchFn);
+    if (!response) return current;
+    if (response.status < 300 || response.status >= 400) return current;
 
     const location = response.headers.get("location");
-    if (!location) {
-      return current;
-    }
-
+    if (!location) return current;
     if (hop === MAX_REDIRECT_HOPS) {
       throw new UrlGuardError("TOO_MANY_REDIRECTS", 400, "Link rút gọn chuyển hướng quá nhiều lần.");
     }
-
-    let nextUrl: URL;
-    try {
-      nextUrl = new URL(location, current);
-    } catch {
-      throw new UrlGuardError("INVALID_URL", 400, "Redirect trả về URL đích không hợp lệ.");
-    }
-
-    if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
-      throw new UrlGuardError("UNSUPPORTED_PROTOCOL", 400, "Redirect tới protocol không được hỗ trợ.");
-    }
-    assertNoUrlCredentials(nextUrl, "Redirect trả về URL chứa thông tin đăng nhập không hợp lệ.");
-
-    await assertPublicHostname(nextUrl.hostname, lookupFn);
-    // Chained short links (t.co → bit.ly → …) are allowed as hops; the final target is checked by the caller
-    if (!isShortLinkHostname(nextUrl.hostname) && !isDomainAllowed(nextUrl.hostname, allowedDomains)) {
-      throw new UrlGuardError(
-        "DOMAIN_NOT_ALLOWED",
-        403,
-        `Domain đích "${nextUrl.hostname}" không nằm trong whitelist.`
-      );
-    }
-    current = nextUrl;
+    current = await validateRedirectTarget(location, current, allowedDomains, lookupFn);
   }
 
   return current;

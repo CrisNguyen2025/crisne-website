@@ -13,6 +13,7 @@ break OpenTelemetry context detach when the stream is cancelled.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 import os
 from contextvars import ContextVar
 from typing import Any, AsyncGenerator, AsyncIterator, Optional
@@ -130,6 +131,78 @@ def usage_from_langchain(message: Any) -> Optional[dict]:
     return {k: int(v) for k, v in usage.items() if v is not None} or None
 
 
+def _start_turn_trace(message: str, session_id: str, page_context: Optional[dict]) -> Optional[TurnTrace]:
+    lf = get_langfuse()
+    if lf is None:
+        return None
+    try:
+        from langfuse import propagate_attributes
+
+        with propagate_attributes(session_id=session_id, trace_name=TRACE_NAME, tags=TRACE_TAGS):
+            root = lf.start_observation(
+                name=TRACE_NAME,
+                as_type="agent",
+                input={"message": message, "page_context": page_context},
+            )
+        return TurnTrace(root, session_id)
+    except Exception as exc:
+        print(f"[Langfuse] trace start failed: {exc}")
+        return None
+
+
+def _update_trace_on_event(
+    ev: dict,
+    trace: TurnTrace,
+    open_tools: list[tuple[str, Any]],
+    output: list[str],
+    tools_used: list[str],
+) -> None:
+    kind = ev.get("type")
+    if kind == "tool_start":
+        name = ev.get("name", "tool")
+        tools_used.append(name)
+        open_tools.append((name, trace.child(name, "tool", input=ev.get("args") or {})))
+    elif kind == "tool_end":
+        name = ev.get("name", "tool")
+        idx = next((i for i, (n, _) in enumerate(open_tools) if n == name), None)
+        if idx is not None:
+            end_step(open_tools.pop(idx)[1], output=ev.get("result", ""))
+    elif kind == "step" and ev.get("status") != "running":
+        if ev.get("id") == "answer" and ev.get("mode"):
+            trace.flags["answer_mode"] = ev["mode"]
+        elif ev.get("id") == "retrieve" and ev.get("before_gate") is not None:
+            trace.flags["gate_dropped"] = ev["before_gate"] - ev.get("count", 0)
+    elif kind == "token":
+        output.append(ev.get("delta", ""))
+
+
+def _finish_turn_trace(
+    trace: TurnTrace,
+    open_tools: list[tuple[str, Any]],
+    output: list[str],
+    tools_used: list[str],
+    error: Optional[BaseException],
+) -> None:
+    for _, obs in open_tools:
+        end_step(obs, level="WARNING", status_message="stream ended before tool_end")
+    try:
+        update: dict[str, Any] = {
+            "output": "".join(output),
+            "metadata": {"tools": tools_used, **trace.flags},
+        }
+        if isinstance(error, (GeneratorExit, asyncio.CancelledError)):
+            # User pressed stop or the client disconnected: not a failure.
+            update["level"] = "WARNING"
+            update["status_message"] = "stream cancelled by client"
+        elif error is not None:
+            update["level"] = "ERROR"
+            update["status_message"] = f"{type(error).__name__}: {error}"
+        trace.root.update(**update)
+        trace.root.end()
+    except Exception as exc:
+        print(f"[Langfuse] trace end failed: {exc}")
+
+
 async def traced_turn(
     events: AsyncIterator[dict],
     *,
@@ -142,22 +215,7 @@ async def traced_turn(
     tool_start/tool_end pairs become `tool` observations, so every agent branch
     is covered without instrumenting each one; streamed tokens become the output.
     """
-    lf = get_langfuse()
-    trace: Optional[TurnTrace] = None
-    if lf is not None:
-        try:
-            from langfuse import propagate_attributes
-
-            with propagate_attributes(session_id=session_id, trace_name=TRACE_NAME, tags=TRACE_TAGS):
-                root = lf.start_observation(
-                    name=TRACE_NAME,
-                    as_type="agent",
-                    input={"message": message, "page_context": page_context},
-                )
-            trace = TurnTrace(root, session_id)
-        except Exception as exc:
-            print(f"[Langfuse] trace start failed: {exc}")
-
+    trace = _start_turn_trace(message, session_id, page_context)
     if trace is None:
         async for ev in events:
             yield ev
@@ -173,50 +231,15 @@ async def traced_turn(
         if trace_id := getattr(trace.root, "trace_id", None):
             yield {"type": "trace", "trace_id": trace_id}
         async for ev in events:
-            kind = ev.get("type")
-            if kind == "tool_start":
-                name = ev.get("name", "tool")
-                tools_used.append(name)
-                open_tools.append((name, trace.child(name, "tool", input=ev.get("args") or {})))
-            elif kind == "tool_end":
-                name = ev.get("name", "tool")
-                idx = next((i for i, (n, _) in enumerate(open_tools) if n == name), None)
-                if idx is not None:
-                    end_step(open_tools.pop(idx)[1], output=ev.get("result", ""))
-            elif kind == "step" and ev.get("status") != "running":
-                if ev.get("id") == "answer" and ev.get("mode"):
-                    trace.flags["answer_mode"] = ev["mode"]
-                elif ev.get("id") == "retrieve" and ev.get("before_gate") is not None:
-                    trace.flags["gate_dropped"] = ev["before_gate"] - ev.get("count", 0)
-            elif kind == "token":
-                output.append(ev.get("delta", ""))
+            _update_trace_on_event(ev, trace, open_tools, output, tools_used)
             yield ev
     except BaseException as exc:  # includes cancellation when the client disconnects
         error = exc
         raise
     finally:
-        try:
-            _current.reset(token)
-        except ValueError:
-            pass  # closed from another context (e.g. client disconnect)
-        for _, obs in open_tools:
-            end_step(obs, level="WARNING", status_message="stream ended before tool_end")
-        try:
-            update: dict[str, Any] = {
-                "output": "".join(output),
-                "metadata": {"tools": tools_used, **trace.flags},
-            }
-            if isinstance(error, (GeneratorExit, asyncio.CancelledError)):
-                # User pressed stop or the client disconnected: not a failure.
-                update["level"] = "WARNING"
-                update["status_message"] = "stream cancelled by client"
-            elif error is not None:
-                update["level"] = "ERROR"
-                update["status_message"] = f"{type(error).__name__}: {error}"
-            trace.root.update(**update)
-            trace.root.end()
-        except Exception as exc:
-            print(f"[Langfuse] trace end failed: {exc}")
+        with suppress(ValueError):
+            _current.reset(token)  # closed from another context (e.g. client disconnect)
+        _finish_turn_trace(trace, open_tools, output, tools_used, error)
 
 
 def flush() -> None:

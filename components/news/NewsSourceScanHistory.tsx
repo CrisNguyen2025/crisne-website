@@ -27,6 +27,51 @@ interface NewsSourceScanHistoryProps {
   onClose: () => void;
 }
 
+function ScanHistoryBody({
+  scans,
+  error,
+}: {
+  scans: NewsSourceScanDto[] | null;
+  error: string | null;
+}) {
+  if (error) {
+    return <p className="[overflow-wrap:anywhere] text-destructive">{error}</p>;
+  }
+  if (scans === null) {
+    return (
+      <p className="flex items-center gap-1.5 text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+        <span>Đang tải…</span>
+      </p>
+    );
+  }
+  if (scans.length === 0) {
+    return <p className="text-muted-foreground">Chưa có lần quét nào được ghi lại.</p>;
+  }
+  return (
+    <ul className="space-y-1.5">
+      {scans.map((scan) => (
+        <li key={scan.id} className="flex min-w-0 items-baseline gap-2 leading-relaxed">
+          <span className="shrink-0 tabular-nums text-muted-foreground">
+            {dayjs(scan.createdAt).format("HH:mm DD/MM")}
+          </span>
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.6875rem] text-foreground/80">
+            {TRIGGER_LABELS[scan.trigger]}
+          </span>
+          <span
+            className={cn(
+              "min-w-0 [overflow-wrap:anywhere]",
+              scan.error ? "text-destructive" : "text-foreground/90"
+            )}
+          >
+            {formatScanResult(scan)}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Latest scans of one source, shown under its card. */
 export function NewsSourceScanHistory({ scans, error, onClose }: NewsSourceScanHistoryProps) {
   return (
@@ -46,37 +91,7 @@ export function NewsSourceScanHistory({ scans, error, onClose }: NewsSourceScanH
         </button>
       </div>
 
-      {error ? (
-        <p className="[overflow-wrap:anywhere] text-destructive">{error}</p>
-      ) : scans === null ? (
-        <p className="flex items-center gap-1.5 text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
-          <span>Đang tải…</span>
-        </p>
-      ) : scans.length === 0 ? (
-        <p className="text-muted-foreground">Chưa có lần quét nào được ghi lại.</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {scans.map((scan) => (
-            <li key={scan.id} className="flex min-w-0 items-baseline gap-2 leading-relaxed">
-              <span className="shrink-0 tabular-nums text-muted-foreground">
-                {dayjs(scan.createdAt).format("HH:mm DD/MM")}
-              </span>
-              <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.6875rem] text-foreground/80">
-                {TRIGGER_LABELS[scan.trigger]}
-              </span>
-              <span
-                className={cn(
-                  "min-w-0 [overflow-wrap:anywhere]",
-                  scan.error ? "text-destructive" : "text-foreground/90"
-                )}
-              >
-                {formatScanResult(scan)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ScanHistoryBody error={error} scans={scans} />
     </section>
   );
 }

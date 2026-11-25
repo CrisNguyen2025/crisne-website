@@ -46,6 +46,14 @@ def step_event(step_id: str, kind: str, status: str, **fields: Any) -> dict:
     return ev
 
 
+def _time_step_event(ev: dict, started: dict[str, tuple[float, str]]) -> dict:
+    if ev["status"] == "running":
+        started[ev["id"]] = (time.monotonic(), ev["kind"])
+    elif ev["id"] in started:
+        ev["duration_ms"] = round((time.monotonic() - started.pop(ev["id"])[0]) * 1000)
+    return ev
+
+
 async def with_steps(events: AsyncIterator[dict]) -> AsyncGenerator[dict, None]:
     """Add timing to the agent's step events and mirror tool_start/tool_end as tool steps.
 
@@ -56,34 +64,27 @@ async def with_steps(events: AsyncIterator[dict]) -> AsyncGenerator[dict, None]:
     open_tools: list[tuple[str, str]] = []
     tool_count = 0
 
-    def timed(ev: dict) -> dict:
-        if ev["status"] == "running":
-            started[ev["id"]] = (time.monotonic(), ev["kind"])
-        elif ev["id"] in started:
-            ev["duration_ms"] = round((time.monotonic() - started.pop(ev["id"])[0]) * 1000)
-        return ev
-
     try:
         async for ev in events:
             kind = ev.get("type")
-            name = ev.get("name", "tool")
             if kind == "step":
-                yield timed(ev)
+                yield _time_step_event(ev, started)
                 continue
             yield ev
+            name = ev.get("name", "tool")
             if kind == "tool_start" and name not in EXPLICIT_TOOL_STEPS:
                 tool_count += 1
                 step_id = f"tool-{tool_count}"
                 open_tools.append((name, step_id))
                 args = ev.get("args") if is_owner() else None
-                yield timed(step_event(step_id, "tool", "running", name=name, args=args))
+                yield _time_step_event(step_event(step_id, "tool", "running", name=name, args=args), started)
             elif kind == "tool_end":
                 idx = next((i for i, (n, _) in enumerate(open_tools) if n == name), None)
                 if idx is not None:
                     _, step_id = open_tools.pop(idx)
                     result = str(ev.get("result", ""))[:TOOL_RESULT_PREVIEW]
-                    yield timed(step_event(step_id, "tool", "done", name=name, result=result))
+                    yield _time_step_event(step_event(step_id, "tool", "done", name=name, result=result), started)
     except Exception:
         for step_id, (_, step_kind) in list(started.items()):
-            yield timed(step_event(step_id, step_kind, "error"))
+            yield _time_step_event(step_event(step_id, step_kind, "error"), started)
         raise

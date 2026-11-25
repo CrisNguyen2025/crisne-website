@@ -19,6 +19,15 @@ from rag_service.state.session_store import session_store
 from rag_service.tools import get_adapter
 
 
+_SYNC_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _trigger_background_sync() -> None:
+    task = asyncio.create_task(rag_engine.sync_live_database())
+    _SYNC_TASKS.add(task)
+    task.add_done_callback(_SYNC_TASKS.discard)
+
+
 def _skipped_message(skipped: list[DuplicateEntityError]) -> str:
     """Explain which entries were left alone because they already exist."""
     names = ", ".join(f"**{d.title}**" for d in skipped)
@@ -55,6 +64,125 @@ class ActionExecutor:
         except Exception as exc:
             return False, f"❌ Lỗi khi thực thi: {exc}"
 
+    async def _create_topics(
+        self,
+        adapter: Any,
+        action: StructuredRoadmapAction,
+        session_id: str,
+        changes: ChangeSet,
+    ) -> Tuple[bool, str]:
+        created: list[tuple[str, str]] = []
+        skipped: list[DuplicateEntityError] = []
+        for ent in action.entities:
+            try:
+                res = await adapter.create_topic(title=ent.title, description=ent.description or "")
+            except DuplicateEntityError as dup:
+                # Keep working in the topic that already exists
+                session_store.set_active_topic(session_id, slug=dup.existing.get("slug", ""), title=dup.title)
+                skipped.append(dup)
+                changes.skip(dup.title)
+                continue
+            changes.created(ent.title, res)
+            session_store.set_active_topic(session_id, slug=res.get("slug", ""), title=ent.title)
+            created.append((ent.title, res.get("slug", "")))
+
+        if not created:
+            return True, _skipped_message(skipped)
+        _trigger_background_sync()
+
+        bullets = "\n".join(f"- **{t}** (slug: `{slug}`)" for t, slug in created)
+        tail = f"\n\n{_skipped_message(skipped)}" if skipped else ""
+        if len(created) == 1:
+            t, slug = created[0]
+            return True, (
+                f"✅ Đã tạo thành công topic **{t}** (slug: `{slug}`). Bài học sẽ được thêm vào sau."
+                f"{tail}"
+            )
+        return True, f"✅ Đã tạo thành công {len(created)} topic:\n{bullets}{tail}"
+
+    async def _delete_topic(
+        self,
+        adapter: Any,
+        action: StructuredRoadmapAction,
+        changes: ChangeSet,
+    ) -> Tuple[bool, str]:
+        target = action.target_parent_identifier or (action.entities[0].title if action.entities else "")
+        before = await snapshot_before_delete(adapter, "topic", target)
+        ok = await adapter.delete_topic(slug=target)
+        _trigger_background_sync()
+        if ok:
+            changes.deleted(target, before)
+            return True, f"🗑️ Đã xóa topic `{target}` và toàn bộ bài học bên trong."
+        return False, f"⚠️ Không tìm thấy topic `{target}` trong hệ thống (hoặc topic đã bị xóa trước đó)."
+
+    async def _create_items(
+        self,
+        adapter: Any,
+        action: StructuredRoadmapAction,
+        session_id: str,
+        changes: ChangeSet,
+        topic_slug: str,
+    ) -> Tuple[bool, str]:
+        created_items: list[str] = []
+        created_records: list[tuple[str, str, Optional[str]]] = []
+        skipped: list[DuplicateEntityError] = []
+        for ent in action.entities:
+            try:
+                res = await adapter.create_item(
+                    topic_slug=topic_slug,
+                    section=ent.section,
+                    title=ent.title,
+                    description=ent.description or "",
+                )
+            except DuplicateEntityError as dup:
+                skipped.append(dup)
+                changes.skip(dup.title)
+                continue
+            changes.created(ent.title, res)
+            created_items.append(ent.title)
+            item_id = res.get("id") if isinstance(res, dict) else None
+            created_records.append((str(item_id or ""), ent.title, ent.section))
+
+        if not created_items:
+            return True, _skipped_message(skipped)
+        if len(created_records) == 1 and created_records[0][0]:
+            cid, ctitle, csec = created_records[0]
+            session_store.set_active_lesson(
+                session_id, cid, ctitle, section=csec, topic_slug=topic_slug
+            )
+        else:
+            session_store.set_active_topic(session_id, slug=topic_slug)
+        _trigger_background_sync()
+        bullets = "\n".join(f"- **{i}**" for i in created_items)
+        section_note = ""
+        if action.entities and action.entities[0].section:
+            section_note = f" mục **{action.entities[0].section}**"
+        tail = f"\n\n{_skipped_message(skipped)}" if skipped else "\n\nNội dung đã được lưu vào hệ thống."
+        return True, (
+            f"✅ Đã thêm thành công {len(created_items)} bài học vào topic **{topic_slug}**{section_note}:"
+            f"\n{bullets}{tail}"
+        )
+
+    async def _delete_item(
+        self,
+        adapter: Any,
+        action: StructuredRoadmapAction,
+        session_id: str,
+        changes: ChangeSet,
+    ) -> Tuple[bool, str]:
+        item_id = action.target_parent_identifier or (action.entities[0].title if action.entities else "")
+        before = await snapshot_before_delete(adapter, "item", item_id)
+        ok = await adapter.delete_item(item_id=item_id)
+        _trigger_background_sync()
+        # handle_cud resolved the name to the id: the reply names the lesson, not its id
+        name = action.entities[0].title if action.entities else item_id
+        if ok:
+            if session_store.get_or_create(session_id).active_lesson_id == item_id:
+                session_store.set_active_lesson(session_id, None)
+            changes.deleted(item_id, before)
+            return True, f"🗑️ Đã xóa bài học **{name}**."
+        return False, f"⚠️ Không tìm thấy bài học **{name}** trong hệ thống."
+
     async def _execute_inner(
         self,
         adapter: Any,
@@ -65,107 +193,19 @@ class ActionExecutor:
         level = action.entity_level
         act_type = action.action
 
-        # ── 1. TOPIC ──────────────────────────────────────────────────────
         if level == EntityLevel.TOPIC:
             if act_type == ActionType.CREATE:
-                created: list[tuple[str, str]] = []
-                skipped: list[DuplicateEntityError] = []
-                for ent in action.entities:
-                    try:
-                        res = await adapter.create_topic(title=ent.title, description=ent.description or "")
-                    except DuplicateEntityError as dup:
-                        # Keep working in the topic that already exists
-                        session_store.set_active_topic(session_id, slug=dup.existing.get("slug", ""), title=dup.title)
-                        skipped.append(dup)
-                        changes.skip(dup.title)
-                        continue
-                    changes.created(ent.title, res)
-                    session_store.set_active_topic(session_id, slug=res.get("slug", ""), title=ent.title)
-                    created.append((ent.title, res.get("slug", "")))
-
-                if not created:
-                    return True, _skipped_message(skipped)
-                asyncio.create_task(rag_engine.sync_live_database())
-
-                bullets = "\n".join(f"- **{t}** (slug: `{slug}`)" for t, slug in created)
-                tail = f"\n\n{_skipped_message(skipped)}" if skipped else ""
-                if len(created) == 1:
-                    t, slug = created[0]
-                    return True, (
-                        f"✅ Đã tạo thành công topic **{t}** (slug: `{slug}`). Bài học sẽ được thêm vào sau."
-                        f"{tail}"
-                    )
-                return True, f"✅ Đã tạo thành công {len(created)} topic:\n{bullets}{tail}"
-
+                return await self._create_topics(adapter, action, session_id, changes)
             if act_type == ActionType.DELETE:
-                target = action.target_parent_identifier or (action.entities[0].title if action.entities else "")
-                before = await snapshot_before_delete(adapter, "topic", target)
-                ok = await adapter.delete_topic(slug=target)
-                asyncio.create_task(rag_engine.sync_live_database())
-                if ok:
-                    changes.deleted(target, before)
-                    return True, f"🗑️ Đã xóa topic `{target}` và toàn bộ bài học bên trong."
-                return False, f"⚠️ Không tìm thấy topic `{target}` trong hệ thống (hoặc topic đã bị xóa trước đó)."
+                return await self._delete_topic(adapter, action, changes)
 
-        # ── 2. LESSON ─────────────────────────────────────────────────────
         if level == EntityLevel.ITEM:
             topic_slug = action.target_parent_identifier
             if not topic_slug:
                 return False, "❌ Không tìm thấy topic đích để thêm bài học. Hãy nêu rõ tên topic."
-
             if act_type == ActionType.CREATE:
-                created_items: list[str] = []
-                created_records: list[tuple[str, str, Optional[str]]] = []
-                skipped = []
-                for ent in action.entities:
-                    try:
-                        res = await adapter.create_item(
-                            topic_slug=topic_slug,
-                            section=ent.section,
-                            title=ent.title,
-                            description=ent.description or "",
-                        )
-                    except DuplicateEntityError as dup:
-                        skipped.append(dup)
-                        changes.skip(dup.title)
-                        continue
-                    changes.created(ent.title, res)
-                    created_items.append(ent.title)
-                    item_id = res.get("id") if isinstance(res, dict) else None
-                    created_records.append((str(item_id or ""), ent.title, ent.section))
-
-                if not created_items:
-                    return True, _skipped_message(skipped)
-                if len(created_records) == 1 and created_records[0][0]:
-                    cid, ctitle, csec = created_records[0]
-                    session_store.set_active_lesson(
-                        session_id, cid, ctitle, section=csec, topic_slug=topic_slug
-                    )
-                else:
-                    session_store.set_active_topic(session_id, slug=topic_slug)
-                asyncio.create_task(rag_engine.sync_live_database())
-                bullets = "\n".join(f"- **{i}**" for i in created_items)
-                section_note = ""
-                if action.entities and action.entities[0].section:
-                    section_note = f" mục **{action.entities[0].section}**"
-                tail = f"\n\n{_skipped_message(skipped)}" if skipped else "\n\nNội dung đã được lưu vào hệ thống."
-                return True, (
-                    f"✅ Đã thêm thành công {len(created_items)} bài học vào topic **{topic_slug}**{section_note}:"
-                    f"\n{bullets}{tail}"
-                )
-
+                return await self._create_items(adapter, action, session_id, changes, topic_slug)
             if act_type == ActionType.DELETE:
-                item_id = action.target_parent_identifier or (action.entities[0].title if action.entities else "")
-                before = await snapshot_before_delete(adapter, "item", item_id)
-                ok = await adapter.delete_item(item_id=item_id)
-                asyncio.create_task(rag_engine.sync_live_database())
-                # handle_cud resolved the name to the id: the reply names the lesson, not its id
-                name = action.entities[0].title if action.entities else item_id
-                if ok:
-                    if session_store.get_or_create(session_id).active_lesson_id == item_id:
-                        session_store.set_active_lesson(session_id, None)
-                    changes.deleted(item_id, before)
-                    return True, f"🗑️ Đã xóa bài học **{name}**."
-                return False, f"⚠️ Không tìm thấy bài học **{name}** trong hệ thống."
+                return await self._delete_item(adapter, action, session_id, changes)
 
         return False, f"Thao tác {act_type.value} trên cấp {level.value} chưa được hỗ trợ."

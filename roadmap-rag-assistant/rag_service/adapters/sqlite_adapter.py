@@ -284,45 +284,58 @@ class SqliteAdapter:
             "order": order,
         }
 
+    async def _append_status_updates(
+        self,
+        current_dict: dict[str, object],
+        kwargs: dict[str, object],
+        sets: list[str],
+        args: list[str | int | None],
+    ) -> None:
+        if kwargs.get("status") is not None:
+            status = str(kwargs["status"]).strip().lower()
+            if status not in ("known", "learning", "target"):
+                raise ValueError(f"Invalid lesson status '{status}'")
+            current_status = current_dict.get("status") or "known"
+            if status != current_status:
+                sets.extend(["status = ?", "statusUpdatedAt = ?"])
+                args.extend([status, _now_iso()])
+                return
+        if kwargs.get("markReviewed") is True:
+            sets.append("statusUpdatedAt = ?")
+            args.append(_now_iso())
+
+    async def _build_item_update_clause(
+        self, db, item_id: str, current: dict[str, object], kwargs: dict[str, object]
+    ) -> tuple[list[str], list[str | int | None]]:
+        sets = ["updatedAt = ?"]
+        args: list[str | int | None] = [_now_iso()]
+        if kwargs.get("title") is not None:
+            title = str(kwargs["title"]).strip()
+            siblings = await self._items_of(db, str(current["roadmapId"]))
+            dup = find_duplicate([s for s in siblings if s["id"] != item_id], title)
+            if dup:
+                raise DuplicateEntityError("item", dup["title"], dup)
+            sets.append("title = ?")
+            args.append(title)
+        if kwargs.get("description") is not None:
+            sets.append("description = ?")
+            args.append(str(kwargs["description"]).strip())
+        if "section" in kwargs:
+            siblings = await self._items_of(db, str(current["roadmapId"]))
+            others = [s.get("section") for s in siblings if s["id"] != item_id]
+            sets.append("section = ?")
+            args.append(resolve_section(others, kwargs["section"]))  # type: ignore[arg-type]
+        await self._append_status_updates(current, kwargs, sets, args)
+        return sets, args
+
     @owner_only
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         async with self._connect() as db:
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
-            current = await cursor.fetchone()
-            if not current:
+            current_row = await cursor.fetchone()
+            if not current_row:
                 raise ValueError(f"Lesson '{item_id}' not found")
-            sets = ["updatedAt = ?"]
-            args: list[str | int | None] = [_now_iso()]
-            if kwargs.get("title") is not None:
-                title = str(kwargs["title"]).strip()
-                siblings = await self._items_of(db, current["roadmapId"])
-                dup = find_duplicate([s for s in siblings if s["id"] != item_id], title)
-                if dup:
-                    raise DuplicateEntityError("item", dup["title"], dup)
-                sets.append("title = ?")
-                args.append(title)
-            if kwargs.get("description") is not None:
-                sets.append("description = ?")
-                args.append(str(kwargs["description"]).strip())
-            if "section" in kwargs:
-                siblings = await self._items_of(db, current["roadmapId"])
-                others = [s.get("section") for s in siblings if s["id"] != item_id]
-                sets.append("section = ?")
-                args.append(resolve_section(others, kwargs["section"]))  # type: ignore[arg-type]
-            if kwargs.get("status") is not None:
-                status = str(kwargs["status"]).strip().lower()
-                if status not in ("known", "learning", "target"):
-                    raise ValueError(f"Invalid lesson status '{status}'")
-                current_status = (current["status"] or "known") if "status" in current.keys() else "known"
-                if status != current_status:
-                    sets.extend(["status = ?", "statusUpdatedAt = ?"])
-                    args.extend([status, _now_iso()])
-                elif kwargs.get("markReviewed") is True:
-                    sets.append("statusUpdatedAt = ?")
-                    args.append(_now_iso())
-            elif kwargs.get("markReviewed") is True:
-                sets.append("statusUpdatedAt = ?")
-                args.append(_now_iso())
+            sets, args = await self._build_item_update_clause(db, item_id, dict(current_row), kwargs)
             await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))  # noqa: S608 -- fixed column names; values parameterized
             await db.commit()
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))

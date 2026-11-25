@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from rag_service.domains.roadmap.retrieval.ingestion import (
     ITEM_CONTEXT_CHARS,
@@ -234,8 +234,10 @@ class HybridRagEngine:
             self._start_freshness_check()
 
     def _start_freshness_check(self) -> None:
-        busy = lambda task: task is not None and not task.done()  # noqa: E731
-        if busy(self._sync_task) or busy(self._check_task):
+        def _is_busy(task: Optional[asyncio.Task[Any]]) -> bool:
+            return task is not None and not task.done()
+
+        if _is_busy(self._sync_task) or _is_busy(self._check_task):
             return
         if self._indexed_version is None:
             # The source gave no version at the last sync (none to compare): re-read it, as before versions

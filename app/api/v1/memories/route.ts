@@ -91,7 +91,8 @@ export async function POST(req: NextRequest) {
     const content = cleanMemoryContent(body.content);
     const scopeTopicSlug = parseScopeTopicSlug(body.scopeTopicSlug);
     const source = body.source === undefined ? 'explicit' : body.source;
-    const status = body.status === undefined ? (source === 'suggested' ? 'pending' : 'active') : body.status;
+    const defaultStatus = source === 'suggested' ? 'pending' : 'active';
+    const status = body.status === undefined ? defaultStatus : body.status;
     const replacesMemoryId =
       typeof body.replacesMemoryId === 'string' && body.replacesMemoryId.trim()
         ? body.replacesMemoryId.trim()

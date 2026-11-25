@@ -42,14 +42,13 @@ def is_private_ip(raw_ip: str) -> bool:
     if isinstance(addr, ipaddress.IPv6Address):
         if addr.ipv4_mapped:
             addr = addr.ipv4_mapped
-        elif addr.sixtofour or addr.teredo:
-            return True
-        elif any(addr in net for net in SPECIAL_IPV6_NETWORKS):
+        elif addr.sixtofour or addr.teredo or any(addr in net for net in SPECIAL_IPV6_NETWORKS):
             return True
 
-    if isinstance(addr, ipaddress.IPv4Address):
-        if addr in CGNAT_NETWORK or any(addr in net for net in SPECIAL_IPV4_NETWORKS):
-            return True
+    if isinstance(addr, ipaddress.IPv4Address) and (
+        addr in CGNAT_NETWORK or any(addr in net for net in SPECIAL_IPV4_NETWORKS)
+    ):
+        return True
 
     return bool(
         addr.is_private
@@ -61,30 +60,22 @@ def is_private_ip(raw_ip: str) -> bool:
     )
 
 
-def assert_public_url(url: str) -> None:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise SsrfBlockedError(f"Unsupported URL scheme: {parsed.scheme}")
-    if parsed.username or parsed.password:
-        raise SsrfBlockedError("URL credentials are not allowed")
-
-    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
-    if not hostname:
-        raise SsrfBlockedError("Missing hostname")
-
-    if (
-        hostname in {"localhost", "localhost.localdomain", "ip6-localhost"}
-        or hostname.endswith(".localhost")
-        or hostname.endswith(".local")
-        or hostname.endswith(".internal")
-    ):
-        raise SsrfBlockedError(f"Blocked internal hostname: {hostname}")
-
+def _is_literal_ip(hostname: str) -> bool:
     try:
         ipaddress.ip_address(hostname)
     except ValueError:
-        pass
-    else:
+        return False
+    return True
+
+
+def _assert_public_hostname(hostname: str) -> None:
+    if (
+        hostname in {"localhost", "localhost.localdomain", "ip6-localhost"}
+        or hostname.endswith((".localhost", ".local", ".internal"))
+    ):
+        raise SsrfBlockedError(f"Blocked internal hostname: {hostname}")
+
+    if _is_literal_ip(hostname):
         if is_private_ip(hostname):
             raise SsrfBlockedError(f"Blocked private IP: {hostname}")
         return
@@ -101,6 +92,19 @@ def assert_public_url(url: str) -> None:
         ip_str = str(sockaddr[0])
         if is_private_ip(ip_str):
             raise SsrfBlockedError(f"Hostname {hostname} resolved to private IP {ip_str}")
+
+
+def assert_public_url(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise SsrfBlockedError(f"Unsupported URL scheme: {parsed.scheme}")
+    if parsed.username or parsed.password:
+        raise SsrfBlockedError("URL credentials are not allowed")
+
+    hostname = (parsed.hostname or "").strip().lower().rstrip(".")
+    if not hostname:
+        raise SsrfBlockedError("Missing hostname")
+    _assert_public_hostname(hostname)
 
 
 async def assert_public_url_async(url: str) -> None:

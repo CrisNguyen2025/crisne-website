@@ -124,6 +124,51 @@ export async function POST(req: NextRequest, context: RouteContext) {
   }
 }
 
+function buildThreadStatePayload(
+  threadId: string,
+  body: Record<string, unknown>
+): { createData: Prisma.ThreadStateUncheckedCreateInput; updateData: Prisma.ThreadStateUncheckedUpdateInput } | null {
+  const hasTopicSlug = 'activeTopicSlug' in body;
+  const hasLessonId = 'activeLessonId' in body;
+  const hasSection = 'activeSection' in body;
+
+  const activeTopicSlug = cleanTopicField(body.activeTopicSlug);
+  const activeTopicTitle = cleanTopicField(body.activeTopicTitle);
+  const activeLessonId = cleanLessonIdField(body.activeLessonId);
+  const activeLessonTitle = cleanTopicField(body.activeLessonTitle);
+  const activeSection = cleanTopicField(body.activeSection);
+
+  // Reject calls that provide neither a valid topic nor a valid lesson/section update
+  if (!activeTopicSlug && !activeLessonId && !activeSection && !(hasLessonId && body.activeLessonId === null)) {
+    return null;
+  }
+
+  const createData: Prisma.ThreadStateUncheckedCreateInput = {
+    threadId,
+    activeTopicSlug,
+    activeTopicTitle,
+    activeLessonId,
+    activeLessonTitle,
+    activeSection,
+    closedAt: null,
+  };
+
+  const updateData: Prisma.ThreadStateUncheckedUpdateInput = { closedAt: null };
+  if (hasTopicSlug && activeTopicSlug) {
+    updateData.activeTopicSlug = activeTopicSlug;
+    if (activeTopicTitle) updateData.activeTopicTitle = activeTopicTitle;
+  }
+  if (hasLessonId) {
+    const clearLesson = body.activeLessonId === null;
+    updateData.activeLessonId = clearLesson ? null : activeLessonId;
+    updateData.activeLessonTitle = clearLesson ? null : activeLessonTitle;
+  }
+  if (hasSection) {
+    updateData.activeSection = body.activeSection === null ? null : activeSection;
+  }
+  return { createData, updateData };
+}
+
 // PATCH /api/v1/threads/[threadId] - Update the Topic / Lesson / Section focus of the Thread.
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
@@ -136,51 +181,18 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     const raw = await req.json().catch(() => null);
     const parsedBody = JsonObjectSchema.safeParse(raw);
     const body = parsedBody.success ? parsedBody.data : {};
-    const hasTopicSlug = 'activeTopicSlug' in body;
-    const hasLessonId = 'activeLessonId' in body;
-    const hasSection = 'activeSection' in body;
-
-    const activeTopicSlug = cleanTopicField(body.activeTopicSlug);
-    const activeTopicTitle = cleanTopicField(body.activeTopicTitle);
-    const activeLessonId = cleanLessonIdField(body.activeLessonId);
-    const activeLessonTitle = cleanTopicField(body.activeLessonTitle);
-    const activeSection = cleanTopicField(body.activeSection);
-
-    // Reject calls that provide neither a valid topic nor a valid lesson/section update
-    if (!activeTopicSlug && !activeLessonId && !activeSection && !(hasLessonId && body.activeLessonId === null)) {
+    const payload = buildThreadStatePayload(thread.threadId, body);
+    if (!payload) {
       return NextResponse.json(
         { error: 'activeTopicSlug, activeLessonId, or activeSection is required' },
         { status: 400 }
       );
     }
 
-    const createData: Prisma.ThreadStateUncheckedCreateInput = {
-      threadId: thread.threadId,
-      activeTopicSlug,
-      activeTopicTitle,
-      activeLessonId,
-      activeLessonTitle,
-      activeSection,
-      closedAt: null,
-    };
-
-    const updateData: Prisma.ThreadStateUncheckedUpdateInput = { closedAt: null };
-    if (hasTopicSlug && activeTopicSlug) {
-      updateData.activeTopicSlug = activeTopicSlug;
-      if (activeTopicTitle) updateData.activeTopicTitle = activeTopicTitle;
-    }
-    if (hasLessonId) {
-      updateData.activeLessonId = body.activeLessonId === null ? null : activeLessonId;
-      updateData.activeLessonTitle = body.activeLessonId === null ? null : activeLessonTitle;
-    }
-    if (hasSection) {
-      updateData.activeSection = body.activeSection === null ? null : activeSection;
-    }
-
     await prisma.threadState.upsert({
       where: { threadId: thread.threadId },
-      create: createData,
-      update: updateData,
+      create: payload.createData,
+      update: payload.updateData,
     });
 
     return NextResponse.json({ ok: true });
