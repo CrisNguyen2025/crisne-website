@@ -184,13 +184,10 @@ class HybridRagEngine:
                 if self._vector_store.generation == current_gen or self._vector_store.vectors_pending == 0:
                     break
 
-    async def wait_for_embedding(self, timeout: Optional[float] = None) -> None:
+    async def wait_for_embedding(self) -> None:
         task = self._embed_task
         if task and not task.done():
-            if timeout is not None:
-                await asyncio.wait({task}, timeout=timeout)
-            else:
-                await task
+            await task
 
     def request_reindex(self) -> None:
         """The source changed: rebuild now, and let the next turn wait briefly for the new index."""
@@ -231,7 +228,8 @@ class HybridRagEngine:
         """
         if not self.is_current():
             self._start_sync()
-            await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
+            if self._sync_task is not None:
+                await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
         elif time.monotonic() - self._synced_at > INDEX_TTL_SECONDS:
             self._start_freshness_check()
 
@@ -320,7 +318,8 @@ class HybridRagEngine:
         if self._is_synced:
             return
         self.start_background_sync()
-        await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
+        if self._sync_task is not None:
+            await asyncio.wait({self._sync_task}, timeout=SYNC_WAIT_SECONDS)
 
     async def catalog(self):
         """Names of the roadmap's topics and lessons, for grounding a change (target_grounding.py)."""
@@ -380,7 +379,7 @@ class HybridRagEngine:
             return "Không tìm thấy tài liệu phù hợp trong cơ sở dữ liệu hệ thống."
 
         lines = ["### 📚 Thông Tin Tìm Thấy Trong Hệ Thống:"]
-        for doc, score in matches:
+        for doc, _score in matches:
             if doc.doc_type == "item":
                 lines.append(
                     f"\n#### 📖 Bài học: [{doc.title}]({lesson_href(doc)})\n"
@@ -408,7 +407,7 @@ def fold_chunks(
     passages: dict = {}
     for doc, score in hits:
         key = doc.parent_id if doc.doc_type == "chunk" else doc.id
-        if key not in docs:
+        if not key or key not in docs:
             continue  # a chunk whose lesson left the index in a swap
         if key not in scores:
             order.append(key)

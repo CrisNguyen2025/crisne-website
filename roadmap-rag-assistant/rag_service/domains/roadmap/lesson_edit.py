@@ -12,6 +12,7 @@ from typing import AsyncGenerator, Optional
 
 from rag_service.adapters.errors import normalize_title
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.lesson_content import matches_page_item
 from rag_service.domains.roadmap.lesson_status import parse_status_change_request
 from rag_service.domains.roadmap.retrieval.relevance import fold
@@ -243,7 +244,7 @@ async def _find_topic_and_lesson(
     return None
 
 
-class LessonEditCommands:
+class LessonEditCommands(AgentHostMixin):
     async def handle_lesson_edit(
         self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
     ) -> AsyncGenerator[dict, None]:

@@ -376,6 +376,7 @@ export function ImagePreview({
           cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default',
         }}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element -- interactive zoom/pan/rotate fullscreen preview for arbitrary image URLs */}
         <img
           ref={imageRef}
           src={currentSrc}

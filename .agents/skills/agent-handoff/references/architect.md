@@ -16,7 +16,7 @@ Claude: verify độc lập → REPORT → NEXT ACTION
 - Ánh xạ plan → spec theo `.claude/skills/think/references/task-spec.md` (nếu máy có skill `think`), nếu không thì theo bảng trong RFC mục 3.
 - `type: "implement"` cho việc sửa code; `type: "review"` cho việc chỉ kiểm tra và báo cáo (Executor không sửa file nào trừ chính file spec).
 - Trước khi viết: chạy `yarn intel how-to-sync "<target>"` (kết quả khớp theo keyword, chỉ là bước lọc sơ bộ). Flow `FLOW_*` mà task thật sự đụng tới thì ghi vào mục Dependencies.
-- `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`, luôn có `intel_status: "yarn intel status"`.
+- `allowed_to_modify` lấy từ `gitnexus_impact` / danh sách file của plan. `verification_gate` dùng script có thật trong `package.json` và các lệnh ở mục Commands của `AGENTS.md`, luôn có `intel_status: "yarn intel status"`. Khi repo có `.handoff/doctor/baseline.json` thì thêm `doctor_delta: "yarn doctor --since HEAD --check"` (để ngoài `fast_gate`, chạy mất khoảng 30 giây).
 - `fast_gate` chọn lệnh nhanh và đúng phạm vi file sửa (ví dụ `type_check`, `boundary_check`, một test file cụ thể). Test toàn bộ (`yarn test`, `pytest -q`) để ngoài `fast_gate`.
 - Spec được commit cùng code của task (cùng nhánh). Spec chưa commit thì không được gỡ worktree hay xoá nhánh.
 

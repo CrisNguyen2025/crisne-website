@@ -6,8 +6,11 @@ offline/fallback mode. Two levels only: a topic, and a lesson in a topic, option
 
 from __future__ import annotations
 
+import logging
 import re
-from typing import Optional
+from typing import Any, Iterable, Optional
+
+log = logging.getLogger(__name__)
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.schemas import (
@@ -73,8 +76,8 @@ def _known_topic_names() -> set[str]:
                         topics.add(doc.topic_slug.strip())
         if getattr(rag_engine, "_catalog", None) and getattr(rag_engine._catalog, "topics", None):
             topics |= rag_engine._catalog.topics
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Could not load known topic names: %s", exc)
     return topics
 
 
@@ -168,7 +171,7 @@ def _clean_parent(raw: str) -> Optional[str]:
 class StructuredEntityExtractor:
     """Extracts StructuredRoadmapAction via Gemini Structured Output or Deterministic Parser."""
 
-    def __init__(self, llm_model: Optional[object] = None) -> None:
+    def __init__(self, llm_model: Optional[Any] = None) -> None:
         self._llm = llm_model
         self._structured_llm = None
         if self._llm is not None:

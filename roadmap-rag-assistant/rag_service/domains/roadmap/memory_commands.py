@@ -17,6 +17,7 @@ from typing import AsyncGenerator, Literal, Optional, Sequence
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.core.memory import KIND_LABELS, OwnerMemoryItem, owner_memory_store
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.tools.topic_resolver import resolve_topic
@@ -211,7 +212,7 @@ def format_memory_list_reply(active: Sequence[OwnerMemoryItem], pending_count: i
     return "\n".join(lines)
 
 
-class MemoryCommands:
+class MemoryCommands(AgentHostMixin):
     async def handle_memory_command(
         self,
         *,

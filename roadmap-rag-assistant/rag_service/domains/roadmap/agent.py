@@ -13,9 +13,12 @@ from __future__ import annotations
 import dataclasses
 
 import asyncio
+import logging
 import os
 from pathlib import Path
-from typing import AsyncGenerator, Callable, Optional
+from typing import Any, AsyncGenerator, Callable, Optional
+
+log = logging.getLogger(__name__)
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.config import settings
@@ -140,7 +143,7 @@ class NextGenRoadmapAgent(
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
     def __init__(
-        self, llm_model: Optional[object] = None, tools: Optional[list] = None, router_llm: Optional[object] = None
+        self, llm_model: Optional[Any] = None, tools: Optional[list] = None, router_llm: Optional[Any] = None
     ) -> None:
         self.llm = llm_model
         # System 2 (routing + write verification); a small model when LLM_MODEL_ROUTER is set
@@ -206,7 +209,7 @@ class NextGenRoadmapAgent(
                 self.name = name
                 self.content = res
 
-        msgs = []
+        msgs: list[MockToolMsg | MockAIMsg] = []
         for tm in tool_messages:
             msgs.append(MockToolMsg(tm["name"], tm["result"]))
         msgs.append(MockAIMsg(final_text, []))
@@ -438,7 +441,7 @@ class NextGenRoadmapAgent(
         recent = history_store.get_recent(session_id, HISTORY_TURNS)
         try:
             # System 1, the write gate, and for a write candidate System 2 + grounding (router/route_decision.py)
-            outcome = await decide_route(
+            route_outcome = await decide_route(
                 self.router, content, recent,
                 verifier_llm=self.router_llm, catalog=await rag_engine.catalog(), page_context=page_context,
                 owner=is_owner(),
@@ -447,17 +450,22 @@ class NextGenRoadmapAgent(
         except BaseException as exc:
             end_step_on_error(router_step, exc)
             raise
-        intent_res, method, decision, route_gate = outcome.intent_res, outcome.method, outcome.decision, outcome.gate
+        intent_res, method, decision, route_gate = (
+            route_outcome.intent_res,
+            route_outcome.method,
+            route_outcome.decision,
+            route_outcome.gate,
+        )
         understood = decision.understanding
         end_step(
             router_step,
             output=intent_res.model_dump(mode="json"),
             metadata={
                 "method": method, **understood.summary(), "rules": decision.rules, "write": route_gate.mode,
-                "write_plan": outcome.plan.reason if outcome.plan else None,
-                "verdict": outcome.verdict.model_dump(mode="json") if outcome.verdict else None,
-                "grounding": outcome.grounding.status if outcome.grounding else None,
-                "phases": outcome.trace(),
+                "write_plan": route_outcome.plan.reason if route_outcome.plan else None,
+                "verdict": route_outcome.verdict.model_dump(mode="json") if route_outcome.verdict else None,
+                "grounding": route_outcome.grounding.status if route_outcome.grounding else None,
+                "phases": route_outcome.trace(),
                 "recent_turns": [{"role": t.role, "content": t.content[:200]} for t in recent],
                 "active_topic_slug": session_ctx.active_topic_slug,
                 "active_lesson_id": session_ctx.active_lesson_id,
@@ -484,18 +492,18 @@ class NextGenRoadmapAgent(
             if intent_res.sub_intent is not None:
                 trace.flags["sub_intent"] = intent_res.sub_intent.value
             trace.flags["write"] = route_gate.mode
-            if outcome.scope is not None:
-                trace.flags["scope"] = outcome.scope.scope.value
+            if route_outcome.scope is not None:
+                trace.flags["scope"] = route_outcome.scope.scope.value
             if not is_owner() and route_gate.mode != WRITE_NONE:
                 trace.flags["visitor_write_attempt"] = True
             if method.startswith(("rate_limited", "llm_error")):
                 trace.flags["router_llm_unavailable"] = True
-            if outcome.plan is not None:
-                trace.flags["write_plan"] = outcome.plan.outcome
-                if outcome.verdict is None:
+            if route_outcome.plan is not None:
+                trace.flags["write_plan"] = route_outcome.plan.outcome
+                if route_outcome.verdict is None:
                     trace.flags["system2_unavailable"] = True
                 # System 1 read a change that System 2 or the data did not confirm: a case worth a golden sample
-                if method == "heuristic" and outcome.plan.outcome in ("reroute", "blocked"):
+                if method == "heuristic" and route_outcome.plan.outcome in ("reroute", "blocked"):
                     trace.flags["router_disagreement"] = True
 
         # ── 3b. Scope guardrail: refuse requests unrelated to roadmaps ────────
@@ -535,7 +543,7 @@ class NextGenRoadmapAgent(
             async for ev in self.handle_cud(
                 content=content, lower=lower, page_context=page_context,
                 session_id=session_id, session_ctx=session_ctx, delay=delay, gate=route_gate,
-                verdict=outcome.verdict,
+                verdict=route_outcome.verdict,
             ):
                 yield ev
             return
@@ -564,9 +572,9 @@ class NextGenRoadmapAgent(
             if answered["handled"]:
                 return
             deps = self._source_deps(content)
-            if outcome.scope is not None and outcome.scope.scope == Scope.DOMAIN_GAP:
+            if route_outcome.scope is not None and route_outcome.scope.scope == Scope.DOMAIN_GAP:
                 # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
-                focus_topic = focus_written(content) or outcome.scope.focus  # folded focus is for matching only
+                focus_topic = focus_written(content) or route_outcome.scope.focus  # folded focus is for matching only
                 deps = dataclasses.replace(
                     deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
                 )
@@ -704,8 +712,8 @@ def _resolve_gemini_api_key() -> str:
                             val = line.split("=", 1)[1].strip(" \"'")
                             if val and not val.startswith("your_"):
                                 return val
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Failed reading env file %s: %s", p, exc)
     return ""
 
 

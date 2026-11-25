@@ -10,11 +10,15 @@ Provides pure sorting/filtering functions for:
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional, Sequence
 
+log = logging.getLogger(__name__)
+
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.lesson_content import matches_page_item
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.policy import KNOWN_CUE, REVIEW_CUE, asks_next_lesson
@@ -65,7 +69,7 @@ def filter_known_lessons(items: Sequence[dict]) -> list[dict]:
 
 def format_review_reply(items: Sequence[dict], topic_title: Optional[str] = None) -> str:
     """Format reply for query (c): lessons needing review."""
-    header = f"📚 **Các bài cần ôn lại**"
+    header = "📚 **Các bài cần ôn lại**"
     if topic_title:
         header += f" trong topic **{topic_title}**"
     header += " (ưu tiên bài lâu chưa ôn hoặc chưa có thời gian cập nhật):\n\n"
@@ -93,7 +97,7 @@ def format_next_learning_reply(
         where = f" trong topic '{topic_title}'" if topic_title else ""
         return f"Hiện chưa có bài nào ở trạng thái **Đang học** hoặc **Mục tiêu**{where}."
 
-    header = f"🎯 **Gợi ý bài nên học tiếp**"
+    header = "🎯 **Gợi ý bài nên học tiếp**"
     if topic_title:
         header += f" trong topic **{topic_title}**"
     header += ":\n"
@@ -252,7 +256,7 @@ async def _all_owner_items(adapter: Any) -> list[dict]:
     topics = [t for t in (await adapter.list_topics() or []) if t.get("slug")]
     details = await asyncio.gather(*(adapter.get_topic(t["slug"]) for t in topics))
     all_items: list[dict] = []
-    for t, detail in zip(topics, details):
+    for t, detail in zip(topics, details, strict=True):
         if not detail:
             continue
         for it in detail.get("items") or []:
@@ -264,13 +268,13 @@ async def _all_owner_items(adapter: Any) -> list[dict]:
     return all_items
 
 
-class LessonStatusCommands:
+class LessonStatusCommands(AgentHostMixin):
     async def _resolve_target_topic(
         self, topic_hint: Optional[str], content: str, page_context, session_ctx
     ) -> Optional[dict]:
         """Find the topic for status queries/commands."""
         adapter = get_adapter()
-        candidates = [topic_hint] if topic_hint else []
+        candidates: list[Optional[str]] = [topic_hint] if topic_hint else []
         candidates += [
             await topic_named_in_message(content),
             (page_context or {}).get("roadmapSlug"),
@@ -286,8 +290,8 @@ class LessonStatusCommands:
                 top = await adapter.get_topic(ref)
                 if top:
                     return top
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Topic fallback lookup failed for %r: %s", ref, exc)
         return None
 
     async def handle_status_change(
@@ -414,7 +418,9 @@ class LessonStatusCommands:
                 items = topic.get("items") or []
                 known = filter_known_lessons(items)
                 learning, target = filter_and_sort_next_lessons(items)
-                reply = format_what_i_know_reply(known, topic.get("title") or topic.get("slug"), learning, target)
+                reply = format_what_i_know_reply(
+                    known, str(topic.get("title") or topic.get("slug") or ""), learning, target
+                )
             else:
                 all_items = await _all_owner_items(adapter)
                 known = filter_known_lessons(all_items)

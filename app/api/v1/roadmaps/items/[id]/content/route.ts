@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { UpdateLessonContentSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -14,8 +15,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const body = await req.json();
-    const { content } = body;
+    const parsed = await parseJsonBody(req, UpdateLessonContentSchema);
+    if (!parsed.ok) return parsed.response;
+    const { content } = parsed.data;
 
     const updated = await prisma.roadmapItem.update({
       where: { id },

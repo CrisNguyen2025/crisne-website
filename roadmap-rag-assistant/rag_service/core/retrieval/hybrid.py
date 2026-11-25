@@ -55,7 +55,7 @@ def _nfc(text: str) -> str:
 
 def _embedding_key(text: str) -> str:
     """Cache key covers both the text and the model, so switching models invalidates old vectors."""
-    return hashlib.sha1(f"{EMBEDDING_MODEL}\n{_nfc(text)[:1000]}".encode("utf-8")).hexdigest()
+    return hashlib.sha1(f"{EMBEDDING_MODEL}\n{_nfc(text)[:1000]}".encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def embedding_cache_path() -> Path:
@@ -195,7 +195,7 @@ def _flag_degraded(reason: str) -> None:
 
 
 def _cosine_similarity(v1: List[float], v2: List[float]) -> float:
-    dot = sum(a * b for a, b in zip(v1, v2))
+    dot = sum(a * b for a, b in zip(v1, v2, strict=True))
     norm1 = math.sqrt(sum(a * a for a in v1))
     norm2 = math.sqrt(sum(b * b for b in v2))
     if norm1 == 0 or norm2 == 0:
@@ -286,7 +286,7 @@ class HybridVectorStore:
                 docs_map[d.id] = d
                 placeholders = ", ".join("?" * (len(self._fields) + 1))
                 conn.execute(
-                    f"INSERT INTO fts_docs (id, {', '.join(self._fields)}) VALUES ({placeholders})",
+                    f"INSERT INTO fts_docs (id, {', '.join(self._fields)}) VALUES ({placeholders})",  # noqa: S608 -- internal validated field tuple; values parameterized
                     (d.id, *(_nfc(str(getattr(d, f) or "")) for f in self._fields)),
                 )
 

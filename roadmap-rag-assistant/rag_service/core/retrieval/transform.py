@@ -16,7 +16,7 @@ import asyncio
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Iterable, List, Sequence, Tuple
 
 from rag_service.core.augmentation.context import _escape
 

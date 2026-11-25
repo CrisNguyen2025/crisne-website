@@ -11,8 +11,11 @@ All IDs use UUID v7 for time-ordered uniqueness.
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
+
+log = logging.getLogger(__name__)
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -144,7 +147,7 @@ class SqliteAdapter:
         async with self._connect() as db:
             parts = []
             for table in ("Roadmap", "RoadmapItem"):
-                cursor = await db.execute(f"SELECT COUNT(*), MAX(updatedAt) FROM {table}")
+                cursor = await db.execute(f"SELECT COUNT(*), MAX(updatedAt) FROM {table}")  # noqa: S608 -- fixed internal table tuple
                 count, latest = await cursor.fetchone()
                 parts += [str(count), str(latest or 0)]
             return ".".join(parts)
@@ -205,7 +208,8 @@ class SqliteAdapter:
             row = await self._find_topic(db, slug)
             if not row:
                 raise ValueError(f"Topic '{slug}' not found")
-            sets, args = ["updatedAt = ?"], [_now_iso()]
+            sets = ["updatedAt = ?"]
+            args: list[str | int | None] = [_now_iso()]
             if kwargs.get("title") is not None:
                 sets.append("title = ?")
                 args.append(str(kwargs["title"]).strip())
@@ -215,7 +219,7 @@ class SqliteAdapter:
             if kwargs.get("isLocked") is not None:
                 sets.append("isLocked = ?")
                 args.append(1 if kwargs["isLocked"] else 0)
-            await db.execute(f"UPDATE Roadmap SET {', '.join(sets)} WHERE id = ?", (*args, row["id"]))
+            await db.execute(f"UPDATE Roadmap SET {', '.join(sets)} WHERE id = ?", (*args, row["id"]))  # noqa: S608 -- fixed column names; values parameterized
             await db.commit()
             cursor = await db.execute("SELECT * FROM Roadmap WHERE id = ?", (row["id"],))
             return dict(await cursor.fetchone())
@@ -257,8 +261,8 @@ class SqliteAdapter:
             try:
                 redirect_cursor = await db.execute("SELECT fromSlug FROM SlugRedirect WHERE entity = 'lesson'")
                 global_slugs.update(row[0] for row in await redirect_cursor.fetchall() if row[0])
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("SlugRedirect lookup skipped: %s", exc)
             topic_used = {i["slug"] for i in items if i.get("slug")}
             slug = _lesson_slug(title, global_slugs, topic["slug"], topic_used)
             item_id, now = _uuid7(), _now_iso()
@@ -287,7 +291,8 @@ class SqliteAdapter:
             current = await cursor.fetchone()
             if not current:
                 raise ValueError(f"Lesson '{item_id}' not found")
-            sets, args = ["updatedAt = ?"], [_now_iso()]
+            sets = ["updatedAt = ?"]
+            args: list[str | int | None] = [_now_iso()]
             if kwargs.get("title") is not None:
                 title = str(kwargs["title"]).strip()
                 siblings = await self._items_of(db, current["roadmapId"])
@@ -318,7 +323,7 @@ class SqliteAdapter:
             elif kwargs.get("markReviewed") is True:
                 sets.append("statusUpdatedAt = ?")
                 args.append(_now_iso())
-            await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))
+            await db.execute(f"UPDATE RoadmapItem SET {', '.join(sets)} WHERE id = ?", (*args, item_id))  # noqa: S608 -- fixed column names; values parameterized
             await db.commit()
             cursor = await db.execute("SELECT * FROM RoadmapItem WHERE id = ?", (item_id,))
             return dict(await cursor.fetchone())

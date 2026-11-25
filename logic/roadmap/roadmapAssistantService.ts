@@ -66,7 +66,7 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 /**
  * Page the user is viewing: `/[topicSlug]` or `/[topicSlug]/[lessonSlug]` (ADR-0014), with the
  * Lesson page's DOM dataset for its Topic and Section. Returns undefined on the server so SSR
- * never reads window, and on pages that are not a Topic or Lesson (`/notes`, `/portfolio`, ...).
+ * never reads window, and on pages that are not a Topic or Lesson (`/news`, `/portfolio`, ...).
  */
 export function getRoadmapPageContext(): PageContext | undefined {
   if (typeof window === 'undefined') return undefined;

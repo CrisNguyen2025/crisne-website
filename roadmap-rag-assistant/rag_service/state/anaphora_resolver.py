@@ -38,7 +38,7 @@ class AnaphoraResolver:
             active_slug = page_slug or ctx.active_topic_slug
             if active_slug:
                 action.target_parent_identifier = active_slug
-                if page_slug:
+                if page_context and page_slug:
                     topic_name = (page_context.get("roadmapTitle") or "").strip() or page_slug
                 else:
                     topic_name = ctx.active_topic_title or ctx.active_topic_slug

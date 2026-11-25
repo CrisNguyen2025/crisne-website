@@ -83,10 +83,7 @@
         "components/roadmap/useTopicOwnerStatuses.ts",
         "components/roadmap/RoadmapMap.tsx",
         "components/roadmap/LessonStatus.tsx",
-        "components/roadmap/ChecklistItemRow.tsx",
-        "components/roadmap/SectionList.tsx",
-        "components/roadmap/MasterPanel.tsx",
-        "components/roadmap/DetailPanel.tsx",
+        "components/roadmap/EditSectionModal.tsx",
         "app/api/v1/roadmaps/route.ts",
         "app/api/v1/roadmaps/[slug]/route.ts",
         "app/api/v1/roadmaps/[slug]/sections/route.ts",
@@ -164,23 +161,6 @@
       ]
     },
     {
-      "id": "notes-editor",
-      "name": "Notes & Lexical Rich-Text CMS",
-      "summary": "Hệ thống ghi chú cá nhân và soạn thảo rich text sử dụng Lexical Editor. Hỗ trợ tạo note, autosave, gán tag, đồng bộ Notion, và backup dữ liệu định kỳ.",
-      "cohesionScore": 0.88,
-      "adrs": [],
-      "glossary": [],
-      "keyFiles": [
-        "app/notes/page.tsx",
-        "app/notes/[slug]/page.tsx",
-        "app/api/tags/route.ts",
-        "app/api/tags/[id]/route.ts",
-        "app/api/backup-notes/route.ts",
-        "lib/notion.ts"
-      ],
-      "dataModels": []
-    },
-    {
       "id": "storage-media",
       "name": "Storage & Media Assets",
       "summary": "Dịch vụ lưu trữ tệp đính kèm và ảnh cho rich-text editor qua Cloudflare R2 / AWS S3 S3Client tương thích.",
@@ -189,8 +169,7 @@
       "glossary": [],
       "keyFiles": [
         "app/api/upload-image/route.ts",
-        "lib/r2-client.ts",
-        "lib/image-upload.ts"
+        "lib/r2-client.ts"
       ],
       "dataModels": []
     },
@@ -369,28 +348,6 @@
       "domainId": "roadmap-learning",
       "summary": "Đường dẫn cũ của bài học (ADR-0013) — chuyển hướng 308 sang /[topicSlug]/[lessonSlug]",
       "handler": "app/lessons/[lessonSlug]/page.tsx",
-      "triggersFlow": "N/A"
-    },
-    {
-      "id": "EP_UI_NOTES",
-      "type": "page",
-      "path": "/notes",
-      "method": "GET",
-      "authRequirement": "none",
-      "domainId": "notes-editor",
-      "summary": "Trang tổng hợp ghi chú cá nhân",
-      "handler": "app/notes/page.tsx",
-      "triggersFlow": "N/A"
-    },
-    {
-      "id": "EP_UI_NOTE_SLUG",
-      "type": "page",
-      "path": "/notes/[slug]",
-      "method": "GET",
-      "authRequirement": "none",
-      "domainId": "notes-editor",
-      "summary": "Trang soạn thảo và xem chi tiết một ghi chú",
-      "handler": "app/notes/[slug]/page.tsx",
       "triggersFlow": "N/A"
     },
     {
@@ -1077,7 +1034,7 @@
       "name": "Cập nhật tiến độ bài học (Lesson Status: target | learning | known)",
       "domainId": "roadmap-learning",
       "actor": "Owner",
-      "trigger": "Owner click chuyển đổi trạng thái trên LessonStatus badge hoặc ChecklistItemRow",
+      "trigger": "Owner click chuyển đổi trạng thái trên LessonStatus badge hoặc menu bài học",
       "preconditions": [
         "User đã đăng nhập với email thuộc danh sách Owner",
         "Bài học tồn tại trong Database",
@@ -1199,8 +1156,8 @@
         {
           "order": 1,
           "layer": "Presentation_UI",
-          "component": "components/roadmap/SectionList.tsx",
-          "functionOrMethod": "onRenameSection",
+          "component": "components/roadmap/TopicEditorialPage.tsx",
+          "functionOrMethod": "handleRenameSection",
           "action": "Gọi `renameSection(slug, { oldName, newName })`",
           "callsNext": "logic/roadmap/roadmapService.ts#renameSection",
           "dataPassed": "{ oldName: 'RAG', newName: 'Retrieval Augmented Generation' }"

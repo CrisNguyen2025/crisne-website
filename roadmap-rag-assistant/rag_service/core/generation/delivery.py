@@ -42,7 +42,7 @@ def metadata_event(
     """
     by_id = {d.id: d for d in documents}
     used = {i for c in citations or [] for i in c["source_ids"]}
-    sources = []
+    sources: List[dict] = []
     for doc_id in cited_ids or []:
         d = by_id.get(doc_id)
         if d is None or (doc_id not in used and len(sources) >= MAX_SOURCES):

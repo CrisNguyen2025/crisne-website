@@ -4,6 +4,7 @@ import { findTopic } from '@/lib/roadmap/resolveRoadmap';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { normalizeTitle } from '@/lib/roadmap/duplicates';
+import { RenameSectionSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 import { sectionSpelling } from '@/lib/roadmap/sections';
 
 interface RouteContext {
@@ -18,13 +19,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   try {
     const { slug } = await context.params;
-    const { from, to } = await req.json();
-    if (typeof from !== 'string' || !from.trim()) {
-      return NextResponse.json({ error: 'from is required' }, { status: 400 });
-    }
-    if (typeof to !== 'string' || !to.trim()) {
-      return NextResponse.json({ error: 'to is required' }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, RenameSectionSchema);
+    if (!parsed.ok) return parsed.response;
+    const { from, to } = parsed.data;
 
     const topic = await findTopic(slug);
     if (!topic) return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });

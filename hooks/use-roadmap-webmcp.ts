@@ -23,7 +23,7 @@ interface WebMcpTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  execute: (args: Record<string, any>) => Promise<unknown>;
+  execute: (args: Record<string, unknown>) => Promise<unknown>;
 }
 
 interface WebMcpRegisteredTool {
@@ -49,6 +49,15 @@ const CONFIRM_SCHEMA = {
   description: 'Must be true. Deletion is irreversible; confirm with the user first.',
 };
 
+function typedTool<TArgs>(
+  tool: Omit<WebMcpTool, 'execute'> & { execute: (args: TArgs) => Promise<unknown> },
+): WebMcpTool {
+  return {
+    ...tool,
+    execute: (args) => tool.execute(args as TArgs),
+  };
+}
+
 // Notify the workspace (app/page.tsx) to refresh after any write, same as the chatbot does.
 function notifyUpdated<T>(result: T): T {
   if (typeof window !== 'undefined') {
@@ -57,7 +66,7 @@ function notifyUpdated<T>(result: T): T {
   return result;
 }
 
-function requireConfirm(args: Record<string, any>) {
+function requireConfirm(args: { confirm?: boolean }) {
   if (args.confirm !== true) {
     throw new Error('Deletion requires confirm: true after the user has agreed.');
   }
@@ -76,7 +85,7 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
     inputSchema: { type: 'object', properties: {} },
     execute: () => fetchAllRoadmaps(),
   },
-  {
+  typedTool<{ slug: string }>({
     name: 'get_roadmap',
     description: 'Get one topic with its lessons in page order and its sections. Accepts slug or title.',
     inputSchema: {
@@ -85,14 +94,14 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       required: ['slug'],
     },
     execute: ({ slug }) => fetchRoadmapBySlug(slug),
-  },
+  }),
   {
     name: 'export_roadmaps',
     description: 'Export all topics with their lessons, each lesson naming its section.',
     inputSchema: { type: 'object', properties: {} },
     execute: () => exportAllRoadmaps(),
   },
-  {
+  typedTool<Parameters<typeof createRoadmap>[0]>({
     name: 'create_roadmap',
     description: 'Create a new topic. Lessons are added afterwards.',
     inputSchema: {
@@ -103,9 +112,9 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['title'],
     },
-    execute: async (args) => notifyUpdated(await createRoadmap(args as Parameters<typeof createRoadmap>[0])),
-  },
-  {
+    execute: async (args) => notifyUpdated(await createRoadmap(args)),
+  }),
+  typedTool<{ slug: string } & Parameters<typeof updateRoadmapBySlug>[1]>({
     name: 'update_roadmap',
     description: 'Update a topic title, description or lock state.',
     inputSchema: {
@@ -119,8 +128,8 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       required: ['slug'],
     },
     execute: async ({ slug, ...payload }) => notifyUpdated(await updateRoadmapBySlug(slug, payload)),
-  },
-  {
+  }),
+  typedTool<{ slug: string; confirm?: boolean }>({
     name: 'delete_roadmap',
     description: 'Delete a topic and all its lessons. Irreversible.',
     inputSchema: {
@@ -133,8 +142,8 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       await deleteRoadmapBySlug(slug);
       return notifyUpdated({ success: true, deletedSlug: slug });
     },
-  },
-  {
+  }),
+  typedTool<Parameters<typeof createItem>[0]>({
     name: 'create_item',
     description:
       'Add a lesson to a topic. section is optional: it names a section of the topic (reused if it exists, created if not); leave it out for a lesson outside any section.',
@@ -149,9 +158,9 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['roadmapSlug', 'title'],
     },
-    execute: async (args) => notifyUpdated(await createItem(args as any)),
-  },
-  {
+    execute: async (args) => notifyUpdated(await createItem(args)),
+  }),
+  typedTool<Parameters<typeof updateItemInfo>[0]>({
     name: 'update_item',
     description: 'Update a lesson title and description. section moves it to another section ("" takes it out of its section).',
     inputSchema: {
@@ -164,9 +173,9 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['id', 'title', 'description'],
     },
-    execute: async (args) => notifyUpdated(await updateItemInfo(args as any)),
-  },
-  {
+    execute: async (args) => notifyUpdated(await updateItemInfo(args)),
+  }),
+  typedTool<{ slug: string; from: string; to: string }>({
     name: 'rename_section',
     description: 'Rename a section of a topic; every lesson in it moves to the new name. Renaming onto an existing section merges them.',
     inputSchema: {
@@ -179,8 +188,8 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       required: ['slug', 'from', 'to'],
     },
     execute: async ({ slug, from, to }) => notifyUpdated(await renameSection(slug, { from, to })),
-  },
-  {
+  }),
+  typedTool<Parameters<typeof updateItemContent>[0]>({
     name: 'update_item_content',
     description: 'Replace the body content of a lesson.',
     inputSchema: {
@@ -188,9 +197,9 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       properties: { id: { type: 'string' }, content: { type: 'string' } },
       required: ['id', 'content'],
     },
-    execute: async (args) => notifyUpdated(await updateItemContent(args as any)),
-  },
-  {
+    execute: async (args) => notifyUpdated(await updateItemContent(args)),
+  }),
+  typedTool<{ id: string; confirm?: boolean }>({
     name: 'delete_item',
     description: 'Delete a lesson. Irreversible.',
     inputSchema: {
@@ -203,8 +212,8 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       await deleteItem(id);
       return notifyUpdated({ success: true, deletedId: id });
     },
-  },
-  {
+  }),
+  typedTool<Parameters<typeof reorderItems>[0]>({
     name: 'reorder_items',
     description: 'Set the page order of the lessons of a topic.',
     inputSchema: {
@@ -214,8 +223,8 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
       },
       required: ['orderedItemIds'],
     },
-    execute: async (args) => notifyUpdated(await reorderItems(args as Parameters<typeof reorderItems>[0])),
-  },
+    execute: async (args) => notifyUpdated(await reorderItems(args)),
+  }),
 ];
 
 /**

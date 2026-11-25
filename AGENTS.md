@@ -10,6 +10,7 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Lint / test: `yarn lint` · `yarn test`
 - Schema và index: `yarn test:schema-sql --check` · `yarn check:knowledge-index`
 - Config agent: `yarn agents:sync --check` (sinh lại bằng `yarn agents:sync`)
+- Doctor (ratchet, không cho thêm finding bug/risk mới): `yarn doctor --check` (ghi lại baseline bằng `yarn doctor --update-baseline`)
 - Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate`
 
 ## 📚 Skills
@@ -20,6 +21,7 @@ Skill dự án nằm thật ở `.agents/skills/` (Claude Code, Codex, Antigravi
 - **`cris-code-intel`:** impact và route map dùng GitNexus, trừ route FastAPI và `/api/roadmap-assistant/*` (GitNexus không thấy consumer, risk không đáng tin): dùng `yarn intel trace FLOW_ABOT_*`. CLI `yarn intel <lệnh>`, bản đồ chi tiết `docs/code-intel/CRIS_WORKSPACE_MAP.md`.
 - **`design-doc-mermaid`:** chỉ dùng cho sơ đồ commit trong file `.md` của repo; quy ước repo nằm đầu `SKILL.md`. Nguồn: [SpillwaveSolutions/design-doc-mermaid](https://github.com/SpillwaveSolutions/design-doc-mermaid) (MIT).
 - **`verify-ci`:** dùng sau khi sửa code; subagent `verifier` của Claude Code chạy skill này.
+- **`cris-doctor`:** chỉ đọc, CLI `yarn doctor`. Chạy `--scope <vùng>` trước khi lập plan cho vùng đó. Sửa xong finding thì chạy `--update-baseline` và commit `.handoff/doctor/baseline.json` cùng thay đổi.
 
 ## 🤖 Config agent (MCP, subagent, hook)
 
@@ -49,6 +51,7 @@ Chỉ ghi quy ước riêng của repo. Quy ước chung của Next.js/React/Tai
 - Don't import server-only code in client components
 - Không hardcode secret, API key, token, password trong code
 - Inline style chỉ dùng cho giá trị tính lúc runtime; còn lại dùng Tailwind
+- UI mới theo `docs/design-system.md`: màu qua token, không cỡ chữ/spacing/z-index tuỳ ý, nút dùng `<Button>`, icon chỉ `lucide-react`
 - Code mới không fetch data trong useEffect; dùng server action hoặc Server Component
 - Naming props/biến theo đúng single component/func, không gắn use-case (sai: isChatLoading, đúng: isLoading)
 - Giá trị optional khi hiển thị phải qua hàm format tương ứng (formatString, formatDateTime, ...)

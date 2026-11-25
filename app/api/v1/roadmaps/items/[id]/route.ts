@@ -5,7 +5,8 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate, normalizeTitle } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionSpelling } from '@/lib/roadmap/sections';
-import { LESSON_STATUSES, isLessonStatus, type LessonStatus } from '@/lib/roadmap/status';
+import { type LessonStatus } from '@/lib/roadmap/status';
+import { UpdateLessonSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 import { findTopic } from '@/lib/roadmap/resolveRoadmap';
 import { slugify } from '@/lib/utils';
 
@@ -20,12 +21,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const body = await req.json();
-    const { title, description, section, status, slug, roadmapSlug, markReviewed } = body;
-
-    if (status !== undefined && !isLessonStatus(status)) {
-      return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, UpdateLessonSchema);
+    if (!parsed.ok) return parsed.response;
+    const { title, description, section, status, slug, roadmapSlug, markReviewed } = parsed.data;
 
     const current = await prisma.roadmapItem.findUnique({ where: { id } });
     if (!current) return NextResponse.json({ error: 'Item not found' }, { status: 404 });

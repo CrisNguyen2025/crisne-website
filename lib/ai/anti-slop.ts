@@ -242,7 +242,7 @@ export function isDirectAnswerCompliant(text: string, maxWords = 20): boolean {
   return words > 0 && words <= maxWords;
 }
 
-export function createAntiSlopTransformStream<T = Uint8Array | string>() {
+export function createAntiSlopTransformStream<T extends Uint8Array | string = Uint8Array>() {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let isBinary: boolean | null = null;
@@ -292,7 +292,7 @@ export function createAntiSlopTransformStream<T = Uint8Array | string>() {
     return text;
   }
 
-  return new TransformStream<T, any>({
+  return new TransformStream<T, T>({
     transform(chunk, controller) {
       if (isBinary === null) {
         isBinary = typeof chunk !== "string";
@@ -333,14 +333,14 @@ export function createAntiSlopTransformStream<T = Uint8Array | string>() {
 
       if (splitIdx === -1) {
         if (pendingBuffer.length > 0) {
-          controller.enqueue(isBinary ? encoder.encode(pendingBuffer) : pendingBuffer);
+          controller.enqueue((isBinary ? encoder.encode(pendingBuffer) : pendingBuffer) as T);
           pendingBuffer = "";
         }
       } else {
         const safePart = pendingBuffer.slice(0, splitIdx);
         pendingBuffer = pendingBuffer.slice(splitIdx);
         if (safePart.length > 0) {
-          controller.enqueue(isBinary ? encoder.encode(safePart) : safePart);
+          controller.enqueue((isBinary ? encoder.encode(safePart) : safePart) as T);
         }
       }
     },
@@ -357,7 +357,7 @@ export function createAntiSlopTransformStream<T = Uint8Array | string>() {
 
       const finalTail = sanitizeTail(pendingBuffer);
       if (finalTail.length > 0) {
-        controller.enqueue(isBinary ? encoder.encode(finalTail) : finalTail);
+        controller.enqueue((isBinary ? encoder.encode(finalTail) : finalTail) as T);
       }
       pendingBuffer = "";
     },

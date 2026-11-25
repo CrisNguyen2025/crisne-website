@@ -87,7 +87,8 @@ def _tokens(text: str) -> list[tuple[str, str]]:
 
 def _clauses(tokens: list[tuple[str, str]]) -> list[tuple[list[tuple[str, str]], bool]]:
     """Clauses, each with whether it is a condition (it ends at "thì": "trường hợp thêm bài X thì …")."""
-    clauses, current = [], []
+    clauses: list[tuple[list[tuple[str, str]], bool]] = []
+    current: list[tuple[str, str]] = []
     for tok, ftok in tokens:
         if tok in CLAUSE_BREAK or (tok == ftok and ftok in CLAUSE_BREAK_FOLDED):
             clauses.append((current, ftok == "thi"))

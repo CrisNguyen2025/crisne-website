@@ -11,7 +11,6 @@ import { mergeRegister } from '@lexical/utils';
 import {
   $createParagraphNode,
   $getNodeByKey,
-  $getRoot,
   $getSelection,
   $isElementNode,
   $isNodeSelection,
@@ -59,10 +58,6 @@ function useSuspenseImage(src: string): ImageStatus {
   throw cached;
 }
 
-function isSVG(src: string): boolean {
-  return src.toLowerCase().endsWith('.svg');
-}
-
 function LazyImage({
   altText,
   className,
@@ -80,7 +75,6 @@ function LazyImage({
   width: 'inherit' | number;
   onError: () => void;
 }>): JSX.Element {
-  const isSVGImage = isSVG(src);
   const status = useSuspenseImage(src);
 
   useEffect(() => {
@@ -146,6 +140,7 @@ function LazyImage({
   const imageStyle = calculateDimensions();
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- dynamic user-uploaded/external image dimensions inside Lexical editor
     <img
       className={className || undefined}
       src={src}
@@ -160,6 +155,7 @@ function LazyImage({
 
 function BrokenImage(): JSX.Element {
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- static fallback SVG inside Lexical image node
     <img
       src='/images/empty.svg'
       style={{
@@ -206,7 +202,6 @@ export default function ImageComponent({
   const activeEditorRef = useRef<LexicalEditor | null>(null);
   const [isLoadError, setIsLoadError] = useState<boolean>(false);
   const isEditable = useLexicalEditable();
-  const lastClickTimeRef = useRef<number>(0);
   const isInNodeSelection = useMemo(
     () =>
       isSelected &&
@@ -220,7 +215,6 @@ export default function ImageComponent({
   const $onEnter = useCallback(
     (event: KeyboardEvent) => {
       const latestSelection = $getSelection();
-      const buttonElem = buttonRef.current;
       if (
         $isNodeSelection(latestSelection) &&
         latestSelection.has(nodeKey) &&
@@ -386,22 +380,6 @@ export default function ImageComponent({
       () => rootCleanup(),
     );
   }, [editor, $onEnter, $onEscape, onClick, onRightClick]);
-
-  const setShowCaption = (show: boolean) => {
-    editor.update(() => {
-      const node = $getNodeByKey(nodeKey);
-      if ($isImageNode(node)) {
-        node.setShowCaption(show);
-        if (show) {
-          node.__caption.update(() => {
-            if (!$getSelection()) {
-              $getRoot().selectEnd();
-            }
-          });
-        }
-      }
-    });
-  };
 
   const onResizeEnd = (nextWidth: 'inherit' | number, nextHeight: 'inherit' | number) => {
     // Delay hiding the resize bars for click case

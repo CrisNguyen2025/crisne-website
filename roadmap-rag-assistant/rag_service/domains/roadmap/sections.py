@@ -12,6 +12,7 @@ from typing import AsyncGenerator, Optional
 
 from rag_service.adapters.errors import normalize_title
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import example_blocks
 from rag_service.domains.roadmap.router.policy import LIST_SECTIONS
@@ -90,10 +91,10 @@ def section_list_reply(topic: dict) -> str:
     return f"{head}:\n\n{lines}"
 
 
-class SectionCommands:
+class SectionCommands(AgentHostMixin):
     async def _section_topic(self, named: Optional[str], content: str, page_context, session_ctx) -> Optional[dict]:
         """The topic the message means: named in it, else the open page, else the session's. None when unknown."""
-        candidates = [named] if named else []
+        candidates: list[Optional[str]] = [named] if named else []
         candidates += [await topic_named_in_message(content), (page_context or {}).get("roadmapSlug"),
                        session_ctx.active_topic_slug]
         for ref in candidates:

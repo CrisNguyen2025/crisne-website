@@ -21,7 +21,7 @@ export function ThemeToggle({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mark mounted after hydration before rendering theme icon
     setMounted(true);
   }, []);
 

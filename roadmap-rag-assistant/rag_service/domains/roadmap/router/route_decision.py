@@ -184,7 +184,8 @@ async def decide_route(
         return RouteOutcome(intent_res, method, decision, gate, plan, verdict, grounding, scope=scope)
     if plan.outcome == BLOCKED:
         return RouteOutcome(intent_res, method, decision, WriteGate(WRITE_DENY, BLOCKED_CHANGE), plan, verdict, grounding, scope=scope)
-    assert plan.outcome == REROUTE
+    if plan.outcome != REROUTE:
+        raise RuntimeError(f"Unexpected route plan outcome: {plan.outcome!r}")
     rerouted = IntentClassificationResult(
         intent=plan.intent or IntentType.KNOWLEDGE_QUERY,
         confidence=verdict.confidence if verdict else 0.5,

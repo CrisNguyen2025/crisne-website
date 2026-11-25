@@ -10,7 +10,7 @@ from __future__ import annotations
 import functools
 import hmac
 from contextvars import ContextVar
-from typing import Any, Awaitable, Callable, Literal, TypeVar
+from typing import Any, Awaitable, Callable, Coroutine, Literal, ParamSpec, TypeVar
 
 Actor = Literal["owner", "visitor"]
 
@@ -46,14 +46,15 @@ def is_valid_internal_key(provided: str | None, expected: str) -> bool:
     return hmac.compare_digest(provided.encode(), expected.encode())
 
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 
-def owner_only(fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+def owner_only(fn: Callable[P, Awaitable[T]]) -> Callable[P, Coroutine[Any, Any, T]]:
     """Decorator for adapter write methods."""
 
     @functools.wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> T:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         require_owner()
         return await fn(*args, **kwargs)
 

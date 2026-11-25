@@ -171,7 +171,7 @@ async def answer_from_sources(
             rag_context += format_fallback_provenance_footer(matches, lesson_provenances)
 
         # Synthesize with LLM if available
-        llm_failed = False
+        llm_failed: bool | str = False
         if pipeline.available(llm):
             try:
                 req = GenerationRequest(

@@ -27,7 +27,6 @@ import {
   KEY_ARROW_UP_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
-  PASTE_COMMAND,
   getDOMSelectionFromTarget,
   isHTMLElement,
   LexicalCommand,

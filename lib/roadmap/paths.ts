@@ -8,7 +8,6 @@ export const RESERVED_TOPIC_SLUGS: readonly string[] = [
   'api',
   'lessons',
   'topic',
-  'notes',
   'portfolio',
   'login',
   'news',

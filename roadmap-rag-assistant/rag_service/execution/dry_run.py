@@ -6,7 +6,7 @@ preventing unintended database modifications and providing clarity to the user.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
 
 

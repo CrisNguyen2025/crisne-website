@@ -11,18 +11,8 @@ vi.mock("next/server", async (importOriginal) => ({
 const authMock = vi.hoisted(() => vi.fn());
 vi.mock("@/auth", () => ({ auth: authMock }));
 
-// Guarded routes must reject before touching storage or Notion
-const notionMock = vi.hoisted(() => ({
-  addFavorite: vi.fn(async () => ({})),
-  removeFavorite: vi.fn(async () => undefined),
-  getFavorites: vi.fn(async () => []),
-  createPost: vi.fn(async () => ({ id: "post-1" })),
-}));
-vi.mock("@/lib/notion", () => notionMock);
-
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { POST as createRoadmap } from "@/app/api/v1/roadmaps/route";
-import { POST as addFavorite } from "@/app/api/favorites/route";
 import { POST as chat } from "@/app/api/chat/route";
 import { POST as sendChatFeedback } from "@/app/api/chat/feedback/route";
 
@@ -87,24 +77,6 @@ describe("guarded write routes", () => {
     authMock.mockResolvedValue({ user: { email: OWNER } });
     const res = await createRoadmap(request("/api/v1/roadmaps", { body: {} }));
     expect(res.status).not.toBe(401);
-  });
-});
-
-describe("favorites (public, rate limited)", () => {
-  it("stays public but returns 429 after 30 writes from one IP", async () => {
-    const send = () =>
-      addFavorite(
-        new NextRequest("http://localhost/api/favorites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-forwarded-for": "198.51.100.77", "X-User-ID": "visitor-1" },
-          body: JSON.stringify({ tagId: "tag-1" }),
-        })
-      );
-    const statuses: number[] = [];
-    for (let i = 0; i < 31; i++) statuses.push((await send()).status);
-
-    expect(statuses.slice(0, 30).every((s) => s !== 401 && s !== 429)).toBe(true);
-    expect(statuses[30]).toBe(429);
   });
 });
 

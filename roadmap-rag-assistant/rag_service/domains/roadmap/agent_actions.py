@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import AsyncGenerator, Optional
 
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.router.grounding import (
     CREATE_TOPIC_EXAMPLE,
     example_blocks,
@@ -48,7 +49,7 @@ async def _example_names() -> tuple[str, str]:
     return topic_slug, section
 
 
-class RoadmapAgentActions:
+class RoadmapAgentActions(AgentHostMixin):
     async def _topic_known(self, slug: str) -> bool:
         """True when the topic exists; a failed lookup counts as known, so the executor can still try."""
         try:

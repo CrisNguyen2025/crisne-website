@@ -73,7 +73,7 @@ def topic_examples(exclude: str = "", limit: int = 1) -> list[str]:
 def plan_examples() -> list[str]:
     """A learning-plan question about a topic the roadmap holds, answered from its lessons; none when empty."""
     titles = [d.title for d in _indexed_docs("topic")]
-    return [f"Mình muốn học {random.choice(titles)}, nên đọc bài nào trước?"] if titles else []
+    return [f"Mình muốn học {random.choice(titles)}, nên đọc bài nào trước?"] if titles else []  # noqa: S311 -- non-cryptographic example selection
 
 
 def browse_examples(exclude: str = "") -> list[str]:

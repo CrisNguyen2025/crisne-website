@@ -199,6 +199,7 @@ model NewsItem {
   @@index([isSaved, createdAt])
   @@index([origin, createdAt])
   @@index([createdAt])
+  @@index([sourceId])
   @@index([ingestStatus])
   @@index([normalizedTitle])
   @@index([isPublic, publicAt])

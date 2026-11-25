@@ -1,4 +1,4 @@
-import { $createLinkNode, $isAutoLinkNode, $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
+import { $isAutoLinkNode, $isLinkNode, LinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { $findMatchingParent, mergeRegister } from '@lexical/utils';
 import {
@@ -26,7 +26,6 @@ import { createPortal } from 'react-dom';
 import { Copy, Trash } from 'lucide-react';
 import { getSelectedNode } from '../../utils/getSelectedNode';
 import { setFloatingElemPositionForLinkEditor } from '../../utils/setFloatingElemPositionForLinkEditor';
-import { sanitizeUrl } from '../../utils/url';
 
 function preventDefault(event: React.KeyboardEvent<HTMLInputElement> | React.MouseEvent<HTMLElement>): void {
   event.preventDefault();
@@ -116,14 +115,14 @@ function FloatingLinkEditor({
     }
   }, [activeUrl]);
 
-  const clearHideTimer = () => {
+  const clearHideTimer = useCallback(() => {
     if (hoverHideTimerRef.current) {
       clearTimeout(hoverHideTimerRef.current);
       hoverHideTimerRef.current = null;
     }
-  };
+  }, []);
 
-  const startHideTimer = () => {
+  const startHideTimer = useCallback(() => {
     clearHideTimer();
     hoverHideTimerRef.current = setTimeout(() => {
       // Don't hide if user is currently focused/typing in the input
@@ -141,7 +140,7 @@ function FloatingLinkEditor({
         }
       });
     }, 280);
-  };
+  }, [anchorElem, clearHideTimer, editor]);
 
   // Hover detection on editor root element with debounce
   useEffect(() => {
@@ -231,7 +230,7 @@ function FloatingLinkEditor({
       if (hoverShowTimerRef.current) clearTimeout(hoverShowTimerRef.current);
       clearHideTimer();
     };
-  }, [editor, anchorElem, hoveredLink]);
+  }, [editor, anchorElem, hoveredLink, startHideTimer, clearHideTimer]);
 
   const $updateLinkEditor = useCallback(() => {
     // If hoveredLink is active and still connected, position according to hovered link

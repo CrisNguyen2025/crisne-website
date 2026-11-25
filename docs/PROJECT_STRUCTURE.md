@@ -11,7 +11,7 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 │   ├── layout.tsx               # Root layout with fonts, metadata, analytics
 │   ├── page.tsx                 # Home page (redirects or renders main roadmap)
 │   ├── portfolio/               # Portfolio view (sections + Cris AI bot)
-│   ├── notes/                   # Notes module (Notion synced)
+│   ├── (news)/                  # Private News reader & PWA share target (Owner only)
 │   ├── api/                     # Next.js API Route Handlers
 │   │   ├── roadmap-assistant/   # Abot assistant proxy / me endpoint
 │   │   ├── v1/roadmaps/         # Roadmap CRUD API routes
@@ -63,7 +63,7 @@ Next.js 16.2.1 + React 19.2.4 portfolio website with performance optimizations a
 │   └── tests/                   # Pytest suite
 │
 ├── hooks/                        # Custom React hooks
-├── lib/                          # Utility functions (Prisma, Notion, AI, etc.)
+├── lib/                          # Utility functions (Prisma, AI, News, Roadmap, R2)
 ├── public/                       # Static assets
 ├── scripts/                      # Utility scripts (seed, backup, sync)
 ├── next.config.ts               # Next.js config with optimizations

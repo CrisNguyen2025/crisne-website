@@ -32,6 +32,7 @@ describe("Private App Middleware Auth Guard", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("DEV_OWNER_BYPASS", "false");
     vi.stubEnv("AUTH_OWNER_EMAILS", "owner@example.com");
+    vi.stubEnv("ADMIN_API_KEY", "secret");
   });
 
   it("redirects unauthenticated page requests to /login with callbackUrl", async () => {
@@ -63,7 +64,7 @@ describe("Private App Middleware Auth Guard", () => {
     expect(res.headers.get("location")).toBe("http://localhost:3334/");
   });
 
-  it("allows requests with x-admin-key machine header", async () => {
+  it("allows requests with valid x-admin-key machine header", async () => {
     const req = createRequest("/api/v1/roadmaps", {
       headers: { "x-admin-key": "secret" },
     });
@@ -72,13 +73,20 @@ describe("Private App Middleware Auth Guard", () => {
     expect(res.status).not.toBe(401);
   });
 
-  it("allows requests with x-internal-key machine header", async () => {
+  it("rejects requests with invalid x-admin-key header", async () => {
+    const req = createRequest("/api/v1/roadmaps", {
+      headers: { "x-admin-key": "wrong" },
+    });
+    const res = (await middleware(req, {} as never)) as Response;
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects unauthenticated requests carrying arbitrary x-internal-key header", async () => {
     const req = createRequest("/api/roadmap-assistant/chat", {
       headers: { "x-internal-key": "internal" },
     });
     const res = (await middleware(req, {} as never)) as Response;
-    expect(res.headers.get("location")).toBeNull();
-    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(401);
   });
 
   it("allows access to public health check", async () => {

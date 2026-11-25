@@ -76,10 +76,10 @@ Thiếu → file upload ghi vào `.data/`, **bị mất** trên Vercel.
 | `R2_BUCKET_NAME` | 🔴 | |
 | `R2_PUBLIC_URL` | 🔴 | |
 
-### Notion & Analytics
-| ENV | | |
+### Analytics & Client
+| ENV | | Ghi chú |
 |---|---|---|
-| `NOTION_TOKEN`, `NOTION_POSTS_DB_ID`, `NOTION_TAGS_DB_ID`, `NOTION_FAVORITES_DB_ID` | 🟡 | Sync Notion |
+| `NEXT_PUBLIC_API_BASE_URL` | 🟡 | Tuỳ chọn; để trống để gọi cùng domain `/api/...` |
 | `NEXT_PUBLIC_GA_ID`, `NEXT_PUBLIC_GTM_ID` | 🟡 | |
 | `NEXT_PUBLIC_ZALO_URL` | 🟡 | |
 
@@ -108,7 +108,7 @@ Không set `PORT` (Render tự cấp). Lưu ENV → Render tự redeploy.
 ### LLM
 | ENV | | Ghi chú |
 |---|---|---|
-| `GEMINI_API_KEY` | 🔴 | Embeddings + fallback; luôn giữ kể cả khi dùng Groq |
+| `GEMINI_API_KEY` | 🔴 | Embeddings + fallback; luôn giữ kể cả khi dùng Groq (`GOOGLE_API_KEY` cũng được đọc làm fallback) |
 | `GEMINI_API_KEYS` | 🟡 | `k1,k2` — xoay vòng khi bị rate limit |
 | `LLM_PROVIDER` | 🟡 | `google_genai` (mặc định) \| `groq` |
 | `LLM_MODEL` | 🟡 | Mặc định `gemini-flash-latest`. **Phải đổi sang model Groq** khi `LLM_PROVIDER=groq` |
@@ -117,6 +117,7 @@ Không set `PORT` (Render tự cấp). Lưu ENV → Render tự redeploy.
 | `LLM_FALLBACK_MODEL` | 🟡 | Mặc định `gemini-flash-latest`. **Phải đổi** nếu fallback là `groq` |
 | `LLM_MODEL_ROUTER` | 🟡 | Model nhỏ cho routing/verify (vd `llama-3.1-8b-instant`) |
 | `LLM_ROUTER_REASONING_EFFORT` | 🟡 | Mặc định `low` (chỉ với gpt-oss) |
+| `LLM_CONTEXT_WINDOW` | 🟡 | Tuỳ chọn, số token context của `LLM_MODEL`; `0` = tự tra theo tên model |
 
 **Preset Gemini chính (mặc định):** chỉ cần `GEMINI_API_KEY`.
 
@@ -140,7 +141,9 @@ Kiểm tra tên model Groq trên console.groq.com trước khi set.
 | `RAG_SEMANTIC_GROUNDING` | 🟡 | Mặc định `false` (+1 LLM call/câu) |
 | `RAG_HISTORY_DB` | 🟡 | Trống (nên để trống trên Render Free): lịch sử Thread của Owner lưu ở Turso qua Next.js (ADR-0012, cần `ADMIN_API_KEY` và đã chạy `yarn db:turso:init`), Thread của Visitor chỉ trong RAM. Chỉ set khi có Persistent Disk |
 | `RAG_ADAPTER_MODE` | 🟡 | Giữ mặc định `http` |
+| `SQLITE_DB_PATH` | 🟡 | Đường dẫn SQLite khi `RAG_ADAPTER_MODE=sqlite` (mặc định `../prisma/dev.db`) |
 | `EMBEDDING_CACHE_PATH` | 🟡 | Trống: cache embedding nằm trong image, mất sau mỗi lần deploy (mọi đoạn bài phải embed lại). Có ổ đĩa bền thì trỏ vào đó, ví dụ `/data/embedding_cache.json` (ADR-0006) |
+| `RAG_TYPING_DELAY_MS` | 🟡 | Độ trễ stream từng từ (ms), mặc định `5` |
 
 `ADMIN_API_KEY` của service này giờ cũng là điều kiện để **đọc** roadmap: `full-export`, `GET /api/v1/roadmaps` và `index-version` chỉ trả dữ liệu cho Owner hoặc `x-admin-key` đúng (ADR-0018). Thiếu hoặc lệch thì Abot không index được gì.
 
@@ -192,5 +195,7 @@ Cấu hình service tách riêng: Language **Docker** · Root Directory `news-in
 | `MEDIA_PROXY_URL` | 🟡 | Proxy HTTP/SOCKS tùy chọn chỉ dùng cho `yt-dlp` tải media |
 | `TIKTOK_FALLBACK_API_URL` | 🟡 | Endpoint Cobalt-compatible tùy chọn khi `yt-dlp` bị chặn IP trên TikTok |
 | `TIKTOK_FALLBACK_API_KEY` | 🟡 | API key tùy chọn cho `TIKTOK_FALLBACK_API_URL` (`Authorization: Api-Key ...`) |
+| `MIN_DESCRIPTION_CHARS` | 🟡 | Độ dài tối thiểu phần mô tả video trước khi bỏ qua chuyển sang transcript (mặc định `300`) |
+| `MIN_TRANSCRIPT_WORDS` | 🟡 | Số từ tối thiểu của transcript (mặc định `40`) |
 
 > Lưu ý nguồn Cron RSS: `vercel.json` đã cấu hình sẵn Vercel Cron chạy `GET /api/news/cron` hằng ngày lúc `04:00 UTC` (11:00 VN, khớp `lib/news/cron-schedule.ts`). Nếu cần quét dày hơn, có thể bổ sung GitHub Actions hoặc cron ngoài gọi `POST /api/news/cron` kèm `Authorization: Bearer <CRON_SECRET>`. Nhớ chạy `yarn db:news-source-cache --apply` lên Turso nếu nâng cấp từ bảng `NewsSource` cũ.

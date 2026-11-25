@@ -19,7 +19,7 @@ _DOC_KIND = {"item": "Bài học", "topic": "Lộ trình (Topic)"}
 def _known_links() -> Callable[[str], bool]:
     from rag_service.domains.roadmap.retrieval.engine import rag_engine
 
-    slugs_fn = getattr(rag_engine, "known_item_slugs", lambda: set())
+    slugs_fn: Callable[[], set[str]] = getattr(rag_engine, "known_item_slugs", lambda: set())
     known_items = set(rag_engine.known_item_ids()) | set(slugs_fn())
     return roadmap_link_allowed(rag_engine.known_topic_slugs(), known_items)
 

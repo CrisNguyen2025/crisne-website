@@ -199,6 +199,78 @@ export async function reingestBlockedNewsItems(
   return { count: itemIds.length, itemIds };
 }
 
+interface ExpiredLeaseRow {
+  id: string;
+  newsItemId: string;
+  attempts: number;
+}
+
+async function reclaimLeaseBucket(
+  tx: Prisma.TransactionClient,
+  bucket: ExpiredLeaseRow[],
+  now: Date,
+  exhausted: boolean
+): Promise<void> {
+  if (bucket.length === 0) return;
+  const attemptGuards = bucket.map((job) => ({ id: job.id, attempts: job.attempts }));
+  const jobData = exhausted
+    ? {
+        status: "failed",
+        lockedUntil: null,
+        lastError: "Worker lease expired after max attempts",
+      }
+    : {
+        status: "pending",
+        lockedUntil: null,
+        nextRunAt: now,
+        lastError: "Previous worker lease expired; re-queued",
+      };
+
+  const reclaimed = await tx.ingestJob.updateMany({
+    where: {
+      status: "running",
+      lockedUntil: { lt: now },
+      OR: attemptGuards,
+    },
+    data: jobData,
+  });
+  if (reclaimed.count === 0) return;
+
+  let newsItemIds: string[];
+  if (reclaimed.count === bucket.length) {
+    newsItemIds = Array.from(new Set(bucket.map((job) => job.newsItemId)));
+  } else {
+    const matched = await tx.ingestJob.findMany({
+      where: exhausted
+        ? {
+            status: "failed",
+            lockedUntil: null,
+            lastError: "Worker lease expired after max attempts",
+            OR: attemptGuards,
+          }
+        : {
+            status: "pending",
+            lockedUntil: null,
+            nextRunAt: now,
+            OR: attemptGuards,
+          },
+      select: { newsItemId: true },
+    });
+    newsItemIds = Array.from(new Set(matched.map((job) => job.newsItemId)));
+  }
+  if (newsItemIds.length === 0) return;
+
+  await tx.newsItem.updateMany({
+    where: { id: { in: newsItemIds } },
+    data: exhausted
+      ? {
+          ingestStatus: "failed",
+          extractionError: "Worker lease expired after max attempts",
+        }
+      : { ingestStatus: "queued" },
+  });
+}
+
 async function reclaimExpiredJobLeases(now: Date): Promise<void> {
   const expired = await prisma.ingestJob.findMany({
     where: {
@@ -207,44 +279,15 @@ async function reclaimExpiredJobLeases(now: Date): Promise<void> {
     },
     select: { id: true, newsItemId: true, attempts: true, maxAttempts: true },
   });
+  if (expired.length === 0) return;
 
-  for (const job of expired) {
-    const exhausted = job.attempts >= job.maxAttempts;
-    await prisma.$transaction(async (tx) => {
-      // Guard on attempts too: the job may have been completed or re-claimed since the read above
-      const reclaimed = await tx.ingestJob.updateMany({
-        where: {
-          id: job.id,
-          status: "running",
-          attempts: job.attempts,
-          lockedUntil: { lt: now },
-        },
-        data: exhausted
-          ? {
-              status: "failed",
-              lockedUntil: null,
-              lastError: "Worker lease expired after max attempts",
-            }
-          : {
-              status: "pending",
-              lockedUntil: null,
-              nextRunAt: now,
-              lastError: "Previous worker lease expired; re-queued",
-            },
-      });
-      if (reclaimed.count !== 1) return;
+  const exhausted = expired.filter((job) => job.attempts >= job.maxAttempts);
+  const retryable = expired.filter((job) => job.attempts < job.maxAttempts);
 
-      await tx.newsItem.update({
-        where: { id: job.newsItemId },
-        data: exhausted
-          ? {
-              ingestStatus: "failed",
-              extractionError: "Worker lease expired after max attempts",
-            }
-          : { ingestStatus: "queued" },
-      });
-    });
-  }
+  await prisma.$transaction(async (tx) => {
+    await reclaimLeaseBucket(tx, exhausted, now, true);
+    await reclaimLeaseBucket(tx, retryable, now, false);
+  });
 }
 
 export async function claimNextIngestJob(): Promise<ClaimedJobDto | null> {

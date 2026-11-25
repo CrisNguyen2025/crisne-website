@@ -4,6 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { duplicateResponse, findDuplicate } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { isReservedTopicSlug } from '@/lib/roadmap/paths';
+import { CreateRoadmapSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 import { slugify } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -46,12 +47,9 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const body = await req.json();
-    const { title, description } = body;
-
-    if (!title || typeof title !== 'string' || !title.trim()) {
-      return NextResponse.json({ error: 'Name is required.' }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, CreateRoadmapSchema);
+    if (!parsed.ok) return parsed.response;
+    const { title, description } = parsed.data;
 
     const baseSlug = slugify(title) || `topic-${Date.now()}`;
     // A Topic lives at /[slug] (ADR-0014), so it must not take a path the app already uses
@@ -76,7 +74,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('[API POST /api/v1/roadmaps] Error:', error);
     return NextResponse.json(
-      { error: (error instanceof Error ? error.message : undefined) || 'Failed to create topic / roadmap' },
+      { error: 'Failed to create topic / roadmap' },
       { status: 500 }
     );
   }

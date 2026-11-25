@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -165,7 +165,7 @@ async def _sse_stream_generator(
 
         # Final done event
         final_message = "".join(accumulated_tokens)
-        done_payload = {
+        done_payload: dict[str, Any] = {
             "message": final_message,
             "tool_calls": executed_tools,
             "steps": list(steps.values()),
@@ -251,7 +251,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
                 config={"configurable": {"thread_id": req.thread_id}},
             )
             msgs = res.get("messages", [])
-            tool_calls = [
+            tool_calls: list[ToolCallResult] = [
                 ToolCallResult(name=m.name, args={}, result=m.content)
                 for m in msgs if getattr(m, "type", "") == "tool"
             ]
@@ -263,7 +263,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             config={"configurable": {"thread_id": req.thread_id}},
         )
 
-        tool_calls: list[ToolCallResult] = []
+        tool_calls = []
         messages = result.get("messages", [])
         for msg in messages:
             if hasattr(msg, "type") and msg.type == "tool":
@@ -276,7 +276,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
                 )
 
         last_msg = messages[-1] if messages else None
-        final_text = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+        final_text = last_msg.content if last_msg is not None and hasattr(last_msg, "content") else str(last_msg)
         return ChatResponse(message=final_text, tool_calls=tool_calls)
 
     except Exception as exc:
@@ -402,6 +402,11 @@ async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionC
 
     action = ctx.pending_confirmation
     ctx.pending_confirmation = None
+    if action is None:
+        return ActionConfirmResponse(
+            success=False,
+            message="Không có thao tác nào đang chờ xác nhận (hoặc thao tác đã hết hạn sau 10 phút).",
+        )
     executor = ActionExecutor()
     changes = ChangeSet.of(action)
     with write_granted("confirmed preview"):

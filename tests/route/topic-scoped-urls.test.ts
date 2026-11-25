@@ -63,7 +63,7 @@ describe('paths', () => {
   });
 
   it('reserves the first path segments the app already uses', () => {
-    for (const slug of ['api', 'lessons', 'topic', 'notes', 'portfolio', 'login', '_next', ' Notes ']) {
+    for (const slug of ['api', 'lessons', 'topic', 'news', 'portfolio', 'login', '_next', ' News ']) {
       expect(isReservedTopicSlug(slug)).toBe(true);
     }
     expect(isReservedTopicSlug('ai')).toBe(false);
@@ -146,7 +146,7 @@ describe('getRoadmapPageContext', () => {
   });
 
   it('ignores pages that are not a Topic or Lesson', () => {
-    stubPage('/notes/some-post');
+    stubPage('/portfolio');
     expect(getRoadmapPageContext()).toBeUndefined();
     stubPage('/');
     expect(getRoadmapPageContext()).toBeUndefined();

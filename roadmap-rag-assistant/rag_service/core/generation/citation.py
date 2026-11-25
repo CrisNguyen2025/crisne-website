@@ -12,7 +12,8 @@ from rag_service.core.generation.links import LinkGuard
 
 
 class CitationFilter(Protocol):
-    removed: List[str]
+    @property
+    def removed(self) -> List[str]: ...
 
     def feed(self, text: str) -> str: ...
 

@@ -1,4 +1,14 @@
-import { timingSafeEqual } from "crypto";
+function constantTimeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  const maxLen = Math.max(aBytes.length, bBytes.length);
+  let diff = aBytes.length ^ bBytes.length;
+  for (let i = 0; i < maxLen; i++) {
+    diff |= (aBytes[i] ?? 0) ^ (bBytes[i] ?? 0);
+  }
+  return diff === 0;
+}
 
 /**
  * Emails allowed to sign in and write data, from `AUTH_OWNER_EMAILS` (comma-separated).
@@ -25,8 +35,5 @@ export function hasValidAdminKey(req: Request): boolean {
   const providedKey = req.headers.get("x-admin-key");
   if (!expectedKey || !providedKey) return false;
 
-  const expected = Buffer.from(expectedKey);
-  const provided = Buffer.from(providedKey);
-  // timingSafeEqual throws on different lengths; a length mismatch is simply a wrong key
-  return expected.length === provided.length && timingSafeEqual(expected, provided);
+  return constantTimeEqual(expectedKey, providedKey);
 }

@@ -76,6 +76,7 @@ Ghi nhận kết quả sơ bộ: Có phát hiện từ cấm trong Glossary khô
    - Cần chạy migration Turso (`yarn db:push`) và export test schema không?
    - Có biến môi trường mới cần bổ sung vào `docs/DEPLOY_ENV.md` không?
    - Cần thêm từ vựng mới vào `GLOSSARY.md` hay viết ADR mới không?
+4. **Tình trạng sức khoẻ vùng code bị chạm**: chạy `yarn doctor --scope <ui|next|rag|worker>` (skill `cris-doctor`). Finding `bug`/`risk` nằm trong file target sẽ sửa thì ghi vào báo cáo, để plan quyết định sửa kèm hay để lại.
 
 ### Bước 4: Xuất Báo Cáo Quyết Định (Target Assessment Report)
 Tổng hợp và đưa ra 1 trong 3 kết luận dứt khoát:

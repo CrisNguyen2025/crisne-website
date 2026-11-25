@@ -137,19 +137,36 @@ export async function POST(req: NextRequest, context: RouteContext) {
                 where: { id: { in: uniqueTargets } },
                 select: { id: true },
               });
-              for (const target of existingTargets) {
-                const [fromLessonId, toLessonId] = canonicalLessonPair(outcome.lesson.id, target.id);
-                await prisma.knowledgeRelation.upsert({
+              if (existingTargets.length > 0) {
+                const pairs = existingTargets.map((target) =>
+                  canonicalLessonPair(outcome.lesson.id, target.id)
+                );
+                const existingRelations = await prisma.knowledgeRelation.findMany({
                   where: {
-                    fromLessonId_toLessonId_relationType: {
+                    relationType: "relates",
+                    OR: pairs.map(([fromLessonId, toLessonId]) => ({
+                      fromLessonId,
+                      toLessonId,
+                    })),
+                  },
+                  select: { fromLessonId: true, toLessonId: true },
+                });
+                const existingKeys = new Set(
+                  existingRelations.map((rel) => `${rel.fromLessonId}\0${rel.toLessonId}`)
+                );
+                const missingPairs = pairs.filter(
+                  ([fromLessonId, toLessonId]) =>
+                    !existingKeys.has(`${fromLessonId}\0${toLessonId}`)
+                );
+                if (missingPairs.length > 0) {
+                  await prisma.knowledgeRelation.createMany({
+                    data: missingPairs.map(([fromLessonId, toLessonId]) => ({
                       fromLessonId,
                       toLessonId,
                       relationType: "relates",
-                    },
-                  },
-                  create: { fromLessonId, toLessonId, relationType: "relates" },
-                  update: {},
-                });
+                    })),
+                  });
+                }
               }
             } catch (relError) {
               if (!isMissingTableError(relError, "KnowledgeRelation")) {

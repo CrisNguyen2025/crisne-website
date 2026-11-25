@@ -22,11 +22,6 @@ export function WebVitals() {
         },
       );
     }
-
-    // Log to console in development
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Web Vitals]", metric.name, metric.value, metric.rating);
-    }
   });
 
   return null;

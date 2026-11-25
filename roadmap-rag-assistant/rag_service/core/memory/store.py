@@ -316,7 +316,7 @@ class OwnerMemoryStore:
             )
             self._local.insert(0, created)
             return created
-        created = await self._api.create_memory(
+        created_item = await self._api.create_memory(
             kind=kind,
             content=clean_content,
             scope=clean_scope,
@@ -325,9 +325,9 @@ class OwnerMemoryStore:
             replaces_memory_id=clean_replaces,
         )
         self.invalidate()
-        if created is None:
+        if created_item is None:
             raise RuntimeError("Failed to create OwnerMemory via API.")
-        return created
+        return created_item
 
     async def archive(self, memory_id: str) -> bool:
         if not is_owner():

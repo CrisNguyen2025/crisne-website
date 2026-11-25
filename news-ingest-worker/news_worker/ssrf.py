@@ -98,7 +98,7 @@ def assert_public_url(url: str) -> None:
         raise SsrfBlockedError(f"No DNS records resolved for {hostname}")
 
     for _, _, _, _, sockaddr in infos:
-        ip_str = sockaddr[0]
+        ip_str = str(sockaddr[0])
         if is_private_ip(ip_str):
             raise SsrfBlockedError(f"Hostname {hostname} resolved to private IP {ip_str}")
 

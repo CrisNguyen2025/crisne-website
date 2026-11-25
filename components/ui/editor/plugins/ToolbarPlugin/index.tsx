@@ -31,6 +31,7 @@ import {
   KEY_MODIFIER_COMMAND,
   LexicalCommand,
   LexicalEditor,
+  LexicalNode,
   REDO_COMMAND,
   TextFormatType,
   UNDO_COMMAND,
@@ -54,11 +55,10 @@ import {
   Undo,
 } from 'lucide-react';
 
-import React, { Dispatch, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { $createCalloutNode, $isCalloutNode, CalloutType } from '../../nodes/CalloutNode';
 import { getSelectedNode } from '../../utils/getSelectedNode';
-import { sanitizeUrl } from '../../utils/url';
-import { ImagePickerRenderer, INSERT_IMAGE_COMMAND } from '../ImagesPlugin';
+import { INSERT_IMAGE_COMMAND } from '../ImagesPlugin';
 
 export const OPEN_LINK_MODAL_COMMAND: LexicalCommand<void> = createCommand('OPEN_LINK_MODAL_COMMAND');
 
@@ -101,10 +101,9 @@ type ToolbarState = typeof InitialToolbarState;
 type Props = {
   editor?: LexicalEditor | null;
   disabled?: boolean;
-  renderImagePicker?: ImagePickerRenderer;
 };
 
-export const ToolbarPlugin = ({ editor: propEditor, disabled, renderImagePicker }: Props) => {
+export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
   const [contextEditor] = useLexicalComposerContext();
   const editor = propEditor || contextEditor;
   const [activeFormats, setActiveFormats] = useState<ToolbarState>(InitialToolbarState);
@@ -253,9 +252,9 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled, renderImagePicker 
             const topLevelElements = new Set<ElementNode>();
             const selectedNodes = selection.getNodes();
             selectedNodes.forEach(node => {
-              let parent: any = node;
+              let parent: LexicalNode | null = node;
               while (parent) {
-                const parentNode = parent.getParent();
+                const parentNode: LexicalNode | null = parent.getParent();
                 if (parentNode === null || parentNode.getKey() === 'root') {
                   break;
                 }

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import logging
+
 import httpx
+
+log = logging.getLogger(__name__)
 
 from news_worker.client import NextJsJobClient
 from news_worker.config import Settings
@@ -69,6 +73,6 @@ async def process_single_job(
                 job.jobId,
                 JobCompleteFailedPayload(attempt=job.attempts, error=message, retryable=True),
             )
-        except Exception:
-            pass
+        except Exception as report_exc:
+            log.warning("Failed to mark job %s as failed: %s", job.jobId, report_exc)
         return "failed"

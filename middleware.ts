@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { isOwnerEmail } from "@/lib/auth/owner-access";
+import { hasValidAdminKey, isOwnerEmail } from "@/lib/auth/owner-access";
 
 function isDevOwnerBypass(): boolean {
   return process.env.NODE_ENV === "development" && process.env.DEV_OWNER_BYPASS === "true";
@@ -21,7 +21,7 @@ export default auth((req) => {
   const isCronRoute = pathname === "/api/news/cron";
 
   if (
-    (isApiRoute && (req.headers.get("x-internal-key") || req.headers.get("x-admin-key"))) ||
+    (isApiRoute && hasValidAdminKey(req)) ||
     (isCronRoute &&
       (req.headers.get("x-cron-secret") ||
         req.headers.get("authorization")?.startsWith("Bearer ")))

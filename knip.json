@@ -1,0 +1,13 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/*.ts"],
+  "ignore": [
+    "roadmap-rag-assistant/**",
+    ".agents/**",
+    "public/**",
+    "tests/load/**",
+    "tests/manual/**",
+    "scripts/agent-adapter/**"
+  ],
+  "ignoreExportsUsedInFile": true
+}

@@ -19,10 +19,11 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, List, Optional, Sequence
+from typing import Any, AsyncGenerator, Optional, Sequence
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 from rag_service.core.memory import MAX_PENDING_MEMORIES, owner_memory_store
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.lesson_content import matches_page_item
 from rag_service.domains.roadmap.lesson_status import (
     LESSON_STATUS_LABEL,
@@ -335,7 +336,7 @@ def _find_lesson_in_items(items: Sequence[dict], lesson_name: str, fallback_item
     return None
 
 
-class QuizCommands:
+class QuizCommands(AgentHostMixin):
     async def handle_active_quiz_turn(
         self,
         *,

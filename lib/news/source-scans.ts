@@ -28,18 +28,27 @@ export async function recordNewsSourceScans(
     })),
   });
 
-  for (const sourceId of new Set(results.map((result) => result.sourceId))) {
-    const stale = await prisma.newsSourceScan.findMany({
-      where: { sourceId },
-      orderBy: { createdAt: "desc" },
-      skip: NEWS_SOURCE_SCAN_HISTORY_LIMIT,
-      select: { id: true },
-    });
-    if (stale.length > 0) {
-      await prisma.newsSourceScan.deleteMany({
-        where: { id: { in: stale.map((row) => row.id) } },
-      });
+  const sourceIds = Array.from(new Set(results.map((result) => result.sourceId)));
+  if (sourceIds.length === 0) return;
+
+  const rows = await prisma.newsSourceScan.findMany({
+    where: { sourceId: { in: sourceIds } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, sourceId: true },
+  });
+  const counts = new Map<string, number>();
+  const staleIds: string[] = [];
+  for (const row of rows) {
+    const count = (counts.get(row.sourceId) ?? 0) + 1;
+    counts.set(row.sourceId, count);
+    if (count > NEWS_SOURCE_SCAN_HISTORY_LIMIT) {
+      staleIds.push(row.id);
     }
+  }
+  if (staleIds.length > 0) {
+    await prisma.newsSourceScan.deleteMany({
+      where: { id: { in: staleIds } },
+    });
   }
 }
 

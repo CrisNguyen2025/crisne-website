@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from rag_service.llm_breaker import llm_breaker
 from rag_service.domains.roadmap.router.grounding import OUT_OF_SCOPE_REPLY, RATE_LIMITED_REPLY, build_grounding
@@ -88,6 +88,7 @@ async def plan_webmcp_call(llm, message: str, tools: list[dict], context: Option
         return {"tool": None, "args": {}, "reply": "Tool bạn cần không có trong danh sách WebMCP của trang."}
 
     allowed_keys = set((spec.get("inputSchema") or {}).get("properties", {}).keys())
-    args = data.get("args") if isinstance(data.get("args"), dict) else {}
+    raw_args = data.get("args")
+    args: dict[str, Any] = raw_args if isinstance(raw_args, dict) else {}
     args = {k: v for k, v in args.items() if k in allowed_keys}
     return {"tool": tool_name, "args": args, "reply": reply}

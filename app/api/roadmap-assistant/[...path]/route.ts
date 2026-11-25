@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { hasWriteAccess } from "@/lib/auth/write-access";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { JsonObjectSchema } from "@/lib/roadmap/schemas";
 
 export const dynamic = "force-dynamic";
 // Streams the agent's answer (SSE); the Python service may also need a cold start
@@ -63,16 +64,17 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
     } catch {
       return jsonError("Invalid JSON body.", 400);
     }
-    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    const parsedPayload = JsonObjectSchema.safeParse(payload);
+    if (!parsedPayload.success) {
       return jsonError("Invalid JSON body.", 400);
     }
     // Same limit as the widget input and the service; refused here before any work is done
-    const message = (payload as { message?: unknown }).message;
+    const message = parsedPayload.data.message;
     if (typeof message === "string" && message.length > MAX_MESSAGE_LENGTH) {
       return jsonError("Câu hỏi quá dài. Bạn rút gọn giúp mình nhé.", 413);
     }
 
-    const scoped: Record<string, unknown> = { ...payload };
+    const scoped: Record<string, unknown> = { ...parsedPayload.data };
     threadId = ownThreadId(scoped.thread_id);
     scoped.thread_id = scopeThreadId(threadId, actor);
     if (typeof scoped.action_id === "string") scoped.action_id = scopeThreadId(scoped.action_id, actor);

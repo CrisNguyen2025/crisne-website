@@ -34,6 +34,7 @@ export function createLangfuseApi() {
       method,
       headers: { Authorization: auth, "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
     });
     const data = await res.json().catch(() => null);
 

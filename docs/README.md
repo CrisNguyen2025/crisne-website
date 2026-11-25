@@ -51,7 +51,6 @@ Dùng cho sơ đồ commit trong file `.md` của repo (skill `design-doc-mermai
 
 - [`TURSO_SETUP.md`](TURSO_SETUP.md)
 - [`R2_SETUP.md`](R2_SETUP.md)
-- [`NOTION_FAVORITES_SETUP.md`](NOTION_FAVORITES_SETUP.md)
 - [`NGINX_CACHE_STRATEGY.md`](NGINX_CACHE_STRATEGY.md)
 - [`DYNAMIC_IMPORTS_GUIDE.md`](DYNAMIC_IMPORTS_GUIDE.md)
 

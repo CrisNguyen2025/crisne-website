@@ -246,6 +246,9 @@ CREATE INDEX "NewsItem_origin_createdAt_idx" ON "NewsItem"("origin", "createdAt"
 CREATE INDEX "NewsItem_createdAt_idx" ON "NewsItem"("createdAt");
 
 -- CreateIndex
+CREATE INDEX "NewsItem_sourceId_idx" ON "NewsItem"("sourceId");
+
+-- CreateIndex
 CREATE INDEX "NewsItem_ingestStatus_idx" ON "NewsItem"("ingestStatus");
 
 -- CreateIndex

@@ -19,7 +19,7 @@ from typing import Any, Iterable, List, Optional, Set, Tuple
 # Question words and filler that say nothing about the topic
 QUESTION_WORDS = {
     "có", "không", "nào", "bài", "về", "là", "gì", "gi", "của", "và", "các", "những", "trong", "để",
-    "thế", "nào", "sao", "hãy", "cho", "tôi", "bạn", "mình", "nói", "cách", "hướng", "dẫn", "như",
+    "thế", "sao", "hãy", "cho", "tôi", "bạn", "mình", "nói", "cách", "hướng", "dẫn", "như",
     "roadmap", "lộ", "trình", "học", "topic", "layer", "item", "the", "what", "is", "how", "any",
     "are", "there", "about", "of", "to", "in", "for", "a", "an", "do", "does",
 }

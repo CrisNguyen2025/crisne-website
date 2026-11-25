@@ -21,7 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=9.0.0", "pytest-asyncio>=0.25.0"]
+# ruff and mypy are pinned: the cris-doctor CI ratchet compares their findings with a baseline, so an
+# upgrade must come with `yarn doctor --update-baseline` (.agents/skills/cris-doctor/SKILL.md)
+dev = ["pytest>=9.0.0", "pytest-asyncio>=0.25.0", "ruff==0.17.6", "mypy==2.4.1", "pip-audit>=2.9.0"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

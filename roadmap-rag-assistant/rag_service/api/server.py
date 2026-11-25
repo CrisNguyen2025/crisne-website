@@ -7,6 +7,7 @@ Start with:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -18,6 +19,9 @@ from rag_service.auth import is_valid_internal_key, parse_actor, set_actor
 from rag_service.config import settings
 from rag_service.tools import init_adapter
 
+if TYPE_CHECKING:
+    from rag_service.adapters.base import BaseAdapter
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,6 +29,7 @@ async def lifespan(app: FastAPI):
     load_dotenv()
 
     # Select and initialise adapter based on config
+    adapter: BaseAdapter
     if settings.rag_adapter_mode == "sqlite":
         from rag_service.adapters.sqlite_adapter import SqliteAdapter
 

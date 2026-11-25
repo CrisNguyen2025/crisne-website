@@ -4,7 +4,7 @@ import { requireWriteAccess } from "@/lib/auth/write-access";
 import { createLesson } from '@/lib/roadmap/create-lesson';
 import { duplicateResponse } from '@/lib/roadmap/duplicates';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
-import { LESSON_STATUSES, isLessonStatus } from '@/lib/roadmap/status';
+import { CreateLessonSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 
 // POST /api/v1/roadmaps/items - Add a lesson to a topic, optionally into a section
 export async function POST(req: NextRequest) {
@@ -12,15 +12,9 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const body = await req.json();
-    const { roadmapSlug, section, title, description, content, status } = body;
-
-    if (!roadmapSlug || !title) {
-      return NextResponse.json({ error: 'roadmapSlug and title are required' }, { status: 400 });
-    }
-    if (status !== undefined && !isLessonStatus(status)) {
-      return NextResponse.json({ error: `status must be one of ${LESSON_STATUSES.join(', ')}` }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, CreateLessonSchema);
+    if (!parsed.ok) return parsed.response;
+    const { roadmapSlug, section, title, description, content, status } = parsed.data;
 
     const result = await createLesson(prisma, { roadmapSlug, section, title, description, content, status });
     if (result.kind === 'roadmap_not_found') {

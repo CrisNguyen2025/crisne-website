@@ -115,7 +115,7 @@ async def test_fts_finds_document_immediately_while_embedding_runs():
 
     # 3. Release embedding worker and verify completion
     embedder.proceed_event.set()
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
 
     final_status = engine.index_status()
     assert final_status["vectors_pending"] == 0
@@ -138,7 +138,7 @@ async def test_vectors_pending_decreases_to_zero():
     await engine.sync_live_database()
     assert engine.index_status()["documents"] == 3
 
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
     assert engine.index_status()["vectors_pending"] == 0
     assert len(engine._vector_store._vectors) == 3
     assert embedder.call_count == 3
@@ -180,7 +180,7 @@ async def test_new_sync_prevents_stale_generation_vectors():
 
     # Now unblock embedder_v1
     embedder_v1.proceed_event.set()
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
 
     # Stale vector with value 0.11 must NOT be in _vectors
     current_vec = engine._vector_store._vectors.get("doc-1")
@@ -201,7 +201,7 @@ async def test_cached_documents_are_not_re_embedded():
 
     # First sync: embeds document and saves to cache
     await engine.sync_live_database()
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
     assert embedder.call_count == 1
     assert engine.index_status()["vectors_pending"] == 0
 
@@ -210,7 +210,7 @@ async def test_cached_documents_are_not_re_embedded():
     # vectors_pending should be 0 immediately after Phase 1 because it was loaded from cache
     assert engine.index_status()["vectors_pending"] == 0
 
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
     # Call count must still be 1 (not re-embedded)
     assert embedder.call_count == 1
 
@@ -230,7 +230,7 @@ async def test_embedding_failure_records_last_error_and_does_not_fail_sync():
     assert engine.is_current() is True
     assert engine.index_status()["synced"] is True
 
-    await engine.wait_for_embedding(timeout=5.0)
+    await asyncio.wait_for(engine.wait_for_embedding(), timeout=5.0)
 
     status = engine.index_status()
     assert status["synced"] is True

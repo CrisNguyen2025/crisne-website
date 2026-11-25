@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, Literal, Optional
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import example_blocks
 from rag_service.tools import get_adapter
@@ -361,10 +362,10 @@ def _text_of(message: object) -> str:
     return str(content or "")
 
 
-class LessonContentCommands:
+class LessonContentCommands(AgentHostMixin):
     async def _content_topic(self, named: Optional[str], content: str, page_context, session_ctx) -> Optional[dict]:
         """Named in the message, else the open page, else the session's topic."""
-        candidates = [named] if named else []
+        candidates: list[Optional[str]] = [named] if named else []
         candidates += [
             await topic_named_in_message(content),
             (page_context or {}).get("roadmapSlug"),
@@ -402,7 +403,7 @@ class LessonContentCommands:
                 yield ev
             return
 
-        topic_title = topic.get("title") or topic.get("slug")
+        topic_title = str(topic.get("title") or topic.get("slug") or "")
         lessons = topic.get("items") or []
         lesson = None
         if request.lesson:

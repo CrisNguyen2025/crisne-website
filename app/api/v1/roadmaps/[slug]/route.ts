@@ -7,6 +7,7 @@ import { DEFAULT_LESSON_STATUS, isLessonStatus } from '@/lib/roadmap/status';
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionsInOrder } from '@/lib/roadmap/sections';
 import { readingMinutes } from '@/lib/roadmap/content-utils';
+import { UpdateRoadmapSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 
 interface RouteContext {
   params: Promise<{ slug: string }>;
@@ -95,7 +96,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
-      { error: (error instanceof Error ? error.message : undefined) || 'Failed to delete roadmap' },
+      { error: 'Failed to delete roadmap' },
       { status: 500 }
     );
   }
@@ -108,8 +109,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   try {
     const { slug } = await context.params;
-    const body = await req.json();
-    const { title, description, isLocked } = body;
+    const parsed = await parseJsonBody(req, UpdateRoadmapSchema);
+    if (!parsed.ok) return parsed.response;
+    const { title, description, isLocked } = parsed.data;
 
     const roadmap = await findTopic(slug);
     if (!roadmap) {
@@ -118,16 +120,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
     const updateData: { title?: string; description?: string; isLocked?: boolean } = {};
     if (title !== undefined) {
-      if (!title.trim()) {
-        return NextResponse.json({ error: 'Title cannot be empty' }, { status: 400 });
-      }
-      updateData.title = title.trim();
+      updateData.title = title;
     }
     if (description !== undefined) {
       updateData.description = description.trim();
     }
     if (isLocked !== undefined) {
-      updateData.isLocked = Boolean(isLocked);
+      updateData.isLocked = isLocked;
     }
 
     const updated = await prisma.roadmap.update({ where: { id: roadmap.id }, data: updateData });
@@ -137,7 +136,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   } catch (error) {
     console.error('[API PATCH /api/v1/roadmaps/[slug]] Error:', error);
     return NextResponse.json(
-      { error: (error instanceof Error ? error.message : undefined) || 'Failed to update roadmap' },
+      { error: 'Failed to update roadmap' },
       { status: 500 }
     );
   }

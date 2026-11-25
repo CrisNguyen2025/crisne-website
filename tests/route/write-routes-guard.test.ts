@@ -9,7 +9,6 @@ import { NextRequest } from "next/server";
 const PUBLIC_WRITE_ROUTES = new Set([
   "chat/route.ts",
   "chat/feedback/route.ts",
-  "favorites/route.ts",
   // Visitors chat without signing in; the proxy tags them x-actor=visitor and the Python
   // service refuses every write for them (see roadmap-assistant-proxy.test.ts)
   "roadmap-assistant/[...path]/route.ts",
@@ -38,12 +37,6 @@ vi.mock("@/auth", () => ({ auth: vi.fn(async () => null) }));
 vi.mock("@/lib/prisma", () => forbiddenModule("prisma", ["prisma"]));
 vi.mock("@/lib/r2-client", async (importOriginal) =>
   forbiddenModule("r2-client", Object.keys(await importOriginal<object>()))
-);
-vi.mock("@/lib/notion", async (importOriginal) =>
-  forbiddenModule("notion", Object.keys(await importOriginal<object>()))
-);
-vi.mock("@/lib/image-upload", async (importOriginal) =>
-  forbiddenModule("image-upload", Object.keys(await importOriginal<object>()))
 );
 
 const API_DIR = path.join(process.cwd(), "app/api");

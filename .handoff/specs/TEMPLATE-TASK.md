@@ -28,6 +28,7 @@ verification_gate:
   lint: "yarn lint"
   test: "yarn test"
   intel_status: "yarn intel status" # map cris-code-intel phải khớp code
+  doctor_delta: "yarn doctor --since HEAD --check" # không thêm finding bug/risk mới so với .handoff/doctor/baseline.json (skill cris-doctor)
   boundary_check: "bash .agents/skills/agent-handoff/scripts/check-boundary.sh [task_id]"
 ---
 

@@ -172,7 +172,11 @@ class CitationTracker:
 
     def _close_claim(self, group: int) -> None:
         line = self._line
-        start = self._claim_from if self._claim_from is not None else LINE_PREFIX.match(line).end()
+        if self._claim_from is not None:
+            start = self._claim_from
+        else:
+            prefix = LINE_PREFIX.match(line)
+            start = prefix.end() if prefix is not None else 0
         self._claim_from = len(line)
         end = len(line.rstrip())
         start += len(line[start:end]) - len(line[start:end].lstrip())

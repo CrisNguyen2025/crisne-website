@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from '@/lib/auth/write-access';
+import { JsonObjectSchema } from '@/lib/roadmap/schemas';
 import {
   MAX_THREAD_MESSAGES,
   THREAD_RETENTION_MS,
@@ -87,7 +88,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
   if ('denied' in thread) return thread.denied;
 
   try {
-    const body = await req.json();
+    const raw = await req.json().catch(() => null);
+    const parsedBody = JsonObjectSchema.safeParse(raw);
+    const body = parsedBody.success ? parsedBody.data : null;
     const content = typeof body?.content === 'string' ? clipMessageContent(body.content) : '';
     if (!isThreadRole(body?.role) || !content) {
       return NextResponse.json({ error: 'role (user | assistant) and content are required' }, { status: 400 });
@@ -130,19 +133,21 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if ('denied' in thread) return thread.denied;
 
   try {
-    const body = await req.json();
-    const hasTopicSlug = 'activeTopicSlug' in (body ?? {});
-    const hasLessonId = 'activeLessonId' in (body ?? {});
-    const hasSection = 'activeSection' in (body ?? {});
+    const raw = await req.json().catch(() => null);
+    const parsedBody = JsonObjectSchema.safeParse(raw);
+    const body = parsedBody.success ? parsedBody.data : {};
+    const hasTopicSlug = 'activeTopicSlug' in body;
+    const hasLessonId = 'activeLessonId' in body;
+    const hasSection = 'activeSection' in body;
 
-    const activeTopicSlug = cleanTopicField(body?.activeTopicSlug);
-    const activeTopicTitle = cleanTopicField(body?.activeTopicTitle);
-    const activeLessonId = cleanLessonIdField(body?.activeLessonId);
-    const activeLessonTitle = cleanTopicField(body?.activeLessonTitle);
-    const activeSection = cleanTopicField(body?.activeSection);
+    const activeTopicSlug = cleanTopicField(body.activeTopicSlug);
+    const activeTopicTitle = cleanTopicField(body.activeTopicTitle);
+    const activeLessonId = cleanLessonIdField(body.activeLessonId);
+    const activeLessonTitle = cleanTopicField(body.activeLessonTitle);
+    const activeSection = cleanTopicField(body.activeSection);
 
     // Reject calls that provide neither a valid topic nor a valid lesson/section update
-    if (!activeTopicSlug && !activeLessonId && !activeSection && !(hasLessonId && body?.activeLessonId === null)) {
+    if (!activeTopicSlug && !activeLessonId && !activeSection && !(hasLessonId && body.activeLessonId === null)) {
       return NextResponse.json(
         { error: 'activeTopicSlug, activeLessonId, or activeSection is required' },
         { status: 400 }
@@ -165,11 +170,11 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       if (activeTopicTitle) updateData.activeTopicTitle = activeTopicTitle;
     }
     if (hasLessonId) {
-      updateData.activeLessonId = body?.activeLessonId === null ? null : activeLessonId;
-      updateData.activeLessonTitle = body?.activeLessonId === null ? null : activeLessonTitle;
+      updateData.activeLessonId = body.activeLessonId === null ? null : activeLessonId;
+      updateData.activeLessonTitle = body.activeLessonId === null ? null : activeLessonTitle;
     }
     if (hasSection) {
-      updateData.activeSection = body?.activeSection === null ? null : activeSection;
+      updateData.activeSection = body.activeSection === null ? null : activeSection;
     }
 
     await prisma.threadState.upsert({

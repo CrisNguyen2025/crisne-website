@@ -1,0 +1,3 @@
+# Report từng lần chạy, không commit. baseline.json thì commit (CI ratchet ở Phase 3).
+DOCTOR-*.md
+latest.json

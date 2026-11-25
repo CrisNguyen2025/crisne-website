@@ -162,7 +162,7 @@ def conversation_context(
 
     history_cap = math.ceil(history_limit * (profile.history_max_chars + TURN_OVERHEAD_CHARS) / CHARS_PER_TOKEN)
     memory_cap = math.ceil(profile.memory_total_chars / CHARS_PER_TOKEN) if memory_tokens else 0
-    reserved = [
+    reserved: list[dict[str, Any]] = [
         {"key": "retrieved", "label": "Tài liệu truy xuất",
          "tokens": math.ceil(profile.max_documents * DOCUMENT_BUDGET_CHARS / CHARS_PER_TOKEN), "count": profile.max_documents},
         {"key": "message", "label": "Câu hỏi kế tiếp", "tokens": math.ceil(QUERY_MAX_CHARS / CHARS_PER_TOKEN)},

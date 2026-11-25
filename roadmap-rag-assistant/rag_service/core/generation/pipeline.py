@@ -165,8 +165,9 @@ class GenerationPipeline:
             sections["owner_memory_count"] = len(selected_memory_ids)
         if req.lesson_provenances and is_owner():
             sections["provenance_lessons"] = len(req.lesson_provenances)
-        if getattr(claims, "dropped", None):
-            sections["dropped_claims"] = claims.dropped
+        dropped_claims = getattr(claims, "dropped", None)
+        if dropped_claims:
+            sections["dropped_claims"] = dropped_claims
         if cite and tracker:
             sections["citations"] = len(tracker.citations)
             sections["invalid_citations"] = cite.invalid
@@ -175,20 +176,26 @@ class GenerationPipeline:
             context_text = "\n".join(f"{d.title}\n{d.body}" for d in documents)
             report = guardrails.check(answer, context_text, req.query, links.removed, profile.grounding_fail_on)
             if settings.rag_semantic_grounding:
-                claims = await unsupported_claims(llm, answer, context_text, req.query)
-                if claims is not None:
-                    report.grounding["unsupported_claims"] = claims
+                unsupported = await unsupported_claims(llm, answer, context_text, req.query)
+                if unsupported is not None:
+                    report.grounding["unsupported_claims"] = unsupported
                     report.fail_on = report.fail_on + ("unsupported_claims",)
             sections["grounding"] = report.grounding
             if (trace := current_trace()) is not None:
                 trace.flags["grounding"] = "issues" if report.issues else "ok"
                 trace.flags.update(report.found)
 
-        def guard_step() -> dict:
-            return step_event("guard", "guard", "done", grounding="issues" if report.issues else "ok", **report.found)
+        def guard_step(guard_report: guardrails.GuardReport) -> dict:
+            return step_event(
+                "guard",
+                "guard",
+                "done",
+                grounding="issues" if guard_report.issues else "ok",
+                **guard_report.found,
+            )
 
         # "sentence" with every sentence dropped sent nothing: the caller's fallback replaces it cleanly
-        withheld = hold or (getattr(claims, "dropped", None) and not emitted)
+        withheld = hold or (bool(dropped_claims) and not emitted)
         if report is not None and report.failed and withheld:
             end_step(
                 gen,
@@ -201,7 +208,7 @@ class GenerationPipeline:
             if (trace := current_trace()) is not None:
                 trace.flags["grounding_fallback"] = True
             if is_owner():
-                yield guard_step()
+                yield guard_step(report)
             raise GenerationFailed("grounding", ", ".join(report.issues))
 
         level = (
@@ -223,7 +230,7 @@ class GenerationPipeline:
             yield token_event(profile.grounding_note)
         yield step_event("answer", "generation", "done", mode="llm")
         if report is not None and is_owner():
-            yield guard_step()
+            yield guard_step(report)
         # Read back by POST /chat/context ("last answer" section)
         record_last_turn(
             req.thread_id,

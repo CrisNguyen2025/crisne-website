@@ -29,15 +29,13 @@ import {
   CodeActionPlugin,
   MarkdownPastePlugin,
   ImagesPlugin,
-  InitialToolbarState,
   PasteImagePlugin,
   PasteTablePlugin,
   SetContentPlugin,
   ToolbarButton,
   ToolbarPlugin,
-  type ImagePickerRenderer,
 } from './plugins';
-import CalloutTransformPlugin from './plugins/CalloutTransformPlugin';
+import { CalloutTransformPlugin } from './plugins/CalloutTransformPlugin';
 import FloatingLinkEditorPlugin from './plugins/FloatingLinkEditorPlugin';
 import LinkPlugin from './plugins/LinkPlugin';
 import NewMentionsPlugin from './plugins/MentionPlugin';
@@ -85,7 +83,6 @@ type Props = Readonly<{
   skipValidateUrl?: boolean;
   mentionData?: string[];
   namespace?: string;
-  renderImagePicker?: ImagePickerRenderer;
   minContentHeight?: number;
   showTopbar?: boolean;
   fillHeight?: boolean;
@@ -133,7 +130,6 @@ export default function Editor({
   skipValidateUrl,
   mentionData = [],
   namespace = 'BaseLexicalEditor',
-  renderImagePicker,
   minContentHeight = 280,
   showTopbar = true,
   fillHeight = false,
@@ -215,7 +211,7 @@ export default function Editor({
             </div>
           )}
 
-          <ToolbarPlugin disabled={disabled} renderImagePicker={renderImagePicker} />
+          <ToolbarPlugin disabled={disabled} />
 
           <div
             className={cn(
@@ -249,7 +245,7 @@ export default function Editor({
           <NewMentionsPlugin data={mentionData} />
           <LinkPlugin hasLinkAttributes={true} skipValidateUrl={skipValidateUrl} />
           <FloatingLinkEditorPlugin
-            // eslint-disable-next-line react-hooks/refs
+            // eslint-disable-next-line react-hooks/refs -- FloatingLinkEditorPlugin portal anchors to container element
             anchorElem={containerRef?.current || undefined}
             isLinkEditMode={isLinkEditMode}
             setIsLinkEditMode={setIsLinkEditMode}

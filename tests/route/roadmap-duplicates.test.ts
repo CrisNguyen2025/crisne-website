@@ -47,8 +47,8 @@ describe("create routes refuse duplicates with 409", () => {
   it("topic: a title whose slug is a path the app uses gets -topic (ADR-0014)", async () => {
     prismaMock.roadmap.findMany.mockResolvedValueOnce([]);
     prismaMock.roadmap.create.mockImplementationOnce(async ({ data }) => ({ id: "t3", ...data }));
-    await createTopic(post("/api/v1/roadmaps", { title: "Notes" }));
-    expect(prismaMock.roadmap.create.mock.calls[0][0].data.slug).toBe("notes-topic");
+    await createTopic(post("/api/v1/roadmaps", { title: "News" }));
+    expect(prismaMock.roadmap.create.mock.calls[0][0].data.slug).toBe("news-topic");
   });
 
   it("topic: a new title is created once, with no lessons yet", async () => {

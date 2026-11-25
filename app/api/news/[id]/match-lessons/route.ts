@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { parseJsonStringArray } from "@/lib/news/schemas";
 import { prisma } from "@/lib/prisma";
@@ -10,24 +11,28 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-interface UpstreamMatchItem {
-  lesson_id: string;
-  lesson_slug: string;
-  title: string;
-  topic_slug: string;
-  topic_title: string;
-  section: string | null;
-  score: number;
-  duplicate_warning: boolean;
-  version_update_hint: boolean;
-}
+const UpstreamMatchItemSchema = z
+  .object({
+    lesson_id: z.string(),
+    lesson_slug: z.string(),
+    title: z.string(),
+    topic_slug: z.string(),
+    topic_title: z.string(),
+    section: z.string().nullable().optional(),
+    score: z.number(),
+    duplicate_warning: z.boolean().optional(),
+    version_update_hint: z.boolean().optional(),
+  })
+  .passthrough();
 
-interface UpstreamMatchResponse {
-  suggested_topic_slug: string | null;
-  suggested_topic_title: string | null;
-  suggested_section: string | null;
-  matches: UpstreamMatchItem[];
-}
+const UpstreamMatchResponseSchema = z
+  .object({
+    suggested_topic_slug: z.string().nullable().optional(),
+    suggested_topic_title: z.string().nullable().optional(),
+    suggested_section: z.string().nullable().optional(),
+    matches: z.array(UpstreamMatchItemSchema).optional(),
+  })
+  .passthrough();
 
 export async function POST(req: NextRequest, context: RouteContext) {
   const denied = await requireWriteAccess(req);
@@ -81,7 +86,11 @@ export async function POST(req: NextRequest, context: RouteContext) {
       );
     }
 
-    const raw = (await upstream.json()) as UpstreamMatchResponse;
+    const parsedRaw = UpstreamMatchResponseSchema.safeParse(await upstream.json());
+    if (!parsedRaw.success) {
+      return NextResponse.json({ error: "Phản hồi từ Abot không đúng định dạng." }, { status: 502 });
+    }
+    const raw = parsedRaw.data;
     const body: MatchLessonsResponseDto = {
       suggestedTopicSlug: raw.suggested_topic_slug ?? null,
       suggestedTopicTitle: raw.suggested_topic_title ?? null,

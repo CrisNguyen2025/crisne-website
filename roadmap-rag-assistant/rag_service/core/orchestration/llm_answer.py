@@ -7,7 +7,7 @@ carries the reason when the call failed (the caller then answers from its templa
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Optional, Sequence
+from typing import Any, AsyncGenerator, Literal, Optional, Sequence
 
 from rag_service.core.augmentation.context import GenerationRequest
 from rag_service.core.generation.pipeline import GenerationFailed
@@ -17,7 +17,7 @@ async def answer_with_llm(
     *,
     llm: Any,
     pipeline: Any,
-    mode: str,
+    mode: Literal["rag", "chitchat"],
     query: str,
     session_id: str,
     outcome: dict,

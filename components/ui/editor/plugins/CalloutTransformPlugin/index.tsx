@@ -1,5 +1,5 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $isQuoteNode, QuoteNode } from '@lexical/rich-text';
+import { QuoteNode } from '@lexical/rich-text';
 import {
   $createParagraphNode,
   $getRoot,
@@ -180,5 +180,3 @@ export function CalloutTransformPlugin() {
 
   return null;
 }
-
-export default CalloutTransformPlugin;

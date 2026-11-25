@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from "@/lib/auth/write-access";
 import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { ReorderLessonsSchema, parseJsonBody } from '@/lib/roadmap/schemas';
 
 // POST /api/v1/roadmaps/items/reorder - Set the page order of the lessons of a topic
 export async function POST(req: NextRequest) {
@@ -9,12 +10,9 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const body = await req.json();
-    const { orderedItemIds } = body as { orderedItemIds: string[] };
-
-    if (!Array.isArray(orderedItemIds)) {
-      return NextResponse.json({ error: 'orderedItemIds array is required' }, { status: 400 });
-    }
+    const parsed = await parseJsonBody(req, ReorderLessonsSchema);
+    if (!parsed.ok) return parsed.response;
+    const { orderedItemIds } = parsed.data;
 
     await prisma.$transaction(
       orderedItemIds.map((id, index) =>

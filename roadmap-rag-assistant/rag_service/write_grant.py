@@ -19,7 +19,7 @@ import functools
 import inspect
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional, TypeVar, cast
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
 
@@ -56,7 +56,10 @@ def is_write_method(name: str) -> bool:
     return name.startswith(WRITE_PREFIXES)
 
 
-def guard_writes(cls: type) -> type:
+_AdapterType = TypeVar("_AdapterType", bound=type)
+
+
+def guard_writes(cls: _AdapterType) -> _AdapterType:
     """Class decorator for a data adapter: its write methods require a grant."""
     for name, fn in list(vars(cls).items()):
         if not (is_write_method(name) and inspect.iscoroutinefunction(fn)):
@@ -71,5 +74,5 @@ def guard_writes(cls: type) -> type:
             return guarded
 
         setattr(cls, name, wrap())
-    cls.__write_guarded__ = True
+    cast(Any, cls).__write_guarded__ = True
     return cls

@@ -28,6 +28,7 @@ Skill kiểm tra chất lượng mã nguồn và đảm bảo tương thích CI 
 | Có file trong dữ liệu knowledge (`lib/ai/data/`, `lib/ai/portfolio-knowledge.ts` hoặc `lib/ai/knowledge-base.ts`, nơi tính hash của index) | `yarn check:knowledge-index` | Kiểm tra tính đồng bộ của vector index |
 | Có file code (`.ts`, `.tsx`, `.py`, `.prisma`) hoặc file trong `.agents/skills/cris-code-intel/` | `yarn intel status` | Exit 1 nghĩa là map lệch code: báo các ref `MISSING_*`, cần sửa `cris-workspace-map.json` trong cùng thay đổi |
 | Có file trong `.agents/**` hoặc `.claude/**` | `yarn agents:sync --check` | CI chạy lệnh này |
+| Có file code (`.ts`, `.tsx`, `.py`, `.prisma`) và đã có `.handoff/doctor/baseline.json` | `yarn doctor --since HEAD --check` | Skill `cris-doctor`. Exit 1 nghĩa là thay đổi thêm finding `bug`/`risk` mới: liệt kê các dòng 🆕 trong `.handoff/doctor/DOCTOR-<date>.md`. CI chạy `yarn doctor --check` trên toàn repo (job `doctor`) |
 
 **Lỗi lint nghi là có từ trước:** chứng minh bằng `git show <nhánh gốc>:<file> | yarn eslint --stdin --stdin-filename <file>`. Bản gốc có cùng lỗi thì ghi "có từ trước (đã chứng minh)"; không chứng minh được thì coi là lỗi mới.
 

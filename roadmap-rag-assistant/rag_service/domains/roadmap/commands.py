@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import re
-from typing import AsyncGenerator, Optional
+from typing import Any, AsyncGenerator, Optional
 
-from rag_service.adapters.errors import DuplicateEntityError, normalize_title
+from rag_service.adapters.errors import DuplicateEntityError
+from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.retrieval.relevance import fold
 
@@ -90,7 +91,7 @@ def names_section(text: str, name: Optional[str]) -> bool:
     return re.search(rf"\b(?:muc|section)\s+{re.escape(wanted)}\b", flat) is not None
 
 
-class RoadmapCommands:
+class RoadmapCommands(AgentHostMixin):
     def bulk_import_applies(self, raw_content: str, lower: str, page_context) -> bool:
         """A pasted list of two or more lessons asked to be added: the same evidence as any other change.
 
@@ -119,7 +120,7 @@ class RoadmapCommands:
         if action.action != ActionType.CREATE or len(titles) != len(action.entities):
             return None
         edited = action.model_copy(deep=True)
-        for ent, raw in zip(edited.entities, titles):
+        for ent, raw in zip(edited.entities, titles, strict=True):
             title = self.extractor.clean_title(raw)
             if not title or title.lower() in POINTING_WORDS:
                 return None
@@ -652,7 +653,7 @@ class RoadmapCommands:
         session_ctx.pending_confirmation = action
         preview_text = DryRunValidator.format_preview_card(action, note=note, snapshot=snapshot)
         preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-        preview_event = {
+        preview_event: dict[str, Any] = {
             "type": "action_preview",
             "action_id": session_id,
             "preview": preview_text,
@@ -671,13 +672,14 @@ class RoadmapCommands:
 
     async def handle_cud(
         self, *, content: str, lower: str, page_context, session_id: str, session_ctx, delay: float,
-        gate: WriteGate = WriteGate(WRITE_ALLOW),
+        gate: Optional[WriteGate] = None,
         verdict=None,
     ) -> AsyncGenerator[dict, None]:
         """Roadmap create/delete: extract the action, ask back when a target is unclear, then confirm or run it.
 
         `gate` is the route-level write decision (write_gate.gate_route); gate_action refines it for the extracted change.
         """
+        gate = gate or WriteGate(WRITE_ALLOW)
         # Visitors may read roadmaps but never change them (writes use ADMIN_API_KEY)
         if not is_owner():
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
@@ -702,7 +704,7 @@ class RoadmapCommands:
                 BLOCKED_CHANGE: BLOCKED_CHANGE_REPLY,
                 ACTION_NOT_ASKED: ACTION_NOT_ASKED_REPLY,
                 TARGET_MISSING: TARGET_MISSING_REPLY,
-            }[gate.reason]
+            }.get(gate.reason or "", BLOCKED_CHANGE_REPLY)
             async for ev in self._stream_text(reply, delay):
                 yield ev
             return
@@ -723,12 +725,12 @@ class RoadmapCommands:
             name = resolved_action.entities[0].title
             page_slug = (page_context or {}).get("roadmapSlug")
             found = await resolve_lesson(name, topic_slug=page_slug)
-            if found.status != "found":
+            if found.status != "found" or not found.lesson_id:
                 async for ev in self._stream_text(unresolved_entity_reply("bài học", name, found.candidates), delay):
                     yield ev
                 return
             resolved_action.target_parent_identifier = found.lesson_id
-            resolved_action.entities[0].title = found.title
+            resolved_action.entities[0].title = found.title or name
             note = None  # the topic the anaphora resolver filled in is not where the delete goes
             item_snapshot = await snapshot_before_delete(get_adapter(), "item", found.lesson_id, topic_slug=page_slug)
             if item_snapshot:
@@ -739,9 +741,9 @@ class RoadmapCommands:
             ref = resolved_action.target_parent_identifier or (
                 resolved_action.entities[0].title if resolved_action.entities else ""
             )
-            found_topic = await resolve_topic(ref)
-            if found_topic.status == "found" and found_topic.slug:
-                resolved_action.target_parent_identifier = found_topic.slug
+            deleted_topic = await resolve_topic(ref)
+            if deleted_topic.status == "found" and deleted_topic.slug:
+                resolved_action.target_parent_identifier = deleted_topic.slug
 
         # A delete to confirm is previewed once its target is resolved (the preview names it)
         if resolved_action.action == ActionType.DELETE and gate.mode == WRITE_CONFIRM:

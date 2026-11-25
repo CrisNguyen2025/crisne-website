@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireWriteAccess } from '@/lib/auth/write-access';
 import { notifyOwnerMemoryChanged } from '@/lib/roadmap/rag-reindex';
+import { JsonObjectSchema } from '@/lib/roadmap/schemas';
 import {
   cleanMemoryContent,
   isOwnerMemoryKind,
@@ -79,10 +80,12 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    const raw = await req.json().catch(() => null);
+    const parsedBody = JsonObjectSchema.safeParse(raw);
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400, headers: NO_STORE });
     }
+    const body = parsedBody.data;
 
     const kind = body.kind;
     const content = cleanMemoryContent(body.content);

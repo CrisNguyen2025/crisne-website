@@ -59,9 +59,9 @@ https://dnschecker.org
 1. Start dev server:
    npm run dev
 
-2. Vào http://localhost:3000/notes
+2. Vào http://localhost:3334 và đăng nhập Owner
 
-3. Tạo post mới
+3. Mở một Lesson để chỉnh sửa nội dung
 
 4. Paste ảnh vào editor
 

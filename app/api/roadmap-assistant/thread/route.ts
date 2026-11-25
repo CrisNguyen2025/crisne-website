@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { hasWriteAccess, requireWriteAccess } from '@/lib/auth/write-access';
 import {
@@ -75,15 +76,19 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const CloseThreadBodySchema = z.object({ threadId: z.string().optional() }).passthrough();
+
 // DELETE /api/roadmap-assistant/thread - Mark the Owner's current Thread closed when starting a new chat.
 export async function DELETE(req: NextRequest) {
   const denied = await requireWriteAccess(req);
   if (denied) return denied;
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const rawBody = await req.json().catch(() => ({}));
+    const parsed = CloseThreadBodySchema.safeParse(rawBody);
+    const body = parsed.success ? parsed.data : {};
     const rawThreadId =
-      typeof body?.threadId === 'string'
+      typeof body.threadId === 'string'
         ? body.threadId
         : req.nextUrl.searchParams.get('threadId') ?? '';
 
