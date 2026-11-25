@@ -17,6 +17,34 @@ import {
 import { useEffect } from 'react';
 import { $createCalloutNode, $isCalloutNode, CalloutType } from '../../nodes/CalloutNode';
 
+function $canExitLastCalloutBlock(anchorNode: LexicalNode): boolean {
+  let currentBlock: LexicalNode | null = anchorNode;
+  while (currentBlock !== null && currentBlock.getParent()?.getKey() !== 'root') {
+    currentBlock = currentBlock.getParent();
+  }
+  if (!currentBlock) return false;
+  const root = $getRoot();
+  return (
+    currentBlock === root.getLastChild() &&
+    $isCalloutNode(currentBlock) &&
+    currentBlock.getNextSibling() === null
+  );
+}
+
+function $focusOrAppendTrailingParagraph(lastChild: LexicalNode): void {
+  if ($isParagraphNode(lastChild) && lastChild.getTextContent().trim() === '') {
+    lastChild.selectEnd();
+    return;
+  }
+  const paragraph = $createParagraphNode();
+  $getRoot().append(paragraph);
+  paragraph.selectEnd();
+}
+
+function isEditorSurfaceTarget(target: HTMLElement, rootElement: HTMLElement): boolean {
+  return target.classList.contains('editor-canvas') || target === rootElement || target.contains(rootElement);
+}
+
 export function CalloutTransformPlugin() {
   const [editor] = useLexicalComposerContext();
 
@@ -88,34 +116,6 @@ export function CalloutTransformPlugin() {
       COMMAND_PRIORITY_CRITICAL,
     );
   }, [editor]);
-
-function $canExitLastCalloutBlock(anchorNode: LexicalNode): boolean {
-  let currentBlock: LexicalNode | null = anchorNode;
-  while (currentBlock !== null && currentBlock.getParent()?.getKey() !== 'root') {
-    currentBlock = currentBlock.getParent();
-  }
-  if (!currentBlock) return false;
-  const root = $getRoot();
-  return (
-    currentBlock === root.getLastChild() &&
-    $isCalloutNode(currentBlock) &&
-    currentBlock.getNextSibling() === null
-  );
-}
-
-function $focusOrAppendTrailingParagraph(lastChild: LexicalNode): void {
-  if ($isParagraphNode(lastChild) && lastChild.getTextContent().trim() === '') {
-    lastChild.selectEnd();
-    return;
-  }
-  const paragraph = $createParagraphNode();
-  $getRoot().append(paragraph);
-  paragraph.selectEnd();
-}
-
-function isEditorSurfaceTarget(target: HTMLElement, rootElement: HTMLElement): boolean {
-  return target.classList.contains('editor-canvas') || target === rootElement || target.contains(rootElement);
-}
 
   // Handle ArrowDown key when at the end of a block that has no next sibling
   useEffect(() => {

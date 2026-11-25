@@ -12,26 +12,6 @@ import { $createHeadingNode } from '@lexical/rich-text';
 import { $createCodeNode } from '@lexical/code';
 import { useEffect } from 'react';
 
-export function MarkdownPastePlugin() {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    return editor.registerCommand(
-      PASTE_COMMAND,
-      (event: ClipboardEvent) => {
-        const clipboardData = event.clipboardData;
-        if (!clipboardData) return false;
-
-        const text = clipboardData.getData('text/plain');
-        if (!text) return false;
-
-        // Check if the pasted text has markdown-like or code-like contents
-        const hasMarkdownOrCode = /^(#+ |interface |type |enum |function |curl |{)/m.test(text);
-        if (!hasMarkdownOrCode) return false;
-
-        event.preventDefault();
-        event.stopPropagation();
-
 function $tryCreateHeadingNode(line: string): LexicalNode | null {
   const prefixes: Array<{ prefix: string; tag: 'h1' | 'h2' | 'h3' }> = [
     { prefix: '### ', tag: 'h3' },
@@ -175,6 +155,26 @@ function $parseMarkdownPasteToNodes(text: string): LexicalNode[] {
 
   return nodesToInsert;
 }
+
+export function MarkdownPastePlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      PASTE_COMMAND,
+      (event: ClipboardEvent) => {
+        const clipboardData = event.clipboardData;
+        if (!clipboardData) return false;
+
+        const text = clipboardData.getData('text/plain');
+        if (!text) return false;
+
+        // Check if the pasted text has markdown-like or code-like contents
+        const hasMarkdownOrCode = /^(#+ |interface |type |enum |function |curl |{)/m.test(text);
+        if (!hasMarkdownOrCode) return false;
+
+        event.preventDefault();
+        event.stopPropagation();
 
         editor.update(() => {
           const selection = $getSelection();
