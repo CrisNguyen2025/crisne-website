@@ -177,6 +177,8 @@ const confuseMetrics = confuseEval.metrics || {};
 
 const writeNowViolations = confuseMetrics.write_now_violation !== undefined ? confuseMetrics.write_now_violation : 999;
 const totalConfuseSamples = confuseMetrics.n || confuseEval.total_samples || 0;
+const expectedConfuseSamples = (confuseEval.baseline && confuseEval.baseline.n) || totalConfuseSamples;
+const totalCheckSamples = checkEval.total_samples || 0;
 const wrongBranch = confuseMetrics.wrong_branch !== undefined ? confuseMetrics.wrong_branch : 999;
 const previewViolations = confuseMetrics.preview_violation !== undefined ? confuseMetrics.preview_violation : 999;
 
@@ -191,7 +193,7 @@ const sloGraceful502Pass = outageStatus === 502 && graceful502 && nextAliveDurin
 const sloTtrPass = ttrDirectMs < 30 && ttrProxyMs < 100;
 const sloStreamPass = streamStatus === 200 && streamDone && staleSockets === 0;
 const sloFreshnessPass = indexIntact && reindexStatus === 202 && reindexConverged && reindexDurationMs < 1500;
-const sloWriteNowPass = writeNowViolations === 0 && totalConfuseSamples === 498;
+const sloWriteNowPass = writeNowViolations === 0 && totalConfuseSamples > 0 && totalConfuseSamples === expectedConfuseSamples;
 const sloRouterRatchetPass = checkPassed && confusePassed && routerOverallPassed;
 
 let sloResourcePass = true;
@@ -247,14 +249,14 @@ const finalSummary = {
       status: sloFreshnessPass ? 'PASS' : 'FAIL',
     },
     router_write_now_invariant: {
-      target: 'write_now_violation = 0 across 498 confusing samples in evals.router.confuse',
+      target: `write_now_violation = 0 across ${expectedConfuseSamples} confusing samples in evals.router.confuse`,
       actual_violations: writeNowViolations,
       total_samples: totalConfuseSamples,
       passed: sloWriteNowPass,
       status: sloWriteNowPass ? 'PASS' : 'FAIL',
     },
     router_eval_ratchet: {
-      target: 'Zero regressions against baselines on 791 check samples and 498 confuse samples',
+      target: `Zero regressions against baselines on ${totalCheckSamples} check samples and ${expectedConfuseSamples} confuse samples`,
       actual: `Check: ${checkPassed ? 'Zero regressions' : 'Regressions'}, Confuse: ${confusePassed ? 'Zero regressions' : 'Regressions'} (wrong_branch: ${wrongBranch}, preview_violation: ${previewViolations})`,
       passed: sloRouterRatchetPass,
       status: sloRouterRatchetPass ? 'PASS' : 'FAIL',

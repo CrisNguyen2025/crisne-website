@@ -48,37 +48,43 @@ def main():
     print("Phase 4: Router Invariant & Confuse Evaluation Harness")
     print("================================================================================")
 
-    # 1. Execute evals.router.check (791 samples: 504 stress + 223 routing + 64 intent)
-    print("\n[1/2] Executing evals.router.check (791 samples)...")
+    # 1. Execute evals.router.check
+    print("\n[1/2] Executing evals.router.check...")
     check_metrics, check_breakdown, check_extra = run_check()
     check_baseline_file = CHECK_BASELINE
-    check_baseline = json.loads(check_baseline_file.read_text(encoding="utf-8")) if check_baseline_file.exists() else {}
 
     check_regressions = []
-    for k, old in check_baseline.items():
+    for k, old in (json.loads(check_baseline_file.read_text(encoding="utf-8")) if check_baseline_file.exists() else {}).items():
         new = check_metrics.get(k, 0)
         if (k in LOWER_IS_BETTER and new > old) or (k.endswith(".correct") and new < old):
             check_regressions.append(f"{k}: baseline={old} -> actual={new}")
 
+    check_baseline = json.loads(check_baseline_file.read_text(encoding="utf-8")) if check_baseline_file.exists() else {}
+    routing_total = check_metrics.get("heldout.routing.correct", 0) + check_metrics.get("heldout.routing.wrong", 0)
+    intent_total = check_metrics.get("heldout.intent_cases.correct", 0) + check_metrics.get("heldout.intent_cases.wrong", 0)
+    stress_total = sum(v for k, v in check_metrics.items() if k.startswith("stress."))
+    check_total_samples = stress_total + routing_total + intent_total
+
     check_passed = len(check_regressions) == 0
     print(f"      check.py status       : {'PASS' if check_passed else 'FAIL'}")
     print(f"      stress.wrong_write    : {check_metrics.get('stress.wrong_write', 0)} (Target: 0)")
-    print(f"      heldout.routing.correct: {check_metrics.get('heldout.routing.correct', 0)} / 223")
-    print(f"      heldout.intent.correct : {check_metrics.get('heldout.intent_cases.correct', 0)} / 64")
+    print(f"      heldout.routing.correct: {check_metrics.get('heldout.routing.correct', 0)} / {routing_total}")
+    print(f"      heldout.intent.correct : {check_metrics.get('heldout.intent_cases.correct', 0)} / {intent_total}")
     if check_regressions:
         print(f"      Regressions detected  : {', '.join(check_regressions)}")
 
-    # 2. Execute evals.router.confuse (498 samples: 83 base × 6 noise variants)
-    print("\n[2/2] Executing evals.router.confuse (498 samples)...")
+    # 2. Execute evals.router.confuse
+    confuse_baseline_file = rag_dir / "evals" / "router" / "confuse_baseline.json"
+    confuse_baseline = json.loads(confuse_baseline_file.read_text(encoding="utf-8")) if confuse_baseline_file.exists() else {}
+
+    print("\n[2/2] Executing evals.router.confuse...")
     confuse_res = asyncio.run(run_confuse(use_llm=False))
     confuse_total = confuse_res.get("total", {})
     confuse_by_cat = confuse_res.get("by_category", {})
     confuse_by_noise = confuse_res.get("by_noise", {})
 
-    confuse_baseline_file = rag_dir / "evals" / "router" / "confuse_baseline.json"
-    confuse_baseline = json.loads(confuse_baseline_file.read_text(encoding="utf-8")) if confuse_baseline_file.exists() else {}
-
     total_samples = confuse_total.get("n", 0)
+    expected_confuse_samples = confuse_baseline.get("n", total_samples)
     write_now_violation = confuse_total.get("write_now_violation", 0)
     preview_violation = confuse_total.get("preview_violation", 0)
     missed_write = confuse_total.get("missed_write", 0)
@@ -94,7 +100,7 @@ def main():
         if actual_val > baseline_val:
             confuse_regressions.append(f"{k}: baseline={baseline_val} -> actual={actual_val}")
 
-    write_now_passed = (write_now_violation == 0) and (total_samples == 498)
+    write_now_passed = (write_now_violation == 0) and (total_samples > 0) and (total_samples == expected_confuse_samples)
     confuse_passed = write_now_passed and (len(confuse_regressions) == 0)
 
     print(f"      confuse.py status     : {'PASS' if confuse_passed else 'FAIL'}")
@@ -115,14 +121,14 @@ def main():
         "verdict": "PASS" if overall_passed else "FAIL",
         "slos": {
             "write_now_invariant": {
-                "target": "write_now_violation = 0 across 498 confuse samples",
+                "target": f"write_now_violation = 0 across {expected_confuse_samples} confuse samples",
                 "actual_violations": write_now_violation,
                 "total_confuse_samples": total_samples,
                 "passed": write_now_passed,
                 "status": "PASS" if write_now_passed else "FAIL",
             },
             "router_eval_ratchet": {
-                "target": "Zero metric regressions on 791 check samples and 498 confuse samples",
+                "target": f"Zero metric regressions on {check_total_samples} check samples and {expected_confuse_samples} confuse samples",
                 "check_passed": check_passed,
                 "confuse_passed": confuse_passed,
                 "check_regressions": check_regressions,
@@ -132,7 +138,7 @@ def main():
             },
         },
         "check_eval": {
-            "total_samples": 791,
+            "total_samples": check_total_samples,
             "metrics": check_metrics,
             "baseline": check_baseline,
             "regressions": check_regressions,

@@ -114,6 +114,7 @@ class HybridRagEngine:
         self._embed_task: Optional[asyncio.Task] = None
         # Source fingerprint read before the last successful sync; None when the source cannot give one
         self._indexed_version: Optional[str] = None
+        self._sync_count = 0
         self._last_sync_ms: Optional[float] = None
         self._version_checks_skipped = 0
         self._check_task: Optional[asyncio.Task] = None
@@ -139,6 +140,7 @@ class HybridRagEngine:
         async with self._sync_lock:
             generation = self._change_generation
             started = time.monotonic()
+            self._sync_count += 1
             # Read before the export: a write landing mid-sync changes the version, so the next check re-syncs
             version = await self._source_version()
             try:
@@ -213,6 +215,10 @@ class HybridRagEngine:
             "chunks": sum(1 for d in getattr(self._vector_store, "_docs_map", {}).values() if d.doc_type == "chunk"),
             "last_sync_ms": self._last_sync_ms,
             "version_checks_skipped": self._version_checks_skipped,
+            "sync_count": self._sync_count,
+            "change_generation": self._change_generation,
+            "indexed_generation": self._indexed_generation,
+            "sync_task_active": bool(self._sync_task and not self._sync_task.done()),
         }
 
     def is_empty(self) -> bool:

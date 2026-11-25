@@ -41,6 +41,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -145,6 +146,53 @@ describe("Roadmap Assistant proxy — what it forwards", () => {
   it("returns 502 when the service cannot be reached", async () => {
     upstream.mockRejectedValueOnce(new TypeError("fetch failed"));
     expect((await callPost("chat/stream", { message: "hi" })).status).toBe(502);
+  });
+
+  it("returns 502 when upstream headers stall past the header timeout", async () => {
+    vi.useFakeTimers();
+    upstream.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+
+    const pending = callPost("chat/stream", { message: "hi" });
+    await vi.advanceTimersByTimeAsync(5_001);
+    const res = await pending;
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "Roadmap Assistant is unavailable." });
+  });
+
+  it("clears the header timeout once SSE headers arrive so streams outlive the connect window", async () => {
+    vi.useFakeTimers();
+    let capturedSignal: AbortSignal | null | undefined;
+    upstream.mockImplementationOnce(async (_url, init) => {
+      capturedSignal = init?.signal;
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("event: token\ndata: hello\n\n"));
+            setTimeout(() => {
+              controller.enqueue(new TextEncoder().encode("event: done\ndata: ok\n\n"));
+              controller.close();
+            }, 10_000);
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      );
+    });
+
+    const res = await callPost("chat/stream", { message: "hi" });
+    expect(res.status).toBe(200);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(capturedSignal?.aborted).toBe(false);
+    expect(await res.text()).toContain("event: done");
   });
 
   it("rate limits visitors but not the owner", async () => {

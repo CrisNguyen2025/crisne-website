@@ -8,6 +8,9 @@ import { Trend, Rate, Counter } from 'k6/metrics';
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3334';
 const MIN_THINK = parseFloat(__ENV.MIN_THINK || '0.7');
 const JITTER = parseFloat(__ENV.JITTER || '0.6');
+const EXPECTED_ROADMAP_ID = __ENV.EXPECTED_ROADMAP_ID || '01a1b02d-1452-7d10-a73a-f96ed89f21a8';
+const EXPECTED_ITEMS = parseInt(__ENV.EXPECTED_ITEMS || '117', 10);
+const EXPECTED_SECTIONS = parseInt(__ENV.EXPECTED_SECTIONS || '16', 10);
 const SUMMARY_JSON_PATH = __ENV.SUMMARY_JSON_PATH || 'tests/load/results/phase1-ai-architecture-summary.json';
 
 // ============================================================================
@@ -87,9 +90,9 @@ export default function () {
         isValidPayload = Boolean(
           jsonBody.roadmap &&
           jsonBody.roadmap.slug === 'ai-architecture' &&
-          jsonBody.roadmap.id === '01a18bc0-4e87-76c0-84da-356c46774241' &&
-          itemsCount === 109 &&
-          sectionsCount === 15
+          jsonBody.roadmap.id === EXPECTED_ROADMAP_ID &&
+          itemsCount === EXPECTED_ITEMS &&
+          sectionsCount === EXPECTED_SECTIONS
         );
       }
     } catch (_err) {
@@ -107,11 +110,11 @@ export default function () {
     'content-type is json': (r) => Boolean(r.headers['Content-Type'] && r.headers['Content-Type'].includes('application/json')),
     'cache-control is no-store': (r) => Boolean(r.headers['Cache-Control'] && r.headers['Cache-Control'].includes('no-store')),
     'has ai-architecture slug': () => Boolean(jsonBody && jsonBody.roadmap && jsonBody.roadmap.slug === 'ai-architecture'),
-    'has roadmap id': () => Boolean(jsonBody && jsonBody.roadmap && jsonBody.roadmap.id === '01a18bc0-4e87-76c0-84da-356c46774241'),
+    'has roadmap id': () => Boolean(jsonBody && jsonBody.roadmap && jsonBody.roadmap.id === EXPECTED_ROADMAP_ID),
     'size > 35000 chars': (r) => Boolean(r.body && r.body.length > 35000),
     'payload parsed successfully': () => parseOk,
-    'has 109 items': () => itemsCount === 109,
-    'has 15 sections': () => sectionsCount === 15,
+    'has expected items': () => itemsCount === EXPECTED_ITEMS,
+    'has expected sections': () => sectionsCount === EXPECTED_SECTIONS,
     'payload fully valid': () => isValidPayload,
   }, { endpoint: 'ai-architecture' });
 
@@ -120,7 +123,7 @@ export default function () {
   roadmapSuccess.add(ok);
 
   // Strictly increment itemsValidatedCount ONLY when payload is verified valid
-  if (isValidPayload && itemsCount === 109) {
+  if (isValidPayload && itemsCount === EXPECTED_ITEMS) {
     itemsValidatedCount.add(itemsCount);
   }
 

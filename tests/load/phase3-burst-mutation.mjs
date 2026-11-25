@@ -221,6 +221,11 @@ async function run() {
       if (itemRes.ok) {
         const itemData = await itemRes.json();
         const itemId = itemData.item.id;
+        await fetch(`${BASE_URL}/api/v1/roadmaps/items/${itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_API_KEY },
+          body: JSON.stringify({ description: 'warmup' }),
+        });
         await fetch(`${BASE_URL}/api/v1/roadmaps/items/${itemId}/content`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_API_KEY },
@@ -230,6 +235,11 @@ async function run() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_API_KEY },
           body: JSON.stringify({ from: 'A', to: 'B' }),
+        });
+        await fetch(`${BASE_URL}/api/v1/roadmaps/items/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_API_KEY },
+          body: JSON.stringify({ orderedItemIds: [itemId] }),
         });
       }
       await fetch(`${BASE_URL}/api/v1/roadmaps/${probeSlug}`, {
@@ -425,10 +435,21 @@ async function run() {
 
   const fetchSyncState = async () => {
     try {
-      const res = await fetch(`${RAG_URL}/internal/sync-state`, {
-        headers: { 'x-internal-key': INTERNAL_KEY },
-      });
-      if (res.ok) return await res.json();
+      const res = await fetch(`${RAG_URL}/health`);
+      if (res.ok) {
+        const data = await res.json();
+        const idx = data?.index;
+        if (idx) {
+          return {
+            is_synced: Boolean(idx.synced),
+            is_current: Boolean(idx.current),
+            sync_task_active: Boolean(idx.sync_task_active),
+            change_generation: idx.change_generation ?? 0,
+            indexed_generation: idx.indexed_generation ?? 0,
+            sync_executions_count: idx.sync_count ?? 0,
+          };
+        }
+      }
     } catch (_) {}
     return null;
   };
@@ -531,7 +552,7 @@ async function run() {
     empiricalSource = 'uvicorn_sync_log';
     console.log(`      Measured Sync Tasks via Event Log: ${actualSyncTasks}`);
   } else {
-    console.log('      Notice: /internal/sync-state not active, using single-task generation lock heuristic');
+    console.log('      Notice: /health index telemetry not available, using single-task generation lock heuristic');
   }
 
   const debouncedCount = Math.max(0, reindexSuccessCount - actualSyncTasks);

@@ -15,6 +15,9 @@ const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", 
 // No LLM call behind it: opening the Context sheet must not use up a visitor's questions
 const UNLIMITED_PATHS = new Set(["chat/context"]);
 const GET_PATHS = new Set(["health"]);
+const SYNC_TIMEOUT_PATHS = new Set(["chat", "chat/plan", "chat/confirm", "chat/cancel"]);
+const HEADER_TIMEOUT_STREAM_MS = 5_000;
+const HEADER_TIMEOUT_SYNC_MS = 25_000;
 
 type Actor = "owner" | "visitor";
 
@@ -93,18 +96,27 @@ async function forward(req: NextRequest, context: RouteContext, allowedPaths: Se
     threadId = prepared.threadId;
   }
 
+  const connectController = new AbortController();
+  const headerTimeoutMs = SYNC_TIMEOUT_PATHS.has(path) ? HEADER_TIMEOUT_SYNC_MS : HEADER_TIMEOUT_STREAM_MS;
+  const headerTimer = setTimeout(() => connectController.abort(), headerTimeoutMs);
+  const upstreamSignal = req.signal
+    ? AbortSignal.any([req.signal, connectController.signal])
+    : connectController.signal;
+
   let upstream: Response;
   try {
     upstream = await fetch(`${trimTrailingChar(baseUrl, "/")}/${path}`, {
       method: req.method,
       headers: { "Content-Type": "application/json", "x-internal-key": internalKey, "x-actor": actor },
       body,
-      // Stop the agent when the visitor closes the chat or presses stop
-      signal: req.signal,
+      // Fail fast when FastAPI stalls before sending headers; cleared once headers arrive so SSE streams keep flowing
+      signal: upstreamSignal,
     });
   } catch (error) {
     console.error("Roadmap Assistant proxy error:", error);
     return jsonError("Roadmap Assistant is unavailable.", 502);
+  } finally {
+    clearTimeout(headerTimer);
   }
 
   // Passed through as-is so SSE events reach the widget as they are produced

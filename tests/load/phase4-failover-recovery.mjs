@@ -56,11 +56,20 @@ function getProcessMetrics(pid) {
 }
 
 async function fetchSyncState() {
-  const res = await fetch(`${RAG_URL}/internal/sync-state`, {
-    headers: { 'x-internal-key': INTERNAL_KEY },
-  });
-  const data = await res.json();
-  return { status: res.status, data };
+  const res = await fetch(`${RAG_URL}/health`);
+  const payload = await res.json();
+  const idx = payload?.index || {};
+  return {
+    status: res.status,
+    data: {
+      is_synced: Boolean(idx.synced),
+      is_current: Boolean(idx.current),
+      sync_task_active: Boolean(idx.sync_task_active),
+      change_generation: idx.change_generation ?? 0,
+      indexed_generation: idx.indexed_generation ?? 0,
+      sync_count: idx.sync_count ?? 0,
+    },
+  };
 }
 
 async function main() {
@@ -292,10 +301,11 @@ async function main() {
 
   let reindexConverged = false;
   let finalSyncState = null;
+  const targetGeneration = (postSyncState.data.change_generation ?? 0) + (reindexRes.status === 202 ? 1 : 0);
   for (let i = 0; i < 50; i++) {
     await new Promise((r) => setTimeout(r, 50));
     const s = await fetchSyncState();
-    if (s.data.is_current && !s.data.sync_task_active) {
+    if (s.data.is_current && !s.data.sync_task_active && s.data.indexed_generation >= targetGeneration) {
       reindexConverged = true;
       finalSyncState = s.data;
       break;

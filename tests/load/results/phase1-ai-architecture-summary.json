@@ -2,43 +2,43 @@
   "phase": "Phase 1: Topic Read Stress",
   "endpoint": "GET /api/v1/roadmaps/ai-architecture",
   "target": "http://localhost:3334/api/v1/roadmaps/ai-architecture",
-  "timestamp": "2026-11-03T09:25:57.840Z",
+  "timestamp": "2026-11-25T09:28:51.241Z",
   "concurrency_vus": 100,
   "duration_seconds": 70,
   "slo": {
     "p95_target_ms": 150,
-    "p95_actual_ms": 25.63889999999995,
-    "p95_passed": true,
+    "p95_actual_ms": 316.64244999999994,
+    "p95_passed": false,
     "error_rate_target_percent": 0,
-    "error_rate_actual_percent": 0,
-    "error_rate_passed": true,
-    "checks_pass_rate_percent": 100,
-    "checks_passed": true,
-    "verdict": "PASS"
+    "error_rate_actual_percent": 0.6394884092725819,
+    "error_rate_passed": false,
+    "checks_pass_rate_percent": 99.42446043165467,
+    "checks_passed": false,
+    "verdict": "FAIL"
   },
   "metrics": {
-    "total_requests": 2608,
-    "throughput_rps": 36.95146241221583,
-    "items_validated": 284272,
+    "total_requests": 2502,
+    "throughput_rps": 35.34772662056929,
+    "items_validated": 290862,
     "latency_ms": {
-      "min": 3.974,
-      "p50": 6.8715,
-      "avg": 13.730240414110439,
-      "med": 6.8715,
-      "p90": 15.670000000000002,
-      "p95": 25.63889999999995,
-      "p99": 197.56776999999997,
-      "max": 404.71
+      "min": 5.277,
+      "p50": 12.844000000000001,
+      "avg": 49.160947242206234,
+      "med": 12.844000000000001,
+      "p90": 162.66710000000006,
+      "p95": 316.64244999999994,
+      "p99": 475.4850999999999,
+      "max": 736.644
     },
     "checks": {
-      "total": 26080,
-      "succeeded": 26080,
-      "failed": 0,
-      "pass_rate": 1
+      "total": 25020,
+      "succeeded": 24876,
+      "failed": 144,
+      "pass_rate": 0.9942446043165467
     },
     "network": {
-      "data_received_bytes": 113953952,
-      "data_received_mb": 108.67495727539062
+      "data_received_bytes": 164138414,
+      "data_received_mb": 156.53458976745605
     }
   }
 }

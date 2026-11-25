@@ -62,6 +62,10 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["age_seconds"] is None
     assert idx["last_error"] is None
     assert idx["vectors_pending"] == 0
+    assert idx["sync_count"] == 0
+    assert idx["change_generation"] == 0
+    assert idx["indexed_generation"] == 0
+    assert idx["sync_task_active"] is False
 
     # 2. After sync: synced=True, current=True, documents=1, age_seconds is float >= 0, last_error=None
     await engine.sync_live_database()
@@ -77,6 +81,10 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["chunks"] == 0
     assert isinstance(idx["last_sync_ms"], (int, float))
     assert idx["version_checks_skipped"] == 0
+    assert idx["sync_count"] == 1
+    assert idx["change_generation"] == 0
+    assert idx["indexed_generation"] == 0
+    assert idx["sync_task_active"] is False
     assert idx["age_seconds"] >= 0
     assert idx["last_error"] is None
     assert idx["vectors_pending"] == 0
@@ -94,6 +102,10 @@ async def test_health_endpoint_includes_index_status(monkeypatch):
     assert idx["documents"] == 1
     assert idx["last_error"] == "ConnectError"
     assert idx["vectors_pending"] == 0
+    assert idx["sync_count"] == 2
+    assert idx["change_generation"] == 1
+    assert idx["indexed_generation"] == 0
+    assert idx["sync_task_active"] is False
     # Never leaks secrets or internal URLs
     assert "secret" not in (idx["last_error"] or "")
     assert "http" not in (idx["last_error"] or "")

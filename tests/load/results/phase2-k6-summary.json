@@ -2,12 +2,12 @@
   "milestone": "Milestone 2 (Phase 2)",
   "endpoint": "POST /api/roadmap-assistant/chat/stream",
   "target": "http://localhost:3334/api/roadmap-assistant/chat/stream",
-  "timestamp": "2026-11-04T01:55:16.950Z",
+  "timestamp": "2026-11-25T09:25:51.633Z",
   "concurrency_vus": 20,
   "duration_seconds": 60,
   "slo": {
     "retrieval_p95_target_ms": 100,
-    "retrieval_p95_actual_ms": 50.199999999999946,
+    "retrieval_p95_actual_ms": 49.14999999999999,
     "retrieval_p95_passed": true,
     "error_rate_target_percent": 1,
     "error_rate_actual_percent": 0,
@@ -17,33 +17,33 @@
     "verdict": "PASS"
   },
   "metrics": {
-    "total_requests": 197,
-    "throughput_rps": 3.179179953930939,
-    "tokens_received": 30413,
-    "quota_error_rate_percent": 94.9238578680203,
+    "total_requests": 158,
+    "throughput_rps": 2.523917875801707,
+    "tokens_received": 35096,
+    "quota_error_rate_percent": 98.10126582278481,
     "retrieval_latency_ms": {
-      "min": 21,
-      "p50": 24,
-      "avg": 29.081218274111674,
-      "med": 24,
-      "p90": 42,
-      "p95": 50.199999999999946,
-      "p99": 127,
-      "max": 127
+      "min": 23,
+      "p50": 34.5,
+      "avg": 35.20886075949367,
+      "med": 34.5,
+      "p90": 45,
+      "p95": 49.14999999999999,
+      "p99": 57.57999999999999,
+      "max": 66
     },
     "stream_duration_ms": {
-      "min": 617.563,
-      "p50": 1251.275,
-      "avg": 1671.4271624365483,
-      "med": 1251.275,
-      "p90": 1676.444,
-      "p95": 2047.3393999999964,
-      "p99": 17042.220599999997,
-      "max": 19455.87
+      "min": 812.439,
+      "p50": 2251.63,
+      "avg": 2689.855164556963,
+      "med": 2251.63,
+      "p90": 4166.4862,
+      "p95": 4957.1586,
+      "p99": 6680.698839999996,
+      "max": 21166.44
     },
     "checks": {
-      "total": 1379,
-      "succeeded": 1379,
+      "total": 1106,
+      "succeeded": 1106,
       "failed": 0,
       "pass_rate": 1
     }

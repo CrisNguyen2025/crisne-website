@@ -263,8 +263,8 @@ const fullExportMetrics = extractMetrics(fullRaw, 350, 30, 'full-export');
 const overallVerdict = (aiMetrics.slo_status === 'PASS' && fullExportMetrics.slo_status === 'PASS') ? 'PASS' : 'FAIL';
 
 // Inspect SQLite database and WAL file dynamically
-const dbPath = 'prisma/dev.db';
-const walPath = 'prisma/dev.db-wal';
+const dbPath = process.env.STRESS_DB_PATH || 'prisma/dev.db';
+const walPath = `${dbPath}-wal`;
 const walSize = fs.existsSync(walPath) ? fs.statSync(walPath).size : 0;
 const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
 
