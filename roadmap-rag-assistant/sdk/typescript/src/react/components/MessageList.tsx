@@ -51,7 +51,6 @@ export interface MessageListProps {
   handleRunCode: (code: string) => void;
   toggleToolExpand: (id: string) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
-  contentRef?: React.RefObject<HTMLDivElement | null>;
   bottomSentinelRef: React.RefObject<HTMLDivElement | null>;
   autoFollowRef?: React.RefObject<boolean>;
   scrollToBottom: () => void;
@@ -88,7 +87,7 @@ function ScrollBottomButton({
       ([entry]) => {
         const isOut = !entry.isIntersecting;
         sentinelOutRef.current = isOut;
-        if (!isOut || root.dataset.subCeiling === "true") {
+        if (!isOut) {
           setVisible(false);
         } else if (!autoFollowRef?.current) {
           setVisible(true);
@@ -99,20 +98,12 @@ function ScrollBottomButton({
     observer.observe(sentinel);
 
     const handleScroll = () => {
-      if (
-        sentinelOutRef.current &&
-        !autoFollowRef?.current &&
-        root.dataset.subCeiling !== "true"
-      ) {
+      if (sentinelOutRef.current && !autoFollowRef?.current) {
         setVisible(true);
       }
     };
     const handleWheel = (e: WheelEvent) => {
-      if (
-        e.deltaY < 0 &&
-        sentinelOutRef.current &&
-        root.dataset.subCeiling !== "true"
-      ) {
+      if (e.deltaY < 0 && sentinelOutRef.current) {
         setVisible(true);
       }
     };
@@ -670,7 +661,6 @@ export function MessageList({
   handleRunCode,
   toggleToolExpand,
   scrollRef,
-  contentRef,
   bottomSentinelRef,
   autoFollowRef,
   scrollToBottom,
@@ -789,7 +779,7 @@ export function MessageList({
         className={
           showWelcomeStage
             ? "flex flex-1 flex-col overflow-hidden px-4"
-            : "flex-1 overflow-x-hidden overflow-y-auto px-4 overscroll-contain touch-pan-y [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#E6E4DF_transparent] data-[sub-ceiling=true]:[scrollbar-color:transparent_transparent]"
+            : "flex-1 overflow-x-hidden overflow-y-auto px-4 overscroll-contain touch-pan-y [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#E6E4DF_transparent]"
         }
       >
         {showWelcomeStage ? (
@@ -834,7 +824,7 @@ export function MessageList({
             )}
           </div>
         ) : (
-          <div ref={contentRef} className="space-y-6 pt-5 pb-2">
+          <div className="space-y-6 pt-5 pb-2">
             {visibleMessages.map((msg, idx) => (
               <MessageItem
                 key={msg.id}

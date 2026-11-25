@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import React, { useRef } from "react";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
+import { DesktopResizeHandle } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/DesktopResizeHandle";
 import {
+  DESKTOP_DEFAULT_HEIGHT,
   DESKTOP_MIN_HEIGHT,
-  useDesktopGrowHeight,
-} from "@/roadmap-rag-assistant/sdk/typescript/src/react/utils/useDesktopGrowHeight";
+  toRem,
+  useDesktopPanelHeight,
+} from "@/roadmap-rag-assistant/sdk/typescript/src/react/utils/useDesktopPanelHeight";
 
 const BASE = "/api/roadmap-assistant";
 
@@ -15,7 +18,7 @@ function mockMatchMedia(desktop: boolean, reducedMotion = false) {
     "matchMedia",
     vi.fn().mockImplementation((query: string) => ({
       matches:
-        query === "(min-width: 768px)"
+        query === "(min-width: 48rem)" || query === "(min-width: 768px)"
           ? desktop
           : query === "(prefers-reduced-motion: reduce)"
             ? reducedMotion
@@ -31,39 +34,29 @@ function mockMatchMedia(desktop: boolean, reducedMotion = false) {
 
 function Harness({
   isOpen = true,
-  isInitStage = false,
-  isStreaming = false,
   offsetY = 24,
-  onReachCeiling,
+  onResize,
 }: {
   isOpen?: boolean;
-  isInitStage?: boolean;
-  isStreaming?: boolean;
   offsetY?: number;
-  onReachCeiling?: () => void;
+  onResize?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const { contentRef } = useDesktopGrowHeight({
+  const resizeProps = useDesktopPanelHeight({
     isOpen,
-    isInitStage,
-    isStreaming,
     offsetY,
     containerRef,
-    scrollRef,
-    onReachCeiling,
+    onResize,
   });
 
   return (
     <div ref={containerRef} data-testid="panel">
-      <div ref={scrollRef} data-testid="scroller">
-        {!isInitStage && <div ref={contentRef} data-testid="content" />}
-      </div>
+      <DesktopResizeHandle edge="top" {...resizeProps} />
     </div>
   );
 }
 
-describe("Desktop progressive height & smooth scroll handoff", () => {
+describe("Desktop 400x650 default size & manual vertical resize", () => {
   beforeEach(() => {
     window.sessionStorage.clear();
     Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
@@ -76,7 +69,7 @@ describe("Desktop progressive height & smooth scroll handoff", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens at fixed 480px on desktop init stage and enables scrollbar-gutter: stable in chat stage", async () => {
+  it("opens at fixed 400x650 default on desktop and does not auto-grow when data fills in", async () => {
     mockMatchMedia(true, true);
     vi.stubGlobal(
       "fetch",
@@ -86,7 +79,7 @@ describe("Desktop progressive height & smooth scroll handoff", () => {
             start(c) {
               c.enqueue(
                 new TextEncoder().encode(
-                  'event: done\ndata: {"message":"Trả lời ngắn"}\n\n'
+                  `event: done\ndata: ${JSON.stringify({ message: "Nội dung dài\n\n".repeat(40) })}\n\n`
                 )
               );
               c.close();
@@ -104,133 +97,90 @@ describe("Desktop progressive height & smooth scroll handoff", () => {
     const panel = container.querySelector(
       "[data-abot-overlay-root]"
     ) as HTMLDivElement;
-    expect(panel.style.height).toBe(`${DESKTOP_MIN_HEIGHT}px`);
-    expect(panel.style.maxHeight).toBe("852px");
+    expect(panel.className).toContain("md:w-[25rem]");
+    expect(panel.className).toContain("md:h-[40.625rem]");
+    expect(panel.style.height).toBe(toRem(DESKTOP_DEFAULT_HEIGHT));
+    expect(panel.style.maxHeight).toBe(toRem(852));
+
+    const handle = screen.getByRole("separator", {
+      name: "Kéo để thay đổi chiều cao Abot",
+    });
+    expect(handle.getAttribute("aria-valuenow")).toBe("650");
 
     fireEvent.click(screen.getByRole("button", { name: "Xem lộ trình" }));
-    await screen.findByText("Trả lời ngắn");
+    await screen.findAllByText("Nội dung dài");
 
     const scroller = container.querySelector(
       "[data-abot-scroll-root]"
     ) as HTMLDivElement;
     expect(scroller.className).toContain("[scrollbar-gutter:stable]");
-    expect(scroller.dataset.subCeiling).toBe("true");
-    expect(panel.style.height).toBe("480px");
+    expect(panel.style.height).toBe(toRem(DESKTOP_DEFAULT_HEIGHT));
   });
 
-  it("grows progressively with monotonic streaming ratchet and hands off cleanly at full-screen ceiling", () => {
+  it("resizes height upward and downward via top drag handle, clamps to bounds, and resets on double click", async () => {
     mockMatchMedia(true, true);
-    const onReachCeiling = vi.fn();
-
-    const chromeOffsetH = 480;
-    const scrollClientH = 360; // chrome = 120px
-    let contentOffsetH = 200; // total = 320px -> clamped to 480px
-
-    const { rerender } = render(
-      <Harness isInitStage={false} isStreaming={true} onReachCeiling={onReachCeiling} />
-    );
+    const onResize = vi.fn();
+    render(<Harness onResize={onResize} />);
 
     const panel = screen.getByTestId("panel");
-    const scroller = screen.getByTestId("scroller");
-    const content = screen.getByTestId("content");
-
-    Object.defineProperty(panel, "offsetHeight", {
-      get: () => chromeOffsetH,
-      configurable: true,
-    });
-    Object.defineProperty(scroller, "clientHeight", {
-      get: () => scrollClientH,
-      configurable: true,
-    });
-    Object.defineProperty(content, "offsetHeight", {
-      get: () => contentOffsetH,
-      configurable: true,
+    const handle = screen.getByRole("separator", {
+      name: "Kéo để thay đổi chiều cao Abot",
     });
 
-    // 1. Medium content (120 chrome + 500 content + 1 sentinel = 621px < 852px ceiling)
-    contentOffsetH = 500;
-    scroller.scrollTop = 18;
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
-    expect(panel.style.height).toBe("621px");
-    expect(scroller.dataset.subCeiling).toBe("true");
-    // Sub-ceiling phase locks scrollTop at 0 to eliminate double-motion bounce
-    expect(scroller.scrollTop).toBe(0);
-    expect(onReachCeiling).not.toHaveBeenCalled();
+    expect(panel.style.height).toBe(toRem(650));
 
-    // 2. Monotonic ratchet while streaming: temporary dip in content height does not shrink panel
-    contentOffsetH = 460;
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
-    expect(panel.style.height).toBe("621px");
+    fireEvent.mouseDown(handle, { button: 0, clientY: 300 });
+    fireEvent.mouseMove(window, { clientY: 170 });
+    expect(panel.style.height).toBe(toRem(780));
 
-    // 3. Content crosses full-screen ceiling (120 + 820 + 1 = 941px -> clamped to 852px)
-    contentOffsetH = 820;
-    act(() => {
-      window.dispatchEvent(new Event("resize"));
-    });
-    expect(panel.style.height).toBe("852px");
-    expect(scroller.dataset.subCeiling).toBe("false");
-    expect(onReachCeiling).toHaveBeenCalledTimes(1);
+    fireEvent.mouseMove(window, { clientY: 20 });
+    expect(panel.style.height).toBe(toRem(852));
+    fireEvent.mouseUp(window);
+    expect(handle.getAttribute("aria-valuenow")).toBe("852");
 
-    // 4. Resetting to init stage returns height to 480px immediately
-    rerender(
-      <Harness isInitStage={true} isStreaming={false} onReachCeiling={onReachCeiling} />
-    );
-    expect(panel.style.height).toBe("480px");
+    fireEvent.mouseDown(handle, { button: 0, clientY: 100 });
+    fireEvent.mouseMove(window, { clientY: 600 });
+    expect(panel.style.height).toBe(toRem(DESKTOP_MIN_HEIGHT));
+    fireEvent.mouseUp(window);
+    expect(handle.getAttribute("aria-valuenow")).toBe(String(DESKTOP_MIN_HEIGHT));
+
+    fireEvent.doubleClick(handle);
+    expect(panel.style.height).toBe(toRem(DESKTOP_DEFAULT_HEIGHT));
+    expect(handle.getAttribute("aria-valuenow")).toBe("650");
+    await waitFor(() => expect(onResize).toHaveBeenCalled());
   });
 
-  it("snaps height immediately to 480px and replays init entrance on new conversation without shrink rAF", () => {
+  it("supports keyboard resize and clamps when viewport shrinks", () => {
     mockMatchMedia(true, false);
-    const rafSpy = vi.spyOn(window, "requestAnimationFrame");
+    render(<Harness />);
 
-    const { rerender } = render(<Harness isInitStage={false} />);
-    const panel = screen.getByTestId("panel") as HTMLDivElement;
-    const scroller = screen.getByTestId("scroller") as HTMLDivElement;
-    const content = screen.getByTestId("content") as HTMLDivElement;
-
-    Object.defineProperty(panel, "offsetHeight", {
-      get: () => 480,
-      configurable: true,
-    });
-    Object.defineProperty(scroller, "clientHeight", {
-      get: () => 360,
-      configurable: true,
-    });
-    Object.defineProperty(content, "offsetHeight", {
-      get: () => 820,
-      configurable: true,
+    const panel = screen.getByTestId("panel");
+    const handle = screen.getByRole("separator", {
+      name: "Kéo để thay đổi chiều cao Abot",
     });
 
+    fireEvent.keyDown(handle, { key: "ArrowUp" });
+    expect(panel.style.height).toBe(toRem(674));
+
+    fireEvent.keyDown(handle, { key: "End" });
+    expect(panel.style.height).toBe(toRem(852));
+
+    Object.defineProperty(window, "innerHeight", { value: 640, configurable: true });
     act(() => {
       window.dispatchEvent(new Event("resize"));
     });
+    expect(panel.style.height).toBe(toRem(592));
+    expect(panel.style.maxHeight).toBe(toRem(592));
 
-    const animateMock = vi.fn();
-    panel.animate = animateMock;
-    rafSpy.mockClear();
-
-    rerender(<Harness isInitStage={true} />);
-
-    // Snaps straight to 480px with no shrink rAF loop, and plays the crisp init fade+zoom entrance
-    expect(panel.style.height).toBe("480px");
-    expect(rafSpy).not.toHaveBeenCalled();
-    expect(animateMock).toHaveBeenCalledWith(
-      [
-        { opacity: 0, transform: "scale(0.95)" },
-        { opacity: 1, transform: "scale(1)" },
-      ],
-      expect.objectContaining({ duration: 200 })
-    );
+    fireEvent.keyDown(handle, { key: "Home" });
+    expect(panel.style.height).toBe(toRem(DESKTOP_MIN_HEIGHT));
   });
 
-  it("leaves inline height untouched on mobile viewports (< 768px)", () => {
+  it("leaves inline height untouched on mobile viewports (< 768)", () => {
     Object.defineProperty(window, "innerWidth", { value: 375, configurable: true });
     mockMatchMedia(false);
 
-    render(<Harness isInitStage={false} />);
+    render(<Harness />);
     const panel = screen.getByTestId("panel");
     expect(panel.style.height).toBe("");
     expect(panel.style.maxHeight).toBe("");

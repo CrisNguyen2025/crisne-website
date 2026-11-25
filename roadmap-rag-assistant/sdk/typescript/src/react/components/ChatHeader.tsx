@@ -26,7 +26,7 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
   return (
     // Like Claude: no divider; messages fade out under the header instead of meeting a line.
     <div
-      className={`relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] ${
+      className={`relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] md:pt-0.5 ${
         hideBrand ? "bg-transparent" : "bg-[#FFFFFF]"
       }`}
     >
