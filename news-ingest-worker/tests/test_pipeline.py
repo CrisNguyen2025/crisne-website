@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from news_worker.config import Settings
-from news_worker.extractors import media, youtube
+from news_worker.extractors import media, tiktok, youtube
 from news_worker.extractors.pipeline import extract_content
 from news_worker.schemas import ClaimedJob
 
@@ -68,6 +68,11 @@ async def test_tiktok_ignores_hashtag_spam_description_and_escalates_to_whisper(
     transcript = " ".join(["Đây là đoạn phân tích kiến trúc AI mới vừa ra mắt tuần này."] * 8)
 
     monkeypatch.setattr(
+        tiktok,
+        "fetch_tiktok_oembed",
+        AsyncMock(return_value={"title": None, "author": "@dev", "thumbnail_url": None}),
+    )
+    monkeypatch.setattr(
         media,
         "fetch_video_metadata",
         AsyncMock(
@@ -98,6 +103,11 @@ async def test_tiktok_ignores_hashtag_spam_description_and_escalates_to_whisper(
 async def test_escalates_to_vision_when_whisper_has_too_few_words(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        tiktok,
+        "fetch_tiktok_oembed",
+        AsyncMock(return_value={"title": None, "author": "@slides", "thumbnail_url": None}),
+    )
     monkeypatch.setattr(
         media,
         "fetch_video_metadata",
@@ -174,6 +184,11 @@ async def test_returns_metadata_only_and_cleans_temp_dir_on_errors(
 
     monkeypatch.setattr(tempfile, "mkdtemp", tracking_mkdtemp)
     monkeypatch.setattr(
+        tiktok,
+        "fetch_tiktok_oembed",
+        AsyncMock(return_value={"title": None, "author": "@creator", "thumbnail_url": None}),
+    )
+    monkeypatch.setattr(
         media,
         "fetch_video_metadata",
         AsyncMock(
@@ -209,3 +224,94 @@ async def test_returns_metadata_only_and_cleans_temp_dir_on_errors(
     assert "403 Forbidden" in result.error
     assert len(created_dirs) == 1
     assert not created_dirs[0].exists()
+
+
+async def test_tiktok_ip_block_fails_fast_preserving_oembed_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        tiktok,
+        "fetch_tiktok_oembed",
+        AsyncMock(
+            return_value={
+                "title": "Highlight trận đấu",
+                "author": "@tv360.bongda",
+                "thumbnail_url": "https://cdn.example.com/thumb.jpg",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        media,
+        "fetch_video_metadata",
+        AsyncMock(
+            side_effect=RuntimeError(
+                "ERROR: [TikTok] 7711882164685573382: Your IP address is blocked from accessing this post"
+            )
+        ),
+    )
+    whisper_mock = AsyncMock()
+    vision_mock = AsyncMock()
+    monkeypatch.setattr(media, "transcribe_audio_with_whisper", whisper_mock)
+    monkeypatch.setattr(media, "extract_slides_with_vision", vision_mock)
+
+    result = await extract_content(
+        make_job(
+            platform="tiktok",
+            url="https://tiktok.com/@tv360.bongda/video/7711882164685573382",
+        ),
+        make_settings(),
+    )
+
+    assert result.method == "metadata_only"
+    assert result.title == "Highlight trận đấu"
+    assert result.author == "@tv360.bongda"
+    assert result.thumbnail_url == "https://cdn.example.com/thumb.jpg"
+    assert result.error is not None
+    assert result.error.startswith("[IP_BLOCKED]")
+    whisper_mock.assert_not_called()
+    vision_mock.assert_not_called()
+
+
+async def test_tiktok_ip_block_uses_fallback_resolver_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transcript = " ".join(["Bàn thắng mở tỷ số đẹp mắt trong hiệp một trận chung kết."] * 8)
+    monkeypatch.setattr(
+        tiktok,
+        "fetch_tiktok_oembed",
+        AsyncMock(return_value={"title": "Bàn thắng", "author": "@tv360.bongda", "thumbnail_url": None}),
+    )
+    monkeypatch.setattr(
+        media,
+        "fetch_video_metadata",
+        AsyncMock(
+            side_effect=RuntimeError(
+                "ERROR: [TikTok] 7711882164685573382: Your IP address is blocked from accessing this post"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        tiktok,
+        "resolve_tiktok_via_fallback_api",
+        AsyncMock(return_value="https://cdn.example.com/media.mp4"),
+    )
+    whisper_mock = AsyncMock(return_value=transcript)
+    monkeypatch.setattr(media, "transcribe_audio_with_whisper", whisper_mock)
+
+    settings = Settings(
+        gemini_api_key="test-gemini",
+        groq_api_key="test-groq",
+        tiktok_fallback_api_url="https://resolver.example.com/api",
+        min_transcript_words=40,
+    )
+    result = await extract_content(
+        make_job(
+            platform="tiktok",
+            url="https://tiktok.com/@tv360.bongda/video/7711882164685573382",
+        ),
+        settings,
+    )
+
+    assert result.method == "whisper"
+    assert result.text == transcript
+    assert whisper_mock.call_args.kwargs.get("media_url") == "https://cdn.example.com/media.mp4"

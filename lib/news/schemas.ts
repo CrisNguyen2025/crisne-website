@@ -141,6 +141,12 @@ export const ReingestRequestSchema = z.object({
 });
 export type ReingestRequest = z.infer<typeof ReingestRequestSchema>;
 
+export const ReingestBlockedRequestSchema = z.object({
+  limit: z.number().int().min(1).max(50).optional().default(20),
+  skipWake: z.boolean().optional().default(true),
+});
+export type ReingestBlockedRequest = z.infer<typeof ReingestBlockedRequestSchema>;
+
 export const UpdateNewsItemSchema = z
   .object({
     readState: ReadStateSchema.optional(),

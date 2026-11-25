@@ -189,5 +189,8 @@ Cấu hình service tách riêng: Language **Docker** · Root Directory `news-in
 | `WORKER_CONCURRENCY` | 🟡 | Số job xử lý song song (`1..5`, mặc định `2`) |
 | `MAX_VIDEO_DURATION_SECONDS` | 🟡 | Mặc định `1200` (20 phút) |
 | `MAX_VISION_FRAMES` | 🟡 | Mặc định `6` |
+| `MEDIA_PROXY_URL` | 🟡 | Proxy HTTP/SOCKS tùy chọn chỉ dùng cho `yt-dlp` tải media |
+| `TIKTOK_FALLBACK_API_URL` | 🟡 | Endpoint Cobalt-compatible tùy chọn khi `yt-dlp` bị chặn IP trên TikTok |
+| `TIKTOK_FALLBACK_API_KEY` | 🟡 | API key tùy chọn cho `TIKTOK_FALLBACK_API_URL` (`Authorization: Api-Key ...`) |
 
 > Lưu ý nguồn Cron RSS: `vercel.json` đã cấu hình sẵn Vercel Cron chạy `GET /api/news/cron` hằng ngày lúc `04:00 UTC` (11:00 VN, khớp `lib/news/cron-schedule.ts`). Nếu cần quét dày hơn, có thể bổ sung GitHub Actions hoặc cron ngoài gọi `POST /api/news/cron` kèm `Authorization: Bearer <CRON_SECRET>`. Nhớ chạy `yarn db:news-source-cache --apply` lên Turso nếu nâng cấp từ bảng `NewsSource` cũ.

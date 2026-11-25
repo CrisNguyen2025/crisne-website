@@ -41,5 +41,16 @@ case "$NEXTJS_API_BASE_URL" in
     ;;
 esac
 
+if command -v curl >/dev/null 2>&1; then
+  requeued=$(curl -fsS -m 10 -X POST \
+    -H "Content-Type: application/json" \
+    -H "x-admin-key: ${ADMIN_API_KEY}" \
+    -d '{"skipWake":true}' \
+    "${NEXTJS_API_BASE_URL%/}/api/news/reingest-blocked" 2>/dev/null || true)
+  if [ -n "$requeued" ]; then
+    echo "news-worker (prod fallback) -> requeue blocked: $requeued"
+  fi
+fi
+
 echo "news-worker (prod fallback) -> $NEXTJS_API_BASE_URL, port 8002"
 exec .venv/bin/uvicorn news_worker.server:app --port 8002

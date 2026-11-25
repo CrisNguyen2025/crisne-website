@@ -5,7 +5,9 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
+import httpx
 from google import genai
 from google.genai import types
 from groq import Groq
@@ -17,8 +19,62 @@ from news_worker.ssrf import assert_public_url
 
 MAX_WHISPER_BYTES = 24 * 1024 * 1024
 MAX_MEDIA_DOWNLOAD_BYTES = 100 * 1024 * 1024
+MAX_MEDIA_REDIRECTS = 3
 YTDLP_SOCKET_TIMEOUT_SECONDS = 20
 LLM_API_TIMEOUT_SECONDS = 90.0
+
+
+def _build_ydl_opts(settings: Settings | None = None, **extra: Any) -> dict[str, Any]:
+    ydl_opts: dict[str, Any] = {
+        "quiet": True,
+        "no_warnings": True,
+        "no_color": True,
+        "noplaylist": True,
+        "socket_timeout": YTDLP_SOCKET_TIMEOUT_SECONDS,
+        **extra,
+    }
+    proxy_url = settings.media_proxy_url.strip() if settings else ""
+    if proxy_url:
+        ydl_opts["proxy"] = proxy_url
+    return ydl_opts
+
+
+def _download_direct_media_sync(
+    media_url: str,
+    dest_path: Path,
+    settings: Settings | None = None,
+) -> Path:
+    proxy_url = settings.media_proxy_url.strip() if settings else ""
+    current = media_url
+    with httpx.Client(
+        timeout=float(YTDLP_SOCKET_TIMEOUT_SECONDS),
+        follow_redirects=False,
+        proxy=proxy_url or None,
+    ) as client:
+        for _ in range(MAX_MEDIA_REDIRECTS + 1):
+            assert_public_url(current)
+            with client.stream("GET", current) as response:
+                if 300 <= response.status_code < 400:
+                    location = response.headers.get("location")
+                    if not location:
+                        break
+                    current = urljoin(current, location)
+                    continue
+                response.raise_for_status()
+                declared_length = response.headers.get("content-length")
+                if declared_length and declared_length.strip().isdigit():
+                    if int(declared_length.strip()) > MAX_MEDIA_DOWNLOAD_BYTES:
+                        raise RuntimeError("File media vượt giới hạn kích thước tải (100MB).")
+
+                received = 0
+                with dest_path.open("wb") as out:
+                    for chunk in response.iter_bytes():
+                        received += len(chunk)
+                        if received > MAX_MEDIA_DOWNLOAD_BYTES:
+                            raise RuntimeError("File media vượt giới hạn kích thước tải (100MB).")
+                        out.write(chunk)
+                return dest_path
+    raise RuntimeError("Quá nhiều redirect khi tải file media.")
 
 
 def _format_upload_date(raw: str | None) -> str | None:
@@ -27,16 +83,9 @@ def _format_upload_date(raw: str | None) -> str | None:
     return None
 
 
-def _fetch_video_metadata_sync(url: str) -> dict[str, Any]:
+def _fetch_video_metadata_sync(url: str, settings: Settings | None = None) -> dict[str, Any]:
     assert_public_url(url)
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "no_color": True,
-        "skip_download": True,
-        "noplaylist": True,
-        "socket_timeout": 15,
-    }
+    ydl_opts = _build_ydl_opts(settings, skip_download=True, socket_timeout=15)
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     return {
@@ -49,8 +98,8 @@ def _fetch_video_metadata_sync(url: str) -> dict[str, Any]:
     }
 
 
-async def fetch_video_metadata(url: str) -> dict[str, Any]:
-    return await asyncio.to_thread(_fetch_video_metadata_sync, url)
+async def fetch_video_metadata(url: str, settings: Settings | None = None) -> dict[str, Any]:
+    return await asyncio.to_thread(_fetch_video_metadata_sync, url, settings)
 
 
 def _find_downloaded_file(directory: Path, prefix: str) -> Path:
@@ -67,6 +116,7 @@ def _transcribe_audio_sync(
     tmp_dir: str,
     settings: Settings,
     duration: float | None = None,
+    media_url: str | None = None,
 ) -> str:
     groq_keys = settings.get_groq_keys()
     if not groq_keys:
@@ -75,30 +125,32 @@ def _transcribe_audio_sync(
         raise RuntimeError(
             f"Video dài {int(duration)}s vượt giới hạn {settings.max_video_duration_seconds}s."
         )
-    if shutil.which("ffmpeg") is None:
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if ffmpeg_bin is None:
         raise RuntimeError("Không tìm thấy ffmpeg trên máy để tách audio.")
 
-    assert_public_url(url)
     tmp_path = Path(tmp_dir)
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "no_color": True,
-        "noplaylist": True,
-        "socket_timeout": YTDLP_SOCKET_TIMEOUT_SECONDS,
-        "max_filesize": MAX_MEDIA_DOWNLOAD_BYTES,
-        "format": "bestaudio/best",
-        "outtmpl": str(tmp_path / "audio_src.%(ext)s"),
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    if media_url:
+        src_file = _download_direct_media_sync(
+            media_url, tmp_path / "audio_src.bin", settings=settings
+        )
+    else:
+        assert_public_url(url)
+        ydl_opts = _build_ydl_opts(
+            settings,
+            max_filesize=MAX_MEDIA_DOWNLOAD_BYTES,
+            format="bestaudio/best",
+            outtmpl=str(tmp_path / "audio_src.%(ext)s"),
+        )
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        src_file = _find_downloaded_file(tmp_path, "audio_src")
 
-    src_file = _find_downloaded_file(tmp_path, "audio_src")
     mp3_file = tmp_path / "audio_16k.mp3"
 
-    proc = subprocess.run(
+    proc = subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
         [
-            "ffmpeg",
+            ffmpeg_bin,
             "-nostdin",
             "-y",
             "-protocol_whitelist",
@@ -145,8 +197,11 @@ async def transcribe_audio_with_whisper(
     tmp_dir: str,
     settings: Settings,
     duration: float | None = None,
+    media_url: str | None = None,
 ) -> str:
-    return await asyncio.to_thread(_transcribe_audio_sync, url, tmp_dir, settings, duration)
+    return await asyncio.to_thread(
+        _transcribe_audio_sync, url, tmp_dir, settings, duration, media_url
+    )
 
 
 def _extract_slides_vision_sync(
@@ -154,6 +209,7 @@ def _extract_slides_vision_sync(
     tmp_dir: str,
     settings: Settings,
     duration: float | None = None,
+    media_url: str | None = None,
 ) -> str:
     gemini_keys = settings.get_gemini_keys()
     if not gemini_keys:
@@ -162,30 +218,32 @@ def _extract_slides_vision_sync(
         raise RuntimeError(
             f"Video dài {int(duration)}s vượt giới hạn {settings.max_video_duration_seconds}s."
         )
-    if shutil.which("ffmpeg") is None:
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if ffmpeg_bin is None:
         raise RuntimeError("Không tìm thấy ffmpeg trên máy để trích xuất frame.")
 
-    assert_public_url(url)
     tmp_path = Path(tmp_dir)
-    ydl_opts: dict[str, Any] = {
-        "quiet": True,
-        "no_warnings": True,
-        "no_color": True,
-        "noplaylist": True,
-        "socket_timeout": YTDLP_SOCKET_TIMEOUT_SECONDS,
-        "max_filesize": MAX_MEDIA_DOWNLOAD_BYTES,
-        "format": "bestvideo[height<=720][ext=mp4]/best[height<=720]/best",
-        "outtmpl": str(tmp_path / "video_src.%(ext)s"),
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    if media_url:
+        video_file = _download_direct_media_sync(
+            media_url, tmp_path / "video_src.mp4", settings=settings
+        )
+    else:
+        assert_public_url(url)
+        ydl_opts = _build_ydl_opts(
+            settings,
+            max_filesize=MAX_MEDIA_DOWNLOAD_BYTES,
+            format="bestvideo[height<=720][ext=mp4]/best[height<=720]/best",
+            outtmpl=str(tmp_path / "video_src.%(ext)s"),
+        )
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        video_file = _find_downloaded_file(tmp_path, "video_src")
 
-    video_file = _find_downloaded_file(tmp_path, "video_src")
     scene_pattern = str(tmp_path / "slide_%02d.jpg")
 
-    subprocess.run(
+    subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
         [
-            "ffmpeg",
+            ffmpeg_bin,
             "-nostdin",
             "-y",
             "-protocol_whitelist",
@@ -212,9 +270,9 @@ def _extract_slides_vision_sync(
         for old in frame_paths:
             old.unlink(missing_ok=True)
         step_sec = max(1, int(max(duration or 18, 6) / settings.max_vision_frames))
-        subprocess.run(
+        subprocess.run(  # noqa: S603 -- fixed ffmpeg arguments and validated local temp paths, shell=False
             [
-                "ffmpeg",
+                ffmpeg_bin,
                 "-nostdin",
                 "-y",
                 "-protocol_whitelist",
@@ -267,5 +325,8 @@ async def extract_slides_with_vision(
     tmp_dir: str,
     settings: Settings,
     duration: float | None = None,
+    media_url: str | None = None,
 ) -> str:
-    return await asyncio.to_thread(_extract_slides_vision_sync, url, tmp_dir, settings, duration)
+    return await asyncio.to_thread(
+        _extract_slides_vision_sync, url, tmp_dir, settings, duration, media_url
+    )

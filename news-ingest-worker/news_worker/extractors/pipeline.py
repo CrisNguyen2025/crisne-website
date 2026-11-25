@@ -5,7 +5,7 @@ import shutil
 import tempfile
 
 from news_worker.config import Settings
-from news_worker.extractors import article, media, youtube
+from news_worker.extractors import article, media, tiktok, youtube
 from news_worker.extractors.base import (
     ExtractionResult,
     count_meaningful_words,
@@ -26,6 +26,7 @@ async def _extract_video_tiers(
     published_at: str | None,
     errors: list[str],
     duration: float | None,
+    media_url: str | None = None,
 ) -> ExtractionResult:
     tmp_dir = tempfile.mkdtemp(prefix=f"news-{job_id}-")
     try:
@@ -33,7 +34,7 @@ async def _extract_video_tiers(
         try:
             transcript = await asyncio.wait_for(
                 media.transcribe_audio_with_whisper(
-                    url, tmp_dir, settings, duration=duration
+                    url, tmp_dir, settings, duration=duration, media_url=media_url
                 ),
                 timeout=MEDIA_TIER_TIMEOUT_SECONDS,
             )
@@ -55,7 +56,7 @@ async def _extract_video_tiers(
         try:
             vision_text = await asyncio.wait_for(
                 media.extract_slides_with_vision(
-                    url, tmp_dir, settings, duration=duration
+                    url, tmp_dir, settings, duration=duration, media_url=media_url
                 ),
                 timeout=MEDIA_TIER_TIMEOUT_SECONDS,
             )
@@ -98,6 +99,7 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
     published_at: str | None = None
     description = ""
     duration: float | None = None
+    media_url: str | None = None
 
     if job.platform == "youtube":
         oembed = await youtube.fetch_youtube_oembed(url)
@@ -117,9 +119,14 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
                     thumbnail_url=thumbnail_url,
                     published_at=published_at,
                 )
+    elif job.platform == "tiktok":
+        oembed = await tiktok.fetch_tiktok_oembed(url)
+        title = oembed.get("title") or title
+        author = oembed.get("author") or author
+        thumbnail_url = oembed.get("thumbnail_url") or thumbnail_url
 
     try:
-        meta = await media.fetch_video_metadata(url)
+        meta = await media.fetch_video_metadata(url, settings=settings)
         title = meta.get("title") or title
         author = meta.get("author") or author
         thumbnail_url = meta.get("thumbnail_url") or thumbnail_url
@@ -128,7 +135,29 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
         raw_duration = meta.get("duration")
         duration = float(raw_duration) if isinstance(raw_duration, (int, float)) else None
     except Exception as exc:
-        errors.append(f"Metadata: {exc}")
+        if job.platform == "tiktok" and tiktok.is_permanent_media_block_error(exc):
+            if not job.forceDeep and has_meaningful_text(title, settings.min_description_chars):
+                return ExtractionResult(
+                    text=(title or "").strip(),
+                    method="description",
+                    title=title,
+                    author=author,
+                    thumbnail_url=thumbnail_url,
+                    published_at=published_at,
+                )
+            media_url = await tiktok.resolve_tiktok_via_fallback_api(url, settings)
+            if not media_url:
+                return ExtractionResult(
+                    text="",
+                    method="metadata_only",
+                    title=title,
+                    author=author,
+                    thumbnail_url=thumbnail_url,
+                    published_at=published_at,
+                    error=tiktok.format_blocked_error(exc),
+                )
+        else:
+            errors.append(f"Metadata: {exc}")
 
     if not job.forceDeep and has_meaningful_text(description, settings.min_description_chars):
         return ExtractionResult(
@@ -150,4 +179,5 @@ async def extract_content(job: ClaimedJob, settings: Settings) -> ExtractionResu
         published_at=published_at,
         errors=errors,
         duration=duration,
+        media_url=media_url,
     )

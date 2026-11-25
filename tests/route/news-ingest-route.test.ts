@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { POST as ingestPost } from "@/app/api/ingest/route";
 import { GET as newsGet } from "@/app/api/news/route";
 import { POST as reingestPost } from "@/app/api/news/[id]/reingest/route";
+import { POST as reingestBlockedPost } from "@/app/api/news/reingest-blocked/route";
 import { POST as claimPost } from "@/app/api/news/jobs/claim/route";
 import { POST as completePost } from "@/app/api/news/jobs/[id]/complete/route";
 
@@ -489,6 +490,40 @@ describe("news ingest & job routes", () => {
       const reingestedItem = (await reingestComplete.json()).item;
       expect(reingestedItem.title).toBe("Completely Different Title After Reingest");
       expect(reingestedItem.slug).toBe(firstItem.slug);
+    });
+
+    it("requeues only IP-blocked partial items via /api/news/reingest-blocked", async () => {
+      const blocked = await ingestAndClaim("https://tiktok.com/@tv360.bongda/video/7711882164685573382");
+      await completePost(
+        jsonRequest("http://localhost/api/news/jobs/x/complete", "POST", {
+          outcome: "partial",
+          extractionError: "[IP_BLOCKED] Your IP address is blocked from accessing this post",
+          author: "@tv360.bongda",
+        }),
+        idContext(blocked.job.jobId)
+      );
+
+      const otherPartial = await ingestAndClaim("https://tiktok.com/@other/video/111");
+      await completePost(
+        jsonRequest("http://localhost/api/news/jobs/x/complete", "POST", {
+          outcome: "partial",
+          extractionError: "Vision không đọc được chữ/nội dung trên frame.",
+        }),
+        idContext(otherPartial.job.jobId)
+      );
+
+      const res = await reingestBlockedPost(
+        jsonRequest("http://localhost/api/news/reingest-blocked", "POST", { skipWake: true })
+      );
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.count).toBe(1);
+      expect(data.itemIds).toEqual([blocked.item.id]);
+
+      const blockedStored = await prisma.newsItem.findUniqueOrThrow({ where: { id: blocked.item.id } });
+      const otherStored = await prisma.newsItem.findUniqueOrThrow({ where: { id: otherPartial.item.id } });
+      expect(blockedStored.ingestStatus).toBe("queued");
+      expect(otherStored.ingestStatus).toBe("partial");
     });
   });
 });

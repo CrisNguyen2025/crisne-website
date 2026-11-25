@@ -277,6 +277,7 @@
         "app/api/news/route.ts",
         "app/api/news/[id]/route.ts",
         "app/api/news/[id]/reingest/route.ts",
+        "app/api/news/reingest-blocked/route.ts",
         "app/api/news/mark-read/route.ts",
         "app/api/news/worker-health/route.ts",
         "app/api/news/sources/route.ts",
@@ -287,6 +288,7 @@
         "news-ingest-worker/news_worker/server.py",
         "news-ingest-worker/news_worker/processor.py",
         "news-ingest-worker/news_worker/extractors/pipeline.py",
+        "news-ingest-worker/news_worker/extractors/tiktok.py",
         "news-ingest-worker/news_worker/summarizer.py",
         "app/(news)/share/page.tsx",
         "components/news/ShareTargetClient.tsx",
@@ -686,6 +688,17 @@
       "domainId": "private-news",
       "summary": "Xếp hàng phân tích sâu lại một NewsItem",
       "handler": "app/api/news/[id]/reingest/route.ts#POST",
+      "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
+    },
+    {
+      "id": "EP_API_NEWS_REINGEST_BLOCKED",
+      "type": "api_route",
+      "path": "/api/news/reingest-blocked",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "private-news",
+      "summary": "Đẩy lại hàng đợi các NewsItem đang partial do bị chặn IP (skipWake mặc định)",
+      "handler": "app/api/news/reingest-blocked/route.ts#POST",
       "triggersFlow": "FLOW_NEWS_INGEST_PIPELINE"
     },
     {

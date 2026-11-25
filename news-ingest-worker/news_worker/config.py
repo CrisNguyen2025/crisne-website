@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     max_vision_frames: int = 6
     min_description_chars: int = 300
     min_transcript_words: int = 40
+    media_proxy_url: str = ""
+    tiktok_fallback_api_url: str = ""
+    tiktok_fallback_api_key: str = ""
 
     @staticmethod
     def _merge_keys(multi: str, single: str) -> list[str]:

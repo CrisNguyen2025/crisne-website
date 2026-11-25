@@ -123,7 +123,8 @@ export async function enqueueNewsUrl(
 
 export async function reingestNewsItem(
   newsItemId: string,
-  forceDeep = true
+  forceDeep = true,
+  options: { skipWake?: boolean } = {}
 ): Promise<{ item: NewsItemDto; jobId: string } | null> {
   const existing = await prisma.newsItem.findUnique({
     where: { id: newsItemId },
@@ -159,8 +160,43 @@ export async function reingestNewsItem(
     return { item, job };
   });
 
-  notifyNewsWorker(updated.job.id);
+  if (!options.skipWake) {
+    notifyNewsWorker(updated.job.id);
+  }
   return { item: serializeNewsItem(updated.item), jobId: updated.job.id };
+}
+
+export async function reingestBlockedNewsItems(
+  options: { limit?: number; skipWake?: boolean } = {}
+): Promise<{ count: number; itemIds: string[] }> {
+  const safeLimit = Math.min(Math.max(options.limit ?? 20, 1), 50);
+  const candidates = await prisma.newsItem.findMany({
+    where: {
+      ingestStatus: "partial",
+      OR: [
+        { extractionError: { contains: "[IP_BLOCKED]" } },
+        { extractionError: { contains: "Your IP address is blocked" } },
+      ],
+      jobs: {
+        none: {
+          status: { in: ["pending", "running"] },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+    take: safeLimit,
+    select: { id: true },
+  });
+
+  const itemIds: string[] = [];
+  const skipWake = options.skipWake ?? true;
+  for (const candidate of candidates) {
+    const res = await reingestNewsItem(candidate.id, true, { skipWake });
+    if (res) {
+      itemIds.push(candidate.id);
+    }
+  }
+  return { count: itemIds.length, itemIds };
 }
 
 async function reclaimExpiredJobLeases(now: Date): Promise<void> {
