@@ -197,6 +197,8 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
       kind: "lesson",
       path: "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529",
       label: "Bản phát hành bảo mật Next.js tháng 11/2026 và lỗi v16.4.5 & v15.5.29",
+      topicLabel: "Frontend",
+      section: "Next.js",
       tooltip:
         "Bản phát hành bảo mật Next.js tháng 11/2026 và lỗi v16.4.5 & v15.5.29 (/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529)",
     };
@@ -220,12 +222,21 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
     expect(chip.textContent).toBe(lessonRef.label);
     expect(chip.textContent).not.toContain("Trang hiện tại");
 
+    // Hovering the 2-level current file chip reveals its full path popover
+    expect(screen.queryByTestId("composer-context-popover")).toBeNull();
+    fireEvent.mouseEnter(chip);
+    const popover = screen.getByTestId("composer-context-popover");
+    expect(popover.textContent).toContain("Frontend · Next.js");
+    expect(popover.textContent).toContain(lessonRef.path);
+    fireEvent.mouseLeave(chip);
+    expect(screen.queryByTestId("composer-context-popover")).toBeNull();
+
     // Textarea className remains static across typing even with contextRef enabled
     const clsBefore = textarea.className;
     fireEvent.change(textarea, { target: { value: "Tóm tắt bài này\nÝ thứ hai" } });
     expect(textarea.className).toBe(clsBefore);
 
-    // Topic reference variant
+    // Topic reference variant (1 level: no 2-level path popover on hover)
     rerender(
       <ComposerTestHarness
         contextRef={{
@@ -236,7 +247,10 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
         }}
       />
     );
-    expect(screen.getByTestId("composer-context-ref").getAttribute("data-context-kind")).toBe("topic");
-    expect(screen.getByTestId("composer-context-ref").textContent).toContain("Frontend");
+    const topicChip = screen.getByTestId("composer-context-ref");
+    expect(topicChip.getAttribute("data-context-kind")).toBe("topic");
+    expect(topicChip.textContent).toContain("Frontend");
+    fireEvent.mouseEnter(topicChip);
+    expect(screen.queryByTestId("composer-context-popover")).toBeNull();
   });
 });

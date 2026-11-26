@@ -7,6 +7,9 @@ export interface PageContextRef {
   path: string;
   /** Human-readable title (or slug fallback) shown on the context chip. */
   label: string;
+  /** Parent Topic label (and optional Section) for 2-level Lesson pages. */
+  topicLabel?: string;
+  section?: string;
   /** Full label + path for hover tooltip. */
   tooltip: string;
 }
@@ -50,6 +53,8 @@ export function resolvePageContextRef(
   if (!topicSlug) return null;
 
   const lessonSlug = cleanSegment(context?.itemId);
+  const topicLabel = context?.roadmapTitle?.trim() || topicSlug;
+  const section = context?.section?.trim() || undefined;
   if (lessonSlug) {
     const path = `/${encodeURIComponent(topicSlug)}/${encodeURIComponent(lessonSlug)}`;
     const label = context?.itemTitle?.trim() || lessonSlug;
@@ -57,16 +62,16 @@ export function resolvePageContextRef(
       kind: "lesson",
       path,
       label,
+      topicLabel,
+      ...(section ? { section } : {}),
       tooltip: `${label} (${path})`,
     };
   }
 
-  const section = context?.section?.trim();
   const basePath = `/${encodeURIComponent(topicSlug)}`;
   const path = section
     ? `${basePath}?section=${encodeURIComponent(section)}`
     : basePath;
-  const topicLabel = context?.roadmapTitle?.trim() || topicSlug;
   const label = section ? `${topicLabel} · ${section}` : topicLabel;
   return {
     kind: "topic",

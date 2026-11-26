@@ -758,7 +758,10 @@ export function LessonEditorialReader({
                 container={contentElement}
                 provenances={provenance.provenances}
               />
-              <RelatedLessons relations={provenance.relations ?? []} />
+              <RelatedLessons
+                relations={provenance.relations ?? []}
+                isLoading={provenance.isLoading}
+              />
               <LessonSources sources={provenance.orphans} />
             </>
           )}

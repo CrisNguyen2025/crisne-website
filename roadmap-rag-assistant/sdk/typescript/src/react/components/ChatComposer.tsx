@@ -50,6 +50,12 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const hasContextRef = Boolean(contextRef);
   const showAnsweringOverlay = isLoading && input.length === 0;
+  const isTwoLevelContext = contextRef?.kind === "lesson";
+  const [isContextHovered, setIsContextHovered] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsContextHovered(false);
+  }, [contextRef?.path]);
 
   // When mobile keyboard dismisses (e.g. Back button pressed), blur textarea to drop active cursor
   const prevKeyboardOpenRef = React.useRef(isKeyboardOpen);
@@ -129,9 +135,28 @@ export function ChatComposer({
               data-testid="composer-context-ref"
               data-context-kind={contextRef.kind}
               data-context-path={contextRef.path}
-              title={contextRef.tooltip}
+              title={isTwoLevelContext ? undefined : contextRef.tooltip}
+              tabIndex={isTwoLevelContext ? 0 : undefined}
+              onMouseEnter={() => {
+                if (isTwoLevelContext) setIsContextHovered(true);
+              }}
+              onMouseLeave={() => {
+                if (isTwoLevelContext) setIsContextHovered(false);
+              }}
+              onFocus={() => {
+                if (isTwoLevelContext) setIsContextHovered(true);
+              }}
+              onBlur={() => {
+                if (isTwoLevelContext) setIsContextHovered(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setIsContextHovered(false);
+                }
+              }}
               onClick={(e) => e.stopPropagation()}
-              className="hidden md:inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-2 py-1 text-xs leading-4 text-[#1F1E1C] select-none"
+              className="relative hidden md:inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-2 py-1 text-xs leading-4 text-[#1F1E1C] select-none outline-none transition-colors hover:border-[#D6D3CC] hover:bg-[#ECEAE5] focus-visible:border-[#D6D3CC] focus-visible:ring-2 focus-visible:ring-[#C2410C]/25"
             >
               {contextRef.kind === "lesson" ? (
                 <FileTextIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
@@ -141,6 +166,28 @@ export function ChatComposer({
               <span className="min-w-0 truncate font-medium text-[#1F1E1C]">
                 {contextRef.label}
               </span>
+
+              {isTwoLevelContext && isContextHovered && (
+                <div
+                  role="tooltip"
+                  data-testid="composer-context-popover"
+                  className="absolute bottom-full left-0 z-30 w-max max-w-[min(21rem,calc(100vw-3rem))] pb-1.5 animate-in fade-in slide-in-from-bottom-1 duration-150 motion-reduce:animate-none"
+                >
+                  <div className="rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] px-2.5 py-2 text-left shadow-[0_8px_24px_-4px_rgba(31,30,28,0.12),0_2px_6px_-1px_rgba(31,30,28,0.06)]">
+                    {(contextRef.topicLabel || contextRef.section) && (
+                      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-[#5E5B55]">
+                        <BookOpenIcon className="h-3 w-3 shrink-0 text-[#C2410C]" />
+                        <span className="truncate">
+                          {[contextRef.topicLabel, contextRef.section].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    )}
+                    <div className="break-all font-mono text-[11px] leading-relaxed text-[#1F1E1C]">
+                      {contextRef.path}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

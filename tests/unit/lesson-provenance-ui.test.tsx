@@ -180,4 +180,60 @@ describe("Provenance on the Lesson page (ADR-0017)", () => {
     await waitFor(() => expect(service.fetchLessonProvenance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText("Nguồn tham khảo của bài")).toBeNull());
   });
+
+  it("shows a skeleton for RelatedLessons while provenance is loading and renders links once resolved", async () => {
+    mockUseCanWrite.mockReturnValue(true);
+    let resolveFetch!: (val: LessonProvenanceResponse) => void;
+    service.fetchLessonProvenance.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    renderReader({ ...LESSON, id: "l-related-loading", content: HTML });
+
+    const heading = screen.getByRole("heading", { name: "Bài học liên quan" });
+    const section = heading.closest("section");
+    expect(section?.getAttribute("aria-busy")).toBe("true");
+
+    resolveFetch({
+      provenances: [],
+      orphans: [],
+      relations: [
+        {
+          lessonId: "l-2",
+          lessonSlug: "agent-memory",
+          title: "Agent Memory",
+          section: "Nền tảng",
+          roadmapSlug: "ai-agent",
+          roadmapTitle: "AI Agent",
+          relationType: "relates",
+        },
+      ],
+    });
+
+    const relatedLink = await screen.findByRole("link", { name: "Agent Memory" });
+    expect(relatedLink.getAttribute("href")).toBe("/ai-agent/agent-memory");
+    expect(relatedLink.closest("section")?.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("hides RelatedLessons skeleton when resolved with no related lessons", async () => {
+    mockUseCanWrite.mockReturnValue(true);
+    let resolveFetch!: (val: LessonProvenanceResponse) => void;
+    service.fetchLessonProvenance.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    renderReader({ ...LESSON, id: "l-related-empty", content: HTML });
+    expect(screen.getByRole("heading", { name: "Bài học liên quan" })).toBeTruthy();
+
+    resolveFetch({ provenances: [], orphans: [], relations: [] });
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: "Bài học liên quan" })).toBeNull()
+    );
+  });
 });
