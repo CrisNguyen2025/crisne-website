@@ -349,6 +349,7 @@ export function useRoadmapAssistantChat(
         isThinking: true,
         thinkingDurationMs: undefined,
         toolCalls: [],
+        ...(activeContext ? { pageContext: activeContext } : {}),
         status: 'streaming',
         timestamp: new Date(),
       };

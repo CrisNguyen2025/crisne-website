@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
+import { CollapsibleReferenceSummary } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/ReferenceSummary";
+import { resolvePageContextRef } from "@/roadmap-rag-assistant/sdk/typescript/src/react/utils/pageContextRef";
 
 const BASE = "/api/roadmap-assistant";
 
@@ -566,12 +568,24 @@ describe("RoadmapChatbotWidget", () => {
       );
       expect(composerChip.textContent).toContain("Bản phát hành bảo mật Next.js tháng 11/2026");
 
-      // 2. Sending records the snapshot onto the user message bubble
+      // 2. Sending keeps the user message bubble clean and shows a collapsible reference on the assistant turn
       fireEvent.change(screen.getByPlaceholderText(/Hỏi Abot/), {
         target: { value: "Tóm tắt bài này" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
       await screen.findByText("Tóm tắt bài Next.js");
+
+      const userBubble = screen.getByText("Tóm tắt bài này").closest("[data-message-id]");
+      expect(userBubble?.querySelector("[data-testid='message-context-ref']")).toBeNull();
+      expect(userBubble?.querySelector("[data-testid='reference-summary-toggle']")).toBeNull();
+
+      const refToggle = screen.getByTestId("reference-summary-toggle");
+      expect(refToggle.textContent).toContain("Used 1 reference");
+      expect(refToggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("message-context-ref")).toBeNull();
+
+      fireEvent.click(refToggle);
+      expect(refToggle.getAttribute("aria-expanded")).toBe("true");
 
       const sentChip = screen.getByTestId("message-context-ref");
       expect(sentChip.getAttribute("data-context-path")).toBe(
@@ -579,7 +593,7 @@ describe("RoadmapChatbotWidget", () => {
       );
       expect(sentChip.textContent).toBe("Bản phát hành bảo mật Next.js tháng 11/2026");
 
-      // 3. Navigating to Topic overview updates composer chip while keeping sent message snapshot intact
+      // 3. Navigating to Topic overview updates composer chip while keeping assistant reference snapshot intact
       currentCtx = { roadmapSlug: "frontend", roadmapTitle: "Frontend" };
       rerender(
         <RoadmapChatbotWidget
@@ -596,11 +610,14 @@ describe("RoadmapChatbotWidget", () => {
         "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
       );
 
-      // 4. Clicking the sent message's context chip SPA-navigates back to that Lesson
+      // 4. Clicking the assistant reference card SPA-navigates back to that Lesson, and toggle collapses cleanly
       fireEvent.click(sentChip.closest("a") as HTMLAnchorElement);
       expect(onNavigate).toHaveBeenCalledWith(
         "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
       );
+      fireEvent.click(refToggle);
+      expect(refToggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("message-context-ref")).toBeNull();
 
       // 5. Navigating to root home clears the composer chip
       currentCtx = undefined;
@@ -614,6 +631,92 @@ describe("RoadmapChatbotWidget", () => {
         />
       );
       expect(screen.queryByTestId("composer-context-ref")).toBeNull();
+    });
+
+    it("falls back to preceding user pageContext inside assistant steps without bleeding into later contextless turns", () => {
+      render(
+        <RoadmapChatbotWidget
+          baseUrl={BASE}
+          initialOpen
+          initialMessages={[
+            {
+              id: "u-1",
+              role: "user",
+              content: "Tóm tắt phần bảo mật",
+              pageContext: {
+                roadmapSlug: "frontend",
+                roadmapTitle: "Frontend",
+                itemId: "nextjs-sec",
+                itemTitle: "Next.js Security",
+                section: "Security",
+              },
+              timestamp: new Date("2026-11-26T10:00:00Z"),
+            },
+            {
+              id: "b-1",
+              role: "assistant",
+              content: "Nội dung tóm tắt bảo mật.",
+              toolCalls: [
+                {
+                  name: "search_knowledge",
+                  result: "ok",
+                  status: "success",
+                  startedAt: 1_000,
+                  endedAt: 3_000,
+                },
+              ],
+              firstTokenAt: 3_000,
+              status: "complete",
+              timestamp: new Date("2026-11-26T10:00:00Z"),
+            },
+            {
+              id: "u-2",
+              role: "user",
+              content: "Câu hỏi chung",
+              timestamp: new Date("2026-11-26T10:01:00Z"),
+            },
+            {
+              id: "b-2",
+              role: "assistant",
+              content: "Trả lời chung.",
+              status: "complete",
+              timestamp: new Date("2026-11-26T10:01:05Z"),
+            },
+          ]}
+        />
+      );
+
+      // Only the first assistant turn renders Used 1 reference inside its processing steps tree
+      expect(screen.queryByTestId("reference-summary-toggle")).toBeNull();
+      const stepsToggle = screen.getByRole("button", { name: /Đã xử lý/ });
+      fireEvent.click(stepsToggle);
+
+      const toggles = screen.getAllByTestId("reference-summary-toggle");
+      expect(toggles).toHaveLength(1);
+      expect(stepsToggle.parentElement?.contains(toggles[0])).toBe(true);
+
+      fireEvent.click(toggles[0]);
+      const refChip = screen.getByTestId("message-context-ref");
+      expect(refChip.textContent).toBe("Next.js Security");
+      expect(refChip.getAttribute("data-context-path")).toBe("/frontend/nextjs-sec");
+      expect(screen.getByText("Frontend · Security")).toBeTruthy();
+    });
+
+    it("CollapsibleReferenceSummary falls back to path subtitle for topic references", () => {
+      const topicRef = resolvePageContextRef({
+        roadmapSlug: "frontend",
+        roadmapTitle: "Frontend",
+      });
+      expect(topicRef).not.toBeNull();
+
+      render(<CollapsibleReferenceSummary contextRef={topicRef!} />);
+      const toggle = screen.getByTestId("reference-summary-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByTestId("message-context-ref").textContent).toBe("Frontend");
+      expect(screen.getByText("/frontend")).toBeTruthy();
     });
   });
 });

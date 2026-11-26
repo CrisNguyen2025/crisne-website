@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./icons";
 import { safeHref } from "./utils/links";
 import { ChatLink } from "./utils/navigation";
+import { CollapsibleReferenceSummary } from "./components/ReferenceSummary";
+import type { PageContextRef } from "./utils/pageContextRef";
 
 export function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -204,6 +206,8 @@ export interface CollapsibleStepsSummaryProps {
   firstTokenAt?: number;
   /** What the turn did, shown after the finished header, e.g. "Tra cứu 3 tài liệu". */
   digest?: string;
+  /** Active topic/lesson reference sent with the turn, rendered inside the expanded steps tree. */
+  contextRef?: PageContextRef | null;
 }
 
 /** Shimmer over the live label; the keyframe lives in the host's globals.css. */
@@ -220,6 +224,7 @@ export function CollapsibleStepsSummary({
   startedAt,
   firstTokenAt,
   digest,
+  contextRef,
 }: CollapsibleStepsSummaryProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -258,7 +263,7 @@ export function CollapsibleStepsSummary({
 
   const status = runningStep || isTicking ? "running" : errorStep ? "error" : isInterrupted ? "warning" : "done";
   const showDigest = status === "done" && !!digest;
-  const canExpand = steps.length > 0;
+  const canExpand = steps.length > 0 || Boolean(contextRef);
 
   return (
     <div className="text-xs">
@@ -337,6 +342,7 @@ export function CollapsibleStepsSummary({
               onToggle={() => onToggleTool(s.id)}
             />
           ))}
+          {contextRef && <CollapsibleReferenceSummary contextRef={contextRef} />}
         </div>
       )}
     </div>

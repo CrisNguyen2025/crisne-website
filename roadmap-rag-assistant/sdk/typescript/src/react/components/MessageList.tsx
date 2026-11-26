@@ -1,18 +1,15 @@
 import React from "react";
 import {
   ArrowDownIcon,
-  BookOpenIcon,
   CheckCircleIcon,
   CheckIcon,
   CloseIcon,
   CopyIcon,
-  FileTextIcon,
   PromptBubbleIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "../icons";
 import { ChatMarkdown, markdownToPlainText } from "../ChatMarkdown";
-import { ChatLink } from "../utils/navigation";
 import { resolvePageContextRef } from "../utils/pageContextRef";
 import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
@@ -25,9 +22,11 @@ import {
 import { PulsatingDots } from "./PulsatingDots";
 import { ChangeReviewCard } from "./ChangeReviewCard";
 import { AbotMascot, type MascotState } from "./AbotMascot";
+import { CollapsibleReferenceSummary } from "./ReferenceSummary";
 import { findExecutedPromptTargets } from "../utils/snippets";
 import { WELCOME_MESSAGE_ID } from "../welcome";
 import type { ChatMessage, ChatbotViewMode } from "../types";
+import type { PageContext } from "../../types";
 
 export interface MessageListProps {
   activityState?: MascotState;
@@ -314,6 +313,7 @@ interface MessageItemProps
     "isLoading" | "isStreaming" | "runningCode" | "expandedTools" | "feedback" | "copiedId" | "canWrite" | "showFeedback"
   > {
   msg: ChatMessage;
+  contextPage?: PageContext;
   isLast: boolean;
   isHighlighted?: boolean;
   executedPrompts?: Record<string, string>;
@@ -341,6 +341,7 @@ function areMessageItemPropsEqual(
 ): boolean {
   return (
     prev.msg === next.msg &&
+    prev.contextPage === next.contextPage &&
     prev.isLast === next.isLast &&
     prev.isLoading === next.isLoading &&
     prev.isStreaming === next.isStreaming &&
@@ -362,6 +363,7 @@ function areMessageItemPropsEqual(
  */
 const MessageItem = React.memo(function MessageItem({
   msg,
+  contextPage,
   isLast,
   isLoading,
   isStreaming,
@@ -391,34 +393,12 @@ const MessageItem = React.memo(function MessageItem({
   const toolCalls = msg.toolCalls ?? [];
 
   if (isUser) {
-    const msgContextRef = resolvePageContextRef(msg.pageContext);
     return (
       <div
         key={msg.id}
         data-message-id={msg.id}
         className="group flex flex-col items-end gap-1"
       >
-        {msgContextRef && (
-          <ChatLink
-            href={msgContextRef.path}
-            external={false}
-            className="hidden md:inline-flex max-w-[85%] items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-0.5 text-xs leading-4 text-[#5E5B55] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] hover:text-[#1F1E1C]"
-          >
-            {msgContextRef.kind === "lesson" ? (
-              <FileTextIcon className="h-3 w-3 shrink-0 text-[#C2410C]" />
-            ) : (
-              <BookOpenIcon className="h-3 w-3 shrink-0 text-[#C2410C]" />
-            )}
-            <span
-              data-testid="message-context-ref"
-              data-context-path={msgContextRef.path}
-              title={msgContextRef.tooltip}
-              className="min-w-0 truncate font-medium"
-            >
-              {msgContextRef.label}
-            </span>
-          </ChatLink>
-        )}
         <div
           className={`relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C] transition-[background-color,box-shadow] duration-300 ${
             isHighlighted
@@ -480,11 +460,12 @@ const MessageItem = React.memo(function MessageItem({
   // Waiting for the model, or a streamed answer; a static greeting has no thinking to show.
   // Gaps between steps are not rows: the header shows "Đang suy nghĩ…" on its own.
   const showSteps = stepItems.length > 0 || (isLive && !msg.content) || !!msg.firstTokenAt;
+  const contextRef = resolvePageContextRef(contextPage);
 
   return (
     <div key={msg.id} className="group flex flex-col gap-2">
-      {/* Step summary (Thinking & Tools), placed at top of response like Claude */}
-      {showSteps && (
+      {/* Step summary (Thinking, Tools & Context Reference), placed at top of response like Claude */}
+      {showSteps ? (
         <div className="-mx-1">
           <CollapsibleStepsSummary
             steps={stepItems}
@@ -494,9 +475,14 @@ const MessageItem = React.memo(function MessageItem({
             startedAt={new Date(msg.timestamp).getTime()}
             firstTokenAt={msg.firstTokenAt}
             digest={stepsDigest}
+            contextRef={contextRef}
           />
         </div>
-      )}
+      ) : contextRef ? (
+        <div className="-mx-1">
+          <CollapsibleReferenceSummary contextRef={contextRef} />
+        </div>
+      ) : null}
 
       {/* Main answer content rendered directly on canvas */}
       {msg.content && (
@@ -671,6 +657,24 @@ const MessageItem = React.memo(function MessageItem({
   );
 }, areMessageItemPropsEqual);
 
+function findAssistantPageContexts(
+  messages: ChatMessage[]
+): Map<string, PageContext> {
+  const result = new Map<string, PageContext>();
+  let activeTurnContext: PageContext | undefined;
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      activeTurnContext = msg.pageContext;
+    } else if (msg.role === "assistant") {
+      const ctx = msg.pageContext ?? activeTurnContext;
+      if (ctx) {
+        result.set(msg.id, ctx);
+      }
+    }
+  }
+  return result;
+}
+
 export function MessageList({
   activityState = "idle",
   title = "Abot",
@@ -718,6 +722,10 @@ export function MessageList({
 
   const executedTargetsByMsg = React.useMemo(
     () => findExecutedPromptTargets(visibleMessages),
+    [visibleMessages]
+  );
+  const pageContextsByMsg = React.useMemo(
+    () => findAssistantPageContexts(visibleMessages),
     [visibleMessages]
   );
 
@@ -889,6 +897,7 @@ export function MessageList({
               <MessageItem
                 key={msg.id}
                 msg={msg}
+                contextPage={pageContextsByMsg.get(msg.id)}
                 isLast={idx === visibleMessages.length - 1}
                 isLoading={isLoading}
                 isStreaming={isStreaming}
