@@ -12,8 +12,7 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 ## Hạ tầng, Nhánh chưa merge & Test thủ công
 
-- Worktree / nhánh chưa merge `feat/news-security-perf` (`aa6e367`, tách từ `e89aefc`): chờ Owner quyết định cherry-pick phần còn cần hay đóng worktree `.claude/worktrees/news-security-perf` và xoá nhánh.
-- Hai nhánh cũ chưa merge vào `main` (`feat/roadmap-assistant-routing-quality`, `origin/feat/rag-layer-picker`): chờ Owner xác nhận giữ tham khảo hay dọn bỏ.
+- Nhánh chưa merge còn giữ chờ review: `feat/visual-hierarchy` (`fc7bb4b`, worktree `.claude/worktrees/visual-hierarchy`). Hai ref local `[gone]` còn lại (`feat/news-security-perf`, `feat/roadmap-assistant-routing-quality`, đã xoá remote/worktree) chờ Owner chạy `git branch -D` nếu muốn xoá nốt ref local.
 - Kịch bản manual test chưa chạy / cần re-run trên môi trường thật (`tests/manual/README.md`): `tests/manual/owner-memory.md` (M1–M17), `tests/manual/lesson-status.md`, và re-run N1–N10, N14 của `tests/manual/news-inbox.md` trên `/news`.
 - AgentAdapter & handoff v3 (đã lên `main` @ `e1a7ce2`): còn test thủ công `tests/manual/agent-handoff.md` E4–E6, E8 và `tests/manual/agent-adapter.md` T1–T4 (T5, T6 mới một phần); chưa xác nhận step `yarn agents:sync --check` của CI chạy xanh trên `main`. Plan: `.handoff/PLAN-agent-adapter.md`.
 
