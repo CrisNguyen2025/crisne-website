@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
       timestamp: m.createdAt.toISOString(),
+      isRestored: true,
     }));
 
     return NextResponse.json(

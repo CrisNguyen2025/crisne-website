@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 // Streams the agent's answer (SSE); the Python service may also need a cold start
 export const maxDuration = 60;
 
-// Public on purpose: visitors chat with the Roadmap Assistant without signing in. The Python
-// service only accepts requests carrying RAG_INTERNAL_KEY and only runs writes for x-actor=owner.
+// Site is Owner-only (ADR-0019), with proxy actor defense-in-depth (ADR-0002): Python only
+// accepts RAG_INTERNAL_KEY and only executes writes or Owner threads when x-actor=owner.
 const MAX_MESSAGE_LENGTH = 2000;
 const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", "chat/cancel", "chat/context"]);
 // No LLM call behind it: opening the Context sheet must not use up a visitor's questions

@@ -423,8 +423,8 @@ const MessageItem = React.memo(function MessageItem({
   const awaitingConfirm =
     !isStreaming &&
     isLast &&
-    (msg.content.includes("Xác nhận thực hiện") ||
-      msg.content.includes("DRY-RUN PREVIEW"));
+    !msg.isRestored &&
+    Boolean(msg.actionPreview?.confirmable);
 
   const awaitingLayerChoice =
     !isStreaming &&
@@ -542,8 +542,8 @@ const MessageItem = React.memo(function MessageItem({
             Đang chờ bạn xác nhận
           </p>
           <ConfirmActions
-            editableTitles={canWrite ? msg.editableTitles : undefined}
-            editableTarget={canWrite ? msg.editableTarget : undefined}
+            editableTitles={canWrite ? (msg.actionPreview?.editableTitles ?? msg.editableTitles) : undefined}
+            editableTarget={canWrite ? (msg.actionPreview?.editableTarget ?? msg.editableTarget) : undefined}
             disabled={isLoading}
             sendMessage={sendMessage}
           />

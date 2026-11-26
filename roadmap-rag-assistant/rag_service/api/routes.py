@@ -73,6 +73,22 @@ def _sse_line(event: str, payload: Any) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+_WEBMCP_READ_ONLY_TOOLS = frozenset({"get_current_context", "list_roadmaps", "get_roadmap", "export_roadmaps"})
+
+
+def _normalize_action_preview_payload(ev: dict) -> dict:
+    payload = {k: v for k, v in ev.items() if k != "type"}
+    if "confirmable" not in payload:
+        payload["confirmable"] = True
+    if "kind" not in payload:
+        from rag_service.state.session_store import session_store
+
+        action_id = str(payload.get("action_id") or "")
+        active = session_store.get_or_create(action_id).active_pending() if action_id else None
+        payload["kind"] = active[1] if active else "section_rename"
+    return payload
+
+
 def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
     ev_type = ev.get("type")
     if ev_type == "tool_start":
@@ -97,7 +113,7 @@ def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
         return _sse_line("change_review", payload)
     if ev_type == "action_preview":
         state.had_preview = True
-        return _sse_line("action_preview", {k: v for k, v in ev.items() if k != "type"})
+        return _sse_line("action_preview", _normalize_action_preview_payload(ev))
     if ev_type == "metadata":
         state.metadata.update({k: v for k, v in ev.items() if k != "type"})
         return None
@@ -214,21 +230,10 @@ def _maybe_schedule_memory_extraction(
 def _schedule_sync_chat_memory(agent: Any, req: ChatRequest, response: ChatResponse) -> None:
     if not is_owner():
         return
-    from rag_service.state import session_store
+    from rag_service.state.session_store import _PENDING_FIELDS, session_store
 
     ctx = session_store.get_or_create(req.thread_id)
-    has_pending = any(
-        getattr(ctx, slot, None) is not None
-        for slot in (
-            "pending_confirmation",
-            "pending_memory_change",
-            "pending_content_draft",
-            "pending_status_change",
-            "pending_lesson_edit",
-            "pending_section_rename",
-            "active_quiz",
-        )
-    )
+    has_pending = any(getattr(ctx, slot, None) is not None for slot in _PENDING_FIELDS)
     tool_names = [t.name for t in response.tool_calls]
     has_changes = any(
         name.startswith(("create_", "update_", "delete_", "rename_"))
@@ -428,12 +433,26 @@ async def chat_context(req: ContextRequest) -> dict:
 
 
 @router.post("/chat/plan", response_model=PlanResponse)
-async def plan(req: PlanRequest):
-    """Choose one WebMCP tool for the browser to execute. Does not execute anything itself."""
+async def plan(req: PlanRequest, request: Request) -> PlanResponse:
+    """Choose one read-only WebMCP tool for the browser to execute. Does not execute anything itself."""
     from rag_service.webmcp_planner import plan_webmcp_call
 
+    set_actor(_actor_of(request))
+    candidate_tools = (
+        req.tools
+        if is_owner()
+        else [t for t in req.tools if str(t.get("name") or "") in _WEBMCP_READ_ONLY_TOOLS]
+    )
     agent = _get_agent()
-    result = await plan_webmcp_call(getattr(agent, "llm", None), req.message, req.tools, req.context)
+    result = await plan_webmcp_call(getattr(agent, "llm", None), req.message, candidate_tools, req.context)
+    chosen = result.get("tool")
+    if chosen and chosen not in _WEBMCP_READ_ONLY_TOOLS:
+        reply = (
+            OWNER_ONLY_MESSAGE
+            if not is_owner()
+            else "Thao tác ghi cần chạy qua khung chat Abot để xem Preview và xác nhận trước."
+        )
+        return PlanResponse(tool=None, args={}, reply=reply)
     return PlanResponse(**result)
 
 
@@ -488,9 +507,8 @@ async def match_lessons_internal(req: MatchLessonsRequest) -> MatchLessonsRespon
 
 @router.post("/chat/confirm", response_model=ActionConfirmResponse, response_model_exclude_none=True)
 async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionConfirmResponse:
-    """Confirm and execute a pending dry-run CUD action."""
-    from rag_service.execution.changes import ChangeSet
-    from rag_service.execution.executor import ActionExecutor
+    """Confirm and execute any pending previewed action."""
+    from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
     from rag_service.state.session_store import session_store
 
     set_actor(_actor_of(request))
@@ -499,34 +517,43 @@ async def confirm_action(req: ActionConfirmRequest, request: Request) -> ActionC
 
     tid = req.action_id or req.thread_id
     ctx = session_store.get_or_create(tid)
-    if not ctx.fresh_pending("pending_confirmation"):
-        return ActionConfirmResponse(
-            success=False,
-            message="Không có thao tác nào đang chờ xác nhận (hoặc thao tác đã hết hạn sau 10 phút)."
-        )
-
-    action = ctx.pending_confirmation
-    ctx.pending_confirmation = None
-    if action is None:
+    if ctx.active_pending() is None:
         return ActionConfirmResponse(
             success=False,
             message="Không có thao tác nào đang chờ xác nhận (hoặc thao tác đã hết hạn sau 10 phút).",
         )
-    executor = ActionExecutor()
-    changes = ChangeSet.of(action)
+
+    agent = _get_agent()
+    runner = agent if hasattr(agent, "confirm_pending_action") else NextGenRoadmapAgent(llm_model=None)
+    target_dict = req.target.model_dump(exclude_none=True) if req.target else None
     with write_granted("confirmed preview"):
-        ok, msg = await executor.aexecute(action, session_id=tid, changes=changes)
-    return ActionConfirmResponse(success=ok, message=msg, changes=changes.to_dict() if changes else None)
+        ok, msg, kind, changes_payload = await runner.confirm_pending_action(
+            session_id=tid,
+            session_ctx=ctx,
+            titles=req.titles,
+            target=target_dict,
+        )
+    return ActionConfirmResponse(success=ok, message=msg, kind=kind, changes=changes_payload)
 
 
-@router.post("/chat/cancel", response_model=ActionConfirmResponse)
-async def cancel_action(req: ActionConfirmRequest) -> ActionConfirmResponse:
-    """Cancel a pending dry-run CUD action."""
+@router.post("/chat/cancel", response_model=ActionConfirmResponse, response_model_exclude_none=True)
+async def cancel_action(req: ActionConfirmRequest, request: Request) -> ActionConfirmResponse:
+    """Cancel any pending previewed action."""
     from rag_service.state.session_store import session_store
+
+    set_actor(_actor_of(request))
+    if not is_owner():
+        return ActionConfirmResponse(success=False, message=OWNER_ONLY_MESSAGE)
 
     tid = req.action_id or req.thread_id
     ctx = session_store.get_or_create(tid)
-    ctx.pending_confirmation = None
-    return ActionConfirmResponse(success=True, message="Đã hủy bỏ thao tác theo yêu cầu.")
+    active = ctx.active_pending()
+    cancelled_kind = active[1] if active is not None else None
+    ctx.clear_confirmable_pending()
+    return ActionConfirmResponse(
+        success=True,
+        message="Đã hủy bỏ thao tác theo yêu cầu.",
+        kind=cancelled_kind,
+    )
 
 

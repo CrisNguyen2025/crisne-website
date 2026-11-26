@@ -22,6 +22,7 @@ from rag_service.domains.roadmap import linking_advisor
 from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import example_blocks, format_concept_promotion_preview
+from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
 
@@ -678,7 +679,11 @@ class LessonContentCommands(AgentHostMixin):
             f"---\n\n{markdown}\n\n---\n\n"
             f"👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để {where}. Bấm **[❌ Hủy bỏ]** để bỏ nháp."
         )
-        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview}
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="content_draft",
+            preview=preview,
+        )
         async for ev in self._stream_text(preview, delay):
             yield ev
 
@@ -939,18 +944,19 @@ class LessonContentCommands(AgentHostMixin):
         """Store `pending_concept_promotion` in RAM and yield preview events."""
         session_ctx.pending_concept_promotion = proposal
         preview_text = format_concept_promotion_preview(proposal)
-        preview_event: dict[str, Any] = {
-            "type": "action_preview",
-            "action_id": session_ctx.session_id,
-            "preview": preview_text,
-        }
-        if proposal.get("mode") == "create":
-            preview_event["editable_titles"] = [proposal["title"]]
-            preview_event["editable_target"] = {
-                "topic": proposal.get("topic") or "",
-                "section": proposal.get("section") or "",
-            }
-        yield preview_event
+        editable_titles = [proposal["title"]] if proposal.get("mode") == "create" else None
+        editable_target = (
+            {"topic": proposal.get("topic") or "", "section": proposal.get("section") or ""}
+            if proposal.get("mode") == "create"
+            else None
+        )
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="concept_promotion",
+            preview=preview_text,
+            editable_titles=editable_titles,
+            editable_target=editable_target,
+        )
         stream_text = f"\n\n{preview_text}" if prefix_newline else preview_text
         async for ev in self._stream_text(stream_text, delay):
             yield ev

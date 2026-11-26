@@ -43,10 +43,10 @@ export interface ChatResponse {
   traceId?: string;
 }
 
-/** A row an action created or deleted. */
+/** A row an action created, updated, or deleted. */
 export interface ChangeEntry {
-  op: 'create' | 'delete';
-  level: 'topic' | 'layer' | 'group' | 'item' | (string & {});
+  op: 'create' | 'update' | 'delete';
+  level: 'topic' | 'layer' | 'group' | 'item' | 'section' | 'content' | 'memory' | (string & {});
   title: string;
   id?: string;
   code?: string;
@@ -60,18 +60,42 @@ export interface ChangeEntry {
  */
 export interface ChangeReview {
   id: string;
-  action: 'create' | 'delete' | (string & {});
+  action: 'create' | 'update' | 'delete' | (string & {});
   level: string;
   /** Where the entries were created (topic slug). */
   parent?: string;
   /** Rows written / deleted, children included. */
   added: number;
+  updated?: number;
   removed: number;
   entries: ChangeEntry[];
   /** Titles left alone because they already exist. */
   skipped?: string[];
   /** True when children were cut short by the server. */
   truncated?: boolean;
+}
+
+export type ActionPreviewKind =
+  | 'cud'
+  | 'concept_promotion'
+  | 'content_draft'
+  | 'lesson_edit'
+  | 'section_rename'
+  | 'status_change'
+  | 'memory_change'
+  | (string & {});
+
+export interface EditablePreviewTarget {
+  topic?: string;
+  section?: string;
+}
+
+export interface ActionPreviewMeta {
+  actionId?: string;
+  kind?: ActionPreviewKind;
+  confirmable: boolean;
+  editableTitles?: string[];
+  editableTarget?: EditablePreviewTarget;
 }
 
 /** A document the answer used; `cited` when a claim cites it or the answer links it inline. */
@@ -208,11 +232,28 @@ export interface PlanResponse {
   reply: string;
 }
 
+export interface IndexHealthInfo {
+  synced: boolean;
+  current: boolean;
+  documents: number;
+  age_seconds?: number | null;
+  last_error?: string | null;
+  vectors_pending?: number;
+  chunks?: number;
+  last_sync_ms?: number | null;
+  version_checks_skipped?: number;
+  sync_count?: number;
+  change_generation?: number;
+  indexed_generation?: number;
+  sync_task_active?: boolean;
+}
+
 export interface HealthResponse {
   status: string;
   adapter_mode: string;
   llm_model: string;
   tools_count: number;
+  index?: IndexHealthInfo;
 }
 
 /**
@@ -241,6 +282,8 @@ export interface ChatMessage {
   toolCalls?: ToolCallResult[];
   sources?: ChatSource[];
   citations?: ChatCitation[];
+  actionPreview?: ActionPreviewMeta;
+  isRestored?: boolean;
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';
   timestamp: Date;
@@ -332,6 +375,7 @@ export interface LatestThreadMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  isRestored?: boolean;
 }
 
 export interface LatestThreadResponse {

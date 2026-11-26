@@ -613,6 +613,20 @@ async def test_sync_chat_schedules_memory_extraction_for_owner_only(owner_header
             await asyncio.gather(*list(routes_mod._BACKGROUND_TASKS), return_exceptions=True)
         assert len(extract_llm.prompts) == 1
 
+        # Pending concept promotion previews must also skip memory extraction
+        tool_outputs["tools"] = []
+        session_store.get_or_create(tid_owner).pending_concept_promotion = {"mode": "create", "title": "Lease"}
+        pending_res = await client.post(
+            "/chat",
+            headers=owner_headers,
+            json={"message": "Từ giờ giải thích ngắn gọn giúp mình nhé.", "thread_id": tid_owner},
+        )
+        assert pending_res.status_code == 200
+        if routes_mod._BACKGROUND_TASKS:
+            await asyncio.gather(*list(routes_mod._BACKGROUND_TASKS), return_exceptions=True)
+        assert len(extract_llm.prompts) == 1
+        session_store.get_or_create(tid_owner).pending_concept_promotion = None
+
         # Visitor turns must never extract memories
         tool_outputs["tools"] = []
         visitor_res = await client.post(

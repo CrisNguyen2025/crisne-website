@@ -172,7 +172,10 @@ export function usePendingMemoryCount(
     if (!enabled) return;
     let cancelled = false;
     const isActive = () => !cancelled;
-    void fetchPending(isActive);
+    const loadInitial = async () => {
+      await fetchPending(isActive);
+    };
+    void loadInitial();
     if (typeof window === 'undefined') {
       return () => {
         cancelled = true;

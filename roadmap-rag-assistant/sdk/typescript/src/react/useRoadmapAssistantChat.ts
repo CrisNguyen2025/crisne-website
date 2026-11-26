@@ -124,17 +124,25 @@ export function useRoadmapAssistantChat(
   const storageKey = conversationKey(baseUrl);
   const [restored] = useState(() => (initialMessages?.length ? null : loadConversation(storageKey)));
 
-  const [conversationId, setConversationId] = useState<string>(
-    () => initialConversationId || threadId || restored?.conversationId || generateConversationId()
+  const propConversationId = initialConversationId || threadId;
+  const [fallbackConversationId] = useState<string>(
+    () => restored?.conversationId || generateConversationId()
   );
+  const [conversationOverride, setConversationOverride] = useState<{
+    forProp: string | undefined;
+    id: string;
+  } | null>(null);
+  const conversationId =
+    conversationOverride && conversationOverride.forProp === propConversationId
+      ? conversationOverride.id
+      : propConversationId || fallbackConversationId;
 
-  useEffect(() => {
-    if (initialConversationId) {
-      setConversationId(initialConversationId);
-    } else if (threadId) {
-      setConversationId(threadId);
-    }
-  }, [initialConversationId, threadId]);
+  const setConversationId = useCallback(
+    (nextId: string) => {
+      setConversationOverride({ forProp: propConversationId, id: nextId });
+    },
+    [propConversationId]
+  );
 
 
   // React 19 compliance: Synchronize callbacks and getters in useEffect
@@ -237,6 +245,7 @@ export function useRoadmapAssistantChat(
           role: m.role,
           content: m.content,
           status: 'complete',
+          isRestored: m.isRestored ?? true,
           timestamp: new Date(m.timestamp),
         }))
       );
@@ -244,7 +253,7 @@ export function useRoadmapAssistantChat(
     return () => {
       active = false;
     };
-  }, [canWrite, restoreLatestThread, client, initialConversationId, threadId, initialMessages]);
+  }, [canWrite, restoreLatestThread, client, initialConversationId, threadId, initialMessages, setConversationId]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const smoothRef = useRef<SmoothStream | null>(null);
@@ -460,15 +469,15 @@ export function useRoadmapAssistantChat(
             },
 
 
-            onActionPreview: ({ editableTitles, editableTarget }) => {
-              if (!editableTitles?.length && !editableTarget) return;
+            onActionPreview: (preview) => {
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === botMsgId
                     ? {
                         ...msg,
-                        ...(editableTitles?.length ? { editableTitles } : {}),
-                        ...(editableTarget ? { editableTarget } : {}),
+                        actionPreview: preview,
+                        ...(preview.editableTitles?.length ? { editableTitles: preview.editableTitles } : {}),
+                        ...(preview.editableTarget ? { editableTarget: preview.editableTarget } : {}),
                       }
                     : msg
                 )
@@ -517,7 +526,7 @@ export function useRoadmapAssistantChat(
                     // Keep streamed calls: they carry the step timings.
                     toolCalls: msg.toolCalls?.length
                       ? msg.toolCalls
-                      : (finalResp.tool_calls as any),
+                      : (finalResp.tool_calls as ChatMessage['toolCalls']),
                     // `done` has the final state of every step: fills in any event missed mid-stream
                     steps: finalResp.steps?.length
                       ? upsertSteps(msg.steps ?? [], finalResp.steps)
@@ -576,7 +585,7 @@ export function useRoadmapAssistantChat(
         setIsStreaming(false);
       }
     },
-    [input, isLoading, conversationId, client, baseUrl]
+    [input, conversationId, client]
   );
 
   /**
@@ -625,7 +634,7 @@ export function useRoadmapAssistantChat(
     setMessages([buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)]);
     setConversationId(generateConversationId());
     clearConversation(storageKey);
-  }, [storageKey, client, conversationId, restoreLatestThread]);
+  }, [storageKey, client, conversationId, restoreLatestThread, setConversationId]);
 
   return {
     messages,

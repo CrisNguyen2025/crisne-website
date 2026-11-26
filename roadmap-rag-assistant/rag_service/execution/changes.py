@@ -3,11 +3,12 @@
 Contract (data of each SSE `change_review` event, JSON):
 
     id        str    Unique per executed action.
-    action    str    create | delete
-    level     str    topic | item
+    action    str    create | delete | update
+    level     str    topic | item | section | content | memory
     parent    str    Optional. Where the entries were created (topic slug).
     added     int    Rows written, children included.
     removed   int    Rows deleted, children included (a delete cascades).
+    updated   int    Optional. Rows, content bodies, or memories updated.
     entries   list   [{op, level, title, id*, code*, children*}]
                      children: [{level, title}] for a cascading delete, at most MAX_CHILDREN.
     skipped   list   Titles left alone because they already exist.
@@ -101,6 +102,25 @@ class ChangeSet:
             }
         )
 
+    def updated(
+        self,
+        title: str,
+        row: Optional[dict] = None,
+        code: Optional[str] = None,
+        level: Optional[str] = None,
+    ) -> None:
+        """An existing row, lesson content, or memory updated; *level* defaults to the action's."""
+        row = row or {}
+        self.entries.append(
+            {
+                "op": "update",
+                "level": level or self.level,
+                "title": title,
+                "id": row.get("id") or row.get("slug"),
+                "code": code,
+            }
+        )
+
     def skip(self, title: str) -> None:
         self.skipped.append(title)
 
@@ -110,6 +130,7 @@ class ChangeSet:
     def to_dict(self) -> dict:
         added = sum(1 for e in self.entries if e["op"] == "create")
         removed = sum(1 + len(e.get("children") or []) for e in self.entries if e["op"] == "delete")
+        updated = sum(1 for e in self.entries if e["op"] == "update")
         truncated = False
         entries = []
         for e in self.entries:
@@ -125,6 +146,7 @@ class ChangeSet:
             "parent": self.parent,
             "added": added,
             "removed": removed,
+            "updated": updated or None,
             "entries": entries,
             "skipped": self.skipped,
             "truncated": truncated or None,

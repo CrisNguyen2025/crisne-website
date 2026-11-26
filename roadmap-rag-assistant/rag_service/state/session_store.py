@@ -31,6 +31,50 @@ _PENDING_FIELDS = (
     "active_quiz",
 )
 
+PENDING_ACTION_KIND: Dict[str, str] = {
+    "pending_confirmation": "cud",
+    "pending_concept_promotion": "concept_promotion",
+    "pending_content_draft": "content_draft",
+    "pending_lesson_edit": "lesson_edit",
+    "pending_section_rename": "section_rename",
+    "pending_status_change": "status_change",
+    "pending_memory_change": "memory_change",
+}
+
+CONFIRMABLE_PENDING_SLOTS: tuple[str, ...] = (
+    "pending_memory_change",
+    "pending_content_draft",
+    "pending_section_rename",
+    "pending_lesson_edit",
+    "pending_status_change",
+    "pending_concept_promotion",
+    "pending_confirmation",
+)
+
+
+def build_action_preview_event(
+    *,
+    action_id: str,
+    kind: str,
+    preview: str,
+    confirmable: bool = True,
+    editable_titles: Optional[Sequence[str]] = None,
+    editable_target: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Structured SSE `action_preview` payload shared across all preview-confirm handlers."""
+    event: Dict[str, Any] = {
+        "type": "action_preview",
+        "action_id": action_id,
+        "kind": kind,
+        "confirmable": confirmable,
+        "preview": preview,
+    }
+    if editable_titles:
+        event["editable_titles"] = list(editable_titles)
+    if editable_target:
+        event["editable_target"] = dict(editable_target)
+    return event
+
 
 def _now() -> float:
     """Clock for pending expiry; tests replace this, not time.monotonic (the event loop reads that one)."""
@@ -81,6 +125,32 @@ class SessionContext(BaseModel):
             setattr(self, name, None)
             return None
         return value
+
+    def active_pending(self, ttl: float = PENDING_TTL_SECONDS) -> Optional[tuple[str, str, Any]]:
+        """Return `(slot_name, kind, payload)` for the first live confirmable pending action, or None."""
+        for slot in CONFIRMABLE_PENDING_SLOTS:
+            value = self.fresh_pending(slot, ttl=ttl)
+            if value is not None:
+                return slot, PENDING_ACTION_KIND[slot], value
+        return None
+
+    def pop_pending(self, ttl: float = PENDING_TTL_SECONDS) -> Optional[tuple[str, str, Any]]:
+        """Pop and return `(slot_name, kind, payload)` for the first live confirmable pending action."""
+        found = self.active_pending(ttl=ttl)
+        if found is None:
+            return None
+        setattr(self, found[0], None)
+        return found
+
+    def clear_confirmable_pending(self, *, keep: Optional[str | Sequence[str]] = None) -> list[str]:
+        """Clear all confirmable pending slots except `keep` and return the cleared slot names."""
+        kept = {keep} if isinstance(keep, str) else set(keep or ())
+        cleared: list[str] = []
+        for slot in CONFIRMABLE_PENDING_SLOTS:
+            if slot not in kept and getattr(self, slot) is not None:
+                setattr(self, slot, None)
+                cleared.append(slot)
+        return cleared
 
     def clear_pending(self, *, keep: Optional[str | Sequence[str]] = None) -> None:
         """Clear every pending confirmation slot except `keep` so a new preview never collides with an old one."""

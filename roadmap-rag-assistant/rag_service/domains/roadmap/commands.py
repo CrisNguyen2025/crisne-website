@@ -48,6 +48,7 @@ from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.execution.dry_run import DryRunValidator
 from rag_service.execution.executor import schedule_local_rag_sync
 from rag_service.state import AnaphoraResolver, session_store
+from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools import get_adapter
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section, update_item_content
 from rag_service.tools.topic_resolver import (
@@ -164,6 +165,7 @@ class RoadmapCommands(AgentHostMixin):
         reply: str,
         delay: float,
         *,
+        kind: str = "cud",
         editable_titles: Optional[list[str]] = None,
         editable_target: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
@@ -171,36 +173,20 @@ class RoadmapCommands(AgentHostMixin):
         full_reply = reply
         if "Xác nhận thực hiện" not in full_reply:
             full_reply += '\n\n👉 Sửa lại rồi bấm **[✅ Xác nhận thực hiện]**, hoặc bấm **[❌ Hủy bỏ]** để hủy.'
-        preview_event: dict = {
-            "type": "action_preview",
-            "action_id": session_id,
-            "preview": full_reply,
-        }
-        if editable_titles:
-            preview_event["editable_titles"] = editable_titles
-        if editable_target:
-            preview_event["editable_target"] = editable_target
-        yield preview_event
+        yield build_action_preview_event(
+            action_id=session_id,
+            kind=kind,
+            preview=full_reply,
+            editable_titles=editable_titles,
+            editable_target=editable_target,
+        )
         async for ev in self._stream_text(full_reply, delay):
             yield ev
 
-    async def _handle_pending_memory(
-        self, mem_change: dict, lower: str, delay: float
-    ) -> AsyncGenerator[dict, None]:
-        if lower not in CONFIRM_WORDS:
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác bộ nhớ theo yêu cầu của bạn.", delay):
-                    yield ev
-            return
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
+    async def _execute_memory_change(self, mem_change: dict) -> tuple[bool, str, Optional[ChangeSet]]:
         from rag_service.core.memory import KIND_LABELS, owner_memory_store
 
         op = mem_change.get("op")
-        tool_name = "save_owner_memory" if op == "create" else "archive_owner_memory"
-        yield {"type": "tool_start", "name": tool_name, "args": {"op": op, "confirmed": True}}
         try:
             if op == "create":
                 saved = await owner_memory_store.create(
@@ -212,34 +198,46 @@ class RoadmapCommands(AgentHostMixin):
                 )
                 kind_label = KIND_LABELS.get(saved.kind, saved.kind)
                 scope = f" *(topic: `{saved.scope}`)*" if saved.scope else ""
-                res_msg = f"✅ Đã lưu vào Bộ nhớ Owner (**{kind_label}**{scope}): {saved.content}"
-                ok = True
-            else:
-                archived = await owner_memory_store.archive(mem_change["memory_id"])
-                if archived:
-                    res_msg = f"🗑️ Đã gỡ khỏi Bộ nhớ Owner: {mem_change['content']}"
-                    ok = True
-                else:
-                    res_msg = "⚠️ Không tìm thấy mục bộ nhớ này (có thể đã được gỡ trước đó)."
-                    ok = False
+                changes = ChangeSet("create", "memory", saved.scope)
+                changes.created(saved.content, {"id": saved.id}, code=kind_label, level="memory")
+                return True, f"✅ Đã lưu vào Bộ nhớ Owner (**{kind_label}**{scope}): {saved.content}", changes
+            archived = await owner_memory_store.archive(mem_change["memory_id"])
+            if not archived:
+                return False, "⚠️ Không tìm thấy mục bộ nhớ này (có thể đã được gỡ trước đó).", None
+            changes = ChangeSet("delete", "memory", mem_change.get("scope_topic_slug"))
+            changes.deleted(
+                mem_change["content"],
+                {"id": mem_change["memory_id"], "title": mem_change["content"]},
+            )
+            return True, f"🗑️ Đã gỡ khỏi Bộ nhớ Owner: {mem_change['content']}", changes
         except Exception as exc:
-            ok, res_msg = False, f"❌ Lỗi khi cập nhật Bộ nhớ Owner: {exc}"
+            return False, f"❌ Lỗi khi cập nhật Bộ nhớ Owner: {exc}", None
+
+    async def _handle_pending_memory(
+        self, mem_change: dict, lower: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        proceed, guard_msg = self._pending_confirm_guard(
+            lower, "Đã hủy bỏ thao tác bộ nhớ theo yêu cầu của bạn."
+        )
+        if not proceed:
+            if guard_msg is not None:
+                async for ev in self._stream_text(guard_msg, delay):
+                    yield ev
+            return
+
+        op = mem_change.get("op")
+        tool_name = "save_owner_memory" if op == "create" else "archive_owner_memory"
+        yield {"type": "tool_start", "name": tool_name, "args": {"op": op, "confirmed": True}}
+        ok, res_msg, changes = await self._execute_memory_change(mem_change)
         yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
-    async def _handle_pending_content_draft(
-        self, draft: dict, lower: str, session_id: str, delay: float
-    ) -> AsyncGenerator[dict, None]:
-        if lower not in CONFIRM_WORDS:
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã bỏ bản nháp, bài học không thay đổi.", delay):
-                    yield ev
-            return
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
+    async def _execute_content_draft(
+        self, draft: dict, session_id: str
+    ) -> tuple[bool, str, Optional[ChangeSet]]:
         args = {
             "topic": draft["topic"],
             "item_id": draft["item_id"],
@@ -247,26 +245,48 @@ class RoadmapCommands(AgentHostMixin):
             "write_mode": draft.get("write_mode", "append"),
             "target_h2": draft.get("target_h2"),
         }
+        try:
+            with write_granted("confirmed lesson content draft"):
+                res_msg = await update_item_content.coroutine(**args)
+            ok = res_msg.startswith("✅")
+            if not ok:
+                return False, res_msg, None
+            session_store.set_active_lesson(
+                session_id,
+                draft["item_id"],
+                draft.get("title") or "",
+                topic_slug=draft.get("topic"),
+                topic_title=draft.get("topic_title"),
+            )
+            changes = ChangeSet("update", "content", draft.get("topic"))
+            changes.updated(
+                draft.get("title") or str(draft["item_id"]),
+                {"id": draft["item_id"]},
+                code=draft.get("target_h2") or draft.get("write_mode") or "content",
+                level="content",
+            )
+            return True, res_msg, changes
+        except Exception as exc:
+            return False, f"❌ Lỗi khi ghi nội dung bài: {exc}", None
+
+    async def _handle_pending_content_draft(
+        self, draft: dict, lower: str, session_id: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        proceed, guard_msg = self._pending_confirm_guard(lower, "Đã bỏ bản nháp, bài học không thay đổi.")
+        if not proceed:
+            if guard_msg is not None:
+                async for ev in self._stream_text(guard_msg, delay):
+                    yield ev
+            return
         yield {
             "type": "tool_start",
             "name": "update_item_content",
             "args": {"topic": draft["topic"], "item_id": draft["item_id"], "confirmed": True},
         }
-        try:
-            with write_granted("confirmed lesson content draft"):
-                res_msg = await update_item_content.coroutine(**args)
-            ok = res_msg.startswith("✅")
-            if ok:
-                session_store.set_active_lesson(
-                    session_id,
-                    draft["item_id"],
-                    draft.get("title") or "",
-                    topic_slug=draft.get("topic"),
-                    topic_title=draft.get("topic_title"),
-                )
-        except Exception as exc:
-            ok, res_msg = False, f"❌ Lỗi khi ghi nội dung bài: {exc}"
+        ok, res_msg, changes = await self._execute_content_draft(draft, session_id)
         yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
@@ -288,16 +308,25 @@ class RoadmapCommands(AgentHostMixin):
 
     async def _execute_pending_section_rename(
         self, rename: dict, args: dict, session_id: str
-    ) -> tuple[bool, str]:
+    ) -> tuple[bool, str, Optional[ChangeSet]]:
         try:
             with write_granted("confirmed section rename"):
                 res_msg = await rename_section.coroutine(**args)
             ok = res_msg.startswith("✅")
-            if ok and rename.get("topic"):
+            if not ok:
+                return False, res_msg, None
+            if rename.get("topic"):
                 session_store.set_active_topic(session_id, rename["topic"], rename.get("title") or "")
-            return ok, res_msg
+            changes = ChangeSet("update", "section", rename.get("topic"))
+            changes.updated(
+                f"{rename['from']} → {rename['to']}",
+                {"id": rename.get("topic")},
+                code=f"{rename['count']} bài" if rename.get("count") else None,
+                level="section",
+            )
+            return True, res_msg, changes
         except Exception as exc:
-            return False, f"❌ Lỗi khi đổi tên mục: {exc}"
+            return False, f"❌ Lỗi khi đổi tên mục: {exc}", None
 
     async def _handle_pending_section_rename(
         self,
@@ -308,20 +337,18 @@ class RoadmapCommands(AgentHostMixin):
         delay: float,
         titles: Optional[list[str]],
     ) -> AsyncGenerator[dict, None]:
-        if lower not in CONFIRM_WORDS:
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác theo yêu cầu của bạn.", delay):
+        proceed, guard_msg = self._pending_confirm_guard(lower, "Đã hủy bỏ thao tác theo yêu cầu của bạn.")
+        if not proceed:
+            if guard_msg is not None:
+                async for ev in self._stream_text(guard_msg, delay):
                     yield ev
-            return
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
             return
         if not self._validate_pending_section_title(rename, titles, session_ctx):
             async for ev in self._reprompt_pending_preview(
                 session_id,
                 EDITED_TITLES_REJECTED_REPLY,
                 delay,
+                kind="section_rename",
                 editable_titles=[rename.get("merge") or rename["to"]],
             ):
                 yield ev
@@ -329,8 +356,10 @@ class RoadmapCommands(AgentHostMixin):
 
         args = {"topic": rename["topic"], "from_name": rename["from"], "to_name": rename["to"]}
         yield {"type": "tool_start", "name": "rename_section", "args": {**args, "confirmed": True}}
-        ok, res_msg = await self._execute_pending_section_rename(rename, args, session_id)
+        ok, res_msg, changes = await self._execute_pending_section_rename(rename, args, session_id)
         yield {"type": "tool_end", "name": "rename_section", "result": res_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
@@ -401,7 +430,7 @@ class RoadmapCommands(AgentHostMixin):
                 item_id,
                 final_title,
                 section=new_section if "section" in update_kwargs else None,
-                topic_slug=edit.get("topic"),
+                topic_slug=edit.get("topic_slug") or edit.get("topic"),
                 topic_title=edit.get("topic_title"),
             )
             return True, res_msg
@@ -439,7 +468,7 @@ class RoadmapCommands(AgentHostMixin):
         )
         if not valid and reprompt_kwargs is not None:
             async for ev in self._reprompt_pending_preview(
-                session_id, EDITED_TITLES_REJECTED_REPLY, delay, **reprompt_kwargs
+                session_id, EDITED_TITLES_REJECTED_REPLY, delay, kind="lesson_edit", **reprompt_kwargs
             ):
                 yield ev
             return
@@ -458,6 +487,15 @@ class RoadmapCommands(AgentHostMixin):
         yield {"type": "tool_start", "name": "update_item", "args": {"item_id": item_id, **update_kwargs, "confirmed": True}}
         ok, res_msg = await self._execute_pending_lesson_edit(edit, item_id, update_kwargs, session_id)
         yield {"type": "tool_end", "name": "update_item", "result": res_msg, "is_error": not ok}
+        if ok:
+            changes = ChangeSet("update", "item", edit.get("topic_slug") or edit.get("topic"))
+            changes.updated(
+                new_title,
+                {"id": item_id},
+                code=(new_section or GENERAL_SECTION) if "section" in update_kwargs else None,
+                level="item",
+            )
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
@@ -466,18 +504,19 @@ class RoadmapCommands(AgentHostMixin):
     ) -> AsyncGenerator[dict, None]:
         session_ctx.pending_concept_promotion = proposal
         preview_text = format_concept_promotion_preview(proposal)
-        ev: dict[str, Any] = {
-            "type": "action_preview",
-            "action_id": session_id,
-            "preview": preview_text,
-        }
-        if proposal.get("mode") == "create":
-            ev["editable_titles"] = [proposal["title"]]
-            ev["editable_target"] = {
-                "topic": proposal.get("topic") or "",
-                "section": proposal.get("section") or "",
-            }
-        yield ev
+        editable_titles = [proposal["title"]] if proposal.get("mode") == "create" else None
+        editable_target = (
+            {"topic": proposal.get("topic") or "", "section": proposal.get("section") or ""}
+            if proposal.get("mode") == "create"
+            else None
+        )
+        yield build_action_preview_event(
+            action_id=session_id,
+            kind="concept_promotion",
+            preview=preview_text,
+            editable_titles=editable_titles,
+            editable_target=editable_target,
+        )
         async for chunk in self._stream_text(f"\n\n{preview_text}", delay):
             yield chunk
 
@@ -531,6 +570,15 @@ class RoadmapCommands(AgentHostMixin):
         yield {"type": "tool_start", "name": tool_name, "args": tool_args}
         ok, res_msg = await self._run_status_change_adapter(status_change, session_id)
         yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
+        if ok:
+            changes = ChangeSet("update", "item", status_change.get("topic_slug"))
+            changes.updated(
+                status_change["item_title"],
+                {"id": item_id},
+                code="reviewed" if mark_reviewed else status_change.get("new_status"),
+                level="item",
+            )
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
         if ok and (follow_up := session_ctx.fresh_pending("pending_concept_promotion")) is not None:
@@ -613,6 +661,15 @@ class RoadmapCommands(AgentHostMixin):
         except Exception as exc:
             ok, res_msg = False, f"❌ Lỗi khi bổ sung kiến thức: {exc}"
         yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
+        if ok:
+            changes = ChangeSet("update", "content", proposal.get("topic"))
+            changes.updated(
+                proposal.get("target_lesson_title") or proposal["title"],
+                {"id": proposal["item_id"]},
+                code=proposal.get("target_h2") or "append",
+                level="content",
+            )
+            yield changes.event()
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
@@ -690,6 +747,7 @@ class RoadmapCommands(AgentHostMixin):
                     session_id,
                     err,
                     delay,
+                    kind="concept_promotion",
                     editable_titles=[proposal["title"]],
                     editable_target={"topic": proposal.get("topic") or "", "section": proposal.get("section") or ""},
                 ):
@@ -758,6 +816,7 @@ class RoadmapCommands(AgentHostMixin):
                 session_id,
                 override_err or EDITED_TARGET_REJECTED_REPLY,
                 delay,
+                kind="cud",
                 editable_titles=retry_titles,
                 editable_target=retry_target,
             ):
@@ -777,34 +836,35 @@ class RoadmapCommands(AgentHostMixin):
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
-    def _pop_simple_pending_stream(
+    def _dispatch_simple_pending(
         self,
+        slot: str,
+        payload: Any,
+        *,
         lower: str,
         session_id: str,
-        session_ctx,
+        session_ctx: Any,
         delay: float,
         titles: Optional[list[str]],
         target: Optional[dict],
-    ) -> Optional[AsyncGenerator[dict, None]]:
-        if mem_change := session_ctx.fresh_pending("pending_memory_change"):
-            session_ctx.pending_memory_change = None
-            return self._handle_pending_memory(mem_change, lower, delay)
-        if draft := session_ctx.fresh_pending("pending_content_draft"):
-            session_ctx.pending_content_draft = None
-            return self._handle_pending_content_draft(draft, lower, session_id, delay)
-        if rename := session_ctx.fresh_pending("pending_section_rename"):
-            session_ctx.pending_section_rename = None
-            return self._handle_pending_section_rename(rename, lower, session_id, session_ctx, delay, titles)
-        if edit := session_ctx.fresh_pending("pending_lesson_edit"):
-            session_ctx.pending_lesson_edit = None
-            return self._handle_pending_lesson_edit(edit, lower, session_id, session_ctx, delay, titles, target)
-        if status_change := session_ctx.fresh_pending("pending_status_change"):
-            session_ctx.pending_status_change = None
-            return self._handle_pending_status_change(status_change, lower, session_id, session_ctx, delay)
-        if promo := session_ctx.fresh_pending("pending_concept_promotion"):
-            session_ctx.pending_concept_promotion = None
-            return self._handle_pending_concept_promotion(promo, lower, session_id, session_ctx, delay, titles, target)
-        return None
+    ) -> AsyncGenerator[dict, None]:
+        handlers = {
+            "pending_memory_change": lambda: self._handle_pending_memory(payload, lower, delay),
+            "pending_content_draft": lambda: self._handle_pending_content_draft(payload, lower, session_id, delay),
+            "pending_section_rename": lambda: self._handle_pending_section_rename(
+                payload, lower, session_id, session_ctx, delay, titles
+            ),
+            "pending_lesson_edit": lambda: self._handle_pending_lesson_edit(
+                payload, lower, session_id, session_ctx, delay, titles, target
+            ),
+            "pending_status_change": lambda: self._handle_pending_status_change(
+                payload, lower, session_id, session_ctx, delay
+            ),
+            "pending_concept_promotion": lambda: self._handle_pending_concept_promotion(
+                payload, lower, session_id, session_ctx, delay, titles, target
+            ),
+        }
+        return handlers[slot]()
 
     async def _resolve_pending_confirmation_turn(
         self,
@@ -838,17 +898,29 @@ class RoadmapCommands(AgentHostMixin):
         target: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Finish a roadmap change that was waiting for confirmation (a previewed action)."""
-        if stream := self._pop_simple_pending_stream(lower, session_id, session_ctx, delay, titles, target):
-            async for ev in stream:
-                yield ev
-            outcome["handled"] = lower in CONFIRM_WORDS or lower in CANCEL_WORDS
-            return
-        # fresh_pending drops a preview older than PENDING_TTL_SECONDS: a late "ok" does not run it
-        if session_ctx.fresh_pending("pending_confirmation"):
-            async for ev in self._resolve_pending_confirmation_turn(
-                lower, session_id, session_ctx, delay, titles, target, outcome
+        # active_pending drops previews older than PENDING_TTL_SECONDS so a late "ok" does not run them
+        active = session_ctx.active_pending()
+        if active is not None:
+            slot, _, payload = active
+            if slot == "pending_confirmation":
+                async for ev in self._resolve_pending_confirmation_turn(
+                    lower, session_id, session_ctx, delay, titles, target, outcome
+                ):
+                    yield ev
+                return
+            setattr(session_ctx, slot, None)
+            async for ev in self._dispatch_simple_pending(
+                slot,
+                payload,
+                lower=lower,
+                session_id=session_id,
+                session_ctx=session_ctx,
+                delay=delay,
+                titles=titles,
+                target=target,
             ):
                 yield ev
+            outcome["handled"] = lower in CONFIRM_WORDS or lower in CANCEL_WORDS
             return
         if lower in CONFIRM_WORDS:
             # 2026-11-04, live: an "ok" after the preview was dropped went to chitchat, which answered
@@ -856,6 +928,53 @@ class RoadmapCommands(AgentHostMixin):
             async for ev in self._stream_text(NOTHING_PENDING_REPLY, delay):
                 yield ev
             outcome["handled"] = True
+
+    async def confirm_pending_action(
+        self,
+        *,
+        session_id: str,
+        session_ctx: Any,
+        titles: Optional[list[str]] = None,
+        target: Optional[dict] = None,
+    ) -> tuple[bool, str, Optional[str], Optional[dict]]:
+        """Execute whichever confirmable pending preview is active on `session_ctx`."""
+        active = session_ctx.active_pending()
+        if active is None:
+            return (
+                False,
+                "Không có thao tác nào đang chờ xác nhận (hoặc thao tác đã hết hạn sau 10 phút).",
+                None,
+                None,
+            )
+        _, kind, _ = active
+        tokens: list[str] = []
+        changes_list: list[dict] = []
+        tool_errors: list[bool] = []
+        saw_preview = False
+        outcome: dict[str, Any] = {"handled": False}
+        async for ev in self.handle_pending(
+            content="ok",
+            lower="ok",
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=0.0,
+            outcome=outcome,
+            titles=titles,
+            target=target,
+        ):
+            ev_type = ev.get("type")
+            if ev_type == "token":
+                tokens.append(str(ev.get("delta") or ""))
+            elif ev_type == "tool_end":
+                tool_errors.append(bool(ev.get("is_error")))
+            elif ev_type == "change_review":
+                changes_list.append({k: v for k, v in ev.items() if k != "type"})
+            elif ev_type == "action_preview":
+                saw_preview = True
+
+        msg = "".join(tokens).strip()
+        ok = (bool(tool_errors) or not saw_preview) and not any(tool_errors)
+        return ok, msg, kind, (changes_list[0] if changes_list else None)
 
     async def handle_listing(
         self, *, content: str, lower: str, delay: float, outcome: dict
@@ -915,20 +1034,22 @@ class RoadmapCommands(AgentHostMixin):
         session_ctx.pending_confirmation = action
         preview_text = DryRunValidator.format_preview_card(action, note=note, snapshot=snapshot)
         preview_text += "\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới hoặc gõ \"ok\" để tiến hành. Bấm **[❌ Hủy bỏ]** để hủy."
-        preview_event: dict[str, Any] = {
-            "type": "action_preview",
-            "action_id": session_id,
-            "preview": preview_text,
-        }
-        if action.action == ActionType.CREATE:
-            # The Owner may correct the names and target the model read before confirming
-            preview_event["editable_titles"] = [ent.title for ent in action.entities]
-            if action.entity_level == EntityLevel.ITEM:
-                preview_event["editable_target"] = {
-                    "topic": action.target_parent_identifier or "",
-                    "section": (action.entities[0].section if action.entities else None) or "",
-                }
-        yield preview_event
+        editable_titles = [ent.title for ent in action.entities] if action.action == ActionType.CREATE else None
+        editable_target = (
+            {
+                "topic": action.target_parent_identifier or "",
+                "section": (action.entities[0].section if action.entities else None) or "",
+            }
+            if action.action == ActionType.CREATE and action.entity_level == EntityLevel.ITEM
+            else None
+        )
+        yield build_action_preview_event(
+            action_id=session_id,
+            kind="cud",
+            preview=preview_text,
+            editable_titles=editable_titles,
+            editable_target=editable_target,
+        )
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 

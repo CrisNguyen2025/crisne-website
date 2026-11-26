@@ -34,7 +34,7 @@ from rag_service.domains.roadmap.lesson_status import (
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.state import session_store
-from rag_service.state.session_store import QUIZ_TTL_SECONDS
+from rag_service.state.session_store import QUIZ_TTL_SECONDS, build_action_preview_event
 from rag_service.tools import get_adapter
 
 log = logging.getLogger(__name__)
@@ -443,7 +443,11 @@ class QuizCommands(AgentHostMixin):
                 "- Cập nhật mốc ôn tập lên hôm nay để ưu tiên các bài lâu chưa ôn khác.\n\n"
                 "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để ghi nhận, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
             )
-        return preview_text, {"type": "action_preview", "action_id": session_id, "preview": preview_text}
+        return preview_text, build_action_preview_event(
+            action_id=session_id,
+            kind="status_change",
+            preview=preview_text,
+        )
 
     async def _prepare_quiz_concept_proposal(
         self, quiz: dict, concept_gaps: list[str], session_ctx

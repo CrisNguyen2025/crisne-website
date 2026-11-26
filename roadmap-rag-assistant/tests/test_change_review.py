@@ -186,3 +186,78 @@ def test_hidden_changes_param_is_not_offered_to_the_llm():
 
     for t in (create_items_batch, import_items_from_text):
         assert "changes" not in t.args
+
+
+def test_changeset_updated_records_content_and_memory_changes():
+    content_changes = ChangeSet("update", "content", "ai-architecture")
+    content_changes.updated("Hybrid Search", {"id": "item-1"}, code="Cơ chế hoạt động", level="content")
+    c_dict = content_changes.to_dict()
+    assert c_dict["action"] == "update"
+    assert c_dict["level"] == "content"
+    assert c_dict["updated"] == 1
+    assert c_dict["added"] == 0 and c_dict["removed"] == 0
+    assert c_dict["entries"] == [
+        {"op": "update", "level": "content", "title": "Hybrid Search", "id": "item-1", "code": "Cơ chế hoạt động"}
+    ]
+
+    mem_create = ChangeSet("create", "memory", "backend")
+    mem_create.created("Ưu tiên PostgreSQL", {"id": "mem-1"}, code="Techstack", level="memory")
+    assert mem_create.to_dict()["added"] == 1
+    assert mem_create.to_dict()["entries"][0]["level"] == "memory"
+
+    mem_delete = ChangeSet("delete", "memory")
+    mem_delete.deleted("Dùng MySQL", {"id": "mem-2", "title": "Dùng MySQL"})
+    assert mem_delete.to_dict()["removed"] == 1
+    assert mem_delete.to_dict()["entries"][0] == {"op": "delete", "level": "memory", "title": "Dùng MySQL", "id": "mem-2"}
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_change_review_for_memory_and_content_draft(mock_adapter, owner_headers, monkeypatch):
+    from types import SimpleNamespace
+    from rag_service.api import routes as routes_mod
+
+    mock_adapter.get_topic.return_value = {
+        "id": "t1",
+        "slug": "test-topic",
+        "title": "Test Topic",
+        "items": [{"id": "item-1", "title": "Existing Lesson", "section": "Core", "content": ""}],
+        "sections": ["Core"],
+    }
+    mock_adapter.update_item_content.return_value = {"id": "item-1", "title": "Existing Lesson"}
+
+    class DraftLLM:
+        async def ainvoke(self, prompt: str):
+            return SimpleNamespace(content="## Tổng quan\n\n- Điểm chính")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=owner_headers) as client:
+        mem_prev = await client.post(
+            "/chat/stream",
+            json={"message": "nhớ giúp mình là mình đang dùng FastAPI và PostgreSQL", "thread_id": "cr-mem"},
+        )
+        assert mem_prev.status_code == 200 and "event: action_preview" in mem_prev.text
+        mem_confirm = await client.post("/chat/stream", json={"message": "ok", "thread_id": "cr-mem"})
+        mem_body = mem_confirm.text
+        assert "event: change_review" in mem_body
+        mem_done = json.loads(mem_body.split("event: done\ndata: ")[1].split("\n")[0])
+        assert mem_done["changes"][0]["entries"][0]["op"] == "create"
+        assert mem_done["changes"][0]["entries"][0]["level"] == "memory"
+
+        agent = routes_mod._get_agent()
+        monkeypatch.setattr(agent, "llm", DraftLLM())
+        content_prev = await client.post(
+            "/chat/stream",
+            json={
+                "message": "thêm nội dung chi tiết cho bài Existing Lesson trong topic Test Topic",
+                "thread_id": "cr-content",
+            },
+        )
+        assert content_prev.status_code == 200 and "event: action_preview" in content_prev.text
+        content_confirm = await client.post("/chat/stream", json={"message": "ok", "thread_id": "cr-content"})
+        content_body = content_confirm.text
+        assert "event: change_review" in content_body
+        content_done = json.loads(content_body.split("event: done\ndata: ")[1].split("\n")[0])
+        assert content_done["changes"][0]["action"] == "update"
+        assert content_done["changes"][0]["updated"] == 1
+        assert content_done["changes"][0]["entries"][0]["op"] == "update"
+        assert content_done["changes"][0]["entries"][0]["level"] == "content"

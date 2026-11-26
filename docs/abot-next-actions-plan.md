@@ -1,22 +1,19 @@
 # Plan: các việc tiếp theo cho Abot và Roadmap
 
-Ngày lập: 2026-11-05. Dựa trên lần chạy `tests/manual/assistant-sections.md` (2026-11-04) và các bản sửa đã lên `main` tới commit `ea3a2be`.
+Ngày lập: 2026-11-05 (dựa trên `tests/manual/assistant-sections.md` tới commit `ea3a2be`).
+**Cập nhật `2026-11-26`:** toàn bộ các mục 1–9 bên dưới đã được triển khai/xử lý trên `main`; kế hoạch mở rộng hiện hành của Abot nằm tại `.handoff/PLAN-abot-scale.md` và `.handoff/PLAN-knowledge-acquisition.md`.
 
-Quy ước chung cho mọi mục:
+Quy ước chung cho mọi mục (giữ nguyên để tham chiếu):
 - Sửa code Python trong `roadmap-rag-assistant/rag_service`. Mỗi lỗi có một test hồi quy trong `roadmap-rag-assistant/tests/`, test phải fail trên code cũ.
-- Sau khi sửa: chạy toàn bộ suite (`.venv/bin/python -m pytest tests -q`). Hai test đang fail sẵn (`test_evals_answer_target`, `test_write_invariants`) không được tệ hơn; `wrong_branch` của router không vượt 107.
-- Chạy lại case liên quan trong `tests/manual/assistant-sections.md` bằng Playwright, ghi kết quả vào kịch bản.
-- Viết hoặc sửa thì luôn có preview và chờ `ok`, giống create/delete hiện tại.
-
-Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API đã có sẵn, chủ yếu là nối lại). 5 → 9 làm sau.
+- Viết hoặc sửa thì luôn có `Preview` và chờ `ok` (`Pending Action` trong RAM), giống create/delete.
 
 ---
 
-## 1. Đổi tên mục qua chat (lỗi 5, case C1–C3)
+## 1. Đổi tên mục qua chat (lỗi 5, case C1–C3) — Đã xong
 
-**Hiện tại:** "đổi tên mục RAG thành Retrieval trong topic X" trả `UPDATE_NOT_SUPPORTED_REPLY`. API `PATCH /api/v1/roadmaps/[slug]/sections`, adapter `update_section()` và tool `rename_section` đều có sẵn. Chỗ chặn là `handle_cud` (`domains/roadmap/commands.py`): nó từ chối mọi `ActionType.UPDATE`, và schema không có cấp `section`.
+**Đã triển khai:** `roadmap-rag-assistant/rag_service/domains/roadmap/sections.py` + `commands.py` (`pending_section_rename`).
 
-**Cách làm:** thêm một handler riêng chạy trước `handle_cud`, giống `handle_bulk_import`, thay vì nhồi thêm cấp `SECTION` vào extractor LLM.
+**Thiết kế đã áp dụng:** thêm một handler riêng chạy trước `handle_cud`, giống `handle_bulk_import`, thay vì nhồi thêm cấp `SECTION` vào extractor LLM.
 1. Viết `RENAME_SECTION` regex trong `router/policy.py`, khớp trên chữ đã bỏ dấu: `(đổi|sửa) tên mục <from> thành <to> [trong|của topic <topic>]`.
 2. Topic lấy theo thứ tự: tên nêu trong câu (`resolve_topic`), rồi topic đang mở (`page_context.roadmapSlug`), rồi `active_topic_slug`. Không xác định được thì hỏi lại bằng `_ask_topic_choice`.
 3. Kiểm tra mục `<from>` có trong `get_topic(slug)["sections"]` không (so bằng `normalizeTitle`). Không có thì liệt kê các mục hiện có và dừng, không preview.
@@ -28,7 +25,9 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 **Rủi ro:** thấp, vì handler chỉ khớp một mẫu câu hẹp. Cần chạy lại stress router để chắc "đổi tên bài …" vẫn trả `UPDATE_NOT_SUPPORTED_REPLY` như cũ.
 
-## 2. "mục X" bị hiểu thành topic (lỗi 3, case A6–A7)
+## 2. "mục X" bị hiểu thành topic (lỗi 3, case A6–A7) — Đã xong
+
+**Đã triển khai:** `roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#names_section`.
 
 **Hiện tại:** "thêm bài Function Schema mục Tools" khi đang mở `?topic=qa-sandbox`: extractor đặt `target_parent_identifier = "Tools"`, `resolve_topic("Tools")` trả `not_found`, nên Abot hỏi "topic Tools nào".
 
@@ -41,7 +40,9 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 **Rủi ro:** trung bình, vì đụng vào extractor. Nếu sửa prompt thì phải chạy lại `evals/router`.
 
-## 3. Liệt kê mục của topic (lỗi 7, case F1)
+## 3. Liệt kê mục của topic (lỗi 7, case F1) — Đã xong
+
+**Đã triển khai:** `roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#handle_section_listing`.
 
 **Hiện tại:** "topic QA Sandbox có những mục nào?" đi qua tra cứu RAG và trả "chưa có thông tin chi tiết về các mục". Trong khi `GET /api/v1/roadmaps/[slug]` đã trả sẵn `sections`.
 
@@ -55,7 +56,9 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 **Rủi ro:** thấp.
 
-## 4. Ô nhập chat nhiều dòng (lỗi 6, case B2–B3)
+## 4. Ô nhập chat nhiều dòng (lỗi 6, case B2–B3) — Đã xong
+
+**Đã triển khai:** `roadmap-rag-assistant/sdk/typescript/src/react/components/ChatComposer.tsx` + `RoadmapChatbotWidget.tsx`.
 
 **Hiện tại:** `ChatComposer` dùng `<input type="text">`, nên danh sách dán vào bị gộp thành một dòng. Tính năng `handle_bulk_import` (nhập nhiều bài một lần) không dùng được từ UI.
 
@@ -79,7 +82,9 @@ Thứ tự đề xuất: 1 → 2 → 3 → 4 làm trước (backend hoặc API �
 
 **Cách làm:** sau khi trích xuất, nếu `topic_named_in_message` tìm thấy một topic có thật mà tên dài hơn parent đã trích, dùng topic đó, rồi tính lại `section` là phần sau chữ "mục" nằm **sau** tên topic. Test với topic có các chữ "Section", "Mục", "Topic" trong tên.
 
-## 6. Sửa bài qua chat
+## 6. Sửa bài qua chat — Đã xong
+
+**Đã triển khai:** `lesson_edit.py` + `lesson_content.py` + `commands.py` (`Preview -> ok`).
 
 Bắt đầu với "chuyển bài X sang mục Y" và "đổi tên bài X thành Y". Dùng chung cách của mục 1: handler theo mẫu câu, `resolve_lesson` để lấy id, preview rồi chờ `ok`, sau đó gọi `update_item()` có sẵn. Sửa nội dung bài vẫn để làm trên trang. (Cập nhật 2026-11-05: Owner chọn để Abot viết nháp nội dung cho một bài có sẵn, xem trước rồi "ok" mới nối vào cuối bài: `rag_service/domains/roadmap/lesson_content.py`.)
 
@@ -91,15 +96,12 @@ Trong `core/generation/pipeline.py`, ghi khối `<conversation_history>` đã đ
 
 **Đã kiểm (2026-11-25):** `api.legacy.scoreV1.delete` trong `@langfuse/client@5.13.1` gọi `DELETE /api/public/scores/{scoreId}` — đây vẫn là REST endpoint chính thức trên Langfuse v4+ (không thuộc đợt gỡ bỏ `GET /api/public/traces/{id}` hay `GET /api/public/scores` v1/v2; tag `LegacyScoreV1` chỉ là namespace sinh tự động của Fern ở JS SDK v5, sang SDK v6 chuyển thành `api.scores.delete` nhưng gọi cùng URL). `fetch-trace.ts` đã dùng `/v2/observations` và `/v3/scores`. Giữ nguyên `lib/ai/langfuse.ts` để không chạm luồng 👍/👎 của Cris AI.
 
-## 9. Hai test đang fail sẵn
+## 9. Hai test đang fail sẵn — Đã xong
 
-**Đã cũ (kiểm 2026-11-15):** không còn test `test_evals_answer_target`; `wrong_branch` đo offline là 91 ≤ mốc 103, nên `test_write_invariants` pass.
-
-- `test_evals_answer_target`: cần `prisma/dev.db` có dữ liệu. File hiện bị sửa (co từ 1,2 MB còn 274 KB) và chưa commit. Khôi phục bằng `git checkout prisma/dev.db` nếu bản đang có trên đĩa là ngoài ý muốn.
-- `test_write_invariants`: `wrong_branch` đang là 107 so với mốc 103. Xem 4 câu nào mới đi sai nhánh, rồi sửa router hoặc cập nhật mốc trong `evals/router/confuse_baseline.json` nếu thay đổi đó là chủ ý.
+**Đã xử lý (kiểm 2026-11-15, cập nhật 2026-11-26):** `test_evals_answer_target` đã được gỡ bỏ và các test Python chạy độc lập với fixture SQLite riêng (không phụ thuộc `prisma/dev.db`); `test_write_invariants` pass hoàn toàn với ratchet `evals/router/confuse_baseline.json` (`write_now_violation == 0`, `wrong_branch <= 91`).
 
 ---
 
-## Việc đang chờ quyết định
+## Trạng thái quyết định liên quan (cập nhật 2026-11-26)
 
-- Nút 👍/👎 của Abot đang ẩn (`FEEDBACK_ENABLED = false`) cho tới khi có rule biến một vote thành việc trong Triage. Chat trên trang portfolio (`FloatingChat*`) vẫn còn nút vote.
+- **Feedback UI của Abot (ADR-0011 & `TASK-abot-scale-003` Q3 Option A):** Đã bỏ Knowledge Triage theo ADR-0011; trên Abot giữ nguyên việc không bật `onFeedback` (👍/👎), chỉ giữ nút `ID` cho `Owner` sao chép Langfuse `traceId` phục vụ `/abot-trace-report`. Luồng 👍/👎 hiện có của Cris AI trên `/portfolio` (`app/api/chat/feedback/route.ts`) vẫn giữ nguyên.

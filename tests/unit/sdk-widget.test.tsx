@@ -302,6 +302,18 @@ describe("RoadmapChatbotWidget", () => {
 
       expect(screen.queryByRole("button", { name: "Câu trả lời hữu ích" })).toBeNull();
     });
+
+    it("keeps 👍/👎 hidden when onFeedback is omitted while keeping trace ID copy button for Owner", async () => {
+      vi.stubGlobal("fetch", replyStream({ message: "đã trả lời", trace_id: traceId }));
+      render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite />);
+      fireEvent.change(screen.getByPlaceholderText(/Hỏi Abot/), { target: { value: "hỏi thử" } });
+      fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+      await screen.findByText("đã trả lời");
+
+      expect(screen.queryByRole("button", { name: "Câu trả lời hữu ích" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Câu trả lời chưa tốt" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Sao chép trace ID của câu trả lời" })).toBeTruthy();
+    });
   });
 
   describe("mascot", () => {

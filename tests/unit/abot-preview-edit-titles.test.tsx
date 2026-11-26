@@ -5,20 +5,37 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MessageList } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList";
 import type { ChatMessage } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
-const PREVIEW = '**➕ TẠO MỚI 1 TOPIC**\n- **Danh sách thực thể:**\n  1. **Backend gíup tôi**\n\n👉 Bấm nút **[✅ Xác nhận thực hiện]** bên dưới';
+const PREVIEW = '**➕ TẠO MỚI 1 TOPIC**\n- **Danh sách thực thể:**\n  1. **Backend gíup tôi**';
 
 function renderPreview(opts: {
+  content?: string;
+  confirmable?: boolean;
+  isRestored?: boolean;
   editableTitles?: string[];
   editableTarget?: { topic?: string; section?: string };
   canWrite?: boolean;
 }) {
   const sendMessage = vi.fn();
+  const confirmable = opts.confirmable;
   const message: ChatMessage = {
     id: "a1",
     role: "assistant",
-    content: PREVIEW,
-    editableTitles: opts.editableTitles,
-    editableTarget: opts.editableTarget,
+    content: opts.content ?? PREVIEW,
+    ...(confirmable !== undefined
+      ? {
+          actionPreview: {
+            actionId: "a1",
+            kind: "cud",
+            confirmable,
+            editableTitles: opts.editableTitles,
+            editableTarget: opts.editableTarget,
+          },
+        }
+      : {
+          editableTitles: opts.editableTitles,
+          editableTarget: opts.editableTarget,
+        }),
+    isRestored: opts.isRestored,
     timestamp: new Date(),
   };
   render(
@@ -45,11 +62,11 @@ function renderPreview(opts: {
   return sendMessage;
 }
 
-describe("Preview with editable names", () => {
+describe("Preview with structured actionPreview", () => {
   afterEach(cleanup);
 
   it("sends the edited name with the confirmation", () => {
-    const sendMessage = renderPreview({ editableTitles: ["Backend gíup tôi"] });
+    const sendMessage = renderPreview({ confirmable: true, editableTitles: ["Backend gíup tôi"] });
     const input = screen.getByRole("textbox", { name: "Tên" }) as HTMLInputElement;
     expect(input.value).toBe("Backend gíup tôi");
     fireEvent.change(input, { target: { value: "  Backend  " } });
@@ -58,13 +75,13 @@ describe("Preview with editable names", () => {
   });
 
   it("sends a plain ok when the name was not edited", () => {
-    const sendMessage = renderPreview({ editableTitles: ["Backend"] });
+    const sendMessage = renderPreview({ confirmable: true, editableTitles: ["Backend"] });
     fireEvent.click(screen.getByRole("button", { name: /Xác nhận thực hiện/ }));
     expect(sendMessage).toHaveBeenCalledWith("ok", undefined);
   });
 
   it("disables confirm while a name is blank", () => {
-    const sendMessage = renderPreview({ editableTitles: ["Backend"] });
+    const sendMessage = renderPreview({ confirmable: true, editableTitles: ["Backend"] });
     fireEvent.change(screen.getByRole("textbox", { name: "Tên" }), { target: { value: "   " } });
     const confirm = screen.getByRole("button", { name: /Xác nhận thực hiện/ });
     expect((confirm as HTMLButtonElement).disabled).toBe(true);
@@ -73,21 +90,23 @@ describe("Preview with editable names", () => {
   });
 
   it("shows no inputs for a preview with nothing to edit (delete) or for a reader", () => {
-    renderPreview({ editableTitles: undefined });
+    renderPreview({ confirmable: true, editableTitles: undefined });
     expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByRole("button", { name: /Xác nhận thực hiện/ })).toBeTruthy();
     cleanup();
-    renderPreview({ editableTitles: ["Backend"], canWrite: false });
+    renderPreview({ confirmable: true, editableTitles: ["Backend"], canWrite: false });
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
   it("cancel still sends hủy", () => {
-    const sendMessage = renderPreview({ editableTitles: ["Backend"] });
+    const sendMessage = renderPreview({ confirmable: true, editableTitles: ["Backend"] });
     fireEvent.click(screen.getByRole("button", { name: /Hủy bỏ/ }));
     expect(sendMessage).toHaveBeenCalledWith("hủy", undefined);
   });
 
   it("renders topic and section target inputs and sends only edited fields", () => {
     const sendMessage = renderPreview({
+      confirmable: true,
       editableTitles: ["Hybrid Search"],
       editableTarget: { topic: "ai-engineering", section: "RAG" },
     });
@@ -106,6 +125,7 @@ describe("Preview with editable names", () => {
 
   it("allows clearing section input while disabling confirm when topic input is blank", () => {
     const sendMessage = renderPreview({
+      confirmable: true,
       editableTitles: ["Hybrid Search"],
       editableTarget: { topic: "ai-engineering", section: "RAG" },
     });
@@ -125,5 +145,28 @@ describe("Preview with editable names", () => {
     expect(confirm.disabled).toBe(false);
     fireEvent.click(confirm);
     expect(sendMessage).toHaveBeenCalledWith("ok", { target: { section: "" } });
+  });
+
+  it("drives ConfirmActions from actionPreview.confirmable instead of text heuristics or restored messages", () => {
+    renderPreview({
+      content: "xác nhận thực hiện chuyển trạng thái lesson",
+      confirmable: true,
+    });
+    expect(screen.getByRole("button", { name: /Xác nhận thực hiện/ })).toBeTruthy();
+    cleanup();
+
+    renderPreview({
+      content: "DRY-RUN PREVIEW: 👉 Bấm nút Xác nhận thực hiện",
+      confirmable: undefined,
+    });
+    expect(screen.queryByRole("button", { name: /Xác nhận thực hiện/ })).toBeNull();
+    cleanup();
+
+    renderPreview({
+      content: "Bản xem trước cũ",
+      confirmable: true,
+      isRestored: true,
+    });
+    expect(screen.queryByRole("button", { name: /Xác nhận thực hiện/ })).toBeNull();
   });
 });

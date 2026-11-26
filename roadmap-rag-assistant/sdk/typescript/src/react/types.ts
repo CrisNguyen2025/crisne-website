@@ -1,4 +1,12 @@
-import type { PageContext, ChatActionChip, ChatSource, ChatCitation, ChangeReview } from '../types';
+import type {
+  ActionPreviewMeta,
+  ChangeReview,
+  ChatActionChip,
+  ChatCitation,
+  ChatSource,
+  EditablePreviewTarget,
+  PageContext,
+} from '../types';
 import type { AssistantStepEvent, AssistantStepItem } from '../client';
 
 export type { ChatActionChip };
@@ -53,7 +61,9 @@ export interface ChatMessage {
   /** Names of a create/edit Preview the Owner may correct before confirming. */
   editableTitles?: string[];
   /** Target (topic / section) of a Preview the Owner may correct before confirming. */
-  editableTarget?: { topic?: string; section?: string };
+  editableTarget?: EditablePreviewTarget;
+  actionPreview?: ActionPreviewMeta;
+  isRestored?: boolean;
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
   suggestions?: { label: string; prompt: string }[];

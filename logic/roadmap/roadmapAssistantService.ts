@@ -57,7 +57,11 @@ export async function runWebMcpCommand(request: string): Promise<string> {
 
   const result = await ctx.executeTool(tool, plan.args);
   if (isRoadmapWriteTool(plan.tool)) {
-    window.dispatchEvent(new CustomEvent('roadmap:updated'));
+    window.dispatchEvent(
+      new CustomEvent('roadmap:updated', {
+        detail: { toolName: plan.tool, result },
+      })
+    );
   }
   const body = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
   const note = plan.reply ? `\n\n${plan.reply}` : '';

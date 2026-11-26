@@ -1,8 +1,8 @@
 # PLAN: Tối ưu Abot Instructions, Mở rộng Auto-Capture Hai Tầng & Hợp nhất An toàn Ghi
 
-- **Trạng thái:** `IN_PROGRESS` — Batch A ([`TASK-abot-scale-001.md`](./specs/TASK-abot-scale-001.md)) đã `COMPLETED` qua full verification gate trên `main` @ `476eef3` (chờ commit); Owner đã chốt **Option (A)** cho toàn bộ câu hỏi mở của [`TASK-abot-scale-002.md`](./specs/TASK-abot-scale-002.md) (Q1–Q7) và [`TASK-abot-scale-003.md`](./specs/TASK-abot-scale-003.md) (Q1–Q4) ngày 2026-11-26, chuyển cả hai spec sang `READY` (chạy tuần tự `001 -> 002 -> 003`).
-- **Ngày lập:** 2026-11-25 · **Cập nhật:** 2026-11-26 (chốt Option (A) toàn bộ `002` & `003`, nâng mốc đối chiếu lên `476eef3`)
-- **Mốc codebase đối chiếu:** `main` @ `476eef3` (`docs(agents): pin runtime versions, add session exit checklist, refresh plan status`)
+- **Trạng thái:** `COMPLETED` — Toàn bộ 3 Batch (`001`, `002`, `003`) đều đã qua full verification gate trên `main` @ `1dfcd0b` (chờ Dev `git commit` phần vá cuối Batch B + toàn bộ Batch C + tài liệu `.handoff/`).
+- **Ngày lập:** 2026-11-25 · **Cập nhật:** 2026-11-26 (Batch A, Batch B & Batch C đều `COMPLETED`, chờ Dev `git commit`)
+- **Mốc codebase đối chiếu:** `main` @ `1dfcd0b` (`feat(abot): upgrade header actions and sidebar mode with abot-scale updates`; xuất phát từ `476eef3`)
 - **Phạm vi liên quan:** `roadmap-assistant-abot`, `roadmap-learning`, `auth-security`, `knowledge-acquisition` (chỉ phần giao tiếp `linking_advisor` / `KnowledgeRelation`, không mở rộng worker)
 - **Tài liệu liên hệ:** [`GLOSSARY.md`](../GLOSSARY.md), [`docs/README.md`](../docs/README.md), [`.handoff/PLAN-second-brain.md`](./PLAN-second-brain.md), [`.handoff/PLAN-knowledge-acquisition.md`](./PLAN-knowledge-acquisition.md), [`TASK-abot-scale-001.md`](./specs/TASK-abot-scale-001.md), [`TASK-abot-scale-002.md`](./specs/TASK-abot-scale-002.md), [`TASK-abot-scale-003.md`](./specs/TASK-abot-scale-003.md)
 
@@ -23,7 +23,7 @@
 ### 1.2. Thứ tự thực thi 3 Batch (Tuần tự: `001 -> 002 -> 003`, Không chồng chéo)
 
 ```text
-Batch A (COMPLETED, chờ commit)         Batch B (READY, sau Batch A)                Batch C (READY, sau Batch B)
+Batch A (COMPLETED @ 1dfcd0b)           Batch B (COMPLETED, +3 fix chờ commit)    Batch C (COMPLETED, chờ commit)
 TASK-abot-scale-001                     TASK-abot-scale-002                         TASK-abot-scale-003
 ──────────────────────────────          ───────────────────────────────────         ───────────────────────────────────
 • Tối ưu <system> & gating              • Tier 1: extractor/store/memories API      • Hợp nhất Pending Action & /chat/confirm
@@ -32,12 +32,12 @@ TASK-abot-scale-001                     TASK-abot-scale-002                     
 • Chuyển chat/context -> 25s timeout    • Tier 2: Quiz gaps + Executor/Reindex      • Evals (_routing, _answer, holdout) + Docs/Intel
 ```
 
-1. **Batch A — [`TASK-abot-scale-001.md`](./specs/TASK-abot-scale-001.md) (`COMPLETED` trên `main` @ `476eef3`, chưa `git commit`)**:
+1. **Batch A — [`TASK-abot-scale-001.md`](./specs/TASK-abot-scale-001.md) (`COMPLETED` trên `main` @ `1dfcd0b`)**:
    - Thu gọn `<system>` (`PROMPT_SUGGESTION_FORMAT` chiếm ~24% empty RAG / ~43.5% empty chitchat prompt; `<owner_memory>` lặp ở 3 nơi; quy tắc `Provenance` luôn bị tiêm cả khi là `Visitor` hay không có nguồn), bỏ gọi `format_owner_memory` lần 2 trong `pipeline.py`, căn chỉnh `context_usage.py` (`DOCUMENT_BUDGET_CHARS`, `history_cap`, `memory_cap`), và đưa `chat/context` vào `SYNC_TIMEOUT_PATHS` trên proxy Next.js.
-2. **Batch B — [`TASK-abot-scale-002.md`](./specs/TASK-abot-scale-002.md) (`READY`, chạy tuần tự sau `TASK-abot-scale-001`)**:
+2. **Batch B — [`TASK-abot-scale-002.md`](./specs/TASK-abot-scale-002.md) (`COMPLETED` — `1dfcd0b` + 3 file vá chờ `git commit`)**:
    - Nâng cấp Tier 1 (`extractor.py` vượt giới hạn 49 chuỗi `_SIGNAL_CUES`, chống trùng paraphrase, quản lý trần `MAX_PENDING_MEMORIES`, xếp hạng theo query + `lastUsedAt`, bỏ invalidate cache khi ghi `pending`, hoàn thiện `OwnerMemorySheet.tsx` + adaptive polling badge).
    - Nối Tier 2 (tổng quát hóa `linking_advisor.py`, nối `Scope.DOMAIN_GAP`, lỗ hổng `QuizCommands`, và lệnh thăng cấp khái niệm trong chat sang `LessonContentCommands` / `ActionExecutor` qua `Preview -> ok`, đồng bộ reindex HTTP/SQLite và `ROADMAP_WRITE_TOOL_RE`).
-3. **Batch C — [`TASK-abot-scale-003.md`](./specs/TASK-abot-scale-003.md) (`READY`, chạy tuần tự sau `TASK-abot-scale-002`)**:
+3. **Batch C — [`TASK-abot-scale-003.md`](./specs/TASK-abot-scale-003.md) (`COMPLETED`, chờ `git commit`)**:
    - Hợp nhất các slot `Pending Action` trong `session_store.py` + `POST /chat/confirm` / `/chat/cancel`, thay heuristic text của `ConfirmActions` bằng metadata `action_preview`, phát `change_review` cho content draft & memory, bịt lỗ hổng ghi trực tiếp của WebMCP (`RoadmapWebMcpRegistrar`, `use-roadmap-webmcp.ts`, `webmcp_planner.py`), bổ sung coverage trong `evals/`, và đồng bộ `cris-workspace-map.json` + tài liệu kiến trúc.
 
 ---

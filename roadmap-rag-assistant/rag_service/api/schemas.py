@@ -99,6 +99,8 @@ class ActionConfirmRequest(BaseModel):
 
     _thread = field_validator("thread_id")(lambda cls, v: reject_shared_thread(v))
     action_id: str | None = Field(default=None, description="Optional action or thread ID alias")
+    titles: Optional[list[Annotated[str, Field(min_length=1, max_length=200)]]] = Field(default=None, max_length=20)
+    target: Optional[PreviewTargetEdit] = Field(default=None)
 
 
 class ActionConfirmResponse(BaseModel):
@@ -106,6 +108,7 @@ class ActionConfirmResponse(BaseModel):
 
     success: bool
     message: str
+    kind: str | None = None
     # What the confirmed action wrote (see rag_service/execution/changes.py); absent when nothing changed
     changes: dict | None = None
 

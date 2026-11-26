@@ -4,7 +4,7 @@ branch: "feat/abot-scale-003" # Dev tạo từ main sau khi TASK-abot-scale-002 
 version: "3.0.0"
 type: "implement"
 priority: "P1"
-status: "READY" # Đã chốt Option (A) cho Q1–Q4 (2026-11-26); thực thi sau khi TASK-abot-scale-002 hoàn tất
+status: "COMPLETED" # Đã chốt Option (A) cho Q1–Q4 (2026-11-26); C1/C2/C3 đã qua full verification gate (chờ Dev git commit)
 assigned_executor: "antigravity"
 max_attempts: 3
 current_attempt: 0
@@ -101,7 +101,7 @@ verification_gate:
 
 # TASK: Hợp nhất Pending Action / Preview UI, an toàn ghi WebMCP, bổ sung Evals và đồng bộ Map/Docs
 
-> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): `READY (sau khi TASK-abot-scale-002 hoàn tất)` — Batch C của `.handoff/PLAN-abot-scale.md` (phụ thuộc `TASK-abot-scale-001` và `TASK-abot-scale-002`). Owner đã chốt **Option (A)** cho toàn bộ Q1–Q4 ngày `2026-11-26`.
+> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): `COMPLETED (2026-11-26)` — Batch C của `.handoff/PLAN-abot-scale.md` (C1 `#51`, C2 `#50`, C3 `#52`) đã qua full verification gate trên `main` @ `1dfcd0b` (chờ Dev `git commit`). Owner đã chốt **Option (A)** cho toàn bộ Q1–Q4 ngày `2026-11-26`.
 
 ## 0. Quyết định đã chốt của Owner (2026-11-26)
 
@@ -156,11 +156,11 @@ verification_gate:
 
 ## 3. Step-by-Step Implementation Checklist
 
-- [ ] **Step 1 — Hợp nhất `Pending Action` ở Backend (`session_store.py`, `commands.py`, `routes.py`, `schemas.py`)**:
+- [x] **Step 1 — Hợp nhất `Pending Action` ở Backend (`session_store.py`, `commands.py`, `routes.py`, `schemas.py`)**:
   - Trong `roadmap-rag-assistant/rag_service/state/session_store.py`: chuẩn hóa truy xuất/xóa các slot pending qua helper chung trên `SessionContext` (giữ tương thích field hiện có hoặc đóng gói envelope có `kind`, `action_id`, `payload`, `ttl`) và đảm bảo `fresh_pending` / `clear_pending` áp dụng thống nhất.
   - Trong `roadmap-rag-assistant/rag_service/api/routes.py#confirm_action` & `#cancel_action` (+ `schemas.py#ActionConfirmResponse`): cho phép `POST /chat/confirm` và `POST /chat/cancel` thực thi/hủy **mọi** loại `Pending Action` đang còn hạn (`pending_confirmation`, `pending_content_draft`, `pending_memory_change`, `pending_lesson_edit`, `pending_section_rename`, `pending_status_change`, bao gồm cả pending concept promotion từ `TASK-abot-scale-002`), dùng chung logic thực thi trong `commands.py#RoadmapCommands` dưới `write_granted(...)` và trả `changes` khi có dữ liệu ghi.
 
-- [ ] **Step 2 — Chuẩn hóa `action_preview` & `ChangeReviewCard` giữa Python và TypeScript SDK**:
+- [x] **Step 2 — Chuẩn hóa `action_preview` & `ChangeReviewCard` giữa Python và TypeScript SDK**:
   - Trong `commands.py`, `lesson_content.py`, `lesson_edit.py`, `lesson_status.py`, `memory_commands.py`, `quiz_commands.py`: mọi nơi phát `{"type": "action_preview", ...}` phải gửi metadata có cấu trúc: `action_id`, `kind` (ví dụ `cud`, `content_draft`, `lesson_edit`, `section_rename`, `status_change`, `memory_change`), `confirmable: True` (và giữ `editable_titles` / `editable_target` ở các luồng hỗ trợ sửa trước khi xác nhận). Sửa dòng gợi ý chữ thường `"xác nhận thực hiện"` ở `lesson_status.py` L382 cho nhất quán.
   - Trong `roadmap-rag-assistant/rag_service/execution/changes.py#ChangeSet` & `commands.py` (`_handle_pending_content_draft`, `_handle_pending_memory`): bổ sung ghi nhận thay đổi dạng cập nhật/bộ nhớ (hoặc `op: "update"` / `level: "memory" | "content"`) và phát `event: change_review` sau khi xác nhận thành công.
   - Trong `roadmap-rag-assistant/sdk/typescript/src/types.ts`, `client.ts#streamChat`, `react/types.ts#ChatMessage`, `react/useRoadmapAssistantChat.ts#onActionPreview`:
@@ -170,48 +170,52 @@ verification_gate:
     - Thay thế điều kiện heuristic `msg.content.includes("Xác nhận thực hiện") || msg.content.includes("DRY-RUN PREVIEW")` bằng `Boolean(msg.actionPreview?.confirmable)` (theo Q4 Option A), đồng thời cập nhật `tests/unit/abot-preview-edit-titles.test.tsx`.
     - Cập nhật `ChangeReviewCard.tsx` hiển thị gọn các `op` cập nhật (`update`) và loại `memory` / `content` từ `ChangeSet`.
 
-- [ ] **Step 3 — Đồng bộ khôi phục `Thread` & trạng thái `Feedback`**:
+- [x] **Step 3 — Đồng bộ khôi phục `Thread` & trạng thái `Feedback`**:
   - Trong `app/api/roadmap-assistant/thread/route.ts#GET` + `sdk/typescript/src/react/useRoadmapAssistantChat.ts`: áp dụng **Q2 Option (A)** (giữ schema `ThreadMessage` tối giản theo ADR-0012, không migration DB; gắn cờ `isRestored` nếu cần để UI không kỳ vọng metadata stream cũ) và **Q3 Option (A)** (giữ tắt `onFeedback` trên `RoadmapAssistantChatbot.tsx`, giữ nút `ID` copy `traceId` cho `Owner`).
 
-- [ ] **Step 4 — Siết chặt an toàn ghi cho WebMCP (`RoadmapWebMcpRegistrar`, `use-roadmap-webmcp.ts`, `webmcp_planner.py`, `routes.py`)**:
+- [x] **Step 4 — Siết chặt an toàn ghi cho WebMCP (`RoadmapWebMcpRegistrar`, `use-roadmap-webmcp.ts`, `webmcp_planner.py`, `routes.py`)**:
   - Trong `components/roadmap/RoadmapWebMcpRegistrar.tsx` và `hooks/use-roadmap-webmcp.ts#useRoadmapWebMcpTools`: kiểm tra `useCanWrite()`; chỉ đăng ký WebMCP tools khi `canWrite === true`, và hủy đăng ký (`controller.abort()`) ngay khi `canWrite` chuyển `false`.
   - Trong `roadmap-rag-assistant/rag_service/webmcp_planner.py#plan_webmcp_call` và `rag_service/api/routes.py#plan`:
     - Kiểm tra `is_owner()` trong `plan_webmcp_call` (`/chat/plan`): nếu không phải `Owner`, không bao giờ chọn tool ghi (`create_*`, `update_*`, `rename_*`, `reorder_*`, `delete_*`).
     - Áp dụng **Q1 Option (A)**: lọc bỏ toàn bộ write tools trong `_allowed_tools` (chỉ giữ nhóm read-only `get_current_context`, `list_roadmaps`, `get_roadmap`, `export_roadmaps`) và trả lời hướng dẫn dùng luồng `Preview -> ok` của Abot khi `Owner` yêu cầu CUD qua `/webmcp`.
     - Đồng bộ `logic/roadmap/roadmapAssistantService.ts#runWebMcpCommand` & `#ROADMAP_WRITE_TOOL_RE` (đảm bảo `roadmap:updated` truyền đủ `detail` và nhất quán với các tool được phép).
 
-- [ ] **Step 5 — Bổ sung `evals/` và Unit/Route Tests**:
+- [x] **Step 5 — Bổ sung `evals/` và Unit/Route Tests**:
   - Thêm sample vào `roadmap-rag-assistant/evals/datasets/_routing/samples.jsonl` (định tuyến `OwnerMemory`, `Quiz`, `LessonContent`, nâng cấp concept thành `Lesson`), `_answer/samples.jsonl` (grounding `<owner_memory>`, không rò rỉ `OwnerMemory` sang `Visitor`), và `roadmap-rag-assistant/evals/router/holdout.jsonl` (câu hỏi thông thường về memory/quiz/concept phải có `write: "no"`, không kích hoạt `write_now_violation`). Giữ nguyên `stress_confuse.jsonl` và `confuse_baseline.json`; chạy `evals validate`, `evals router-check` (rà diff và `--accept` nếu hợp lệ), `evals.router.holdout`, `evals.router.confuse` (bắt buộc `write_now_violation == 0`, `missed_write <= 3`, `wrong_branch <= 91`, `preview_violation <= 23`).
   - Bổ sung unit/integration test:
     - Python (`roadmap-rag-assistant/tests/`): `test_sse.py` & `test_change_review.py` (confirm/cancel qua `/chat/confirm` cho mọi loại `Pending Action`; `action_preview` có cấu trúc; `change_review` cho content draft & memory), `test_webmcp_planner.py` (chặn `Visitor`, chặn/gắn xác nhận cho 7 tool ghi).
     - Next.js (`tests/unit/`, `tests/route/`): `abot-preview-edit-titles.test.tsx`, `change-review.test.tsx`, `sdk-chat-hook.test.tsx`, `sdk-widget.test.tsx`, `assistant-thread-route.test.ts`, và test mới cho `use-roadmap-webmcp.ts` / `RoadmapWebMcpRegistrar.tsx` (`canWrite=false` không đăng ký tool ghi).
 
-- [ ] **Step 6 — Đồng bộ Code Intelligence, ADRs Reference & Docs**:
+- [x] **Step 6 — Đồng bộ Code Intelligence, ADRs Reference & Docs**:
   - Sửa comment lỗi thời ở `app/api/roadmap-assistant/[...path]/route.ts` L11 (`"Public on purpose"` -> phản ánh đúng ADR-0019 site chỉ dành cho `Owner` + proxy vẫn gán `x-actor` chặt).
   - Cập nhật `.agents/skills/cris-code-intel/data/cris-workspace-map.json` (`headCommit`, `generatedAt`, thêm/sửa symbols cho `FLOW_ABOT_CUD_PREVIEW_CONFIRM`, `FLOW_ABOT_OWNER_MEMORY_MANAGE`, `FLOW_ABOT_ACTIVE_RECALL_QUIZ`, `FLOW_ABOT_LINKING_AND_PROVENANCE`, WebMCP safety) và `docs/code-intel/CRIS_WORKSPACE_MAP.md` (ADR-0012..0019, cập nhật mô hình phẳng Topic/Section/Lesson theo ADR-0008/0009, bổ sung News/Provenance/OwnerMemory/WebMCP).
   - Cập nhật `.agents/skills/cris-how-to-sync/references/ARCHITECTURAL_INVARIANTS.md` (bổ sung bảng ADR-0011..0019).
   - Rà soát và dọn các ghi chú lỗi thời còn sót: commit `476eef3` đã cập nhật `PLAN-*` (kể cả trạng thái các task trong `.handoff/PLAN-second-brain.md` — chỉ kiểm tra lại nếu còn mục lệch), nên Step 6 tập trung kiểm tra/dọn ghi chú cũ còn lại (ví dụ cờ `FEEDBACK_ENABLED = false` trong `docs/abot-next-actions-plan.md` và comment `"Public on purpose"` ở `route.ts` L11).
 
-- [ ] **Step 7 — Chạy toàn bộ Verification Gate**:
+- [x] **Step 7 — Chạy toàn bộ Verification Gate**:
   - Chạy đầy đủ `type_check`, `lint`, `test`, `python_tests`, `evals_validate`, `router_check`, `agents_sync`, `intel_status`, `doctor_delta`, `boundary_check` và điền kết quả vào Mục 4.
 
 ## 4. Verification Gate Results
 <!-- Executor điền: PENDING | PASSED | FAILED | SKIPPED -->
-- [ ] `TypeCheck`: PENDING
-- [ ] `Lint`: PENDING
-- [ ] `Vitest Targeted`: PENDING
-- [ ] `Test`: PENDING
-- [ ] `Python Tests`: PENDING
-- [ ] `Evals Validate`: PENDING
-- [ ] `Router Check (router-check + holdout + confuse)`: PENDING
-- [ ] `Agents Sync`: PENDING
-- [ ] `Intel Status`: PENDING
-- [ ] `Doctor Delta`: PENDING
-- [ ] `Boundary Check`: PENDING
+- [x] `TypeCheck`: PASSED (`yarn tsc --noEmit -p .` & `npx tsc --noEmit -p roadmap-rag-assistant/sdk/typescript/tsconfig.json`: 0 errors)
+- [x] `Lint`: PASSED trên phạm vi file đổi (`npx eslint --max-warnings=0` 12 file Next.js/test + `npx eslint --no-ignore --max-warnings=0` 7 file SDK `.ts/.tsx`: 0 errors, 0 warnings; `.venv/bin/ruff check rag_service` & 4 file test Python: `All checks passed!`)
+- [x] `Vitest Targeted`: PASSED (`yarn vitest run` 7 file từ spec L91 + `roadmap-webmcp.test.tsx`: `7 files passed, 69 passed` in `5.37s`)
+- [x] `Test`: PASSED (`yarn test`: `141 test files passed`, `1353 passed | 8 skipped (1361)` in `21.67s`; 8 skipped có sẵn ở `tests/e2e/tier1-r3-action-chips.test.ts`)
+- [x] `Python Tests`: PASSED (`1262 passed in 55.66s`; `test_write_invariants.py`, `test_sse.py`, `test_change_review.py`, `test_webmcp_planner.py`, `test_owner_memory.py`, `test_concept_promotion.py` pass; `.venv/bin/mypy` 9 file nguồn typed Batch C: `Success: no issues found`)
+- [x] `Evals Validate`: PASSED (`OK: 501 samples in 4 datasets, 125 documents in 1 corpora`)
+- [x] `Router Check (router-check + holdout + confuse)`: PASSED (`router-check`: `heldout.intent_cases.correct=64`, `heldout.routing.correct=273`, `stress.dropped=0`, `stress.misroute=0`, `stress.wrong_write=0`; `holdout`: `n=75, write_now_violations=0, write_preview_violations=7, missed_writes=0`; `confuse`: `n=504, write_now_violation=0, preview_violation=23, missed_write=3, wrong_branch=91 — ratchet: ok`)
+- [x] `Agents Sync`: PASSED (`yarn agents:sync --check`, `yarn test:schema-sql --check`, `yarn check:knowledge-index` đều PASS)
+- [x] `Intel Status`: PASSED (`yarn intel status`: `🟢 OK`, `Domains 6 | Entry Points 56 | Flows 19 | Data Models 10 | ADR Rules 17`, `251 ref map + 59 ref docs đều khớp code`)
+- [x] `Doctor Delta`: PASSED (`yarn doctor --since HEAD --check`: `0 bug · 0 risk · 0 nit · 0 mới`)
+- [x] `Boundary Check`: PASSED (`43` file Batch C trong `git status --porcelain` khớp `allowed_to_modify` với `0` vi phạm `strictly_forbidden`; cùng working tree còn `2` file vá Batch B `useOwnerMemories.ts` & `test_owner_memory.py` + `2` doc `.handoff/` đã sign-off; không dùng `baseline.txt` nên đối chiếu trực tiếp qua glob spec)
 
 ## 5. Execution Audit Log
 <!-- Executor điền. Không commit: Dev commit sau khi Claude verify -->
-- **Result file**: `.handoff/runs/TASK-abot-scale-003/result.json`
-- **Modified Files**:
-  - `...`
-- **Bài học** (Claude điền khi verify PASS, tối đa 3 dòng): ...
+- **Result file**: N/A (thực thi qua swarm C1 `#51`, C2 `#50`, C3 `#52` & verify bởi `@verifier-sync`)
+- **Modified Files** (43 files Batch C: C1 `12`, C2 `20`, C3 `11`):
+  - C1 (`12`): `roadmap-rag-assistant/rag_service/state/session_store.py`, `roadmap-rag-assistant/rag_service/api/routes.py`, `roadmap-rag-assistant/rag_service/api/schemas.py`, `roadmap-rag-assistant/rag_service/execution/changes.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/commands.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/lesson_content.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/lesson_edit.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/lesson_status.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py`, `roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py`, `roadmap-rag-assistant/tests/test_sse.py`, `roadmap-rag-assistant/tests/test_change_review.py`
+  - C2 (`20`): `roadmap-rag-assistant/rag_service/webmcp_planner.py`, `roadmap-rag-assistant/sdk/typescript/src/types.ts`, `roadmap-rag-assistant/sdk/typescript/src/client.ts`, `roadmap-rag-assistant/sdk/typescript/src/react/types.ts`, `roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts`, `roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx`, `roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx`, `components/roadmap/RoadmapWebMcpRegistrar.tsx`, `hooks/use-roadmap-webmcp.ts`, `logic/roadmap/roadmapAssistantService.ts`, `app/api/roadmap-assistant/thread/route.ts`, `app/api/roadmap-assistant/[...path]/route.ts`, `roadmap-rag-assistant/tests/test_webmcp_planner.py`, `tests/unit/abot-preview-edit-titles.test.tsx`, `tests/unit/change-review.test.tsx`, `tests/unit/sdk-chat-hook.test.tsx`, `tests/unit/sdk-widget.test.tsx`, `tests/unit/roadmap-webmcp.test.tsx`, `tests/route/assistant-thread-route.test.ts`, `tests/route/roadmap-assistant-proxy.test.ts`
+  - C3 (`11`): `roadmap-rag-assistant/evals/datasets/_routing/samples.jsonl`, `roadmap-rag-assistant/evals/datasets/_answer/samples.jsonl`, `roadmap-rag-assistant/evals/datasets/tags.json`, `roadmap-rag-assistant/evals/router/holdout.jsonl`, `roadmap-rag-assistant/evals/router/baseline.json`, `roadmap-rag-assistant/evals/router/decisions.jsonl`, `.agents/skills/cris-code-intel/data/cris-workspace-map.json`, `docs/code-intel/CRIS_WORKSPACE_MAP.md`, `.agents/skills/cris-how-to-sync/references/ARCHITECTURAL_INVARIANTS.md`, `.handoff/PLAN-second-brain.md`, `docs/abot-next-actions-plan.md`
+- **Bài học** (Claude điền khi verify PASS, tối đa 3 dòng):
+  - Hợp nhất 7 slot pending trong `session_store.py` (`PENDING_ACTION_KIND`, `SessionContext.active_pending`) và chuẩn hóa `build_action_preview_event` giúp `/chat/confirm`, `/chat/cancel` và `ConfirmActions` bỏ hoàn toàn dò chuỗi text mong manh.
+  - Khóa WebMCP hai lớp (`RoadmapWebMcpRegistrar` chỉ mount khi `useCanWrite()` là `true`, đồng thời `webmcp_planner.py` chặn `Visitor` và chỉ giữ `READ_ONLY_WEBMCP_TOOLS`) ngăn mọi ghi trực tiếp bỏ qua `Preview -> ok` mà không ảnh hưởng luồng chat Abot.

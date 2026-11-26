@@ -20,6 +20,7 @@ from rag_service.core.memory import KIND_LABELS, OwnerMemoryItem, owner_memory_s
 from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
+from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools.topic_resolver import resolve_topic
 
 MemoryAction = Literal["create", "archive", "list"]
@@ -246,7 +247,11 @@ class MemoryCommands(AgentHostMixin):
             f"- **Nội dung:** {req.content}\n\n"
             "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để lưu, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
         )
-        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="memory_change",
+            preview=preview_text,
+        )
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 
@@ -278,7 +283,11 @@ class MemoryCommands(AgentHostMixin):
             f"- **Nội dung:** {match.content}\n\n"
             "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để gỡ, hoặc bấm **[❌ Hủy bỏ]** để giữ lại."
         )
-        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="memory_change",
+            preview=preview_text,
+        )
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 

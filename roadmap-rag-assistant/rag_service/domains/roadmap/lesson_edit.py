@@ -20,6 +20,7 @@ from rag_service.domains.roadmap.router.grounding import legacy_level_reply
 from rag_service.domains.roadmap.router.understanding import understand
 from rag_service.domains.roadmap.router.vietnamese import clean_conversational_fillers, normalize_vietnamese
 from rag_service.domains.roadmap.sections import GENERAL_SECTION
+from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import (
     describe_unresolved_topic,
@@ -405,12 +406,12 @@ class LessonEditCommands(AgentHostMixin):
         }
 
         preview = _build_lesson_edit_preview(topic_title, old_title, old_section, proposed_title, proposed_section)
-        yield {
-            "type": "action_preview",
-            "action_id": session_ctx.session_id,
-            "preview": preview,
-            "editable_titles": [proposed_title],
-            "editable_target": {"section": proposed_section or ""},
-        }
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="lesson_edit",
+            preview=preview,
+            editable_titles=[proposed_title],
+            editable_target={"section": proposed_section or ""},
+        )
         async for ev in self._stream_text(preview, delay):
             yield ev

@@ -3,6 +3,7 @@
  */
 
 import type {
+  ActionPreviewMeta,
   AssistantStepEvent,
   ChangeReview,
   ChatResponse,
@@ -10,6 +11,7 @@ import type {
   CreatedLessonItem,
   CreateLessonInput,
   CreateOwnerMemoryInput,
+  EditablePreviewTarget,
   HealthResponse,
   LatestThreadResponse,
   OwnerMemoryItem,
@@ -45,12 +47,7 @@ export class StreamTimeoutError extends Error {
   }
 }
 
-export type { AssistantStepEvent, AssistantStepItem, AssistantStepKind } from './types';
-
-export interface EditablePreviewTarget {
-  topic?: string;
-  section?: string;
-}
+export type { AssistantStepEvent, AssistantStepItem, AssistantStepKind, EditablePreviewTarget } from './types';
 
 export interface StreamCallbacks {
   onToken?: (delta: string) => void;
@@ -61,10 +58,7 @@ export interface StreamCallbacks {
   onStep?: (step: AssistantStepEvent) => void;
   onChangeReview?: (change: ChangeReview) => void;
   /** A change waiting for the Owner's confirmation; `editableTitles` / `editableTarget` may be corrected first */
-  onActionPreview?: (preview: {
-    editableTitles?: string[];
-    editableTarget?: EditablePreviewTarget;
-  }) => void;
+  onActionPreview?: (preview: ActionPreviewMeta) => void;
   /** Langfuse trace of the turn, sent before the reply (also repeated on `done` as `traceId`) */
   onTrace?: (traceId: string) => void;
   onDone?: (response: ChatResponse) => void;
@@ -289,11 +283,15 @@ export class RoadmapChatClient {
                           ...(typeof rawTarget.section === 'string' ? { section: rawTarget.section } : {}),
                         }
                       : {};
+                  const editableTitles = Array.isArray(data.editable_titles)
+                    ? data.editable_titles.filter((t: unknown): t is string => typeof t === 'string')
+                    : undefined;
                   callbacks.onActionPreview?.({
-                    editableTitles: Array.isArray(data.editable_titles)
-                      ? data.editable_titles.filter((t: unknown): t is string => typeof t === 'string')
-                      : undefined,
-                    editableTarget: Object.keys(parsedTarget).length > 0 ? parsedTarget : undefined,
+                    actionId: typeof data.action_id === 'string' ? data.action_id : undefined,
+                    kind: typeof data.kind === 'string' ? data.kind : undefined,
+                    confirmable: typeof data.confirmable === 'boolean' ? data.confirmable : true,
+                    ...(editableTitles?.length ? { editableTitles } : {}),
+                    ...(Object.keys(parsedTarget).length > 0 ? { editableTarget: parsedTarget } : {}),
                   });
                 } else if (currentEvent === 'trace') {
                   if (typeof data.trace_id === 'string') callbacks.onTrace?.(data.trace_id);

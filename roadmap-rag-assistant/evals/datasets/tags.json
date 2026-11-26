@@ -25,6 +25,9 @@
     "split-holdout",
     "sub-intent",
     "harmful",
-    "over-refusal"
+    "over-refusal",
+    "quiz",
+    "lesson-content",
+    "concept-promotion"
   ]
 }

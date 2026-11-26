@@ -100,6 +100,14 @@ describe("Roadmap Assistant proxy — who the caller is", () => {
 
     expect(forwarded().body.action_id).toBe("visitor:web-session");
   });
+
+  it("forwards chat/plan with strict x-actor scoping for visitor vs owner", async () => {
+    await callPost("chat/plan", { message: "xóa bài", tools: [] }, { "x-actor": "owner" });
+    expect(forwarded(0).headers["x-actor"]).toBe("visitor");
+
+    await callPost("chat/plan", { message: "liệt kê", tools: [] }, { "x-admin-key": "machine-key" });
+    expect(forwarded(1).headers["x-actor"]).toBe("owner");
+  });
 });
 
 describe("Roadmap Assistant proxy — what it forwards", () => {

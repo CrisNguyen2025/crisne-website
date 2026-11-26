@@ -81,9 +81,9 @@ describe("/api/roadmap-assistant/thread", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.threadId).toBe("latest-test-2");
-    expect(data.messages.map((m: { role: string; content: string }) => [m.role, m.content])).toEqual([
-      ["user", "hi"],
-      ["assistant", "hello owner"],
+    expect(data.messages.map((m: { role: string; content: string; isRestored?: boolean }) => [m.role, m.content, m.isRestored])).toEqual([
+      ["user", "hi", true],
+      ["assistant", "hello owner", true],
     ]);
   });
 

@@ -232,4 +232,66 @@ describe("useRoadmapAssistantChat", () => {
       expect(onToolExecuted).toHaveBeenNthCalledWith(2, "mark_lesson_reviewed", "Đã ôn xong", false);
     });
   });
+
+  describe("action_preview and thread restore", () => {
+    it("parses structured action_preview metadata even without editableTitles", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(c) {
+              const enc = new TextEncoder();
+              c.enqueue(
+                enc.encode(
+                  sse("action_preview", {
+                    action_id: "owner:t1",
+                    kind: "status_change",
+                    confirmable: true,
+                  })
+                )
+              );
+              c.enqueue(enc.encode(sse("token", { delta: "xác nhận thực hiện" })));
+              c.enqueue(enc.encode(sse("done", { message: "xác nhận thực hiện" })));
+              c.close();
+            },
+          }),
+          { status: 200 }
+        )
+      );
+
+      const { result } = renderHook(() => useRoadmapAssistantChat({ baseUrl: BASE, canWrite: true }));
+      await act(() => result.current.sendMessage("đánh dấu đã nắm bài X"));
+      await settle(result);
+
+      expect(result.current.messages.at(-1)?.actionPreview).toEqual({
+        actionId: "owner:t1",
+        kind: "status_change",
+        confirmable: true,
+      });
+    });
+
+    it("marks Owner messages restored from /thread with isRestored=true", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            threadId: "restored-thread-1",
+            messages: [
+              { id: "restored-1", role: "user", content: "hỏi trước", timestamp: "2026-11-25T08:00:00.000Z" },
+              { id: "restored-2", role: "assistant", content: "đáp trước", timestamp: "2026-11-25T08:00:05.000Z" },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+
+      const { result } = renderHook(() =>
+        useRoadmapAssistantChat({ baseUrl: BASE, canWrite: true, restoreLatestThread: true })
+      );
+
+      await waitFor(() => expect(result.current.conversationId).toBe("restored-thread-1"));
+      expect(result.current.messages).toHaveLength(2);
+      expect(result.current.messages.every((m) => m.isRestored === true)).toBe(true);
+      expect(result.current.messages[1].traceId).toBeUndefined();
+      expect(result.current.messages[1].changes).toBeUndefined();
+    });
+  });
 });

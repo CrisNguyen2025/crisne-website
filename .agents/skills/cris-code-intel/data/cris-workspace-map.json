@@ -1,10 +1,10 @@
 {
-  "version": "1.0.0",
-  "generatedAt": "2026-11-25T03:41:00Z",
-  "headCommit": "9ddfc67",
+  "version": "1.1.0",
+  "generatedAt": "2026-11-26T09:36:00Z",
+  "headCommit": "1dfcd0b",
   "repository": "crisne-website",
   "architecture": {
-    "framework": "Next.js 15+ (App Router) + Python 3.13 FastAPI Microservice",
+    "framework": "Next.js 16 (App Router) + Python 3.13 FastAPI Microservice",
     "languages": [
       "TypeScript 5",
       "Python 3.13"
@@ -57,7 +57,8 @@
       "adrs": [
         "ADR-0008",
         "ADR-0009",
-        "ADR-0010"
+        "ADR-0010",
+        "ADR-0014"
       ],
       "glossary": [
         "Topic",
@@ -96,13 +97,14 @@
       ],
       "dataModels": [
         "Roadmap",
-        "RoadmapItem"
+        "RoadmapItem",
+        "KnowledgeRelation"
       ]
     },
     {
       "id": "roadmap-assistant-abot",
       "name": "Roadmap Assistant (Abot AI RAG & CUD)",
-      "summary": "Trợ lý AI chuyên biệt cho Roadmap. Tách biệt thành Python FastAPI microservice (ADR-0001) được truy cập qua Same-origin proxy (ADR-0002). Thực hiện Intent Router 9 chặng (P0-P8), Hybrid RAG (FTS + In-memory Gemini vector store theo ADR-0004/0006), và sinh thẻ Preview xác nhận CUD cho Owner.",
+      "summary": "Trợ lý AI chuyên biệt cho Roadmap. Tách biệt thành Python FastAPI microservice (ADR-0001) qua Same-origin proxy (ADR-0002). Hợp nhất Pending Action & Preview có cấu trúc across 7 loại change, hỗ trợ OwnerMemory (ADR-0015), Active Recall Quiz, Concept Promotion, Hybrid RAG (ADR-0004/0006), và WebMCP read-only cho Owner (ADR-0019).",
       "cohesionScore": 0.96,
       "adrs": [
         "ADR-0001",
@@ -110,8 +112,11 @@
         "ADR-0003",
         "ADR-0004",
         "ADR-0006",
+        "ADR-0011",
         "ADR-0012",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0017",
+        "ADR-0019"
       ],
       "glossary": [
         "Roadmap Assistant",
@@ -135,22 +140,42 @@
         "lib/roadmap/owner-memory.ts",
         "logic/roadmap/roadmapAssistantService.ts",
         "components/roadmap/RoadmapAssistantChatbot.tsx",
+        "components/roadmap/RoadmapWebMcpRegistrar.tsx",
+        "hooks/use-roadmap-webmcp.ts",
         "roadmap-rag-assistant/rag_service/api/server.py",
         "roadmap-rag-assistant/rag_service/api/routes.py",
+        "roadmap-rag-assistant/rag_service/api/schemas.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/router/policy.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/router/understanding.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/router/scope.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/agent_actions.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_content.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_edit.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_status.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py",
+        "roadmap-rag-assistant/rag_service/webmcp_planner.py",
+        "roadmap-rag-assistant/rag_service/state/session_store.py",
+        "roadmap-rag-assistant/rag_service/execution/changes.py",
+        "roadmap-rag-assistant/rag_service/execution/executor.py",
         "roadmap-rag-assistant/rag_service/core/memory/store.py",
+        "roadmap-rag-assistant/rag_service/core/memory/extractor.py",
         "roadmap-rag-assistant/rag_service/core/orchestration/sources.py",
         "roadmap-rag-assistant/rag_service/core/retrieval/hybrid.py",
         "roadmap-rag-assistant/rag_service/core/augmentation/context.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
         "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
-        "roadmap-rag-assistant/rag_service/observability.py"
+        "roadmap-rag-assistant/rag_service/observability.py",
+        "roadmap-rag-assistant/sdk/typescript/src/types.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/client.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx"
       ],
       "dataModels": [
         "In-memory Topic/Section/Lesson Embeddings",
@@ -176,10 +201,11 @@
     {
       "id": "auth-security",
       "name": "Auth, RBAC & Actor Model",
-      "summary": "Mô hình xác thực và phân quyền. Định nghĩa ranh giới Actor: Owner (có quyền ghi dữ liệu qua Google OAuth hoặc ADMIN_KEY) và Visitor (chỉ đọc và hỏi đáp). Cung cấp các route guard bảo vệ API và proxy.",
+      "summary": "Mô hình xác thực và phân quyền. Định nghĩa ranh giới Actor: Owner (có quyền ghi dữ liệu qua Google OAuth hoặc ADMIN_KEY) và Visitor (chỉ đọc và hỏi đáp; không thấy site riêng tư sau ADR-0019). Cung cấp các route guard bảo vệ API, WebMCP và proxy.",
       "cohesionScore": 0.92,
       "adrs": [
-        "ADR-0002"
+        "ADR-0002",
+        "ADR-0019"
       ],
       "glossary": [
         "Actor",
@@ -357,7 +383,7 @@
       "method": "GET",
       "authRequirement": "owner_only",
       "domainId": "roadmap-learning",
-      "summary": "Lấy danh sách tất cả các topic kèm số lượng bài học (Owner hoặc x-admin-key, ADR-0018)",
+      "summary": "Lấy danh sách tất cả các topic kèm số lượng bài học (Owner hoặc x-admin-key, ADR-0019)",
       "handler": "app/api/v1/roadmaps/route.ts#GET",
       "triggersFlow": "N/A"
     },
@@ -525,6 +551,39 @@
       "summary": "Python FastAPI SSE endpoint xử lý turn chat của Roadmap Assistant",
       "handler": "roadmap-rag-assistant/rag_service/api/routes.py#chat_stream",
       "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
+    },
+    {
+      "id": "EP_FASTAPI_CHAT_CONFIRM",
+      "type": "fastapi_route",
+      "path": "/api/chat/confirm",
+      "method": "POST",
+      "authRequirement": "internal_bearer",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Thực thi Pending Action còn hạn (tất cả 7 slot xác nhận) cho Owner dưới write_granted",
+      "handler": "roadmap-rag-assistant/rag_service/api/routes.py#confirm_action",
+      "triggersFlow": "FLOW_ABOT_CUD_PREVIEW_CONFIRM"
+    },
+    {
+      "id": "EP_FASTAPI_CHAT_CANCEL",
+      "type": "fastapi_route",
+      "path": "/api/chat/cancel",
+      "method": "POST",
+      "authRequirement": "internal_bearer",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Hủy mọi Pending Action đang chờ xác nhận trong RAM cho Owner",
+      "handler": "roadmap-rag-assistant/rag_service/api/routes.py#cancel_action",
+      "triggersFlow": "FLOW_ABOT_CUD_PREVIEW_CONFIRM"
+    },
+    {
+      "id": "EP_FASTAPI_CHAT_PLAN",
+      "type": "fastapi_route",
+      "path": "/api/chat/plan",
+      "method": "POST",
+      "authRequirement": "internal_bearer",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Lập kế hoạch WebMCP read-only cho Owner (chặn non-Owner và chuyển hướng yêu cầu ghi sang Preview -> ok)",
+      "handler": "roadmap-rag-assistant/rag_service/api/routes.py#plan",
+      "triggersFlow": "FLOW_ABOT_WEBMCP_SAFETY"
     },
     {
       "id": "EP_API_UPLOAD_IMAGE",
@@ -819,7 +878,7 @@
       "method": "GET",
       "authRequirement": "owner_only",
       "domainId": "roadmap-assistant-abot",
-      "summary": "Khôi phục Thread đang mở gần nhất của Owner (hoặc đánh dấu đóng khi tạo hội thoại mới, ADR-0012 / ADR-0015)",
+      "summary": "Khôi phục Thread đang mở gần nhất của Owner kèm isRestored (hoặc đánh dấu đóng khi tạo hội thoại mới, ADR-0012 / ADR-0015 / Q2 Option A)",
       "handler": "app/api/roadmap-assistant/thread/route.ts#GET",
       "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
     },
@@ -854,6 +913,17 @@
       "domainId": "roadmap-assistant-abot",
       "summary": "Cập nhật nội dung/trạng thái mục Owner Memory (duyệt pending -> active tự archive mục thay thế, ADR-0015)",
       "handler": "app/api/v1/memories/[id]/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_TOUCH",
+      "type": "api_route",
+      "path": "/api/v1/memories",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Cập nhật hàng loạt lastUsedAt cho các mục Owner Memory active vừa được sử dụng (không xóa cache)",
+      "handler": "app/api/v1/memories/route.ts#PATCH",
       "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
     }
   ],
@@ -927,7 +997,7 @@
           "order": 7,
           "layer": "Presentation_UI",
           "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
-          "action": "Nhận từng token SSE, hiển thị typewriter effect và render danh sách trích dẫn bài học (sources badges)",
+          "action": "Nhận từng token SSE, hiển thị typewriter effect và danh sách trích dẫn bài học; onFeedback (👍/👎) tắt trên Abot theo ADR-0011 & Q3 Option A (giữ nút copy Langfuse traceId cho Owner); khôi phục Thread qua /api/roadmap-assistant/thread (isRestored=true, Q2 Option A)",
           "callsNext": null,
           "dataPassed": "Rendered chat bubble"
         }
@@ -935,7 +1005,8 @@
       "invariants": [
         "Visitor chỉ được quyền đọc, không bao giờ được phép kích hoạt write tool",
         "Embeddings của Knowledge Base luôn sử dụng Gemini text-embedding-004 768d (ADR-0004)",
-        "Mọi lượt hỏi đáp đều phải ghi vết Langfuse trace (ADR-0003)"
+        "Mọi lượt hỏi đáp đều phải ghi vết Langfuse trace (ADR-0003)",
+        "Khôi phục Thread của Owner giữ schema ThreadMessage tối giản trên Turso (ADR-0012, Q2 Option A)"
       ],
       "failureModes": [
         "Python FastAPI microservice chưa bật (503 Service Unavailable)",
@@ -947,7 +1018,10 @@
         "ADR-0002",
         "ADR-0003",
         "ADR-0004",
-        "ADR-0006"
+        "ADR-0006",
+        "ADR-0011",
+        "ADR-0012",
+        "ADR-0015"
       ]
     },
     {
@@ -955,7 +1029,7 @@
       "name": "Thao tác CUD Roadmap qua Abot (Preview ➔ Confirm ➔ Execute)",
       "domainId": "roadmap-assistant-abot",
       "actor": "Owner",
-      "trigger": "Owner ra lệnh tự nhiên (ví dụ: 'thêm bài Langfuse Observability vào section MLOps của topic AI')",
+      "trigger": "Owner ra lệnh tự nhiên (tạo/xóa bài, đổi mục, sửa bài/trạng thái, soạn nội dung, lưu khái niệm, nhớ/quên OwnerMemory)",
       "preconditions": [
         "Actor bắt buộc là 'owner' (Google OAuth hoặc valid ADMIN_KEY)",
         "Topic cha phải tồn tại"
@@ -966,7 +1040,7 @@
           "layer": "Routing_Gateway",
           "component": "app/api/roadmap-assistant/[...path]/route.ts",
           "functionOrMethod": "forward",
-          "action": "Xác nhận actor='owner', forward lệnh tới /api/chat",
+          "action": "Xác nhận actor='owner', forward lệnh tới /api/chat/stream",
           "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/agent.py#NextGenRoadmapAgent",
           "dataPassed": "{ message, actor: 'owner' }"
         },
@@ -975,58 +1049,63 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/router/intent_router.py",
           "functionOrMethod": "IntentRouter.aroute",
-          "action": "Phát hiện speech act COMMAND / REQUEST và target ROADMAP -> Chọn intent ROADMAP_CUD, write policy = CONFIRM",
+          "action": "Phát hiện speech act COMMAND / REQUEST và target ROADMAP (hoặc pre-router domain handlers) -> Chọn intent ROADMAP_CUD / domain preview, write policy = CONFIRM",
           "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_cud",
           "dataPassed": "Extracted entities: topic, section, lesson title"
         },
         {
           "order": 3,
           "layer": "AI_Orchestration",
-          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
-          "functionOrMethod": "RoadmapCommands.handle_cud",
-          "action": "Tạo PendingAction lưu vào session store (prefix 'owner:'), sinh thẻ Preview payload trả về cho client",
-          "callsNext": "components/roadmap/RoadmapAssistantChatbot.tsx",
-          "dataPassed": "PendingAction: { action_id, type: 'CREATE_LESSON', target, preview_card }"
+          "component": "roadmap-rag-assistant/rag_service/state/session_store.py",
+          "functionOrMethod": "build_action_preview_event",
+          "action": "Lưu Pending Action vào RAM-only SessionContext (7 slot: pending_confirmation, pending_concept_promotion, pending_content_draft, pending_lesson_edit, pending_section_rename, pending_status_change, pending_memory_change; TTL 600s) và phát SSE action_preview có cấu trúc (action_id, kind, confirmable, editable_titles?, editable_target?)",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx#MessageItem",
+          "dataPassed": "ActionPreviewMeta: { actionId, kind, confirmable: true }"
         },
         {
           "order": 4,
           "layer": "Presentation_UI",
-          "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
-          "action": "Hiển thị Preview Card với nút 'Xác nhận' và 'Huỷ'. Owner click 'Xác nhận'",
-          "callsNext": "logic/roadmap/roadmapAssistantService.ts#roadmapChatClient",
-          "dataPassed": "{ action_id }"
+          "component": "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx",
+          "functionOrMethod": "ConfirmActions",
+          "action": "Khi !msg.isRestored && msg.actionPreview?.confirmable, hiển thị nút Xác nhận / Hủy (và form sửa tên/Topic nếu hỗ trợ); Owner bấm Xác nhận gọi /chat/confirm (hoặc gõ 'ok')",
+          "callsNext": "roadmap-rag-assistant/rag_service/api/routes.py#confirm_action",
+          "dataPassed": "{ thread_id, titles?, target? }"
         },
         {
           "order": 5,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
-          "functionOrMethod": "RoadmapCommands.handle_pending",
-          "action": "Lấy PendingAction từ store, gọi ngược về Next.js API để thực thi ghi vào database",
-          "callsNext": "app/api/v1/roadmaps/items/route.ts#POST",
-          "dataPassed": "HTTP POST /api/v1/roadmaps/items với { roadmapId, section, title }"
+          "functionOrMethod": "RoadmapCommands.confirm_pending_action",
+          "action": "Lấy active_pending qua SessionContext.active_pending(), thực thi dưới write_granted(...) qua ActionExecutor hoặc update_item_content / OwnerMemoryStore; ghi ChangeSet (gồm op='update' cho content/memory/section/item) và phát event: change_review",
+          "callsNext": "roadmap-rag-assistant/rag_service/execution/changes.py#ChangeSet.updated",
+          "dataPassed": "ChangeReview ({ action, level, added, updated, removed, entries })"
         },
         {
           "order": 6,
           "layer": "Domain_Logic",
           "component": "lib/roadmap/rag-reindex.ts",
           "functionOrMethod": "notifyRoadmapChanged",
-          "action": "Sau khi ghi thành công, kích hoạt background hook `after(requestRagReindex)` để Python microservice nạp lại dữ liệu",
-          "callsNext": null,
+          "action": "Sau khi ghi Topic/Lesson/Section qua API Next.js, kích hoạt background hook after(notifyRoadmapChanged) (hoặc schedule_local_rag_sync khi chạy sqlite mode; riêng status/memory không RAG reindex)",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx#ChangeReviewCard",
           "dataPassed": "POST /internal/reindex"
         }
       ],
       "invariants": [
-        "Mọi thay đổi CUD qua trợ lý bắt buộc phải qua bước Preview và được Owner ấn xác nhận (Human-in-the-loop)",
-        "Visitor gửi lệnh ghi sẽ bị chặn ngay tại Router và nhận thông báo từ chối lịch sự"
+        "Mọi thay đổi CUD/Memory/Content/Status qua trợ lý bắt buộc qua Preview có cấu trúc và được Owner xác nhận (Human-in-the-loop)",
+        "Pending Action chỉ nằm trong RAM TTL 600s (ADR-0012); tin nhắn isRestored không hiện ConfirmActions",
+        "Visitor gửi lệnh ghi hoặc gọi /chat/confirm, /chat/cancel sẽ bị chặn ngay tại Proxy và FastAPI (is_owner() + write_granted)"
       ],
       "failureModes": [
-        "Owner chờ quá lâu làm PendingAction hết hạn trong memory store (Action expired)",
+        "Owner chờ quá 600s làm Pending Action hết hạn trong RAM (câu 'ok' không chạy thao tác cũ)",
         "Tên bài học bị trùng trong cùng Topic (Prisma @@unique([roadmapId, title]) vi phạm)"
       ],
       "relatedAdrs": [
         "ADR-0001",
         "ADR-0002",
-        "ADR-0007"
+        "ADR-0007",
+        "ADR-0012",
+        "ADR-0015",
+        "ADR-0019"
       ]
     },
     {
@@ -1279,14 +1358,16 @@
         }
       ],
       "invariants": [
-        "Visitor tuyệt đối không thể can thiệp dữ liệu DB hay sinh pending actions (bảo vệ kép ở cả Gateway lẫn Python backend)",
-        "Thread của Visitor tách biệt với Owner nhờ namespace `visitor:` và `owner:`"
+        "Visitor tuyệt đối không thể can thiệp dữ liệu DB hay sinh/xác nhận pending actions (bảo vệ kép ở Gateway, routes.py và write_gate)",
+        "Thread của Visitor tách biệt với Owner nhờ namespace `visitor:` và `owner:`",
+        "Visitor không bao giờ đăng ký được WebMCP tools hoặc gọi /chat/plan để chọn write tools (ADR-0019)"
       ],
       "failureModes": [
         "Visitor giả mạo header trên client (Proxy Next.js tự xác thực qua session cookie và ghi đè header `x-actor` trước khi gửi đi)"
       ],
       "relatedAdrs": [
-        "ADR-0002"
+        "ADR-0002",
+        "ADR-0019"
       ]
     },
     {
@@ -1699,7 +1780,7 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py",
           "functionOrMethod": "MemoryCommands.handle_memory_command",
-          "action": "Phân tích lệnh nhớ/quên/xem; lưu pending_memory_change vào RAM (TTL 10 phút) và trả Preview chờ Owner xác nhận",
+          "action": "Phân tích lệnh nhớ/quên/xem; lưu pending_memory_change vào RAM (TTL 10 phút) và phát structured action_preview (kind='memory_change') chờ Owner xác nhận",
           "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_pending",
           "dataPassed": "pending_memory_change: { op, kind, content, scope_topic_slug }"
         },
@@ -1707,18 +1788,18 @@
           "order": 2,
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/core/memory/store.py",
-          "functionOrMethod": "OwnerMemoryStore.create",
-          "action": "Gửi POST/PATCH tới Next.js /api/v1/memories sau khi Owner gõ 'ok', xoá RAM cache và tiêm <owner_memory> ở các lượt sau",
-          "callsNext": "app/api/v1/memories/route.ts#POST",
-          "dataPassed": "{ kind, content, scopeTopicSlug, source, status }"
+          "functionOrMethod": "OwnerMemoryStore.list_active",
+          "action": "Đọc/lọc OwnerMemory theo scope & mức độ liên quan query; chạm nền lastUsedAt qua PATCH /api/v1/memories không xóa cache; tạo/gỡ qua POST/PATCH (chỉ xóa cache khi active), phát ChangeSet (op='update', level='memory')",
+          "callsNext": "app/api/v1/memories/route.ts#PATCH",
+          "dataPassed": "{ ids / kind, content, scopeTopicSlug, source, status }"
         },
         {
           "order": 3,
           "layer": "Domain_Logic",
           "component": "lib/roadmap/rag-reindex.ts",
           "functionOrMethod": "notifyOwnerMemoryChanged",
-          "action": "Sau khi Owner tạo/sửa/xoá bộ nhớ qua /api/v1/memories (kể cả trên OwnerMemorySheet), gọi nền POST /internal/memory-cache/invalidate để Python xoá ngay RAM cache (không kích hoạt RAG re-index)",
-          "callsNext": "roadmap-rag-assistant/rag_service/api/routes.py#invalidate_memory_cache",
+          "action": "Khi memory active thay đổi (kể cả trên OwnerMemorySheet, nơi còn hỗ trợ sửa pending, khôi phục archived, và đưa memory sang Lesson trạng thái target), gọi nền POST /internal/memory-cache/invalidate (không RAG reindex)",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx#OwnerMemorySheet",
           "dataPassed": "POST /internal/memory-cache/invalidate"
         },
         {
@@ -1726,15 +1807,15 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/core/memory/extractor.py",
           "functionOrMethod": "maybe_suggest_memories",
-          "action": "Chạy nền sau SSE done cho Owner khi có tín hiệu bền vững; trích xuất fact mới (kèm replacesMemoryId nếu thay thế mục cũ) và chỉ ghi status=pending để hiện badge chờ duyệt trên ChatHeader",
+          "action": "Kiểm tra tín hiệu bền vững qua has_memory_signal cả trên user_message lẫn assistant_reply; khử trùng paraphrase/Jaccard và gắn replacesMemoryId; chỉ ghi status=pending (trần MAX_PENDING_MEMORIES=10)",
           "callsNext": "roadmap-rag-assistant/rag_service/core/memory/store.py#OwnerMemoryStore.create",
           "dataPassed": "{ kind, content, scope, source: 'suggested', status: 'pending', replaces_memory_id }"
         }
       ],
       "invariants": [
         "Visitor không bao giờ đọc, ghi hay nhận <owner_memory> trong prompt (ADR-0002, ADR-0015)",
-        "Mọi thao tác nhớ/quên qua chat bắt buộc qua Preview -> ok như mọi Change khác",
-        "Đề xuất tự động luôn đi vào trạng thái pending chờ Owner duyệt"
+        "Mọi thao tác nhớ/quên qua chat bắt buộc qua Preview -> ok và phát ChangeReview (op='update', level='memory')",
+        "Đề xuất tự động luôn đi vào pending (trần MAX_PENDING_MEMORIES=10); <owner_memory> không rò rỉ vào Lesson draft"
       ],
       "failureModes": [
         "Next.js API không phản hồi khi đọc memory: fail-open chạy tiếp không có <owner_memory>",
@@ -1750,7 +1831,7 @@
     },
     {
       "id": "FLOW_ABOT_ACTIVE_RECALL_QUIZ",
-      "name": "Ôn tập Active Recall (Quiz & Review) nối Lesson Status & Owner Memory",
+      "name": "Ôn tập Active Recall (Quiz & Review) nối Lesson Status, Owner Memory & Concept Promotion",
       "domainId": "roadmap-assistant-abot",
       "actor": "Owner",
       "trigger": "Owner nhắn 'quiz bài X', 'kiểm tra mình bài này' hoặc 'quiz bài cần ôn nhất'",
@@ -1773,23 +1854,23 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py",
           "functionOrMethod": "QuizCommands.handle_active_quiz_turn",
-          "action": "Chấm từng câu trả lời của Owner; khi hoàn thành thì tự tạo learning_note pending cho lỗ hổng kiến thức và trả Preview nâng trạng thái -> known hoặc đánh dấu đã ôn (markReviewed)",
+          "action": "Chấm từng câu trả lời; khi hoàn thành dùng classify_quiz_gaps phân tách ghi chú cá nhân (learning_note pending) với lỗ hổng kiến thức khái niệm (hoặc khi đầy 10 pending) để chuẩn bị pending_concept_promotion nối sau pending_status_change Preview (kind='status_change')",
           "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands.handle_pending",
-          "dataPassed": "pending_status_change: { item_id, new_status, mark_reviewed }"
+          "dataPassed": "pending_status_change + chained pending_concept_promotion"
         },
         {
           "order": 3,
           "layer": "API_Route",
           "component": "app/api/v1/roadmaps/items/[id]/route.ts",
           "functionOrMethod": "PATCH",
-          "action": "Khi Owner xác nhận Preview, cập nhật status hoặc làm mới statusUpdatedAt (markReviewed=true) mà không kích hoạt RAG re-index",
+          "action": "Khi Owner xác nhận Preview, cập nhật status hoặc làm mới statusUpdatedAt (markReviewed=true) mà không kích hoạt RAG re-index, sau đó phát Preview bổ sung/tạo Lesson nếu có pending_concept_promotion",
           "callsNext": null,
           "dataPassed": "{ status | markReviewed: true }"
         }
       ],
       "invariants": [
-        "Visitor không bao giờ chạy quiz, đọc trạng thái bài hay tạo OwnerMemory pending",
-        "Mọi cập nhật Lesson Status hoặc markReviewed sau quiz bắt buộc qua Preview -> ok",
+        "Visitor không bao giờ chạy quiz, đọc trạng thái bài hay tạo OwnerMemory/Concept pending",
+        "Mọi cập nhật Lesson Status, markReviewed, hay enrichment sau quiz bắt buộc qua Preview -> ok",
         "Đánh dấu markReviewed không kích hoạt RAG re-index"
       ],
       "failureModes": [
@@ -1835,8 +1916,8 @@
           "order": 3,
           "layer": "AI_Service",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py",
-          "functionOrMethod": "match_news_to_lessons",
-          "action": "Tìm Lesson gần nghĩa qua Hybrid RAG, phát hiện trùng tiêu đề và tín hiệu version mới, gợi ý Topic/Section và relates",
+          "functionOrMethod": "advise_concept_promotion",
+          "action": "Dùng match_concept_to_lessons / match_news_to_lessons tìm Lesson gần nghĩa qua Hybrid RAG, phát hiện trùng tiêu đề và tín hiệu version mới, gợi ý append vs create (kèm relates)",
           "callsNext": "app/api/news/[id]/integrate/route.ts#POST",
           "dataPassed": "MatchLessonsResponse"
         },
@@ -1852,6 +1933,7 @@
       ],
       "invariants": [
         "KnowledgeProvenance và KnowledgeRelation không bao giờ nạp vào KnowledgeDocument hay index dùng chung (ADR-0006, ADR-0017)",
+        "KnowledgeProvenance chỉ tạo từ NewsItem; concept promotion từ chat không tạo Provenance",
         "Visitor không bao giờ kích hoạt fetch provenance, không nhận external_sources trong prompt hay metadata",
         "Quan hệ relates lưu đối xứng theo thứ tự chuẩn fromLessonId < toLessonId"
       ],
@@ -1866,6 +1948,110 @@
         "ADR-0015",
         "ADR-0016",
         "ADR-0017"
+      ]
+    },
+    {
+      "id": "FLOW_ABOT_CONCEPT_PROMOTION",
+      "name": "Chuyển đổi khái niệm từ chat / Domain Gap / Quiz thành Lesson dài hạn (Preview -> ok)",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner ra lệnh 'lưu khái niệm X thành bài học', gặp Scope.DOMAIN_GAP khi hỏi đáp không có bài khớp, hoặc kết thúc Quiz có lỗ hổng kiến thức",
+      "preconditions": [
+        "Actor là Owner (is_owner() == true); Visitor tuyệt đối không nhận action_preview hay pending_concept_promotion"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_content.py",
+          "functionOrMethod": "LessonContentCommands.handle_concept_promotion",
+          "action": "Nhận diện yêu cầu qua parse_concept_promotion_request (hoặc Domain Gap từ agent.py / lỗ hổng Quiz từ quiz_commands.py) và gọi advise_concept_promotion xác định append vào bài có sẵn hay create bài mới (status mặc định 'target')",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py#advise_concept_promotion",
+          "dataPassed": "{ concept, summary, preferred_topic_slug, source }"
+        },
+        {
+          "order": 2,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_content.py",
+          "functionOrMethod": "LessonContentCommands.build_concept_promotion_proposal",
+          "action": "Soạn bản nháp HTML chuẩn H2/H3 với include_owner_memory=False (hoặc fallback offline có cấu trúc), đóng gói pending_concept_promotion và phát action_preview (kind='concept_promotion', hỗ trợ sửa tên/Topic)",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#RoadmapCommands._handle_pending_concept_promotion",
+          "dataPassed": "pending_concept_promotion: { mode: 'create'|'append', status: 'target', html, related_lessons }"
+        },
+        {
+          "order": 3,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/commands.py",
+          "functionOrMethod": "RoadmapCommands._handle_pending_concept_promotion",
+          "action": "Khi Owner xác nhận ('ok' hoặc POST /chat/confirm), thực thi dưới write_granted: gọi ActionExecutor.aexecute (tool promote_concept_to_lesson, status='target') + tạo KnowledgeRelation (relates), hoặc update_item_content; đồng thời kích hoạt schedule_local_rag_sync khi chạy sqlite mode",
+          "callsNext": "roadmap-rag-assistant/rag_service/execution/executor.py#schedule_local_rag_sync",
+          "dataPassed": "tool_start/tool_end + ChangeReview"
+        }
+      ],
+      "invariants": [
+        "Khái niệm học tập dài hạn lưu vào Lesson (RoadmapItem), không lưu nhầm vào OwnerMemory",
+        "Tạo bài mới từ Domain Gap / Quiz / Concept Promotion mặc định status='target' và không tạo KnowledgeProvenance",
+        "Bản nháp Lesson không bao giờ trộn <owner_memory> vào HTML công khai của bài (include_owner_memory=False)"
+      ],
+      "failureModes": [
+        "Không xác định được Topic đích khi Owner không mở trang hay nêu tên: Abot hỏi lại Topic rõ ràng, không tạo bừa"
+      ],
+      "relatedAdrs": [
+        "ADR-0002",
+        "ADR-0010",
+        "ADR-0012",
+        "ADR-0015",
+        "ADR-0017"
+      ]
+    },
+    {
+      "id": "FLOW_ABOT_WEBMCP_SAFETY",
+      "name": "An toàn WebMCP Read-Only & Phân quyền Owner",
+      "domainId": "auth-security",
+      "actor": "Owner | Visitor",
+      "trigger": "Component RoadmapWebMcpRegistrar mount trên client hoặc Owner gõ '/webmcp <lệnh>' gửi tới POST /chat/plan",
+      "preconditions": [
+        "NextAuth session xác định useCanWrite() phía client và proxy gán x-actor phía server"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/roadmap/RoadmapWebMcpRegistrar.tsx",
+          "functionOrMethod": "RoadmapWebMcpRegistrar",
+          "action": "Kiểm tra useCanWrite(); chỉ mount và gọi useRoadmapWebMcpTools khi canWrite === true, abort/gỡ đăng ký ngay khi canWrite chuyển false",
+          "callsNext": "hooks/use-roadmap-webmcp.ts#useRoadmapWebMcpTools",
+          "dataPassed": "navigator.modelContext tools (chỉ Owner)"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "roadmap-rag-assistant/rag_service/api/routes.py",
+          "functionOrMethod": "plan",
+          "action": "Gán actor qua set_actor(_actor_of(request)) trên POST /chat/plan, lọc tool không thuộc _WEBMCP_READ_ONLY_TOOLS cho non-Owner và chặn mọi write tool trả về",
+          "callsNext": "roadmap-rag-assistant/rag_service/webmcp_planner.py#plan_webmcp_call",
+          "dataPassed": "{ message, available_tools, page_context }"
+        },
+        {
+          "order": 3,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/webmcp_planner.py",
+          "functionOrMethod": "plan_webmcp_call",
+          "action": "Kiểm is_owner(), thu hẹp _allowed_tools về READ_ONLY_WEBMCP_TOOLS (get_current_context, list_roadmaps, get_roadmap, export_roadmaps), và chuyển hướng lệnh ghi của Owner sang luồng Preview -> ok trên chat Abot",
+          "callsNext": null,
+          "dataPassed": "{ tool: string | null, args, reply }"
+        }
+      ],
+      "invariants": [
+        "Visitor không bao giờ đăng ký được WebMCP tools hoặc lập kế hoạch thực thi tool ghi qua /chat/plan",
+        "WebMCP hoạt động ở chế độ read-only theo Q1 Option A; mọi thao tác thay đổi dữ liệu đều đi qua chat Preview -> ok"
+      ],
+      "failureModes": [
+        "Client truyền nhầm danh sách write tools vào /chat/plan: server tự lọc bỏ về tập read-only"
+      ],
+      "relatedAdrs": [
+        "ADR-0002",
+        "ADR-0019"
       ]
     }
   ],
@@ -2203,9 +2389,19 @@
       "summary": "Trạng thái bài học phản ánh tiến trình của Owner (target, learning, known); chỉ Owner xem được; mặc định là known; không gắn với độ khó."
     },
     {
+      "ruleId": "ADR-0011",
+      "title": "Drop Knowledge Triage",
+      "summary": "Bỏ Knowledge Triage; giữ Langfuse Feedback (Cris AI 👍/👎 giữ nguyên) và Golden Set; Abot giữ tắt onFeedback và giữ nút ID copy traceId cho Owner."
+    },
+    {
       "ruleId": "ADR-0012",
       "title": "Owner Thread State in Turso",
-      "summary": "Lịch sử và ngữ cảnh đang mở của Thread Owner lưu ở Turso qua Next.js API; Thread Visitor và mọi Pending Action chỉ nằm trong RAM."
+      "summary": "Lịch sử và ngữ cảnh đang mở của Thread Owner lưu ở Turso qua Next.js API (ThreadMessage schema tối giản); Thread Visitor và mọi Pending Action chỉ nằm trong RAM."
+    },
+    {
+      "ruleId": "ADR-0014",
+      "title": "Topic-Scoped URLs and Heading Anchors (supersedes ADR-0013)",
+      "summary": "Topic dùng /[topicSlug], Lesson dùng /[topicSlug]/[lessonSlug]#[headingSlug], vẫn giữ RoadmapItem.slug duy nhất toàn cục và SlugRedirect 308."
     },
     {
       "ruleId": "ADR-0015",
@@ -2224,8 +2420,8 @@
     },
     {
       "ruleId": "ADR-0019",
-      "title": "Owner-only site, no Public News",
-      "summary": "Middleware bắt đăng nhập mọi trang trừ /login (không còn trang public); route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key."
+      "title": "Owner-only site, no Public News (supersedes ADR-0018)",
+      "summary": "Middleware bắt đăng nhập mọi trang trừ /login (không còn trang public); route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key; WebMCP chỉ đăng ký read-only khi canWrite === true."
     }
   ]
 }

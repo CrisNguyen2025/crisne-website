@@ -18,18 +18,20 @@
 
 ## Giai đoạn và hàng đợi task
 
-### Giai đoạn 0: nền chắc (đang chạy)
+### Giai đoạn 0: nền chắc (đã hoàn tất và hợp nhất lên `main`)
+> Cập nhật `2026-11-26`: toàn bộ nền tảng Giai đoạn 0, 0.5 và Giai đoạn 1 dưới đây đã hoàn tất và được kế thừa trực tiếp trong `.handoff/PLAN-abot-scale.md` (`TASK-abot-scale-001..003`). Bảng bên dưới giữ lại để đối chiếu lịch sử thiết kế `2026-11-05`.
+
 | Task | Branch | Trạng thái | Chạy song song được với |
 |---|---|---|---|
-| `TASK-lesson-status-002`: Abot đọc / đổi Lesson Status, chặn Visitor, rà rò rỉ | `feat/lesson-status-abot` | READY | rag-sync-001 |
-| `TASK-rag-sync-001`: `/health` có trạng thái index, test sync end-to-end, không reindex khi chỉ đổi status | `feat/rag-sync-hardening` | READY | lesson-status-002 |
-| `TASK-abot-bugs-001`: lỗi 9 (dòng "Chưa có topic nào được chọn" hiện sai), lỗi 2 (tên topic chứa "Section"), lỗi 8 (preview xoá bài) | `fix/abot-bugs` | Chưa viết spec, chờ lesson-status-002 merge (cùng đụng `commands.py`) | — |
-| Claude tự kiểm: cache embedding trên Railway có bền qua các lần deploy không | — | Xong 2026-11-05, xem "Kết quả gần nhất" | — |
-| `TASK-rag-sync-002`: index FTS ngay, embedding chạy nền sau (index không còn trống sau mỗi lần deploy) | `feat/rag-index-fts-first` | Chưa viết spec, chờ rag-sync-001 merge (cùng sửa `retrieval/**`) | — |
+| `TASK-lesson-status-002`: Abot đọc / đổi Lesson Status, chặn Visitor, rà rò rỉ | `feat/lesson-status-abot` | DONE (đã hợp nhất `main`) | rag-sync-001 |
+| `TASK-rag-sync-001`: `/health` có trạng thái index, test sync end-to-end, không reindex khi chỉ đổi status | `feat/rag-sync-hardening` | DONE (đã hợp nhất `main`) | lesson-status-002 |
+| `TASK-abot-bugs-001`: lỗi 9 (dòng "Chưa có topic nào được chọn" hiện sai), lỗi 2 (tên topic chứa "Section"), lỗi 8 (preview xoá bài) | `fix/abot-bugs` | DONE (đã hợp nhất `main`) | — |
+| Claude tự kiểm: cache embedding trên Railway có bền qua các lần deploy không | — | DONE (`2026-11-05`) | — |
+| `TASK-rag-sync-002`: index FTS ngay, embedding chạy nền sau (index không còn trống sau mỗi lần deploy) | `feat/rag-index-fts-first` | DONE (đã hợp nhất `main`) | — |
 
-### Giai đoạn 0.5: nạp nội dung vào kho (đòn bẩy lớn nhất cho mục tiêu)
-- Kho trên Turso hiện chỉ có **4 topic và 1 bài**. Công cụ đã có nhưng gần như chưa có tri thức, nên Abot chưa có gì để gợi ý.
-- `TASK-seed-import-001` (`feat/seed-import`, đang chạy, Antigravity): nhập khoảng 110 bài trong `lib/roadmap/data.ts` vào topic `ai-architecture` với trạng thái `target` (Owner chốt ngày 2026-11-05). Script mặc định dry-run, bỏ qua bài trùng tiêu đề, backup và ghi trong một transaction. **Owner tự chạy `yarn db:import-seed --apply`** sau khi Claude review xong và đã xem output dry-run trên Turso. Chạy song song được với lesson-status-002 và rag-sync-001 (không đụng file của nhau).
+### Giai đoạn 0.5: nạp nội dung vào kho (lịch sử `2026-11-05`)
+- Thời điểm `2026-11-05`, kho trên Turso mới có 4 topic và 1 bài; nay đã được nạp corpus thực tế và mở rộng qua `NewsItem -> Lesson` và concept promotion từ chat.
+- `TASK-seed-import-001` (`feat/seed-import`): đã hoàn tất import 109 bài seed trạng thái `target` vào `ai-architecture`.
 - Song song: Owner liệt kê những topic đang theo dõi thật ngoài đời, rồi dán vào Abot để nhập hàng loạt (bulk import đã có, có Preview).
 
 ### Giai đoạn 1: trợ lý ôn tập
@@ -47,12 +49,15 @@
 1. ~~Bao lâu thì coi một bài là cũ: theo thời gian, hay chỉ khi có version mới?~~ Đã chốt 2026-11-23: khi có version mới.
 2. ~~Abot có được tìm trên web, hay chỉ đọc nguồn đã khai báo cho từng topic?~~ Đã chốt 2026-11-23: chỉ đọc nguồn đã khai báo, không tìm web.
 3. "Đổi techstack" là thế giới ra version mới, repo của Owner đổi dependency, hay cả hai? (Còn mở, tách khỏi plan Knowledge Acquisition.)
-4. ~~Gợi ý hiện ở đâu: Triage, chat của Abot, hay bản tóm tắt định kỳ?~~ Đã chốt 2026-11-23: gợi ý từ nguồn tin ở `/feed-ingestion`, gợi ý ôn tập trong chat Abot.
-5. ~~Kho tri thức có còn công khai cho Visitor không, hay chỉ trạng thái và gợi ý là riêng tư (như ADR-0010)?~~ Đã chốt 2026-11-23: chỉ Owner, trừ Public News (ADR-0018).
+4. ~~Gợi ý hiện ở đâu: Triage, chat của Abot, hay bản tóm tắt định kỳ?~~ Đã chốt 2026-11-23: gợi ý từ nguồn tin ở `/news` (trước đây `/feed-ingestion`), gợi ý ôn tập/khái niệm trong chat Abot.
+5. ~~Kho tri thức có còn công khai cho Visitor không, hay chỉ trạng thái và gợi ý là riêng tư (như ADR-0010)?~~ Đã chốt 2026-11-23 (ADR-0018 → ADR-0019): chỉ dành riêng cho `Owner`, bỏ hoàn toàn Public News.
 6. ~~Có nhập bài seed vào Turso không?~~ Đã chốt 2026-11-05: nhập, trạng thái `target`.
-7. Lịch sử chat của Abot có cần giữ qua các lần deploy không? Hiện lưu trong RAM, trừ khi đặt `RAG_HISTORY_DB`, mà trên Railway file cũng mất khi deploy. (Còn mở. ADR-0012 đã lưu Thread của Owner ở Turso; cần xem câu này còn đúng không.)
+7. ~~Lịch sử chat của Abot có cần giữ qua các lần deploy không?~~ Đã chốt theo ADR-0012 + ADR-0015 + `TASK-abot-scale-003` Q2 Option (A): `Thread`, `ThreadMessage` (schema tối giản) và `OwnerMemory` của `Owner` lưu ở Turso qua API Next.js; `Pending Action` và `Thread` `Visitor` chỉ giữ trong RAM.
 
-## Kết quả gần nhất (2026-11-05)
+## Nhật ký & Lịch sử `2026-11-05`
+> Mục `Kết quả gần nhất`, `Đợt A–D` dưới đây là log lưu trữ tại thời điểm `2026-11-05`; toàn bộ đầu việc Giai đoạn 0–1 và các bước mở rộng năng lực Abot tiếp theo được theo dõi tại `.handoff/PLAN-abot-scale.md` và `.handoff/PLAN-knowledge-acquisition.md`.
+
+### Kết quả gần nhất (2026-11-05)
 - **lesson-status-002**: Antigravity báo `COMPLETED` (lần 1, chưa commit). **Claude review: cần sửa 3 việc**, đã giao lại (lần thử 2). (1) bỏ nhánh schema Layer/Group cũ đã thêm vào `sqlite_adapter.py` chỉ để test pass trên `dev.db` cũ; (2) bỏ `status` khỏi tool LLM `update_item`, vì luồng CUD chung có thể ghi ngay mà không qua Preview; (3) hoàn tác thay đổi ngoài phạm vi. Những phần khác đạt: (a)/(b)/(c), Preview ok/hủy, chặn Visitor ở cả handler và adapter, pytest 982/982.
 - **rag-sync-001**: Antigravity báo `COMPLETED` (commit `2349db2`, `02faf69`). **Claude review: ĐẠT, chờ Owner duyệt merge.** Code khớp spec, mọi file nằm trong boundary. PATCH chỉ có 4 trường (title, description, section, status), nên bỏ reindex khi chỉ đổi `status` là đúng. `/health` chỉ trả số liệu. Chạy lại: vitest 22/22 (test mới cùng test reindex cũ), pytest các test sync và health 18/18, toàn bộ pytest 967 pass / 3 fail. Cả 3 fail đều do môi trường, không phải lỗi của branch: `test_evals_answer_target` và `test_stress_set_offline…` fail cả trên `main`; `test_held_out_messages…` fail vì worktree dùng `prisma/dev.db` bản đã commit có schema cũ ("no such column: i.roadmapId"), còn branch không đụng `prisma/` hay adapter. Việc riêng nên làm sau: các test Python không nên phụ thuộc `prisma/dev.db`.
 - **seed-import-001, lần 2** (commit `c61b15c`, `570fbfc`): **Claude review: ĐẠT, chờ Owner duyệt merge rồi tự chạy `--apply`.** Ngày giờ giờ lưu số mili giây, kèm kiểm tra trong script và unit test. Claude chạy lại: vitest 7/7, tsc sạch, eslint file mới sạch, dry-run Turso: 109 bài, 0 bỏ qua.

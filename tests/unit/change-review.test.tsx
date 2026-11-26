@@ -69,6 +69,32 @@ describe("ChangeReviewCard", () => {
     const { container } = render(<ChangeReviewCard changes={[{ ...CREATE, added: 0, entries: [] }]} />);
     expect(container.innerHTML).toBe("");
   });
+
+  it("displays update operations alongside content and memory levels", () => {
+    const updateContent: ChangeReview = {
+      id: "c3",
+      action: "update",
+      level: "content",
+      added: 0,
+      updated: 2,
+      removed: 0,
+      entries: [
+        { op: "update", level: "content", title: "Hybrid Search", id: "lesson-1" },
+        { op: "update", level: "memory", title: "Luôn dùng ví dụ Next.js 16", id: "mem-1" },
+      ],
+    };
+
+    const { getByRole, getByText } = render(<ChangeReviewCard changes={[updateContent]} />);
+    const toggle = getByRole("button");
+    expect(toggle.textContent).toContain("2 thay đổi");
+    expect(toggle.textContent).toContain("~2");
+
+    fireEvent.click(toggle);
+    expect(getByText("Nội dung")).toBeTruthy();
+    expect(getByText("Bộ nhớ")).toBeTruthy();
+    expect(getByText("Hybrid Search")).toBeTruthy();
+    expect(getByText("Luôn dùng ví dụ Next.js 16")).toBeTruthy();
+  });
 });
 
 describe("RoadmapChatClient change_review events", () => {

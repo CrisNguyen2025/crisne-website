@@ -23,6 +23,7 @@ from rag_service.domains.roadmap.lesson_content import matches_page_item
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.policy import KNOWN_CUE, REVIEW_CUE, asks_next_lesson
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
+from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
 
@@ -379,9 +380,13 @@ class LessonStatusCommands(AgentHostMixin):
             f"- **Topic:** {topic.get('title')}\n"
             f"- **Trạng thái cũ:** {old_label}\n"
             f"- **Trạng thái mới:** {new_label}\n\n"
-            f"👉 Gõ **ok** để xác nhận thực hiện hoặc **hủy** để hủy bỏ."
+            f"👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để cập nhật, hoặc bấm **[❌ Hủy bỏ]** để hủy bỏ."
         )
-        yield {"type": "action_preview", "action_id": session_ctx.session_id, "preview": preview_text}
+        yield build_action_preview_event(
+            action_id=session_ctx.session_id,
+            kind="status_change",
+            preview=preview_text,
+        )
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 

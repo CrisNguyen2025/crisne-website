@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useCanWrite } from '@/hooks/use-can-write';
 import {
   clearDeletedTopicSlug,
   recordPendingDeletion,
@@ -254,7 +255,10 @@ const ROADMAP_WEBMCP_TOOLS: WebMcpTool[] = [
  * Handlers call logic/roadmap/roadmapService, so API logic is not duplicated here.
  */
 export function useRoadmapWebMcpTools() {
+  const canWrite = useCanWrite();
+
   useEffect(() => {
+    if (!canWrite) return;
     const modelContext = document.modelContext;
     if (!modelContext) return;
 
@@ -266,5 +270,5 @@ export function useRoadmapWebMcpTools() {
     }
 
     return () => controller.abort();
-  }, []);
+  }, [canWrite]);
 }
