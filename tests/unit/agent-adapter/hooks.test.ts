@@ -1,5 +1,6 @@
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import * as os from 'os';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
@@ -11,6 +12,9 @@ import { Hook } from '../../../scripts/agent-adapter/core/model';
 import { writeConfig } from '../../../scripts/agent-adapter/core/write';
 
 const repoRoot = path.resolve(__dirname, '../../..');
+const cjsRequire = createRequire(import.meta.url);
+const guardTaskBoundaryRaw = cjsRequire('../../../.agents/adapter/hooks/guard-task-boundary.js');
+const guardGitSafetyRaw = cjsRequire('../../../.agents/adapter/hooks/guard-git-safety.js');
 
 describe('AgentAdapter - Hooks System', () => {
   describe('(a) Validation of Hook ID', () => {
@@ -531,6 +535,257 @@ describe('AgentAdapter - Hooks System', () => {
       const preservedData = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
       expect(preservedData.userTheme).toBe('dark');
       expect(preservedData.hooks).toEqual({ PreToolUse: [{ matcher: 'Edit' }] });
+    });
+  });
+
+  describe('(i) guard-task-boundary execution', () => {
+    type HookDecision = { decision: string; reason: string } | undefined;
+    type HookFn = (payload: {
+      event?: string;
+      tool?: { category?: string; name?: string; path?: string; command?: string };
+      repoRoot?: string;
+    }) => Promise<HookDecision>;
+
+    const guardTaskBoundary = guardTaskBoundaryRaw as unknown as HookFn;
+
+    const withTaskSandbox = async (
+      opts: {
+        lock?: Record<string, unknown> | string | null;
+        specId?: string;
+        specBody?: string;
+      },
+      fn: (root: string) => Promise<void>,
+    ) => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-boundary-'));
+      try {
+        fs.mkdirSync(path.join(root, '.handoff', 'runs'), { recursive: true });
+        fs.mkdirSync(path.join(root, '.handoff', 'specs'), { recursive: true });
+        if (opts.lock !== undefined && opts.lock !== null) {
+          const content = typeof opts.lock === 'string' ? opts.lock : JSON.stringify(opts.lock);
+          fs.writeFileSync(path.join(root, '.handoff', 'runs', '.lock'), content, 'utf-8');
+        }
+        if (opts.specId && opts.specBody) {
+          fs.writeFileSync(path.join(root, '.handoff', 'specs', `${opts.specId}.md`), opts.specBody, 'utf-8');
+        }
+        await fn(root);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    };
+
+    const sampleImplementSpec = [
+      '---',
+      'task_id: "TASK-demo-001"',
+      'type: "implement"',
+      'boundaries:',
+      '  allowed_to_modify:',
+      '    - "components/roadmap/**"',
+      '    - "lib/single.ts"',
+      '  strictly_forbidden:',
+      '    - "components/roadmap/Forbidden.tsx"',
+      '    - "package.json"',
+      '---',
+      '# Demo',
+    ].join('\n');
+
+    it('allows any edit when no lock exists or when lock is older than 4 hours', async () => {
+      await withTaskSandbox({ specId: 'TASK-demo-001', specBody: sampleImplementSpec }, async root => {
+        const res = await guardTaskBoundary({
+          tool: { category: 'edit', name: 'Edit', path: 'package.json' },
+          repoRoot: root,
+        });
+        expect(res).toBeUndefined();
+      });
+
+      const staleStartedAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+      await withTaskSandbox(
+        {
+          lock: { task_id: 'TASK-demo-001', started_at: staleStartedAt },
+          specId: 'TASK-demo-001',
+          specBody: sampleImplementSpec,
+        },
+        async root => {
+          const res = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Edit', path: 'package.json' },
+            repoRoot: root,
+          });
+          expect(res).toBeUndefined();
+        },
+      );
+    });
+
+    it('enforces allowed_to_modify, strictly_forbidden, and handoff runtime paths when lock is active', async () => {
+      await withTaskSandbox(
+        {
+          lock: { task_id: 'TASK-demo-001', started_at: new Date().toISOString() },
+          specId: 'TASK-demo-001',
+          specBody: sampleImplementSpec,
+        },
+        async root => {
+          const allowedTargets = [
+            'components/roadmap/TopicCard.tsx',
+            'lib/single.ts',
+            '.handoff/specs/TASK-demo-001.md',
+            '.handoff/runs/.lock',
+            '.handoff/runs/escalations/ESC-TASK-demo-001.md',
+            '.handoff/runs/TASK-demo-001/result.json.tmp',
+            '.handoff/runs/TASK-demo-001/progress.md',
+            '../outside-brain-artifact/plan.md',
+          ];
+
+          for (const target of allowedTargets) {
+            const res = await guardTaskBoundary({
+              tool: { category: 'edit', name: 'write_file', path: target },
+              repoRoot: root,
+            });
+            expect(res, target).toBeUndefined();
+          }
+
+          const outOfScope = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Edit', path: 'app/page.tsx' },
+            repoRoot: root,
+          });
+          expect(outOfScope?.decision).toBe('deny');
+          expect(outOfScope?.reason).toContain('allowed_to_modify');
+
+          const forbidden = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Edit', path: 'components/roadmap/Forbidden.tsx' },
+            repoRoot: root,
+          });
+          expect(forbidden?.decision).toBe('deny');
+          expect(forbidden?.reason).toContain('strictly_forbidden');
+
+          const baselineEdit = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Write', path: '.handoff/runs/TASK-demo-001/baseline.txt' },
+            repoRoot: root,
+          });
+          expect(baselineEdit?.decision).toBe('deny');
+          expect(baselineEdit?.reason).toContain('baseline.txt');
+
+          const directResultJson = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'write_file', path: '.handoff/runs/TASK-demo-001/result.json' },
+            repoRoot: root,
+          });
+          expect(directResultJson?.decision).toBe('deny');
+          expect(directResultJson?.reason).toContain('result.json.tmp');
+        },
+      );
+    });
+
+    it('denies repo source edits for review tasks while allowing spec and review.md', async () => {
+      const reviewSpec = sampleImplementSpec.replace('type: "implement"', 'type: "review"');
+      await withTaskSandbox(
+        {
+          lock: { task_id: 'TASK-demo-001', started_at: new Date().toISOString() },
+          specId: 'TASK-demo-001',
+          specBody: reviewSpec,
+        },
+        async root => {
+          const denied = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Edit', path: 'components/roadmap/TopicCard.tsx' },
+            repoRoot: root,
+          });
+          expect(denied?.decision).toBe('deny');
+          expect(denied?.reason).toContain('review');
+
+          const allowedReview = await guardTaskBoundary({
+            tool: { category: 'edit', name: 'Write', path: '.handoff/runs/TASK-demo-001/review.md' },
+            repoRoot: root,
+          });
+          expect(allowedReview).toBeUndefined();
+        },
+      );
+    });
+  });
+
+  describe('(j) guard-git-safety execution', () => {
+    type HookDecision = { decision: string; reason: string } | undefined;
+    type HookFn = (payload: {
+      event?: string;
+      tool?: { category?: string; name?: string; command?: string };
+      repoRoot?: string;
+    }) => Promise<HookDecision>;
+
+    const guardGitSafety = guardGitSafetyRaw as unknown as HookFn;
+    const runnerScript = path.join(repoRoot, 'scripts/agent-adapter/hook-runner.js');
+
+    it('always denies destructive git commands across Claude and Antigravity runners', () => {
+      const destructive = [
+        'git reset --hard HEAD',
+        'cd roadmap-rag-assistant && git clean -fd',
+        'git restore .',
+        'git restore -- .',
+        'git checkout -- .',
+        'git branch -D feat/old',
+        'git push --force origin main',
+        'bash -c "git reset --hard"',
+      ];
+
+      for (const cmd of destructive) {
+        const claudeRes = spawnSync('node', [runnerScript, 'guard-git-safety', '--agent=claude'], {
+          input: JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: cmd } }),
+          encoding: 'utf-8',
+        });
+        expect(claudeRes.status, `claude: ${cmd}`).toBe(0);
+        expect(JSON.parse(claudeRes.stdout).hookSpecificOutput.permissionDecision, `claude: ${cmd}`).toBe('deny');
+
+        const agyRes = spawnSync('node', [runnerScript, 'guard-git-safety', '--agent=antigravity'], {
+          input: JSON.stringify({ toolCall: { name: 'run_command', args: { CommandLine: cmd } } }),
+          encoding: 'utf-8',
+        });
+        expect(agyRes.status, `antigravity: ${cmd}`).toBe(0);
+        expect(JSON.parse(agyRes.stdout).decision, `antigravity: ${cmd}`).toBe('deny');
+      }
+    });
+
+    it('allows safe git commands, single-file restore, dry-run clean, and quoted grep strings', async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-git-nolock-'));
+      try {
+        const safeCommands = [
+          'git status --short',
+          'git clean -nd',
+          'git restore -- src/app/page.tsx',
+          'git checkout -b feat/new-hook',
+          'git branch -d feat/merged',
+          'grep "git reset --hard" AGENTS.md',
+          'git commit -m "chore: allowed outside executor lock"',
+          'git push origin --delete feat/merged',
+        ];
+
+        for (const cmd of safeCommands) {
+          const res = await guardGitSafety({
+            tool: { category: 'shell', name: 'Bash', command: cmd },
+            repoRoot: root,
+          });
+          expect(res, cmd).toBeUndefined();
+        }
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
+    it('denies git commit and git push only while an active Executor lock is present', async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-git-locked-'));
+      try {
+        const runsDir = path.join(root, '.handoff', 'runs');
+        fs.mkdirSync(runsDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(runsDir, '.lock'),
+          JSON.stringify({ task_id: 'TASK-exec-001', started_at: new Date().toISOString() }),
+          'utf-8',
+        );
+
+        for (const cmd of ['git commit -m "bad"', 'git push origin feat/x']) {
+          const res = await guardGitSafety({
+            tool: { category: 'shell', name: 'Bash', command: cmd },
+            repoRoot: root,
+          });
+          expect(res?.decision, cmd).toBe('deny');
+          expect(res?.reason, cmd).toContain('TASK-exec-001');
+        }
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
     });
   });
 });

@@ -26,10 +26,12 @@ Các file sau do `yarn agents:sync` sinh ra và được commit trong git:
   - (Skills được Antigravity đọc trực tiếp từ `.agents/skills/`)
   - (Subagents `unsupported`: Antigravity dùng skill `verify-ci` dùng chung trong phiên chính)
 
-## 3. Cơ chế Hook và Guard Generated
+## 3. Cơ chế Hook và Các Guard Hiện Có
 
 - **Hook Runner (`scripts/agent-adapter/hook-runner.js`)**: Runner dùng chung chuẩn hoá stdin/stdout giữa Claude Code và Antigravity, truyền payload `{ event, tool, repoRoot }` tới script thực thi. Runner tuân thủ nguyên tắc **fail-open** (exit code 0 nếu gặp lỗi cú pháp stdin, thiếu script, hoặc hook crash) để không làm treo phiên làm việc của agent.
-- **Hook `guard-generated`**: Hook `PreToolUse` kiểm tra công cụ `edit` (bao gồm `Edit`, `Write` trên Claude; `edit_file`, `write_file` trên Antigravity). Nếu agent định sửa các file sinh tự động (`.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md`), hook sẽ từ chối (`deny`) và hướng dẫn sửa tại nguồn trong `.agents/adapter/`.
+- **Hook `guard-generated` (`PreToolUse` trên `edit`)**: Nếu agent định sửa các file sinh tự động (`.mcp.json`, `.agents/mcp_config.json`, `.agents/hooks.json`, `.claude/agents/*.md`), hook sẽ từ chối (`deny`) và hướng dẫn sửa tại nguồn trong `.agents/adapter/`.
+- **Hook `guard-task-boundary` (`PreToolUse` trên `edit`)**: Khi có `.handoff/runs/.lock` còn hiệu lực (≤ 4 giờ), hook đối chiếu file sắp sửa với `allowed_to_modify` / `strictly_forbidden` / `type` trong `.handoff/specs/<task_id>.md`; cho phép các đường dẫn runtime hợp lệ của task (`.handoff/specs/<task_id>.md`, `.handoff/runs/.lock`, `ESC-<task_id>.md`, `.handoff/runs/<task_id>/**`) nhưng chặn sửa `baseline.txt` và chặn ghi thẳng vào `result.json` (bắt buộc ghi `result.json.tmp` rồi `mv`).
+- **Hook `guard-git-safety` (`PreToolUse` trên `shell`)**: Luôn chặn các lệnh git phá hoại (`git reset --hard`, `git clean -f`, `git restore .`, `git checkout .`, `git branch -D`, `git push --force`, vẫn cho phép `git restore -- <file>` và `git clean -n`); đồng thời chặn `git commit` và `git push` khi đang giữ `.handoff/runs/.lock` của phiên Executor.
 - **Ngoại lệ `.claude/settings.json`**: guard chặn theo cả file, mà file này còn các key khác được sửa tay (ví dụ `permissions`), nên guard không chặn. Mục `hooks` trong đó chỉ được `yarn agents:sync --check` bắt ở CI.
 
 ### Chọn hook, subagent hay skill

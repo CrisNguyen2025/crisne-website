@@ -10,6 +10,26 @@
           }
         ],
         "matcher": "Edit|Write"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/agent-adapter/hook-runner.js\" guard-task-boundary --agent=claude",
+            "timeout": 10
+          }
+        ],
+        "matcher": "Edit|Write"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/agent-adapter/hook-runner.js\" guard-git-safety --agent=claude",
+            "timeout": 10
+          }
+        ],
+        "matcher": "Bash"
       }
     ]
   }

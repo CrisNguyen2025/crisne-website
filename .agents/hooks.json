@@ -11,5 +11,31 @@
         "matcher": "edit_file|write_file"
       }
     ]
+  },
+  "guard-task-boundary": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node ../scripts/agent-adapter/hook-runner.js guard-task-boundary --agent=antigravity",
+            "timeout": 10
+          }
+        ],
+        "matcher": "edit_file|write_file"
+      }
+    ]
+  },
+  "guard-git-safety": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node ../scripts/agent-adapter/hook-runner.js guard-git-safety --agent=antigravity",
+            "timeout": 10
+          }
+        ],
+        "matcher": "run_command"
+      }
+    ]
   }
 }

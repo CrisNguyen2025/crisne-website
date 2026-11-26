@@ -8,6 +8,24 @@
       ],
       "script": "hooks/guard-generated.js",
       "timeout": 10
+    },
+    {
+      "id": "guard-task-boundary",
+      "event": "PreToolUse",
+      "tools": [
+        "edit"
+      ],
+      "script": "hooks/guard-task-boundary.js",
+      "timeout": 10
+    },
+    {
+      "id": "guard-git-safety",
+      "event": "PreToolUse",
+      "tools": [
+        "shell"
+      ],
+      "script": "hooks/guard-git-safety.js",
+      "timeout": 10
     }
   ]
 }
