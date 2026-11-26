@@ -12,6 +12,7 @@ File dùng chung cho mọi coding agent (Claude Code, Codex, Antigravity). Phầ
 - Lint / test: `yarn lint` · `yarn test`
 - Schema và index: `yarn test:schema-sql --check` · `yarn check:knowledge-index`
 - Config agent: `yarn agents:sync --check` (sinh lại bằng `yarn agents:sync`)
+- Preflight môi trường & trạng thái phiên: `yarn preflight` (thêm `--full` để kiểm config, index, schema, map)
 - Doctor (ratchet, không cho thêm finding bug/risk mới): `yarn doctor --check` (ghi lại baseline bằng `yarn doctor --update-baseline`)
 - Python (`cd roadmap-rag-assistant`): `.venv/bin/python -m pytest -q` · `.venv/bin/python -m evals validate` · `.venv/bin/python -m evals router-check` · `.venv/bin/python -m evals.router.holdout` · `.venv/bin/python -m evals.router.confuse`
 - Python (`cd news-ingest-worker`): `.venv/bin/python -m pytest -q`
