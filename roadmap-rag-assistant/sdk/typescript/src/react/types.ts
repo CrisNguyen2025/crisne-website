@@ -164,6 +164,11 @@ export interface ChatbotConfig {
   onToolExecuted?: (toolName: string, result: string, isFailed?: boolean) => void;
 
   /**
+   * Optional notification callback (e.g., toast) for actions like deleting or switching a Thread.
+   */
+  onNotify?: (message: string, type?: 'success' | 'error') => void;
+
+  /**
    * Callback fired with the last vote on an answer (1 for like, 0 for unlike, null when taken back),
    * after rapid clicks settle. A 👎 arrives once its reason sheet closes, with the reason if given.
    * Reject the promise when the vote was not saved: the widget then shows the previous vote again.

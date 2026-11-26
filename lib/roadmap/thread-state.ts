@@ -9,6 +9,12 @@ export const THREAD_RETENTION_MS = 30 * 24 * 3600 * 1000;
 /** One message is clipped to this length (a bulk-import paste or a long answer). */
 export const MAX_MESSAGE_CONTENT_CHARS = 20_000;
 
+export const DEFAULT_THREAD_LIST_LIMIT = 30;
+export const MAX_THREAD_LIST_LIMIT = 100;
+export const MAX_THREAD_SEARCH_CHARS = 100;
+export const MAX_THREAD_TITLE_CHARS = 80;
+const MAX_SNIPPET_CHARS = 96;
+
 const MAX_THREAD_ID_CHARS = 200;
 const MAX_TOPIC_FIELD_CHARS = 300;
 const MAX_LESSON_ID_CHARS = 120;
@@ -17,6 +23,42 @@ export const OWNER_THREAD_PREFIX = "owner:";
 
 export const THREAD_ROLES = ["user", "assistant"] as const;
 export type ThreadRole = (typeof THREAD_ROLES)[number];
+
+export interface ThreadSummary {
+  threadId: string;
+  title: string;
+  matchedSnippet: string | null;
+  lastMessageAt: string;
+  messageCount: number;
+  activeTopicSlug: string | null;
+  activeTopicTitle: string | null;
+  activeLessonTitle: string | null;
+  isClosed: boolean;
+}
+
+const TRIVIAL_GREETINGS = new Set([
+  "hi",
+  "hello",
+  "hey",
+  "alo",
+  "chao",
+  "xin chao",
+  "ok",
+  "oki",
+  "okay",
+  "test",
+]);
+
+const CONFIRMATION_ACTIONS = new Set([
+  "ok",
+  "oki",
+  "okay",
+  "huy",
+  "huy bo",
+  "cancel",
+  "xac nhan",
+  "dong y",
+]);
 
 /**
  * Only an Owner Thread is stored. The proxy prefixes every Thread id with its Actor ("owner:" or
@@ -61,4 +103,165 @@ export function cleanLessonIdField(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim().slice(0, MAX_LESSON_ID_CHARS);
   return trimmed || null;
+}
+
+export function parseThreadListLimit(raw: string | null): number {
+  if (!raw) return DEFAULT_THREAD_LIST_LIMIT;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_THREAD_LIST_LIMIT;
+  return Math.min(parsed, MAX_THREAD_LIST_LIMIT);
+}
+
+export function parseThreadSearchQuery(raw: string | null): string {
+  if (typeof raw !== "string") return "";
+  return raw.trim().slice(0, MAX_THREAD_SEARCH_CHARS);
+}
+
+export function foldThreadSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactText(text: string): string {
+  return text.replace(/[`*_#>\[\]]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+const TRAILING_PUNCTUATION = new Set(["!", "?", ".", "~", ","]);
+const SHORT_WORD_TOKEN_MAX = 3;
+
+function stripTrailingPunctuation(folded: string): string {
+  let out = folded;
+  while (out.length > 0 && TRAILING_PUNCTUATION.has(out[out.length - 1])) {
+    out = out.slice(0, -1);
+  }
+  return out.trim();
+}
+
+function isWordBoundaryChar(ch: string | undefined): boolean {
+  if (!ch) return true;
+  return !/[a-z0-9]/.test(ch);
+}
+
+function indexOfWordToken(haystack: string, token: string): number {
+  if (!token) return -1;
+  if (token.length > SHORT_WORD_TOKEN_MAX) {
+    return haystack.indexOf(token);
+  }
+  let pos = 0;
+  while (pos <= haystack.length - token.length) {
+    const found = haystack.indexOf(token, pos);
+    if (found < 0) return -1;
+    const before = found > 0 ? haystack[found - 1] : undefined;
+    const after = haystack[found + token.length];
+    if (isWordBoundaryChar(before) && isWordBoundaryChar(after)) {
+      return found;
+    }
+    pos = found + 1;
+  }
+  return -1;
+}
+
+export function isTrivialThreadGreeting(text: string): boolean {
+  const folded = stripTrailingPunctuation(foldThreadSearchText(text));
+  return !folded || TRIVIAL_GREETINGS.has(folded);
+}
+
+export function isConfirmationThreadMessage(text: string): boolean {
+  const folded = stripTrailingPunctuation(foldThreadSearchText(text));
+  return !folded || CONFIRMATION_ACTIONS.has(folded);
+}
+
+export function matchesThreadSearchText(haystack: string, query: string): boolean {
+  const foldedHaystack = foldThreadSearchText(haystack);
+  const foldedQuery = foldThreadSearchText(query);
+  if (!foldedHaystack || !foldedQuery) return false;
+
+  const tokens = foldedQuery.split(" ").filter(Boolean);
+  if (tokens.length === 1) {
+    return indexOfWordToken(foldedHaystack, tokens[0]) >= 0;
+  }
+  if (foldedHaystack.includes(foldedQuery)) {
+    return true;
+  }
+  return tokens.every((token) => indexOfWordToken(foldedHaystack, token) >= 0);
+}
+
+export function buildThreadTitle(contents: readonly string[]): string {
+  const cleaned = contents.map(compactText).filter(Boolean);
+  if (cleaned.length === 0) return "Cuộc trò chuyện";
+  const meaningful = cleaned.find((item) => !isTrivialThreadGreeting(item));
+  return truncateText(meaningful ?? cleaned[0], MAX_THREAD_TITLE_CHARS);
+}
+
+function foldWithOffsets(text: string): { folded: string; starts: number[] } {
+  let folded = "";
+  const starts: number[] = [];
+  let offset = 0;
+
+  for (const ch of text) {
+    const piece = ch
+      .toLowerCase()
+      .replace(/đ/g, "d")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    for (let i = 0; i < piece.length; i++) {
+      folded += piece[i];
+      starts.push(offset);
+    }
+    offset += ch.length;
+  }
+
+  return { folded, starts };
+}
+
+function findMatchedSlice(nfc: string, query: string): { start: number; end: number } | null {
+  const foldedQuery = foldThreadSearchText(query);
+  if (!foldedQuery) return null;
+
+  const { folded, starts } = foldWithOffsets(nfc);
+  const tokens = foldedQuery.split(" ").filter(Boolean);
+  let idx =
+    tokens.length === 1
+      ? indexOfWordToken(folded, tokens[0])
+      : folded.indexOf(foldedQuery);
+  let matchLen = foldedQuery.length;
+
+  if (idx < 0 && tokens.length > 0) {
+    idx = indexOfWordToken(folded, tokens[0]);
+    matchLen = tokens[0].length;
+  }
+
+  if (idx < 0 || idx >= starts.length) return null;
+  const start = starts[idx];
+  const lastIdx = Math.min(idx + Math.max(matchLen - 1, 0), starts.length - 1);
+  const end = starts[lastIdx] + 1;
+  return { start, end };
+}
+
+export function extractMatchSnippet(content: string, query: string): string | null {
+  const compacted = content.replace(/\s+/g, " ").trim().normalize("NFC");
+  if (!compacted) return null;
+
+  const matched = findMatchedSlice(compacted, query);
+  if (!matched) return null;
+
+  const halfWindow = Math.floor((MAX_SNIPPET_CHARS - (matched.end - matched.start)) / 2);
+  const windowStart = Math.max(0, matched.start - Math.max(halfWindow, 24));
+  const windowEnd = Math.min(compacted.length, windowStart + MAX_SNIPPET_CHARS);
+  const slice = compacted.slice(windowStart, windowEnd).trim();
+  if (!slice) return null;
+
+  const prefix = windowStart > 0 ? "…" : "";
+  const suffix = windowEnd < compacted.length ? "…" : "";
+  return `${prefix}${slice}${suffix}`;
 }

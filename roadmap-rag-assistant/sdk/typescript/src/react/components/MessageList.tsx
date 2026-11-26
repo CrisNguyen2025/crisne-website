@@ -58,6 +58,10 @@ export interface MessageListProps {
   scrollToBottom: () => void;
   /** Called before programmatic scroll away from the bottom so auto-follow disengages */
   onBeforeJump?: () => void;
+  /** Identifies the active Thread so switching Threads fades in cleanly and snaps to bottom. */
+  conversationKey?: string;
+  /** True while switching to another Thread from history. */
+  isTransitioning?: boolean;
 }
 
 /**
@@ -668,6 +672,8 @@ export function MessageList({
   autoFollowRef,
   scrollToBottom,
   onBeforeJump,
+  conversationKey,
+  isTransitioning = false,
 }: MessageListProps) {
   const showWelcomeStage =
     messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
@@ -678,6 +684,11 @@ export function MessageList({
         : messages.filter((m) => m.id !== WELCOME_MESSAGE_ID),
     [messages, showWelcomeStage]
   );
+
+  React.useLayoutEffect(() => {
+    if (!conversationKey || showWelcomeStage || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [conversationKey, showWelcomeStage, scrollRef]);
 
   const executedTargetsByMsg = React.useMemo(
     () => findExecutedPromptTargets(visibleMessages),
@@ -842,7 +853,12 @@ export function MessageList({
             )}
           </div>
         ) : (
-          <div className="space-y-6 pt-5 pb-2">
+          <div
+            key={conversationKey ?? "thread"}
+            className={`space-y-6 pt-5 pb-2 animate-in fade-in duration-200 motion-reduce:animate-none transition-opacity ${
+              isTransitioning ? "pointer-events-none opacity-45" : "opacity-100"
+            }`}
+          >
             {visibleMessages.map((msg, idx) => (
               <MessageItem
                 key={msg.id}
@@ -870,7 +886,19 @@ export function MessageList({
         />
       </div>
 
-      {!showWelcomeStage && (
+      {isTransitioning && (
+        <div
+          role="status"
+          className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center animate-in fade-in duration-150"
+        >
+          <span className="flex items-center gap-2 rounded-full border border-[#E6E4DF] bg-[#FFFFFF]/95 px-3 py-1 text-xs font-medium text-[#4D4B46] shadow-sm backdrop-blur-xs">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#C2410C]" />
+            Đang mở cuộc trò chuyện…
+          </span>
+        </div>
+      )}
+
+      {!showWelcomeStage && !isTransitioning && (
         <ScrollBottomButton
           scrollRef={scrollRef}
           bottomSentinelRef={bottomSentinelRef}

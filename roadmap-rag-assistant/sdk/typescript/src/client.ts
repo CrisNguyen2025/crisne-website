@@ -20,6 +20,8 @@ import type {
   PlanResponse,
   RoadmapOutlineResponse,
   RoadmapSummaryItem,
+  ThreadDetailResponse,
+  ThreadSummary,
   ToolCallResult,
   UpdateOwnerMemoryInput,
   WebMcpToolSpec,
@@ -425,6 +427,49 @@ export class RoadmapChatClient {
       });
     } catch {
       // Fail-open: starting a new conversation locally still works
+    }
+  }
+
+  /** List recent Owner Threads (with optional keyword search). */
+  async listThreads(query?: string, signal?: AbortSignal): Promise<ThreadSummary[]> {
+    const params = new URLSearchParams();
+    const trimmed = query?.trim();
+    if (trimmed) {
+      params.set('q', trimmed);
+    }
+    const suffix = params.toString();
+    const resp = await fetch(`${this.baseUrl}/threads${suffix ? `?${suffix}` : ''}`, {
+      cache: 'no-store',
+      signal,
+    });
+    if (!resp.ok) {
+      throw new Error(`Không tải được lịch sử chat (${resp.status})`);
+    }
+    const data = (await resp.json()) as { threads?: ThreadSummary[] };
+    return Array.isArray(data.threads) ? data.threads : [];
+  }
+
+  /** Switch to a previous Owner Thread and make it the active open Thread. */
+  async switchThread(threadId: string): Promise<ThreadDetailResponse> {
+    const resp = await fetch(`${this.baseUrl}/threads/${encodeURIComponent(threadId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'activate' }),
+      cache: 'no-store',
+    });
+    if (!resp.ok) {
+      throw new Error(`Không mở được cuộc trò chuyện (${resp.status})`);
+    }
+    return (await resp.json()) as ThreadDetailResponse;
+  }
+
+  /** Permanently delete an Owner Thread from history. */
+  async deleteThread(threadId: string): Promise<void> {
+    const resp = await fetch(`${this.baseUrl}/threads/${encodeURIComponent(threadId)}`, {
+      method: 'DELETE',
+    });
+    if (!resp.ok) {
+      throw new Error(`Không xoá được cuộc trò chuyện (${resp.status})`);
     }
   }
 

@@ -29,6 +29,7 @@ describe("RoadmapChatbotWidget", () => {
       openWidget(false);
       const newChatBtn = screen.getByRole("button", { name: "Cuộc trò chuyện mới" }) as HTMLButtonElement;
       expect(newChatBtn.disabled).toBe(true);
+      expect(screen.queryByRole("button", { name: "Lịch sử chat" })).toBeNull();
       expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
 
       await openMenu();
@@ -39,6 +40,7 @@ describe("RoadmapChatbotWidget", () => {
 
     it("owner: offers the conversation id and memory inside more options", async () => {
       openWidget(true);
+      expect(screen.getByRole("button", { name: "Lịch sử chat" })).toBeTruthy();
       await openMenu();
       expect(screen.getByRole("button", { name: "Context" })).toBeTruthy();
       expect(screen.getByText("Bộ nhớ")).toBeTruthy();

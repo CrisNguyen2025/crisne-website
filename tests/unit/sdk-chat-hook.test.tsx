@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRoadmapAssistantChat } from "@/roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat";
 import { conversationKey } from "@/roadmap-rag-assistant/sdk/typescript/src/react/storage";
@@ -36,6 +36,7 @@ describe("useRoadmapAssistantChat", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(() => {
+    cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -292,6 +293,58 @@ describe("useRoadmapAssistantChat", () => {
       expect(result.current.messages.every((m) => m.isRestored === true)).toBe(true);
       expect(result.current.messages[1].traceId).toBeUndefined();
       expect(result.current.messages[1].changes).toBeUndefined();
+    });
+
+    it("switches to a selected Thread, aborts active stream, and persists to sessionStorage", async () => {
+      fetchMock
+        .mockImplementationOnce(async (_url: string, init?: RequestInit) => {
+          init?.signal?.addEventListener("abort", () => {});
+          return new Response(new ReadableStream({ start() {} }), { status: 200 });
+        })
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              threadId: "history-thread-2",
+              messages: [
+                { id: "restored-10", role: "user", content: "câu cũ", timestamp: "2026-11-24T10:00:00.000Z" },
+                { id: "restored-11", role: "assistant", content: "đáp cũ", timestamp: "2026-11-24T10:00:05.000Z" },
+              ],
+              state: null,
+            }),
+            { status: 200 }
+          )
+        );
+
+      const { result } = renderHook(() => useRoadmapAssistantChat({ baseUrl: BASE, canWrite: true }));
+      act(() => {
+        void result.current.sendMessage("đang stream");
+      });
+      await waitFor(() => expect(result.current.isLoading).toBe(true));
+
+      await act(async () => {
+        await result.current.switchToThread("history-thread-2");
+      });
+
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.conversationId).toBe("history-thread-2");
+      expect(result.current.messages.map((m) => m.content)).toEqual(["câu cũ", "đáp cũ"]);
+      expect(result.current.messages.every((m) => m.isRestored === true)).toBe(true);
+
+      const saved = JSON.parse(window.sessionStorage.getItem(KEY) ?? "{}");
+      expect(saved.conversationId).toBe("history-thread-2");
+    });
+
+    it("resets to welcome only when the currently active Thread is deleted", () => {
+      const { result } = renderHook(() =>
+        useRoadmapAssistantChat({ baseUrl: BASE, canWrite: true, threadId: "t-active" })
+      );
+
+      act(() => result.current.handleThreadDeleted("t-other"));
+      expect(result.current.conversationId).toBe("t-active");
+
+      act(() => result.current.handleThreadDeleted("t-active"));
+      expect(result.current.conversationId).not.toBe("t-active");
+      expect(result.current.messages[0].id).toBe(WELCOME_MESSAGE_ID);
     });
   });
 });

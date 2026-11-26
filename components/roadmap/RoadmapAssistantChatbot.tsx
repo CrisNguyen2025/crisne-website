@@ -8,6 +8,7 @@ import {
 } from "@/logic/roadmap/roadmapAssistantService";
 import React from "react";
 import { useCanWrite } from "@/hooks/use-can-write";
+import { useToast } from "@/components/ui/toast";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
 import type { ChatbotPosition } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
@@ -103,6 +104,7 @@ export function RoadmapAssistantChatbot({
   const baseUrl = ROADMAP_ASSISTANT_BASE_URL;
 
   const canWrite = useCanWrite();
+  const { toast } = useToast();
 
   return (
     <RoadmapChatbotWidget
@@ -116,6 +118,7 @@ export function RoadmapAssistantChatbot({
       restoreLatestThread={canWrite}
       className={className}
       onToolExecuted={handleToolExecuted}
+      onNotify={toast}
       getContext={getRoadmapPageContext}
       onWebMcpMessage={runWebMcpCommand}
     />

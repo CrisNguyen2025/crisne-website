@@ -27,6 +27,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: isolatedDb.client }));
 
 import { prisma } from "@/lib/prisma";
 import { DELETE, GET } from "@/app/api/roadmap-assistant/thread/route";
+import { PATCH as switchThread } from "@/app/api/roadmap-assistant/threads/[threadId]/route";
 
 const T1 = "owner:latest-test-1";
 const T2 = "owner:latest-test-2";
@@ -94,6 +95,31 @@ describe("/api/roadmap-assistant/thread", () => {
     const closeRes = await DELETE(makeReq("DELETE", { threadId: "latest-test-2" }));
     expect(closeRes.status).toBe(200);
 
+    const afterClose = await GET(makeReq("GET"));
+    expect(await afterClose.json()).toEqual({ threadId: null, messages: [] });
+  });
+
+  it("restores a switched older Thread across reloads until closed with New Chat", async () => {
+    await prisma.threadMessage.create({ data: { threadId: T1, role: "user", content: "older topic" } });
+    await prisma.threadState.create({ data: { threadId: T1, closedAt: new Date("2026-11-25T00:00:00.000Z") } });
+    await prisma.threadMessage.create({ data: { threadId: T2, role: "user", content: "newer unstated" } });
+
+    const switchRes = await switchThread(
+      new NextRequest("http://localhost/api/roadmap-assistant/threads/latest-test-1", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "activate" }),
+        headers: { "Content-Type": "application/json" },
+      }),
+      { params: Promise.resolve({ threadId: "latest-test-1" }) }
+    );
+    expect(switchRes.status).toBe(200);
+
+    const restored = await GET(makeReq("GET"));
+    const restoredJson = await restored.json();
+    expect(restoredJson.threadId).toBe("latest-test-1");
+    expect(restoredJson.messages.map((m: { content: string }) => m.content)).toEqual(["older topic"]);
+
+    await DELETE(makeReq("DELETE", { threadId: "latest-test-1" }));
     const afterClose = await GET(makeReq("GET"));
     expect(await afterClose.json()).toEqual({ threadId: null, messages: [] });
   });

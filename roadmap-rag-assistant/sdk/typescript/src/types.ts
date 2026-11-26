@@ -382,3 +382,33 @@ export interface LatestThreadResponse {
   threadId: string | null;
   messages: LatestThreadMessage[];
 }
+
+export interface ThreadSummary {
+  threadId: string;
+  title: string;
+  matchedSnippet: string | null;
+  lastMessageAt: string;
+  messageCount: number;
+  activeTopicSlug: string | null;
+  activeTopicTitle: string | null;
+  activeLessonTitle: string | null;
+  isClosed: boolean;
+}
+
+export interface ThreadListResponse {
+  threads: ThreadSummary[];
+}
+
+export interface ThreadFocusState {
+  activeTopicSlug: string | null;
+  activeTopicTitle: string | null;
+  activeLessonId?: string;
+  activeLessonTitle?: string;
+  activeSection?: string;
+}
+
+export interface ThreadDetailResponse {
+  threadId: string;
+  messages: LatestThreadMessage[];
+  state: ThreadFocusState | null;
+}

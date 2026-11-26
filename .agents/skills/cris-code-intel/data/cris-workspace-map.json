@@ -133,6 +133,8 @@
       "keyFiles": [
         "app/api/roadmap-assistant/[...path]/route.ts",
         "app/api/roadmap-assistant/thread/route.ts",
+        "app/api/roadmap-assistant/threads/route.ts",
+        "app/api/roadmap-assistant/threads/[threadId]/route.ts",
         "app/api/v1/threads/[threadId]/route.ts",
         "app/api/v1/memories/route.ts",
         "app/api/v1/memories/[id]/route.ts",
@@ -173,9 +175,11 @@
         "roadmap-rag-assistant/sdk/typescript/src/types.ts",
         "roadmap-rag-assistant/sdk/typescript/src/client.ts",
         "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/react/useThreadHistory.ts",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx",
-        "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx"
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx"
       ],
       "dataModels": [
         "In-memory Topic/Section/Lesson Embeddings",
@@ -881,6 +885,28 @@
       "summary": "Khôi phục Thread đang mở gần nhất của Owner kèm isRestored (hoặc đánh dấu đóng khi tạo hội thoại mới, ADR-0012 / ADR-0015 / Q2 Option A)",
       "handler": "app/api/roadmap-assistant/thread/route.ts#GET",
       "triggersFlow": "FLOW_ABOT_CHAT_QUERY"
+    },
+    {
+      "id": "EP_API_ROADMAP_ASSISTANT_THREADS",
+      "type": "api_route",
+      "path": "/api/roadmap-assistant/threads",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Liệt kê và tìm kiếm các Thread gần đây (30 ngày) của Owner theo tiêu đề, nội dung tin nhắn và Topic",
+      "handler": "app/api/roadmap-assistant/threads/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_THREAD_HISTORY"
+    },
+    {
+      "id": "EP_API_ROADMAP_ASSISTANT_THREAD_ITEM",
+      "type": "api_route",
+      "path": "/api/roadmap-assistant/threads/[threadId]",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Chuyển hẳn sang một Thread cũ làm Thread đang mở (đóng Thread đang mở khác trong transaction) hoặc xóa Thread qua DELETE",
+      "handler": "app/api/roadmap-assistant/threads/[threadId]/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_THREAD_HISTORY"
     },
     {
       "id": "EP_API_MEMORIES_GET",
@@ -2051,6 +2077,58 @@
       ],
       "relatedAdrs": [
         "ADR-0002",
+        "ADR-0019"
+      ]
+    },
+    {
+      "id": "FLOW_ABOT_THREAD_HISTORY",
+      "name": "Quản lý lịch sử Thread, tìm kiếm và chuyển Thread đang mở cho Owner",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner bấm icon Lịch sử chat trên ChatHeader để mở Bottom Sheet ThreadHistorySheet",
+      "preconditions": [
+        "Actor bắt buộc là Owner (canWrite === true phía client; requireWriteAccess phía API)"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx",
+          "functionOrMethod": "ThreadHistorySheet",
+          "action": "Mở Bottom Sheet danh sách Thread gần đây, lọc tức thì ở client và kích hoạt search server có debounce kèm xác nhận xóa 2 chạm",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/useThreadHistory.ts#useThreadHistory",
+          "dataPassed": "{ query, selectedThreadId }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/roadmap-assistant/threads/route.ts",
+          "functionOrMethod": "GET",
+          "action": "Tổng hợp danh sách Thread Owner trong 30 ngày qua (title từ tin user đầu tiên, relative time, activeTopicTitle, matchedSnippet khi search không dấu)",
+          "callsNext": null,
+          "dataPassed": "{ threads: ThreadSummary[] }"
+        },
+        {
+          "order": 3,
+          "layer": "Routing_Gateway",
+          "component": "app/api/roadmap-assistant/threads/[threadId]/route.ts",
+          "functionOrMethod": "PATCH",
+          "action": "Trong transaction đóng Thread đang mở khác, đặt closedAt=null cho Thread đích và trả về messages (isRestored=true) để chuyển hẳn làm Thread đang mở",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts#useRoadmapAssistantChat",
+          "dataPassed": "{ threadId, messages, state }"
+        }
+      ],
+      "invariants": [
+        "Visitor không thấy nút Lịch sử chat và nhận 401 tại /api/roadmap-assistant/threads*",
+        "Zero-migration trên ThreadMessage/ThreadState (ADR-0012); không phục hồi Pending Action trên tin nhắn isRestored"
+      ],
+      "failureModes": [
+        "Xóa đúng Thread đang mở: reset khung chat về lời chào mới và sinh conversationId mới"
+      ],
+      "relatedAdrs": [
+        "ADR-0002",
+        "ADR-0012",
+        "ADR-0015",
         "ADR-0019"
       ]
     }

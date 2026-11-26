@@ -12,7 +12,9 @@ import { formatTime } from "./utils/formatters";
 import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
 import { ContextUsageSheet } from "./components/ContextUsageSheet";
 import { OwnerMemorySheet } from "./components/OwnerMemorySheet";
+import { ThreadHistorySheet } from "./components/ThreadHistorySheet";
 import { usePendingMemoryCount } from "./useOwnerMemories";
+import { useThreadHistory } from "./useThreadHistory";
 import { ChatComposer } from "./components/ChatComposer";
 import { ChatHeader } from "./components/ChatHeader";
 import { AbotMascot, type MascotState } from "./components/AbotMascot";
@@ -43,6 +45,7 @@ export function RoadmapChatbotWidget({
   defaultViewMode = "floating",
   initialMessages,
   onToolExecuted,
+  onNotify,
   onFeedback,
   getContext,
   onWebMcpMessage,
@@ -59,6 +62,8 @@ export function RoadmapChatbotWidget({
   const [copiedConvId, setCopiedConvId] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSwitchingThread, setIsSwitchingThread] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const switchMenuRef = useRef<HTMLDivElement>(null);
   const { viewMode, setViewMode, isSidebarActive } = useSidebarLayout(
@@ -126,6 +131,8 @@ export function RoadmapChatbotWidget({
     stopStreaming,
     conversationContext,
     refreshContext,
+    switchToThread,
+    handleThreadDeleted,
     clearMessages,
     retry,
   } = useRoadmapAssistantChat({
@@ -141,6 +148,21 @@ export function RoadmapChatbotWidget({
   });
 
   const [pendingMemoryCount, setPendingMemoryCount] = usePendingMemoryCount(baseUrl, canWrite && restoreLatestThread && isOpen, isStreaming);
+  const {
+    threads: historyThreads,
+    query: historyQuery,
+    setQuery: setHistoryQuery,
+    isLoading: isHistoryLoading,
+    isSearching: isHistorySearching,
+    error: historyError,
+    deletingId: deletingHistoryId,
+    refresh: refreshHistory,
+    removeThread: removeHistoryThread,
+  } = useThreadHistory({
+    baseUrl,
+    isOpen: isOpen && isHistoryOpen,
+    enabled: canWrite,
+  });
 
   // Follows the on-screen keyboard on phones so the composer stays visible
   const keyboardBox = useVisualViewportBox(isOpen);
@@ -158,11 +180,12 @@ export function RoadmapChatbotWidget({
     setIsSwitchMenuOpen(false);
     setIsContextOpen(false);
     setIsMemoryOpen(false);
+    setIsHistoryOpen(false);
   }, []);
   const { close: animateClose } = useDrawerMotion(
     containerRef,
     scrimRef,
-    isOpen && !activeFeedbackMsgId && !isMemoryOpen && !isContextOpen,
+    isOpen && !activeFeedbackMsgId && !isMemoryOpen && !isContextOpen && !isHistoryOpen,
     dismiss
   );
   const closeDrawer = useCallback(
@@ -294,6 +317,64 @@ export function RoadmapChatbotWidget({
     clearMessages();
   }, [captureBeforeReset, clearMessages]);
 
+  const closeHistorySheet = useCallback(() => {
+    setIsHistoryOpen(false);
+    setHistoryQuery("");
+  }, [setHistoryQuery]);
+
+  const notify = useCallback(
+    (message: string, type: "success" | "error" = "success") => {
+      if (onNotify) {
+        onNotify(message, type);
+      } else if (type === "error") {
+        setFeedbackNotice(message);
+      }
+    },
+    [onNotify]
+  );
+
+  const handleSelectHistoryThread = useCallback(
+    async (selectedId: string): Promise<boolean> => {
+      if (selectedId === conversationId) {
+        return true;
+      }
+      setIsSwitchingThread(true);
+      try {
+        const ok = await switchToThread(selectedId);
+        if (!ok) {
+          notify("Chưa mở được cuộc trò chuyện.", "error");
+          return false;
+        }
+        isAtBottomRef.current = true;
+        autoFollowRef.current = true;
+        return true;
+      } catch (err: unknown) {
+        notify(
+          err instanceof Error ? err.message : "Chưa mở được cuộc trò chuyện.",
+          "error"
+        );
+        return false;
+      } finally {
+        setIsSwitchingThread(false);
+      }
+    },
+    [conversationId, switchToThread, isAtBottomRef, autoFollowRef, notify]
+  );
+
+  const handleDeleteHistoryThread = useCallback(
+    async (deletedId: string): Promise<boolean> => {
+      const ok = await removeHistoryThread(deletedId);
+      if (ok) {
+        handleThreadDeleted(deletedId);
+        notify("Đã xoá cuộc trò chuyện", "success");
+      } else {
+        notify("Chưa xoá được cuộc trò chuyện.", "error");
+      }
+      return ok;
+    },
+    [removeHistoryThread, handleThreadDeleted, notify]
+  );
+
   const toggleToolExpand = (id: string) => {
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -407,8 +488,9 @@ export function RoadmapChatbotWidget({
             hideBrand={isInitStage}
             mascotRef={headerMascotRef}
             textRef={headerTextRef}
-            openContext={() => { setIsMemoryOpen(false); setIsContextOpen(true); void refreshContext(); }}
-            openMemory={canWrite ? () => { setIsContextOpen(false); setIsMemoryOpen(true); } : undefined}
+            openContext={() => { setIsMemoryOpen(false); setIsHistoryOpen(false); setIsContextOpen(true); void refreshContext(); }}
+            openMemory={canWrite ? () => { setIsContextOpen(false); setIsHistoryOpen(false); setIsMemoryOpen(true); } : undefined}
+            openHistory={canWrite ? () => { setIsContextOpen(false); setIsMemoryOpen(false); setIsHistoryOpen(true); } : undefined}
             pendingMemoryCount={canWrite ? pendingMemoryCount : 0}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
@@ -449,6 +531,8 @@ export function RoadmapChatbotWidget({
             autoFollowRef={autoFollowRef}
             scrollToBottom={scrollToBottom}
             onBeforeJump={disengageFollow}
+            conversationKey={conversationId}
+            isTransitioning={isSwitchingThread}
           />
 
           {feedbackNotice && (
@@ -492,6 +576,24 @@ export function RoadmapChatbotWidget({
           {/* ── Owner Memory Bottom Sheet (Owner-only, ADR-0015) ── */}
           {canWrite && isMemoryOpen && (
             <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={getContext?.()?.roadmapSlug} onPendingCountChange={setPendingMemoryCount} onClose={() => setIsMemoryOpen(false)} />
+          )}
+
+          {/* ── Thread History Bottom Sheet (Owner-only, ADR-0012) ── */}
+          {canWrite && isHistoryOpen && (
+            <ThreadHistorySheet
+              threads={historyThreads}
+              query={historyQuery}
+              onQueryChange={setHistoryQuery}
+              isLoading={isHistoryLoading}
+              isSearching={isHistorySearching}
+              error={historyError}
+              deletingId={deletingHistoryId}
+              currentThreadId={conversationId}
+              onRetry={() => void refreshHistory()}
+              onSelectThread={handleSelectHistoryThread}
+              onDeleteThread={handleDeleteHistoryThread}
+              onClose={closeHistorySheet}
+            />
           )}
 
           {/* ── Feedback Reason Bottom Sheet ── */}

@@ -101,6 +101,8 @@ export interface UseRoadmapAssistantChatReturn {
   conversationContext: ConversationContextState;
   /** Loads what the conversation's next answer carries (POST /chat/context). */
   refreshContext: () => Promise<void>;
+  switchToThread: (threadId: string) => Promise<boolean>;
+  handleThreadDeleted: (threadId: string) => void;
   clearMessages: () => void;
   retry: (errorMessageId: string) => void;
 }
@@ -619,22 +621,64 @@ export function useRoadmapAssistantChat(
     }
   }, [client, conversationId]);
 
+  const resetConversationState = useCallback(
+    (nextId: string, nextMessages: ChatMessage[]) => {
+      smoothRef.current?.cancel();
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      setIsStreaming(false);
+      setActiveTool(null);
+      setError(null);
+      setConversationContext(EMPTY_CONTEXT);
+      setConversationId(nextId);
+      setMessages(nextMessages);
+    },
+    [setConversationId]
+  );
+
+  const switchToThread = useCallback(
+    async (targetThreadId: string): Promise<boolean> => {
+      const detail = await client.switchThread(targetThreadId);
+      const nextMessages: ChatMessage[] =
+        detail.messages.length > 0
+          ? detail.messages.map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              status: 'complete',
+              isRestored: m.isRestored ?? true,
+              timestamp: new Date(m.timestamp),
+            }))
+          : [buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)];
+
+      resetConversationState(detail.threadId, nextMessages);
+      saveConversation(storageKey, { conversationId: detail.threadId, messages: nextMessages });
+      return true;
+    },
+    [client, resetConversationState, storageKey]
+  );
+
+  const handleThreadDeleted = useCallback(
+    (deletedThreadId: string) => {
+      if (deletedThreadId !== conversationId) return;
+      resetConversationState(generateConversationId(), [
+        buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current),
+      ]);
+      clearConversation(storageKey);
+    },
+    [conversationId, resetConversationState, storageKey]
+  );
+
   const clearMessages = useCallback(() => {
-    // Stop anything still streaming so its tokens can't land in the new conversation
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
     if (canWriteRef.current && restoreLatestThread && conversationId) {
       void client.resetThread(conversationId);
     }
-    setIsLoading(false);
-    setIsStreaming(false);
-    setActiveTool(null);
-    setError(null);
-    setConversationContext(EMPTY_CONTEXT);
-    setMessages([buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)]);
-    setConversationId(generateConversationId());
+    resetConversationState(generateConversationId(), [
+      buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current),
+    ]);
     clearConversation(storageKey);
-  }, [storageKey, client, conversationId, restoreLatestThread, setConversationId]);
+  }, [storageKey, client, conversationId, restoreLatestThread, resetConversationState]);
 
   return {
     messages,
@@ -650,6 +694,8 @@ export function useRoadmapAssistantChat(
     stopStreaming,
     conversationContext,
     refreshContext,
+    switchToThread,
+    handleThreadDeleted,
     clearMessages,
     retry,
   };

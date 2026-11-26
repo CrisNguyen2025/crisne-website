@@ -5,6 +5,7 @@ import {
   ContextIcon,
   CopyIcon,
   FloatingModeIcon,
+  HistoryIcon,
   MemoryIcon,
   MoreHorizontalIcon,
   NewChatIcon,
@@ -35,6 +36,7 @@ export interface ChatHeaderProps {
   textRef?: React.RefObject<HTMLDivElement | null>;
   openContext: () => void;
   openMemory?: () => void;
+  openHistory?: () => void;
   pendingMemoryCount?: number;
   handleCopyConversationId: (e: React.MouseEvent) => void;
   isOptionsOpen: boolean;
@@ -61,6 +63,7 @@ export function ChatHeader({
   textRef,
   openContext,
   openMemory,
+  openHistory,
   pendingMemoryCount = 0,
   handleCopyConversationId,
   isOptionsOpen,
@@ -113,6 +116,21 @@ export function ChatHeader({
       </div>
 
       <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+        {canWrite && openHistory && (
+          <button
+            type="button"
+            onClick={() => {
+              closeMenus();
+              openHistory();
+            }}
+            title="Lịch sử chat"
+            aria-label="Lịch sử chat"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#4D4B46] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] active:scale-95 cursor-pointer"
+          >
+            <HistoryIcon className="h-[18px] w-[18px]" />
+          </button>
+        )}
+
         <button
           type="button"
           disabled={!canNewChat}

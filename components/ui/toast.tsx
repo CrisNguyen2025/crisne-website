@@ -2,6 +2,7 @@
 
 import { ToastContainer, toast as toastify, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import "@/app/styles/toast.css";
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -20,7 +21,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         theme="colored"
         transition={Slide}
         toastClassName="!rounded-xl !text-sm !font-medium !shadow-lg"
-        style={{ zIndex: 9999 }}
       />
     </>
   );

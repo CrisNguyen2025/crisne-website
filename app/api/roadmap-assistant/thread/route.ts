@@ -26,31 +26,56 @@ export async function GET(req: NextRequest) {
 
   try {
     const cutoff = new Date(Date.now() - THREAD_RETENTION_MS);
-    const latestMessage = await prisma.threadMessage.findFirst({
-      where: {
-        threadId: { startsWith: OWNER_THREAD_PREFIX },
-        createdAt: { gte: cutoff },
-      },
-      orderBy: { id: 'desc' },
-      select: { threadId: true },
-    });
+    const [latestMessage, latestOpenState] = await Promise.all([
+      prisma.threadMessage.findFirst({
+        where: {
+          threadId: { startsWith: OWNER_THREAD_PREFIX },
+          createdAt: { gte: cutoff },
+        },
+        orderBy: { id: 'desc' },
+        select: { threadId: true, createdAt: true },
+      }),
+      prisma.threadState.findFirst({
+        where: {
+          threadId: { startsWith: OWNER_THREAD_PREFIX },
+          closedAt: null,
+          updatedAt: { gte: cutoff },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: { threadId: true, updatedAt: true },
+      }),
+    ]);
 
     if (!latestMessage) {
       return NextResponse.json({ threadId: null, messages: [] }, { headers: NO_STORE });
     }
 
-    const state = await prisma.threadState.findUnique({
+    const latestMsgState = await prisma.threadState.findUnique({
       where: { threadId: latestMessage.threadId },
       select: { closedAt: true },
     });
 
-    // Owner explicitly started a fresh conversation after their last message: do not re-open an older Thread
-    if (state?.closedAt) {
+    let targetThreadId: string | null = latestMsgState?.closedAt ? null : latestMessage.threadId;
+
+    if (
+      latestOpenState &&
+      (latestMsgState?.closedAt ||
+        latestOpenState.updatedAt.getTime() >= latestMessage.createdAt.getTime())
+    ) {
+      const openMessageCount = await prisma.threadMessage.count({
+        where: { threadId: latestOpenState.threadId, createdAt: { gte: cutoff } },
+      });
+      if (openMessageCount > 0) {
+        targetThreadId = latestOpenState.threadId;
+      }
+    }
+
+    if (!targetThreadId) {
       return NextResponse.json({ threadId: null, messages: [] }, { headers: NO_STORE });
     }
 
     const newestFirst = await prisma.threadMessage.findMany({
-      where: { threadId: latestMessage.threadId },
+      where: { threadId: targetThreadId },
       orderBy: { id: 'desc' },
       take: MAX_THREAD_MESSAGES,
       select: { id: true, role: true, content: true, createdAt: true },
@@ -66,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
-        threadId: stripOwnerThreadPrefix(latestMessage.threadId),
+        threadId: stripOwnerThreadPrefix(targetThreadId),
         messages,
       },
       { headers: NO_STORE }
