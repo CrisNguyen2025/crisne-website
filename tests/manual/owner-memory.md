@@ -1,16 +1,17 @@
-# Abot — Owner Memory xuyên Thread & Nối tiếp hội thoại (ADR-0015)
+# Abot — Owner Memory xuyên Thread, Rovo 2-Tab & Observations (ADR-0020, supersedes ADR-0015)
 
-Kiểm thử thủ công luồng **Owner Memory** lưu ở Turso (`/api/v1/memories`), cache invalidation tức thì (`POST /internal/memory-cache/invalidate`), Preview xác nhận 1 chạm qua chat, nối tiếp `Thread` của Owner (`/api/roadmap-assistant/thread`) và cách ly tuyệt đối với `Visitor`.
+Kiểm thử thủ công luồng **Owner Memory** lưu ở Turso (`/api/v1/memories`, `/api/v1/memories/settings`, `/api/v1/memories/activity-events`, `/api/v1/memories/activity-snapshot`), cache invalidation tức thì (`POST /internal/memory-cache/invalidate`), tổng hợp quan sát (`/api/roadmap-assistant/memories/observations/refresh`), Preview xác nhận 1 chạm qua chat, nối tiếp `Thread` của Owner (`/api/roadmap-assistant/thread`) và cách ly tuyệt đối với `Visitor`.
 
-- **Tài liệu thiết kế:** `docs/adr/0015-abot-owner-memory.md`
+- **Tài liệu thiết kế:** `docs/adr/0020-rovo-owner-memory-and-observations.md`
 - **Test tự động đã khoá:**
-  - Python: `roadmap-rag-assistant/tests/test_owner_memory.py`, `roadmap-rag-assistant/tests/test_working_memory_fixes.py`
+  - Python: `roadmap-rag-assistant/tests/test_owner_memory.py`, `roadmap-rag-assistant/tests/test_working_memory_fixes.py`, `roadmap-rag-assistant/tests/test_observations_and_pruning.py`, `roadmap-rag-assistant/tests/test_owner_memory_security.py`
+  - Evals: `.venv/bin/python -m evals.memory`
   - Next.js API: `tests/route/memories-route.test.ts`, `tests/route/assistant-thread-route.test.ts`, `tests/route/threads-route.test.ts`, `tests/route/rag-reindex.test.ts`
-  - UI SDK: `tests/unit/owner-memory-sheet.test.tsx`
+  - UI SDK: `tests/unit/owner-memory-sheet.test.tsx`, `tests/unit/owner-memory-guards.test.ts`
 
 ## Điều kiện trước khi chạy
 
-1. Đã chạy migration Turso (hoặc DB local đang trỏ): `yarn db:owner-memory` (dry-run) → `yarn db:owner-memory --apply`.
+1. Đã chạy migration Turso (hoặc DB local đang trỏ): `yarn db:owner-memory --apply` và `yarn db:rovo-owner-memory --apply`.
 2. Khởi động `yarn dev` (3334) và `yarn rag:dev` (8000) với `RAG_SERVICE_URL` + `RAG_INTERNAL_KEY` khớp nhau.
 3. Kiểm tra bằng cả hai vai trò:
    - **Owner:** `DEV_OWNER_BYPASS=true` trong `.env.local` (hoặc đăng nhập Google Owner).
@@ -33,6 +34,10 @@ Kiểm thử thủ công luồng **Owner Memory** lưu ở Turso (`/api/v1/memor
 | M11 | Owner | Gửi `"quiz bài Hybrid Search"` (bài đang `learning`), trả lời 3 câu (2 câu đúng, 1 câu thiếu ý) | Hỏi từng câu 1–3, chấm từng câu; kết thúc tự tạo 1 mục `learning_note` vào tab **Chờ duyệt** + trả Preview đổi trạng thái sang `Đã nắm` có nút `[✅ Xác nhận thực hiện]` |
 | M12 | Owner | Gửi `"ôn nhanh 1 câu bài cần ôn nhất"` (bài đang `known`) → trả lời đạt → bấm `[✅ Xác nhận thực hiện]` | Bốc bài `known` quá hạn lâu nhất; tool pill hiện **Đánh dấu đã ôn bài** (`markReviewed=true`), cập nhật `statusUpdatedAt` mà không re-index RAG |
 | M13 | Owner / Visitor | Owner bắt đầu quiz rồi gõ `"dừng quiz"`; Visitor gửi `"quiz bài Hybrid Search"` | Owner thoát sạch phiên quiz; Visitor bị từ chối bằng thông báo chỉ dành cho Owner và không gọi `/api/v1/memories?status=pending` |
+| M14 | Owner | Mở sheet `Bộ nhớ Abot` (2 tab **Abot quan sát** & **Bạn chia sẻ trực tiếp**) → tìm kiếm + lọc theo loại + dùng chip gợi ý + bấm **Thêm ghi nhớ** | Tìm/lọc chính xác, mở **Đã gỡ** xem/khôi phục được, và `Hoàn tác` hoạt động trong 7s |
+| M15 | Owner | Bấm biểu tượng cài đặt ⚙️ → tắt **Kích hoạt Bộ nhớ Owner** hoặc **Tự động quan sát & đề xuất** → thử chat hoặc nhấn **Xoá toàn bộ** (2 bước xác nhận) | Tắt công tắc chặn ngay inject `<owner_memory>` & auto-extract; **Xoá toàn bộ** xóa sạch và hiện Rovo Empty State |
+| M16 | Owner | Ở tab **Abot quan sát**, bấm **Tổng hợp lại** hoặc bấm **Không đúng** trên gợi ý | `POST /api/roadmap-assistant/memories/observations/refresh` tổng hợp lại 30d & prune mục hết hạn; bấm **Không đúng** ghi `memory_rejected` và tránh gợi ý lại |
+| M17 | Owner | Xoá 1 `Topic` có gắn `OwnerMemory` scoped (`scopeTopicSlug`) | Mọi `OwnerMemory` gắn `Topic` đó bị xoá cứng khỏi DB và cache Python được làm mới |
 
 ## Ghi kết quả
 

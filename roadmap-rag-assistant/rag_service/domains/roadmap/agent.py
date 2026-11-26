@@ -632,9 +632,12 @@ class NextGenRoadmapAgent(
 
     async def _list_active_owner_memories(self, active_topic: Optional[str], query: str) -> list[Any]:
         params = inspect.signature(owner_memory_store.list_active).parameters
+        kwargs: dict[str, Any] = {}
         if "query" in params:
-            return await owner_memory_store.list_active(active_topic, query=query)
-        return await owner_memory_store.list_active(active_topic)
+            kwargs["query"] = query
+        if "touch" in params:
+            kwargs["touch"] = False
+        return await owner_memory_store.list_active(active_topic, **kwargs)
 
     async def _stream_sources_and_gap_promotion(
         self,

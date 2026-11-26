@@ -1,15 +1,26 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const writeAccess = vi.hoisted(() => ({ requireWriteAccess: vi.fn() }));
+const writeAccess = vi.hoisted(() => ({
+  hasWriteAccess: vi.fn(),
+  requireWriteAccess: vi.fn(),
+}));
 vi.mock("@/lib/auth/write-access", () => writeAccess);
 
-const ragReindex = vi.hoisted(() => ({ notifyOwnerMemoryChanged: vi.fn() }));
+const ragReindex = vi.hoisted(() => ({
+  notifyOwnerMemoryChanged: vi.fn(),
+  notifyRoadmapChanged: vi.fn(),
+}));
 vi.mock("@/lib/roadmap/rag-reindex", () => ragReindex);
 
 import { prisma } from "@/lib/prisma";
-import { GET, PATCH as PATCH_COLLECTION, POST } from "@/app/api/v1/memories/route";
+import { DELETE as CLEAR_MEMORIES, GET, PATCH as PATCH_COLLECTION, POST } from "@/app/api/v1/memories/route";
 import { DELETE, PATCH } from "@/app/api/v1/memories/[id]/route";
+import { GET as GET_SETTINGS, PATCH as PATCH_SETTINGS } from "@/app/api/v1/memories/settings/route";
+import { GET as GET_EVENTS, POST as POST_EVENT } from "@/app/api/v1/memories/activity-events/route";
+import { GET as GET_SNAPSHOT } from "@/app/api/v1/memories/activity-snapshot/route";
+import { DELETE as DELETE_TOPIC } from "@/app/api/v1/roadmaps/[slug]/route";
+import { POST as PROXY_POST } from "@/app/api/roadmap-assistant/[...path]/route";
 
 const makeReq = (method: string, url: string, body?: unknown) =>
   new NextRequest(url, {
@@ -21,11 +32,15 @@ const ctxFor = (id: string) => ({ params: Promise.resolve({ id }) });
 
 async function cleanUp() {
   await prisma.ownerMemory.deleteMany();
+  await prisma.ownerActivityEvent.deleteMany();
+  await prisma.ownerPreference.deleteMany();
+  await prisma.roadmap.deleteMany({ where: { slug: "rovo-test-topic" } });
 }
 
 describe("/api/v1/memories (ADR-0015)", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    writeAccess.hasWriteAccess.mockResolvedValue(true);
     writeAccess.requireWriteAccess.mockResolvedValue(null);
     await cleanUp();
   });
@@ -243,5 +258,190 @@ describe("/api/v1/memories (ADR-0015)", () => {
       const badRes = await PATCH_COLLECTION(makeReq("PATCH", "http://localhost/api/v1/memories", invalid));
       expect(badRes.status, JSON.stringify(invalid)).toBe(400);
     }
+  });
+
+  it("rejects secrets and placeholder-only PII while masking mixed PII", async () => {
+    const secretRes = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "techstack",
+        content: "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz123456",
+      })
+    );
+    expect(secretRes.status).toBe(400);
+
+    const credUrlRes = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "techstack",
+        content: "DB url postgres://admin:SecretPass99@db.example.com:5432/prod",
+      })
+    );
+    expect(credUrlRes.status).toBe(400);
+
+    const piiOnlyRes = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "profile",
+        content: "Email: owner@example.com",
+      })
+    );
+    expect(piiOnlyRes.status).toBe(400);
+
+    const validStudyNote = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "learning_note",
+        content: "Dùng Bearer JWT kết hợp local postgres://localhost:5432/app",
+      })
+    );
+    expect(validStudyNote.status).toBe(201);
+
+    const maskedPii = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "profile",
+        content: "Dùng email work owner@example.com cho dự án",
+      })
+    );
+    expect(maskedPii.status).toBe(201);
+    const maskedBody = (await maskedPii.json()).memory;
+    expect(maskedBody.content).toBe("Dùng email work [email] cho dự án");
+  });
+
+  it("manages settings kill-switches, includeSettings, origin/search filters, Clear All, and atomic Undo", async () => {
+    const defRes = await GET_SETTINGS(makeReq("GET", "http://localhost/api/v1/memories/settings"));
+    expect(defRes.status).toBe(200);
+    expect((await defRes.json()).settings.memoryEnabled).toBe(true);
+
+    const offObs = await PATCH_SETTINGS(
+      makeReq("PATCH", "http://localhost/api/v1/memories/settings", { autoObserveEnabled: false })
+    );
+    expect(offObs.status).toBe(200);
+    expect(ragReindex.notifyOwnerMemoryChanged).toHaveBeenCalledTimes(1);
+
+    const blockedSuggested = await POST(
+      makeReq("POST", "http://localhost/api/v1/memories", {
+        kind: "techstack",
+        content: "Thử suggest khi tắt autoObserve",
+        source: "suggested",
+      })
+    );
+    expect(blockedSuggested.status).toBe(409);
+
+    await PATCH_SETTINGS(
+      makeReq("PATCH", "http://localhost/api/v1/memories/settings", { autoObserveEnabled: true })
+    );
+
+    const oldMem = await (
+      await POST(
+        makeReq("POST", "http://localhost/api/v1/memories", {
+          kind: "techstack",
+          content: "Đang dùng Next.js 14",
+        })
+      )
+    ).json();
+    const pendingNew = await (
+      await POST(
+        makeReq("POST", "http://localhost/api/v1/memories", {
+          kind: "techstack",
+          content: "Đang dùng Next.js 16",
+          source: "suggested",
+          status: "pending",
+          replacesMemoryId: oldMem.memory.id,
+          confidence: 0.92,
+          evidenceSnippet: "Nâng cấp Next.js 16",
+        })
+      )
+    ).json();
+    const obsMem = await (
+      await POST(
+        makeReq("POST", "http://localhost/api/v1/memories", {
+          kind: "goal",
+          content: "Đang ôn Distributed Caching",
+          source: "observed",
+        })
+      )
+    ).json();
+    expect(obsMem.memory.status).toBe("active");
+
+    await PATCH_COLLECTION(
+      makeReq("PATCH", "http://localhost/api/v1/memories", { ids: [oldMem.memory.id] })
+    );
+    const afterTouch = await prisma.ownerMemory.findUnique({ where: { id: oldMem.memory.id } });
+    expect(afterTouch?.useCount).toBe(1);
+
+    const combinedRes = await GET(
+      makeReq("GET", "http://localhost/api/v1/memories?status=active&includeSettings=1&origin=auto&q=Caching")
+    );
+    const combinedJson = await combinedRes.json();
+    expect(combinedJson.memories).toHaveLength(1);
+    expect(combinedJson.settings.autoObserveEnabled).toBe(true);
+
+    await PATCH(
+      makeReq("PATCH", `http://localhost/api/v1/memories/${pendingNew.memory.id}`, { status: "active" }),
+      ctxFor(pendingNew.memory.id)
+    );
+    expect((await prisma.ownerMemory.findUnique({ where: { id: oldMem.memory.id } }))?.status).toBe("archived");
+
+    const undoRes = await PATCH(
+      makeReq("PATCH", `http://localhost/api/v1/memories/${pendingNew.memory.id}`, {
+        status: "pending",
+        restoreReplacedId: oldMem.memory.id,
+      }),
+      ctxFor(pendingNew.memory.id)
+    );
+    expect(undoRes.status).toBe(200);
+    expect((await prisma.ownerMemory.findUnique({ where: { id: oldMem.memory.id } }))?.status).toBe("active");
+
+    const clearRes = await CLEAR_MEMORIES(makeReq("DELETE", "http://localhost/api/v1/memories?status=all"));
+    expect(clearRes.status).toBe(200);
+    expect((await clearRes.json()).deletedCount).toBeGreaterThanOrEqual(3);
+    expect(await prisma.ownerMemory.count()).toBe(0);
+  });
+
+  it("hard-deletes scoped memories on Topic delete and records activity events + snapshot + visitor proxy block", async () => {
+    const topic = await prisma.roadmap.create({
+      data: { slug: "rovo-test-topic", title: "Rovo Test Topic" },
+    });
+    await prisma.ownerMemory.create({
+      data: { kind: "learning_note", content: "Ghi chú riêng topic", scopeTopicSlug: topic.slug },
+    });
+    await prisma.ownerMemory.create({
+      data: { kind: "preference", content: "Quy ước toàn cục", scopeTopicSlug: null },
+    });
+
+    const delTopicRes = await DELETE_TOPIC(makeReq("DELETE", `http://localhost/api/v1/roadmaps/${topic.slug}`), {
+      params: Promise.resolve({ slug: topic.slug }),
+    });
+    expect(delTopicRes.status).toBe(200);
+    const remaining = await prisma.ownerMemory.findMany();
+    expect(remaining.map((m) => m.scopeTopicSlug)).toEqual([null]);
+
+    await prisma.ownerActivityEvent.create({
+      data: {
+        eventType: "quiz_completed",
+        summary: "Old quiz event",
+        createdAt: new Date(Date.now() - 95 * 86_400_000),
+      },
+    });
+    const evRes = await POST_EVENT(
+      makeReq("POST", "http://localhost/api/v1/memories/activity-events", {
+        eventType: "memory_rejected",
+        summary: "Không dùng Vue",
+      })
+    );
+    expect(evRes.status).toBe(201);
+    const eventsJson = await (await GET_EVENTS(makeReq("GET", "http://localhost/api/v1/memories/activity-events"))).json();
+    expect(eventsJson.events).toHaveLength(1);
+    expect(eventsJson.events[0].summary).toBe("Không dùng Vue");
+
+    const snapRes = await GET_SNAPSHOT(makeReq("GET", "http://localhost/api/v1/memories/activity-snapshot"));
+    expect(snapRes.status).toBe(200);
+    const snapJson = await snapRes.json();
+    expect(typeof snapJson.sourceHash).toBe("string");
+    expect(snapJson.snapshot.activityEvents).toHaveLength(1);
+
+    writeAccess.hasWriteAccess.mockResolvedValue(false);
+    const visitorProxy = await PROXY_POST(
+      makeReq("POST", "http://localhost/api/roadmap-assistant/memories/observations/refresh", { force: true }),
+      { params: Promise.resolve({ path: ["memories", "observations", "refresh"] }) }
+    );
+    expect(visitorProxy.status).toBe(403);
   });
 });

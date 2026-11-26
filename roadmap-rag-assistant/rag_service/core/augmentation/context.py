@@ -9,6 +9,7 @@ cited, and documents far below the best match are left out.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 from rag_service.auth import is_owner
@@ -35,9 +36,16 @@ class GenerationRequest:
     lesson_provenances: Dict[str, Sequence[Any]] = field(default_factory=dict)
 
 
+_OPEN_CONTROL_TAG_RE = re.compile(
+    r"<(owner_memory|conversation_history|user_memory|context|document|turn|system|instructions?|prompt|developer|assistant|tool)\b",
+    re.IGNORECASE,
+)
+
+
 def _escape(text: str) -> str:
-    # Data inside a tag must not be able to close it.
-    return text.replace("</", "<\\/")
+    # Data inside a tag must not close it or spoof sibling XML sections.
+    escaped = (text or "").replace("</", "<\\/")
+    return _OPEN_CONTROL_TAG_RE.sub(r"<\\\1", escaped)
 
 
 def _attr(text: str) -> str:
@@ -165,6 +173,7 @@ def synthesize_prompt(
             req.owner_memories,
             note=profile.memory_note,
             scope=req.memory_scope,
+            query=req.query,
             max_items=profile.memory_max_items,
             max_chars=profile.memory_total_chars,
         )

@@ -11,11 +11,27 @@ export const maxDuration = 60;
 // Site is Owner-only (ADR-0019), with proxy actor defense-in-depth (ADR-0002): Python only
 // accepts RAG_INTERNAL_KEY and only executes writes or Owner threads when x-actor=owner.
 const MAX_MESSAGE_LENGTH = 2000;
-const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", "chat/cancel", "chat/context"]);
+const POST_PATHS = new Set([
+  "chat/stream",
+  "chat",
+  "chat/plan",
+  "chat/confirm",
+  "chat/cancel",
+  "chat/context",
+  "memories/observations/refresh",
+]);
 // No LLM call behind it: opening the Context sheet must not use up a visitor's questions
 const UNLIMITED_PATHS = new Set(["chat/context"]);
+const OWNER_ONLY_PATHS = new Set(["memories/observations/refresh"]);
 const GET_PATHS = new Set(["health"]);
-const SYNC_TIMEOUT_PATHS = new Set(["chat", "chat/plan", "chat/confirm", "chat/cancel", "chat/context"]);
+const SYNC_TIMEOUT_PATHS = new Set([
+  "chat",
+  "chat/plan",
+  "chat/confirm",
+  "chat/cancel",
+  "chat/context",
+  "memories/observations/refresh",
+]);
 const HEADER_TIMEOUT_STREAM_MS = 5_000;
 const HEADER_TIMEOUT_SYNC_MS = 25_000;
 
@@ -68,33 +84,40 @@ async function preparePostBody(req: NextRequest, actor: Actor): Promise<Prepared
   return { ok: true, body: JSON.stringify(scoped), threadId };
 }
 
+function checkVisitorLimit(req: NextRequest, actor: Actor, path: string): Response | null {
+  if (actor !== "visitor" || UNLIMITED_PATHS.has(path)) return null;
+  const rateLimit = checkRateLimit(req, { key: "roadmap-assistant", limit: 30, windowMs: 5 * 60_000 });
+  if (rateLimit.isAllowed) return null;
+  return jsonError("Bạn hỏi hơi nhanh rồi, thử lại sau ít phút nhé!", 429, {
+    "Retry-After": String(rateLimit.retryAfterSeconds),
+  });
+}
+
+async function resolveProxyRequest(req: NextRequest, actor: Actor): Promise<PreparedPostBody | null> {
+  if (req.method !== "POST") return null;
+  return preparePostBody(req, actor);
+}
+
 async function forward(req: NextRequest, context: RouteContext, allowedPaths: Set<string>) {
   const path = (await context.params).path.join("/");
   if (!allowedPaths.has(path)) return jsonError("Not found", 404);
+
+  const actor: Actor = (await hasWriteAccess(req)) ? "owner" : "visitor";
+  if (OWNER_ONLY_PATHS.has(path) && actor !== "owner") {
+    return jsonError("Chỉ chủ sở hữu mới có thể làm mới quan sát.", 403);
+  }
 
   const baseUrl = process.env.RAG_SERVICE_URL;
   const internalKey = process.env.RAG_INTERNAL_KEY;
   if (!baseUrl || !internalKey) return jsonError("Roadmap Assistant is not configured.", 503);
 
-  const actor: Actor = (await hasWriteAccess(req)) ? "owner" : "visitor";
+  const rateLimited = checkVisitorLimit(req, actor, path);
+  if (rateLimited) return rateLimited;
 
-  if (actor === "visitor" && !UNLIMITED_PATHS.has(path)) {
-    const rateLimit = checkRateLimit(req, { key: "roadmap-assistant", limit: 30, windowMs: 5 * 60_000 });
-    if (!rateLimit.isAllowed) {
-      return jsonError("Bạn hỏi hơi nhanh rồi, thử lại sau ít phút nhé!", 429, {
-        "Retry-After": String(rateLimit.retryAfterSeconds),
-      });
-    }
-  }
-
-  let body: string | undefined;
-  let threadId: string | undefined;
-  if (req.method === "POST") {
-    const prepared = await preparePostBody(req, actor);
-    if (!prepared.ok) return prepared.response;
-    body = prepared.body;
-    threadId = prepared.threadId;
-  }
+  const prepared = await resolveProxyRequest(req, actor);
+  if (prepared && !prepared.ok) return prepared.response;
+  const body = prepared?.body;
+  const threadId = prepared?.threadId;
 
   const connectController = new AbortController();
   const headerTimeoutMs = SYNC_TIMEOUT_PATHS.has(path) ? HEADER_TIMEOUT_SYNC_MS : HEADER_TIMEOUT_STREAM_MS;

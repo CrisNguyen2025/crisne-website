@@ -53,6 +53,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # Cleanup
+    from rag_service.api.routes import drain_background_tasks
+
+    await drain_background_tasks()
     observability.flush()
     if hasattr(adapter, "close"):
         await adapter.close()

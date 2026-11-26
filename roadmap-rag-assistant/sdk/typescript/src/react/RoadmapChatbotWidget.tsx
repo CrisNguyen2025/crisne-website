@@ -147,7 +147,23 @@ export function RoadmapChatbotWidget({
     restoreLatestThread,
   });
 
-  const [pendingMemoryCount, setPendingMemoryCount] = usePendingMemoryCount(baseUrl, canWrite && restoreLatestThread && isOpen, isStreaming);
+  const [memorySuggestionBanner, setMemorySuggestionBanner] = useState<number | null>(null);
+  const isMemoryOpenRef = useRef(isMemoryOpen);
+  useEffect(() => {
+    isMemoryOpenRef.current = isMemoryOpen;
+  }, [isMemoryOpen]);
+  const [pendingMemoryCount, setPendingMemoryCount] = usePendingMemoryCount(
+    baseUrl,
+    canWrite && restoreLatestThread && isOpen,
+    isStreaming,
+    {
+      onPendingIncrease: (nextCount) => {
+        if (!isMemoryOpenRef.current) {
+          setMemorySuggestionBanner(nextCount);
+        }
+      },
+    }
+  );
   const {
     threads: historyThreads,
     query: historyQuery,
@@ -276,11 +292,18 @@ export function RoadmapChatbotWidget({
 
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
-    if (isOpen && typeof window !== "undefined" && window.innerWidth >= 768) {
+    if (
+      isOpen &&
+      !isMemoryOpen &&
+      !isHistoryOpen &&
+      !isContextOpen &&
+      typeof window !== "undefined" &&
+      window.innerWidth >= 768
+    ) {
       const timer = setTimeout(() => inputRef.current?.focus(), 50);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, isLoading]);
+  }, [isOpen, isLoading, isMemoryOpen, isHistoryOpen, isContextOpen]);
 
   // Reset the "copied" tick after a moment
   useEffect(() => {
@@ -541,6 +564,37 @@ export function RoadmapChatbotWidget({
               className="mx-3 mb-1.5 rounded-md border border-[#B42318]/20 bg-[#FBEDE5] px-3 py-1.5 text-xs text-[#B42318]"
             >
               {feedbackNotice}
+            </div>
+          )}
+
+          {canWrite && memorySuggestionBanner !== null && pendingMemoryCount > 0 && !isMemoryOpen && (
+            <div
+              role="status"
+              className="mx-3 mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-[#E6E4DF] bg-[#FAF9F7] px-2.5 py-1.5 text-[0.6875rem] text-[#1F1E1C]"
+            >
+              <span className="truncate">
+                Abot vừa rút ra gợi ý bộ nhớ mới ({memorySuggestionBanner} đang chờ duyệt)
+              </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMemorySuggestionBanner(null);
+                    setIsMemoryOpen(true);
+                  }}
+                  className="cursor-pointer rounded bg-[#1F1E1C] px-2 py-0.5 font-medium text-white hover:opacity-90"
+                >
+                  Xem & duyệt
+                </button>
+                <button
+                  type="button"
+                  aria-label="Đóng thông báo gợi ý bộ nhớ"
+                  onClick={() => setMemorySuggestionBanner(null)}
+                  className="cursor-pointer text-[#5E5B55] hover:text-[#1F1E1C]"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
           )}
 

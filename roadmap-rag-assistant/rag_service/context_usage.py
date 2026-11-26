@@ -154,6 +154,29 @@ def conversation_context(
     system = estimate_tokens(texts["system"])
     memory_tokens = estimate_tokens(texts["owner_memory"])
     memory_count = len([line for line in texts["owner_memory"].splitlines() if line.startswith("- [")])
+    explicit_count = 0
+    observation_count = 0
+    explicit_tokens = 0
+    observation_tokens = 0
+    if owner_memories and memory_tokens:
+        from rag_service.core.memory import format_owner_memory_detailed
+
+        _, selected_items = format_owner_memory_detailed(
+            owner_memories,
+            note=profile.memory_note,
+            scope=memory_scope,
+            max_items=profile.memory_max_items,
+            max_chars=profile.memory_total_chars,
+        )
+        explicit_items = [m for m in selected_items if getattr(m, "source", "explicit") == "explicit"]
+        observation_items = [m for m in selected_items if getattr(m, "source", "explicit") != "explicit"]
+        explicit_count = len(explicit_items)
+        observation_count = len(observation_items)
+        if explicit_count + observation_count > 0:
+            explicit_tokens = estimate_tokens("\n".join(m.content for m in explicit_items)) if explicit_items else 0
+            observation_tokens = max(memory_tokens - explicit_tokens, 0) if observation_items else 0
+            if explicit_items and not observation_items:
+                explicit_tokens = memory_tokens
     messages = estimate_tokens(texts["history"])
     history_limit = profile.history_turns * 2
     in_window = texts["history"].count("<turn ")
@@ -201,6 +224,10 @@ def conversation_context(
                 "tokens": memory_tokens,
                 "count": memory_count,
                 "limit": profile.memory_max_items,
+                "breakdown": {
+                    "explicit": {"count": explicit_count, "tokens": explicit_tokens},
+                    "observation": {"count": observation_count, "tokens": observation_tokens},
+                },
             }
         )
     parts.append({"key": "messages", "label": "Tin nhắn", "tokens": messages, "count": in_window, "limit": history_limit})

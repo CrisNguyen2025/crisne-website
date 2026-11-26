@@ -19,6 +19,7 @@
     "news:worker:prod": "sh scripts/news-worker-prod.sh",
     "db:lesson-status": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-lesson-status.ts",
     "db:owner-memory": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-owner-memory.ts",
+    "db:rovo-owner-memory": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-rovo-owner-memory.ts",
     "db:news-source-cache": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-source-cache.ts",
     "db:news-public": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-public.ts",
     "db:news-slug": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/add-news-slug.ts",

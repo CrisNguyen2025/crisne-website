@@ -137,6 +137,11 @@ export interface ContextPart {
   count?: number;
   /** messages/owner_memory: most the window holds before capping. */
   limit?: number;
+  /** owner_memory: split between user-declared explicit facts and Abot observations. */
+  breakdown?: {
+    explicit: { count: number; tokens: number };
+    observation: { count: number; tokens: number };
+  };
 }
 
 /** An input that exists but is kept out of the prompt (shown without a share, like deferred tools). */
@@ -289,10 +294,10 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-/** Persistent cross-Thread Owner Memory entry (ADR-0015). Strictly Owner-only. */
+/** Persistent cross-Thread Owner Memory entry (ADR-0015 / ADR-0020). Strictly Owner-only. */
 export type OwnerMemoryKind = 'profile' | 'techstack' | 'goal' | 'preference' | 'learning_note';
 export type OwnerMemoryStatus = 'active' | 'pending' | 'archived';
-export type OwnerMemorySource = 'explicit' | 'suggested';
+export type OwnerMemorySource = 'explicit' | 'suggested' | 'observed';
 
 export interface OwnerMemoryItem {
   id: string;
@@ -302,6 +307,11 @@ export interface OwnerMemoryItem {
   source: OwnerMemorySource;
   status: OwnerMemoryStatus;
   replacesMemoryId?: string | null;
+  useCount?: number;
+  confidence?: number | null;
+  validTo?: string | null;
+  evidenceSnippet?: string | null;
+  sourceThreadId?: string | null;
   createdAt: string;
   updatedAt: string;
   lastUsedAt?: string | null;
@@ -318,6 +328,32 @@ export interface UpdateOwnerMemoryInput {
   content?: string;
   scopeTopicSlug?: string | null;
   status?: OwnerMemoryStatus;
+  validTo?: string | null;
+  restoreReplacedId?: string;
+}
+
+export interface OwnerMemorySettings {
+  id: string;
+  memoryEnabled: boolean;
+  autoObserveEnabled: boolean;
+  lastSynthesizedAt?: string | null;
+  lastSynthesisHash?: string | null;
+  updatedAt?: string;
+}
+
+export type OwnerActivityEventType =
+  | 'quiz_completed'
+  | 'memory_rejected'
+  | 'memory_edited'
+  | 'observation_feedback'
+  | 'lesson_updated';
+
+export interface LogMemoryActivityInput {
+  eventType: OwnerActivityEventType;
+  summary: string;
+  topicSlug?: string | null;
+  entityId?: string | null;
+  metadata?: Record<string, string | number | boolean | null>;
 }
 
 export type LessonStatusValue = 'target' | 'learning' | 'known';

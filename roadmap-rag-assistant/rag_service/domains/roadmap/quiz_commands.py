@@ -393,17 +393,33 @@ class QuizCommands(AgentHostMixin):
         if not gaps:
             return False
         try:
+            if not await owner_memory_store.is_auto_observe_enabled():
+                return False
             existing_pending = await owner_memory_store.list_pending()
             if len(existing_pending) < MAX_PENDING_MEMORIES:
                 gap_summary = "; ".join(gaps[:2])
                 note_content = f"Bài {quiz['lesson_title']} — cần chú ý: {gap_summary}"[:300]
+                evidence = f"Quiz {quiz['lesson_title']}: {gap_summary}"[:200]
                 await owner_memory_store.create(
                     kind="learning_note",
                     content=note_content,
                     scope=quiz.get("topic_slug"),
                     source="suggested",
                     status="pending",
+                    confidence=0.90,
+                    evidence_snippet=evidence,
                 )
+                api = getattr(owner_memory_store, "_api", None)
+                if api is not None and hasattr(api, "log_activity_event"):
+                    payload: dict[str, Any] = {
+                        "eventType": "quiz_completed",
+                        "summary": f"Hoàn thành quiz {quiz['lesson_title']} ({len(gaps)} điểm cần ôn)"[:240],
+                    }
+                    if quiz.get("topic_slug"):
+                        payload["topicSlug"] = quiz.get("topic_slug")
+                    if quiz.get("lesson_id"):
+                        payload["entityId"] = str(quiz.get("lesson_id"))
+                    await api.log_activity_event(payload)
                 return True
         except Exception as exc:
             log.debug("quiz_commands: failed to create pending learning_note (%s)", exc)

@@ -271,3 +271,39 @@ export function SearchIcon({ className }: IconProps) {
     </Icon>
   );
 }
+
+export function RefreshIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+      <path d="M16 16h5v5" />
+    </Icon>
+  );
+}
+
+export function SlidersIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <line x1="4" x2="4" y1="21" y2="14" />
+      <line x1="4" x2="4" y1="10" y2="3" />
+      <line x1="12" x2="12" y1="21" y2="12" />
+      <line x1="12" x2="12" y1="8" y2="3" />
+      <line x1="20" x2="20" y1="21" y2="16" />
+      <line x1="20" x2="20" y1="12" y2="3" />
+      <line x1="2" x2="6" y1="14" y2="14" />
+      <line x1="10" x2="14" y1="8" y2="8" />
+      <line x1="18" x2="22" y1="16" y2="16" />
+    </Icon>
+  );
+}
+
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+    </Icon>
+  );
+}

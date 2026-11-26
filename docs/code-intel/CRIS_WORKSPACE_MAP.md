@@ -164,7 +164,7 @@ sequenceDiagram
 
 ### Luồng bổ sung (ADR-0012..ADR-0019 & Batch A–C)
 
-- **`FLOW_ABOT_OWNER_MEMORY_MANAGE`**: `roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py#handle_memory_command` · `roadmap-rag-assistant/rag_service/core/memory/extractor.py#has_memory_signal` / `#maybe_suggest_memories` · `roadmap-rag-assistant/rag_service/core/memory/store.py#list_active` · `app/api/v1/memories/route.ts#PATCH` · `roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx#OwnerMemorySheet`.
+- **`FLOW_ABOT_OWNER_MEMORY_MANAGE`**: `roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py#handle_memory_command` · `roadmap-rag-assistant/rag_service/core/memory/extractor.py#has_memory_signal` / `#maybe_suggest_memories` · `roadmap-rag-assistant/rag_service/domains/roadmap/observations.py#synthesize_owner_observations` / `#prune_stale_observations` · `roadmap-rag-assistant/rag_service/core/memory/store.py#list_active` · `app/api/v1/memories/route.ts#PATCH` · `app/api/v1/memories/settings/route.ts` · `app/api/v1/memories/activity-events/route.ts` · `app/api/v1/memories/activity-snapshot/route.ts` · `roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx#OwnerMemorySheet`.
 - **`FLOW_ABOT_ACTIVE_RECALL_QUIZ`**: `roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py#handle_quiz_command` · `#handle_active_quiz_turn` · `#classify_quiz_gaps` (chuyển tiếp lỗ hổng kiến thức sang `pending_concept_promotion` nối sau `pending_status_change`).
 - **`FLOW_ABOT_CONCEPT_PROMOTION`**: `roadmap-rag-assistant/rag_service/domains/roadmap/lesson_content.py#handle_concept_promotion` / `#build_concept_promotion_proposal` (`include_owner_memory=False`, mặc định `status="target"`, không tạo Provenance) · `roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py#advise_concept_promotion` · `roadmap-rag-assistant/rag_service/domains/roadmap/commands.py#_handle_pending_concept_promotion` · `roadmap-rag-assistant/rag_service/execution/executor.py#schedule_local_rag_sync`.
 - **`FLOW_ABOT_WEBMCP_SAFETY`**: `components/roadmap/RoadmapWebMcpRegistrar.tsx#RoadmapWebMcpRegistrar` · `hooks/use-roadmap-webmcp.ts#useRoadmapWebMcpTools` (chỉ mount khi `canWrite === true`) · `roadmap-rag-assistant/rag_service/api/routes.py#plan` · `roadmap-rag-assistant/rag_service/webmcp_planner.py#plan_webmcp_call` (read-only tools cho Owner, chuyển hướng lệnh ghi sang `Preview` -> `ok`).
@@ -231,7 +231,8 @@ sequenceDiagram
 | `POST`   | `/api/chat/stream`                              | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#chat_stream`                          | RAG SSE Stream            |
 | `POST`   | `/api/chat/confirm` · `/api/chat/cancel`        | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#confirm_action`                       | Execute / Cancel Pending Action |
 | `POST`   | `/api/chat/plan`                                | Internal Bearer     | `roadmap-assistant-abot` | `rag_service/api/routes.py#plan`                                 | WebMCP Read-Only Planner  |
-| `GET/POST/PATCH` | `/api/v1/memories` · `/api/v1/memories/[id]` | Owner Only      | `roadmap-assistant-abot` | `app/api/v1/memories/route.ts`                                   | `FLOW_ABOT_OWNER_MEMORY_MANAGE` |
+| `GET/POST/PATCH/DELETE` | `/api/v1/memories` · `/api/v1/memories/[id]` · `/api/v1/memories/settings` · `/api/v1/memories/activity-events` · `/api/v1/memories/activity-snapshot` | Owner Only | `roadmap-assistant-abot` | `app/api/v1/memories/**` | `FLOW_ABOT_OWNER_MEMORY_MANAGE` |
+| `POST` | `/api/roadmap-assistant/memories/observations/refresh` | Owner Only (Proxy 403 Visitor) | `roadmap-assistant-abot` | `app/api/roadmap-assistant/[...path]/route.ts` -> `rag_service/api/routes.py#refresh_owner_observations` | `FLOW_ABOT_OWNER_MEMORY_MANAGE` |
 | `POST`   | `/api/upload-image`                             | Owner Only          | `storage-media`          | `app/api/upload-image/route.ts#POST`                             | S3 / R2 Upload            |
 | `GET`    | `/news` · `/news/sources` · `/share` | Owner Only          | `private-news`           | `app/(news)/**`                                                  | Private News Inbox & PWA  |
 | `POST`   | `/api/ingest`                                   | Owner Only          | `private-news`           | `app/api/ingest/route.ts#POST`                                   | `FLOW_NEWS_INGEST_PIPELINE` |
@@ -253,9 +254,9 @@ sequenceDiagram
 - **ADR-0001**: Trợ lý Roadmap phải luôn chạy trên dịch vụ Python FastAPI tách biệt.
 - **ADR-0002**: Trình duyệt tuyệt đối không gọi trực tiếp Python service; bắt buộc thông qua Same-origin proxy `/api/roadmap-assistant` để bảo vệ phân quyền Actor.
 - **ADR-0003**: Feedback người dùng (vote 👍/👎) thuộc quản lý của Langfuse.
-- **ADR-0004**: Tất cả mô hình nhúng vector (embeddings) bắt buộc dùng Google Gemini `text-embedding-004` (768 dimensions).
+- **ADR-0004**: Vector embeddings dùng Google Gemini (`gemini-embedding-001` 3072d ở Abot; 768d ở Cris AI TS).
 - **ADR-0005**: Môi trường production sử dụng Turso (libSQL edge db) tương thích SQLite.
-- **ADR-0006**: RAG Assistant sử dụng in-memory vector search trên RAM để đảm bảo độ trễ thấp và đơn giản hóa kiến trúc.
+- **ADR-0006**: RAG Assistant sử dụng in-memory vector search trên RAM (pure-Python cosine trong `hybrid.py` + BM25 FTS) để đảm bảo độ trễ thấp và đơn giản hóa kiến trúc.
 - **ADR-0007**: Thuật ngữ tuân thủ `GLOSSARY.md`, nhưng chấp nhận các từ đồng nghĩa trong mục `_Also_` đã tồn tại trong codebase.
 - **ADR-0008**: Loại bỏ cấu trúc nhóm `level` trung gian; Topic trực tiếp chứa các bài học.
 - **ADR-0009**: Section là mục tuỳ chọn của Topic để gom bài; là chuỗi tự do (free-form string), so khớp không phân biệt hoa thường; không tạo bảng riêng.
@@ -264,8 +265,9 @@ sequenceDiagram
 - **ADR-0012**: Lịch sử và ngữ cảnh `Topic`/`Lesson` của Thread Owner lưu ở Turso (`ThreadState`, `ThreadMessage` schema tối giản); Thread Visitor và mọi `Pending Action` chỉ nằm trong RAM (TTL 600s).
 - **ADR-0013** (superseded by ADR-0014): URL bài học phẳng `/lessons/[lessonSlug]`. Phần `RoadmapItem.slug` duy nhất toàn cục và `SlugRedirect` vẫn giữ.
 - **ADR-0014**: Topic ở `/[topicSlug]`, Lesson ở `/[topicSlug]/[lessonSlug]#[headingSlug]`; slug Topic không trùng route gốc (`lib/roadmap/paths.ts`); URL cũ 308 về URL mới.
-- **ADR-0015**: `Owner Memory` xuyên Thread lưu ở Turso (5 kind `profile | techstack | goal | preference | learning_note`, <= 300 ký tự, trần `pending <= 10`), cách ly hoàn toàn với Visitor, chat qua `Preview -> ok`, `<owner_memory>` không rò rỉ vào Lesson draft.
+- **ADR-0015** (superseded by ADR-0020): `Owner Memory` lưu ở Turso, thay thế và mở rộng sang mô hình 4 lớp / Rovo 2-tab ở `ADR-0020`.
 - **ADR-0016**: `news-ingest-worker` là service Python riêng, chỉ trích xuất và tóm tắt từng NewsItem; mọi suy luận đối chiếu với Lesson thuộc Abot.
 - **ADR-0017**: Provenance theo từng câu: marker rỗng `<span data-provenance-ref="<uuid>">` trong `RoadmapItem.content`, metadata ở `KnowledgeProvenance`; chỉ Owner thấy, nạp phía client (`useLessonProvenance`), không vào index Abot; marker mất thì thành "Nguồn tham khảo của bài" (`FLOW_NEWS_ADD_TO_LESSON`); concept promotion từ chat không tạo Provenance.
 - **ADR-0018** (superseded by ADR-0019): Từng mở Public News; đã thay thế hoàn toàn.
+- **ADR-0020**: Nâng cấp `Owner Memory` theo mô hình Rovo 2-tab (`Explicit` vs `Observations`), bảng `OwnerPreference` (kill-switches) & `OwnerActivityEvent` (tổng hợp 30d/7d kèm negative signals), lọc secret/PII/XML control tag, cách ly Lesson draft mặc định, xoá cứng theo Topic khi xoá Topic, và eval module độc lập `evals/memory/`.
 - **ADR-0019**: Site chỉ dành cho Owner, trừ `/login`; không còn Public News, `/feed-ingestion` redirect sang `/news`; route riêng tư tự kiểm `requireWriteAccess` vì middleware cho qua request có header key; WebMCP chỉ đăng ký read-only khi `canWrite === true`.

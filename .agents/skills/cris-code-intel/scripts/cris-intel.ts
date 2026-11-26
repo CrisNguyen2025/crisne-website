@@ -466,13 +466,13 @@ const INVARIANT_RULES_CATALOG: InvariantRuleCheck[] = [
   {
     keywords: ["pinecone", "weaviate", "qdrant", "milvus", "chromadb", "chroma"],
     rule: "ADR-0006",
-    message: "Vi phạm ADR-0006: Abot bắt buộc dùng in-memory vector store (numpy + BM25 FTS), cấm dùng external vector DB.",
+    message: "Vi phạm ADR-0006: Abot bắt buộc dùng in-memory vector store (pure-Python cosine trong hybrid.py + BM25 FTS), cấm dùng external vector DB.",
     severity: "CRITICAL"
   },
   {
     keywords: ["openai", "text-embedding-3", "text-embedding-3-small", "text-embedding-3-large", "cohere", "huggingface"],
     rule: "ADR-0004",
-    message: "Vi phạm ADR-0004: Toàn bộ vector embeddings bắt buộc dùng Google Gemini text-embedding-004 (768d).",
+    message: "Vi phạm ADR-0004: Vector embeddings bắt buộc dùng Google Gemini embedding model (Abot gemini-embedding-001 3072d; Cris AI 768d).",
     severity: "CRITICAL"
   },
   {

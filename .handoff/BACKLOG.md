@@ -4,6 +4,7 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 ## Abot & Knowledge Acquisition
 
+- Rovo Owner Memory (`ADR-0020`): code, schema, evals và test tự động đã hoàn tất (2026-11-26). Còn bước Owner review dry-run rồi chạy `yarn db:rovo-owner-memory --apply` lên Turso và chạy manual test `M14–M17` trong `tests/manual/owner-memory.md`: `docs/adr/0020-rovo-owner-memory-and-observations.md`.
 - Knowledge Acquisition Phase 3 (`KnowledgeRelation` / `Related Lessons`, `POST /internal/match-lessons`, Abot truy ngược `Lesson → External Source` cho Owner): code đã triển khai (2026-11-25). Còn bước Owner review dry-run rồi chạy `yarn db:knowledge-relations --apply` lên Turso: `.handoff/PLAN-knowledge-acquisition.md`.
 - RSS/Atom nguồn ngoài (`/news`): Tier 1 (platform URL mapping, JSON Feed, dry-run `/api/news/sources/preview`, phân loại lỗi, xoá N+1 cron) đã triển khai (2026-11-25). Còn Tier 2–3 (`allowExternalLinks` + DNS pinning, per-source `fetchIntervalMinutes` & runner dày hơn 1 lần/ngày): `.handoff/RESEARCH-external-rss-config.md` (PROPOSAL).
 - Abot đọc được toàn bộ Lesson (`TASK-abot-lesson-chunks-001`, đã lên `main` @ `0b8626f`): còn `deploy_steps` trên host production (`ADMIN_API_KEY`, persistent disk `EMBEDDING_CACHE_PATH`, thứ tự deploy Next.js trước Python) và kiểm case 9 trong `tests/manual/rag-index-sync.md`.
@@ -13,7 +14,7 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 - Worktree / nhánh chưa merge `feat/news-security-perf` (`aa6e367`, tách từ `e89aefc`): chờ Owner quyết định cherry-pick phần còn cần hay đóng worktree `.claude/worktrees/news-security-perf` và xoá nhánh.
 - Hai nhánh cũ chưa merge vào `main` (`feat/roadmap-assistant-routing-quality`, `origin/feat/rag-layer-picker`): chờ Owner xác nhận giữ tham khảo hay dọn bỏ.
-- Kịch bản manual test chưa chạy / cần re-run trên môi trường thật (`tests/manual/README.md`): `tests/manual/owner-memory.md` (M1–M9), `tests/manual/lesson-status.md`, và re-run N1–N10, N14 của `tests/manual/news-inbox.md` trên `/news`.
+- Kịch bản manual test chưa chạy / cần re-run trên môi trường thật (`tests/manual/README.md`): `tests/manual/owner-memory.md` (M1–M17), `tests/manual/lesson-status.md`, và re-run N1–N10, N14 của `tests/manual/news-inbox.md` trên `/news`.
 - AgentAdapter & handoff v3 (đã lên `main` @ `e1a7ce2`): còn test thủ công `tests/manual/agent-handoff.md` E4–E6, E8 và `tests/manual/agent-adapter.md` T1–T4 (T5, T6 mới một phần); chưa xác nhận step `yarn agents:sync --check` của CI chạy xanh trên `main`. Plan: `.handoff/PLAN-agent-adapter.md`.
 
 ## Chờ Owner quyết định

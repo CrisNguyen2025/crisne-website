@@ -48,6 +48,8 @@ def _actor_of(request: Request) -> Actor:
 
 
 _BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+_DEBOUNCE_TASKS: dict[str, asyncio.Task[Any]] = {}
+MEMORY_EXTRACT_DEBOUNCE_SECONDS = 1.5
 _SKIP_MEMORY_TOOLS = {
     "save_owner_memory",
     "archive_owner_memory",
@@ -67,6 +69,7 @@ class _SseTurnState:
     changes: list[dict] = field(default_factory=list)
     had_preview: bool = False
     trace_id: str | None = None
+    answer_mode: str | None = None
 
 
 def _sse_line(event: str, payload: Any) -> str:
@@ -89,6 +92,14 @@ def _normalize_action_preview_payload(ev: dict) -> dict:
     return payload
 
 
+def _record_step_event(ev: dict, state: _SseTurnState) -> str:
+    payload = {k: v for k, v in ev.items() if k != "type"}
+    state.steps[payload["id"]] = {**state.steps.get(payload["id"], {}), **payload}
+    if payload.get("id") == "answer" and payload.get("mode"):
+        state.answer_mode = str(payload["mode"])
+    return _sse_line("step", payload)
+
+
 def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
     ev_type = ev.get("type")
     if ev_type == "tool_start":
@@ -104,9 +115,7 @@ def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
         state.accumulated_tokens.append(delta)
         return _sse_line("token", {"delta": delta})
     if ev_type == "step":
-        payload = {k: v for k, v in ev.items() if k != "type"}
-        state.steps[payload["id"]] = {**state.steps.get(payload["id"], {}), **payload}
-        return _sse_line("step", payload)
+        return _record_step_event(ev, state)
     if ev_type == "change_review":
         payload = {k: v for k, v in ev.items() if k != "type"}
         state.changes.append(payload)
@@ -180,6 +189,20 @@ def _build_done_payload(state: _SseTurnState) -> dict[str, Any]:
     return done_payload
 
 
+async def drain_background_tasks(max_wait_seconds: float = 3.0) -> None:
+    """Await queued background extraction and usage-touch tasks cleanly on server shutdown."""
+    from rag_service.core.memory import owner_memory_store
+
+    pending = [task for task in list(_BACKGROUND_TASKS) if not task.done()]
+    if pending:
+        await asyncio.wait(pending, timeout=max_wait_seconds)
+    try:
+        async with asyncio.timeout(max_wait_seconds):
+            await owner_memory_store.flush_touches()
+    except Exception as exc:
+        print(f"[Routes] Skipped flushing memory touches on shutdown: {exc}")
+
+
 def _maybe_schedule_memory_extraction(
     agent: Any,
     message: str,
@@ -192,7 +215,7 @@ def _maybe_schedule_memory_extraction(
     has_changes: bool = False,
     executed_tool_names: Sequence[str] = (),
 ) -> None:
-    # Background Owner Memory auto-suggestion (ADR-0015 Phase 2): strictly Owner-only, non-blocking,
+    # Background Owner Memory auto-suggestion (ADR-0015 / ADR-0020): strictly Owner-only, non-blocking,
     # skipped on explicit memory/CUD/preview/quiz turns to avoid redundant LLM calls.
     skip_preview = had_preview or (state.had_preview if state is not None else False)
     skip_changes = has_changes or bool(state.changes if state is not None else False)
@@ -210,21 +233,48 @@ def _maybe_schedule_memory_extraction(
     from rag_service.state import session_store
 
     extract_llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
-    if extract_llm is None or not has_memory_signal(message, final_message):
+    effective_reply = "" if (state is not None and state.answer_mode == "context") else final_message
+    if extract_llm is None or not has_memory_signal(message, effective_reply):
         return
     ctx_topic = ((context or {}).get("roadmapSlug") or "").strip() or session_store.get_or_create(
         thread_id
     ).active_topic_slug
-    task = asyncio.create_task(
-        maybe_suggest_memories(
+    prior = _DEBOUNCE_TASKS.get(thread_id)
+    if prior is not None and not prior.done():
+        prior.cancel()
+
+    async def _debounced_extract() -> None:
+        if MEMORY_EXTRACT_DEBOUNCE_SECONDS > 0:
+            await asyncio.sleep(MEMORY_EXTRACT_DEBOUNCE_SECONDS)
+        await maybe_suggest_memories(
             extract_llm,
             user_message=message,
-            assistant_reply=final_message,
+            assistant_reply=effective_reply,
             scope=ctx_topic,
+            source_thread_id=thread_id,
         )
-    )
+
+    task = asyncio.create_task(_debounced_extract())
+    _DEBOUNCE_TASKS[thread_id] = task
     _BACKGROUND_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    def _cleanup(done_task: asyncio.Task[Any]) -> None:
+        _BACKGROUND_TASKS.discard(done_task)
+        if _DEBOUNCE_TASKS.get(thread_id) is done_task:
+            _DEBOUNCE_TASKS.pop(thread_id, None)
+
+    task.add_done_callback(_cleanup)
+    _schedule_lazy_observations(extract_llm)
+
+
+def _schedule_lazy_observations(extract_llm: Any) -> None:
+    if not is_owner() or extract_llm is None:
+        return
+    from rag_service.domains.roadmap.observations import maybe_schedule_lazy_observations
+
+    obs_task = asyncio.create_task(maybe_schedule_lazy_observations(extract_llm))
+    _BACKGROUND_TASKS.add(obs_task)
+    obs_task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 def _schedule_sync_chat_memory(agent: Any, req: ChatRequest, response: ChatResponse) -> None:
@@ -489,6 +539,25 @@ async def invalidate_memory_cache() -> dict:
 
     owner_memory_store.invalidate()
     return {"status": "invalidated"}
+
+
+@router.post("/memories/observations/refresh")
+async def refresh_owner_observations(request: Request):
+    """Owner-only endpoint to trigger immediate 30-day observation synthesis + stale pruning."""
+    from fastapi.responses import JSONResponse
+    from rag_service.domains.roadmap.observations import synthesize_owner_observations
+
+    set_actor(_actor_of(request))
+    if not is_owner():
+        return JSONResponse({"error": OWNER_ONLY_MESSAGE}, status_code=403)
+    try:
+        raw_body = await request.json()
+    except Exception:
+        raw_body = {}
+    force = bool(raw_body.get("force", True)) if isinstance(raw_body, dict) else True
+    agent = _get_agent()
+    llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
+    return await synthesize_owner_observations(llm, force=force)
 
 
 @router.post("/internal/match-lessons", response_model=MatchLessonsResponse)

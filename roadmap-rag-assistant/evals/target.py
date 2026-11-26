@@ -233,14 +233,51 @@ class RoadmapTarget:
             )
         ]
 
-    def answer(self, text: str, history: list[dict], run_as: str | None = None) -> Answer:
+    def _active_memory_snapshot(
+        self,
+        actor: str,
+        override_memories: list[dict] | None,
+    ) -> tuple[str, list[Any] | None]:
+        if actor != "owner":
+            return "visitor", None
+        from rag_service.core.memory import OwnerMemoryItem
+
+        if override_memories is not None:
+            seeded = [
+                OwnerMemoryItem(
+                    id=str(m.get("id") or f"eval-mem-{i}"),
+                    kind=str(m.get("kind") or "techstack"),
+                    content=str(m.get("content") or ""),
+                    scope=m.get("scope"),
+                    source=str(m.get("source") or "explicit"),
+                    status=str(m.get("status") or "active"),
+                    confidence=m.get("confidence"),
+                )
+                for i, m in enumerate(override_memories)
+                if m.get("content")
+            ]
+            digest_payload = [(m.id, m.kind, m.scope, m.source, m.content) for m in seeded]
+            return hashlib.sha256(json.dumps(digest_payload, ensure_ascii=False).encode()).hexdigest(), seeded
+        return "owner-none", []
+
+    def answer(
+        self,
+        text: str,
+        history: list[dict],
+        run_as: str | None = None,
+        *,
+        owner_memories: list[dict] | None = None,
+    ) -> Answer:
         from rag_service.auth import current_actor
         from rag_service.context_usage import last_turn_diagnostics
         from rag_service.core.augmentation.history import history_store
+        from rag_service.core.memory import owner_memory_store
         from rag_service.pii import mask_pii
         from rag_service.state import session_store
 
-        key = self._cache_key(text, history)
+        actor = "owner" if run_as == "owner" else "visitor"
+        mem_digest, seeded_memories = self._active_memory_snapshot(actor, owner_memories)
+        key = self._cache_key(text, history, run_as=actor, memory_digest=mem_digest)
         if self._cache_on:
             hit = self._load_cache().get(key)
             if hit is not None:
@@ -259,12 +296,15 @@ class RoadmapTarget:
         for turn in history:
             history_store.append(thread_id, turn["role"], mask_pii(turn["content"]))
         # Visitors cannot write, so an eval can never change the database
-        token = current_actor.set("owner" if run_as == "owner" else "visitor")
+        token = current_actor.set(actor)
         prev_transform = settings.rag_query_transform
+        prev_local = list(owner_memory_store._local)
         settings.rag_query_transform = self.transform
+        owner_memory_store._local = list(seeded_memories) if seeded_memories is not None else []
         try:
             events = self._loop.run_until_complete(self._collect(text, thread_id))
         finally:
+            owner_memory_store._local = prev_local
             settings.rag_query_transform = prev_transform
             current_actor.reset(token)
             session_store.clear(thread_id)
@@ -290,12 +330,21 @@ class RoadmapTarget:
             self._store_cache(key, answer_obj)
         return answer_obj
 
-    def _cache_key(self, text: str, history: list[dict]) -> str:
-        """Model, code, corpus and the exact question: change any of them and the answer is recomputed."""
+    def _cache_key(
+        self,
+        text: str,
+        history: list[dict],
+        *,
+        run_as: str = "visitor",
+        memory_digest: str = "",
+    ) -> str:
+        """Model, code, corpus, actor/memory snapshot, and question: change any and recompute."""
         payload = {
-            "schema": 2,
+            "schema": 3,
             "model": settings.llm_model,
             "transform": self.transform,
+            "run_as": run_as,
+            "memory": memory_digest,
             "code": _code_fingerprint(),
             "corpus": self.corpus_fingerprint()["sha256"],
             "text": text,

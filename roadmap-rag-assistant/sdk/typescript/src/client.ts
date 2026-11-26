@@ -14,7 +14,9 @@ import type {
   EditablePreviewTarget,
   HealthResponse,
   LatestThreadResponse,
+  LogMemoryActivityInput,
   OwnerMemoryItem,
+  OwnerMemorySettings,
   OwnerMemoryStatus,
   PageContext,
   PlanResponse,
@@ -474,8 +476,18 @@ export class RoadmapChatClient {
   }
 
   /** List Owner Memory items by status (`active`, `pending`, `archived`, or `all`). */
-  async listMemories(status: OwnerMemoryStatus | 'all' = 'active'): Promise<OwnerMemoryItem[]> {
-    const resp = await fetch(`${this.memoriesBaseUrl}?status=${encodeURIComponent(status)}`, {
+  async listMemories(
+    status: OwnerMemoryStatus | 'all' = 'active',
+    options?: { origin?: 'all' | 'explicit' | 'auto'; q?: string }
+  ): Promise<OwnerMemoryItem[]> {
+    const params = new URLSearchParams({ status });
+    if (options?.origin && options.origin !== 'all') {
+      params.set('origin', options.origin);
+    }
+    if (options?.q?.trim()) {
+      params.set('q', options.q.trim());
+    }
+    const resp = await fetch(`${this.memoriesBaseUrl}?${params.toString()}`, {
       cache: 'no-store',
     });
     if (!resp.ok) {
@@ -523,6 +535,92 @@ export class RoadmapChatClient {
     if (!resp.ok) {
       throw new Error(`Không xoá được mục bộ nhớ (${resp.status})`);
     }
+  }
+
+  /** Read Owner Memory global kill-switches (`memoryEnabled`, `autoObserveEnabled`). */
+  async getMemorySettings(): Promise<OwnerMemorySettings> {
+    const resp = await fetch(`${this.memoriesBaseUrl}/settings`, { cache: 'no-store' });
+    if (!resp.ok) {
+      throw new Error(`Không tải được cài đặt bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { settings?: OwnerMemorySettings };
+    if (!data?.settings || typeof data.settings.memoryEnabled !== 'boolean') {
+      throw new Error('Dữ liệu cài đặt bộ nhớ không hợp lệ');
+    }
+    return data.settings;
+  }
+
+  /** Update Owner Memory kill-switches (`memoryEnabled`, `autoObserveEnabled`). */
+  async updateMemorySettings(
+    input: Partial<Pick<OwnerMemorySettings, 'memoryEnabled' | 'autoObserveEnabled'>>
+  ): Promise<OwnerMemorySettings> {
+    const resp = await fetch(`${this.memoriesBaseUrl}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không cập nhật được cài đặt bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { settings: OwnerMemorySettings };
+    return data.settings;
+  }
+
+  /** Permanently delete memories matching `status` / `origin` (Clear All). */
+  async clearMemories(
+    status: OwnerMemoryStatus | 'all' = 'all',
+    origin?: 'all' | 'explicit' | 'auto'
+  ): Promise<{ deletedCount: number }> {
+    const params = new URLSearchParams({ status });
+    if (origin && origin !== 'all') {
+      params.set('origin', origin);
+    }
+    const resp = await fetch(`${this.memoriesBaseUrl}?${params.toString()}`, {
+      method: 'DELETE',
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không xoá được bộ nhớ (${resp.status})`);
+    }
+    const data = (await resp.json()) as { deletedCount?: number };
+    return { deletedCount: Number(data.deletedCount ?? 0) };
+  }
+
+  /** Best-effort log of Owner rejection/feedback/edit signals for future synthesis avoidance. */
+  async logMemoryActivityEvent(input: LogMemoryActivityInput): Promise<void> {
+    const resp = await fetch(`${this.memoriesBaseUrl}/activity-events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) {
+      throw new Error(`Không ghi nhận được phản hồi (${resp.status})`);
+    }
+  }
+
+  /** Trigger on-demand observation synthesis and stale memory pruning via Next.js proxy. */
+  async refreshObservations(force = true): Promise<{
+    ok: boolean;
+    createdCount: number;
+    archivedCount: number;
+    skipped?: string;
+  }> {
+    const resp = await fetch(`${this.baseUrl}/memories/observations/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không tổng hợp lại được quan sát (${resp.status})`);
+    }
+    return (await resp.json()) as {
+      ok: boolean;
+      createdCount: number;
+      archivedCount: number;
+      skipped?: string;
+    };
   }
 
   /** List Topic summaries for Owner Lesson promotion/picker flows. */

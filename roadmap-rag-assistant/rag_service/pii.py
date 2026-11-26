@@ -16,6 +16,24 @@ SECRET_PATTERN = re.compile(
     r"|\bAKIA[0-9A-Z]{16}\b"
     r"|\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"
 )
+ADDITIONAL_SECRET_PATTERN = re.compile(
+    r"\b(?:glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{20,}|ASIA[0-9A-Z]{16})\b"
+)
+PEM_PRIVATE_KEY_PATTERN = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----")
+CREDENTIALED_URL_PATTERN = re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s/@:]+:[^\s/@]+@[^\s/]+")
+BEARER_EXTRACT_PATTERN = re.compile(r"\bBearer\s+([^\s\"'`,;)\]<>]+)")
+ENV_ASSIGN_EXTRACT_PATTERN = re.compile(r"\b([A-Z][A-Z0-9_]{2,})\s*[:=]\s*[\"']?([^\s\"'`,;)]{12,})")
+_SECRET_ENV_KEYWORDS = (
+    "SECRET",
+    "PASSWORD",
+    "PASSWD",
+    "API_KEY",
+    "ADMIN_KEY",
+    "ACCESS_TOKEN",
+    "PRIVATE_KEY",
+)
+_PII_PLACEHOLDER_PATTERN = re.compile(r"\[(?:secret|email|phone|cccd|card)\]")
+_TOKEN_CHAR_PATTERN = re.compile(r"^[A-Za-z0-9._~+/=-]+$")
 
 # Payment cards: 13–19 digits, optional space/dash groups; masked only when the Luhn checksum holds.
 CARD_PATTERN = re.compile(r"(?<![\w.-])\d(?:[ -]?\d){12,18}(?![\w-])")
@@ -60,6 +78,48 @@ def mask_pii(text: str) -> str:
     text = CCCD_PATTERN.sub("[cccd]", text)
     text = VN_PHONE_PATTERN.sub("[phone]", text)
     return INTL_PHONE_PATTERN.sub("[phone]", text)
+
+
+def _is_high_entropy_bearer_token(token: str) -> bool:
+    if not _TOKEN_CHAR_PATTERN.fullmatch(token):
+        return False
+    if len(token) >= 28:
+        return True
+    return len(token) >= 16 and any(c.isdigit() for c in token) and any(c.isalpha() for c in token)
+
+
+def contains_secret(text: str) -> bool:
+    """Detect API keys, private keys, credentialed URLs, and high-entropy bearer/env secrets."""
+    if not text:
+        return False
+    if (
+        SECRET_PATTERN.search(text)
+        or ADDITIONAL_SECRET_PATTERN.search(text)
+        or PEM_PRIVATE_KEY_PATTERN.search(text)
+        or CREDENTIALED_URL_PATTERN.search(text)
+    ):
+        return True
+    for match in BEARER_EXTRACT_PATTERN.finditer(text):
+        if _is_high_entropy_bearer_token(match.group(1)):
+            return True
+    for match in ENV_ASSIGN_EXTRACT_PATTERN.finditer(text):
+        key_name = match.group(1)
+        if any(kw in key_name for kw in _SECRET_ENV_KEYWORDS):
+            return True
+    return False
+
+
+def has_meaningful_text(text: str) -> bool:
+    """Return True if masked text retains enough non-placeholder letters/digits to store."""
+    has_placeholder = bool(_PII_PLACEHOLDER_PATTERN.search(text))
+    without_placeholders = _PII_PLACEHOLDER_PATTERN.sub("", text)
+    meaningful_chars = "".join(ch for ch in without_placeholders if ch.isalnum())
+    return len(meaningful_chars) >= (6 if has_placeholder else 3)
+
+
+def is_placeholder_only(text: str) -> bool:
+    """Return True when masked text collapses into placeholders or insufficient content."""
+    return not has_meaningful_text(text)
 
 
 def mask_trace_data(*, data: Any, **_: Any) -> Any:

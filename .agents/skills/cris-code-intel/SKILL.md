@@ -89,6 +89,6 @@ Sửa map (`data/cris-workspace-map.json`) xong phải chạy `yarn intel status
    - Phản ánh tiến trình của Owner, không phản ánh độ khó của bài học.
    - Status chỉ hiển thị cho Owner, ẩn hoàn toàn với Visitor.
 4. **Mô hình Embeddings (ADR-0004)**:
-   - Tất cả vector embeddings trong dự án bắt buộc sử dụng Google Gemini `text-embedding-004` (768 dimensions).
+   - Vector embeddings trong dự án bắt buộc dùng Google Gemini (`gemini-embedding-001` 3072d ở Abot; 768d ở Cris AI TS).
 5. **Đồng bộ RAG Re-index**:
    - Khi có bất kỳ thay đổi nào về bài học trên Next.js, phải kích hoạt `after(requestRagReindex)` để Python backend tự động nạp lại dữ liệu mà không làm nghẽn response của user.

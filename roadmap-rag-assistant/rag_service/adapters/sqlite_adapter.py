@@ -230,8 +230,17 @@ class SqliteAdapter:
             row = await self._find_topic(db, slug)
             if not row:
                 return False
+            topic_slug = dict(row).get("slug") or slug.strip().lower()
             await db.execute("DELETE FROM Roadmap WHERE id = ?", (row["id"],))
+            cursor = await db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='OwnerMemory'"
+            )
+            if await cursor.fetchone():
+                await db.execute("DELETE FROM OwnerMemory WHERE scopeTopicSlug = ?", (topic_slug,))
             await db.commit()
+            from rag_service.core.memory import owner_memory_store
+
+            owner_memory_store.invalidate()
             return True
 
     # ── Lessons ──────────────────────────────────────────────────────────

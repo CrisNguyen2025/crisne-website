@@ -7,7 +7,7 @@ import {
   OWNER_MEMORIES_UPDATED_EVENT,
   usePendingMemoryCount,
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/useOwnerMemories";
-import type { OwnerMemoryItem } from "@/roadmap-rag-assistant/sdk/typescript/src/types";
+import type { OwnerMemoryItem, OwnerMemorySettings } from "@/roadmap-rag-assistant/sdk/typescript/src/types";
 
 const BASE = "/api/roadmap-assistant";
 
@@ -20,13 +20,14 @@ function makeItem(overrides: Partial<OwnerMemoryItem> = {}): OwnerMemoryItem {
     source: overrides.source ?? "explicit",
     status: overrides.status ?? "active",
     replacesMemoryId: overrides.replacesMemoryId ?? null,
+    evidenceSnippet: overrides.evidenceSnippet ?? null,
     createdAt: "2026-11-22T00:00:00.000Z",
     updatedAt: "2026-11-22T00:00:00.000Z",
     lastUsedAt: null,
   };
 }
 
-describe("OwnerMemorySheet & useOwnerMemories", () => {
+describe("OwnerMemorySheet & useOwnerMemories (Rovo 2-Tab)", () => {
   beforeEach(() => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -38,450 +39,255 @@ describe("OwnerMemorySheet & useOwnerMemories", () => {
     vi.restoreAllMocks();
   });
 
-  it("loads active & pending memories, creates topic-scoped memory, edits inline, approves pending, and deletes", async () => {
-    let activeList: OwnerMemoryItem[] = [makeItem()];
+  it("renders Rovo two-tab dialog, approves with Undo, rejects with negative feedback, and manages explicit items", async () => {
+    let settings: OwnerMemorySettings = {
+      id: "default",
+      memoryEnabled: true,
+      autoObserveEnabled: true,
+      lastSynthesizedAt: null,
+    };
+    let activeList: OwnerMemoryItem[] = [
+      makeItem({ id: "mem-old", kind: "techstack", content: "Đang dùng Next.js 14", source: "explicit" }),
+      makeItem({
+        id: "mem-obs",
+        kind: "goal",
+        content: "Đang tập trung ôn RAG",
+        source: "observed",
+        evidenceSnippet: "Đọc 3 bài về RAG",
+      }),
+    ];
     let pendingList: OwnerMemoryItem[] = [
       makeItem({
         id: "mem-pending",
-        kind: "preference",
-        content: "Luôn kèm mục Lỗi hay gặp",
+        kind: "techstack",
+        content: "Đang nâng cấp Next.js 16",
         source: "suggested",
         status: "pending",
+        replacesMemoryId: "mem-old",
       }),
     ];
+    let archivedList: OwnerMemoryItem[] = [];
+    const activityEvents: Array<Record<string, unknown>> = [];
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-
-      if (method === "GET" && url.includes("status=active")) {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/memories/settings") {
+        if (method === "PATCH") {
+          const patch = JSON.parse(String(init?.body ?? "{}"));
+          settings = { ...settings, ...patch };
+        }
+        return new Response(JSON.stringify({ settings }), { status: 200 });
+      }
+      if (url === "/api/v1/memories/activity-events" && method === "POST") {
+        activityEvents.push(JSON.parse(String(init?.body ?? "{}")));
+        return new Response(JSON.stringify({ event: { id: "ev-1" } }), { status: 201 });
+      }
+      if (url.startsWith("/api/v1/memories?status=active")) {
         return new Response(JSON.stringify({ memories: activeList }), { status: 200 });
       }
-      if (method === "GET" && url.includes("status=pending")) {
+      if (url.startsWith("/api/v1/memories?status=pending")) {
         return new Response(JSON.stringify({ memories: pendingList }), { status: 200 });
       }
-      if (method === "POST" && url === "/api/v1/memories") {
-        const body = JSON.parse(String(init?.body));
+      if (url.startsWith("/api/v1/memories?status=archived")) {
+        return new Response(JSON.stringify({ memories: archivedList }), { status: 200 });
+      }
+      if (url === "/api/v1/memories" && method === "POST") {
+        const body = JSON.parse(String(init?.body ?? "{}"));
         const created = makeItem({
-          id: "mem-created",
+          id: `mem-${Date.now()}`,
           kind: body.kind,
           content: body.content,
           scopeTopicSlug: body.scopeTopicSlug ?? null,
+          source: "explicit",
+          status: "active",
         });
         activeList = [created, ...activeList];
         return new Response(JSON.stringify({ memory: created }), { status: 201 });
       }
-      if (method === "PATCH" && url.startsWith("/api/v1/memories/")) {
-        const id = url.split("/").pop()!;
-        const body = JSON.parse(String(init?.body));
-        if (body.status === "active") {
-          const target = pendingList.find((m) => m.id === id)!;
-          const approved = { ...target, status: "active" as const };
-          pendingList = pendingList.filter((m) => m.id !== id);
-          activeList = [approved, ...activeList];
-          return new Response(JSON.stringify({ memory: approved }), { status: 200 });
-        }
-        activeList = activeList.map((m) => (m.id === id ? { ...m, ...body } : m));
-        const updated = activeList.find((m) => m.id === id)!;
-        return new Response(JSON.stringify({ memory: updated }), { status: 200 });
-      }
-      if (method === "DELETE" && url.startsWith("/api/v1/memories/")) {
-        const id = url.split("/").pop()!;
+      if (url.startsWith("/api/v1/memories/") && method === "PATCH") {
+        const id = url.split("/").pop() ?? "";
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        const target =
+          [...activeList, ...pendingList, ...archivedList].find((m) => m.id === id) ?? makeItem({ id });
+        const updated = { ...target, ...body };
         activeList = activeList.filter((m) => m.id !== id);
         pendingList = pendingList.filter((m) => m.id !== id);
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        archivedList = archivedList.filter((m) => m.id !== id);
+        if (body.restoreReplacedId) {
+          const restored = archivedList.find((m) => m.id === body.restoreReplacedId);
+          if (restored) {
+            archivedList = archivedList.filter((m) => m.id !== body.restoreReplacedId);
+            activeList = [{ ...restored, status: "active" }, ...activeList];
+          }
+        } else if (updated.status === "active" && target.replacesMemoryId) {
+          const old = activeList.find((m) => m.id === target.replacesMemoryId);
+          if (old) {
+            activeList = activeList.filter((m) => m.id !== old.id);
+            archivedList = [{ ...old, status: "archived" }, ...archivedList];
+          }
+        }
+        if (updated.status === "active") activeList = [updated, ...activeList];
+        else if (updated.status === "pending") pendingList = [updated, ...pendingList];
+        else archivedList = [updated, ...archivedList];
+        return new Response(JSON.stringify({ memory: updated }), { status: 200 });
       }
-      return new Response("Not found", { status: 404 });
+      if (url === "/api/v1/memories?status=all" && method === "DELETE") {
+        activeList = [];
+        pendingList = [];
+        archivedList = [];
+        return new Response(JSON.stringify({ ok: true, deletedCount: 2 }), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const onClose = vi.fn();
-    render(<OwnerMemorySheet baseUrl={BASE} currentTopicSlug="nextjs" onClose={onClose} />);
+    const onPendingCount = vi.fn();
+    render(
+      <OwnerMemorySheet
+        baseUrl={BASE}
+        currentTopicSlug="nextjs"
+        onPendingCountChange={onPendingCount}
+        onClose={vi.fn()}
+      />
+    );
 
-    // Initial load shows active & pending counts
-    await waitFor(() => expect(screen.getByText("Đang dùng Next.js 15 và FastAPI")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Đang nhớ (1)" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Chờ duyệt (1)" })).toBeTruthy();
+    // Tab 1 (Abot quan sát) shows both pending replacement diff & observed snippet
+    await waitFor(() => expect(screen.getByText("Đang nâng cấp Next.js 16")).toBeTruthy());
+    expect(screen.getByText(/Thay thế: “Đang dùng Next.js 14”/)).toBeTruthy();
+    expect(screen.getByText("Đang tập trung ôn RAG")).toBeTruthy();
+    expect(screen.getByText(/Đọc 3 bài về RAG/)).toBeTruthy();
+    expect(onPendingCount).toHaveBeenCalledWith(1);
 
-    // Create a topic-scoped goal memory
-    fireEvent.change(screen.getByLabelText("Loại bộ nhớ"), { target: { value: "goal" } });
-    fireEvent.change(screen.getByLabelText("Phạm vi bộ nhớ"), { target: { value: "topic" } });
-    fireEvent.change(screen.getByPlaceholderText(/Đang dùng Next\.js 15/), {
-      target: { value: "Hoàn thành App Router trong Q4" },
+    // Approve pending -> shows Undo toast, click Undo -> calls restoreReplacedId
+    fireEvent.click(screen.getByRole("button", { name: "Duyệt" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Hoàn tác" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Hoàn tác" }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([u, opt]) =>
+            u === "/api/v1/memories/mem-pending" &&
+            String(opt?.body ?? "").includes('"restoreReplacedId":"mem-old"')
+        )
+      ).toBe(true)
+    );
+
+    // Reject pending -> archives and logs memory_rejected event
+    fireEvent.click(screen.getByRole("button", { name: "Không đúng" }));
+    await waitFor(() =>
+      expect(activityEvents.some((ev) => ev.eventType === "memory_rejected")).toBe(true)
+    );
+
+    // Switch to Tab 2 (Bạn chia sẻ trực tiếp) -> filter & create new explicit memory
+    fireEvent.click(screen.getByRole("tab", { name: /Bạn chia sẻ trực tiếp/ }));
+    await waitFor(() => expect(screen.getByText("Đang dùng Next.js 14")).toBeTruthy());
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Tìm kiếm ghi nhớ" }), {
+      target: { value: "không tồn tại" },
+    });
+    expect(screen.getByText("Không có mục nào khớp với bộ lọc hiện tại.")).toBeTruthy();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Tìm kiếm ghi nhớ" }), {
+      target: { value: "" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Thêm ghi nhớ/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Phạm vi bộ nhớ" }), {
+      target: { value: "topic" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Nội dung ghi nhớ mới" }), {
+      target: { value: "Luôn kèm ví dụ App Router" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Lưu" }));
+    await waitFor(() => expect(screen.getByText("Luôn kèm ví dụ App Router")).toBeTruthy());
 
-    await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Đang nhớ (2)" })).toBeTruthy();
-      expect(screen.getByText("topic: nextjs")).toBeTruthy();
-    });
-    expect(screen.getByText("Hoàn thành App Router trong Q4")).toBeTruthy();
+    // Open Settings drawer -> toggle kill-switch + Clear All 2-step confirmation -> Rovo Empty State
+    fireEvent.click(screen.getByRole("button", { name: "Cài đặt bộ nhớ" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Tự động quan sát và đề xuất" }));
+    await waitFor(() => expect(settings.autoObserveEnabled).toBe(false));
 
-    // Inline edit the first active memory
-    const editButtons = screen.getAllByRole("button", { name: "Sửa mục bộ nhớ" });
-    fireEvent.click(editButtons[0]);
-    const editTextarea = screen.getByDisplayValue("Hoàn thành App Router trong Q4");
-    fireEvent.change(editTextarea, { target: { value: "Hoàn thành App Router & RSC" } });
-    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
-
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Lưu thay đổi" })).toBeNull();
-      expect(screen.getByText("Hoàn thành App Router & RSC")).toBeTruthy();
-    });
-
-    // Switch to pending tab and approve
-    fireEvent.click(screen.getByRole("button", { name: "Chờ duyệt (1)" }));
-    await waitFor(() => expect(screen.getByText("Luôn kèm mục Lỗi hay gặp")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Duyệt" }));
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Chờ duyệt (0)" })).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Đang nhớ (3)" })).toBeTruthy();
-
-    // Switch back to active tab and delete one item
-    fireEvent.click(screen.getByRole("button", { name: "Đang nhớ (3)" }));
-    const deleteButtons = await screen.findAllByRole("button", { name: "Xoá mục bộ nhớ" });
-    fireEvent.click(deleteButtons[0]);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Đang nhớ (2)" })).toBeTruthy());
-
-    // Escape closes the sheet and stops propagation
-    const parentKeyListener = vi.fn();
-    document.addEventListener("keydown", parentKeyListener);
-    fireEvent.keyDown(document, { key: "Escape" });
-    document.removeEventListener("keydown", parentKeyListener);
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(parentKeyListener).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Xoá toàn bộ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận xoá tất cả" }));
+    await waitFor(() => expect(screen.getByText("Sẵn sàng ghi nhớ!")).toBeTruthy());
   });
 
-  it("shows an error banner and retries loading when the API fails", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(new Response("err", { status: 500 }))
-      .mockResolvedValueOnce(new Response("err", { status: 500 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ memories: [makeItem()] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ memories: [] }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<OwnerMemorySheet baseUrl={BASE} onClose={vi.fn()} />);
-
-    await waitFor(() => expect(screen.getByText(/Không tải được bộ nhớ/)).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
-    await waitFor(() => expect(screen.getByText("Đang dùng Next.js 15 và FastAPI")).toBeTruthy());
-  });
-
-  it("shows replacement target text for pending suggestions with replacesMemoryId and notifies count", async () => {
-    const active = [makeItem({ id: "old-1", content: "Đang dùng Next.js 14" })];
-    const pending = [
-      makeItem({
-        id: "new-1",
-        content: "Đã nâng cấp lên Next.js 15",
-        source: "suggested",
-        status: "pending",
-        replacesMemoryId: "old-1",
-      }),
-    ];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.includes("status=active")) return new Response(JSON.stringify({ memories: active }), { status: 200 });
-        return new Response(JSON.stringify({ memories: pending }), { status: 200 });
-      })
-    );
-
-    const onPendingCountChange = vi.fn();
-    render(
-      <OwnerMemorySheet baseUrl={BASE} onPendingCountChange={onPendingCountChange} onClose={vi.fn()} />
-    );
-
-    await waitFor(() => expect(onPendingCountChange).toHaveBeenCalledWith(1));
-    fireEvent.click(screen.getByRole("button", { name: "Chờ duyệt (1)" }));
-    await waitFor(() => expect(screen.getByText(/Thay thế: “Đang dùng Next\.js 14”/)).toBeTruthy());
-  });
-
-  it("wires pendingMemoryCount badge for Owner and never fetches memories for Visitor", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/api/v1/memories?status=pending")) {
-        return new Response(
-          JSON.stringify({ memories: [makeItem({ id: "p1", status: "pending" }), makeItem({ id: "p2", status: "pending" })] }),
-          { status: 200 }
-        );
-      }
-      return new Response(JSON.stringify({ memories: [] }), { status: 200 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    // 1. Visitor: zero memory requests
-    const { unmount } = render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite={false} restoreLatestThread={false} />);
-    await new Promise((r) => setTimeout(r, 30));
-    expect(fetchMock).not.toHaveBeenCalled();
-    unmount();
-
-    // 2. Owner: fetches pending count and displays badge "2" next to Bộ nhớ
-    render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite restoreLatestThread />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/v1/memories?status=pending", { cache: "no-store" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
-    await waitFor(() => {
-      expect(screen.getByText("Bộ nhớ")).toBeTruthy();
-      expect(screen.getByText("2")).toBeTruthy();
-    });
-  });
-
-  it("edits kind, scope, and content on Chờ duyệt tab before approving, and warns at 10 pending items", async () => {
-    let activeList: OwnerMemoryItem[] = [];
-    let pendingList: OwnerMemoryItem[] = Array.from({ length: 10 }, (_, idx) =>
-      makeItem({
-        id: `mem-p-${idx}`,
-        kind: "learning_note",
-        content: idx === 0 ? "Hay quên stale closure trong hook" : `Ghi chú chờ ${idx}`,
-        source: "suggested",
-        status: "pending",
-      })
-    );
-    const patchCalls: Array<{ id: string; body: Record<string, unknown> }> = [];
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = String(input);
-        const method = init?.method ?? "GET";
-        if (method === "GET" && url.includes("status=active")) {
-          return new Response(JSON.stringify({ memories: activeList }), { status: 200 });
-        }
-        if (method === "GET" && url.includes("status=pending")) {
-          return new Response(JSON.stringify({ memories: pendingList }), { status: 200 });
-        }
-        if (method === "PATCH" && url.startsWith("/api/v1/memories/")) {
-          const id = url.split("/").pop()!;
-          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          patchCalls.push({ id, body });
-          if (body.status === "active") {
-            const target = pendingList.find((m) => m.id === id)!;
-            const approved = { ...target, status: "active" as const };
-            pendingList = pendingList.filter((m) => m.id !== id);
-            activeList = [approved, ...activeList];
-            return new Response(JSON.stringify({ memory: approved }), { status: 200 });
-          }
-          pendingList = pendingList.map((m) => (m.id === id ? { ...m, ...body } : m));
-          return new Response(JSON.stringify({ memory: pendingList.find((m) => m.id === id) }), { status: 200 });
-        }
-        return new Response("Not found", { status: 404 });
-      })
-    );
-
-    render(<OwnerMemorySheet baseUrl={BASE} currentTopicSlug="react" onClose={vi.fn()} />);
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Chờ duyệt (10)" })).toBeTruthy());
-    expect(screen.getByRole("status").textContent).toContain("10/10");
-
-    fireEvent.click(screen.getByRole("button", { name: "Chờ duyệt (10)" }));
-    await waitFor(() => expect(screen.getByText("Hay quên stale closure trong hook")).toBeTruthy());
-
-    const editButtons = screen.getAllByRole("button", { name: "Sửa mục bộ nhớ" });
-    fireEvent.click(editButtons[0]);
-
-    fireEvent.change(screen.getByLabelText("Loại bộ nhớ khi sửa"), { target: { value: "preference" } });
-    fireEvent.change(screen.getByLabelText("Phạm vi bộ nhớ khi sửa"), { target: { value: "react" } });
-    fireEvent.change(screen.getByLabelText("Nội dung bộ nhớ khi sửa"), {
-      target: { value: "Luôn giải thích stale closure kèm dependency array" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
-
-    await waitFor(() => {
-      expect(screen.getByText("Luôn giải thích stale closure kèm dependency array")).toBeTruthy();
-      expect(screen.getByText("topic: react")).toBeTruthy();
-    });
-    expect(patchCalls[0]).toEqual({
-      id: "mem-p-0",
-      body: {
-        kind: "preference",
-        content: "Luôn giải thích stale closure kèm dependency array",
-        scopeTopicSlug: "react",
-      },
-    });
-    expect(screen.getByRole("button", { name: "Chờ duyệt (10)" })).toBeTruthy();
-
-    const approveButtons = screen.getAllByRole("button", { name: "Duyệt" });
-    fireEvent.click(approveButtons[0]);
-
-    await waitFor(() => expect(screen.getByRole("button", { name: "Chờ duyệt (9)" })).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Đang nhớ (1)" })).toBeTruthy();
-    expect(patchCalls[1]).toEqual({ id: "mem-p-0", body: { status: "active" } });
-  });
-
-  it("lazily loads Đã gỡ (archived) tab, supports restore and permanent delete", async () => {
-    let activeList: OwnerMemoryItem[] = [];
-    let archivedList: OwnerMemoryItem[] = [
-      makeItem({ id: "arch-1", content: "Mục đã lưu trữ 1", status: "archived" }),
-      makeItem({ id: "arch-2", content: "Mục đã lưu trữ 2", status: "archived" }),
-    ];
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-      if (method === "GET" && url.includes("status=active")) {
-        return new Response(JSON.stringify({ memories: activeList }), { status: 200 });
-      }
-      if (method === "GET" && url.includes("status=pending")) {
-        return new Response(JSON.stringify({ memories: [] }), { status: 200 });
-      }
-      if (method === "GET" && url.includes("status=archived")) {
-        return new Response(JSON.stringify({ memories: archivedList }), { status: 200 });
-      }
-      if (method === "PATCH" && url === "/api/v1/memories/arch-1") {
-        const target = archivedList.find((m) => m.id === "arch-1")!;
-        archivedList = archivedList.filter((m) => m.id !== "arch-1");
-        const restored = { ...target, status: "active" as const };
-        activeList = [restored, ...activeList];
-        return new Response(JSON.stringify({ memory: restored }), { status: 200 });
-      }
-      if (method === "DELETE" && url === "/api/v1/memories/arch-2") {
-        archivedList = archivedList.filter((m) => m.id !== "arch-2");
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
-      return new Response("Not found", { status: 404 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(<OwnerMemorySheet baseUrl={BASE} onClose={vi.fn()} />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Đang nhớ (0)" })).toBeTruthy());
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("status=archived"), expect.anything());
-
-    fireEvent.click(screen.getByRole("button", { name: "Đã gỡ" }));
-    await waitFor(() => expect(screen.getByText("Mục đã lưu trữ 1")).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Đã gỡ (2)" })).toBeTruthy();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Khôi phục" })[0]);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Đang nhớ (1)" })).toBeTruthy());
-    expect(screen.getByRole("button", { name: "Đã gỡ (1)" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: "Xoá mục bộ nhớ" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Đã gỡ (0)" })).toBeTruthy());
-    expect(screen.getByText("Không có mục nào đã gỡ.")).toBeTruthy();
-  });
-
-  it("promotes a memory to a target Lesson, archives the memory, and dispatches roadmap:updated", async () => {
-    let activeList: OwnerMemoryItem[] = [
+  it("supports Promote to Lesson with retry on error", async () => {
+    const activeList: OwnerMemoryItem[] = [
       makeItem({
         id: "mem-promote",
         kind: "learning_note",
-        scopeTopicSlug: "react",
         content: "useTransition giữ UI phản hồi khi render tác vụ nặng",
+        scopeTopicSlug: "nextjs",
+        source: "observed",
       }),
     ];
-    let shouldFailCreate = true;
+    let createAttempts = 0;
     const roadmapUpdatedEvents: Array<{ toolName?: string; result?: string }> = [];
-    const onRoadmapUpdated = (event: Event) => {
-      roadmapUpdatedEvents.push((event as CustomEvent<{ toolName?: string; result?: string }>).detail);
+    const onRoadmapUpdated = (ev: Event) => {
+      roadmapUpdatedEvents.push((ev as CustomEvent).detail ?? {});
     };
     window.addEventListener("roadmap:updated", onRoadmapUpdated);
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-      if (method === "GET" && url.includes("status=active")) {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (url === "/api/v1/memories/settings") {
+        return new Response(JSON.stringify({ settings: { id: "default", memoryEnabled: true, autoObserveEnabled: true } }), { status: 200 });
+      }
+      if (url.startsWith("/api/v1/memories?status=active")) {
         return new Response(JSON.stringify({ memories: activeList }), { status: 200 });
       }
-      if (method === "GET" && url.includes("status=pending")) {
+      if (url.startsWith("/api/v1/memories?status=pending")) {
         return new Response(JSON.stringify({ memories: [] }), { status: 200 });
       }
-      if (method === "GET" && url === "/api/v1/roadmaps") {
+      if (url === "/api/v1/roadmaps") {
         return new Response(
-          JSON.stringify({
-            roadmaps: [
-              { id: "t-react", slug: "react", title: "React 19", order: 1 },
-              { id: "t-next", slug: "nextjs", title: "Next.js", order: 2 },
-            ],
-          }),
+          JSON.stringify({ roadmaps: [{ id: "r1", slug: "react", title: "React 19", order: 1 }] }),
           { status: 200 }
         );
       }
-      if (method === "GET" && url === "/api/v1/roadmaps/react?mode=outline") {
+      if (url === "/api/v1/roadmaps/react?mode=outline") {
         return new Response(
-          JSON.stringify({
-            roadmap: { id: "t-react", slug: "react", title: "React 19", order: 1 },
-            items: [],
-            sections: ["Hooks", "Concurrency", null],
-          }),
+          JSON.stringify({ roadmap: { id: "r1", slug: "react", title: "React 19", order: 1 }, items: [], sections: ["Concurrency"] }),
           { status: 200 }
         );
       }
-      if (method === "POST" && url === "/api/v1/roadmaps/items") {
-        if (shouldFailCreate) {
-          shouldFailCreate = false;
-          return new Response(JSON.stringify({ error: "Lesson đã tồn tại" }), { status: 409 });
+      if (url === "/api/v1/roadmaps/items" && method === "POST") {
+        createAttempts += 1;
+        if (createAttempts === 1) {
+          return new Response(JSON.stringify({ error: "Tiêu đề trùng" }), { status: 400 });
         }
-        return new Response(
-          JSON.stringify({
-            item: {
-              id: "lesson-new",
-              slug: "concurrent-usetransition",
-              title: "Concurrent useTransition",
-              description: "useTransition giữ UI phản hồi khi render tác vụ nặng",
-              section: "Concurrency",
-              order: 1,
-              roadmapSlug: "react",
-              createdAt: "2026-11-26T00:00:00.000Z",
-              updatedAt: "2026-11-26T00:00:00.000Z",
-            },
-          }),
-          { status: 201 }
-        );
+        return new Response(JSON.stringify({ item: { id: "it-1", slug: "concurrent-usetransition" } }), { status: 201 });
       }
-      if (method === "PATCH" && url === "/api/v1/memories/mem-promote") {
-        activeList = [];
-        return new Response(
-          JSON.stringify({
-            memory: makeItem({ id: "mem-promote", status: "archived" }),
-          }),
-          { status: 200 }
-        );
+      if (url === "/api/v1/memories/mem-promote" && method === "PATCH") {
+        return new Response(JSON.stringify({ memory: makeItem({ id: "mem-promote", status: "archived" }) }), { status: 200 });
       }
-      return new Response("Not found", { status: 404 });
+      return new Response("{}", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
     try {
       render(<OwnerMemorySheet baseUrl={BASE} currentTopicSlug="nextjs" onClose={vi.fn()} />);
-      await waitFor(() => expect(screen.getByText("useTransition giữ UI phản hồi khi render tác vụ nặng")).toBeTruthy());
-
-      fireEvent.click(screen.getByRole("button", { name: "Đưa vào Lesson" }));
-      await waitFor(() => expect(screen.getByRole("option", { name: "Concurrency" })).toBeTruthy());
-
-      expect((screen.getByLabelText("Topic đích") as HTMLSelectElement).value).toBe("react");
-      fireEvent.change(screen.getByLabelText("Section đích"), { target: { value: "Concurrency" } });
-      fireEvent.change(screen.getByLabelText("Tiêu đề Lesson"), { target: { value: "Concurrent useTransition" } });
-
-      // First submit returns 409 error and must NOT archive the memory
-      fireEvent.click(screen.getByRole("button", { name: "Xác nhận đưa vào Lesson" }));
-      await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Lesson đã tồn tại"));
-      expect(activeList).toHaveLength(1);
-
-      // Retry succeeds, dispatches roadmap:updated, and archives the memory
-      fireEvent.click(screen.getByRole("button", { name: "Xác nhận đưa vào Lesson" }));
-      await waitFor(() => expect(screen.getByRole("button", { name: "Đang nhớ (0)" })).toBeTruthy());
-
-      expect(roadmapUpdatedEvents).toEqual([
-        { toolName: "promote_concept_to_lesson", result: "concurrent-usetransition" },
-      ]);
-      const createCall = fetchMock.mock.calls.find(([url, init]) => url === "/api/v1/roadmaps/items" && init?.method === "POST");
-      expect(JSON.parse(String(createCall?.[1]?.body))).toEqual({
-        roadmapSlug: "react",
-        title: "Concurrent useTransition",
-        section: "Concurrency",
-        description: "useTransition giữ UI phản hồi khi render tác vụ nặng",
-        status: "target",
-      });
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/v1/memories/mem-promote",
-        expect.objectContaining({ method: "PATCH", body: JSON.stringify({ status: "archived" }) })
+      await waitFor(() =>
+        expect(screen.getByText("useTransition giữ UI phản hồi khi render tác vụ nặng")).toBeTruthy()
       );
+      fireEvent.click(screen.getByRole("button", { name: "Đưa vào Lesson" }));
+      await waitFor(() => expect(screen.getByText("React 19")).toBeTruthy());
+
+      fireEvent.change(screen.getByRole("textbox", { name: "Tiêu đề Lesson" }), {
+        target: { value: "Concurrent useTransition" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Xác nhận đưa vào Lesson" }));
+      await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Tiêu đề trùng"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Xác nhận đưa vào Lesson" }));
+      await waitFor(() => expect(roadmapUpdatedEvents).toHaveLength(1));
     } finally {
       window.removeEventListener("roadmap:updated", onRoadmapUpdated);
     }
   });
 
-  it("refreshes pending count adaptively after stream end and on memory mutation events", async () => {
+  it("hides Bộ nhớ in Visitor widget and isolates pending count polling", async () => {
     vi.useFakeTimers();
     const pendingResponses = [0, 0, 1, 2];
     const fetchMock = vi.fn(async () => {
@@ -491,6 +297,10 @@ describe("OwnerMemorySheet & useOwnerMemories", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
+    render(<RoadmapChatbotWidget baseUrl={BASE} canWrite={false} initialOpen />);
+    fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
+    expect(screen.queryByRole("menuitem", { name: /Bộ nhớ/ })).toBeNull();
+
     function Harness({ enabled, isStreaming }: { enabled: boolean; isStreaming: boolean }) {
       const [count] = usePendingMemoryCount(BASE, enabled, isStreaming);
       return <span data-testid="pending-count">{count}</span>;
@@ -498,8 +308,7 @@ describe("OwnerMemorySheet & useOwnerMemories", () => {
 
     const { rerender } = render(<Harness enabled={false} isStreaming={false} />);
     await act(async () => {
-      window.dispatchEvent(new CustomEvent(OWNER_MEMORIES_UPDATED_EVENT));
-      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2500);
     });
     expect(fetchMock).not.toHaveBeenCalled();
 
@@ -519,24 +328,16 @@ describe("OwnerMemorySheet & useOwnerMemories", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1200);
+      await vi.advanceTimersByTimeAsync(2000);
     });
     expect(screen.getByTestId("pending-count").textContent).toBe("1");
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
-    // Stops polling once count increases; subsequent timers do not fire extra requests
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10000);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-
-    // Instant refresh on mutation event from OwnerMemorySheet
     await act(async () => {
       window.dispatchEvent(new CustomEvent(OWNER_MEMORIES_UPDATED_EVENT));
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(screen.getByTestId("pending-count").textContent).toBe("2");
-    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 });

@@ -20,7 +20,9 @@ from rag_service.core.memory import KIND_LABELS, OwnerMemoryItem, owner_memory_s
 from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
+from rag_service.pii import contains_secret, has_meaningful_text, mask_pii
 from rag_service.state.session_store import build_action_preview_event
+from rag_service.steps import step_event
 from rag_service.tools.topic_resolver import resolve_topic
 
 MemoryAction = Literal["create", "archive", "list"]
@@ -214,29 +216,65 @@ def format_memory_list_reply(active: Sequence[OwnerMemoryItem], pending_count: i
 
 
 class MemoryCommands(AgentHostMixin):
-    async def _handle_memory_create(self, req, page_context, session_ctx, delay: float) -> AsyncGenerator[dict, None]:
-        kind = infer_memory_kind(req.content)
-        scope_slug: Optional[str] = None
+    @staticmethod
+    def _validate_create_content(raw_content: str) -> tuple[Optional[str], Optional[str]]:
+        if contains_secret(raw_content):
+            return None, (
+                "Mình không thể lưu API key, token, mật khẩu hoặc secret vào Bộ nhớ Owner. "
+                "Bạn hãy bỏ thông tin nhạy cảm rồi thử lại nhé."
+            )
+        safe_content = mask_pii(raw_content).strip()[:300]
+        if not has_meaningful_text(safe_content):
+            return None, (
+                "Nội dung bộ nhớ quá ngắn hoặc chỉ chứa thông tin cá nhân cần che "
+                "(email/SĐT/CCCD/thẻ), nên mình chưa lưu được."
+            )
+        return safe_content, None
+
+    @staticmethod
+    async def _resolve_create_scope(req, page_context, session_ctx) -> tuple[Optional[str], Optional[str]]:
         if req.use_current_topic:
-            scope_slug = ((page_context or {}).get("roadmapSlug") or "").strip() or session_ctx.active_topic_slug
-        elif req.topic_hint:
+            slug = ((page_context or {}).get("roadmapSlug") or "").strip() or session_ctx.active_topic_slug
+            return slug, None
+        if req.topic_hint:
             found = await resolve_topic(req.topic_hint)
             if found.status == "found" and found.slug:
-                scope_slug = found.slug
-            else:
-                async for ev in self._stream_text(
-                    f"Không tìm thấy topic `{req.topic_hint}` để gắn phạm vi bộ nhớ. "
-                    "Bạn hãy kiểm tra lại tên topic hoặc bỏ tên topic để lưu toàn cục.",
-                    delay,
-                ):
-                    yield ev
-                return
+                return found.slug, None
+            return None, (
+                f"Không tìm thấy topic `{req.topic_hint}` để gắn phạm vi bộ nhớ. "
+                "Bạn hãy kiểm tra lại tên topic hoặc bỏ tên topic để lưu toàn cục."
+            )
+        return None, None
+
+    async def _handle_memory_create(self, req, page_context, session_ctx, delay: float) -> AsyncGenerator[dict, None]:
+        if not await owner_memory_store.is_memory_enabled():
+            yield step_event("answer", "generation", "done", mode="memory")
+            async for ev in self._stream_text(
+                "🧠 **Bộ nhớ Owner hiện đang tạm tắt** trong cài đặt. Bạn hãy bật lại công tắc Bộ nhớ để thêm ghi nhớ mới nhé.",
+                delay,
+            ):
+                yield ev
+            return
+        safe_content, content_err = self._validate_create_content(req.content)
+        if content_err is not None or safe_content is None:
+            yield step_event("answer", "generation", "done", mode="memory")
+            async for ev in self._stream_text(content_err or "", delay):
+                yield ev
+            return
+
+        kind = infer_memory_kind(safe_content)
+        scope_slug, scope_err = await self._resolve_create_scope(req, page_context, session_ctx)
+        if scope_err is not None:
+            yield step_event("answer", "generation", "done", mode="memory")
+            async for ev in self._stream_text(scope_err, delay):
+                yield ev
+            return
 
         session_ctx.clear_pending()
         session_ctx.pending_memory_change = {
             "op": "create",
             "kind": kind,
-            "content": req.content,
+            "content": safe_content,
             "scope_topic_slug": scope_slug,
         }
         scope_label = f"Topic `{scope_slug}`" if scope_slug else "Toàn cục (mọi Topic)"
@@ -244,7 +282,7 @@ class MemoryCommands(AgentHostMixin):
             "🧠 **Lưu vào Bộ nhớ Owner**\n\n"
             f"- **Loại:** {KIND_LABELS.get(kind, kind)} (`{kind}`)\n"
             f"- **Phạm vi:** {scope_label}\n"
-            f"- **Nội dung:** {req.content}\n\n"
+            f"- **Nội dung:** {safe_content}\n\n"
             "👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để lưu, hoặc bấm **[❌ Hủy bỏ]** để bỏ qua."
         )
         yield build_action_preview_event(
@@ -252,6 +290,7 @@ class MemoryCommands(AgentHostMixin):
             kind="memory_change",
             preview=preview_text,
         )
+        yield step_event("answer", "generation", "done", mode="memory")
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 
@@ -263,6 +302,7 @@ class MemoryCommands(AgentHostMixin):
                 f"Mình không tìm thấy mục bộ nhớ nào khớp với **{req.content}**.\n\n"
                 + (format_memory_list_reply(active) if active else "Bộ nhớ Owner hiện đang trống.")
             )
+            yield step_event("answer", "generation", "done", mode="memory")
             async for ev in self._stream_text(reply, delay):
                 yield ev
             return
@@ -288,6 +328,7 @@ class MemoryCommands(AgentHostMixin):
             kind="memory_change",
             preview=preview_text,
         )
+        yield step_event("answer", "generation", "done", mode="memory")
         async for ev in self._stream_text(preview_text, delay):
             yield ev
 
@@ -307,6 +348,7 @@ class MemoryCommands(AgentHostMixin):
 
         outcome["handled"] = True
         if not is_owner():
+            yield step_event("answer", "generation", "done", mode="memory")
             async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
@@ -317,6 +359,7 @@ class MemoryCommands(AgentHostMixin):
             reply = format_memory_list_reply(active, len(pending))
             yield {"type": "tool_start", "name": "list_owner_memories", "args": {}}
             yield {"type": "tool_end", "name": "list_owner_memories", "result": f"{len(active)} active, {len(pending)} pending"}
+            yield step_event("answer", "generation", "done", mode="memory")
             async for ev in self._stream_text(reply, delay):
                 yield ev
         elif req.action == "create":

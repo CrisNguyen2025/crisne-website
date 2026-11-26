@@ -49,8 +49,21 @@ Một cuộc hội thoại với Roadmap Assistant, luôn thuộc về đúng m�
 _Avoid_: session, conversation
 
 **Owner Memory**:
-Mục ghi nhớ ngắn và bền vững về Owner xuyên qua nhiều Thread (nền tảng, techstack, mục tiêu, quy ước trả lời hoặc ghi chú học tập), chỉ Owner thấy và dùng.
+Mục ghi nhớ ngắn và bền vững về Owner xuyên qua nhiều Thread (nền tảng, techstack, mục tiêu, quy ước trả lời hoặc ghi chú học tập), gồm phần Owner chia sẻ trực tiếp (`explicit`) và phần Abot quan sát (`suggested` / `observed`), chỉ Owner thấy và dùng.
 _Avoid_: user profile, global context, long-term prompt
+
+**Owner Observation**:
+Quan sát dài hạn được Roadmap Assistant tự rút ra từ hội thoại hoặc tổng hợp định kỳ từ hoạt động học tập của Owner; luôn có nguồn gốc minh bạch và quyền tắt/sửa/từ chối tức thì.
+_Also_: Abot quan sát
+_Avoid_: user profile, behavior analytics, Provenance
+
+**Owner Activity Event**:
+Sự kiện hoạt động thưa của Owner (như kết quả Quiz hoặc phản hồi từ chối/sửa quan sát) lưu append-only để làm nguyên liệu tổng hợp Owner Observation, không bao giờ nạp thô vào prompt.
+_Avoid_: audit log, raw log, Trace
+
+**Owner Preference**:
+Thiết lập kiểm soát bộ nhớ của riêng Owner (bật/tắt dùng bộ nhớ trong chat, bật/tắt tự động quan sát, mốc tổng hợp gần nhất).
+_Avoid_: user settings, feature flag (khi nói về công tắc bộ nhớ Owner)
 
 **Thread Summary**:
 Bản tóm tắt phần hội thoại cũ của một Thread khi số lượt vượt quá cửa sổ tin nhắn gần nhất.

@@ -92,7 +92,7 @@ model ThreadState {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Owner Memory across Threads (ADR-0015): profile, techstack, goals, preferences, notes
+// Owner Memory across Threads (ADR-0015 / ADR-0020): profile, techstack, goals, preferences, notes
 // Strictly Owner-only; never loaded or exposed for Visitors.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -101,15 +101,43 @@ model OwnerMemory {
   kind             String    // profile | techstack | goal | preference | learning_note
   scopeTopicSlug   String?   // null = global; topic slug = injected when working on that Topic
   content          String    // Short atomic fact (<= 300 chars)
-  source           String    @default("explicit") // explicit | suggested
+  source           String    @default("explicit") // explicit | suggested | observed
   status           String    @default("active")   // active | pending | archived
   replacesMemoryId String?   // Optional active memory archived when a pending item is approved
+  useCount         Int       @default(0)
+  confidence       Float?
+  validTo          DateTime?
+  evidenceSnippet  String?   // Masked short UI-only provenance snippet; never injected into LLM prompt
+  sourceThreadId   String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   lastUsedAt       DateTime?
 
   @@index([status, scopeTopicSlug])
   @@index([kind, status])
+  @@index([source, status])
+}
+
+model OwnerPreference {
+  id                 String    @id @default("default")
+  memoryEnabled      Boolean   @default(true)
+  autoObserveEnabled Boolean   @default(true)
+  lastSynthesizedAt  DateTime?
+  lastSynthesisHash  String?
+  updatedAt          DateTime  @updatedAt
+}
+
+model OwnerActivityEvent {
+  id           String   @id @default(uuid(7))
+  eventType    String   // quiz_completed | memory_rejected | memory_edited | observation_feedback
+  topicSlug    String?
+  entityId     String?
+  summary      String
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType, createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -27,7 +27,10 @@ const notifyMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth/write-access', () => writeAccessMock);
-vi.mock('@/lib/roadmap/rag-reindex', () => ({ notifyRoadmapChanged: notifyMock }));
+vi.mock('@/lib/roadmap/rag-reindex', () => ({
+  notifyRoadmapChanged: notifyMock,
+  notifyOwnerMemoryChanged: vi.fn(),
+}));
 
 import { DELETE as deleteTopic } from '@/app/api/v1/roadmaps/[slug]/route';
 import { PATCH } from '@/app/api/v1/roadmaps/items/[id]/route';

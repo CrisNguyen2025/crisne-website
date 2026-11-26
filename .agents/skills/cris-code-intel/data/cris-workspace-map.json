@@ -11,7 +11,7 @@
     ],
     "database": "SQLite (dev) / Turso libSQL (prod) via Prisma ORM; Cloudflare R2 / AWS S3 for object storage",
     "ai_providers": [
-      "Google Gemini (gemini-2.5-flash / text-embedding-004 768d)",
+      "Google Gemini (gemini-2.5-flash / gemini-embedding-001 3072d Abot & 768d Cris AI)",
       "Groq Llama 3 (fallback)"
     ],
     "observability": "Langfuse v5 OTEL SDK for spans, generations, and user feedback",
@@ -39,7 +39,7 @@
       {
         "id": "Persistence",
         "name": "Persistence & Storage Layer",
-        "description": "Prisma ORM (Turso/SQLite), Cloudflare R2 / AWS S3 buckets, Python In-memory Vector Store (DuckDB/numpy)"
+        "description": "Prisma ORM (Turso/SQLite), Cloudflare R2 / AWS S3 buckets, Python In-memory Vector Store (pure-Python cosine + BM25 FTS)"
       },
       {
         "id": "Observability",
@@ -138,6 +138,9 @@
         "app/api/v1/threads/[threadId]/route.ts",
         "app/api/v1/memories/route.ts",
         "app/api/v1/memories/[id]/route.ts",
+        "app/api/v1/memories/settings/route.ts",
+        "app/api/v1/memories/activity-events/route.ts",
+        "app/api/v1/memories/activity-snapshot/route.ts",
         "lib/roadmap/thread-state.ts",
         "lib/roadmap/owner-memory.ts",
         "logic/roadmap/roadmapAssistantService.ts",
@@ -948,8 +951,63 @@
       "method": "PATCH",
       "authRequirement": "owner_only",
       "domainId": "roadmap-assistant-abot",
-      "summary": "Cập nhật hàng loạt lastUsedAt cho các mục Owner Memory active vừa được sử dụng (không xóa cache)",
+      "summary": "Cập nhật hàng loạt lastUsedAt và tăng useCount cho các mục Owner Memory active vừa được sử dụng trong prompt (không xóa cache)",
       "handler": "app/api/v1/memories/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_CLEAR",
+      "type": "api_route",
+      "path": "/api/v1/memories",
+      "method": "DELETE",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Xoá hàng loạt Owner Memory (Clear All) theo status/origin và invalidates cache (ADR-0020)",
+      "handler": "app/api/v1/memories/route.ts#DELETE",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_SETTINGS",
+      "type": "api_route",
+      "path": "/api/v1/memories/settings",
+      "method": "GET/PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Đọc/cập nhật kill-switches OwnerPreference (memoryEnabled, autoObserveEnabled, lastSynthesizedAt) (ADR-0020)",
+      "handler": "app/api/v1/memories/settings/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_ACTIVITY_EVENTS",
+      "type": "api_route",
+      "path": "/api/v1/memories/activity-events",
+      "method": "GET/POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Ghi/đọc OwnerActivityEvent (Layer 4 negative signals, quiz_completed, undo feedback; auto-prune >90d) (ADR-0020)",
+      "handler": "app/api/v1/memories/activity-events/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_MEMORIES_ACTIVITY_SNAPSHOT",
+      "type": "api_route",
+      "path": "/api/v1/memories/activity-snapshot",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Tổng hợp tín hiệu học tập 30 ngày + sourceHash từ Turso cho weekly observation synthesis (ADR-0020)",
+      "handler": "app/api/v1/memories/activity-snapshot/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_OBSERVATIONS_REFRESH",
+      "type": "api_route",
+      "path": "/api/roadmap-assistant/memories/observations/refresh",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Proxy Owner-only (403 Visitor) kích hoạt tổng hợp quan sát tức thì và prune mục hết hạn trên Python (ADR-0020)",
+      "handler": "app/api/roadmap-assistant/[...path]/route.ts#forward",
       "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
     }
   ],
@@ -1030,7 +1088,7 @@
       ],
       "invariants": [
         "Visitor chỉ được quyền đọc, không bao giờ được phép kích hoạt write tool",
-        "Embeddings của Knowledge Base luôn sử dụng Gemini text-embedding-004 768d (ADR-0004)",
+        "Embeddings của Knowledge Base dùng Gemini (Abot gemini-embedding-001 3072d, Cris AI 768d) (ADR-0004)",
         "Mọi lượt hỏi đáp đều phải ghi vết Langfuse trace (ADR-0003)",
         "Khôi phục Thread của Owner giữ schema ThreadMessage tối giản trên Turso (ADR-0012, Q2 Option A)"
       ],
@@ -1833,15 +1891,15 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/core/memory/extractor.py",
           "functionOrMethod": "maybe_suggest_memories",
-          "action": "Kiểm tra tín hiệu bền vững qua has_memory_signal cả trên user_message lẫn assistant_reply; khử trùng paraphrase/Jaccard và gắn replacesMemoryId; chỉ ghi status=pending (trần MAX_PENDING_MEMORIES=10)",
-          "callsNext": "roadmap-rag-assistant/rag_service/core/memory/store.py#OwnerMemoryStore.create",
-          "dataPassed": "{ kind, content, scope, source: 'suggested', status: 'pending', replaces_memory_id }"
+          "action": "Debounce 1.5s trên server, kiểm tra kill-switch + secret/PII/XML guard + has_memory_signal; đề xuất ADD/SUPERSEDE/NOOP kèm confidence & evidenceSnippet vào pending; hỗ trợ tổng hợp quan sát hằng tuần trong observations.py",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/observations.py#synthesize_owner_observations",
+          "dataPassed": "{ kind, content, scope, source: 'suggested'|'observed', replaces_memory_id, confidence, evidence_snippet }"
         }
       ],
       "invariants": [
-        "Visitor không bao giờ đọc, ghi hay nhận <owner_memory> trong prompt (ADR-0002, ADR-0015)",
+        "Visitor không bao giờ đọc, ghi, gọi refresh observations hay nhận <owner_memory> trong prompt (ADR-0002, ADR-0020)",
         "Mọi thao tác nhớ/quên qua chat bắt buộc qua Preview -> ok và phát ChangeReview (op='update', level='memory')",
-        "Đề xuất tự động luôn đi vào pending (trần MAX_PENDING_MEMORIES=10); <owner_memory> không rò rỉ vào Lesson draft"
+        "Lọc API key/token/credentialed URL/PII-only và escape XML control tags; include_owner_memory mặc định False ở Lesson draft; xóa cứng memory theo Topic khi xóa Topic"
       ],
       "failureModes": [
         "Next.js API không phản hồi khi đọc memory: fail-open chạy tiếp không có <owner_memory>",
@@ -1852,7 +1910,8 @@
         "ADR-0002",
         "ADR-0005",
         "ADR-0012",
-        "ADR-0015"
+        "ADR-0015",
+        "ADR-0020"
       ]
     },
     {
@@ -2434,7 +2493,7 @@
     {
       "ruleId": "ADR-0004",
       "title": "Embeddings Always Gemini",
-      "summary": "Toàn bộ vector embeddings trong workspace luôn dùng mô hình Google Gemini text-embedding-004 với 768 dimensions."
+      "summary": "Vector embeddings trong workspace luôn dùng mô hình Google Gemini (Abot gemini-embedding-001 3072d; Cris AI 768d)."
     },
     {
       "ruleId": "ADR-0005",
@@ -2483,8 +2542,8 @@
     },
     {
       "ruleId": "ADR-0015",
-      "title": "Abot Owner Memory",
-      "summary": "Owner Memory xuyên Thread lưu ở Turso (5 kind, <= 300 ký tự), cách ly hoàn toàn với Visitor, lệnh chat luôn có Preview -> ok, gợi ý tự động vào pending chờ duyệt."
+      "title": "Abot Owner Memory (superseded by ADR-0020)",
+      "summary": "Thiết kế nền ban đầu cho Owner Memory trên Turso, nay được thay thế và mở rộng sang Rovo 2-tab & Observations bởi ADR-0020."
     },
     {
       "ruleId": "ADR-0016",
@@ -2500,6 +2559,11 @@
       "ruleId": "ADR-0019",
       "title": "Owner-only site, no Public News (supersedes ADR-0018)",
       "summary": "Middleware bắt đăng nhập mọi trang trừ /login (không còn trang public); route riêng tư phải tự kiểm quyền vì middleware cho qua request có header key; WebMCP chỉ đăng ký read-only khi canWrite === true."
+    },
+    {
+      "ruleId": "ADR-0020",
+      "title": "Rovo Owner Memory & Observations (supersedes ADR-0015)",
+      "summary": "Tách Explicit vs Suggested vs Observed; thêm OwnerPreference kill-switches, OwnerActivityEvent (90d prune), lọc secret/PII/XML, cách ly Lesson draft mặc định, xoá cứng memory theo Topic, ranking ổn định prefix & evals/memory/."
     }
   ]
 }

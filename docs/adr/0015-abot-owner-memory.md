@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0020
 ---
 
 # Owner Memory xuyên Thread lưu ở Turso, cách ly hoàn toàn với Visitor

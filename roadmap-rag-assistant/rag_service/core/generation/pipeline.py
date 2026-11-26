@@ -122,6 +122,17 @@ def _guard_step_event(guard_report: guardrails.GuardReport) -> dict:
     )
 
 
+def _record_owner_memory_usage(setup: dict[str, Any]) -> None:
+    selected_ids = setup["selected_memory_ids"]
+    if not (selected_ids and is_owner()):
+        return
+    from rag_service.core.memory import owner_memory_store
+
+    owner_memory_store.record_usage(selected_ids)
+    if (trace := current_trace()) is not None:
+        trace.flags["owner_memory_count"] = len(selected_ids)
+
+
 class GenerationPipeline:
     def __init__(self, profile: DomainProfile) -> None:
         self.profile = profile
@@ -358,6 +369,7 @@ class GenerationPipeline:
         if report is not None and report.failed and profile.grounding_note:
             yield token_event(profile.grounding_note)
         yield step_event("answer", "generation", "done", mode="llm")
+        _record_owner_memory_usage(setup)
         if report is not None and is_owner():
             yield _guard_step_event(report)
         self._record_diagnostics(req, prompt, usage, documents, sections, cite, links)

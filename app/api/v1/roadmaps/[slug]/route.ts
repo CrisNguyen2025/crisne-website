@@ -4,7 +4,7 @@ import { ChecklistItem, GetRoadmapResponseDto } from '@/lib/roadmap/types';
 import { findTopic } from '@/lib/roadmap/resolveRoadmap';
 import { hasWriteAccess, requireWriteAccess } from "@/lib/auth/write-access";
 import { DEFAULT_LESSON_STATUS, isLessonStatus } from '@/lib/roadmap/status';
-import { notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
+import { notifyOwnerMemoryChanged, notifyRoadmapChanged } from '@/lib/roadmap/rag-reindex';
 import { sectionsInOrder } from '@/lib/roadmap/sections';
 import { readingMinutes } from '@/lib/roadmap/content-utils';
 import { UpdateRoadmapSchema, parseJsonBody } from '@/lib/roadmap/schemas';
@@ -89,7 +89,8 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Roadmap not found' }, { status: 404 });
     }
 
-    type DeleteTopicTx = Pick<typeof prisma, 'roadmap' | 'roadmapItem' | 'slugRedirect'>;
+    let hasDeletedMemories = false;
+    type DeleteTopicTx = Pick<typeof prisma, 'roadmap' | 'roadmapItem' | 'slugRedirect' | 'ownerMemory'>;
     const applyDelete = async (tx: DeleteTopicTx) => {
       const childItems =
         (await tx.roadmapItem?.findMany?.({
@@ -110,6 +111,8 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
             }
           : { entity: 'topic', targetId: roadmap.id };
       await tx.slugRedirect?.deleteMany?.({ where: redirectWhere });
+      const deletedMem = await tx.ownerMemory?.deleteMany?.({ where: { scopeTopicSlug: roadmap.slug } });
+      hasDeletedMemories = Boolean(deletedMem?.count);
     };
 
     if (typeof prisma.$transaction === 'function') {
@@ -119,6 +122,9 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     }
 
     notifyRoadmapChanged();
+    if (hasDeletedMemories) {
+      notifyOwnerMemoryChanged();
+    }
     return NextResponse.json({ success: true, deletedSlug: roadmap.slug, deletedTitle: roadmap.title });
   } catch (error) {
     console.error('[API DELETE /api/v1/roadmaps/[slug]] Error:', error);

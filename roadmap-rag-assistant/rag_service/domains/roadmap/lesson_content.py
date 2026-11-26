@@ -390,11 +390,21 @@ def is_template_placeholder_only(html_text: str) -> bool:
 
 def validate_lesson_draft(html_text: str) -> tuple[bool, Optional[str]]:
     """Output guard before creating Preview: ensures structured H2/H3 headings and no placeholder text."""
+    from rag_service.pii import contains_secret
+
     plain = _plain(html_text)
     if not plain:
         return False, "Bản nháp rỗng."
     if re.search(r"<h1\b", html_text, flags=re.IGNORECASE):
         return False, "Bản nháp chứa thẻ H1; chỉ được dùng ## và ###."
+    if re.search(
+        r"</?(?:owner_memory|system|instructions?|prompt|conversation_history)\b",
+        html_text,
+        flags=re.IGNORECASE,
+    ):
+        return False, "Bản nháp chứa thẻ hệ thống nội bộ không hợp lệ."
+    if contains_secret(plain):
+        return False, "Bản nháp chứa token hoặc thông tin bí mật nhạy cảm."
     if re.search(r"\[điền vào đây\]|\bTODO\s*:|:\s*\.\.\.(?:\s|$)", plain, flags=re.IGNORECASE):
         return False, "Bản nháp vẫn còn nội dung giữ chỗ (TODO / ...)."
     if not extract_html_outline(html_text):
@@ -553,7 +563,7 @@ class LessonContentCommands(AgentHostMixin):
         template_kind: TemplateKind,
         write_mode: WriteMode,
         target_h2: Optional[str],
-        include_owner_memory: bool = True,
+        include_owner_memory: bool = False,
     ) -> tuple[str, str, Optional[str]]:
         owner_memory_block = ""
         if include_owner_memory:
@@ -561,7 +571,11 @@ class LessonContentCommands(AgentHostMixin):
 
             topic_slug = topic.get("slug")
             owner_memories = await owner_memory_store.list_active(topic_slug)
-            relevant_memories = [m for m in owner_memories if m.kind in ("preference", "techstack", "learning_note")]
+            relevant_memories = [
+                m
+                for m in owner_memories
+                if m.kind == "preference" and m.source == "explicit"
+            ]
             owner_memory_block, _ = format_owner_memory(
                 relevant_memories,
                 note="Ngữ cảnh cá nhân của Owner (áp dụng cho ví dụ và phong cách viết, không nhắc lại như lời trò chuyện):",

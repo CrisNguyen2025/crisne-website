@@ -12,6 +12,22 @@ const SECRET_PATTERN = new RegExp(
   "g",
 );
 
+const ADDITIONAL_SECRET_PATTERN = /\b(?:glpat-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{20,}|ASIA[0-9A-Z]{16})\b/;
+const PEM_PRIVATE_KEY_PATTERN = /-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----/;
+const URL_CANDIDATE_PATTERN = /\b[a-z][a-z0-9+.-]{1,15}:\/\/\S+/gi;
+const BEARER_EXTRACT_PATTERN = /\bBearer\s+([^\s"'`,;)\]<>]+)/g;
+const ENV_ASSIGN_EXTRACT_PATTERN = /\b([A-Z][A-Z0-9_]{2,})\s*[:=]\s*["']?([^\s"'`,;)]{12,})/g;
+const SECRET_ENV_KEYWORDS = [
+  "SECRET",
+  "PASSWORD",
+  "PASSWD",
+  "API_KEY",
+  "ADMIN_KEY",
+  "ACCESS_TOKEN",
+  "PRIVATE_KEY",
+] as const;
+const PII_PLACEHOLDER_PATTERN = /\[(?:secret|email|phone|cccd|card)\]/g;
+
 // Payment cards: 13–19 digits, optional space/dash groups; masked only when the Luhn checksum holds.
 const CARD_PATTERN = /(?<![\w.-])\d(?:[ -]?\d){12,18}(?![\w-])/g;
 
@@ -56,4 +72,61 @@ export function maskPII(text: string): string {
     .replace(CCCD_PATTERN, "[cccd]")
     .replace(VN_PHONE_PATTERN, "[phone]")
     .replace(INTL_PHONE_PATTERN, "[phone]");
+}
+
+function isHighEntropyBearerToken(token: string): boolean {
+  if (!/^[A-Za-z0-9._~+/=-]+$/.test(token)) {
+    return false;
+  }
+  if (token.length >= 28) {
+    return true;
+  }
+  return token.length >= 16 && /\d/.test(token) && /[A-Za-z]/.test(token);
+}
+
+function hasCredentialedUrl(text: string): boolean {
+  for (const match of text.matchAll(URL_CANDIDATE_PATTERN)) {
+    try {
+      const parsed = new URL(match[0]);
+      if (parsed.password) {
+        return true;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
+export function containsSecret(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  if (
+    new RegExp(SECRET_PATTERN.source).test(text) ||
+    ADDITIONAL_SECRET_PATTERN.test(text) ||
+    PEM_PRIVATE_KEY_PATTERN.test(text) ||
+    hasCredentialedUrl(text)
+  ) {
+    return true;
+  }
+  for (const match of text.matchAll(BEARER_EXTRACT_PATTERN)) {
+    if (match[1] && isHighEntropyBearerToken(match[1])) {
+      return true;
+    }
+  }
+  for (const match of text.matchAll(ENV_ASSIGN_EXTRACT_PATTERN)) {
+    const keyName = match[1];
+    if (keyName && SECRET_ENV_KEYWORDS.some((kw) => keyName.includes(kw))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function hasMeaningfulText(text: string): boolean {
+  const hasPlaceholder = new RegExp(PII_PLACEHOLDER_PATTERN.source).test(text);
+  const withoutPlaceholders = text.replace(PII_PLACEHOLDER_PATTERN, "");
+  const meaningfulChars = withoutPlaceholders.replace(/[^\p{L}\p{N}]+/gu, "");
+  return meaningfulChars.length >= (hasPlaceholder ? 6 : 3);
 }

@@ -103,13 +103,38 @@ function ContextBody({ data, deltaTokens }: { data: ConversationContext; deltaTo
 
       <ul className="mt-3 space-y-1.5">
         {parts.map((p) => (
-          <Row
-            key={p.key}
-            color={PART_COLORS[p.key] ?? FALLBACK_COLOR}
-            label={p.limit ? `${p.label} · ${p.count ?? 0} / ${p.limit}` : p.label}
-            value={formatTokenCount(p.tokens)}
-            share={formatPercent(p.tokens, budget)}
-          />
+          <React.Fragment key={p.key}>
+            <Row
+              color={PART_COLORS[p.key] ?? FALLBACK_COLOR}
+              label={p.limit ? `${p.label} · ${p.count ?? 0} / ${p.limit}` : p.label}
+              value={formatTokenCount(p.tokens)}
+              share={formatPercent(p.tokens, budget)}
+            />
+            {p.key === "owner_memory" &&
+              p.breakdown &&
+              (p.breakdown.explicit.count > 0 || p.breakdown.observation.count > 0) && (
+                <>
+                  {p.breakdown.explicit.count > 0 && (
+                    <Row
+                      color="bg-[#5E8C6F]"
+                      label={`↳ Chia sẻ trực tiếp · ${p.breakdown.explicit.count} mục`}
+                      value={formatTokenCount(p.breakdown.explicit.tokens)}
+                      share={formatPercent(p.breakdown.explicit.tokens, budget)}
+                      muted
+                    />
+                  )}
+                  {p.breakdown.observation.count > 0 && (
+                    <Row
+                      color="bg-[#D97706]/70"
+                      label={`↳ Abot quan sát · ${p.breakdown.observation.count} mục`}
+                      value={formatTokenCount(p.breakdown.observation.tokens)}
+                      share={formatPercent(p.breakdown.observation.tokens, budget)}
+                      muted
+                    />
+                  )}
+                </>
+              )}
+          </React.Fragment>
         ))}
         {deltaTokens !== undefined && <Row color="bg-[#E6E4DF]" label="Thay đổi từ lần xem trước" value={formatTokenDelta(deltaTokens)} />}
         {reserved.map((r) => (

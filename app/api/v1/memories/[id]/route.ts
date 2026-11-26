@@ -5,10 +5,13 @@ import { requireWriteAccess } from '@/lib/auth/write-access';
 import { notifyOwnerMemoryChanged } from '@/lib/roadmap/rag-reindex';
 import { JsonObjectSchema } from '@/lib/roadmap/schemas';
 import {
-  cleanMemoryContent,
+  cleanEvidenceSnippet,
   isOwnerMemoryKind,
   isOwnerMemoryStatus,
+  parseConfidence,
   parseScopeTopicSlug,
+  parseValidTo,
+  sanitizeMemoryTextForStorage,
 } from '@/lib/roadmap/owner-memory';
 
 // Owner Memory single-item update/delete (ADR-0015): strictly Owner-only.
@@ -30,10 +33,35 @@ const MEMORY_SELECT = {
   source: true,
   status: true,
   replacesMemoryId: true,
+  useCount: true,
+  confidence: true,
+  validTo: true,
+  evidenceSnippet: true,
+  sourceThreadId: true,
   createdAt: true,
   updatedAt: true,
   lastUsedAt: true,
 } as const;
+
+function applyMetadataUpdates(
+  body: Record<string, unknown>,
+  data: Prisma.OwnerMemoryUpdateInput
+): string | null {
+  if (body.confidence !== undefined) {
+    const parsedConf = parseConfidence(body.confidence);
+    if (!parsedConf.ok) return parsedConf.error;
+    data.confidence = parsedConf.value;
+  }
+  if (body.validTo !== undefined) {
+    const parsedValidTo = parseValidTo(body.validTo);
+    if (!parsedValidTo.ok) return parsedValidTo.error;
+    data.validTo = parsedValidTo.value;
+  }
+  if (body.evidenceSnippet !== undefined) {
+    data.evidenceSnippet = cleanEvidenceSnippet(body.evidenceSnippet);
+  }
+  return null;
+}
 
 function buildMemoryUpdateData(
   body: Record<string, unknown>
@@ -44,9 +72,9 @@ function buildMemoryUpdateData(
     data.kind = body.kind;
   }
   if (body.content !== undefined) {
-    const content = cleanMemoryContent(body.content);
-    if (!content) return { error: 'content must be 1..300 characters' };
-    data.content = content;
+    const sanitized = sanitizeMemoryTextForStorage(body.content);
+    if (!sanitized.ok) return { error: sanitized.error };
+    data.content = sanitized.content;
   }
   if (body.scopeTopicSlug !== undefined) {
     const scopeTopicSlug = parseScopeTopicSlug(body.scopeTopicSlug);
@@ -57,6 +85,8 @@ function buildMemoryUpdateData(
     if (!isOwnerMemoryStatus(body.status)) return { error: 'Invalid status' };
     data.status = body.status;
   }
+  const metaErr = applyMetadataUpdates(body, data);
+  if (metaErr) return { error: metaErr };
   if (Object.keys(data).length === 0) {
     return { error: 'At least one updatable field is required' };
   }
@@ -91,23 +121,38 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     }
     const { data } = updateResult;
 
-    // Approving a pending replacement archives the superseded memory in the same transaction
+    const restoreReplacedId =
+      typeof parsedBody.data.restoreReplacedId === 'string' && parsedBody.data.restoreReplacedId.trim()
+        ? parsedBody.data.restoreReplacedId.trim()
+        : null;
+
     const shouldArchiveReplaced =
       existing.status === 'pending' &&
       data.status === 'active' &&
       Boolean(existing.replacesMemoryId);
 
-    const memory = shouldArchiveReplaced
-      ? await prisma.$transaction(async (tx) => {
-          await tx.ownerMemory.updateMany({
-            where: { id: existing.replacesMemoryId!, status: 'active' },
-            data: { status: 'archived' },
-          });
-          return tx.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
-        })
-      : await prisma.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
+    let memory;
+    if (shouldArchiveReplaced) {
+      memory = await prisma.$transaction(async (tx) => {
+        await tx.ownerMemory.updateMany({
+          where: { id: existing.replacesMemoryId!, status: 'active' },
+          data: { status: 'archived' },
+        });
+        return tx.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
+      });
+    } else if (restoreReplacedId) {
+      memory = await prisma.$transaction(async (tx) => {
+        await tx.ownerMemory.updateMany({
+          where: { id: restoreReplacedId, status: 'archived' },
+          data: { status: 'active' },
+        });
+        return tx.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
+      });
+    } else {
+      memory = await prisma.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
+    }
 
-    if (existing.status === 'active' || memory.status === 'active') {
+    if (existing.status === 'active' || memory.status === 'active' || Boolean(restoreReplacedId)) {
       notifyOwnerMemoryChanged();
     }
     return NextResponse.json({ memory }, { headers: NO_STORE });
@@ -132,6 +177,10 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     if (!existing) {
       return NextResponse.json({ error: 'Memory not found' }, { status: 404, headers: NO_STORE });
     }
+    await prisma.ownerMemory.updateMany?.({
+      where: { replacesMemoryId: id },
+      data: { replacesMemoryId: null },
+    });
     await prisma.ownerMemory.delete({ where: { id } });
     if (existing.status === 'active') {
       notifyOwnerMemoryChanged();

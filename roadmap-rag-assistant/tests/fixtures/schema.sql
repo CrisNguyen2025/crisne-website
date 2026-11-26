@@ -66,9 +66,35 @@ CREATE TABLE "OwnerMemory" (
     "source" TEXT NOT NULL DEFAULT 'explicit',
     "status" TEXT NOT NULL DEFAULT 'active',
     "replacesMemoryId" TEXT,
+    "useCount" INTEGER NOT NULL DEFAULT 0,
+    "confidence" REAL,
+    "validTo" DATETIME,
+    "evidenceSnippet" TEXT,
+    "sourceThreadId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "lastUsedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "OwnerPreference" (
+    "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
+    "memoryEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "autoObserveEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "lastSynthesizedAt" DATETIME,
+    "lastSynthesisHash" TEXT,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "OwnerActivityEvent" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "eventType" TEXT NOT NULL,
+    "topicSlug" TEXT,
+    "entityId" TEXT,
+    "summary" TEXT NOT NULL,
+    "metadataJson" TEXT NOT NULL DEFAULT '{}',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -217,6 +243,15 @@ CREATE INDEX "OwnerMemory_status_scopeTopicSlug_idx" ON "OwnerMemory"("status", 
 
 -- CreateIndex
 CREATE INDEX "OwnerMemory_kind_status_idx" ON "OwnerMemory"("kind", "status");
+
+-- CreateIndex
+CREATE INDEX "OwnerMemory_source_status_idx" ON "OwnerMemory"("source", "status");
+
+-- CreateIndex
+CREATE INDEX "OwnerActivityEvent_createdAt_idx" ON "OwnerActivityEvent"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "OwnerActivityEvent_eventType_createdAt_idx" ON "OwnerActivityEvent"("eventType", "createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NewsSource_feedUrl_key" ON "NewsSource"("feedUrl");

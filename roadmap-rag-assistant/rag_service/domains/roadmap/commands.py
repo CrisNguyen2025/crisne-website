@@ -185,13 +185,20 @@ class RoadmapCommands(AgentHostMixin):
 
     async def _execute_memory_change(self, mem_change: dict) -> tuple[bool, str, Optional[ChangeSet]]:
         from rag_service.core.memory import KIND_LABELS, owner_memory_store
+        from rag_service.pii import contains_secret, has_meaningful_text, mask_pii
 
         op = mem_change.get("op")
         try:
             if op == "create":
+                raw_content = str(mem_change.get("content") or "")
+                if contains_secret(raw_content):
+                    return False, "❌ Không thể lưu API key, token, mật khẩu hoặc secret vào Bộ nhớ Owner.", None
+                safe_content = mask_pii(raw_content).strip()[:300]
+                if not has_meaningful_text(safe_content):
+                    return False, "❌ Nội dung bộ nhớ không hợp lệ hoặc chỉ chứa thông tin cá nhân đã che.", None
                 saved = await owner_memory_store.create(
                     kind=mem_change["kind"],
-                    content=mem_change["content"],
+                    content=safe_content,
                     scope=mem_change.get("scope_topic_slug"),
                     source="explicit",
                     status="active",
