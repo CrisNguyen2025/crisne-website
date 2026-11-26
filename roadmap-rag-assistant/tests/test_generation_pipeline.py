@@ -435,3 +435,15 @@ def test_format_documents_preserves_order_and_build_prompt_reorders():
     sent_ids = [line.split('id="')[1].split('"')[0] for line in llm.prompts[0].splitlines() if line.startswith("<document ")]
     assert sent_ids == ["2", "4", "3", "1"]
     assert last_turn_diagnostics(thread)["document_ids"] == ["2", "4", "3", "1"]
+
+
+def test_build_prompt_places_current_page_adjacent_to_user_query():
+    req = GenerationRequest(
+        mode="rag",
+        query="tóm tắt page này",
+        thread_id=f"t-{uuid.uuid4()}",
+        sources=[(DOC, 0.9)],
+        page_hint="roadmap='frontend', itemTitle='Next.js 9/2026'",
+    )
+    prompt = build_prompt(req, PROFILE)
+    assert prompt.index("</context>") < prompt.index("<current_page>") < prompt.index("<user_query>")

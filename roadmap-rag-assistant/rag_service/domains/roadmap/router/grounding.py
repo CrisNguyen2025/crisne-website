@@ -364,15 +364,21 @@ def build_grounding(context: Optional[dict]) -> str:
 
     parts: list[str] = []
     slug = (context.get("roadmapSlug") or "").strip()
+    roadmap_title = (context.get("roadmapTitle") or "").strip()
     section = (context.get("section") or "").strip()
     item_id = (context.get("itemId") or "").strip()
+    item_title = (context.get("itemTitle") or "").strip()
 
     if slug:
         parts.append(f"roadmap='{slug}'")
+    if roadmap_title and roadmap_title != slug:
+        parts.append(f"roadmapTitle='{roadmap_title}'")
     if section:
         parts.append(f"section='{section}'")
     if item_id:
         parts.append(f"itemId='{item_id}'")
+    if item_title and item_title != item_id:
+        parts.append(f"itemTitle='{item_title}'")
 
     if not parts:
         return ""

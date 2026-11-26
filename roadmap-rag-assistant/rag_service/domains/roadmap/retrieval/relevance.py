@@ -20,8 +20,8 @@ from typing import Any, Iterable, List, Optional, Set, Tuple
 QUESTION_WORDS = {
     "có", "không", "nào", "bài", "về", "là", "gì", "gi", "của", "và", "các", "những", "trong", "để",
     "thế", "sao", "hãy", "cho", "tôi", "bạn", "mình", "nói", "cách", "hướng", "dẫn", "như",
-    "roadmap", "lộ", "trình", "học", "topic", "layer", "item", "the", "what", "is", "how", "any",
-    "are", "there", "about", "of", "to", "in", "for", "a", "an", "do", "does",
+    "roadmap", "lộ", "trình", "học", "topic", "layer", "item", "section", "mục", "lesson", "page",
+    "the", "what", "is", "how", "any", "are", "there", "about", "of", "to", "in", "for", "a", "an", "do", "does",
 }
 WORD = re.compile(r"\w+", re.UNICODE)
 
@@ -54,10 +54,10 @@ def corpus_vocabulary(docs: Iterable[Any]) -> Set[str]:
 # Typos ("retreival", "hybird") still name a known term; one wrong letter in four ("lora") does not
 TERM_MATCH_CUTOFF = 0.8
 
+_DEICTIC_ENTITY = r"(?:trang|page|bai(?:\s+hoc)?|lesson|topic|lo\s+trinh|muc|section)"
+_DEICTIC_MODIFIER = r"(?:nay|hien\s+tai|dang\s+(?:xem|mo))"
 CURRENT_PAGE_DEICTIC_RE = re.compile(
-    r"\b(?:trang\s+(?:nay|hien\s+tai|dang\s+xem)|bai\s+(?:hoc\s+)?(?:nay|hien\s+tai|dang\s+xem)"
-    r"|topic\s+(?:nay|hien\s+tai|dang\s+xem)|lo\s+trinh\s+(?:nay|hien\s+tai|dang\s+xem)"
-    r"|muc\s+nay|o\s+day|tren\s+trang\s+nay)\b"
+    rf"\b(?:{_DEICTIC_ENTITY}\s+{_DEICTIC_MODIFIER}|day\s+la\s+{_DEICTIC_ENTITY}|o\s+day|tren\s+trang\s+nay)\b"
 )
 
 

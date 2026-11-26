@@ -42,6 +42,7 @@ LEADING_FRAME = re.compile(
 SPOKEN_FILLER = re.compile(r"(?:(?:o|om|um|uhm|uh|hmm+|thi\s+la|cai)[\s,]+)+")
 TRAILING_FRAME = re.compile(
     r"(?:\s+(?:la\s+(?:gi|cai\s+gi|sao)|nghia\s+la\s+(?:gi|sao)|dung\s+(?:de\s+)?lam\s+gi|de\s+lam\s+gi"
+    r"|(?:dang\s+)?noi\s+ve\s+(?:cai\s+)?gi"
     r"|hoat\s+dong\s+(?:the\s+nao|ra\s+sao)|the\s+nao|ra\s+sao|nhu\s+the\s+nao|khac\s+nhau|khac\s+.*\s+cho\s+nao"
     r"|(?:co\s+)?(?:duoc\s+)?khong|ko|k|nhi|vay|the|a|ha|nhe|nha|di|giup(?:\s+(?:minh|toi|em))?"
     r"|(?:thi\s+)?sao|(?:con\s+)?(?:gi\s+)?nua"
@@ -49,9 +50,11 @@ TRAILING_FRAME = re.compile(
 )
 # What is left when the message names nothing: pronouns and empty fillers
 # A filler may lead it ("thế còn cái trên"); "con" alone is not stripped elsewhere, since "con trỏ" is a topic
+_DEICTIC_ENTITY = r"(?:cai|bai(?:\s+hoc)?|lesson|trang|page|topic|lo\s+trinh|muc|section)"
+_DEICTIC_MODIFIER = r"(?:do|nay|kia|tren|hien\s+tai|dang\s+(?:xem|mo))"
 NO_TOPIC = re.compile(
     r"^(?:(?:the|ok|oke|vay|con|thi|ma)\s+)*"
-    r"(?:no|cai\s+(?:do|nay|kia|tren)|bai\s+(?:do|nay|kia|tren)|cai\s+gi|gi|con\s+(?:gi|nua)|con|nua|"
+    rf"(?:no|{_DEICTIC_ENTITY}\s+{_DEICTIC_MODIFIER}|cai\s+gi|gi|con\s+(?:gi|nua)|con|nua|"
     r"vay|the|a|u|uh|hmm+|ok|oke|tren|do|nay|kia|thi\s+sao|sao|)$"
 )
 

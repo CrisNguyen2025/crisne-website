@@ -34,6 +34,8 @@ class GenerationRequest:
     owner_memories: Sequence[Any] = field(default_factory=list)
     memory_scope: Optional[str] = None
     lesson_provenances: Dict[str, Sequence[Any]] = field(default_factory=dict)
+    # Current open page hint placed adjacent to <user_query> so history about an earlier page cannot hijack 'này'/'đây'.
+    page_hint: str = ""
 
 
 _OPEN_CONTROL_TAG_RE = re.compile(
@@ -188,6 +190,8 @@ def synthesize_prompt(
         parts.append(hist)
     if req.mode == "rag":
         parts.append(format_documents(docs))
+    if req.page_hint:
+        parts.append(f"<current_page>\n{_escape(req.page_hint)}\n</current_page>")
     parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
     return "\n\n".join(parts), selected_memory_ids
 

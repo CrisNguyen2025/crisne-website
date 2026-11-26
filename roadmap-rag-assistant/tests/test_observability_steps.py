@@ -156,3 +156,85 @@ def test_traced_turn_records_answer_mode_and_gate_dropped(monkeypatch):
     root = langfuse.observations[0]
     assert root.updates["metadata"]["answer_mode"] == "no_match"
     assert root.updates["metadata"]["gate_dropped"] == 3
+
+
+def test_concept_promotion_proposal_and_draft_emit_trace_spans(monkeypatch, mock_adapter):
+    from rag_service.auth import set_actor
+    from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
+    from rag_service.state import session_store
+
+    langfuse = FakeLangfuse()
+    monkeypatch.setattr(observability, "get_langfuse", lambda: langfuse)
+    mock_adapter.get_topic.return_value = {
+        "id": "t-fe",
+        "slug": "frontend",
+        "title": "Frontend",
+        "description": "Frontend roadmap",
+        "items": [],
+        "sections": ["Core"],
+    }
+
+    class FakeDraftLLM:
+        async def ainvoke(self, prompt):
+            return type(
+                "Msg",
+                (),
+                {
+                    "content": "## Tổng quan & Bài toán\n\nNội dung chuẩn về Speculative Decoding.\n\n## Cơ chế hoạt động\n\nChi tiết.",
+                    "usage_metadata": {"input_tokens": 50, "output_tokens": 30, "total_tokens": 80},
+                },
+            )()
+
+    async def run():
+        set_actor("owner")
+        agent = NextGenRoadmapAgent(llm_model=FakeDraftLLM())
+        session_ctx = session_store.get_or_create(f"obs-promo-{uuid.uuid4()}")
+
+        async def work():
+            yield {"type": "step", "id": "work", "kind": "tool", "status": "running"}
+            proposal, err = await agent.build_concept_promotion_proposal(
+                concept="Speculative Decoding",
+                preferred_topic_slug="frontend",
+                source="domain_gap",
+                session_ctx=session_ctx,
+            )
+            assert err is None and proposal is not None
+            yield {"type": "token", "delta": "ok"}
+
+        return [ev async for ev in traced_turn(work(), message="Speculative Decoding là gì", session_id=session_ctx.session_id)]
+
+    asyncio.run(run())
+    names = [o.name for o in langfuse.observations]
+    assert "concept-promotion-proposal" in names
+    assert "lesson-draft-generation" in names
+    gen = next(o for o in langfuse.observations if o.name == "lesson-draft-generation")
+    assert gen.as_type == "generation"
+    assert gen.ended
+    assert gen.updates["usage_details"] == {"input": 50, "output": 30, "total": 80}
+    proposal_span = next(o for o in langfuse.observations if o.name == "concept-promotion-proposal")
+    assert proposal_span.ended
+
+
+def test_turn_emits_thread_context_and_owner_memory_spans(monkeypatch):
+    from rag_service.auth import set_actor
+    from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
+
+    langfuse = FakeLangfuse()
+    monkeypatch.setattr(observability, "get_langfuse", lambda: langfuse)
+
+    async def run():
+        set_actor("owner")
+        agent = NextGenRoadmapAgent(llm_model=None)
+        return [
+            ev
+            async for ev in agent.astream_events(
+                {"messages": [{"role": "user", "content": "Docker là gì?"}], "fast": True},
+                config={"configurable": {"thread_id": f"obs-ctx-{uuid.uuid4()}"}},
+            )
+        ]
+
+    asyncio.run(run())
+    names = [o.name for o in langfuse.observations]
+    assert "load-thread-context" in names
+    assert "load-owner-memory" in names
+    assert all(o.ended for o in langfuse.observations if o.name in ("load-thread-context", "load-owner-memory"))

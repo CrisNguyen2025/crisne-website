@@ -18,10 +18,12 @@ from typing import Any, AsyncGenerator, Literal, Optional, Sequence
 log = logging.getLogger(__name__)
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.config import settings
 from rag_service.domains.roadmap import linking_advisor
 from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import example_blocks, format_concept_promotion_preview
+from rag_service.observability import end_step, end_step_on_error, start_step, usage_from_langchain
 from rag_service.state.session_store import build_action_preview_event
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
@@ -586,25 +588,33 @@ class LessonContentCommands(AgentHostMixin):
 
         guard_error: Optional[str] = None
         for attempt in range(2):
+            prompt = draft_prompt(
+                topic=topic_title,
+                lesson=lesson,
+                request=content,
+                topic_description=(topic.get("description") or "").strip(),
+                template_kind=template_kind,
+                write_mode=write_mode,
+                target_h2=target_h2,
+                strict_retry_reason=guard_error if attempt == 1 else None,
+                owner_memory_block=owner_memory_block,
+            )
+            draft_step = start_step(
+                "lesson-draft-generation",
+                "generation",
+                model=settings.llm_model,
+                input=prompt,
+                metadata={"template_kind": template_kind, "write_mode": write_mode, "attempt": attempt + 1},
+            )
             try:
-                message = await asyncio.wait_for(
-                    self.llm.ainvoke(
-                        draft_prompt(
-                            topic=topic_title,
-                            lesson=lesson,
-                            request=content,
-                            topic_description=(topic.get("description") or "").strip(),
-                            template_kind=template_kind,
-                            write_mode=write_mode,
-                            target_h2=target_h2,
-                            strict_retry_reason=guard_error if attempt == 1 else None,
-                            owner_memory_block=owner_memory_block,
-                        )
-                    ),
-                    DRAFT_TIMEOUT,
-                )
+                message = await asyncio.wait_for(self.llm.ainvoke(prompt), DRAFT_TIMEOUT)
                 candidate = _text_of(message).strip()
-            except Exception as exc:
+                end_step(draft_step, output=candidate, usage_details=usage_from_langchain(message))
+            except BaseException as exc:
+                if isinstance(exc, (asyncio.CancelledError, GeneratorExit)):
+                    end_step_on_error(draft_step, exc)
+                    raise
+                end_step(draft_step, level="ERROR", status_message=f"{type(exc).__name__}: {exc}")
                 print(f"[lesson_content] Draft failed: {exc}")
                 candidate = ""
             if not candidate:
@@ -869,6 +879,53 @@ class LessonContentCommands(AgentHostMixin):
         if not is_owner():
             return None, OWNER_ONLY_MESSAGE
 
+        proposal_step = start_step(
+            "concept-promotion-proposal",
+            "span",
+            input={"concept": concept, "source": source, "preferred_topic": preferred_topic_slug},
+        )
+        try:
+            proposal, err_msg = await self._build_concept_promotion_proposal_impl(
+                concept=concept,
+                summary=summary,
+                topic_hint=topic_hint,
+                preferred_topic_slug=preferred_topic_slug,
+                preferred_lesson=preferred_lesson,
+                write_mode_override=write_mode_override,
+                target_h2=target_h2,
+                source=source,
+                keywords=keywords,
+                session_ctx=session_ctx,
+                status=status,
+            )
+            end_step(
+                proposal_step,
+                output=(
+                    {"mode": proposal["mode"], "topic": proposal["topic"], "section": proposal["section"]}
+                    if proposal is not None
+                    else {"error": err_msg}
+                ),
+            )
+            return proposal, err_msg
+        except BaseException as exc:
+            end_step_on_error(proposal_step, exc)
+            raise
+
+    async def _build_concept_promotion_proposal_impl(
+        self,
+        *,
+        concept: str,
+        summary: str = "",
+        topic_hint: Optional[str] = None,
+        preferred_topic_slug: Optional[str] = None,
+        preferred_lesson: Optional[dict] = None,
+        write_mode_override: Optional[WriteMode] = None,
+        target_h2: Optional[str] = None,
+        source: str = "explicit",
+        keywords: Sequence[str] = (),
+        session_ctx: Any,
+        status: str = "target",
+    ) -> tuple[Optional[dict], Optional[str]]:
         advice: dict = {
             "mode": "create",
             "target_lesson": None,

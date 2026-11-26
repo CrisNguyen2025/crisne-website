@@ -60,8 +60,8 @@ from rag_service.observability import (
 from rag_service.steps import step_event, with_steps
 from rag_service.core.augmentation.history import history_store
 from rag_service.core.retrieval.rerank import rerank
-from rag_service.core.retrieval.transform import HISTORY_TURNS, plan_queries
-from rag_service.domains.roadmap.retrieval.relevance import filter_on_topic
+from rag_service.core.retrieval.transform import HISTORY_TURNS, has_history_backref, is_compound, plan_queries
+from rag_service.domains.roadmap.retrieval.relevance import asks_about_current_page, filter_on_topic, fold
 from rag_service.domains.roadmap.retrieval.engine import lesson_href, rag_engine
 from rag_service.domains.roadmap.router import (
     IntentClassificationResult,
@@ -78,8 +78,8 @@ from rag_service.domains.roadmap.router.scope import Scope, classify_for_routing
 from rag_service.domains.roadmap.router.understanding import instruction_part
 from rag_service.domains.roadmap.router.write_gate import BLOCKED_CHANGE, CONTENT_UNCLEAR, DESCRIPTION_UNSUPPORTED
 from rag_service.domains.roadmap.router.policy import TOPIC_REFERENCE, TOPIC_REFERENCE_FOLDED
-from rag_service.domains.roadmap.retrieval.relevance import fold
 from rag_service.domains.roadmap.router.grounding import (
+    build_grounding,
     mixed_intent_reply,
     RETRIEVAL_ERROR_REPLY,
     TOO_LONG_REPLY,
@@ -127,9 +127,9 @@ def _unless_empty(reply: Callable[[bool], str]) -> Callable[[bool], str]:
     return lambda owner: empty_roadmap_reply(owner) if rag_engine.is_empty() else reply(owner)
 
 
-async def _plan_queries(llm, query: str, session_id: str):
+async def _plan_queries(llm, query: str, session_id: str, page_hint: str = ""):
     """Query plan for a turn: the recent conversation is passed so references like "bài đó" can be resolved."""
-    return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm)
+    return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm, page_hint=page_hint)
 
 
 class NextGenRoadmapAgent(
@@ -175,8 +175,9 @@ class NextGenRoadmapAgent(
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
         has_page_ref = bool(
             page_context
-            and (str(page_context.get("itemId") or "").strip() or str(page_context.get("roadmapSlug") or "").strip())
+            and any(str(page_context.get(k) or "").strip() for k in ("itemId", "roadmapSlug", "section"))
         )
+        page_hint = build_grounding(page_context)
 
         async def _search(q: str, limit: int = 4):
             if has_page_ref and hasattr(rag_engine, "search_with_page_context"):
@@ -199,10 +200,22 @@ class NextGenRoadmapAgent(
                 pinned_doc_id=pinned_id,
             )
 
+        # Open-page deictic queries ("tóm tắt page này", "đây là bài về tháng 9 mà") point at page_context,
+        # not an earlier conversation turn; rewriting them from history bleeds previous lessons into retrieval.
+        use_plan = settings.rag_query_transform and not (
+            has_page_ref
+            and asks_about_current_page(query)
+            and not is_compound(query)
+            and not has_history_backref(query)
+        )
+
+        async def _plan(llm, q: str, session_id: str):
+            return await _plan_queries(llm, q, session_id, page_hint=page_hint)
+
         return SourceDeps(
             search=_search,
             accept=_accept,
-            plan=_plan_queries if settings.rag_query_transform else None,
+            plan=_plan if use_plan else None,
             rerank=_rerank if settings.rag_rerank else None,
             rerank_needed=_rerank_needed,
             format_context=lambda matches: rag_engine.format_knowledge_context(matches),
@@ -215,6 +228,7 @@ class NextGenRoadmapAgent(
             pipeline=generation_pipeline,
             adapter_mode=settings.rag_adapter_mode,
             fetch_provenances=lambda ids: lesson_provenance_store.get_for_lessons(ids),
+            page_hint=page_hint,
         )
 
     async def ainvoke(self, input_dict: dict, config: dict | None = None) -> dict:
@@ -298,13 +312,24 @@ class NextGenRoadmapAgent(
         page_slug = ((page_context or {}).get("roadmapSlug") or "").strip()
         page_item = ((page_context or {}).get("itemId") or "").strip()
         page_section = ((page_context or {}).get("section") or "").strip() or None
+        page_title = ((page_context or {}).get("roadmapTitle") or "").strip()
+        item_title = ((page_context or {}).get("itemTitle") or "").strip()
         if page_slug and page_item:
-            if session_ctx.active_lesson_id != page_item or session_ctx.active_topic_slug != page_slug:
+            if (
+                session_ctx.active_lesson_id != page_item
+                or session_ctx.active_topic_slug != page_slug
+                or (page_section is not None and session_ctx.active_section != page_section)
+            ):
                 session_store.set_active_lesson(
-                    session_id, page_item, section=page_section, topic_slug=page_slug
+                    session_id,
+                    page_item,
+                    lesson_title=item_title,
+                    section=page_section,
+                    topic_slug=page_slug,
+                    topic_title=page_title,
                 )
         elif page_slug and session_ctx.active_topic_slug != page_slug:
-            session_store.set_active_topic(session_id, page_slug)
+            session_store.set_active_topic(session_id, page_slug, title=page_title)
         return page_slug
 
     async def _run_pre_router_domain_handlers(
@@ -631,6 +656,16 @@ class NextGenRoadmapAgent(
                 yield ev
             if answered["handled"] or answered.get("owner_denied"):
                 return
+            async for ev in self.handle_current_section(
+                content=raw_content,
+                page_context=page_context,
+                session_ctx=session_ctx,
+                delay=delay,
+                outcome=answered,
+            ):
+                yield ev
+            if answered["handled"]:
+                return
 
         deps = self._source_deps(content, page_context=page_context)
         is_domain_gap = (
@@ -657,13 +692,29 @@ class NextGenRoadmapAgent(
             yield ev
 
     async def _list_active_owner_memories(self, active_topic: Optional[str], query: str) -> list[Any]:
-        params = inspect.signature(owner_memory_store.list_active).parameters
-        kwargs: dict[str, Any] = {}
-        if "query" in params:
-            kwargs["query"] = query
-        if "touch" in params:
-            kwargs["touch"] = False
-        return await owner_memory_store.list_active(active_topic, **kwargs)
+        mem_step = start_step("load-owner-memory", "span", input={"scope": active_topic or "global"})
+        try:
+            params = inspect.signature(owner_memory_store.list_active).parameters
+            kwargs: dict[str, Any] = {}
+            if "query" in params:
+                kwargs["query"] = query
+            if "touch" in params:
+                kwargs["touch"] = False
+            items = await owner_memory_store.list_active(active_topic, **kwargs)
+            end_step(mem_step, output={"count": len(items)})
+            return items
+        except BaseException as exc:
+            end_step_on_error(mem_step, exc)
+            raise
+
+    async def _load_thread_context(self, session_id: str, session_ctx, page_context: dict | None) -> None:
+        load_step = start_step("load-thread-context", "span", input={"has_page_context": bool(page_context)})
+        try:
+            await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
+            end_step(load_step, output={"topic_loaded": bool(getattr(session_ctx, "topic_loaded", False))})
+        except BaseException as exc:
+            end_step_on_error(load_step, exc)
+            raise
 
     async def _stream_sources_and_gap_promotion(
         self,
@@ -918,7 +969,7 @@ class NextGenRoadmapAgent(
 
         # An Owner's thread kept in Turso (ADR-0012), its history and open Topic/Lesson focus, is read once,
         # before anything below reads either; the two reads run together so a cold start waits for one round trip
-        await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
+        await self._load_thread_context(session_id, session_ctx, page_context)
         page_slug = self._sync_page_focus(session_id, session_ctx, page_context)
 
         pre_outcome = {"handled": False}

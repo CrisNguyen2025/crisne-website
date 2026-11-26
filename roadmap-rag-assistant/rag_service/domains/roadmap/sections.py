@@ -22,6 +22,14 @@ from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_messa
 
 GENERAL_SECTION = "Chung"
 _CHANGE_VERB = re.compile(r"\b(?:them|xoa|tao|doi|sua|chuyen|add|delete|create|rename)\b")
+_CURRENT_SECTION_NAME = re.compile(
+    r"\b(?:section|muc)\s+(?:nay|hien\s+tai|dang\s+(?:xem|mo))\s+(?:la\s+(?:gi|cai\s+gi|nao)|ten\s+(?:la\s+)?gi)\b"
+)
+_PAGE_ITEM_SECTION = re.compile(
+    r"\b(?:bai(?:\s+hoc)?|trang)\s+(?:nay|hien\s+tai|dang\s+(?:xem|mo))\s+(?:nam\s+o|o|thuoc)\s+(?:muc|section)\s+(?:nao|gi)\b"
+)
+_WHERE_SECTION = re.compile(r"^\s*(?:toi\s+|minh\s+|em\s+)?(?:dang\s+)?(?:o|xem)\s+(?:muc|section)\s+(?:nao|gi)\b")
+_SECTION_LESSONS_ASK = re.compile(r"\b(?:bai(?:\s+hoc)?|lessons?|bao\s+nhieu|may\s+bai|co\s+nhung)\b")
 
 # The topic the message names: "… (trong|của) topic <name>", up to "thành" or the end. Accented or not.
 _TOPIC_CLAUSE = re.compile(
@@ -48,6 +56,18 @@ def _clean(name: str) -> Optional[str]:
 def asks_section_list(text: str) -> bool:
     flat = fold(normalize_vietnamese(text).lower())
     return LIST_SECTIONS.search(flat) is not None and _CHANGE_VERB.search(flat) is None
+
+
+def asks_current_section(text: str) -> bool:
+    """True when the user asks which section the currently open page or lesson belongs to."""
+    flat = fold(normalize_vietnamese(text).lower())
+    if _CHANGE_VERB.search(flat) is not None:
+        return False
+    return bool(
+        _CURRENT_SECTION_NAME.search(flat)
+        or _PAGE_ITEM_SECTION.search(flat)
+        or _WHERE_SECTION.search(flat)
+    )
 
 
 def parse_section_rename(text: str) -> Optional[dict]:
@@ -146,6 +166,125 @@ class SectionCommands(AgentHostMixin):
         async for ev in self._stream_text(reply, delay):
             yield ev
         return
+
+    async def _lookup_lesson_section(
+        self, page_context: Optional[dict], topic_slug: Optional[str], lesson_ref: Optional[str]
+    ) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """Look up a lesson's section and display labels from the local index, then the topic API."""
+        if not lesson_ref:
+            return None, None, None, topic_slug
+        from rag_service.domains.roadmap.retrieval.engine import rag_engine
+
+        lookup_ctx = page_context or {"roadmapSlug": topic_slug or "", "itemId": lesson_ref}
+        page_doc = rag_engine.find_page_document(lookup_ctx)
+        if page_doc is not None and page_doc.doc_type == "item":
+            return (
+                (page_doc.section or "").strip() or None,
+                page_doc.title or None,
+                page_doc.topic_title or None,
+                page_doc.topic_slug or topic_slug,
+            )
+        if not topic_slug:
+            return None, None, None, None
+        try:
+            topic = await get_adapter().get_topic(topic_slug)
+        except Exception as exc:
+            print(f"[sections] Lesson section lookup skipped: {exc}")
+            return None, None, None, topic_slug
+        if not topic:
+            return None, None, None, topic_slug
+        item = next(
+            (i for i in topic.get("items") or [] if i.get("id") == lesson_ref or i.get("slug") == lesson_ref),
+            None,
+        )
+        if item is None:
+            return None, None, topic.get("title") or None, topic.get("slug") or topic_slug
+        return (
+            (item.get("section") or "").strip() or None,
+            item.get("title") or None,
+            topic.get("title") or None,
+            topic.get("slug") or topic_slug,
+        )
+
+    async def _resolve_current_section(
+        self, page_context: Optional[dict], session_ctx
+    ) -> tuple[str, Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """Resolve `(status, section, lesson_title, topic_title, topic_slug)` from page context or thread state."""
+        has_page = bool(
+            page_context
+            and any(str(page_context.get(k) or "").strip() for k in ("roadmapSlug", "itemId", "section"))
+        )
+        if has_page:
+            section = ((page_context or {}).get("section") or "").strip() or None
+            lesson_ref = ((page_context or {}).get("itemId") or "").strip() or None
+            lesson_title = ((page_context or {}).get("itemTitle") or "").strip() or lesson_ref
+            topic_slug = ((page_context or {}).get("roadmapSlug") or "").strip() or None
+            topic_title = ((page_context or {}).get("roadmapTitle") or "").strip() or topic_slug
+        else:
+            section = (getattr(session_ctx, "active_section", None) or "").strip() or None
+            lesson_ref = (getattr(session_ctx, "active_lesson_id", None) or "").strip() or None
+            lesson_title = (getattr(session_ctx, "active_lesson_title", None) or "").strip() or lesson_ref
+            topic_slug = (getattr(session_ctx, "active_topic_slug", None) or "").strip() or None
+            topic_title = (getattr(session_ctx, "active_topic_title", None) or "").strip() or topic_slug
+
+        if not section and lesson_ref:
+            found_sec, found_lesson, found_topic, found_slug = await self._lookup_lesson_section(
+                page_context if has_page else None, topic_slug, lesson_ref
+            )
+            section = found_sec or section
+            lesson_title = found_lesson or lesson_title
+            topic_title = found_topic or topic_title
+            topic_slug = found_slug or topic_slug
+
+        if section:
+            return "found", section, lesson_title, topic_title, topic_slug
+        if lesson_ref:
+            return "general", None, lesson_title, topic_title, topic_slug
+        if topic_slug:
+            return "topic_only", None, None, topic_title, topic_slug
+        return "none", None, None, None, None
+
+    @staticmethod
+    def _format_current_section_reply(
+        status: str,
+        section: Optional[str],
+        lesson_title: Optional[str],
+        topic_title: Optional[str],
+        topic_slug: Optional[str],
+    ) -> str:
+        slug_part = f" (`{topic_slug}`)" if topic_slug and topic_title != topic_slug else ""
+        topic_part = f" trong lộ trình **{topic_title}**{slug_part}" if topic_title else ""
+        if status == "found" and section:
+            if lesson_title:
+                return f"Mục (section) hiện tại của bài **{lesson_title}**{topic_part} là **`{section}`**."
+            if topic_title:
+                return f"Mục (section) hiện tại{topic_part} là **`{section}`**."
+            return f"Mục (section) hiện tại là **`{section}`**."
+        if status == "general":
+            return f"Bài học **{lesson_title}**{topic_part} chưa thuộc mục (section) riêng nào (đang ở nhóm **{GENERAL_SECTION}**)."
+        if status == "topic_only":
+            return f"Bạn đang xem lộ trình **{topic_title}**{slug_part} và chưa mở bài học hay mục (section) cụ thể nào."
+        return "Mình chưa thấy bài học hay mục (section) nào đang mở. Bạn hãy mở một bài học hoặc nêu tên topic/bài muốn kiểm tra nhé."
+
+    async def handle_current_section(
+        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Answer questions about the currently open section directly from page context or lesson metadata."""
+        if not asks_current_section(content):
+            return
+        outcome["handled"] = True
+        status, section, lesson_title, topic_title, topic_slug = await self._resolve_current_section(
+            page_context, session_ctx
+        )
+        yield {
+            "type": "tool_start",
+            "name": "get_current_section",
+            "args": {k: v for k, v in {"topic": topic_slug, "lesson": lesson_title, "section": section}.items() if v},
+        }
+        reply = self._format_current_section_reply(status, section, lesson_title, topic_title, topic_slug)
+        yield {"type": "tool_end", "name": "get_current_section", "result": reply}
+        async for ev in self._stream_text(reply, delay):
+            yield ev
 
     def _build_section_rename_preview(
         self, rename: dict, topic: dict, session_ctx

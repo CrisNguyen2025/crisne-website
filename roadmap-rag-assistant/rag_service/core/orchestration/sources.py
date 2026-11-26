@@ -43,6 +43,7 @@ class SourceDeps:
     # None reranks every question.
     rerank_needed: Optional[Callable[[str, list], bool]] = None
     fetch_provenances: Optional[Callable[[list[str]], Awaitable[dict]]] = None
+    page_hint: str = ""
 
 
 async def stream_words(text: str, delay: float) -> AsyncGenerator[dict, None]:
@@ -168,6 +169,7 @@ async def _stream_answer_body(
                 owner_memories=owner_memories if owner else (),
                 memory_scope=memory_scope,
                 lesson_provenances=lesson_provenances if owner else {},
+                page_hint=deps.page_hint,
             )
             async for ev in deps.pipeline.astream(llm, req):
                 yield ev

@@ -92,10 +92,11 @@ class Decision:
         return snap
 
 
-def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
+def build_router_prompt(text: str, history: Sequence[Any] = (), page_hint: str = "") -> str:
     """Prompt for the LLM router: labels, rules, examples, then the recent conversation and the message."""
     examples = "\n".join(f'- "{msg}" → {label}' for msg, label in ROUTER_EXAMPLES)
     turns = "\n".join(f"{t.role}: {t.content}" for t in history) or "(chưa có)"
+    page_block = f"Ngữ cảnh trang đang mở:\n{page_hint}\n\n" if page_hint else ""
     return (
         "Phân loại ý định của người dùng trong hệ thống quản lý Roadmap:\n"
         "- ROADMAP_CUD: người dùng RA LỆNH tạo, thêm, sửa, xóa, chuyển một topic/mục/bài học cụ thể\n"
@@ -111,10 +112,12 @@ def build_router_prompt(text: str, history: Sequence[Any] = ()) -> str:
         "- Câu hỏi (kể cả không có dấu \"?\", ví dụ kết thúc bằng \"gì\", \"nào\", \"không\") KHÔNG BAO GIỜ là ROADMAP_CUD.\n"
         "- ROADMAP_CUD cần một động từ thay đổi và đối tượng rõ ràng (từ tin nhắn hoặc hội thoại trước).\n"
         "- Một tên công nghệ, khái niệm hay bài học đứng một mình (\"Kafka\", \"RAG\") là KNOWLEDGE_QUERY: người dùng muốn tra cứu nó.\n"
+        "- Câu trỏ vào trang/bài đang mở hoặc đính chính về bài học (\"đây là bài về tháng 9 mà\", \"vậy còn page này\") là KNOWLEDGE_QUERY, KHÔNG phải UNCLEAR.\n"
         "- UNCLEAR chỉ dành cho tin nhắn không đọc được ý nào (ký tự ngẫu nhiên, đại từ trơn như \"cái đó\" khi chưa có hội thoại).\n"
         "- Phân vân giữa ROADMAP_CUD và nhãn khác: chọn nhãn khác hoặc UNCLEAR, vì ROADMAP_CUD ghi vào dữ liệu.\n"
         "- confidence: mức chắc chắn từ 0.0 đến 1.0.\n\n"
         f"Ví dụ:\n{examples}\n\n"
+        f"{page_block}"
         f"Hội thoại gần đây:\n{turns}\n\n"
         f"Tin nhắn: \"{text}\""
     )
@@ -232,7 +235,9 @@ class IntentRouter:
         """Classify message intent, falling back to LLM structured output if ambiguous."""
         return (await self.aroute(text))[0]
 
-    async def aroute(self, text: str, history: Sequence[Any] = ()) -> tuple[IntentClassificationResult, str]:
+    async def aroute(
+        self, text: str, history: Sequence[Any] = (), page_context: Optional[dict] = None
+    ) -> tuple[IntentClassificationResult, str]:
         """Classify and say how it was decided: heuristic | llm | llm_error | rate_limited | default.
 
         `history` (recent turns with .role/.content) is shown to the LLM router only, for follow-ups like "xóa nó đi".
@@ -253,7 +258,10 @@ class IntentRouter:
         elif self._llm is not None:
             method = "llm_error"
             try:
-                res = await invoke_structured(self._llm, IntentClassificationResult, build_router_prompt(text, history))
+                from rag_service.domains.roadmap.router.grounding import build_grounding
+
+                prompt = build_router_prompt(text, history, page_hint=build_grounding(page_context))
+                res = await invoke_structured(self._llm, IntentClassificationResult, prompt)
                 if isinstance(res, IntentClassificationResult):
                     # The prompt never describes sub_intent: only the decision table sets it
                     return res.model_copy(update={"sub_intent": None}), "llm"

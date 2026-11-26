@@ -31,6 +31,11 @@ REFERENCE = re.compile(
     r"\b(đó|đấy|này|nọ|kia|nó|trên|vừa\s+rồi|vừa\s+nãy|cái\s+đó|cái\s+này|bài\s+đó|bài\s+này|ở\s+trên)\b",
     re.IGNORECASE,
 )
+# References that explicitly point to an earlier chat turn rather than the open page ("này")
+HISTORY_BACKREF = re.compile(
+    r"\b(?:đó|đấy|nọ|kia|nó|vừa\s+rồi|vừa\s+nãy|trước\s+đó|cái\s+đó|bài\s+đó|ở\s+trên)\b",
+    re.IGNORECASE,
+)
 # Questions that compare or list several things
 COMPOUND = re.compile(r"\b(so\s+sánh|khác\s+nhau|khác\s+gì|giữa|so\s+với|và|vs\.?)\b|\s-\s|/", re.IGNORECASE)
 JSON_OBJECT = re.compile(r"\{.*\}", re.DOTALL)
@@ -65,16 +70,24 @@ def is_compound(query: str) -> bool:
     return bool(COMPOUND.search(query))
 
 
-def build_prompt(query: str, turns: Sequence[Any]) -> str:
+def has_history_backref(query: str) -> bool:
+    """True when the query points back to an earlier chat turn rather than the currently open page."""
+    return bool(HISTORY_BACKREF.search(query))
+
+
+def build_prompt(query: str, turns: Sequence[Any], page_hint: str = "") -> str:
     history = "\n".join(f"{t.role}: {_escape(t.content)}" for t in turns[-HISTORY_TURNS:]) or "(chưa có)"
+    page_block = f"<current_page>{_escape(page_hint)}</current_page>\n" if page_hint else ""
     return (
         "Bạn chuẩn bị câu truy vấn tìm kiếm cho một hệ thống tra cứu tài liệu. "
         "Chỉ trả về một JSON object với các khóa:\n"
         '- "rewrite": câu hỏi viết lại đứng độc lập, thay các đại từ như "đó", "này" bằng tên cụ thể '
-        "trong lịch sử; nếu câu hỏi đã rõ thì giữ nguyên.\n"
+        "(ưu tiên <current_page> nếu có khi câu hỏi nói 'này', 'đây', 'hiện tại', rồi mới tới lịch sử); "
+        "nếu câu hỏi đã rõ thì giữ nguyên.\n"
         f'- "variants": tối đa {MAX_VARIANTS} cách diễn đạt khác của cùng câu hỏi (từ đồng nghĩa, tên tiếng Anh).\n'
         f'- "parts": tối đa {MAX_PARTS} câu hỏi con, chỉ khi câu hỏi so sánh hoặc liệt kê nhiều thứ; nếu không thì [].\n'
         "Không giải thích thêm.\n\n"
+        f"{page_block}"
         f"<conversation_history>\n{history}\n</conversation_history>\n"
         f"<question>{_escape(query)}</question>"
     )
@@ -124,7 +137,7 @@ def _text_of(content: Any) -> str:
     return ""
 
 
-async def plan_queries(query: str, turns: Sequence[Any], llm: Any) -> QueryPlan:
+async def plan_queries(query: str, turns: Sequence[Any], llm: Any, page_hint: str = "") -> QueryPlan:
     """One LLM call for the plan, only when needs_plan says so.
 
     No model, no reference to the conversation, a timeout or an error keeps the original query.
@@ -132,7 +145,7 @@ async def plan_queries(query: str, turns: Sequence[Any], llm: Any) -> QueryPlan:
     if llm is None or not query.strip() or not needs_plan(query, turns):
         return QueryPlan(query)
     try:
-        message = await asyncio.wait_for(llm.ainvoke(build_prompt(query, turns)), REWRITE_TIMEOUT)
+        message = await asyncio.wait_for(llm.ainvoke(build_prompt(query, turns, page_hint=page_hint)), REWRITE_TIMEOUT)
     except Exception:
         return QueryPlan(query)
     return parse_plan(_text_of(getattr(message, "content", "")), query)

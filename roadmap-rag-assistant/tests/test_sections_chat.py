@@ -13,7 +13,12 @@ import uuid
 from rag_service.auth import set_actor
 from rag_service.domains.roadmap.agent import NextGenRoadmapAgent
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
-from rag_service.domains.roadmap.sections import asks_section_list, parse_section_rename, section_list_reply
+from rag_service.domains.roadmap.sections import (
+    asks_current_section,
+    asks_section_list,
+    parse_section_rename,
+    section_list_reply,
+)
 from rag_service.state import session_store
 
 TOPIC = {
@@ -209,4 +214,46 @@ def test_topic_with_section_in_title_extracts_correct_section_and_topic(mock_ada
     assert kwargs["topic_slug"] == "qa-section-test"
     assert kwargs["section"] == "Core"
     assert kwargs["title"] == "RAG"
+
+
+def test_current_section_questions_are_told_apart_from_lists_and_renames():
+    for text in (
+        "section hiện tại là gì",
+        "section này là gì?",
+        "mục hiện tại là gì",
+        "mục đang xem tên gì?",
+        "bài này ở mục nào?",
+        "bài hiện tại thuộc section nào?",
+    ):
+        assert asks_current_section(text), text
+    for text in (
+        "section hiện tại có những bài nào?",
+        "mục này có mấy bài?",
+        "section trong HTML là gì?",
+        "đổi tên section hiện tại thành ABC",
+    ):
+        assert not asks_current_section(text), text
+
+
+def test_current_section_resolves_from_topic_api_when_context_has_no_section(mock_adapter):
+    mock_adapter.get_topic.return_value = TOPIC
+    set_actor("owner")
+    text, events = _turn(
+        NextGenRoadmapAgent(llm_model=None),
+        "bài này thuộc mục nào?",
+        f"cur-sec-{uuid.uuid4()}",
+        context={"roadmapSlug": "test-topic", "itemId": "i-4"},
+    )
+    assert "`RAG`" in text
+    assert "Vector DB" in text
+    assert any(e.get("type") == "tool_start" and e.get("name") == "get_current_section" for e in events)
+
+    general_text, _ = _turn(
+        NextGenRoadmapAgent(llm_model=None),
+        "section hiện tại là gì",
+        f"cur-sec-gen-{uuid.uuid4()}",
+        context={"roadmapSlug": "test-topic", "itemId": "i-3"},
+    )
+    assert "Chung" in general_text
+    assert "Prompt Basics" in general_text
 

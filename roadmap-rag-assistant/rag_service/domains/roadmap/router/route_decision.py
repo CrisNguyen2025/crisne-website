@@ -105,14 +105,18 @@ _OPEN_PAGE_READ_VERB_RE = re.compile(
 
 
 def _is_open_page_query(decision: Decision, page_context: Optional[dict]) -> bool:
-    """Undecided read/question explicitly pointing at the open Topic/Lesson ('tóm tắt bài này', 'trang này nói gì?')."""
-    if not page_context or not (
-        str(page_context.get("itemId") or "").strip() or str(page_context.get("roadmapSlug") or "").strip()
+    """Read/question explicitly pointing at the open Topic/Lesson/Section ('tóm tắt bài này', 'section hiện tại là gì')."""
+    if not page_context or not any(
+        str(page_context.get(key) or "").strip() for key in ("itemId", "roadmapSlug", "section")
     ):
         return False
     u = decision.understanding
+    # Keep explicit catalog and lesson-status queries on their specialized handlers.
+    allow_intent = decision.intent is None or (
+        decision.intent == IntentType.KNOWLEDGE_QUERY and decision.sub_intent == KnowledgeSubIntent.SEARCH
+    )
     if (
-        decision.intent is not None
+        not allow_intent
         or u.has_change_verb
         or u.write_blocker is not None
         or u.asks_usage
@@ -121,7 +125,7 @@ def _is_open_page_query(decision: Decision, page_context: Optional[dict]) -> boo
         return False
     if not asks_about_current_page(u.flat):
         return False
-    return u.act.value == "question" or bool(_OPEN_PAGE_READ_VERB_RE.search(u.flat))
+    return u.act.value in ("question", "statement") or bool(_OPEN_PAGE_READ_VERB_RE.search(u.flat))
 
 
 def is_write_candidate(gate: WriteGate) -> bool:
@@ -236,7 +240,7 @@ async def decide_route(
     if scope_outcome is not None:
         return scope_outcome
 
-    intent_res, method = await router.aroute(content, history)
+    intent_res, method = await router.aroute(content, history, page_context=page_context)
     gate = gate_route(
         intent_res, method, router.has_change_request(content, follow_up=bool(history)), decision.write
     )

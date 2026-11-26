@@ -42,7 +42,9 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
     if getattr(doc, "is_current_page", False):
         lines.append(
             "Ngữ cảnh trang hiện tại: Người dùng đang mở trực tiếp trang này "
-            "(khi câu hỏi dùng 'bài này', 'trang này', 'topic này', 'ở đây' là chỉ tài liệu này)."
+            "(khi câu hỏi dùng 'bài này', 'bài hiện tại', 'lesson này', 'lesson hiện tại', "
+            "'trang này', 'page này', 'page hiện tại', 'topic này', 'mục này', 'mục hiện tại', "
+            "'section này', 'section hiện tại', 'ở đây' là chỉ tài liệu này)."
         )
     if doc.doc_type != "topic":
         lines.append(f"Thuộc lộ trình: {doc.topic_title} (`{doc.topic_slug}`)")

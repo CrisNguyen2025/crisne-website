@@ -91,6 +91,37 @@ def lesson_href(doc: KnowledgeDocument) -> str:
     return knowledge_href(doc, anchor)
 
 
+_OPEN_LESSON_FILLER_WORDS = {
+    "tom", "tat", "giai", "thich", "noi", "dung", "phan", "tich", "chi", "tiet",
+    "chinh", "diem", "tong", "quan", "xem", "doc", "lai", "giup", "hien", "tai",
+    "dang", "nay", "trang", "page", "day", "con", "vay", "nhung", "khong", "phai",
+    "ma", "thi", "nhe", "nha", "voi", "nhi", "chut", "xiu", "ve", "muc", "section",
+}
+_OPEN_TOPIC_SCOPE_RE = re.compile(
+    r"\b(?:topic|lo\s+trinh)\s+(?:nay|hien\s+tai|dang\s+(?:xem|mo))\b"
+    r"|\b(?:tim|kiem|tra\s+cuu|danh\s+sach|liet\s+ke|cac\s+bai|bai\s+nao|khac\s+gi|so\s+sanh)\b"
+)
+
+
+def _is_exclusive_open_lesson_query(query: str, page_doc: KnowledgeDocument) -> bool:
+    """True when a query on an open Lesson asks only about that lesson itself, not comparing or searching others."""
+    if page_doc.doc_type != "item":
+        return False
+    from rag_service.core.retrieval.transform import has_history_backref, is_compound
+    from rag_service.domains.roadmap.retrieval.relevance import _doc_text, asks_about_current_page, content_words, fold
+
+    if not asks_about_current_page(query) or is_compound(query) or has_history_backref(query):
+        return False
+    if _OPEN_TOPIC_SCOPE_RE.search(fold(query)):
+        return False
+    doc_text = _doc_text(page_doc)
+    query_nums = set(re.findall(r"\b\d+\b", query))
+    if query_nums and not (query_nums <= set(re.findall(r"\b\d+\b", doc_text))):
+        return False
+    extra_words = content_words(query) - _OPEN_LESSON_FILLER_WORDS
+    return extra_words <= content_words(doc_text)
+
+
 def _is_index_meta(doc: KnowledgeDocument) -> bool:
     """Topics and lessons; chunks only serve passage search and stay out of catalogs, vocabularies and centroids."""
     return doc.doc_type != "chunk"
@@ -351,10 +382,24 @@ class HybridRagEngine:
         """Run hybrid search and pin/mark the open Lesson or Topic when the question refers to or matches it."""
         from rag_service.domains.roadmap.retrieval.relevance import _doc_text, asks_about_current_page, content_words
 
+        if page_context:
+            await self.ensure_fresh()
+        page_doc = self.find_page_document(page_context) if page_context else None
+        if page_doc is not None and _is_exclusive_open_lesson_query(query, page_doc):
+            passages = self._select_page_passages(page_doc, query)
+            pinned_doc = page_doc.model_copy(
+                update={
+                    "is_current_page": True,
+                    **({"passages": passages} if passages else {}),
+                }
+            )
+            return [(pinned_doc, 1.0)]
+
         matches = await self.search_live_knowledge(query, limit=limit)
         if not page_context:
             return matches
-        page_doc = self.find_page_document(page_context)
+        if page_doc is None:
+            page_doc = self.find_page_document(page_context)
         if page_doc is None:
             return matches
 

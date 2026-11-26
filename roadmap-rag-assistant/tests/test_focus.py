@@ -35,9 +35,17 @@ def test_frame_is_removed_and_the_topic_kept(text, focus):
 @pytest.mark.parametrize("text", [
     "bài đó sao", "?", "cái kia thì sao", "thế còn cái trên", "hmm", "ok vậy còn gì nữa",
     "vậy à", "nó là gì", "bài trên thì sao", "cái này là gì", "còn nữa không", "ừ", "thế à",
+    "section hiện tại là gì", "mục hiện tại là gì", "section này là gì", "trang này là gì",
+    "page hiện tại đang nói về gì", "page này là gì", "lesson hiện tại đang nói về gì",
 ])
 def test_message_without_a_topic_has_no_focus(text):
     assert focus_of(text) is None
+    assert focus_written(text) is None
+
+
+def test_section_with_technical_qualifier_keeps_focus():
+    assert focus_of("section trong HTML là gì") == "section trong html"
+    assert focus_of("bài Docker nói về gì?") == "bai docker"
 
 
 def test_every_scope_sample_with_a_topic_has_a_focus_and_none_without():

@@ -136,6 +136,8 @@ def test_router_prompt_has_unclear_label_examples_and_history():
     assert "UNCLEAR" in prompt and "có thể thao tác gì ở dự án này" in prompt
     assert "user: tìm bài Kafka" in prompt and 'Tin nhắn: "xóa nó đi"' in prompt
     assert "(chưa có)" in build_router_prompt("abc")
+    grounded = build_router_prompt("đây là bài về tháng 9 mà", page_hint="itemTitle='Next.js 9/2026'")
+    assert "Ngữ cảnh trang đang mở" in grounded and "Next.js 9/2026" in grounded
 
 
 class _FixedLlm:
