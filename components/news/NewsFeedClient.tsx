@@ -58,6 +58,7 @@ interface NewsFeedClientProps {
     q?: string;
     sort: NewsFeedSort;
   };
+  initialItemId?: string;
   initialSources?: NewsSourceDto[];
   initialSourcesOpen?: boolean;
   initialWorkerHealth?: NewsWorkerHealthDto;
@@ -784,6 +785,7 @@ function NewsReaderSlot({
 export function NewsFeedClient({
   initialData,
   initialParams,
+  initialItemId,
   initialSources = [],
   initialSourcesOpen = false,
   initialWorkerHealth,
@@ -821,6 +823,10 @@ export function NewsFeedClient({
     "sort",
     parseAsStringLiteral(SORT_VALUES).withDefault(initialParams.sort)
   );
+  const [itemParam] = useQueryState(
+    "item",
+    parseAsString.withDefault(initialItemId ?? "")
+  );
 
   const [limit, setLimit] = useState(DEFAULT_PAGE_LIMIT);
   const initialFilterKey = serializeParams({ ...initialParams, limit: DEFAULT_PAGE_LIMIT });
@@ -838,8 +844,18 @@ export function NewsFeedClient({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPasteOpen, setIsPasteOpen] = useState(false);
   const [isSourcesOpen, setIsSourcesOpen] = useState(initialSourcesOpen);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [isPanelOpenOnNarrow, setIsPanelOpenOnNarrow] = useState(false);
+  const [prevItemParam, setPrevItemParam] = useState(itemParam);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(() => initialItemId ?? null);
+  const [isPanelOpenOnNarrow, setIsPanelOpenOnNarrow] = useState<boolean>(() =>
+    Boolean(initialItemId)
+  );
+  if (itemParam !== prevItemParam) {
+    setPrevItemParam(itemParam);
+    if (itemParam) {
+      setSelectedItemId(itemParam);
+      setIsPanelOpenOnNarrow(true);
+    }
+  }
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);

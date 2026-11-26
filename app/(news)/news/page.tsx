@@ -30,6 +30,7 @@ interface FeedIngestionPageProps {
     readState?: string;
     q?: string;
     sort?: string;
+    item?: string;
   }>;
 }
 
@@ -72,6 +73,7 @@ export default async function FeedIngestionPage({ searchParams }: FeedIngestionP
       <NewsFeedClient
         initialData={initialData}
         initialParams={initialParams}
+        initialItemId={sp.item?.trim() || undefined}
         initialSources={initialSources}
         initialWorkerHealth={initialWorkerHealth}
         workerConfigured={initialWorkerHealth.configured}

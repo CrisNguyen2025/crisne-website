@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Newspaper, Plus } from "lucide-react";
+import { Newspaper, Plus, Search } from "lucide-react";
 import type {
   PublicationTopicSummary,
   RecentLessonSummary,
@@ -13,6 +13,8 @@ import type { CreateRoadmapDto } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { NEWS_PATH } from "@/lib/news/paths";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
+import { openGlobalSearch } from "@/lib/search/search-controller";
+import { Button } from "@/components/ui/button";
 import {
   clearDeletedTopicSlug,
   getDeletedLessonIdsSnapshot,
@@ -160,6 +162,20 @@ export function PublicationHome({
 
           {canWrite && (
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                onClick={openGlobalSearch}
+                aria-label="Tìm kiếm nhanh (Cmd+K)"
+                className="cursor-pointer bg-card px-3 text-xs"
+              >
+                <Search className="size-3.5 text-muted-foreground" />
+                <span>Tìm kiếm</span>
+                <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
+                  ⌘K
+                </kbd>
+              </Button>
               <Link
                 href={NEWS_PATH}
                 prefetch={true}

@@ -93,7 +93,13 @@
         "app/api/v1/roadmaps/items/[id]/content/route.ts",
         "app/api/v1/roadmaps/items/reorder/route.ts",
         "app/api/v1/roadmaps/full-export/route.ts",
-        "app/api/v1/roadmaps/index-version/route.ts"
+        "app/api/v1/roadmaps/index-version/route.ts",
+        "app/api/v1/search/route.ts",
+        "lib/search/text-match.ts",
+        "lib/search/global-search.ts",
+        "lib/search/search-controller.ts",
+        "logic/search/searchService.ts",
+        "components/search/GlobalSearchPalette.tsx"
       ],
       "dataModels": [
         "Roadmap",
@@ -536,6 +542,17 @@
       "summary": "Đổi tên section, di chuyển toàn bộ bài học thuộc section sang tên mới (ADR-0009)",
       "handler": "app/api/v1/roadmaps/[slug]/sections/route.ts#PATCH",
       "triggersFlow": "FLOW_TOPIC_SECTION_REORGANIZE"
+    },
+    {
+      "id": "EP_API_GLOBAL_SEARCH",
+      "type": "api_route",
+      "path": "/api/v1/search",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-learning",
+      "summary": "Tìm kiếm toàn cục không dấu trên Topic, Lesson (kèm heading anchor & Lesson Status) và NewsItem cho Owner",
+      "handler": "app/api/v1/search/route.ts#GET",
+      "triggersFlow": "FLOW_GLOBAL_SEARCH_CMD_K"
     },
     {
       "id": "EP_API_ROADMAP_ASSISTANT_PROXY",
@@ -2188,6 +2205,61 @@
         "ADR-0002",
         "ADR-0012",
         "ADR-0015",
+        "ADR-0019"
+      ]
+    },
+    {
+      "id": "FLOW_GLOBAL_SEARCH_CMD_K",
+      "name": "Tìm kiếm toàn cục (Global Search Cmd+K) cho Owner",
+      "domainId": "roadmap-learning",
+      "actor": "Owner",
+      "trigger": "Owner nhấn Cmd+K / Ctrl+K hoặc bấm nút Tìm kiếm trên PublicationHome / LectureShell",
+      "preconditions": [
+        "Actor là Owner (canWrite === true phía client; requireWriteAccess phía API)",
+        "Không kích hoạt trên /portfolio, /login, /share"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "components/search/GlobalSearchPalette.tsx",
+          "functionOrMethod": "GlobalSearchPalette",
+          "action": "Mở Command Palette qua Cmd+K hoặc openGlobalSearch(), giữ cache RAM phiên tự xoá theo roadmap:updated, gọi fetchGlobalSearch theo debounce",
+          "callsNext": "logic/search/searchService.ts#fetchGlobalSearch",
+          "dataPassed": "{ q, scope }"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/v1/search/route.ts",
+          "functionOrMethod": "GET",
+          "action": "Kiểm tra requireWriteAccess, validate query Zod (q, scope, limit), gọi engine tìm kiếm và trả Cache-Control: private, no-store",
+          "callsNext": "lib/search/global-search.ts#searchGlobalWorkspace",
+          "dataPassed": "GlobalSearchResponseDto"
+        },
+        {
+          "order": 3,
+          "layer": "Domain_Logic",
+          "component": "lib/search/global-search.ts",
+          "functionOrMethod": "searchGlobalWorkspace",
+          "action": "Truy vấn Topic, Lesson (tách heading & anchor qua lessonChunks) và NewsItem (loại dismissed), chấm điểm và trích snippet highlight không dấu qua lib/search/text-match.ts",
+          "callsNext": "lib/search/text-match.ts#extractHighlightedSnippet",
+          "dataPassed": "{ topics, lessons, news }"
+        }
+      ],
+      "invariants": [
+        "Visitor bị chặn hoàn toàn (401 ở GET /api/v1/search; không gắn listener hay render trigger khi canWrite === false)",
+        "Không đọc KnowledgeProvenance hoặc OwnerMemory; marker rỗng bị lọc bỏ qua lessonChunks",
+        "Không gọi Abot hay tốn Gemini embedding (ADR-0006)"
+      ],
+      "failureModes": [
+        "Lỗi mạng hoặc 500 từ /api/v1/search: hiển thị thông báo lỗi và nút Thử lại"
+      ],
+      "relatedAdrs": [
+        "ADR-0006",
+        "ADR-0010",
+        "ADR-0014",
+        "ADR-0017",
         "ADR-0019"
       ]
     }

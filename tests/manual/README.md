@@ -43,6 +43,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [topic-scoped-urls.md](topic-scoped-urls.md) | URL theo Topic `/[topicSlug]/[lessonSlug]#[headingSlug]`, redirect URL cũ (ADR-0014) | 2026-11-19 (chưa commit, trên `5baadeb`) | U1–U9 Pass |
 | [owner-memory.md](owner-memory.md) | Owner Memory xuyên Thread, cache invalidate, nối tiếp Thread & cách ly Visitor (ADR-0015) | Chưa chạy | Kịch bản mới (M1–M9) |
 | [knowledge-provenance.md](knowledge-provenance.md) | Đưa News Item vào Lesson kèm Provenance, chip nguồn trên trang Lesson (ADR-0017, TASK-knowledge-provenance-001..003) | 2026-11-23 (chưa commit, trên `ce7564a`) | P1–P10 Pass |
+| [global-search.md](global-search.md) | Global Search / Command Palette (`Cmd+K`) tìm Topic, Lesson kèm `#anchor`, NewsItem (Owner-only) | Chưa chạy | Kịch bản mới (S1–S6) |
 
 ## Cách chạy (đã kiểm chứng)
 

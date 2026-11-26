@@ -1,3 +1,9 @@
+import {
+  extractHighlightedSnippet,
+  foldSearchText,
+  matchesSearchText,
+} from "@/lib/search/text-match";
+
 // Thread state of the Owner (ADR-0012): what the routes under /api/v1/threads accept and keep.
 
 /** Messages kept per Thread; older ones are deleted on every write. */
@@ -118,13 +124,7 @@ export function parseThreadSearchQuery(raw: string | null): string {
 }
 
 export function foldThreadSearchText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return foldSearchText(text);
 }
 
 function compactText(text: string): string {
@@ -137,7 +137,6 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 const TRAILING_PUNCTUATION = new Set(["!", "?", ".", "~", ","]);
-const SHORT_WORD_TOKEN_MAX = 3;
 
 function stripTrailingPunctuation(folded: string): string {
   let out = folded;
@@ -145,30 +144,6 @@ function stripTrailingPunctuation(folded: string): string {
     out = out.slice(0, -1);
   }
   return out.trim();
-}
-
-function isWordBoundaryChar(ch: string | undefined): boolean {
-  if (!ch) return true;
-  return !/[a-z0-9]/.test(ch);
-}
-
-function indexOfWordToken(haystack: string, token: string): number {
-  if (!token) return -1;
-  if (token.length > SHORT_WORD_TOKEN_MAX) {
-    return haystack.indexOf(token);
-  }
-  let pos = 0;
-  while (pos <= haystack.length - token.length) {
-    const found = haystack.indexOf(token, pos);
-    if (found < 0) return -1;
-    const before = found > 0 ? haystack[found - 1] : undefined;
-    const after = haystack[found + token.length];
-    if (isWordBoundaryChar(before) && isWordBoundaryChar(after)) {
-      return found;
-    }
-    pos = found + 1;
-  }
-  return -1;
 }
 
 export function isTrivialThreadGreeting(text: string): boolean {
@@ -182,18 +157,7 @@ export function isConfirmationThreadMessage(text: string): boolean {
 }
 
 export function matchesThreadSearchText(haystack: string, query: string): boolean {
-  const foldedHaystack = foldThreadSearchText(haystack);
-  const foldedQuery = foldThreadSearchText(query);
-  if (!foldedHaystack || !foldedQuery) return false;
-
-  const tokens = foldedQuery.split(" ").filter(Boolean);
-  if (tokens.length === 1) {
-    return indexOfWordToken(foldedHaystack, tokens[0]) >= 0;
-  }
-  if (foldedHaystack.includes(foldedQuery)) {
-    return true;
-  }
-  return tokens.every((token) => indexOfWordToken(foldedHaystack, token) >= 0);
+  return matchesSearchText(haystack, query);
 }
 
 export function buildThreadTitle(contents: readonly string[]): string {
@@ -203,65 +167,6 @@ export function buildThreadTitle(contents: readonly string[]): string {
   return truncateText(meaningful ?? cleaned[0], MAX_THREAD_TITLE_CHARS);
 }
 
-function foldWithOffsets(text: string): { folded: string; starts: number[] } {
-  let folded = "";
-  const starts: number[] = [];
-  let offset = 0;
-
-  for (const ch of text) {
-    const piece = ch
-      .toLowerCase()
-      .replace(/đ/g, "d")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    for (let i = 0; i < piece.length; i++) {
-      folded += piece[i];
-      starts.push(offset);
-    }
-    offset += ch.length;
-  }
-
-  return { folded, starts };
-}
-
-function findMatchedSlice(nfc: string, query: string): { start: number; end: number } | null {
-  const foldedQuery = foldThreadSearchText(query);
-  if (!foldedQuery) return null;
-
-  const { folded, starts } = foldWithOffsets(nfc);
-  const tokens = foldedQuery.split(" ").filter(Boolean);
-  let idx =
-    tokens.length === 1
-      ? indexOfWordToken(folded, tokens[0])
-      : folded.indexOf(foldedQuery);
-  let matchLen = foldedQuery.length;
-
-  if (idx < 0 && tokens.length > 0) {
-    idx = indexOfWordToken(folded, tokens[0]);
-    matchLen = tokens[0].length;
-  }
-
-  if (idx < 0 || idx >= starts.length) return null;
-  const start = starts[idx];
-  const lastIdx = Math.min(idx + Math.max(matchLen - 1, 0), starts.length - 1);
-  const end = starts[lastIdx] + 1;
-  return { start, end };
-}
-
 export function extractMatchSnippet(content: string, query: string): string | null {
-  const compacted = content.replace(/\s+/g, " ").trim().normalize("NFC");
-  if (!compacted) return null;
-
-  const matched = findMatchedSlice(compacted, query);
-  if (!matched) return null;
-
-  const halfWindow = Math.floor((MAX_SNIPPET_CHARS - (matched.end - matched.start)) / 2);
-  const windowStart = Math.max(0, matched.start - Math.max(halfWindow, 24));
-  const windowEnd = Math.min(compacted.length, windowStart + MAX_SNIPPET_CHARS);
-  const slice = compacted.slice(windowStart, windowEnd).trim();
-  if (!slice) return null;
-
-  const prefix = windowStart > 0 ? "…" : "";
-  const suffix = windowEnd < compacted.length ? "…" : "";
-  return `${prefix}${slice}${suffix}`;
+  return extractHighlightedSnippet(content, query, MAX_SNIPPET_CHARS)?.text ?? null;
 }

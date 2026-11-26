@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import Script from "next/script";
 import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -13,6 +14,7 @@ import {
 } from "@/components/analytics";
 import { GA_ID } from "@/lib/analytics";
 import { SiteChatbot } from "@/components/site-chatbot";
+import { GlobalSearchPalette } from "@/components/search/GlobalSearchPalette";
 import { RoadmapWebMcpRegistrar } from "@/components/roadmap/RoadmapWebMcpRegistrar";
 import { PwaServiceWorkerRegistrar } from "@/components/news/PwaServiceWorkerRegistrar";
 import { ToastProvider } from "@/components/ui/toast";
@@ -176,6 +178,9 @@ export default function RootLayout({
             <ToastProvider>
               <NuqsAdapter>{children}</NuqsAdapter>
               <SiteChatbot />
+              <Suspense fallback={null}>
+                <GlobalSearchPalette />
+              </Suspense>
               <RoadmapWebMcpRegistrar />
               <PwaServiceWorkerRegistrar />
             </ToastProvider>

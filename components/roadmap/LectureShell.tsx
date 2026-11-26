@@ -2,7 +2,7 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { BookOpen, ChevronRight, List, X } from "lucide-react";
+import { BookOpen, ChevronRight, List, Search, X } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import { splitSectionLabel } from "@/lib/roadmap/section-label";
 import type { LessonStatus } from "@/lib/roadmap/status";
@@ -11,7 +11,9 @@ import type {
   RoadmapMeta,
   SectionGroup,
 } from "@/lib/roadmap/types";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { openGlobalSearch } from "@/lib/search/search-controller";
 import { cn, getScrollBehavior } from "@/lib/utils";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import {
@@ -541,6 +543,19 @@ export function LectureShell({
           <span className="text-[0.6875rem] tabular-nums text-muted-foreground/75 font-medium">
             {totalLessonsCount} bài
           </span>
+          {canWrite && !onClose && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={openGlobalSearch}
+              aria-label="Tìm kiếm nhanh (Cmd+K)"
+              title="Tìm kiếm nhanh (⌘K)"
+              className="cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+            >
+              <Search className="size-3.5" />
+            </Button>
+          )}
           {onClose && (
             <button
               type="button"
@@ -610,6 +625,19 @@ export function LectureShell({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {canWrite && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={openGlobalSearch}
+                aria-label="Tìm kiếm nhanh"
+                title="Tìm kiếm nhanh"
+                className="cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+              >
+                <Search className="size-4" />
+              </Button>
+            )}
             <MobileTocDropdown
               headings={headings}
               activeHeadingId={activeHeadingId}
