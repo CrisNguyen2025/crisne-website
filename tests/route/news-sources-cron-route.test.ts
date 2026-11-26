@@ -8,7 +8,6 @@ const writeAccess = vi.hoisted(() => ({ requireWriteAccess: vi.fn() }));
 vi.mock("@/lib/auth/write-access", () => writeAccess);
 
 import { prisma } from "@/lib/prisma";
-import { getVietnamHour } from "@/lib/news/rss-fetcher";
 import { listNewsSources } from "@/lib/news/sources";
 import {
   NEWS_SOURCE_SCAN_HISTORY_LIMIT,
@@ -202,13 +201,11 @@ describe("news sources CRUD & cron RSS sync routes", () => {
   });
 
   it("syncs enabled RSS sources into draft items, skips dismissed URLs, and isolates feed errors", async () => {
-    // The scheduled (CRON_SECRET) run only pulls sources whose fetchHour is the current Vietnam hour
-    const currentHour = getVietnamHour(Date.now());
+    // The scheduled (CRON_SECRET) run only pulls sources whose fetchIntervalDays has passed
     const createOk = await sourcesPost(
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Custom Eng Blog",
         feedUrl: "https://custom-eng.blog/feed.xml",
-        fetchHour: currentHour,
       })
     );
     const okSource = (await createOk.json()).source;
@@ -217,7 +214,6 @@ describe("news sources CRUD & cron RSS sync routes", () => {
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Broken Feed",
         feedUrl: "https://broken-feed.blog/rss.xml",
-        fetchHour: currentHour,
       })
     );
     const brokenSource = (await createBroken.json()).source;
@@ -226,11 +222,15 @@ describe("news sources CRUD & cron RSS sync routes", () => {
       jsonRequest("http://localhost/api/news/sources", "POST", {
         name: "Later Feed",
         feedUrl: "https://custom-eng.blog/later.xml",
-        fetchHour: (currentHour + 1) % 24,
+        fetchIntervalDays: 3,
       })
     );
     expect(createLater.status).toBe(201);
     const laterSource = (await createLater.json()).source;
+    await prisma.newsSource.update({
+      where: { id: laterSource.id },
+      data: { lastFetchedAt: new Date() },
+    });
 
     // Authenticate cron using CRON_SECRET bearer header even when requireWriteAccess would reject
     vi.stubEnv("CRON_SECRET", "super-cron-secret");

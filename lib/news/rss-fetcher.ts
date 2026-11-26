@@ -603,24 +603,19 @@ function resolveDefaultCronMaxItems(): number {
 
 const HOUR_MS = 60 * 60_000;
 const DAY_MS = 24 * HOUR_MS;
-// Vietnam has no DST, so its hour is a fixed UTC+7 offset
-const VN_UTC_OFFSET_HOURS = 7;
-// Half a day of slack lets an Owner move fetchHour earlier without the source skipping a whole cycle
-const FETCH_INTERVAL_SLACK_MS = 12 * HOUR_MS;
-
-export function getVietnamHour(timestamp: number): number {
-  return (new Date(timestamp).getUTCHours() + VN_UTC_OFFSET_HOURS) % 24;
-}
+// The daily cron fires anywhere within its hour, so runs are 23-25h apart. A slack of 22h counts
+// cron days instead of exact hours: a daily source pulls every run unless it was pulled in the last 2h,
+// and a 3-day source never pulls on day 2 (at most 48h59m elapsed, below 3 days - 22h = 50h).
+const FETCH_INTERVAL_SLACK_MS = 22 * HOUR_MS;
 
 /**
- * True when the hourly cron run at `now` should pull this source: it is the source's `fetchHour`
- * (Vietnam time) and roughly `fetchIntervalDays` have passed since the last pull (or it was never pulled).
+ * True when the daily cron run at `now` should pull this source: roughly `fetchIntervalDays`
+ * have passed since the last pull (or it was never pulled).
  */
 export function isNewsSourceDue(
-  source: { fetchIntervalDays: number; fetchHour: number; lastFetchedAt: Date | null },
+  source: { fetchIntervalDays: number; lastFetchedAt: Date | null },
   now: number = Date.now()
 ): boolean {
-  if (getVietnamHour(now) !== source.fetchHour) return false;
   if (!source.lastFetchedAt) return true;
   const elapsedMs = now - source.lastFetchedAt.getTime();
   return elapsedMs >= source.fetchIntervalDays * DAY_MS - FETCH_INTERVAL_SLACK_MS;

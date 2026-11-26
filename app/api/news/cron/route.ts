@@ -73,7 +73,7 @@ async function handleCronSync(
     const summary = await syncNewsSourcesCron({
       sourceId: parsed.data.sourceId,
       maxItemsPerSource: parsed.data.maxItemsPerSource,
-      // The hourly Vercel Cron honours each source's fetchHour and fetchIntervalDays; "Quét tất cả ngay" from the UI pulls everything
+      // The daily Vercel Cron honours each source's fetchIntervalDays; "Quét tất cả ngay" from the UI pulls everything
       onlyDue: isScheduled,
     });
     return NextResponse.json(summary, {

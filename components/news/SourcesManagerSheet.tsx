@@ -32,15 +32,11 @@ import {
   FetchScheduleFields,
   type FetchSchedule,
   formatFeedUrl,
-  formatFetchHour,
   formatFetchInterval,
   useFeedLink,
 } from "@/components/news/NewsSourceFields";
 import { NewsSourceScanHistory } from "@/components/news/NewsSourceScanHistory";
-import {
-  FetchIntervalDaysSchema,
-  NEWS_SOURCE_DEFAULT_FETCH_HOUR,
-} from "@/lib/news/schemas";
+import { FetchIntervalDaysSchema } from "@/lib/news/schemas";
 import type {
   CronSyncSummary,
   NewsSourceDto,
@@ -54,7 +50,6 @@ import * as newsService from "@/logic/news/newsService";
 
 const DEFAULT_FETCH_SCHEDULE: FetchSchedule = {
   fetchIntervalDays: 1,
-  fetchHour: NEWS_SOURCE_DEFAULT_FETCH_HOUR,
 };
 
 function getFeedHost(feedUrl: string): string {
@@ -74,7 +69,6 @@ function getFetchSchedule(source: NewsSourceDto): FetchSchedule {
   const interval = FetchIntervalDaysSchema.safeParse(source.fetchIntervalDays);
   return {
     fetchIntervalDays: interval.success ? interval.data : DEFAULT_FETCH_SCHEDULE.fetchIntervalDays,
-    fetchHour: source.fetchHour,
   };
 }
 
@@ -111,7 +105,6 @@ function NewsSourceEditForm({ source, isSaving, onSave, onCancel }: NewsSourceEd
     if (schedule.fetchIntervalDays !== initialSchedule.fetchIntervalDays) {
       patch.fetchIntervalDays = schedule.fetchIntervalDays;
     }
-    if (schedule.fetchHour !== initialSchedule.fetchHour) patch.fetchHour = schedule.fetchHour;
 
     if (Object.keys(patch).length === 0) {
       onCancel();
@@ -653,10 +646,7 @@ export function SourcesManagerSheet({
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-relaxed text-muted-foreground">
-                    <span>
-                      {formatFetchInterval(source.fetchIntervalDays)} ·{" "}
-                      {formatFetchHour(source.fetchHour)}
-                    </span>
+                    <span>{formatFetchInterval(source.fetchIntervalDays)}</span>
                     <span className="[overflow-wrap:anywhere]">
                       {formatPullTime(source.lastFetchedAt)}
                     </span>

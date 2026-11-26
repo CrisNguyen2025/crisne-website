@@ -19,8 +19,6 @@ import type {
 import { cn } from "@/lib/utils";
 import * as newsService from "@/logic/news/newsService";
 
-const FETCH_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-
 function isPastedLink(value: string): boolean {
   if (!value || /\s/.test(value)) return false;
   const lower = value.toLowerCase();
@@ -43,10 +41,6 @@ export function formatFetchInterval(days: number): string {
   if (days === 1) return "Mỗi ngày";
   if (days === 7) return "Mỗi tuần";
   return `Mỗi ${days} ngày`;
-}
-
-export function formatFetchHour(hour: number): string {
-  return `${String(hour).padStart(2, "0")}:00`;
 }
 
 /** State of one "link → detected feed" field, shared by the add and edit forms. */
@@ -278,7 +272,6 @@ export function FeedLinkField({ link, disabled = false }: FeedLinkFieldProps) {
 
 export interface FetchSchedule {
   fetchIntervalDays: 1 | 3 | 7;
-  fetchHour: number;
 }
 
 interface FetchScheduleFieldsProps {
@@ -287,61 +280,38 @@ interface FetchScheduleFieldsProps {
   disabled?: boolean;
 }
 
-/** Interval and hour (Vietnam time) of the automatic cron pull. */
+/** Interval of the automatic cron pull; the daily cron itself sets the hour (see `NEWS_CRON_SCHEDULE`). */
 export function FetchScheduleFields({
   value,
   onChange,
   disabled = false,
 }: FetchScheduleFieldsProps) {
   const intervalId = useId();
-  const hourId = useId();
 
   return (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="space-y-1.5">
-        <RoadmapFieldLabel htmlFor={intervalId}>
-          Tần suất quét tự động
-        </RoadmapFieldLabel>
-        <select
-          id={intervalId}
-          disabled={disabled}
-          value={value.fetchIntervalDays}
-          onChange={(e) => {
-            const parsed = FetchIntervalDaysSchema.safeParse(
-              Number(e.target.value)
-            );
-            if (parsed.success)
-              onChange({ ...value, fetchIntervalDays: parsed.data });
-          }}
-          className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-        >
-          {NEWS_SOURCE_FETCH_INTERVAL_DAYS.map((days) => (
-            <option key={days} value={days}>
-              {formatFetchInterval(days)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="space-y-1.5">
-        <RoadmapFieldLabel htmlFor={hourId}>
-          Giờ quét (giờ VN)
-        </RoadmapFieldLabel>
-        <select
-          id={hourId}
-          disabled={disabled}
-          value={value.fetchHour}
-          onChange={(e) =>
-            onChange({ ...value, fetchHour: Number(e.target.value) })
-          }
-          className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
-        >
-          {FETCH_HOURS.map((hour) => (
-            <option key={hour} value={hour}>
-              {formatFetchHour(hour)}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="space-y-1.5">
+      <RoadmapFieldLabel htmlFor={intervalId}>
+        Tần suất quét tự động
+      </RoadmapFieldLabel>
+      <select
+        id={intervalId}
+        disabled={disabled}
+        value={value.fetchIntervalDays}
+        onChange={(e) => {
+          const parsed = FetchIntervalDaysSchema.safeParse(
+            Number(e.target.value)
+          );
+          if (parsed.success)
+            onChange({ ...value, fetchIntervalDays: parsed.data });
+        }}
+        className={cn(ROADMAP_INPUT_CLASS, "text-base sm:text-sm")}
+      >
+        {NEWS_SOURCE_FETCH_INTERVAL_DAYS.map((days) => (
+          <option key={days} value={days}>
+            {formatFetchInterval(days)}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

@@ -450,13 +450,11 @@ describe("news feed UI components", () => {
     fireEvent.change(screen.getByLabelText("Link trang hoặc feed"), {
       target: { value: "https://vercel.com/blog" },
     });
-    // Schedule defaults to every day at 07:00 (Vietnam time)
+    // Schedule defaults to every day; the daily cron sets the hour, so there is no hour field
     const intervalField = screen.getByLabelText("Tần suất quét tự động") as HTMLSelectElement;
-    const hourField = screen.getByLabelText("Giờ quét (giờ VN)") as HTMLSelectElement;
     expect(intervalField.value).toBe("1");
-    expect(hourField.value).toBe("7");
+    expect(screen.queryByLabelText("Giờ quét (giờ VN)")).toBeNull();
     fireEvent.change(intervalField, { target: { value: "3" } });
-    fireEvent.change(hourField, { target: { value: "8" } });
     fireEvent.click(screen.getByRole("button", { name: "Thêm nguồn" }));
 
     await waitFor(() => {
@@ -467,7 +465,6 @@ describe("news feed UI components", () => {
         domain: "vercel.com",
         enabled: true,
         fetchIntervalDays: 3,
-        fetchHour: 8,
       });
     });
 
@@ -550,7 +547,6 @@ describe("news feed UI components", () => {
       domain: "goonnguyen.substack.com",
       enabled: true,
       fetchIntervalDays: 1,
-      fetchHour: 7,
     });
   });
 
@@ -849,15 +845,11 @@ describe("news feed UI components", () => {
     fireEvent.change(within(reopenedEditForm).getByLabelText("Tên nguồn"), {
       target: { value: "Anthropic Engineering" },
     });
-    fireEvent.change(within(reopenedEditForm).getByLabelText("Giờ quét (giờ VN)"), {
-      target: { value: "7" },
-    });
     fireEvent.click(within(reopenedEditForm).getByRole("button", { name: "Lưu" }));
 
     await waitFor(() => {
       expect(updateSpy).toHaveBeenCalledWith("src-edit", {
         name: "Anthropic Engineering",
-        fetchHour: 7,
       });
     });
 
