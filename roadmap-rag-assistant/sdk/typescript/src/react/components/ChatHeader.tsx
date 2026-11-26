@@ -1,10 +1,33 @@
 import React from "react";
-import { CheckIcon, CloseIcon, ContextIcon, CopyIcon, MemoryIcon, MoreVerticalIcon, NewChatIcon } from "../icons";
+import {
+  CheckIcon,
+  CloseIcon,
+  ContextIcon,
+  CopyIcon,
+  FloatingModeIcon,
+  MemoryIcon,
+  MoreHorizontalIcon,
+  NewChatIcon,
+  SidebarModeIcon,
+} from "../icons";
+import type { ChatbotViewMode } from "../types";
 import { AbotMascot, type MascotState } from "./AbotMascot";
+
+const VIEW_MODE_OPTIONS: {
+  value: ChatbotViewMode;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { value: "floating", label: "Floating", icon: FloatingModeIcon },
+  { value: "sidebar", label: "Sidebar", icon: SidebarModeIcon },
+];
 
 export interface ChatHeaderProps {
   activityState?: MascotState;
+  canNewChat: boolean;
   canWrite: boolean;
+  viewMode: ChatbotViewMode;
+  onViewModeChange: (mode: ChatbotViewMode) => void;
   clearMessages: () => void;
   copiedConvId: boolean;
   hideBrand?: boolean;
@@ -15,18 +38,50 @@ export interface ChatHeaderProps {
   pendingMemoryCount?: number;
   handleCopyConversationId: (e: React.MouseEvent) => void;
   isOptionsOpen: boolean;
+  isSwitchMenuOpen: boolean;
   optionsRef: React.RefObject<HTMLDivElement | null>;
+  switchMenuRef: React.RefObject<HTMLDivElement | null>;
   setIsOpen: (open: boolean) => void;
   setIsOptionsOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  setIsSwitchMenuOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   status: string;
   title: string;
 }
 
-export function ChatHeader({ activityState = "idle", canWrite, clearMessages, copiedConvId, hideBrand = false, mascotRef, textRef, openContext, openMemory, pendingMemoryCount = 0, handleCopyConversationId, isOptionsOpen, optionsRef, setIsOpen, setIsOptionsOpen, status, title }: ChatHeaderProps) {
+export function ChatHeader({
+  activityState = "idle",
+  canNewChat,
+  canWrite,
+  viewMode,
+  onViewModeChange,
+  clearMessages,
+  copiedConvId,
+  hideBrand = false,
+  mascotRef,
+  textRef,
+  openContext,
+  openMemory,
+  pendingMemoryCount = 0,
+  handleCopyConversationId,
+  isOptionsOpen,
+  isSwitchMenuOpen,
+  optionsRef,
+  switchMenuRef,
+  setIsOpen,
+  setIsOptionsOpen,
+  setIsSwitchMenuOpen,
+  status,
+  title,
+}: ChatHeaderProps) {
+  const closeMenus = () => {
+    setIsOptionsOpen(false);
+    setIsSwitchMenuOpen(false);
+  };
+
   return (
     // Like Claude: no divider; messages fade out under the header instead of meeting a line.
     <div
-      className={`relative z-20 grid shrink-0 grid-cols-[2.25rem_1fr_2.25rem] items-center gap-2 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] md:pt-0.5 ${
+      className={`relative z-20 flex shrink-0 items-center justify-between gap-2 px-3 py-1.5 pt-[max(0.5rem,env(safe-area-inset-top))] md:py-2 ${
         hideBrand ? "bg-transparent" : "bg-[#FFFFFF]"
       }`}
     >
@@ -36,12 +91,10 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
           hideBrand ? "opacity-0 duration-0" : "opacity-100 delay-300 duration-200"
         }`}
       />
-      {/* No close button: "Thu gọn" lives in the ⋮ menu. The empty cell keeps the title centred. */}
-      <span aria-hidden="true" />
 
       <div
         aria-hidden={hideBrand || undefined}
-        className={`relative z-10 min-w-0 flex items-center justify-center gap-2 ${
+        className={`relative z-10 min-w-0 flex items-center gap-2 ${
           hideBrand ? "pointer-events-none opacity-[0.001]" : "opacity-100"
         }`}
       >
@@ -59,32 +112,104 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
         </div>
       </div>
 
-      <div className="relative z-10 flex shrink-0 items-center justify-end">
+      <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          disabled={!canNewChat}
+          onClick={() => {
+            closeMenus();
+            clearMessages();
+          }}
+          title="Cuộc trò chuyện mới"
+          aria-label="Cuộc trò chuyện mới"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#4D4B46] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] active:scale-95 cursor-pointer disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-[#4D4B46] disabled:active:scale-100"
+        >
+          <NewChatIcon className="h-[18px] w-[18px]" />
+        </button>
+
+        <div className="relative hidden md:block" ref={switchMenuRef}>
+          <button
+            type="button"
+            onClick={() => {
+              setIsOptionsOpen(false);
+              setIsSwitchMenuOpen((prev) => !prev);
+            }}
+            title="Switch to"
+            aria-label="Switch to"
+            aria-haspopup="menu"
+            aria-expanded={isSwitchMenuOpen}
+            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors active:scale-95 cursor-pointer ${
+              isSwitchMenuOpen
+                ? "bg-[#F4F3F0] text-[#1F1E1C]"
+                : "text-[#4D4B46] hover:bg-[#F4F3F0] hover:text-[#1F1E1C]"
+            }`}
+          >
+            {viewMode === "sidebar" ? (
+              <SidebarModeIcon className="h-[18px] w-[18px]" />
+            ) : (
+              <FloatingModeIcon className="h-[18px] w-[18px]" />
+            )}
+          </button>
+
+          {isSwitchMenuOpen && (
+            <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[180px] whitespace-nowrap rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-2.5 py-1 text-[11px] font-medium text-[#5E5B55]">
+                Switch to
+              </div>
+              {VIEW_MODE_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const isActive = viewMode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => {
+                      setIsSwitchMenuOpen(false);
+                      onViewModeChange(opt.value);
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                      isActive
+                        ? "bg-[#F4F3F0] text-[#1F1E1C]"
+                        : "text-[#1F1E1C] hover:bg-[#F4F3F0]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Icon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                      <span>{opt.label}</span>
+                    </span>
+                    {isActive && (
+                      <CheckIcon className="h-3.5 w-3.5 text-[#C2410C] shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="relative" ref={optionsRef}>
           <button
             type="button"
-            onClick={() => setIsOptionsOpen((prev) => !prev)}
+            onClick={() => {
+              setIsSwitchMenuOpen(false);
+              setIsOptionsOpen((prev) => !prev);
+            }}
             title="Tùy chọn"
             aria-label="Tùy chọn"
+            aria-haspopup="menu"
             aria-expanded={isOptionsOpen}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-[#4D4B46] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] cursor-pointer"
+            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors active:scale-95 cursor-pointer ${
+              isOptionsOpen
+                ? "bg-[#F4F3F0] text-[#1F1E1C]"
+                : "text-[#4D4B46] hover:bg-[#F4F3F0] hover:text-[#1F1E1C]"
+            }`}
           >
-            <MoreVerticalIcon className="h-[18px] w-[18px]" />
+            <MoreHorizontalIcon className="h-[18px] w-[18px]" />
           </button>
 
           {isOptionsOpen && (
-            <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[220px] whitespace-nowrap rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] animate-in fade-in zoom-in-95 duration-150">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOptionsOpen(false);
-                  clearMessages();
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
-              >
-                <NewChatIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
-                <span>Cuộc trò chuyện mới</span>
-              </button>
+            <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[200px] whitespace-nowrap rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] animate-in fade-in zoom-in-95 duration-150">
               <button
                 type="button"
                 onClick={() => {
@@ -116,17 +241,6 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
                   )}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOptionsOpen(false);
-                  setIsOpen(false);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
-              >
-                <CloseIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
-                <span>Thu gọn</span>
-              </button>
               {canWrite && (
                 <button
                   type="button"
@@ -155,6 +269,19 @@ export function ChatHeader({ activityState = "idle", canWrite, clearMessages, co
             </div>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            closeMenus();
+            setIsOpen(false);
+          }}
+          title="Thu gọn"
+          aria-label="Đóng Abot"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#4D4B46] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] active:scale-95 cursor-pointer"
+        >
+          <CloseIcon className="h-[18px] w-[18px]" />
+        </button>
       </div>
     </div>
   );

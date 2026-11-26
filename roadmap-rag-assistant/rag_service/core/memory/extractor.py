@@ -32,6 +32,7 @@ MIN_CONFIDENCE = 0.75
 MAX_SUGGESTIONS_PER_TURN = 2
 MAX_PENDING_MEMORIES = 10
 EXTRACT_TIMEOUT_SECONDS = 20.0
+DEDUPE_JACCARD_THRESHOLD = 0.72
 
 _TRIVIAL_MESSAGES = frozenset({"ok", "okay", "oke", "yes", "co", "có", "huy", "hủy", "cancel", "no", "khong", "không"})
 
@@ -50,6 +51,44 @@ _SIGNAL_CUES = (
     "hay nham", "thuong quen", "kho nho", "hay bi nham",
 )
 
+_QUESTION_SELF_CUES = (
+    "minh dang", "toi dang", "minh dung", "toi dung", "minh la", "toi la",
+    "hay nham", "thuong nham", "hay quen", "thuong quen", "kho nho",
+    "muc tieu", "du an cua minh", "he thong cua minh", "team minh",
+)
+
+_SELF_DECISION_OR_STRUGGLE_RE = re.compile(
+    r"\b(?:"
+    r"(?:tu gio|tu nay|sau nay|bat dau tu|ke tu nay|moi khi|luon nho|nho rang|dung quen)\b"
+    r"|(?:minh|toi|team minh|du an nay)\s+(?:vua|moi|se|da chon|quyet dinh|chuyen sang|dung|lam|phu trach|chiu trach nhiem|hay bi|cu bi|bi nham|bi lan|van vuong|chua hieu|hay quen|muon tap trung|chi on)"
+    r"|(?:y minh la|chinh xac la|thuc ra minh|truoc gio minh|cu nghi la|hay bi lan giua|nham giua)"
+    r"|(?:going forward|from now on|always keep|remember that i|i work on|i decided to|i switched to|i keep confusing|i often forget)"
+    r")\b"
+)
+
+_LOOKUP_PREFIX_RE = re.compile(
+    r"^(?:giai thich|so sanh|cho vi du|neu su khac biet|tai sao|vi sao|lam sao|la gi|how does|how do|what is|explain|compare)\b"
+)
+
+_REPLY_INSIGHT_RE = re.compile(
+    r"(?<!cac )(?<!nhieu )\b(?:"
+    r"ban dang (?:nham|lan|hieu nham|mac loi)"
+    r"|ban (?:da chon|vua xac nhan|vua chuyen|hay nham|thuong quen)"
+    r"|diem ban hay nham|ghi nhan quy uoc|luu y rieng cho ban"
+    r"|you might be confusing|noted your|i will keep in mind"
+    r")\b"
+)
+
+_VERSION_TOKEN_RE = re.compile(r"\b(?:v?\d+(?:\.\d+)*|q[1-4]|20\d{2})\b")
+_WORD_TOKEN_RE = re.compile(r"[a-z0-9]+(?:[._-][a-z0-9]+)*")
+_DEDUPE_STOP_WORDS = frozenset({
+    "la", "va", "voi", "cua", "cho", "trong", "khi", "den", "tu", "thi", "ma", "de",
+    "minh", "toi", "ban", "dang", "da", "se", "hay", "nen", "can", "muon", "duoc",
+    "cac", "nhung", "mot", "nhieu", "hon", "rat", "ve", "tren", "duoi", "nay", "kia",
+    "do", "the", "a", "an", "to", "of", "in", "on", "for", "and", "or", "with",
+    "is", "are", "was", "were", "be", "my", "i", "we", "our",
+})
+
 
 @dataclass(frozen=True)
 class MemorySuggestion:
@@ -65,20 +104,47 @@ def _fold_ascii(text: str) -> str:
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch)).lower().strip()
 
 
-def has_memory_signal(user_message: str) -> bool:
-    """Cheap pre-filter: True only when the utterance plausibly contains a durable Owner fact."""
+def _content_tokens(text: str) -> set[str]:
+    raw_tokens = _WORD_TOKEN_RE.findall(_fold_ascii(text))
+    filtered = {tok for tok in raw_tokens if len(tok) > 1 and tok not in _DEDUPE_STOP_WORDS}
+    return filtered or set(raw_tokens)
+
+
+def _version_tokens(text: str) -> set[str]:
+    return set(_VERSION_TOKEN_RE.findall(_fold_ascii(text)))
+
+
+def _jaccard(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    union = left | right
+    return len(left & right) / len(union)
+
+
+def _has_question_signal(flat_user: str, flat_reply: str) -> bool:
+    if any(cue in flat_user for cue in _QUESTION_SELF_CUES) or _SELF_DECISION_OR_STRUGGLE_RE.search(flat_user):
+        return True
+    return bool(flat_reply and _REPLY_INSIGHT_RE.search(flat_reply))
+
+
+def has_memory_signal(user_message: str, assistant_reply: str = "") -> bool:
+    """Cheap pre-filter: True only when the turn plausibly contains a durable Owner fact."""
     cleaned = (user_message or "").strip()
     if len(cleaned) < MIN_MESSAGE_CHARS:
         return False
     flat = _fold_ascii(cleaned)
     if flat in _TRIVIAL_MESSAGES:
         return False
-    # Pure questions rarely declare a durable personal fact unless paired with self-statement cues
-    if cleaned.endswith("?") and not any(
-        cue in flat for cue in ("minh dang", "toi dang", "minh dung", "toi dung", "minh la", "toi la", "hay nham", "muc tieu")
-    ):
+    flat_reply = _fold_ascii(assistant_reply)
+    if cleaned.endswith("?"):
+        return _has_question_signal(flat, flat_reply)
+    if _SELF_DECISION_OR_STRUGGLE_RE.search(flat):
+        return True
+    if _LOOKUP_PREFIX_RE.search(flat) and not any(cue in flat for cue in _QUESTION_SELF_CUES):
         return False
-    return any(cue in flat for cue in _SIGNAL_CUES)
+    if any(cue in flat for cue in _SIGNAL_CUES):
+        return True
+    return bool(flat_reply and _REPLY_INSIGHT_RE.search(flat_reply))
 
 
 def _build_extraction_prompt(
@@ -140,6 +206,62 @@ def _extract_json_array(raw_text: str) -> list[Any]:
     return parsed if isinstance(parsed, list) else []
 
 
+def _is_paraphrase_match(
+    cand_tokens: set[str],
+    cand_versions: set[str],
+    other_tokens: set[str],
+    other_versions: set[str],
+) -> bool:
+    return _jaccard(cand_tokens, other_tokens) >= DEDUPE_JACCARD_THRESHOLD and cand_versions == other_versions
+
+
+def _resolve_dedupe_and_replaces(
+    *,
+    content: str,
+    kind: str,
+    explicit_replaces_id: Optional[str],
+    existing_active: Sequence[OwnerMemoryItem],
+    existing_pending: Sequence[OwnerMemoryItem],
+    seen_entries: Sequence[tuple[str, set[str], set[str]]],
+) -> tuple[bool, Optional[str]]:
+    folded = _fold_ascii(content)
+    cand_tokens = _content_tokens(content)
+    cand_versions = _version_tokens(content)
+
+    for s_fold, s_tokens, s_versions in seen_entries:
+        if folded == s_fold or _is_paraphrase_match(cand_tokens, cand_versions, s_tokens, s_versions):
+            return True, None
+
+    for item in existing_pending:
+        if folded == _fold_ascii(item.content) or _is_paraphrase_match(
+            cand_tokens, cand_versions, _content_tokens(item.content), _version_tokens(item.content)
+        ):
+            return True, None
+
+    auto_replaces = explicit_replaces_id
+    best_overlap = 0.0
+    for item in existing_active:
+        item_fold = _fold_ascii(item.content)
+        item_tokens = _content_tokens(item.content)
+        item_versions = _version_tokens(item.content)
+        if folded == item_fold or _is_paraphrase_match(cand_tokens, cand_versions, item_tokens, item_versions):
+            return True, None
+        if auto_replaces is None and item.kind == kind:
+            sim = _jaccard(cand_tokens, item_tokens)
+            if sim >= 0.45 and item_versions != cand_versions and sim > best_overlap:
+                best_overlap = sim
+                auto_replaces = item.id
+    return False, auto_replaces
+
+
+def _parse_row_confidence(row: dict[str, Any]) -> Optional[float]:
+    try:
+        confidence = float(row.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        return None
+    return confidence if confidence >= MIN_CONFIDENCE else None
+
+
 def _parse_suggestions(
     raw_text: str,
     *,
@@ -153,12 +275,8 @@ def _parse_suggestions(
         return []
 
     active_ids = {m.id for m in existing_active}
-    known_contents = {
-        _fold_ascii(m.content) for m in (*existing_active, *existing_pending)
-    }
-
     out: List[MemorySuggestion] = []
-    seen_new: set[str] = set()
+    seen_entries: list[tuple[str, set[str], set[str]]] = []
     clean_scope = scope.strip().lower() if isinstance(scope, str) and scope.strip() else None
 
     for row in rows:
@@ -168,24 +286,26 @@ def _parse_suggestions(
             continue
         kind = str(row.get("kind") or "").strip()
         content = " ".join(str(row.get("content") or "").split()).strip()[:300]
-        if kind not in OWNER_MEMORY_KINDS or len(content) < 5:
+        confidence = _parse_row_confidence(row)
+        if kind not in OWNER_MEMORY_KINDS or len(content) < 5 or confidence is None:
             continue
-        try:
-            confidence = float(row.get("confidence", 0.0))
-        except (TypeError, ValueError):
-            continue
-        if confidence < MIN_CONFIDENCE:
-            continue
-
-        folded = _fold_ascii(content)
-        if folded in known_contents or folded in seen_new:
-            continue
-        seen_new.add(folded)
 
         raw_replaces = row.get("replaces_memory_id") or row.get("replacesMemoryId")
         replaces_id = str(raw_replaces).strip() if isinstance(raw_replaces, str) else None
         if replaces_id not in active_ids:
             replaces_id = None
+
+        is_dup, replaces_id = _resolve_dedupe_and_replaces(
+            content=content,
+            kind=kind,
+            explicit_replaces_id=replaces_id,
+            existing_active=existing_active,
+            existing_pending=existing_pending,
+            seen_entries=seen_entries,
+        )
+        if is_dup:
+            continue
+        seen_entries.append((_fold_ascii(content), _content_tokens(content), _version_tokens(content)))
 
         item_scope = clean_scope if (bool(row.get("scoped")) and clean_scope) else None
         out.append(
@@ -271,7 +391,7 @@ async def maybe_suggest_memories(
     """Background helper: extract & persist `pending` OwnerMemory suggestions (never `active`)."""
     if not is_owner() or llm is None:
         return []
-    if not bypass_prefilter and not has_memory_signal(user_message):
+    if not bypass_prefilter and not has_memory_signal(user_message, assistant_reply):
         return []
 
     try:

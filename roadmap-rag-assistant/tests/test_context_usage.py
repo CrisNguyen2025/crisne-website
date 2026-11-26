@@ -10,8 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from rag_service.context_usage import (
+    CHARS_PER_TOKEN,
     DEFAULT_WINDOW,
+    DOCUMENT_BUDGET_CHARS,
     OUTPUT_RESERVE_TOKENS,
+    TURN_OVERHEAD_CHARS,
     context_window,
     conversation_context,
     estimate_tokens,
@@ -86,14 +89,40 @@ def test_messages_past_the_window_are_reported_as_omitted():
 
 
 def test_budget_is_abots_caps_not_the_model_window():
+    from rag_service.core.memory import OwnerMemoryItem
+
     ctx = _context(_thread(), InMemoryHistoryStore())
 
     reserved = {r["key"]: r["tokens"] for r in ctx["reserved"]}
     assert list(reserved) == ["retrieved", "message", "output"]
+    assert reserved["retrieved"] == math.ceil(PROFILE.max_documents * DOCUMENT_BUDGET_CHARS / CHARS_PER_TOKEN)
     assert reserved["output"] == OUTPUT_RESERVE_TOKENS
     history_cap = ctx["budget"] - ctx["parts"][0]["tokens"] - sum(reserved.values())
-    assert history_cap >= math.ceil(PROFILE.history_turns * 2 * PROFILE.history_max_chars / 4)
+    expected_history_cap = math.ceil(
+        (
+            min(PROFILE.history_turns * 2 * PROFILE.history_max_chars, PROFILE.history_total_chars)
+            + PROFILE.history_turns * 2 * TURN_OVERHEAD_CHARS
+            + len(PROFILE.history_note)
+            + 48
+        )
+        / CHARS_PER_TOKEN
+    )
+    assert history_cap == expected_history_cap
     assert ctx["budget"] < ctx["window"]
+
+    full_store, full_thread = InMemoryHistoryStore(), _thread()
+    for i in range(PROFILE.history_turns * 2):
+        full_store.append(full_thread, "user" if i % 2 == 0 else "assistant", "x" * 400)
+    full_ctx = _context(full_thread, full_store)
+    full_messages = next(p for p in full_ctx["parts"] if p["key"] == "messages")
+    full_history_cap = full_ctx["budget"] - full_ctx["parts"][0]["tokens"] - sum(r["tokens"] for r in full_ctx["reserved"])
+    assert full_messages["tokens"] <= full_history_cap
+
+    mems = [OwnerMemoryItem(id=f"m-{i}", kind="preference", content="Ghi chú ngắn " * 10) for i in range(15)]
+    mem_ctx = conversation_context(_thread(), PROFILE, model="openai/gpt-oss-120b", owner_memories=mems)
+    mem_part = next(p for p in mem_ctx["parts"] if p["key"] == "owner_memory")
+    mem_cap = mem_ctx["budget"] - mem_ctx["parts"][0]["tokens"] - full_history_cap - sum(r["tokens"] for r in mem_ctx["reserved"])
+    assert mem_part["tokens"] <= mem_cap
 
 
 def test_window_follows_the_model_and_an_override_wins():

@@ -217,6 +217,48 @@ describe("Roadmap Assistant proxy — what it forwards", () => {
     expect(url).toBe("https://rag.example.com/chat/context");
     expect(body).toEqual({ thread_id: "visitor:web-session" });
   });
+
+  it("uses the 25s sync header timeout for chat/context so cold-start loads do not 502 at 5s", async () => {
+    vi.useFakeTimers();
+    const okPayload = JSON.stringify({ parts: [] });
+    upstream.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(
+            () => resolve(new Response(okPayload, { status: 200, headers: { "Content-Type": "application/json" } })),
+            6_000,
+          );
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+          );
+        }),
+    );
+
+    const pending = callPost("chat/context", { thread_id: "web-session" });
+    await vi.advanceTimersByTimeAsync(6_001);
+    const okRes = await pending;
+    expect(okRes.status).toBe(200);
+
+    upstream.mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        }),
+    );
+    const stalled = callPost("chat/context", { thread_id: "web-session" });
+    await vi.advanceTimersByTimeAsync(25_001);
+    const timeoutRes = await stalled;
+    expect(timeoutRes.status).toBe(502);
+  });
 });
 
 describe("message length limit (P1-6)", () => {

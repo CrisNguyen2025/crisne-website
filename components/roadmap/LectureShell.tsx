@@ -204,6 +204,7 @@ interface LectureShellProps {
   rail?: React.ReactNode;
   /** Shown under "On this page" in the xl right rail, e.g. a Lesson's Owner controls */
   railFooter?: React.ReactNode;
+  collapseRightRail?: boolean;
   sidebarHeaderAction?: React.ReactNode;
   isTransitioning?: boolean;
   articleDataAttributes?: {
@@ -229,6 +230,7 @@ export function LectureShell({
   headings,
   rail,
   railFooter,
+  collapseRightRail = false,
   sidebarHeaderAction,
   isTransitioning = false,
   articleDataAttributes,
@@ -554,6 +556,24 @@ export function LectureShell({
     </div>
   );
 
+  let rightRailNode: React.ReactNode = null;
+  if (!collapseRightRail) {
+    rightRailNode = rail ? (
+      <aside className="hidden xl:block w-[15.75rem] shrink-0">
+        <div className="sticky top-20 max-h-[calc(100dvh-6.5rem)] overflow-y-auto no-scrollbar">
+          {rail}
+        </div>
+      </aside>
+    ) : (
+      <DesktopTocRail
+        headings={headings}
+        activeHeadingId={activeHeadingId}
+        onJump={jumpToHeading}
+        footer={railFooter}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-dvh w-full flex-col">
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md lg:hidden">
@@ -616,7 +636,10 @@ export function LectureShell({
           <div className="relative flex min-w-0 flex-1 flex-col">
             <main
               id="main-content"
-              className="flex w-full flex-1 justify-center xl:justify-between gap-8 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 lg:px-10 lg:pt-10 xl:gap-12 xl:px-12"
+              className={cn(
+                "flex w-full flex-1 justify-center gap-8 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 lg:px-10 lg:pt-10 xl:gap-12 xl:px-12",
+                !collapseRightRail && "xl:justify-between"
+              )}
             >
               <article
                 {...articleDataAttributes}
@@ -629,6 +652,7 @@ export function LectureShell({
                   headings={headings}
                   activeHeadingId={activeHeadingId}
                   onJump={jumpToHeading}
+                  showOnXl={collapseRightRail}
                 />
 
                 {children}
@@ -659,20 +683,7 @@ export function LectureShell({
                 />
               </article>
 
-              {rail ? (
-                <aside className="hidden xl:block w-[15.75rem] shrink-0">
-                  <div className="sticky top-20 max-h-[calc(100dvh-6.5rem)] overflow-y-auto no-scrollbar">
-                    {rail}
-                  </div>
-                </aside>
-              ) : (
-                <DesktopTocRail
-                  headings={headings}
-                  activeHeadingId={activeHeadingId}
-                  onJump={jumpToHeading}
-                  footer={railFooter}
-                />
-              )}
+              {rightRailNode}
             </main>
           </div>
         </div>

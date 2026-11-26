@@ -170,6 +170,50 @@ export function MoreVerticalIcon({ className }: IconProps) {
   );
 }
 
+export function MoreHorizontalIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="5" cy="12" r="1.15" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.15" fill="currentColor" />
+      <circle cx="19" cy="12" r="1.15" fill="currentColor" />
+    </Icon>
+  );
+}
+
+export function FloatingModeIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <rect x="12.5" y="11" width="5.5" height="5.5" rx="1" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
+export function SidebarModeIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M14.5 4v16" />
+      <path
+        d="M14.5 4h4a2.5 2.5 0 0 1 2.5 2.5v11A2.5 2.5 0 0 1 18.5 20h-4V4Z"
+        fill="currentColor"
+        fillOpacity="0.65"
+        stroke="none"
+      />
+    </Icon>
+  );
+}
+
+export function PromptBubbleIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M8 8.5h8" />
+      <path d="M8 12h5" />
+    </Icon>
+  );
+}
+
 
 export function AlertTriangleIcon({ className }: IconProps) {
   return (

@@ -21,6 +21,9 @@ import { copyText } from "./utils/clipboard";
 import { useDrawerMotion } from "./utils/useDrawerMotion";
 import { useHeaderFlip } from "./utils/useHeaderFlip";
 import { useDesktopPanelHeight } from "./utils/useDesktopPanelHeight";
+import { useSidebarLayout } from "./utils/useSidebarLayout";
+import { useWidgetDismiss } from "./utils/useWidgetDismiss";
+import { useChatAutoScroll } from "./utils/useChatAutoScroll";
 import { DesktopResizeHandle } from "./components/DesktopResizeHandle";
 import { WELCOME_MESSAGE_ID } from "./welcome";
 import { MessageList } from "./components/MessageList";
@@ -37,6 +40,7 @@ export function RoadmapChatbotWidget({
   subtitle = "Trợ lý kiến thức cá nhân",
   baseUrl = "http://localhost:8000",
   initialOpen = false,
+  defaultViewMode = "floating",
   initialMessages,
   onToolExecuted,
   onFeedback,
@@ -51,10 +55,17 @@ export function RoadmapChatbotWidget({
   const [isOpen, setIsOpen] = useState(initialOpen);
   const [isHovered, setIsHovered] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isSwitchMenuOpen, setIsSwitchMenuOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(false);
   const [isMemoryOpen, setIsMemoryOpen] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
+  const switchMenuRef = useRef<HTMLDivElement>(null);
+  const { viewMode, setViewMode, isSidebarActive } = useSidebarLayout(
+    baseUrl,
+    defaultViewMode,
+    isOpen
+  );
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
     {}
   );
@@ -144,6 +155,7 @@ export function RoadmapChatbotWidget({
   const dismiss = useCallback(() => {
     setIsOpen(false);
     setIsOptionsOpen(false);
+    setIsSwitchMenuOpen(false);
     setIsContextOpen(false);
     setIsMemoryOpen(false);
   }, []);
@@ -176,41 +188,19 @@ export function RoadmapChatbotWidget({
     [isLoading, sendMessage]
   );
 
-  // Close container & options on click outside or Escape
-  useEffect(() => {
-    if (!isOpen && !isOptionsOpen) return;
-    const handleClick = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node;
-      // The scrim has its own click handler, which closes with the slide-out animation
-      if (scrimRef.current?.contains(target)) return;
-      if (
-        isOpen &&
-        containerRef.current &&
-        !containerRef.current.contains(target)
-      ) {
-        closeDrawer();
-      } else if (
-        isOptionsOpen &&
-        optionsRef.current &&
-        !optionsRef.current.contains(target)
-      ) {
-        setIsOptionsOpen(false);
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        closeDrawer();
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("touchstart", handleClick, { passive: true });
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("touchstart", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [isOpen, isOptionsOpen, closeDrawer]);
+  useWidgetDismiss({
+    isOpen,
+    isOptionsOpen,
+    isSwitchMenuOpen,
+    viewMode,
+    containerRef,
+    scrimRef,
+    optionsRef,
+    switchMenuRef,
+    closeDrawer,
+    setIsOptionsOpen,
+    setIsSwitchMenuOpen,
+  });
 
   const handleCopyConversationId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -225,54 +215,32 @@ export function RoadmapChatbotWidget({
     });
   };
 
-  const isAtBottomRef = useRef(true);
-  const autoFollowRef = useRef(false);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
-
-  // "Stick to bottom": a 1px sentinel after the last message tells us whether the reader is
-  // at the end. The browser reports only when that changes, so nothing runs while scrolling.
-  // Within 80px of the end still counts as "at the bottom".
-  useEffect(() => {
-    const root = scrollRef.current;
-    const sentinel = bottomSentinelRef.current;
-    if (
-      !isOpen ||
-      !root ||
-      !sentinel ||
-      typeof IntersectionObserver === "undefined"
-    )
-      return;
-    // Only ever turns follow on here. Content growing below pushes the sentinel out of view for a
-    // frame; turning follow off on that would stop the lerp for good. Follow is turned off only by
-    // the user scrolling up (wheel/touch handlers below).
-    const followObserver = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) isAtBottomRef.current = true;
-      },
-      { root, rootMargin: "0px 0px 80px 0px" }
-    );
-    followObserver.observe(sentinel);
-    return () => followObserver.disconnect();
-  }, [isOpen]);
-
-  const rafIdRef = useRef<number | null>(null);
-  const isStreamingRef = useRef(isStreaming);
-  useEffect(() => {
-    isStreamingRef.current = isStreaming;
-  }, [isStreaming]);
+  const isResizingRef = useRef(false);
 
   const isInitStage =
     messages.length === 1 && messages[0]?.id === WELCOME_MESSAGE_ID;
+  const canNewChat = messages.length > 0 && !isInitStage;
 
-  const isResizingRef = useRef(false);
+  const { isAtBottomRef, autoFollowRef, scrollToBottom, disengageFollow } =
+    useChatAutoScroll({
+      isOpen,
+      isStreaming,
+      activeTool,
+      messages,
+      scrollRef,
+      bottomSentinelRef,
+      isResizingRef,
+    });
+
   const handlePanelResize = useCallback(() => {
     if (isAtBottomRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, []);
+  }, [isAtBottomRef]);
 
   const resizeHandleProps = useDesktopPanelHeight({
-    isOpen,
+    isOpen: isOpen && viewMode === "floating",
     offsetY,
     position,
     containerRef,
@@ -282,183 +250,6 @@ export function RoadmapChatbotWidget({
   useEffect(() => {
     isResizingRef.current = resizeHandleProps.isDragging;
   }, [resizeHandleProps.isDragging]);
-
-  const startScrollGlide = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el || !isAtBottomRef.current) {
-      autoFollowRef.current = false;
-      return;
-    }
-
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll <= el.scrollTop) {
-      autoFollowRef.current = isStreamingRef.current;
-      return;
-    }
-
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      el.scrollTop = maxScroll;
-      autoFollowRef.current = isStreamingRef.current;
-      return;
-    }
-
-    if (rafIdRef.current !== null) return;
-    autoFollowRef.current = true;
-
-    let lastTime = performance.now();
-    const tick = (now: number) => {
-      const container = scrollRef.current;
-      if (!container || !isAtBottomRef.current) {
-        rafIdRef.current = null;
-        autoFollowRef.current = false;
-        return;
-      }
-      const target = container.scrollHeight - container.clientHeight;
-      const curr = container.scrollTop;
-      const dist = target - curr;
-
-      if (dist <= 0.5) {
-        container.scrollTop = target;
-        rafIdRef.current = null;
-        autoFollowRef.current =
-          isStreamingRef.current && isAtBottomRef.current;
-        return;
-      }
-
-      const dt = Math.min(now - lastTime, 100);
-      lastTime = now;
-      const factor = 1 - Math.exp(-dt / 55);
-      const step = Math.max(1, dist * factor);
-      container.scrollTop = Math.min(target, curr + step);
-
-      if (container.scrollTop < target && isAtBottomRef.current) {
-        rafIdRef.current = requestAnimationFrame(tick);
-      } else {
-        rafIdRef.current = null;
-        autoFollowRef.current =
-          isStreamingRef.current && isAtBottomRef.current;
-      }
-    };
-
-    rafIdRef.current = requestAnimationFrame(tick);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-      isAtBottomRef.current = true;
-      autoFollowRef.current = false;
-    }
-  }, [isOpen]);
-
-  const disengageFollow = useCallback(() => {
-    isAtBottomRef.current = false;
-    autoFollowRef.current = false;
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!isOpen || !el) return;
-
-    let touchStartY = 0;
-    let lastScrollTop = el.scrollTop;
-
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) disengageFollow();
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      const deltaY = e.touches[0].clientY - touchStartY;
-      if (deltaY > 10) {
-        disengageFollow();
-      }
-    };
-
-    const handleScroll = () => {
-      const curr = el.scrollTop;
-      const nearBottom = curr + el.clientHeight >= el.scrollHeight - 24;
-      if (
-        !isResizingRef.current &&
-        !nearBottom &&
-        curr < lastScrollTop - 2 &&
-        rafIdRef.current === null
-      ) {
-        disengageFollow();
-      }
-      lastScrollTop = curr;
-    };
-
-    el.addEventListener("wheel", handleWheel, { passive: true });
-    el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMove, { passive: true });
-    el.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      el.removeEventListener("wheel", handleWheel);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
-      el.removeEventListener("scroll", handleScroll);
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-      autoFollowRef.current = false;
-    };
-  }, [isOpen, disengageFollow]);
-
-  const scrollToBottom = () => {
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    autoFollowRef.current = isStreaming;
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = el.scrollHeight;
-      isAtBottomRef.current = true;
-    }
-  };
-
-  useEffect(() => {
-    if (!isOpen || !scrollRef.current || !isAtBottomRef.current) {
-      return;
-    }
-    startScrollGlide();
-  }, [messages, isOpen, isStreaming, activeTool, startScrollGlide]);
-
-  useEffect(() => {
-    if (!isOpen || !isAtBottomRef.current) {
-      autoFollowRef.current = false;
-      return;
-    }
-    if (isStreaming) {
-      autoFollowRef.current = true;
-      return;
-    }
-
-    autoFollowRef.current = true;
-    const frame = requestAnimationFrame(() => {
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
-      startScrollGlide();
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [isStreaming, isOpen, messages, startScrollGlide]);
 
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
@@ -477,13 +268,16 @@ export function RoadmapChatbotWidget({
 
   // Offsets and z-index come from props, so they cannot be static utility classes.
   const positionStyles: React.CSSProperties = useMemo(() => {
+    if (isSidebarActive) {
+      return { position: "fixed", zIndex, top: 0, right: 0, bottom: 0 };
+    }
     const styles: React.CSSProperties = { position: "fixed", zIndex };
     const vertical = position.startsWith("top") ? "top" : "bottom";
     const horizontal = position.endsWith("left") ? "left" : "right";
     styles[vertical] = `${offsetY}px`;
     styles[horizontal] = `${offsetX}px`;
     return styles;
-  }, [position, offsetX, offsetY, zIndex]);
+  }, [isSidebarActive, position, offsetX, offsetY, zIndex]);
 
   const {
     headerMascotRef,
@@ -492,7 +286,13 @@ export function RoadmapChatbotWidget({
     heroTextRef,
     heroChipsRef,
     captureBeforeSend,
+    captureBeforeReset,
   } = useHeaderFlip(isInitStage, scrollRef);
+
+  const handleNewChat = useCallback(() => {
+    captureBeforeReset();
+    clearMessages();
+  }, [captureBeforeReset, clearMessages]);
 
   const toggleToolExpand = (id: string) => {
     setExpandedTools((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -584,17 +384,25 @@ export function RoadmapChatbotWidget({
         <div
           ref={containerRef}
           data-abot-overlay-root=""
+          data-abot-view-mode={viewMode}
           style={{ ...WIDGET_THEME_VARS, ...keyboardBox }}
-          className="pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:h-[40.625rem] md:max-h-[calc(100dvh-3rem)] md:w-[25rem] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:zoom-in-95"
+          className={`pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:w-[25rem] md:max-w-[calc(100vw-2rem)] ${
+            viewMode === "sidebar"
+              ? "md:h-dvh md:max-h-dvh md:rounded-none md:border-l md:border-[#E6E4DF] md:shadow-none"
+              : "md:h-[40.625rem] md:max-h-[calc(100dvh-3rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] md:zoom-in-95"
+          }`}
         >
-          {!position.startsWith("top") && (
+          {viewMode === "floating" && !position.startsWith("top") && (
             <DesktopResizeHandle edge="top" {...resizeHandleProps} />
           )}
 
           <ChatHeader
             activityState={activityState}
+            canNewChat={canNewChat}
             canWrite={canWrite}
-            clearMessages={clearMessages}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            clearMessages={handleNewChat}
             copiedConvId={copiedConvId}
             hideBrand={isInitStage}
             mascotRef={headerMascotRef}
@@ -604,9 +412,12 @@ export function RoadmapChatbotWidget({
             pendingMemoryCount={canWrite ? pendingMemoryCount : 0}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
+            isSwitchMenuOpen={isSwitchMenuOpen}
             optionsRef={optionsRef}
+            switchMenuRef={switchMenuRef}
             setIsOpen={closeDrawer}
             setIsOptionsOpen={setIsOptionsOpen}
+            setIsSwitchMenuOpen={setIsSwitchMenuOpen}
             status={status}
             title={title}
           />
@@ -614,6 +425,7 @@ export function RoadmapChatbotWidget({
           <MessageList
             activityState={activityState}
             title={title}
+            viewMode={viewMode}
             heroMascotRef={heroMascotRef}
             heroTextRef={heroTextRef}
             heroChipsRef={heroChipsRef}
@@ -664,7 +476,7 @@ export function RoadmapChatbotWidget({
             }
           />
 
-          {position.startsWith("top") && (
+          {viewMode === "floating" && position.startsWith("top") && (
             <DesktopResizeHandle edge="bottom" {...resizeHandleProps} />
           )}
 

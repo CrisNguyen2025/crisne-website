@@ -5,6 +5,7 @@ import {
   CheckIcon,
   CloseIcon,
   CopyIcon,
+  PromptBubbleIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "../icons";
@@ -22,11 +23,12 @@ import { ChangeReviewCard } from "./ChangeReviewCard";
 import { AbotMascot, type MascotState } from "./AbotMascot";
 import { findExecutedPromptTargets } from "../utils/snippets";
 import { WELCOME_MESSAGE_ID } from "../welcome";
-import type { ChatMessage } from "../types";
+import type { ChatMessage, ChatbotViewMode } from "../types";
 
 export interface MessageListProps {
   activityState?: MascotState;
   title?: string;
+  viewMode?: ChatbotViewMode;
   heroMascotRef?: React.RefObject<HTMLDivElement | null>;
   heroTextRef?: React.RefObject<HTMLDivElement | null>;
   heroChipsRef?: React.RefObject<HTMLDivElement | null>;
@@ -642,6 +644,7 @@ const MessageItem = React.memo(function MessageItem({
 export function MessageList({
   activityState = "idle",
   title = "Abot",
+  viewMode = "floating",
   heroMascotRef,
   heroTextRef,
   heroChipsRef,
@@ -783,7 +786,11 @@ export function MessageList({
         }
       >
         {showWelcomeStage ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-4 text-center">
+          <div
+            className={`flex min-h-0 flex-1 flex-col items-center justify-center pb-4 text-center ${
+              viewMode === "sidebar" ? "md:justify-end md:pb-6" : ""
+            }`}
+          >
             <div
               ref={heroMascotRef}
               className="mb-3.5 flex items-center justify-center"
@@ -806,7 +813,11 @@ export function MessageList({
             {!!messages[0]?.suggestions?.length && (
               <div
                 ref={heroChipsRef}
-                className="mt-5 flex flex-wrap justify-center gap-2"
+                className={
+                  viewMode === "sidebar"
+                    ? "mt-5 flex flex-wrap justify-center gap-2 md:w-full md:max-w-[300px] md:flex-col md:items-stretch md:gap-1.5"
+                    : "mt-5 flex flex-wrap justify-center gap-2"
+                }
               >
                 {messages[0].suggestions.map((s) => (
                   <button
@@ -815,9 +826,16 @@ export function MessageList({
                     onClick={() => handlers.sendMessage(s.prompt)}
                     disabled={isLoading}
                     title={s.prompt}
-                    className="rounded-full border border-[#E6E4DF] bg-white px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer"
+                    className={
+                      viewMode === "sidebar"
+                        ? "rounded-full border border-[#E6E4DF] bg-white px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer md:flex md:w-full md:items-center md:gap-2.5 md:rounded-xl md:border-[#E6E4DF]/80 md:px-3 md:py-2 md:text-left"
+                        : "rounded-full border border-[#E6E4DF] bg-white px-3.5 py-1.5 text-xs font-medium text-[#1F1E1C] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] disabled:opacity-50 cursor-pointer"
+                    }
                   >
-                    {s.label}
+                    {viewMode === "sidebar" && (
+                      <PromptBubbleIcon className="hidden h-4 w-4 shrink-0 text-[#5E5B55] md:block" />
+                    )}
+                    <span>{s.label}</span>
                   </button>
                 ))}
               </div>

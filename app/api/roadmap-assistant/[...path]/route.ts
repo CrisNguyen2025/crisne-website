@@ -15,7 +15,7 @@ const POST_PATHS = new Set(["chat/stream", "chat", "chat/plan", "chat/confirm", 
 // No LLM call behind it: opening the Context sheet must not use up a visitor's questions
 const UNLIMITED_PATHS = new Set(["chat/context"]);
 const GET_PATHS = new Set(["health"]);
-const SYNC_TIMEOUT_PATHS = new Set(["chat", "chat/plan", "chat/confirm", "chat/cancel"]);
+const SYNC_TIMEOUT_PATHS = new Set(["chat", "chat/plan", "chat/confirm", "chat/cancel", "chat/context"]);
 const HEADER_TIMEOUT_STREAM_MS = 5_000;
 const HEADER_TIMEOUT_SYNC_MS = 25_000;
 

@@ -759,4 +759,36 @@ describe("LectureShell & editorial pages", () => {
     fireEvent.click(screen.getByRole("button", { name: /Nền tảng/ }));
     expect(screen.getByRole("button", { name: /Nền tảng/ }).getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("collapses right rail into compact menu when Abot sidebar is active on laptop xl viewports", () => {
+    mockUseCanWrite.mockReturnValue(true);
+    mockUseMediaQuery.mockImplementation((query?: string) => query === "(min-width: 1280px)");
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+
+    document.documentElement.dataset.abotSidebar = "true";
+    try {
+      const { container } = render(
+        <LessonEditorialReader
+          lesson={ITEMS[0]}
+          processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
+          headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+          topic={TOPIC}
+          siblingGroups={groups}
+          allTopics={[TOPIC]}
+        />
+      );
+
+      expect(container.querySelector('nav[aria-label="On this page"]')).toBeNull();
+      expect(screen.getAllByRole("button", { name: "Thao tác bài học" }).length).toBeGreaterThanOrEqual(1);
+
+      act(() => {
+        delete document.documentElement.dataset.abotSidebar;
+        window.dispatchEvent(new CustomEvent("abot:sidebar-change"));
+      });
+
+      expect(container.querySelector('nav[aria-label="On this page"]')).toBeTruthy();
+    } finally {
+      delete document.documentElement.dataset.abotSidebar;
+    }
+  });
 });

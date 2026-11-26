@@ -7,6 +7,8 @@ import type {
   ChangeReview,
   ChatResponse,
   ConversationContext,
+  CreatedLessonItem,
+  CreateLessonInput,
   CreateOwnerMemoryInput,
   HealthResponse,
   LatestThreadResponse,
@@ -14,6 +16,8 @@ import type {
   OwnerMemoryStatus,
   PageContext,
   PlanResponse,
+  RoadmapOutlineResponse,
+  RoadmapSummaryItem,
   ToolCallResult,
   UpdateOwnerMemoryInput,
   WebMcpToolSpec,
@@ -23,6 +27,8 @@ export interface RoadmapChatClientOptions {
   baseUrl?: string;
   /** Base path for Owner Memory CRUD API (defaults to `/api/v1/memories`). */
   memoriesBaseUrl?: string;
+  /** Base path for Roadmap CRUD API (defaults to `/api/v1/roadmaps`). */
+  roadmapsBaseUrl?: string;
   /** Total time allowed for one request, in ms. */
   timeout?: number;
   /** Longest silence allowed between stream chunks, in ms. */
@@ -68,6 +74,7 @@ export interface StreamCallbacks {
 export class RoadmapChatClient {
   private readonly baseUrl: string;
   private readonly memoriesBaseUrl: string;
+  private readonly roadmapsBaseUrl: string;
   private readonly timeout: number;
   private readonly idleTimeout: number;
 
@@ -77,6 +84,10 @@ export class RoadmapChatClient {
       ''
     );
     this.memoriesBaseUrl = (options.memoriesBaseUrl || '/api/v1/memories').replace(
+      /\/$/,
+      ''
+    );
+    this.roadmapsBaseUrl = (options.roadmapsBaseUrl || '/api/v1/roadmaps').replace(
       /\/$/,
       ''
     );
@@ -469,6 +480,44 @@ export class RoadmapChatClient {
     if (!resp.ok) {
       throw new Error(`Không xoá được mục bộ nhớ (${resp.status})`);
     }
+  }
+
+  /** List Topic summaries for Owner Lesson promotion/picker flows. */
+  async listRoadmaps(): Promise<RoadmapSummaryItem[]> {
+    const resp = await fetch(this.roadmapsBaseUrl, { cache: 'no-store' });
+    if (!resp.ok) {
+      throw new Error(`Không tải được danh sách Topic (${resp.status})`);
+    }
+    const data = (await resp.json()) as { roadmaps?: RoadmapSummaryItem[] };
+    return Array.isArray(data.roadmaps) ? data.roadmaps : [];
+  }
+
+  /** Fetch outline metadata (`sections`, items) of a Topic by slug. */
+  async getRoadmap(slug: string): Promise<RoadmapOutlineResponse> {
+    const resp = await fetch(
+      `${this.roadmapsBaseUrl}/${encodeURIComponent(slug)}?mode=outline`,
+      { cache: 'no-store' }
+    );
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string; message?: string };
+      throw new Error(err.error || err.message || `Không tải được cấu trúc Topic (${resp.status})`);
+    }
+    return (await resp.json()) as RoadmapOutlineResponse;
+  }
+
+  /** Create a Lesson inside a Topic via `/api/v1/roadmaps/items`. */
+  async createLesson(input: CreateLessonInput): Promise<CreatedLessonItem> {
+    const resp = await fetch(`${this.roadmapsBaseUrl}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string; message?: string };
+      throw new Error(err.error || err.message || `Không tạo được Lesson (${resp.status})`);
+    }
+    const data = (await resp.json()) as { item: CreatedLessonItem };
+    return data.item;
   }
 
   /**

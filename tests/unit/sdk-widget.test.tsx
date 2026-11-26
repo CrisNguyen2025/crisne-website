@@ -25,18 +25,122 @@ describe("RoadmapChatbotWidget", () => {
   });
 
   describe("menu by access (P1-5, P1-7)", () => {
-    it("reader: offers a new conversation, but no conversation id", async () => {
+    it("reader: puts disabled New Chat and Close outside menu, and Context without conversation id inside menu", async () => {
       openWidget(false);
+      const newChatBtn = screen.getByRole("button", { name: "Cuộc trò chuyện mới" }) as HTMLButtonElement;
+      expect(newChatBtn.disabled).toBe(true);
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
       await openMenu();
-      expect(screen.getByText("Cuộc trò chuyện mới")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Context" })).toBeTruthy();
+      expect(screen.queryByText("Thu gọn")).toBeNull();
       expect(screen.queryByText("Mã hội thoại")).toBeNull();
     });
 
-    it("owner: offers the conversation id as well", async () => {
+    it("owner: offers the conversation id and memory inside more options", async () => {
       openWidget(true);
       await openMenu();
-      expect(screen.getByText("Cuộc trò chuyện mới")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Context" })).toBeTruthy();
+      expect(screen.getByText("Bộ nhớ")).toBeTruthy();
       expect(screen.getByText("Mã hội thoại")).toBeTruthy();
+    });
+
+    it("enables New Chat after a message is sent and resets to disabled init stage on click", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode('event: done\ndata: {"message":"đã trả lời"}\n\n'));
+                c.close();
+              },
+            }),
+            { status: 200 }
+          )
+        )
+      );
+      openWidget(false);
+      const newChatBtn = screen.getByRole("button", { name: "Cuộc trò chuyện mới" }) as HTMLButtonElement;
+      expect(newChatBtn.disabled).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: "Xem lộ trình" }));
+      await screen.findByText("đã trả lời");
+      expect(newChatBtn.disabled).toBe(false);
+
+      fireEvent.click(newChatBtn);
+      expect(screen.getByText(/Xin chào, mình là Abot/)).toBeTruthy();
+      expect(newChatBtn.disabled).toBe(true);
+    });
+  });
+
+  describe("top-right Switch to (Floating / Sidebar) and Close", () => {
+    it("switches between Floating and Sidebar modes, pushes page layout, and closes via X button", () => {
+      Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn().mockImplementation((query: string) => ({
+          matches: query === "(min-width: 48rem)",
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }))
+      );
+
+      const { container, unmount } = openWidget(false);
+      const panel = container.querySelector("[data-abot-overlay-root]") as HTMLElement;
+      expect(panel.getAttribute("data-abot-view-mode")).toBe("floating");
+      expect(screen.getByRole("separator", { name: "Kéo để thay đổi chiều cao Abot" })).toBeTruthy();
+      expect(document.documentElement.dataset.abotSidebar).toBeUndefined();
+
+      fireEvent.click(screen.getByRole("button", { name: "Switch to" }));
+      expect(screen.getByText("Switch to")).toBeTruthy();
+      const floatingOpt = screen.getByRole("button", { name: "Floating" });
+      const sidebarOpt = screen.getByRole("button", { name: "Sidebar" });
+      expect(floatingOpt.getAttribute("aria-pressed")).toBe("true");
+      expect(sidebarOpt.getAttribute("aria-pressed")).toBe("false");
+
+      fireEvent.click(sidebarOpt);
+      expect(panel.getAttribute("data-abot-view-mode")).toBe("sidebar");
+      expect(panel.className).toContain("md:h-dvh");
+      expect(panel.className).toContain("md:border-l");
+      expect(panel.style.height).toBe("");
+      expect(screen.queryByRole("separator", { name: "Kéo để thay đổi chiều cao Abot" })).toBeNull();
+      expect(document.documentElement.dataset.abotSidebar).toBe("true");
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("25rem");
+
+      // Desktop sidebar stays docked on outside clicks and global Escape
+      fireEvent.mouseDown(document.body);
+      expect(container.querySelector("[data-abot-overlay-root]")).toBeTruthy();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(container.querySelector("[data-abot-overlay-root]")).toBeTruthy();
+
+      // Switch back to Floating
+      fireEvent.click(screen.getByRole("button", { name: "Switch to" }));
+      expect(screen.getByRole("button", { name: "Sidebar" }).getAttribute("aria-pressed")).toBe("true");
+      fireEvent.click(screen.getByRole("button", { name: "Floating" }));
+      expect(panel.getAttribute("data-abot-view-mode")).toBe("floating");
+      expect(document.documentElement.dataset.abotSidebar).toBeUndefined();
+      expect(screen.getByRole("separator", { name: "Kéo để thay đổi chiều cao Abot" })).toBeTruthy();
+
+      // Switch to Sidebar again, then close with top-right X button
+      fireEvent.click(screen.getByRole("button", { name: "Switch to" }));
+      fireEvent.click(screen.getByRole("button", { name: "Sidebar" }));
+      expect(document.documentElement.dataset.abotSidebar).toBe("true");
+
+      fireEvent.click(screen.getByRole("button", { name: "Đóng Abot" }));
+      expect(container.querySelector("[data-abot-overlay-root]")).toBeNull();
+      expect(document.documentElement.dataset.abotSidebar).toBeUndefined();
+      expect(screen.getByRole("button", { name: "Mở Abot" })).toBeTruthy();
+
+      // Re-opening remembers Sidebar mode in sessionStorage
+      fireEvent.click(screen.getByRole("button", { name: "Mở Abot" }));
+      const reopened = container.querySelector("[data-abot-overlay-root]") as HTMLElement;
+      expect(reopened.getAttribute("data-abot-view-mode")).toBe("sidebar");
+      expect(document.documentElement.dataset.abotSidebar).toBe("true");
+
+      unmount();
+      expect(document.documentElement.dataset.abotSidebar).toBeUndefined();
     });
   });
 

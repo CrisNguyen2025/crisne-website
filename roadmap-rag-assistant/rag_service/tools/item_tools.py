@@ -23,6 +23,12 @@ if TYPE_CHECKING:
     from rag_service.execution.changes import ChangeSet
 
 
+def _sync_local_index() -> None:
+    from rag_service.execution.executor import schedule_local_rag_sync
+
+    schedule_local_rag_sync()
+
+
 # ── Pydantic Input Schemas ───────────────────────────────────────────────
 
 
@@ -40,6 +46,10 @@ class CreateItemInput(BaseModel):
     )
     description: str = Field(default="", description="Mô tả ngắn cho bài")
     content: str = Field(default="", description="Nội dung chi tiết (HTML/markdown) nếu người dùng cung cấp")
+    status: Optional[str] = Field(
+        default=None,
+        description="Trạng thái khởi tạo tùy chọn: 'known', 'learning', hoặc 'target'.",
+    )
 
 
 class ImportItemsFromTextInput(BaseModel):
@@ -150,6 +160,7 @@ async def create_item(
     section: str = "",
     description: str = "",
     content: str = "",
+    status: Optional[str] = None,
 ) -> str:
     """Thêm một bài học vào một Topic, tuỳ chọn vào một mục của topic.
 
@@ -161,10 +172,12 @@ async def create_item(
     if slug is None:
         return message or ""
     adapter = get_adapter()
+    extra = {"status": status} if status else {}
     try:
-        result = await adapter.create_item(slug, section, title, description, content)
+        result = await adapter.create_item(slug, section, title, description, content, **extra)
     except DuplicateEntityError as dup:
         return f"ℹ️ Bài học '{dup.title}' đã có trong topic '{slug}', không tạo thêm."
+    _sync_local_index()
     where = f" mục {result.get('section')}" if result.get("section") else ""
     return f"✅ Đã thêm bài '{result.get('title', title)}' vào topic '{slug}'{where}"
 
@@ -200,6 +213,8 @@ async def create_items_batch(
         created.append(result.get("title", item_title))
         if changes is not None:
             changes.created(result.get("title", item_title), result)
+    if created:
+        _sync_local_index()
     section_note = f" vào mục {section}" if section else ""
     return _with_skipped(f"✅ Đã thêm {len(created)} bài{section_note}: {', '.join(created)}", skipped)
 
@@ -258,6 +273,7 @@ async def update_item(
         result = await adapter.update_item(item_id, **kwargs)
     except DuplicateEntityError as dup:
         return f"ℹ️ Topic đã có bài '{dup.title}', không đổi tên."
+    _sync_local_index()
     return f"✅ Đã cập nhật bài '{result.get('title', item_id)}'"
 
 
@@ -276,6 +292,7 @@ async def rename_section(topic: str, from_name: str, to_name: str) -> str:
         result = await get_adapter().update_section(slug, from_name, to_name)
     except ValueError as exc:
         return f"⚠️ {exc}"
+    _sync_local_index()
     return f"✅ Đã đổi tên mục '{from_name}' thành '{result.get('section') or to_name}' ({result.get('renamed', 0)} bài)"
 
 
@@ -308,6 +325,7 @@ async def update_item_content(
     else:
         next_html = f"{existing}\n{html}" if existing else html
     await adapter.update_item_content(item_id, next_html)
+    _sync_local_index()
     return f"✅ Đã thêm nội dung vào bài '{lesson.get('title') or item_id}'"
 
 
@@ -321,5 +339,6 @@ async def delete_item(item_id: str) -> str:
 
     success = await get_adapter().delete_item(item_id)
     if success:
+        _sync_local_index()
         return f"🗑️ Đã xóa bài '{item_id}'."
     return f"❌ Không thể xóa bài '{item_id}'."

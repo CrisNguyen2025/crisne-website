@@ -533,5 +533,11 @@ input[type="search"]::-webkit-search-cancel-button {
   }
 }
 
+@media (min-width: 48rem) {
+  html[data-abot-sidebar="true"] body {
+    padding-right: var(--abot-sidebar-width, 25rem);
+  }
+}
+
 
 

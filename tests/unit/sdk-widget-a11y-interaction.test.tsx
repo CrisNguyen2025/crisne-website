@@ -89,6 +89,13 @@ describe("RoadmapChatbotWidget interactions, MSW streaming, and a11y", () => {
     expect(optionsButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "Context" })).toBeInTheDocument();
     await expectNoA11yViolations(container);
+
+    const switchButton = screen.getByRole("button", { name: "Switch to" });
+    await user.click(switchButton);
+    expect(optionsButton).toHaveAttribute("aria-expanded", "false");
+    expect(switchButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Sidebar" })).toBeInTheDocument();
+    await expectNoA11yViolations(container);
   });
 
   it("recovers cleanly via userEvent click when MSW returns 502 then 200", async () => {

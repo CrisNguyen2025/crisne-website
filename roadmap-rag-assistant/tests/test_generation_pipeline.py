@@ -349,6 +349,47 @@ def test_fixed_text_comes_before_per_request_data():
         assert PROFILE.suggestion_format.strip() in system
         assert prompt.endswith("</user_query>")
 
+        for non_prompt_query in (
+            "Docker là gì?",
+            "xin chào",
+            "gợi ý học gì tiếp",
+            "gợi ý bài cần ôn",
+            "gợi ý bài về RAG",
+        ):
+            ordinary = build_prompt(
+                GenerationRequest(mode=mode, query=non_prompt_query, thread_id=f"t-{uuid.uuid4()}", sources=[(DOC, 0.9)]),
+                PROFILE,
+            )
+            assert PROFILE.suggestion_format.strip() not in ordinary.split("</system>")[0]
+
+
+def test_generation_pipeline_formats_owner_memory_once(monkeypatch):
+    from rag_service.core.memory import OwnerMemoryItem, format_owner_memory as real_format
+
+    calls = 0
+
+    def spy_format(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return real_format(*args, **kwargs)
+
+    monkeypatch.setattr("rag_service.core.augmentation.context.format_owner_memory", spy_format)
+    mem = OwnerMemoryItem(id="mem-1", kind="preference", content="Trả lời ngắn gọn.")
+
+    async def run():
+        req = GenerationRequest(
+            mode="rag",
+            query="Docker là gì?",
+            thread_id=f"t-{uuid.uuid4()}",
+            sources=[(DOC, 0.9)],
+            owner_memories=[mem],
+        )
+        return [ev async for ev in generation_pipeline.astream(RecordingLLM(f"Ok [[{DOC.id}]]\n<sources>{DOC.id}</sources>"), req)]
+
+    events = asyncio.run(run())
+    assert calls == 1
+    assert any(ev.get("type") == "metadata" for ev in events)
+
 
 def test_reorder_documents_u_shape():
     from rag_service.core.augmentation.documents import ContextDocument

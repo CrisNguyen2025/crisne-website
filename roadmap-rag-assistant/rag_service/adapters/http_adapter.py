@@ -122,13 +122,29 @@ class HttpApiAdapter:
         title: str,
         description: str = "",
         content: str = "",
+        status: str | None = None,
     ) -> dict:
         """POST /api/v1/roadmaps/items"""
-        payload = {"roadmapSlug": topic_slug, "section": section, "title": title, "description": description}
+        payload: dict[str, object] = {
+            "roadmapSlug": topic_slug,
+            "section": section,
+            "title": title,
+            "description": description,
+        }
         if content:
             payload["content"] = content
+        if status:
+            payload["status"] = status
         data = await self._request("POST", "/api/v1/roadmaps/items", json=payload)
         return data.get("item", data)
+
+    async def create_relation(self, lesson_id: str, target_lesson_id: str) -> dict:
+        """POST /api/v1/roadmaps/items/{id}/relations"""
+        return await self._request(
+            "POST",
+            f"/api/v1/roadmaps/items/{lesson_id}/relations",
+            json={"targetLessonId": target_lesson_id},
+        )
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:
         """PATCH /api/v1/roadmaps/items/{id}"""

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 import json
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Sequence
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -170,22 +170,31 @@ def _maybe_schedule_memory_extraction(
     final_message: str,
     thread_id: str,
     context: dict | None,
-    state: _SseTurnState,
+    state: _SseTurnState | None = None,
+    *,
+    had_preview: bool = False,
+    has_changes: bool = False,
+    executed_tool_names: Sequence[str] = (),
 ) -> None:
     # Background Owner Memory auto-suggestion (ADR-0015 Phase 2): strictly Owner-only, non-blocking,
     # skipped on explicit memory/CUD/preview/quiz turns to avoid redundant LLM calls.
+    skip_preview = had_preview or (state.had_preview if state is not None else False)
+    skip_changes = has_changes or bool(state.changes if state is not None else False)
+    tools = list(executed_tool_names)
+    if state is not None:
+        tools.extend(str(t.get("name") or "") for t in state.executed_tools)
     if (
         not is_owner()
-        or state.had_preview
-        or state.changes
-        or any(t.get("name") in _SKIP_MEMORY_TOOLS for t in state.executed_tools)
+        or skip_preview
+        or skip_changes
+        or any(name in _SKIP_MEMORY_TOOLS for name in tools)
     ):
         return
     from rag_service.core.memory import has_memory_signal, maybe_suggest_memories
     from rag_service.state import session_store
 
     extract_llm = getattr(agent, "router_llm", None) or getattr(agent, "llm", None)
-    if extract_llm is None or not has_memory_signal(message):
+    if extract_llm is None or not has_memory_signal(message, final_message):
         return
     ctx_topic = ((context or {}).get("roadmapSlug") or "").strip() or session_store.get_or_create(
         thread_id
@@ -200,6 +209,42 @@ def _maybe_schedule_memory_extraction(
     )
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
+def _schedule_sync_chat_memory(agent: Any, req: ChatRequest, response: ChatResponse) -> None:
+    if not is_owner():
+        return
+    from rag_service.state import session_store
+
+    ctx = session_store.get_or_create(req.thread_id)
+    has_pending = any(
+        getattr(ctx, slot, None) is not None
+        for slot in (
+            "pending_confirmation",
+            "pending_memory_change",
+            "pending_content_draft",
+            "pending_status_change",
+            "pending_lesson_edit",
+            "pending_section_rename",
+            "active_quiz",
+        )
+    )
+    tool_names = [t.name for t in response.tool_calls]
+    has_changes = any(
+        name.startswith(("create_", "update_", "delete_", "rename_"))
+        or name in ("import_items_from_text", "promote_concept_to_lesson")
+        for name in tool_names
+    )
+    _maybe_schedule_memory_extraction(
+        agent,
+        req.message,
+        response.message,
+        req.thread_id,
+        req.context,
+        had_preview=has_pending or ("Xác nhận thực hiện" in response.message),
+        has_changes=has_changes,
+        executed_tool_names=tool_names,
+    )
 
 
 def _build_sse_extra_input(titles: list[str] | None, target: dict | None) -> dict:
@@ -310,7 +355,9 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
                 for m in msgs if getattr(m, "type", "") == "tool"
             ]
             last_content = msgs[-1].content if msgs else ""
-            return ChatResponse(message=last_content, tool_calls=tool_calls)
+            response = ChatResponse(message=last_content, tool_calls=tool_calls)
+            _schedule_sync_chat_memory(agent, req, response)
+            return response
 
         result = agent.invoke(
             {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
@@ -331,7 +378,9 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 
         last_msg = messages[-1] if messages else None
         final_text = last_msg.content if last_msg is not None and hasattr(last_msg, "content") else str(last_msg)
-        return ChatResponse(message=final_text, tool_calls=tool_calls)
+        response = ChatResponse(message=final_text, tool_calls=tool_calls)
+        _schedule_sync_chat_memory(agent, req, response)
+        return response
 
     except Exception as exc:
         print(f"[Routes] Chat error ({exc}), using fallback agent...")
@@ -346,7 +395,9 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
             for m in msgs if getattr(m, "type", "") == "tool"
         ]
         last_content = msgs[-1].content if msgs else ""
-        return ChatResponse(message=last_content, tool_calls=tool_calls)
+        response = ChatResponse(message=last_content, tool_calls=tool_calls)
+        _schedule_sync_chat_memory(fallback, req, response)
+        return response
 
 
 @router.post("/chat/context")

@@ -107,7 +107,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         })
       : await prisma.ownerMemory.update({ where: { id }, data, select: MEMORY_SELECT });
 
-    notifyOwnerMemoryChanged();
+    if (existing.status === 'active' || memory.status === 'active') {
+      notifyOwnerMemoryChanged();
+    }
     return NextResponse.json({ memory }, { headers: NO_STORE });
   } catch (error) {
     console.error('[API PATCH /api/v1/memories/[id]] Error:', error);
@@ -126,12 +128,14 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   }
 
   try {
-    const existing = await prisma.ownerMemory.findUnique({ where: { id }, select: { id: true } });
+    const existing = await prisma.ownerMemory.findUnique({ where: { id }, select: { id: true, status: true } });
     if (!existing) {
       return NextResponse.json({ error: 'Memory not found' }, { status: 404, headers: NO_STORE });
     }
     await prisma.ownerMemory.delete({ where: { id } });
-    notifyOwnerMemoryChanged();
+    if (existing.status === 'active') {
+      notifyOwnerMemoryChanged();
+    }
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   } catch (error) {
     console.error('[API DELETE /api/v1/memories/[id]] Error:', error);

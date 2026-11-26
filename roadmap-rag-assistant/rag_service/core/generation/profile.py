@@ -30,8 +30,11 @@ class DomainProfile:
     rules_rag: str
     persona_chitchat: str
     rules_chitchat: str
-    # Appended after the prompt, e.g. a format for follow-up suggestion chips.
+    # Optional conditional rules appended to <system> only when relevant (memory, provenance, suggestions).
+    rules_owner_memory: str = ""
+    rules_provenance: str = ""
     suggestion_format: str = ""
+    should_include_suggestion_format: Callable[[str], bool] | None = None
     # Shown above the history / memory blocks so the model reads them as context, not instructions.
     history_note: str = ""
     memory_note: str = ""

@@ -7,6 +7,7 @@ export type {
 export type {
   ChatbotConfig,
   ChatbotPosition,
+  ChatbotViewMode,
   ChatMessage,
   ChatActionChip,
   ToolCall,

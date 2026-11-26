@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 
 import asyncio
+import inspect
 import logging
 import os
 from pathlib import Path
@@ -92,6 +93,7 @@ from rag_service.domains.roadmap.router.grounding import (
     empty_message_reply,
     empty_roadmap_reply,
     harmful_reply,
+    looks_like_title,
     no_match_reply,
     out_of_scope_reply,
     sensitive_reply,
@@ -297,6 +299,9 @@ class NextGenRoadmapAgent(
             ),
             self.handle_lesson_edit(
                 content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            ),
+            self.handle_concept_promotion(
+                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
             ),
             self.handle_lesson_content(
                 content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
@@ -602,27 +607,94 @@ class NextGenRoadmapAgent(
                 return
 
         deps = self._source_deps(content)
-        if (
+        is_domain_gap = (
             intent_res.intent == IntentType.KNOWLEDGE_QUERY
             and route_outcome.scope is not None
             and route_outcome.scope.scope == Scope.DOMAIN_GAP
-        ):
+        )
+        focus_topic = (focus_written(content) or route_outcome.scope.focus) if is_domain_gap else None
+        if is_domain_gap:
             # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
-            focus_topic = focus_written(content) or route_outcome.scope.focus
             deps = dataclasses.replace(
                 deps, no_match_reply=_unless_empty(lambda owner: domain_gap_reply(focus_topic, owner))
             )
+        async for ev in self._stream_sources_and_gap_promotion(
+            content=content,
+            page_slug=page_slug,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+            deps=deps,
+            is_domain_gap=is_domain_gap,
+            focus_topic=focus_topic,
+        ):
+            yield ev
+
+    async def _list_active_owner_memories(self, active_topic: Optional[str], query: str) -> list[Any]:
+        params = inspect.signature(owner_memory_store.list_active).parameters
+        if "query" in params:
+            return await owner_memory_store.list_active(active_topic, query=query)
+        return await owner_memory_store.list_active(active_topic)
+
+    async def _stream_sources_and_gap_promotion(
+        self,
+        *,
+        content: str,
+        page_slug: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        deps,
+        is_domain_gap: bool,
+        focus_topic: Optional[str],
+    ) -> AsyncGenerator[dict, None]:
         active_topic = page_slug or session_ctx.active_topic_slug
-        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
+        owner = is_owner()
+        owner_memories = await self._list_active_owner_memories(active_topic, content) if owner else []
+        saw_no_match = False
         async for ev in answer_from_sources(
             query=content,
             session_id=session_id,
-            owner=is_owner(),
+            owner=owner,
             delay=delay,
             llm=self.llm,
             deps=deps,
             owner_memories=owner_memories,
             memory_scope=active_topic,
+        ):
+            if ev.get("type") == "step" and ev.get("id") == "answer" and ev.get("mode") == "no_match":
+                saw_no_match = True
+            yield ev
+        if is_domain_gap and saw_no_match and owner and looks_like_title(focus_topic):
+            async for ev in self._maybe_emit_domain_gap_promotion_preview(
+                concept=focus_topic or "",
+                page_slug=page_slug,
+                session_ctx=session_ctx,
+                delay=delay,
+            ):
+                yield ev
+
+    async def _maybe_emit_domain_gap_promotion_preview(
+        self,
+        *,
+        concept: str,
+        page_slug: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
+        proposal, _ = await self.build_concept_promotion_proposal(
+            concept=concept,
+            summary="",
+            preferred_topic_slug=page_slug or session_ctx.active_topic_slug,
+            source="domain_gap",
+            session_ctx=session_ctx,
+            status="target",
+        )
+        if proposal is None:
+            return
+        session_ctx.clear_pending()
+        async for ev in self.emit_concept_promotion_preview(
+            proposal, session_ctx, delay, prefix_newline=True
         ):
             yield ev
 
@@ -646,7 +718,7 @@ class NextGenRoadmapAgent(
 
         outcome = {"handled": False, "llm_failed": False}
         active_topic = page_slug or session_ctx.active_topic_slug
-        owner_memories = await owner_memory_store.list_active(active_topic) if is_owner() else []
+        owner_memories = await self._list_active_owner_memories(active_topic, content) if is_owner() else []
         async for ev in answer_with_llm(
             llm=self.llm,
             pipeline=generation_pipeline,

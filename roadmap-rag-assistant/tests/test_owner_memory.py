@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import uuid
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -19,6 +21,8 @@ from rag_service.core.memory import (
     OwnerMemoryItem,
     OwnerMemoryStore,
     format_owner_memory,
+    has_memory_signal,
+    maybe_suggest_memories,
     owner_memory_store,
     select_owner_memories,
 )
@@ -220,7 +224,27 @@ async def test_generation_pipeline_keeps_citations_clean_with_owner_memory():
     meta = next(ev for ev in events if ev["type"] == "metadata")
     assert [s["id"] for s in meta["sources"]] == [DOC.id]
     assert "<owner_memory>" in llm.prompts[0]
+    assert PROFILE.rules_owner_memory in llm.prompts[0]
     assert "mem-secret-id" not in llm.prompts[0]
+
+
+def test_visitor_prompt_excludes_owner_memory_and_provenance_rules():
+    from rag_service.auth import set_actor
+
+    set_actor("visitor")
+    for mode in ("rag", "chitchat"):
+        prompt = build_prompt(
+            GenerationRequest(
+                mode=mode,
+                query="Docker là gì?",
+                thread_id=f"visitor:{uuid.uuid4()}",
+                sources=[(DOC, 0.9)],
+            ),
+            PROFILE,
+        )
+        assert "<owner_memory>" not in prompt
+        assert PROFILE.rules_owner_memory not in prompt
+        assert PROFILE.rules_provenance not in prompt
 
 
 @pytest.mark.asyncio
@@ -392,3 +416,211 @@ async def test_visitor_prompt_injection_never_receives_owner_memory(visitor_head
         for prompt in captured_prompts:
             assert "<owner_memory>" not in prompt
             assert "SECRET_OWNER_FACT_XYZ" not in prompt
+
+
+def test_has_memory_signal_detects_non_cue_statements_and_reply_insights():
+    assert has_memory_signal("ok") is False
+    assert has_memory_signal("PostgreSQL MVCC hoạt động như thế nào?") is False
+    assert has_memory_signal("Giải thích sự khác biệt giữa Redis và Memcached") is False
+    assert has_memory_signal("Giải thích Redis giúp mình", "Redis là in-memory store nhanh.") is False
+
+    assert has_memory_signal("Từ giờ giải thích mọi khái niệm kèm sơ đồ ASCII trước nhé.") is True
+    assert has_memory_signal("Mình vừa quyết định bỏ microservices để quay lại modular monolith.") is True
+    assert has_memory_signal("Khoản này mình cứ bị lẫn giữa eventual consistency với causal consistency.") is True
+    assert has_memory_signal("Going forward, keep architectural trade-offs concise.") is True
+
+    assert (
+        has_memory_signal(
+            "Vậy trước giờ hiểu chỗ lease token như vậy có đúng không?",
+            "Bạn đang nhầm giữa lease token TTL và lock fencing token.",
+        )
+        is True
+    )
+    assert (
+        has_memory_signal(
+            "Chỗ này mình vừa chọn hướng đơn giản hơn rồi.",
+            "Ghi nhận quy ước đó cho các giải thích tiếp theo.",
+        )
+        is True
+    )
+
+
+@pytest.mark.asyncio
+async def test_maybe_suggest_memories_dedupes_paraphrases_and_auto_links_version_updates():
+    old_item = await owner_memory_store.create(kind="techstack", content="Đang dùng Next.js 14")
+    await owner_memory_store.create(kind="preference", content="Ưu tiên trả lời ngắn gọn kèm ví dụ code")
+    await owner_memory_store.create(
+        kind="preference",
+        content="Thích sơ đồ kiến trúc trước khi xem code",
+        source="suggested",
+        status="pending",
+    )
+
+    llm_payload = json.dumps(
+        [
+            {
+                "kind": "preference",
+                "content": "Trả lời ngắn gọn ưu tiên kèm ví dụ code",
+                "scoped": False,
+                "confidence": 0.92,
+            },
+            {
+                "kind": "techstack",
+                "content": "Đang dùng Next.js 15",
+                "scoped": False,
+                "confidence": 0.9,
+            },
+            {
+                "kind": "learning_note",
+                "content": "Hay nhầm lẫn giữa eventual consistency với causal consistency",
+                "scoped": True,
+                "confidence": 0.85,
+            },
+        ],
+        ensure_ascii=False,
+    )
+    llm = RecordingLLM(llm_payload)
+
+    created = await maybe_suggest_memories(
+        llm,
+        user_message="Từ giờ giải thích ngắn hơn, mình mới nâng lên Next.js 15 và hay nhầm causal consistency.",
+        scope="distributed-systems",
+    )
+
+    assert len(created) == 2
+    assert all(m.status == "pending" and m.source == "suggested" for m in created)
+    assert created[0].content == "Đang dùng Next.js 15"
+    assert created[0].replaces_memory_id == old_item.id
+    assert created[1].content == "Hay nhầm lẫn giữa eventual consistency với causal consistency"
+    assert created[1].scope == "distributed-systems"
+    assert created[1].replaces_memory_id is None
+
+
+@pytest.mark.asyncio
+async def test_select_and_store_query_relevance_preserves_cap_and_touches_last_used_at(monkeypatch):
+    items = [
+        OwnerMemoryItem(id="pref-1", kind="preference", content="Trả lời ngắn gọn"),
+        *[OwnerMemoryItem(id=f"fill-{i}", kind="techstack", content=f"Rust crate số {i}") for i in range(16)],
+        OwnerMemoryItem(id="mvcc-1", kind="learning_note", content="Hay nhầm snapshot isolation trong MVCC"),
+    ]
+    selected = select_owner_memories(items, query="MVCC snapshot isolation hoạt động sao")
+    selected_ids = [m.id for m in selected]
+    assert len(selected) == 15
+    assert "pref-1" in selected_ids
+    assert "mvcc-1" in selected_ids
+
+    server_items = [
+        {"id": "pref-1", "kind": "preference", "content": "Trả lời ngắn gọn", "scopeTopicSlug": None, "status": "active", "lastUsedAt": None},
+        {"id": "mvcc-1", "kind": "learning_note", "content": "Hay nhầm snapshot isolation trong MVCC", "scopeTopicSlug": None, "status": "active", "lastUsedAt": None},
+    ]
+    calls: list[tuple[str, str, dict | None]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode()) if request.content else None
+        calls.append((request.method, request.url.path, body))
+        if request.method == "GET":
+            return httpx.Response(200, json={"memories": list(server_items)})
+        if request.method == "PATCH" and request.url.path == "/api/v1/memories":
+            return httpx.Response(200, json={"updatedCount": len(body.get("ids", [])), "lastUsedAt": "2026-11-26T00:00:00.000Z"})
+        if request.method == "POST":
+            return httpx.Response(201, json={"memory": {"id": "pend-1", **body}})
+        return httpx.Response(404)
+
+    api = OwnerMemoryApi("http://next.test", "admin-key", scope_field="scopeTopicSlug")
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        api,
+        "_client",
+        lambda timeout=5.0: httpx.AsyncClient(transport=transport, base_url="http://next.test", headers=api._headers),
+    )
+    store = OwnerMemoryStore(api, cache_ttl=60.0)
+
+    first = await store.list_active(query="MVCC snapshot isolation")
+    await store.flush_touches()
+    assert [m.id for m in first] == ["pref-1", "mvcc-1"]
+    assert all(m.last_used_at is not None for m in first)
+    assert [c[:2] for c in calls] == [("GET", "/api/v1/memories"), ("PATCH", "/api/v1/memories")]
+    assert set(calls[1][2]["ids"]) == {"pref-1", "mvcc-1"}
+
+    # Touch does not clear active RAM cache, and creating pending keeps active cache warm
+    await store.create(kind="goal", content="Ôn Distributed Transactions", source="suggested", status="pending")
+    second = await store.list_active(query="MVCC snapshot isolation")
+    await store.flush_touches()
+    assert len(second) == 2
+    assert sum(1 for method, _, _ in calls if method == "GET") == 1
+
+    # Visitors never read or touch active memories
+    token = current_actor.set("visitor")
+    try:
+        assert await store.list_active(query="MVCC snapshot isolation") == []
+        await store.flush_touches()
+        assert sum(1 for method, _, _ in calls if method == "PATCH") == 2
+    finally:
+        current_actor.reset(token)
+
+
+@pytest.mark.asyncio
+async def test_sync_chat_schedules_memory_extraction_for_owner_only(owner_headers, visitor_headers, monkeypatch):
+    from rag_service.api import routes as routes_mod
+
+    extract_llm = RecordingLLM(
+        '[{"kind":"learning_note","content":"Hay nhầm TTL của lease với fencing token","scoped":false,"confidence":0.9}]'
+    )
+    tool_outputs: dict[str, list[object]] = {"tools": []}
+
+    class FakeSyncAgent:
+        def __init__(self) -> None:
+            self.llm = RecordingLLM("ok")
+            self.router_llm = extract_llm
+
+        def invoke(self, inputs, config=None):
+            return {
+                "messages": [
+                    *tool_outputs["tools"],
+                    SimpleNamespace(type="ai", content="Bạn đang nhầm giữa lease token TTL và fencing token."),
+                ]
+            }
+
+    monkeypatch.setattr(routes_mod, "_get_agent", lambda: FakeSyncAgent())
+
+    tid_owner = f"owner:{uuid.uuid4()}"
+    tid_visitor = f"visitor:{uuid.uuid4()}"
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        owner_res = await client.post(
+            "/chat",
+            headers=owner_headers,
+            json={"message": "Vậy trước giờ hiểu chỗ lease token như vậy có đúng không?", "thread_id": tid_owner},
+        )
+        assert owner_res.status_code == 200
+        if routes_mod._BACKGROUND_TASKS:
+            await asyncio.gather(*list(routes_mod._BACKGROUND_TASKS), return_exceptions=True)
+
+        assert len(extract_llm.prompts) == 1
+        pending = await owner_memory_store.list_pending()
+        assert [m.content for m in pending] == ["Hay nhầm TTL của lease với fencing token"]
+
+        # Skip-tool turns must skip memory extraction even for Owner
+        tool_outputs["tools"] = [SimpleNamespace(type="tool", name="start_lesson_quiz", content="quiz")]
+        tool_res = await client.post(
+            "/chat",
+            headers=owner_headers,
+            json={"message": "Từ giờ giải thích ngắn gọn giúp mình nhé.", "thread_id": tid_owner},
+        )
+        assert tool_res.status_code == 200
+        if routes_mod._BACKGROUND_TASKS:
+            await asyncio.gather(*list(routes_mod._BACKGROUND_TASKS), return_exceptions=True)
+        assert len(extract_llm.prompts) == 1
+
+        # Visitor turns must never extract memories
+        tool_outputs["tools"] = []
+        visitor_res = await client.post(
+            "/chat",
+            headers=visitor_headers,
+            json={"message": "Vậy trước giờ hiểu chỗ lease token như vậy có đúng không?", "thread_id": tid_visitor},
+        )
+        assert visitor_res.status_code == 200
+        if routes_mod._BACKGROUND_TASKS:
+            await asyncio.gather(*list(routes_mod._BACKGROUND_TASKS), return_exceptions=True)
+        assert len(extract_llm.prompts) == 1

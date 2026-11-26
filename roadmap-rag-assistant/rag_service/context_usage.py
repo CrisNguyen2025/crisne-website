@@ -32,9 +32,9 @@ DEFAULT_WINDOW = 128_000
 # Rough rule for Latin and Vietnamese text; good enough to size a bar without a tokenizer dependency.
 CHARS_PER_TOKEN = 4
 
-# Budget slots. A roadmap document is a title, its description and a 300-character content summary
-# (domains/roadmap/profile.py), so 1200 characters covers one with room to spare.
-DOCUMENT_BUDGET_CHARS = 1200
+# Budget slots. Chunked lessons carry up to 2 passages (900 chars each) plus title, section,
+# description and provenance lines, so 2400 characters matches one retrieved document.
+DOCUMENT_BUDGET_CHARS = 2400
 QUERY_MAX_CHARS = 2000  # api/schemas.py ChatRequest.message
 OUTPUT_RESERVE_TOKENS = 2048  # room kept for the reply; no max_tokens is set on the model
 # Tags and attributes around each history message ('<turn role="assistant">…</turn>')
@@ -160,8 +160,20 @@ def conversation_context(
     # The store keeps at most 50 messages per thread, so this reads the whole thread
     outside = max(len(history.get_recent(thread_id, 1000)) - in_window, 0)
 
-    history_cap = math.ceil(history_limit * (profile.history_max_chars + TURN_OVERHEAD_CHARS) / CHARS_PER_TOKEN)
-    memory_cap = math.ceil(profile.memory_total_chars / CHARS_PER_TOKEN) if memory_tokens else 0
+    history_chars_cap = min(history_limit * profile.history_max_chars, profile.history_total_chars)
+    history_overhead_chars = history_limit * TURN_OVERHEAD_CHARS + len(profile.history_note) + 48
+    history_cap = max(
+        messages,
+        math.ceil((history_chars_cap + history_overhead_chars) / CHARS_PER_TOKEN),
+    )
+    memory_cap = (
+        max(
+            memory_tokens,
+            math.ceil((profile.memory_total_chars + len(profile.memory_note) + 32) / CHARS_PER_TOKEN),
+        )
+        if memory_tokens
+        else 0
+    )
     reserved: list[dict[str, Any]] = [
         {"key": "retrieved", "label": "Tài liệu truy xuất",
          "tokens": math.ceil(profile.max_documents * DOCUMENT_BUDGET_CHARS / CHARS_PER_TOKEN), "count": profile.max_documents},

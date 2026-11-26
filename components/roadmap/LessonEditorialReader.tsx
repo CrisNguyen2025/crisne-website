@@ -31,6 +31,7 @@ import type {
 } from "@/lib/roadmap/types";
 import { cn } from "@/lib/utils";
 import { useAnimatedPresence } from "@/hooks/use-animated-presence";
+import { useCollapseRightRail } from "@/hooks/use-abot-sidebar";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -268,6 +269,52 @@ function LessonOwnerMenu({
   );
 }
 
+interface EmptyLessonPlaceholderProps {
+  canWrite: boolean;
+  onStartTemplate: () => void;
+  onStartBlank: () => void;
+}
+
+function EmptyLessonPlaceholder({
+  canWrite,
+  onStartTemplate,
+  onStartBlank,
+}: EmptyLessonPlaceholderProps) {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center">
+      <p className="text-sm text-muted-foreground">
+        {canWrite
+          ? "Chưa có nội dung chi tiết."
+          : "Nội dung cho bài học này đang được cập nhật."}
+      </p>
+      {canWrite && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onMouseEnter={preloadLessonContentEditor}
+            onFocus={preloadLessonContentEditor}
+            onClick={onStartTemplate}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+          >
+            <ListTree className="size-4" />
+            <span>Soạn từ mẫu chuẩn</span>
+          </button>
+          <button
+            type="button"
+            onMouseEnter={preloadLessonContentEditor}
+            onFocus={preloadLessonContentEditor}
+            onClick={onStartBlank}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-[border-color,background-color,transform] duration-150 hover:border-foreground/30 hover:bg-muted active:scale-[0.98] cursor-pointer"
+          >
+            <Edit3 className="size-4" />
+            <span>Soạn tự do</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface LessonEditorialReaderProps {
   lesson: ChecklistItem;
   processedHtml: string;
@@ -293,6 +340,8 @@ export function LessonEditorialReader({
   const { toast } = useToast();
   const canWrite = useCanWrite();
   const isXl = useMediaQuery(XL_VIEWPORT_QUERY);
+  const collapseRightRail = useCollapseRightRail();
+  const showDesktopRail = isXl && !collapseRightRail;
   usePendingRoadmapRefresh(lessonPath(topic.slug, lesson.slug));
   const { ownerStatusById, setOptimisticStatus, invalidateStatuses } =
     useTopicOwnerStatuses(topic.slug, canWrite, lesson.id);
@@ -570,9 +619,10 @@ export function LessonEditorialReader({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={rendered.headings}
-        railFooter={canWrite && isXl ? desktopRailControls : undefined}
+        railFooter={canWrite && showDesktopRail ? desktopRailControls : undefined}
+        collapseRightRail={collapseRightRail}
         sidebarHeaderAction={
-          canWrite && !isXl
+          canWrite && !showDesktopRail
             ? renderCompactOwnerMenu("size-9 border border-border/70 bg-card")
             : undefined
         }
@@ -654,8 +704,8 @@ export function LessonEditorialReader({
               )}
             </nav>
 
-            {canWrite && !isXl && (
-              <div className="xl:hidden">
+            {canWrite && !showDesktopRail && (
+              <div className={collapseRightRail ? undefined : "xl:hidden"}>
                 {renderCompactOwnerMenu("size-8")}
               </div>
             )}
@@ -688,43 +738,17 @@ export function LessonEditorialReader({
               dangerouslySetInnerHTML={{ __html: rendered.html }}
             />
           ) : (
-            <div className="rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                {canWrite
-                  ? "Chưa có nội dung chi tiết."
-                  : "Nội dung cho bài học này đang được cập nhật."}
-              </p>
-              {canWrite && (
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onMouseEnter={preloadLessonContentEditor}
-                    onFocus={preloadLessonContentEditor}
-                    onClick={() => {
-                      setDraftSeed(DEFAULT_LESSON_TEMPLATE_HTML);
-                      setIsContentOpen(true);
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
-                  >
-                    <ListTree className="size-4" />
-                    <span>Soạn từ mẫu chuẩn</span>
-                  </button>
-                  <button
-                    type="button"
-                    onMouseEnter={preloadLessonContentEditor}
-                    onFocus={preloadLessonContentEditor}
-                    onClick={() => {
-                      setDraftSeed(undefined);
-                      setIsContentOpen(true);
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-[border-color,background-color,transform] duration-150 hover:border-foreground/30 hover:bg-muted active:scale-[0.98] cursor-pointer"
-                  >
-                    <Edit3 className="size-4" />
-                    <span>Soạn tự do</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <EmptyLessonPlaceholder
+              canWrite={canWrite}
+              onStartTemplate={() => {
+                setDraftSeed(DEFAULT_LESSON_TEMPLATE_HTML);
+                setIsContentOpen(true);
+              }}
+              onStartBlank={() => {
+                setDraftSeed(undefined);
+                setIsContentOpen(true);
+              }}
+            />
           )}
           {canWrite && (
             <>

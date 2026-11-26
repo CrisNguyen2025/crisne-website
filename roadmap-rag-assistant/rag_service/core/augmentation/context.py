@@ -121,34 +121,73 @@ def format_history(turns: List[Turn], profile: DomainProfile) -> str:
     return f"{profile.history_note}\n<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
 
 
-def build_prompt(
+def _has_document_provenance(req: GenerationRequest, docs: Sequence[ContextDocument]) -> bool:
+    return bool(req.lesson_provenances) and is_owner() and any(req.lesson_provenances.get(d.id) for d in docs)
+
+
+def _build_system_block(
     req: GenerationRequest,
     profile: DomainProfile,
-    history: HistoryStore = history_store,
-    documents: Optional[List[ContextDocument]] = None,
+    *,
+    has_memory: bool,
+    has_provenance: bool,
 ) -> str:
     persona, rules = (
         (profile.persona_rag, profile.rules_rag)
         if req.mode == "rag"
         else (profile.persona_chitchat, profile.rules_chitchat)
     )
-    # Fixed text first, per-request data after: the prefix stays the same from one request to the next
-    system = "\n".join(s.strip("\n") for s in (persona, rules, profile.suggestion_format) if s)
-    parts = [f"<system>\n{system}\n</system>"]
-    if req.owner_memories:
-        mem_block, _ = format_owner_memory(
+    sections = [persona, rules]
+    if has_memory and profile.rules_owner_memory:
+        sections.append(profile.rules_owner_memory)
+    if req.mode == "rag" and has_provenance and profile.rules_provenance:
+        sections.append(profile.rules_provenance)
+    if profile.suggestion_format and (
+        profile.should_include_suggestion_format is None or profile.should_include_suggestion_format(req.query)
+    ):
+        sections.append(profile.suggestion_format)
+    # Fixed base text first, conditional addenda after: prefix stays stable from turn to turn
+    system = "\n".join(s.strip("\n") for s in sections if s)
+    return f"<system>\n{system}\n</system>"
+
+
+def synthesize_prompt(
+    req: GenerationRequest,
+    profile: DomainProfile,
+    history: HistoryStore = history_store,
+    documents: Optional[List[ContextDocument]] = None,
+) -> Tuple[str, List[str]]:
+    docs: List[ContextDocument] = []
+    if req.mode == "rag":
+        docs = reorder_documents(select_documents(req, profile)) if documents is None else documents
+    mem_block, selected_memory_ids = (
+        format_owner_memory(
             req.owner_memories,
             note=profile.memory_note,
             scope=req.memory_scope,
             max_items=profile.memory_max_items,
             max_chars=profile.memory_total_chars,
         )
-        if mem_block:
-            parts.append(mem_block)
+        if req.owner_memories
+        else ("", [])
+    )
+    has_provenance = req.mode == "rag" and _has_document_provenance(req, docs)
+    parts = [_build_system_block(req, profile, has_memory=bool(mem_block), has_provenance=has_provenance)]
+    if mem_block:
+        parts.append(mem_block)
     if hist := format_history(history.get_recent(req.thread_id, profile.history_turns * 2), profile):
         parts.append(hist)
     if req.mode == "rag":
-        docs = reorder_documents(select_documents(req, profile)) if documents is None else documents
         parts.append(format_documents(docs))
     parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
-    return "\n\n".join(parts)
+    return "\n\n".join(parts), selected_memory_ids
+
+
+def build_prompt(
+    req: GenerationRequest,
+    profile: DomainProfile,
+    history: HistoryStore = history_store,
+    documents: Optional[List[ContextDocument]] = None,
+) -> str:
+    prompt, _ = synthesize_prompt(req, profile, history=history, documents=documents)
+    return prompt

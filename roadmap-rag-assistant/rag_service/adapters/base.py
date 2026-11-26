@@ -47,9 +47,14 @@ class BaseAdapter(Protocol):
         title: str,
         description: str = "",
         content: str = "",
+        status: str | None = None,
     ) -> dict:
         """Add a lesson to a topic, into `section` (or outside any section). Raises DuplicateEntityError
         when the topic already has a lesson with that title."""
+        ...
+
+    async def create_relation(self, lesson_id: str, target_lesson_id: str) -> dict:
+        """Link two lessons with a symmetric 'relates' relation."""
         ...
 
     async def update_item(self, item_id: str, **kwargs: object) -> dict:

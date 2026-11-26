@@ -6,10 +6,14 @@ and write checks `is_owner()` first so Visitors never trigger a request or recei
 
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 import logging
+import re
 import time
+import unicodedata
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, List, Optional, Sequence, Tuple
 
 import httpx
@@ -52,10 +56,27 @@ class OwnerMemoryItem:
     source: str = "explicit"
     status: str = "active"
     replaces_memory_id: Optional[str] = None
+    last_used_at: Optional[str] = None
 
 
 def _escape_tag(text: str) -> str:
     return text.replace("</", "<\\/")
+
+
+def _memory_tokens(text: str) -> set[str]:
+    decomposed = unicodedata.normalize("NFKD", (text or "").replace("đ", "d").replace("Đ", "D"))
+    flat = "".join(ch for ch in decomposed if not unicodedata.combining(ch)).lower()
+    return {tok for tok in re.findall(r"[a-z0-9]+", flat) if len(tok) >= 2}
+
+
+def _last_used_order(item: OwnerMemoryItem) -> int:
+    if not item.last_used_at:
+        return 0
+    try:
+        parsed = datetime.fromisoformat(item.last_used_at.replace("Z", "+00:00"))
+        return -int(parsed.timestamp() * 1000)
+    except ValueError:
+        return 0
 
 
 def _item_from_dict(raw: dict[str, Any], scope_field: str = "scope") -> Optional[OwnerMemoryItem]:
@@ -72,6 +93,8 @@ def _item_from_dict(raw: dict[str, Any], scope_field: str = "scope") -> Optional
     status = str(raw.get("status") or "active").strip()
     raw_replaces = raw.get("replacesMemoryId") or raw.get("replaces_memory_id")
     replaces_id = str(raw_replaces).strip() if isinstance(raw_replaces, str) and raw_replaces.strip() else None
+    raw_last_used = raw.get("lastUsedAt") or raw.get("last_used_at")
+    last_used_at = str(raw_last_used).strip() if isinstance(raw_last_used, str) and raw_last_used.strip() else None
     return OwnerMemoryItem(
         id=mid,
         kind=kind,
@@ -80,17 +103,40 @@ def _item_from_dict(raw: dict[str, Any], scope_field: str = "scope") -> Optional
         source=source,
         status=status,
         replaces_memory_id=replaces_id,
+        last_used_at=last_used_at,
     )
+
+
+def _rank_memory_item(
+    item: OwnerMemoryItem,
+    *,
+    wanted: Optional[str],
+    query_tokens: set[str],
+) -> tuple[int, int, int, int, int]:
+    scope_rank = 0 if (wanted and item.scope == wanted) else 1
+    priority = KIND_PRIORITY.get(item.kind, 99)
+    recency = _last_used_order(item)
+    if not query_tokens:
+        return (scope_rank, priority, recency, 0, 0)
+    overlap = len(query_tokens & _memory_tokens(item.content))
+    if item.kind == "preference":
+        tier = 0
+    elif overlap > 0:
+        tier = 1
+    else:
+        tier = 2
+    return (tier, -overlap, scope_rank, priority, recency)
 
 
 def select_owner_memories(
     items: Sequence[OwnerMemoryItem],
     *,
     scope: Optional[str] = None,
+    query: Optional[str] = None,
     max_items: int = DEFAULT_MAX_ITEMS,
     max_chars: int = DEFAULT_MAX_CHARS,
 ) -> List[OwnerMemoryItem]:
-    """Filter active memories applicable to `scope` within strict item and character caps."""
+    """Filter active memories applicable to `scope` (and optional `query`) within item and char caps."""
     if not items or max_items <= 0 or max_chars <= 0:
         return []
 
@@ -103,13 +149,8 @@ def select_owner_memories(
     if not eligible:
         return []
 
-    # Scoped items matching the active scope appear before global items of the same priority
-    eligible.sort(
-        key=lambda m: (
-            0 if (wanted and m.scope == wanted) else 1,
-            KIND_PRIORITY.get(m.kind, 99),
-        )
-    )
+    q_tokens = _memory_tokens(query) if query and query.strip() else set()
+    eligible.sort(key=lambda m: _rank_memory_item(m, wanted=wanted, query_tokens=q_tokens))
 
     selected: List[OwnerMemoryItem] = []
     total_chars = 0
@@ -222,6 +263,19 @@ class OwnerMemoryApi:
         resp.raise_for_status()
         return True
 
+    async def touch_memories(self, memory_ids: Sequence[str]) -> bool:
+        ids = [mid.strip() for mid in memory_ids if isinstance(mid, str) and mid.strip()]
+        if not ids:
+            return False
+        try:
+            async with self._client(timeout=5.0) as client:
+                resp = await client.patch("/api/v1/memories", json={"ids": ids[:50]})
+            resp.raise_for_status()
+            return True
+        except (httpx.HTTPError, ValueError) as exc:
+            log.debug("owner_memory: failed to touch lastUsedAt (%s)", exc)
+            return False
+
 
 class OwnerMemoryStore:
     """Owner-only memory store with short TTL RAM cache (API-backed or in-memory for tests)."""
@@ -233,6 +287,7 @@ class OwnerMemoryStore:
         self._cached_at: float = 0.0
         # Local fallback store used when api is None (tests / offline mode)
         self._local: List[OwnerMemoryItem] = []
+        self._touch_tasks: set[asyncio.Task[Any]] = set()
 
     def invalidate(self) -> None:
         self._cache = None
@@ -247,11 +302,53 @@ class OwnerMemoryStore:
         self._local.clear()
         self.invalidate()
 
-    async def list_active(self, scope: Optional[str] = None) -> List[OwnerMemoryItem]:
+    def _stamp_local_touch(self, memory_ids: Sequence[str], stamped_at: str) -> None:
+        id_set = set(memory_ids)
+        if not id_set:
+            return
+        if self._local:
+            self._local = [
+                replace(item, last_used_at=stamped_at) if item.id in id_set else item
+                for item in self._local
+            ]
+        if self._cache is not None:
+            self._cache = [
+                replace(item, last_used_at=stamped_at) if item.id in id_set else item
+                for item in self._cache
+            ]
+
+    def _schedule_touch(self, memory_ids: Sequence[str]) -> Optional[str]:
+        if not memory_ids or not is_owner():
+            return None
+        stamped_at = datetime.now(timezone.utc).isoformat()
+        self._stamp_local_touch(memory_ids, stamped_at)
+        if self._api is not None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                return stamped_at
+            task = loop.create_task(self._api.touch_memories(list(memory_ids)))
+            self._touch_tasks.add(task)
+            task.add_done_callback(self._touch_tasks.discard)
+        return stamped_at
+
+    async def flush_touches(self) -> None:
+        if self._touch_tasks:
+            await asyncio.gather(*list(self._touch_tasks), return_exceptions=True)
+
+    async def list_active(
+        self, scope: Optional[str] = None, *, query: Optional[str] = None
+    ) -> List[OwnerMemoryItem]:
         """Return active memories for the Owner only; always empty for Visitors."""
         if not is_owner():
             return []
         items = await self._load_active()
+        if query and query.strip():
+            selected = select_owner_memories(items, scope=scope, query=query)
+            stamped_at = self._schedule_touch([m.id for m in selected])
+            if stamped_at is not None:
+                return [replace(m, last_used_at=stamped_at) for m in selected]
+            return selected
         if not scope:
             return list(items)
         wanted = scope.strip().lower()
@@ -324,9 +421,10 @@ class OwnerMemoryStore:
             status=status,
             replaces_memory_id=clean_replaces,
         )
-        self.invalidate()
         if created_item is None:
             raise RuntimeError("Failed to create OwnerMemory via API.")
+        if created_item.status == "active":
+            self.invalidate()
         return created_item
 
     async def archive(self, memory_id: str) -> bool:

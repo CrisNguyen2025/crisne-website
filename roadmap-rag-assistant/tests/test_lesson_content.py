@@ -311,3 +311,92 @@ def test_aci_replaces_template_placeholder_only_content(mock_adapter):
     _turn(agent, "ok", thread)
     _, saved_html = mock_adapter.update_item_content.await_args.args
     assert saved_html == "<h2>Tổng quan &amp; Bài toán</h2><p>Nội dung thật.</p>"
+
+
+def test_concept_promotion_parser_and_no_memory_leakage(mock_adapter):
+    from rag_service.core.memory import owner_memory_store
+    from rag_service.domains.roadmap.lesson_content import parse_concept_promotion_request
+
+    req = parse_concept_promotion_request(
+        "lưu khái niệm 'Speculative Decoding' thành bài học trong topic Frontend: tăng tốc token decoding"
+    )
+    assert req is not None
+    assert req.concept == "Speculative Decoding"
+    assert req.topic == "Frontend"
+    assert "tăng tốc" in req.summary
+
+    assert parse_concept_promotion_request("lưu vào bộ nhớ: mình thích dùng TypeScript") is None
+    assert parse_concept_promotion_request("thêm bài Docker vào topic DevOps") is None
+    assert parse_concept_promotion_request("cách lưu khái niệm thành bài học?") is None
+    assert parse_concept_promotion_request("thêm nội dung chi tiết cho bài Caching") is None
+
+    set_actor("owner")
+    _setup(mock_adapter)
+    mock_adapter.create_item.return_value = {
+        "id": "lesson-new",
+        "slug": "speculative-decoding",
+        "title": "Speculative Decoding",
+        "section": None,
+        "status": "target",
+    }
+
+    async def seed_memory():
+        await owner_memory_store.create(
+            kind="preference",
+            content="SECRET_OWNER_FACT thích ví dụ bằng ngôn ngữ Go thay vì Python",
+            source="manual",
+            status="active",
+        )
+
+    asyncio.run(seed_memory())
+
+    llm = FakeLLM("## Tổng quan & Bài toán\n\nGiải thích Speculative Decoding.")
+    agent, thread = NextGenRoadmapAgent(llm_model=llm), f"s-{uuid.uuid4()}"
+
+    preview_text, preview_events = _turn(
+        agent,
+        "lưu khái niệm Speculative Decoding thành bài học trong topic Frontend",
+        thread,
+        context={"roadmapSlug": "frontend"},
+    )
+    assert any(ev.get("type") == "action_preview" for ev in preview_events)
+    assert "Mục tiêu (target)" in preview_text
+    assert session_store.get_or_create(thread).pending_concept_promotion is not None
+    mock_adapter.create_item.assert_not_awaited()
+    assert llm.prompts and "SECRET_OWNER_FACT" not in llm.prompts[0]
+    assert "<owner_memory>" not in llm.prompts[0]
+    assert not any(ev.get("type") == "tool_start" and ev.get("name") == "promote_concept_to_lesson" for ev in preview_events)
+
+    confirm_text, confirm_events = _turn(agent, "ok", thread)
+    assert "Speculative Decoding" in confirm_text
+    tool_starts = [ev.get("name") for ev in confirm_events if ev.get("type") == "tool_start"]
+    assert "promote_concept_to_lesson" in tool_starts
+    mock_adapter.create_item.assert_awaited_once()
+    assert mock_adapter.create_item.await_args.kwargs["status"] == "target"
+    created_html = mock_adapter.create_item.await_args.kwargs.get("content", "")
+    assert "<h2>Tổng quan &amp; Bài toán</h2>" in created_html
+
+
+def test_concept_promotion_offline_summary_draft_works_without_llm(mock_adapter):
+    set_actor("owner")
+    _setup(mock_adapter)
+    mock_adapter.create_item.return_value = {
+        "id": "lesson-offline",
+        "slug": "prompt-caching",
+        "title": "Prompt Caching",
+        "section": None,
+        "status": "target",
+    }
+    agent, thread = NextGenRoadmapAgent(llm_model=None), f"s-{uuid.uuid4()}"
+    preview_text, preview_events = _turn(
+        agent,
+        "chuyển khái niệm Prompt Caching thành bài học: Tái sử dụng KV prefix giữa nhiều lượt prompt.",
+        thread,
+        context={"roadmapSlug": "frontend"},
+    )
+    assert any(ev.get("type") == "action_preview" for ev in preview_events)
+    assert "KV prefix" in preview_text
+    _turn(agent, "ok", thread)
+    created_html = mock_adapter.create_item.await_args.kwargs.get("content", "")
+    assert "<h2>Tổng quan &amp; Bài toán</h2>" in created_html
+    assert "KV prefix" in created_html

@@ -76,6 +76,54 @@ _TOPIC_TAIL_RE = re.compile(
 _QUOTED_RE = re.compile(r"[\"“”'‘’«»](.+?)[\"“”'‘’«»]")
 _POINTING_LESSONS = frozenset({"", "nay", "do", "day", "kia", "hien tai", "vua tao", "vua them", "no", "this", "it"})
 _TAG_RE = re.compile(r"<[^>]+>")
+_PERSONAL_GAP_RE = re.compile(
+    r"\b(?:hay\s+nham|thuong\s+quen|de\s+quen|kho\s+nho|nham\s+lan|quen\s+mat|hay\s+quen|chua\s+nho\s+ky)\b"
+)
+_GAP_ENRICH_RE = re.compile(
+    r"\b(?:thieu\s+(?:phan|vi\s+du|muc|noi\s+dung)|bo\s+sung|them\s+(?:phan|vi\s+du)|trong\s+bai\s+nay)\b"
+)
+_GAP_CONCEPT_Cue_RE = re.compile(
+    r"\b(?:khai\s+niem|prerequisite|nen\s+hoc\s+truoc|bai\s+moi|chua\s+(?:hieu|nam|biet)(?:\s+ro)?\s+khai\s+niem)\b"
+)
+_GAP_CONCEPT_PREFIX_RE = re.compile(
+    r"^(?:chua\s+(?:hieu|nam|biet)(?:\s+(?:ro|ky))?(?:\s+(?:khai\s+niem|kien\s+thuc|ve))?"
+    r"|thieu(?:\s+(?:phan|kien\s+thuc|vi\s+du|muc))?(?:\s+(?:ve|cho))?"
+    r"|can\s+(?:bo\s+sung|on\s+them)(?:\s+(?:phan|ve))?"
+    r"|prerequisite(?:\s+concept)?\s*:?)\s+",
+    re.IGNORECASE,
+)
+
+
+def classify_quiz_gaps(gaps: Sequence[str]) -> tuple[list[str], list[str]]:
+    """Split quiz gaps into personal learning_note cues and conceptual lesson gaps."""
+    personal_notes: list[str] = []
+    concept_gaps: list[str] = []
+    for raw in gaps:
+        text = (raw or "").strip()
+        if not text:
+            continue
+        flat = fold(normalize_vietnamese(text).lower())
+        if _PERSONAL_GAP_RE.search(flat):
+            personal_notes.append(text)
+        else:
+            concept_gaps.append(text)
+    return personal_notes, concept_gaps
+
+
+def _extract_quiz_concept_gap(concept_gaps: Sequence[str], lesson_title: str) -> tuple[str, bool, str]:
+    summary = "; ".join(g.strip() for g in concept_gaps[:2] if g.strip())
+    first = concept_gaps[0].strip() if concept_gaps else ""
+    flat = fold(normalize_vietnamese(first).lower())
+    stripped = _GAP_CONCEPT_PREFIX_RE.sub("", first).strip(" .:-–\"“”'‘’")
+    candidate = stripped if stripped and len(stripped.split()) <= 8 else ""
+    wants_new_concept = (
+        bool(candidate)
+        and _GAP_ENRICH_RE.search(flat) is None
+        and _GAP_CONCEPT_Cue_RE.search(flat) is not None
+        and fold(candidate) != fold(lesson_title)
+    )
+    concept = candidate if wants_new_concept else (lesson_title or first)
+    return concept, wants_new_concept, summary
 
 
 @dataclass(frozen=True)
@@ -363,7 +411,7 @@ class QuizCommands(AgentHostMixin):
 
     def _prepare_quiz_status_preview(self, quiz: dict, session_id: str, session_ctx) -> tuple[str, dict]:
         curr_status = quiz.get("lesson_status") or "known"
-        session_ctx.clear_pending()
+        session_ctx.clear_pending(keep=("pending_concept_promotion",))
         if curr_status != "known":
             old_label = LESSON_STATUS_LABEL.get(curr_status, curr_status)
             session_ctx.pending_status_change = {
@@ -397,6 +445,44 @@ class QuizCommands(AgentHostMixin):
             )
         return preview_text, {"type": "action_preview", "action_id": session_id, "preview": preview_text}
 
+    async def _prepare_quiz_concept_proposal(
+        self, quiz: dict, concept_gaps: list[str], session_ctx
+    ) -> Optional[dict]:
+        if not concept_gaps or not hasattr(self, "build_concept_promotion_proposal"):
+            return None
+        lesson_title = str(quiz.get("lesson_title") or "")
+        topic_slug = quiz.get("topic_slug")
+        concept, wants_new_concept, summary = _extract_quiz_concept_gap(concept_gaps, lesson_title)
+        preferred_lesson: Optional[dict] = None
+        if not wants_new_concept:
+            preferred_lesson = {
+                "id": quiz.get("lesson_id"),
+                "title": lesson_title,
+                "section": quiz.get("section") or "",
+                "content": quiz.get("excerpt") or "",
+            }
+            if topic_slug:
+                try:
+                    topic_detail = await get_adapter().get_topic(topic_slug) or {}
+                    live = next(
+                        (i for i in topic_detail.get("items") or [] if i.get("id") == quiz.get("lesson_id")),
+                        None,
+                    )
+                    if live is not None:
+                        preferred_lesson = live
+                except Exception as exc:
+                    log.debug("quiz_commands: failed to fetch target lesson (%s)", exc)
+        proposal, _ = await self.build_concept_promotion_proposal(
+            concept=concept,
+            summary=summary,
+            preferred_topic_slug=topic_slug,
+            preferred_lesson=preferred_lesson,
+            source="quiz_gap",
+            session_ctx=session_ctx,
+            status="target",
+        )
+        return proposal
+
     async def _finish_active_quiz_turn(
         self,
         quiz: dict,
@@ -411,22 +497,37 @@ class QuizCommands(AgentHostMixin):
         passed_count = sum(1 for r in results if r.get("passed"))
         pass_threshold = max(1, math.ceil(total * 2 / 3))
         gaps = [r["gap"] for r in results if r.get("gap")]
+        personal_notes, concept_gaps = classify_quiz_gaps(gaps)
         reply_parts.append(f"\n---\n🏁 **Hoàn thành ôn tập bài `{quiz['lesson_title']}`:** **{passed_count}/{total}** câu đạt.")
 
-        if await self._maybe_suggest_quiz_gap_note(quiz, gaps):
-            reply_parts.append(
-                "🧠 Mình đã tạo 1 gợi ý ghi nhớ (`learning_note`) vào tab **Chờ duyệt** trong mục **Bộ nhớ** để bạn duyệt lưu."
-            )
+        if personal_notes:
+            if await self._maybe_suggest_quiz_gap_note(quiz, personal_notes):
+                reply_parts.append(
+                    "🧠 Mình đã tạo 1 gợi ý ghi nhớ (`learning_note`) vào tab **Chờ duyệt** trong mục **Bộ nhớ** để bạn duyệt lưu."
+                )
+            else:
+                concept_gaps = [*concept_gaps, *personal_notes]
+
+        proposal = await self._prepare_quiz_concept_proposal(quiz, concept_gaps, session_ctx)
+        if proposal is not None:
+            session_ctx.pending_concept_promotion = proposal
 
         preview_payload: Optional[dict] = None
         if passed_count >= pass_threshold:
             preview_text, preview_payload = self._prepare_quiz_status_preview(quiz, session_id, session_ctx)
             reply_parts.append("\n" + preview_text)
+            if proposal is not None:
+                reply_parts.append(
+                    "\n💡 Mình cũng đã chuẩn bị đề xuất cập nhật/lưu kiến thức cho phần còn thiếu — sẽ hiện bản xem trước ngay sau khi bạn xác nhận trạng thái ở trên."
+                )
 
         if preview_payload:
             yield preview_payload
         async for ev in self._stream_text("\n".join(reply_parts), delay):
             yield ev
+        if not preview_payload and proposal is not None and hasattr(self, "emit_concept_promotion_preview"):
+            async for ev in self.emit_concept_promotion_preview(proposal, session_ctx, delay, prefix_newline=True):
+                yield ev
 
     async def handle_active_quiz_turn(
         self,

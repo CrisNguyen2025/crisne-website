@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 from pydantic import BaseModel, Field
 
 from rag_service.core.bounded import BoundedStore
@@ -27,6 +27,7 @@ _PENDING_FIELDS = (
     "pending_status_change",
     "pending_lesson_edit",
     "pending_memory_change",
+    "pending_concept_promotion",
     "active_quiz",
 )
 
@@ -54,6 +55,8 @@ class SessionContext(BaseModel):
     pending_lesson_edit: Optional[Dict[str, Any]] = None
     # A previewed Owner Memory create/archive waiting for "ok" (domains/roadmap/memory_commands.py, ADR-0015)
     pending_memory_change: Optional[Dict[str, Any]] = None
+    # A previewed concept promotion (Domain Gap / Quiz gap / chat -> Lesson) waiting for "ok"
+    pending_concept_promotion: Optional[Dict[str, Any]] = None
     # Active Recall quiz session in RAM (domains/roadmap/quiz_commands.py, TTL QUIZ_TTL_SECONDS)
     active_quiz: Optional[Dict[str, Any]] = None
     # The open Topic/Lesson focus was read from Turso (SessionStore.load): once per context
@@ -79,10 +82,11 @@ class SessionContext(BaseModel):
             return None
         return value
 
-    def clear_pending(self, *, keep: Optional[str] = None) -> None:
+    def clear_pending(self, *, keep: Optional[str | Sequence[str]] = None) -> None:
         """Clear every pending confirmation slot except `keep` so a new preview never collides with an old one."""
+        kept = {keep} if isinstance(keep, str) else set(keep or ())
         for field in _PENDING_FIELDS:
-            if field != keep and getattr(self, field) is not None:
+            if field not in kept and getattr(self, field) is not None:
                 setattr(self, field, None)
 
 

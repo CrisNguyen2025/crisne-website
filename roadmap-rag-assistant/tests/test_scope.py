@@ -162,3 +162,73 @@ def test_a_lesson_name_inside_the_message_is_the_roadmap():
     # parts must stay specific: "đánh giá" alone, or a parenthesised abbreviation, is no lesson name
     assert not catalog.mentioned_in("phim này đánh giá thế nào")
     assert not catalog.mentioned_in("bạn có biết thông tin về telegram k")
+
+
+def test_domain_gap_proposes_concept_promotion_preview_for_owner_only(mock_adapter, monkeypatch):
+    from rag_service.auth import current_actor
+    from rag_service.domains.roadmap import agent as agent_module
+    from rag_service.state import session_store
+    from rag_service.steps import step_event
+
+    async def gap(_text, _engine, embed=None):
+        return ScopeResult(Scope.DOMAIN_GAP, "Speculative Decoding", "in the field, no lesson")
+
+    async def no_match_stream(**kw):
+        reply = kw["deps"].no_match_reply(kw["owner"])
+        yield step_event("answer", "generation", "done", mode="no_match")
+        yield {"type": "token", "delta": reply}
+
+    mock_adapter.list_topics.return_value = [{"id": "t-ai", "slug": "ai-engineering", "title": "AI Engineering"}]
+    mock_adapter.get_topic.return_value = {
+        "id": "t-ai",
+        "slug": "ai-engineering",
+        "title": "AI Engineering",
+        "items": [],
+        "sections": [],
+    }
+    mock_adapter.create_item.return_value = {
+        "id": "lesson-spec",
+        "slug": "speculative-decoding",
+        "title": "Speculative Decoding",
+        "section": None,
+        "status": "target",
+    }
+
+    monkeypatch.setattr(agent_module, "classify_for_routing", gap)
+    monkeypatch.setattr(agent_module, "answer_from_sources", no_match_stream)
+    monkeypatch.setattr(agent_module.rag_engine, "is_empty", lambda: False)
+
+    async def run_turn(actor: str, text: str, tid: str) -> list[dict]:
+        tok = current_actor.set(actor)
+        try:
+            bot = NextGenRoadmapAgent(llm_model=None)
+            return [
+                ev
+                async for ev in bot.astream_events(
+                    {"messages": [{"role": "user", "content": text}], "fast": True},
+                    config={"configurable": {"thread_id": tid}},
+                )
+            ]
+        finally:
+            current_actor.reset(tok)
+
+    visitor_events = asyncio.run(run_turn("visitor", "Speculative Decoding là gì", "gap-visitor"))
+    assert not any(ev.get("type") == "action_preview" for ev in visitor_events)
+    assert session_store.get_or_create("gap-visitor").pending_concept_promotion is None
+    mock_adapter.create_item.assert_not_awaited()
+
+    owner_events = asyncio.run(run_turn("owner", "Speculative Decoding là gì", "gap-owner"))
+    assert any(ev.get("type") == "action_preview" for ev in owner_events)
+    promo = session_store.get_or_create("gap-owner").pending_concept_promotion
+    assert promo is not None
+    assert promo["source"] == "domain_gap"
+    assert promo["status"] == "target"
+    assert promo["title"] == "Speculative Decoding"
+    mock_adapter.create_item.assert_not_awaited()
+
+    confirm_events = asyncio.run(run_turn("owner", "ok", "gap-owner"))
+    assert any(
+        ev.get("type") == "tool_start" and ev.get("name") == "promote_concept_to_lesson" for ev in confirm_events
+    )
+    mock_adapter.create_item.assert_awaited_once()
+    assert mock_adapter.create_item.await_args.kwargs["status"] == "target"

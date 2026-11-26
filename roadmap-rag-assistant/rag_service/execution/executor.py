@@ -12,6 +12,7 @@ import asyncio
 from typing import Any, Optional, Tuple
 
 from rag_service.adapters.errors import DuplicateEntityError
+from rag_service.config import settings
 from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
@@ -22,10 +23,20 @@ from rag_service.tools import get_adapter
 _SYNC_TASKS: set[asyncio.Task[Any]] = set()
 
 
-def _trigger_background_sync() -> None:
+def schedule_local_rag_sync() -> None:
+    """Trigger an in-process RAG rebuild when writes bypass Next.js (SQLite mode).
+
+    In HTTP mode, Next.js write routes call notifyRoadmapChanged() -> POST /internal/reindex.
+    """
+    if settings.rag_adapter_mode == "http":
+        return
     task = asyncio.create_task(rag_engine.sync_live_database())
     _SYNC_TASKS.add(task)
     task.add_done_callback(_SYNC_TASKS.discard)
+
+
+def _trigger_background_sync() -> None:
+    schedule_local_rag_sync()
 
 
 def _skipped_message(skipped: list[DuplicateEntityError]) -> str:
@@ -52,6 +63,9 @@ class ActionExecutor:
         action: StructuredRoadmapAction,
         session_id: str,
         changes: Optional[ChangeSet] = None,
+        *,
+        initial_content: str = "",
+        default_status: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Execute action, update state, and sync the RAG index.
 
@@ -60,7 +74,14 @@ class ActionExecutor:
         if changes is None:
             changes = ChangeSet.of(action)
         try:
-            return await self._execute_inner(self.adapter, action, session_id, changes)
+            return await self._execute_inner(
+                self.adapter,
+                action,
+                session_id,
+                changes,
+                initial_content=initial_content,
+                default_status=default_status,
+            )
         except Exception as exc:
             return False, f"❌ Lỗi khi thực thi: {exc}"
 
@@ -122,10 +143,18 @@ class ActionExecutor:
         session_id: str,
         changes: ChangeSet,
         topic_slug: str,
+        *,
+        initial_content: str = "",
+        default_status: Optional[str] = None,
     ) -> Tuple[bool, str]:
         created_items: list[str] = []
         created_records: list[tuple[str, str, Optional[str]]] = []
         skipped: list[DuplicateEntityError] = []
+        extra_kwargs: dict[str, Any] = {}
+        if initial_content:
+            extra_kwargs["content"] = initial_content
+        if default_status:
+            extra_kwargs["status"] = default_status
         for ent in action.entities:
             try:
                 res = await adapter.create_item(
@@ -133,6 +162,7 @@ class ActionExecutor:
                     section=ent.section,
                     title=ent.title,
                     description=ent.description or "",
+                    **extra_kwargs,
                 )
             except DuplicateEntityError as dup:
                 skipped.append(dup)
@@ -189,6 +219,9 @@ class ActionExecutor:
         action: StructuredRoadmapAction,
         session_id: str,
         changes: ChangeSet,
+        *,
+        initial_content: str = "",
+        default_status: Optional[str] = None,
     ) -> Tuple[bool, str]:
         level = action.entity_level
         act_type = action.action
@@ -204,7 +237,15 @@ class ActionExecutor:
             if not topic_slug:
                 return False, "❌ Không tìm thấy topic đích để thêm bài học. Hãy nêu rõ tên topic."
             if act_type == ActionType.CREATE:
-                return await self._create_items(adapter, action, session_id, changes, topic_slug)
+                return await self._create_items(
+                    adapter,
+                    action,
+                    session_id,
+                    changes,
+                    topic_slug,
+                    initial_content=initial_content,
+                    default_status=default_status,
+                )
             if act_type == ActionType.DELETE:
                 return await self._delete_item(adapter, action, session_id, changes)
 

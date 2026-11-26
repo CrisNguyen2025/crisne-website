@@ -9,15 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import html as html_lib
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass
-from typing import AsyncGenerator, Literal, Optional
+from typing import Any, AsyncGenerator, Literal, Optional, Sequence
+
+log = logging.getLogger(__name__)
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
+from rag_service.domains.roadmap import linking_advisor
 from rag_service.domains.roadmap.host import AgentHostMixin
 from rag_service.domains.roadmap.retrieval.relevance import fold
-from rag_service.domains.roadmap.router.grounding import example_blocks
+from rag_service.domains.roadmap.router.grounding import example_blocks, format_concept_promotion_preview
 from rag_service.tools import get_adapter
 from rag_service.tools.topic_resolver import resolve_topic, topic_named_in_message
 
@@ -86,6 +90,33 @@ class ContentRequest:
     target_h2: Optional[str] = None  # specific H2 heading to fill, when requested
 
 
+@dataclass(frozen=True)
+class ConceptPromotionRequest:
+    concept: str
+    summary: str = ""
+    topic: Optional[str] = None
+
+
+_CONCEPT_PROMOTE_NAMED_RE = re.compile(
+    r"^\s*(?:hay\s+|giup\s+(?:minh|toi|em)\s+|vui\s+long\s+)?"
+    r"(?:(?:luu|chuyen|them|bo\s+sung|tao)\s+(?:khai\s+niem|kien\s+thuc|chu\s+de)\b"
+    r"|promote(?:\s+concept)?\b|save\s+concept\b)(?P<rest>.*)$"
+)
+_CONCEPT_PROMOTE_DIRECT_RE = re.compile(
+    r"^\s*(?:hay\s+|giup\s+(?:minh|toi|em)\s+|vui\s+long\s+)?"
+    r"(?:luu|chuyen)\s+(?:noi\s+dung\s+)?(?P<obj>.+?)\s+"
+    r"(?:thanh\s+bai(?:\s+hoc)?|vao\s+(?:roadmap|lo\s+trinh|kho\s+kien\s+thuc))(?P<rest>.*)$"
+)
+_CONCEPT_QUESTION_START_RE = re.compile(r"^\s*(?:lam\s+sao|cach|huong\s+dan|co\s+the|tai\s+sao|vi\s+sao|how\s+to)\b")
+_CONCEPT_TARGET_TAIL_RE = re.compile(
+    r"\s+(?:thanh\s+bai(?:\s+hoc)?|vao\s+(?:roadmap|lo\s+trinh|kho\s+kien\s+thuc)|to\s+(?:a\s+)?lesson|as\s+(?:a\s+)?lesson)\b",
+    re.IGNORECASE,
+)
+_CONCEPT_TOPIC_TAIL_RE = re.compile(
+    r"\s+(?:trong|vao|o|thuoc|cua|in)\s+(?:topic\s+|chu\s+de\s+|lo\s+trinh\s+)?(?P<topic>.+)$"
+)
+
+
 def _original_span(text: str, folded_start: int, folded_end: int) -> str:
     """The original text for a span of fold(text): fold keeps one character per character except marks."""
     out, i = [], 0
@@ -133,6 +164,76 @@ def parse_content_request(text: str) -> Optional[ContentRequest]:
     rest_original = _original_span(stripped, m.start("rest"), m.end("rest"))
     lesson, topic = _extract_lesson_and_topic(rest_original)
     return ContentRequest(lesson=lesson, topic=topic, target_h2=None)
+
+
+def _split_concept_summary(text: str) -> tuple[str, str]:
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if not lines:
+        return "", ""
+    head = lines[0]
+    summary_lines = lines[1:]
+    if ":" in head:
+        left, right = head.split(":", 1)
+        left_clean = left.strip(" .-\"“”'‘’")
+        right_clean = right.strip()
+        if left_clean and right_clean:
+            head = left_clean
+            summary_lines = [right_clean, *summary_lines]
+        elif not left_clean and right_clean:
+            head = right_clean
+    return head, "\n".join(summary_lines).strip()
+
+
+def _strip_folded_suffix(text: str, pattern: re.Pattern[str]) -> str:
+    if m := pattern.search(fold(text)):
+        return _original_span(text, 0, m.start()).strip()
+    return text.strip()
+
+
+def _clean_concept_head_and_topic(raw_head: str, extra_tail: str = "") -> tuple[str, Optional[str]]:
+    combined = f"{raw_head.strip()} {extra_tail.strip()}".strip()
+    topic: Optional[str] = None
+    if t := _CONCEPT_TOPIC_TAIL_RE.search(fold(combined)):
+        topic = _original_span(combined, t.start("topic"), t.end("topic")).strip(" .?!\"“”'‘’") or None
+        combined = _original_span(combined, 0, t.start()).strip()
+    combined = _strip_folded_suffix(combined, _CONCEPT_TARGET_TAIL_RE)
+    if t2 := _CONCEPT_TOPIC_TAIL_RE.search(fold(combined)):
+        topic = topic or (_original_span(combined, t2.start("topic"), t2.end("topic")).strip(" .?!\"“”'‘’") or None)
+        combined = _original_span(combined, 0, t2.start()).strip()
+    quoted = _QUOTED.search(combined)
+    concept = quoted.group(1).strip() if quoted else combined.strip(" .?!:\"“”'‘’")
+    return concept, topic
+
+
+def parse_concept_promotion_request(text: str) -> Optional[ConceptPromotionRequest]:
+    """Match explicit requests to promote a chat concept into a Roadmap lesson."""
+    stripped = (text or "").strip()
+    if not stripped or parse_content_request(stripped) is not None:
+        return None
+    flat = fold(stripped)
+    if _CONCEPT_QUESTION_START_RE.search(flat) or re.search(r"\b(?:bo\s+nho|owner\s+memory|memory)\b", flat):
+        return None
+
+    m_named = _CONCEPT_PROMOTE_NAMED_RE.match(flat)
+    m_direct = _CONCEPT_PROMOTE_DIRECT_RE.match(flat) if m_named is None else None
+    if m_named is None and m_direct is None:
+        return None
+
+    if m_named is not None:
+        rest = _original_span(stripped, m_named.start("rest"), m_named.end("rest")).lstrip()
+        head, summary = _split_concept_summary(rest)
+        concept, topic = _clean_concept_head_and_topic(head)
+    elif m_direct is not None:
+        obj = _original_span(stripped, m_direct.start("obj"), m_direct.end("obj"))
+        rest = _original_span(stripped, m_direct.start("rest"), m_direct.end("rest"))
+        rest_head, summary = _split_concept_summary(rest)
+        concept, topic = _clean_concept_head_and_topic(obj, rest_head)
+    else:
+        return None
+
+    if not concept or fold(concept) in _POINTING:
+        return None
+    return ConceptPromotionRequest(concept=concept, summary=summary, topic=topic)
 
 
 def detect_template_kind(text: str) -> TemplateKind:
@@ -451,19 +552,22 @@ class LessonContentCommands(AgentHostMixin):
         template_kind: TemplateKind,
         write_mode: WriteMode,
         target_h2: Optional[str],
+        include_owner_memory: bool = True,
     ) -> tuple[str, str, Optional[str]]:
-        from rag_service.core.memory import format_owner_memory, owner_memory_store
+        owner_memory_block = ""
+        if include_owner_memory:
+            from rag_service.core.memory import format_owner_memory, owner_memory_store
 
-        topic_slug = topic.get("slug")
-        owner_memories = await owner_memory_store.list_active(topic_slug)
-        relevant_memories = [m for m in owner_memories if m.kind in ("preference", "techstack", "learning_note")]
-        owner_memory_block, _ = format_owner_memory(
-            relevant_memories,
-            note="Ngữ cảnh cá nhân của Owner (áp dụng cho ví dụ và phong cách viết, không nhắc lại như lời trò chuyện):",
-            scope=topic_slug,
-            max_items=8,
-            max_chars=800,
-        )
+            topic_slug = topic.get("slug")
+            owner_memories = await owner_memory_store.list_active(topic_slug)
+            relevant_memories = [m for m in owner_memories if m.kind in ("preference", "techstack", "learning_note")]
+            owner_memory_block, _ = format_owner_memory(
+                relevant_memories,
+                note="Ngữ cảnh cá nhân của Owner (áp dụng cho ví dụ và phong cách viết, không nhắc lại như lời trò chuyện):",
+                scope=topic_slug,
+                max_items=8,
+                max_chars=800,
+            )
 
         guard_error: Optional[str] = None
         for attempt in range(2):
@@ -642,3 +746,236 @@ class LessonContentCommands(AgentHostMixin):
         ):
             yield ev
         # The confirmed write runs in commands.handle_pending, the decision point that grants writes
+
+    @staticmethod
+    def build_fallback_concept_draft(
+        concept: str,
+        summary: str = "",
+        *,
+        write_mode: WriteMode = "create_or_replace_empty",
+        target_h2: Optional[str] = None,
+    ) -> tuple[str, str]:
+        heading = (
+            target_h2.strip()
+            if write_mode == "fill_h2_section" and target_h2
+            else (f"Bổ sung: {concept}" if write_mode == "append" else "Tổng quan & Bài toán")
+        )
+        body = (
+            summary.strip()
+            or f"Khái niệm **{concept}** được đề xuất đưa vào lộ trình để hệ thống hóa kiến thức và tài liệu tham chiếu."
+        )
+        markdown = f"## {heading}\n\n{body}"
+        return markdown, markdown_to_html(markdown)
+
+    async def _draft_concept_markdown_and_html(
+        self,
+        *,
+        concept: str,
+        topic_detail: dict,
+        topic_title: str,
+        lesson: dict,
+        summary: str,
+        write_mode: WriteMode,
+        target_h2: Optional[str] = None,
+    ) -> tuple[str, str]:
+        if getattr(self, "llm", None) is not None:
+            request_text = f"Hệ thống hóa khái niệm '{concept}' thành nội dung bài học chuẩn" + (
+                f": {summary}" if summary else ""
+            )
+            markdown, draft_html, _ = await self._generate_validated_draft(
+                topic=topic_detail,
+                topic_title=topic_title,
+                lesson=lesson,
+                content=request_text,
+                template_kind="standard",
+                write_mode=write_mode,
+                target_h2=target_h2,
+                include_owner_memory=False,
+            )
+            if draft_html:
+                return markdown, draft_html
+        return self.build_fallback_concept_draft(
+            concept, summary, write_mode=write_mode, target_h2=target_h2
+        )
+
+    async def _resolve_promotion_topic(
+        self,
+        *,
+        concept: str,
+        topic_hint: Optional[str],
+        preferred_topic_slug: Optional[str],
+        advice: dict,
+        session_ctx: Any,
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        if topic_hint:
+            found = await resolve_topic(topic_hint)
+            if found.status == "found" and found.slug:
+                return found.slug, found.title or found.slug, None
+            return None, None, f"Mình chưa tìm thấy topic **{topic_hint}** để lưu khái niệm **{concept}**."
+
+        candidate_slug = (
+            advice.get("target_topic_slug")
+            or preferred_topic_slug
+            or getattr(session_ctx, "active_topic_slug", None)
+        )
+        if candidate_slug:
+            return candidate_slug, advice.get("target_topic_title") or candidate_slug, None
+
+        topics = await get_adapter().list_topics()
+        if len(topics) == 1:
+            only = topics[0]
+            return only.get("slug"), only.get("title") or only.get("slug"), None
+        return (
+            None,
+            None,
+            f"Mình chưa biết nên lưu khái niệm **{concept}** vào topic nào. Bạn ghi rõ tên topic giúp mình nhé.",
+        )
+
+    async def build_concept_promotion_proposal(
+        self,
+        *,
+        concept: str,
+        summary: str = "",
+        topic_hint: Optional[str] = None,
+        preferred_topic_slug: Optional[str] = None,
+        preferred_lesson: Optional[dict] = None,
+        write_mode_override: Optional[WriteMode] = None,
+        target_h2: Optional[str] = None,
+        source: str = "explicit",
+        keywords: Sequence[str] = (),
+        session_ctx: Any,
+        status: str = "target",
+    ) -> tuple[Optional[dict], Optional[str]]:
+        """Build a previewable concept-promotion proposal without writing anything."""
+        if not is_owner():
+            return None, OWNER_ONLY_MESSAGE
+
+        advice: dict = {
+            "mode": "create",
+            "target_lesson": None,
+            "target_topic_slug": preferred_topic_slug,
+            "target_topic_title": preferred_topic_slug,
+            "target_section": None,
+            "related_lessons": [],
+        }
+        try:
+            if getattr(linking_advisor.rag_engine, "_is_synced", True):
+                advice = await linking_advisor.advise_concept_promotion(
+                    title=concept,
+                    summary=summary,
+                    keywords=keywords,
+                    preferred_topic_slug=preferred_topic_slug,
+                )
+        except Exception as exc:
+            log.debug("concept_promotion: linking advisor skipped (%s)", exc)
+
+        topic_slug, topic_title, err_msg = await self._resolve_promotion_topic(
+            concept=concept,
+            topic_hint=topic_hint,
+            preferred_topic_slug=preferred_topic_slug,
+            advice=advice,
+            session_ctx=session_ctx,
+        )
+        if err_msg or not topic_slug:
+            return None, err_msg
+
+        topic_detail = await get_adapter().get_topic(topic_slug) or {"slug": topic_slug, "title": topic_title, "items": []}
+        topic_title = str(topic_detail.get("title") or topic_title or topic_slug)
+
+        target_lesson = preferred_lesson
+        if target_lesson is None and advice.get("mode") == "append" and advice.get("target_lesson"):
+            adv_id = advice["target_lesson"].get("lesson_id")
+            target_lesson = next(
+                (i for i in topic_detail.get("items") or [] if i.get("id") == adv_id),
+                None,
+            )
+
+        if target_lesson is not None:
+            mode = "append"
+            write_mode: WriteMode = write_mode_override or ("fill_h2_section" if target_h2 else "append")
+            draft_lesson = target_lesson
+            related = [
+                r for r in advice.get("related_lessons") or [] if r.get("lesson_id") != target_lesson.get("id")
+            ][:3]
+            section = str(target_lesson.get("section") or advice.get("target_section") or "")
+        else:
+            mode = "create"
+            write_mode = "create_or_replace_empty"
+            section = str(advice.get("target_section") or "")
+            draft_lesson = {"title": concept, "section": section, "description": summary, "content": ""}
+            related = list(advice.get("related_lessons") or [])[:3]
+
+        draft_md, draft_html = await self._draft_concept_markdown_and_html(
+            concept=concept,
+            topic_detail=topic_detail,
+            topic_title=topic_title,
+            lesson=draft_lesson,
+            summary=summary,
+            write_mode=write_mode,
+            target_h2=target_h2,
+        )
+        proposal = {
+            "mode": mode,
+            "source": source,
+            "title": concept,
+            "topic": topic_slug,
+            "topic_title": topic_title,
+            "section": section,
+            "item_id": target_lesson.get("id") if target_lesson else None,
+            "target_lesson_title": target_lesson.get("title") if target_lesson else None,
+            "write_mode": write_mode,
+            "target_h2": target_h2,
+            "status": status,
+            "description": (summary or f"Khái niệm {concept}").strip()[:200],
+            "html": draft_html,
+            "markdown": draft_md,
+            "related_lessons": related,
+        }
+        return proposal, None
+
+    async def emit_concept_promotion_preview(
+        self, proposal: dict, session_ctx: Any, delay: float, *, prefix_newline: bool = False
+    ) -> AsyncGenerator[dict, None]:
+        """Store `pending_concept_promotion` in RAM and yield preview events."""
+        session_ctx.pending_concept_promotion = proposal
+        preview_text = format_concept_promotion_preview(proposal)
+        preview_event: dict[str, Any] = {
+            "type": "action_preview",
+            "action_id": session_ctx.session_id,
+            "preview": preview_text,
+        }
+        if proposal.get("mode") == "create":
+            preview_event["editable_titles"] = [proposal["title"]]
+            preview_event["editable_target"] = {
+                "topic": proposal.get("topic") or "",
+                "section": proposal.get("section") or "",
+            }
+        yield preview_event
+        stream_text = f"\n\n{preview_text}" if prefix_newline else preview_text
+        async for ev in self._stream_text(stream_text, delay):
+            yield ev
+
+    async def handle_concept_promotion(
+        self, *, content: str, page_context, session_ctx, delay: float, outcome: dict
+    ) -> AsyncGenerator[dict, None]:
+        """Promote an explicit chat concept into a Previewed Lesson create/append proposal."""
+        request = parse_concept_promotion_request(content)
+        if request is None:
+            return
+        outcome["handled"] = True
+        proposal, err_msg = await self.build_concept_promotion_proposal(
+            concept=request.concept,
+            summary=request.summary,
+            topic_hint=request.topic,
+            preferred_topic_slug=(page_context or {}).get("roadmapSlug") or session_ctx.active_topic_slug,
+            source="explicit",
+            session_ctx=session_ctx,
+            status="target",
+        )
+        if err_msg is not None or proposal is None:
+            async for ev in self._stream_text(err_msg or "", delay):
+                yield ev
+            return
+        session_ctx.clear_pending()
+        async for ev in self.emit_concept_promotion_preview(proposal, session_ctx, delay):
+            yield ev

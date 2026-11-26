@@ -14,6 +14,8 @@ export type ChatbotPosition =
   | 'top-right'
   | 'top-left';
 
+export type ChatbotViewMode = 'floating' | 'sidebar';
+
 export interface ToolCall {
   name: string;
   args?: Record<string, unknown>;
@@ -129,6 +131,12 @@ export interface ChatbotConfig {
    * Default: false
    */
   initialOpen?: boolean;
+
+  /**
+   * Initial desktop presentation mode when no stored preference exists.
+   * Default: 'floating'
+   */
+  defaultViewMode?: ChatbotViewMode;
 
   /**
    * Suggested quick prompts displayed in the empty state.

@@ -248,10 +248,12 @@ export function TabletInlineToc({
   headings,
   activeHeadingId,
   onJump,
+  showOnXl = false,
 }: {
   headings: ContentHeading[];
   activeHeadingId: string;
   onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
+  showOnXl?: boolean;
 }) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -260,7 +262,10 @@ export function TabletInlineToc({
   return (
     <details
       ref={detailsRef}
-      className="hidden lg:block xl:hidden group mb-6 rounded-xl border border-border bg-[var(--editorial-sidebar)] px-4 py-3 text-xs"
+      className={cn(
+        "hidden lg:block group mb-6 rounded-xl border border-border bg-[var(--editorial-sidebar)] px-4 py-3 text-xs",
+        !showOnXl && "xl:hidden"
+      )}
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-foreground transition-colors duration-150 select-none [&::-webkit-details-marker]:hidden">
         <span>On this page</span>

@@ -170,10 +170,15 @@ export function useDesktopPanelHeight({
   useLayoutEffect(() => {
     if (!isOpen) {
       cleanupDragRef.current?.();
+      clearHeightTransition();
+      if (containerRef.current) {
+        containerRef.current.style.height = "";
+        containerRef.current.style.maxHeight = "";
+      }
       return;
     }
     syncContainerHeight(true);
-  }, [isOpen, syncContainerHeight]);
+  }, [isOpen, clearHeightTransition, containerRef, syncContainerHeight]);
 
   useEffect(() => {
     if (!isOpen) return;

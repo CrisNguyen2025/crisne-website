@@ -7,13 +7,11 @@ when the topic is not known the user is asked for it, never guessed.
 
 from __future__ import annotations
 
-import asyncio
 import re
 from typing import Any, AsyncGenerator, Optional
 
 from rag_service.adapters.errors import DuplicateEntityError
 from rag_service.domains.roadmap.host import AgentHostMixin
-from rag_service.domains.roadmap.retrieval.engine import rag_engine
 from rag_service.domains.roadmap.retrieval.relevance import fold
 
 from rag_service.auth import OWNER_ONLY_MESSAGE, is_owner
@@ -28,10 +26,11 @@ from rag_service.domains.roadmap.router.grounding import (
     batch_entity_delete_reply,
     build_grounding,
     example_blocks,
+    format_concept_promotion_preview,
     unresolved_entity_reply,
 )
 from rag_service.domains.roadmap.router.policy import LIST_TOPICS, WRITE_ALLOW, WRITE_CONFIRM
-from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, StructuredRoadmapAction
+from rag_service.domains.roadmap.router.schemas import ActionType, EntityLevel, SingleEntity, StructuredRoadmapAction
 from rag_service.domains.roadmap.router.understanding import is_plain_listing, understand
 from rag_service.domains.roadmap.router.vietnamese import normalize_vietnamese
 from rag_service.domains.roadmap.router.write_gate import (
@@ -47,6 +46,7 @@ from rag_service.domains.roadmap.router.write_gate import (
 from rag_service.domains.roadmap.sections import GENERAL_SECTION
 from rag_service.execution.changes import ChangeSet, snapshot_before_delete
 from rag_service.execution.dry_run import DryRunValidator
+from rag_service.execution.executor import schedule_local_rag_sync
 from rag_service.state import AnaphoraResolver, session_store
 from rag_service.tools import get_adapter
 from rag_service.tools.item_tools import import_items_from_text, parse_item_list, rename_section, update_item_content
@@ -57,14 +57,6 @@ from rag_service.tools.topic_resolver import (
     topic_named_in_message,
 )
 from rag_service.write_grant import write_granted
-
-_COMMAND_BG_TASKS: set[asyncio.Task[Any]] = set()
-
-
-def _schedule_rag_sync() -> None:
-    task = asyncio.create_task(rag_engine.sync_live_database())
-    _COMMAND_BG_TASKS.add(task)
-    task.add_done_callback(_COMMAND_BG_TASKS.discard)
 
 
 CONFIRM_WORDS = ("ok", "oke", "xác nhận", "đồng ý", "yes", "confirm", "tiến hành", "chắc chắn")
@@ -400,7 +392,7 @@ class RoadmapCommands(AgentHostMixin):
         try:
             with write_granted("confirmed lesson edit"):
                 res = await get_adapter().update_item(item_id, **update_kwargs)
-            _schedule_rag_sync()
+            schedule_local_rag_sync()
             final_title, res_msg = self._format_lesson_edit_success(
                 res, update_kwargs, old_title, new_title, new_section
             )
@@ -469,36 +461,41 @@ class RoadmapCommands(AgentHostMixin):
         async for ev in self._stream_text(res_msg, delay):
             yield ev
 
-    async def _handle_pending_status_change(
-        self, status_change: dict, lower: str, session_id: str, delay: float
+    async def _emit_follow_up_promotion_preview(
+        self, proposal: dict, session_id: str, session_ctx, delay: float
     ) -> AsyncGenerator[dict, None]:
-        if lower not in CONFIRM_WORDS:
-            if lower in CANCEL_WORDS:
-                async for ev in self._stream_text("Đã hủy bỏ thao tác đổi trạng thái theo yêu cầu của bạn.", delay):
-                    yield ev
-            return
-        if not is_owner():
-            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
-                yield ev
-            return
+        session_ctx.pending_concept_promotion = proposal
+        preview_text = format_concept_promotion_preview(proposal)
+        ev: dict[str, Any] = {
+            "type": "action_preview",
+            "action_id": session_id,
+            "preview": preview_text,
+        }
+        if proposal.get("mode") == "create":
+            ev["editable_titles"] = [proposal["title"]]
+            ev["editable_target"] = {
+                "topic": proposal.get("topic") or "",
+                "section": proposal.get("section") or "",
+            }
+        yield ev
+        async for chunk in self._stream_text(f"\n\n{preview_text}", delay):
+            yield chunk
+
+    async def _run_status_change_adapter(
+        self, status_change: dict, session_id: str
+    ) -> tuple[bool, str]:
         item_id, item_title = status_change["item_id"], status_change["item_title"]
         new_status = status_change["new_status"]
         mark_reviewed = bool(status_change.get("mark_reviewed"))
-        tool_name = "mark_lesson_reviewed" if mark_reviewed else "update_item"
-        tool_args = (
-            {"item_id": item_id, "markReviewed": True, "confirmed": True}
-            if mark_reviewed
-            else {"item_id": item_id, "status": new_status, "confirmed": True}
-        )
-        yield {"type": "tool_start", "name": tool_name, "args": tool_args}
         try:
             from rag_service.domains.roadmap.lesson_status import LESSON_STATUS_LABEL
 
             with write_granted("confirmed lesson review" if mark_reviewed else "confirmed lesson status change"):
-                if mark_reviewed:
-                    res = await get_adapter().update_item(item_id, markReviewed=True)
-                else:
-                    res = await get_adapter().update_item(item_id, status=new_status)
+                res = (
+                    await get_adapter().update_item(item_id, markReviewed=True)
+                    if mark_reviewed
+                    else await get_adapter().update_item(item_id, status=new_status)
+                )
             label = LESSON_STATUS_LABEL.get(new_status, new_status)
             title = res.get("title", item_title) if isinstance(res, dict) else item_title
             res_msg = (
@@ -506,12 +503,204 @@ class RoadmapCommands(AgentHostMixin):
                 if mark_reviewed
                 else f"✅ Đã đổi trạng thái bài '{title}' sang **{label}**."
             )
-            ok = True
             session_store.set_active_lesson(session_id, item_id, title, topic_slug=status_change.get("topic_slug"))
+            return True, res_msg
         except Exception as exc:
-            ok, res_msg = False, f"❌ Lỗi khi cập nhật trạng thái bài: {exc}"
+            return False, f"❌ Lỗi khi cập nhật trạng thái bài: {exc}"
+
+    async def _handle_pending_status_change(
+        self, status_change: dict, lower: str, session_id: str, session_ctx, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        ok_guard, early_msg = self._pending_confirm_guard(
+            lower, "Đã hủy bỏ thao tác đổi trạng thái theo yêu cầu của bạn."
+        )
+        if not ok_guard:
+            session_ctx.pending_concept_promotion = None
+            if early_msg:
+                async for ev in self._stream_text(early_msg, delay):
+                    yield ev
+            return
+        item_id = status_change["item_id"]
+        mark_reviewed = bool(status_change.get("mark_reviewed"))
+        tool_name = "mark_lesson_reviewed" if mark_reviewed else "update_item"
+        tool_args = (
+            {"item_id": item_id, "markReviewed": True, "confirmed": True}
+            if mark_reviewed
+            else {"item_id": item_id, "status": status_change["new_status"], "confirmed": True}
+        )
+        yield {"type": "tool_start", "name": tool_name, "args": tool_args}
+        ok, res_msg = await self._run_status_change_adapter(status_change, session_id)
         yield {"type": "tool_end", "name": tool_name, "result": res_msg, "is_error": not ok}
         async for ev in self._stream_text(res_msg, delay):
+            yield ev
+        if ok and (follow_up := session_ctx.fresh_pending("pending_concept_promotion")) is not None:
+            async for ev in self._emit_follow_up_promotion_preview(follow_up, session_id, session_ctx, delay):
+                yield ev
+
+    async def _apply_concept_promotion_overrides(
+        self, proposal: dict, titles: Optional[list[str]], target: Optional[dict]
+    ) -> tuple[dict, Optional[str]]:
+        updated = dict(proposal)
+        if titles is not None:
+            if len(titles) != 1:
+                return updated, EDITED_TITLES_REJECTED_REPLY
+            clean = self.extractor.clean_title(titles[0])
+            if not clean or clean.lower() in POINTING_WORDS:
+                return updated, EDITED_TITLES_REJECTED_REPLY
+            updated["title"] = clean
+        if target is not None:
+            if "topic" in target:
+                raw_topic = (target.get("topic") or "").strip()
+                if not raw_topic or raw_topic.lower() in POINTING_WORDS:
+                    return updated, EDITED_TARGET_REJECTED_REPLY
+                found = await resolve_topic(raw_topic)
+                if found.status == "unavailable":
+                    return updated, "⚠️ Hiện chưa kiểm tra được Topic đích. Thao tác vẫn đang chờ: thử lại hoặc bấm hủy."
+                if found.status != "found" or not found.slug:
+                    return updated, (
+                        describe_unresolved_topic(raw_topic, found)
+                        + " Thao tác vẫn đang chờ: sửa lại Topic đích rồi bấm xác nhận, hoặc bấm hủy."
+                    )
+                updated["topic"] = found.slug
+                updated["topic_title"] = found.title or found.slug
+            if "section" in target:
+                raw_sec = re.sub(r"\s+", " ", (target.get("section") or "")).strip().strip("\"'`“”‘’")
+                updated["section"] = "" if (not raw_sec or raw_sec.lower() == "chung") else raw_sec
+        return updated, None
+
+    async def _link_promoted_lesson_relations(self, created_id: str, related_lessons: list[dict]) -> list[str]:
+        linked: list[str] = []
+        adapter = get_adapter()
+        for rel in related_lessons[:3]:
+            rel_id = str(rel.get("lesson_id") or "").strip()
+            if not rel_id or rel_id == created_id:
+                continue
+            try:
+                with write_granted("confirmed concept promotion relation"):
+                    await adapter.create_relation(created_id, rel_id)
+                linked.append(str(rel.get("title") or rel_id))
+            except Exception as exc:
+                print(f"[concept_promotion] Relation skipped ({created_id} <-> {rel_id}): {exc}")
+        return linked
+
+    async def _execute_concept_promotion_append(
+        self, proposal: dict, session_id: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        args = {
+            "topic": proposal["topic"],
+            "item_id": proposal["item_id"],
+            "html": proposal["html"],
+            "write_mode": proposal.get("write_mode", "append"),
+            "target_h2": proposal.get("target_h2"),
+        }
+        yield {
+            "type": "tool_start",
+            "name": "update_item_content",
+            "args": {"topic": proposal["topic"], "item_id": proposal["item_id"], "confirmed": True},
+        }
+        try:
+            with write_granted("confirmed concept promotion append"):
+                res_msg = await update_item_content.coroutine(**args)
+            ok = res_msg.startswith("✅")
+            if ok:
+                session_store.set_active_lesson(
+                    session_id,
+                    proposal["item_id"],
+                    proposal.get("target_lesson_title") or proposal["title"],
+                    topic_slug=proposal.get("topic"),
+                    topic_title=proposal.get("topic_title"),
+                )
+        except Exception as exc:
+            ok, res_msg = False, f"❌ Lỗi khi bổ sung kiến thức: {exc}"
+        yield {"type": "tool_end", "name": "update_item_content", "result": res_msg, "is_error": not ok}
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    async def _execute_concept_promotion_create(
+        self, proposal: dict, session_id: str, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        action = StructuredRoadmapAction(
+            action=ActionType.CREATE,
+            entity_level=EntityLevel.ITEM,
+            is_batch=False,
+            target_parent_identifier=proposal.get("topic"),
+            raw_intent_summary=f"Promote concept '{proposal['title']}'",
+            entities=[
+                SingleEntity(
+                    title=proposal["title"],
+                    section=proposal.get("section") or None,
+                    description=proposal.get("description") or "",
+                )
+            ],
+        )
+        yield {
+            "type": "tool_start",
+            "name": "promote_concept_to_lesson",
+            "args": {
+                "topic": proposal.get("topic"),
+                "title": proposal["title"],
+                "status": proposal.get("status", "target"),
+                "confirmed": True,
+            },
+        }
+        changes = ChangeSet.of(action)
+        with write_granted("confirmed concept promotion create"):
+            ok, res_msg = await self.executor.aexecute(
+                action,
+                session_id=session_id,
+                changes=changes,
+                initial_content=proposal.get("html") or "",
+                default_status=proposal.get("status") or "target",
+            )
+        if ok and changes.entries and proposal.get("related_lessons"):
+            created_id = str(changes.entries[0].get("id") or "").strip()
+            if created_id:
+                linked = await self._link_promoted_lesson_relations(created_id, proposal["related_lessons"])
+                if linked:
+                    res_msg += f"\n🔗 Đã liên kết với bài liên quan: {', '.join(linked)}"
+        yield {"type": "tool_end", "name": "promote_concept_to_lesson", "result": res_msg, "is_error": not ok}
+        if changes:
+            yield changes.event()
+        async for ev in self._stream_text(res_msg, delay):
+            yield ev
+
+    async def _handle_pending_concept_promotion(
+        self,
+        proposal: dict,
+        lower: str,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        titles: Optional[list[str]],
+        target: Optional[dict],
+    ) -> AsyncGenerator[dict, None]:
+        ok_guard, early_msg = self._pending_confirm_guard(
+            lower, "Đã bỏ qua đề xuất lưu khái niệm, Roadmap không thay đổi."
+        )
+        if not ok_guard:
+            if early_msg:
+                async for ev in self._stream_text(early_msg, delay):
+                    yield ev
+            return
+        if proposal.get("mode") == "create" and (titles is not None or target is not None):
+            proposal, err = await self._apply_concept_promotion_overrides(proposal, titles, target)
+            if err is not None:
+                session_ctx.pending_concept_promotion = proposal
+                async for ev in self._reprompt_pending_preview(
+                    session_id,
+                    err,
+                    delay,
+                    editable_titles=[proposal["title"]],
+                    editable_target={"topic": proposal.get("topic") or "", "section": proposal.get("section") or ""},
+                ):
+                    yield ev
+                return
+        stream = (
+            self._execute_concept_promotion_append(proposal, session_id, delay)
+            if proposal.get("mode") == "append" and proposal.get("item_id")
+            else self._execute_concept_promotion_create(proposal, session_id, delay)
+        )
+        async for ev in stream:
             yield ev
 
     def _preview_retry_args(self, pending_act: StructuredRoadmapAction) -> tuple[Optional[list[str]], Optional[dict]]:
@@ -611,7 +800,10 @@ class RoadmapCommands(AgentHostMixin):
             return self._handle_pending_lesson_edit(edit, lower, session_id, session_ctx, delay, titles, target)
         if status_change := session_ctx.fresh_pending("pending_status_change"):
             session_ctx.pending_status_change = None
-            return self._handle_pending_status_change(status_change, lower, session_id, delay)
+            return self._handle_pending_status_change(status_change, lower, session_id, session_ctx, delay)
+        if promo := session_ctx.fresh_pending("pending_concept_promotion"):
+            session_ctx.pending_concept_promotion = None
+            return self._handle_pending_concept_promotion(promo, lower, session_id, session_ctx, delay, titles, target)
         return None
 
     async def _resolve_pending_confirmation_turn(

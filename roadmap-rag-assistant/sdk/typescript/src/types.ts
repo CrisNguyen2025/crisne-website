@@ -277,6 +277,56 @@ export interface UpdateOwnerMemoryInput {
   status?: OwnerMemoryStatus;
 }
 
+export type LessonStatusValue = 'target' | 'learning' | 'known';
+
+export interface RoadmapSummaryItem {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  icon?: string | null;
+  order: number;
+  isLocked?: boolean;
+  _count?: {
+    items: number;
+  };
+}
+
+export interface RoadmapOutlineItem {
+  id: string;
+  slug: string;
+  title: string;
+  section: string | null;
+  order: number;
+}
+
+export interface RoadmapOutlineResponse {
+  roadmap: RoadmapSummaryItem;
+  items: RoadmapOutlineItem[];
+  sections: (string | null)[];
+}
+
+export interface CreateLessonInput {
+  roadmapSlug: string;
+  title: string;
+  section?: string | null;
+  description?: string;
+  content?: string;
+  status?: LessonStatusValue;
+}
+
+export interface CreatedLessonItem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  section: string | null;
+  order: number;
+  roadmapSlug: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LatestThreadMessage {
   id: string;
   role: 'user' | 'assistant';

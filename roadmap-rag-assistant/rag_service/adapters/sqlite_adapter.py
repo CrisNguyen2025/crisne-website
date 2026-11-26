@@ -244,7 +244,14 @@ class SqliteAdapter:
         title: str,
         description: str = "",
         content: str = "",
+        status: str | None = None,
     ) -> dict:
+        clean_status = "known"
+        if status is not None:
+            clean_status = status.strip().lower()
+            if clean_status not in ("known", "learning", "target"):
+                raise ValueError(f"Invalid lesson status '{status}'")
+
         async with self._connect() as db:
             topic = await self._find_topic(db, topic_slug)
             if not topic:
@@ -266,13 +273,47 @@ class SqliteAdapter:
             topic_used = {i["slug"] for i in items if i.get("slug")}
             slug = _lesson_slug(title, global_slugs, topic["slug"], topic_used)
             item_id, now = _uuid7(), _now_iso()
-            await db.execute(
-                """
-                INSERT INTO RoadmapItem (id, roadmapId, slug, section, title, description, content, "order", createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (item_id, topic["id"], slug, used, title.strip(), description.strip(), content or None, order, now, now),
-            )
+            col_cur = await db.execute("PRAGMA table_info(RoadmapItem)")
+            columns = {row[1] for row in await col_cur.fetchall()}
+            if "status" in columns:
+                await db.execute(
+                    """
+                    INSERT INTO RoadmapItem (id, roadmapId, slug, section, title, description, content, "order", status, createdAt, updatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item_id,
+                        topic["id"],
+                        slug,
+                        used,
+                        title.strip(),
+                        description.strip(),
+                        content or None,
+                        order,
+                        clean_status,
+                        now,
+                        now,
+                    ),
+                )
+            else:
+                await db.execute(
+                    """
+                    INSERT INTO RoadmapItem (id, roadmapId, slug, section, title, description, content, "order", createdAt, updatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        item_id,
+                        topic["id"],
+                        slug,
+                        used,
+                        title.strip(),
+                        description.strip(),
+                        content or None,
+                        order,
+                        now,
+                        now,
+                    ),
+                )
             await db.commit()
         return {
             "id": item_id,
@@ -281,8 +322,26 @@ class SqliteAdapter:
             "section": used,
             "title": title.strip(),
             "description": description.strip(),
+            "status": clean_status,
             "order": order,
         }
+
+    @owner_only
+    async def create_relation(self, lesson_id: str, target_lesson_id: str) -> dict:
+        a, b = lesson_id.strip(), target_lesson_id.strip()
+        if not a or not b or a == b:
+            raise ValueError("Cannot relate a lesson to itself")
+        from_id, to_id = (a, b) if a < b else (b, a)
+        async with self._connect() as db:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO KnowledgeRelation (id, fromLessonId, toLessonId, relationType, createdAt)
+                VALUES (?, ?, ?, 'relates', ?)
+                """,
+                (_uuid7(), from_id, to_id, _now_iso()),
+            )
+            await db.commit()
+        return {"created": True}
 
     async def _append_status_updates(
         self,

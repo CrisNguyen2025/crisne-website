@@ -1,4 +1,4 @@
-import type { ChatMessage } from './types';
+import type { ChatbotViewMode, ChatMessage } from './types';
 
 // The conversation lives in sessionStorage: it survives a reload or a page change in the same
 // tab, and is gone when the tab closes. Storage can be blocked (private mode), so every access
@@ -83,5 +83,26 @@ export function clearConversation(key: string): void {
     window.sessionStorage.removeItem(key);
   } catch {
     // Storage blocked: nothing was stored
+  }
+}
+
+export function viewModeKey(baseUrl: string): string {
+  return `abot:view-mode:${baseUrl}`;
+}
+
+export function loadViewMode(key: string): ChatbotViewMode | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw === 'floating' || raw === 'sidebar' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveViewMode(key: string, mode: ChatbotViewMode): void {
+  try {
+    window.sessionStorage.setItem(key, mode);
+  } catch {
+    // Storage blocked: mode stays in memory only
   }
 }

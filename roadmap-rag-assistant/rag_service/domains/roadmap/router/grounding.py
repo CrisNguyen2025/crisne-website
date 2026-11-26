@@ -311,6 +311,52 @@ def domain_gap_reply(topic: Optional[str], owner: bool) -> str:
     return reply
 
 
+def format_concept_promotion_preview(proposal: dict) -> str:
+    """Render a confirmation preview for promoting a concept into a Roadmap lesson."""
+    mode = proposal.get("mode", "create")
+    topic_label = str(proposal.get("topic_title") or proposal.get("topic") or "chưa xác định")
+    section = str(proposal.get("section") or "").strip()
+    section_line = f"\n- **Mục:** {section}" if section else ""
+    related = proposal.get("related_lessons") or []
+    rel_titles = [str(r.get("title") or "").strip() for r in related if str(r.get("title") or "").strip()]
+    rel_line = f"\n- **Liên kết gợi ý (`relates`):** {', '.join(rel_titles[:3])}" if rel_titles else ""
+    source_map = {
+        "domain_gap": "Domain Gap (chủ đề thuộc lộ trình nhưng chưa có bài)",
+        "quiz_gap": "Lỗ hổng kiến thức từ bài ôn tập",
+        "explicit": "Đề xuất lưu khái niệm từ chat",
+    }
+    source_label = source_map.get(str(proposal.get("source") or "explicit"), "Đề xuất lưu khái niệm")
+
+    if mode == "append":
+        lesson_name = str(proposal.get("target_lesson_title") or proposal.get("title") or "bài học")
+        target_h2 = str(proposal.get("target_h2") or "").strip()
+        write_mode = proposal.get("write_mode") or "append"
+        mode_desc = (
+            f'Điền mục "{target_h2}" trong bài **{lesson_name}**'
+            if write_mode == "fill_h2_section" and target_h2
+            else f"Bổ sung vào bài **{lesson_name}**"
+        )
+        header = f"💡 **ĐỀ XUẤT BỔ SUNG KIẾN THỨC VÀO BÀI HỌC** ({source_label})"
+        action_verb = f"bổ sung nội dung vào bài **{lesson_name}**"
+    else:
+        lesson_name = str(proposal.get("title") or "Bài học mới")
+        status = str(proposal.get("status") or "target")
+        status_vi = {"known": "Đã nắm", "learning": "Đang học", "target": "Mục tiêu (target)"}.get(status, status)
+        mode_desc = f"Tạo bài học mới **{lesson_name}** · Trạng thái: **{status_vi}**"
+        header = f"💡 **ĐỀ XUẤT LƯU KHÁI NIỆM THÀNH BÀI HỌC** ({source_label})"
+        action_verb = f"tạo bài **{lesson_name}** vào Roadmap"
+
+    markdown = str(proposal.get("markdown") or "").strip()
+    body_block = f"\n\n---\n\n{markdown}\n\n---" if markdown else ""
+    return (
+        f"{header}\n\n"
+        f"- **Hành động:** {mode_desc}\n"
+        f"- **Topic:** {topic_label}{section_line}{rel_line}"
+        f"{body_block}\n\n"
+        f"👉 Bấm **[✅ Xác nhận thực hiện]** (hoặc gõ **ok**) để {action_verb}, hoặc **[❌ Hủy bỏ]** để bỏ qua."
+    )
+
+
 def build_grounding(context: Optional[dict]) -> str:
     """Return a one-line hint describing the page the user is looking at, or '' if none."""
     if not context:

@@ -17,7 +17,7 @@ runs its own fallback.
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Sequence
 
 from rag_service.auth import is_owner
 from rag_service.config import settings
@@ -25,13 +25,12 @@ from rag_service.context_usage import record_last_turn, record_turn_diagnostics,
 from rag_service.core.generation import citation, guardrails
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
-from rag_service.core.memory.store import format_owner_memory
 from rag_service.core.augmentation.context import (
     GenerationRequest,
-    build_prompt,
     format_documents,
     reorder_documents,
     select_documents,
+    synthesize_prompt,
 )
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.faithfulness import unsupported_claims
@@ -81,26 +80,15 @@ def _clip_history_snippet(prompt: str) -> str:
 
 
 def _build_generation_sections(
-    profile: DomainProfile,
     req: GenerationRequest,
     prompt: str,
     documents: list[Any],
+    selected_memory_ids: Sequence[str],
     links: Any,
     claims: Any,
     cite: CiteChannel | None,
     tracker: CitationTracker | None,
 ) -> dict[str, Any]:
-    _, selected_memory_ids = (
-        format_owner_memory(
-            req.owner_memories,
-            note=profile.memory_note,
-            scope=req.memory_scope,
-            max_items=profile.memory_max_items,
-            max_chars=profile.memory_total_chars,
-        )
-        if req.owner_memories
-        else ("", [])
-    )
     sections: dict[str, Any] = {
         "history_turns": prompt.count("<turn "),
         "documents": [d.id for d in documents],
@@ -111,7 +99,7 @@ def _build_generation_sections(
     if history_snippet:
         sections["conversation_history"] = history_snippet
     if selected_memory_ids:
-        sections["owner_memory_ids"] = selected_memory_ids
+        sections["owner_memory_ids"] = list(selected_memory_ids)
         sections["owner_memory_count"] = len(selected_memory_ids)
     if req.lesson_provenances and is_owner():
         sections["provenance_lessons"] = len(req.lesson_provenances)
@@ -195,7 +183,7 @@ class GenerationPipeline:
     def _build_stream_setup(profile: DomainProfile, req: GenerationRequest) -> dict[str, Any]:
         is_rag = req.mode == "rag"
         documents = reorder_documents(select_documents(req, profile)) if is_rag else []
-        prompt = build_prompt(req, profile, documents=documents)
+        prompt, selected_memory_ids = synthesize_prompt(req, profile, documents=documents)
         known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)
         channel = SourceChannel(d.id for d in documents) if is_rag else None
@@ -212,6 +200,7 @@ class GenerationPipeline:
             "is_rag": is_rag,
             "documents": documents,
             "prompt": prompt,
+            "selected_memory_ids": selected_memory_ids,
             "links": links,
             "channel": channel,
             "cite": cite,
@@ -323,7 +312,16 @@ class GenerationPipeline:
         result: StreamResult = setup["result"]
         answer = strip_marks("".join(clean)) if channel else result.text
         usage = usage_from_langchain(result.merged)
-        sections = _build_generation_sections(profile, req, prompt, documents, links, claims, cite, tracker)
+        sections = _build_generation_sections(
+            req,
+            prompt,
+            documents,
+            setup["selected_memory_ids"],
+            links,
+            claims,
+            cite,
+            tracker,
+        )
         report = (
             await self._run_rag_grounding(llm, answer, documents, req, links, sections)
             if is_rag

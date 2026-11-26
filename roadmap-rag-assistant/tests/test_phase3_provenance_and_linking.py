@@ -139,6 +139,7 @@ async def test_provenance_store_and_pipeline_enforce_strict_visitor_isolation():
     assert len(api_calls) == 1
     assert "Secret RAG Notes" not in llm_visitor.prompts[0]
     assert "secret.internal.blog" not in llm_visitor.prompts[0]
+    assert PROFILE.rules_provenance not in llm_visitor.prompts[0]
     visitor_meta = next(ev for ev in visitor_events if ev.get("type") == "metadata")
     assert "external_sources" not in visitor_meta["sources"][0]
 
@@ -158,6 +159,7 @@ async def test_provenance_store_and_pipeline_enforce_strict_visitor_isolation():
         )
     ]
     assert "Private Tech Blog · Secret RAG Notes" in llm_owner.prompts[0]
+    assert PROFILE.rules_provenance in llm_owner.prompts[0]
     parts = split_prompt(
         build_prompt(
             GenerationRequest(
@@ -250,3 +252,66 @@ async def test_match_news_to_lessons_and_internal_endpoint(monkeypatch):
         payload = ok_resp.json()
         assert payload["suggested_topic_slug"] == "frontend"
         assert len(payload["matches"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_advise_concept_promotion_append_vs_create_and_news_compat():
+    from rag_service.domains.roadmap.linking_advisor import advise_concept_promotion, match_concept_to_lessons
+
+    fake_engine = FakeEngine(
+        [
+            (
+                FakeKnowledgeDoc(
+                    id="item-1",
+                    doc_type="item",
+                    title="Hybrid Search",
+                    item_slug="hybrid-search",
+                    topic_slug="ai-architecture",
+                    topic_title="AI Architecture",
+                    section="RAG",
+                ),
+                0.78,
+            ),
+            (
+                FakeKnowledgeDoc(
+                    id="item-2",
+                    doc_type="item",
+                    title="Vector Database",
+                    item_slug="vector-database",
+                    topic_slug="ai-architecture",
+                    topic_title="AI Architecture",
+                    section="Storage",
+                ),
+                0.61,
+            ),
+        ]
+    )
+
+    concept_match = await match_concept_to_lessons(
+        title="Hybrid Search",
+        summary="BM25 + Vector",
+        keywords=["rrf", "retrieval"],
+        engine=fake_engine,
+    )
+    assert concept_match["suggested_topic_slug"] == "ai-architecture"
+    assert concept_match["matches"][0]["duplicate_warning"] is True
+
+    append_advice = await advise_concept_promotion(
+        title="Hybrid Search",
+        summary="RRF scoring notes",
+        engine=fake_engine,
+    )
+    assert append_advice["mode"] == "append"
+    assert append_advice["target_lesson"]["lesson_id"] == "item-1"
+    assert [r["lesson_id"] for r in append_advice["related_lessons"]] == ["item-2"]
+
+    create_advice = await advise_concept_promotion(
+        title="Speculative Decoding",
+        summary="Draft model speeds up autoregressive generation",
+        preferred_topic_slug="llm-inference",
+        engine=fake_engine,
+    )
+    assert create_advice["mode"] == "create"
+    assert create_advice["target_lesson"] is None
+    assert create_advice["target_topic_slug"] == "llm-inference"
+    assert [r["lesson_id"] for r in create_advice["related_lessons"]] == ["item-1", "item-2"]

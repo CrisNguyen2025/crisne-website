@@ -109,3 +109,14 @@ async def classify_for_routing(text: str, engine: Any, embed: Optional[Callable[
     centroids = engine.centroids()
     vec = await embed(text) if embed is not None and centroids is not None else None
     return classify_scope(text, catalog=catalog, centroids=centroids, query_vec=vec, thresholds=load_thresholds())
+
+
+def promotable_gap_focus(scope_result: Optional[ScopeResult], text: str) -> Optional[str]:
+    """Return a clean lesson-title focus phrase when scope is DOMAIN_GAP, else None."""
+    if scope_result is None or scope_result.scope != Scope.DOMAIN_GAP:
+        return None
+    from rag_service.domains.roadmap.router.focus import focus_written
+    from rag_service.domains.roadmap.router.grounding import looks_like_title
+
+    focus = focus_written(text) or scope_result.focus
+    return focus.strip() if focus and looks_like_title(focus) else None

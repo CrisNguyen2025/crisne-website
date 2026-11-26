@@ -14,7 +14,6 @@ from rag_service.api.server import app
 from rag_service.auth import OWNER_ONLY_MESSAGE, current_actor
 from rag_service.core.memory import (
     MAX_PENDING_MEMORIES,
-    OwnerMemoryItem,
     OwnerMemoryStore,
     extract_memory_suggestions,
     has_memory_signal,
@@ -365,3 +364,146 @@ async def test_quiz_refuses_empty_lesson_and_expires_after_ttl(owner_headers, mo
     assert ctx.fresh_pending("active_quiz", ttl=session_module.QUIZ_TTL_SECONDS) is not None
     clock[0] += session_module.QUIZ_TTL_SECONDS + 5
     assert ctx.fresh_pending("active_quiz", ttl=session_module.QUIZ_TTL_SECONDS) is None
+
+
+def test_classify_quiz_gaps_separates_personal_cues_from_concept_gaps():
+    from rag_service.domains.roadmap.quiz_commands import classify_quiz_gaps
+
+    personal, conceptual = classify_quiz_gaps([
+        "Hay nhầm bước gộp RRF với bước cross-encoder rerank",
+        "Thiếu phần ví dụ cấu hình cross-encoder rerank",
+        "Chưa hiểu khái niệm Speculative Decoding",
+    ])
+    assert personal == ["Hay nhầm bước gộp RRF với bước cross-encoder rerank"]
+    assert conceptual == [
+        "Thiếu phần ví dụ cấu hình cross-encoder rerank",
+        "Chưa hiểu khái niệm Speculative Decoding",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_quiz_pass_with_concept_gap_chains_status_then_concept_promotion_preview(
+    owner_headers, mock_adapter, monkeypatch
+):
+    lesson_html = (
+        "<h2>Hybrid Search</h2>"
+        "<p>Hybrid Search kết hợp tìm kiếm từ khóa BM25 và tìm kiếm ngữ nghĩa Vector Embeddings "
+        "bằng thuật toán Reciprocal Rank Fusion (RRF).</p>"
+    )
+    mock_adapter.get_topic.return_value = {
+        "id": "t-ai",
+        "slug": "ai-architecture",
+        "title": "AI Architecture",
+        "items": [
+            {
+                "id": "lesson-hs",
+                "title": "Hybrid Search",
+                "section": "RAG",
+                "status": "learning",
+                "content": lesson_html,
+                "order": 1,
+            }
+        ],
+        "sections": ["RAG"],
+    }
+    mock_adapter.update_item.return_value = {"id": "lesson-hs", "title": "Hybrid Search", "status": "known"}
+    mock_adapter.update_item_content.return_value = {"id": "lesson-hs", "title": "Hybrid Search"}
+
+    quiz_llm = ScriptedLLM([
+        json.dumps([
+            {"question": "Hybrid Search kết hợp gì?", "expected_points": "BM25 và Vector"},
+            {"question": "RRF dùng để làm gì?", "expected_points": "Gộp thứ hạng"},
+            {"question": "Reranker làm gì sau RRF?", "expected_points": "Sắp xếp lại top-k"},
+        ]),
+        json.dumps({"passed": True, "feedback": "Chuẩn.", "gap": None}),
+        json.dumps({"passed": True, "feedback": "Chuẩn RRF.", "gap": None}),
+        json.dumps({
+            "passed": False,
+            "feedback": "Thiếu phần giải thích cụ thể.",
+            "gap": "Thiếu phần ví dụ triển khai cross-encoder rerank",
+        }),
+        "## Bổ sung: Hybrid Search\n\nVí dụ triển khai cross-encoder rerank trên top-20.",
+    ])
+    monkeypatch.setattr(routes_mod._get_agent(), "llm", quiz_llm)
+
+    tid = f"owner:{uuid.uuid4()}"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test", headers=owner_headers
+    ) as client:
+        await client.post(
+            "/chat/stream",
+            json={"message": "quiz 3 câu bài Hybrid Search", "thread_id": tid, "context": {"roadmapSlug": "ai-architecture"}},
+        )
+        await client.post("/chat/stream", json={"message": "BM25 và Vector", "thread_id": tid})
+        await client.post("/chat/stream", json={"message": "RRF gộp thứ hạng", "thread_id": tid})
+        r_end = await client.post("/chat/stream", json={"message": "Không rõ", "thread_id": tid})
+        assert "Đề xuất cập nhật trạng thái bài học" in r_end.text
+        assert "event: action_preview" in r_end.text
+
+        ctx = session_store.get_or_create(tid)
+        assert ctx.pending_status_change is not None
+        assert ctx.pending_concept_promotion is not None
+        assert ctx.pending_concept_promotion["mode"] == "append"
+        assert ctx.pending_concept_promotion["item_id"] == "lesson-hs"
+
+        # 1st ok: confirms status change first and emits follow-up concept promotion preview
+        r_ok1 = await client.post("/chat/stream", json={"message": "ok", "thread_id": tid})
+        mock_adapter.update_item.assert_awaited_once_with("lesson-hs", status="known")
+        assert "ĐỀ XUẤT BỔ SUNG KIẾN THỨC" in r_ok1.text
+        assert "event: action_preview" in r_ok1.text
+        mock_adapter.update_item_content.assert_not_awaited()
+
+        # 2nd ok: confirms concept promotion append via update_item_content
+        r_ok2 = await client.post("/chat/stream", json={"message": "ok", "thread_id": tid})
+        assert "update_item_content" in r_ok2.text
+        mock_adapter.update_item_content.assert_awaited_once()
+        _, saved_html = mock_adapter.update_item_content.await_args.args
+        assert "cross-encoder rerank" in saved_html
+
+
+@pytest.mark.asyncio
+async def test_quiz_memory_cap_full_falls_back_to_concept_promotion_preview(
+    owner_headers, mock_adapter, monkeypatch
+):
+    token = current_actor.set("owner")
+    try:
+        for i in range(MAX_PENDING_MEMORIES):
+            await owner_memory_store.create(kind="learning_note", content=f"Ghi nhớ chờ duyệt {i}", status="pending")
+    finally:
+        current_actor.reset(token)
+
+    mock_adapter.get_topic.return_value = {
+        "id": "t-ai",
+        "slug": "ai-architecture",
+        "title": "AI Architecture",
+        "items": [
+            {
+                "id": "lesson-chunk",
+                "title": "Chunking",
+                "section": "RAG",
+                "status": "learning",
+                "content": "<p>Chunking chia nhỏ tài liệu dài theo token window và overlap phù hợp.</p>",
+                "order": 1,
+            }
+        ],
+        "sections": ["RAG"],
+    }
+    quiz_llm = ScriptedLLM([
+        json.dumps([{"question": "Overlap dùng để làm gì?", "expected_points": "Giữ ngữ cảnh biên đoạn"}]),
+        json.dumps({"passed": False, "feedback": "Chưa nêu overlap.", "gap": "Hay nhầm kích thước overlap khi chunk"}),
+        "## Bổ sung: Chunking\n\nChi tiết chọn kích thước overlap.",
+    ])
+    monkeypatch.setattr(routes_mod._get_agent(), "llm", quiz_llm)
+
+    tid = f"owner:{uuid.uuid4()}"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test", headers=owner_headers
+    ) as client:
+        await client.post(
+            "/chat/stream",
+            json={"message": "quiz 1 câu bài Chunking", "thread_id": tid, "context": {"roadmapSlug": "ai-architecture"}},
+        )
+        r_end = await client.post("/chat/stream", json={"message": "Chia nhỏ tài liệu", "thread_id": tid})
+        assert "event: action_preview" in r_end.text
+        assert "ĐỀ XUẤT BỔ SUNG KIẾN THỨC" in r_end.text
+        assert session_store.get_or_create(tid).pending_concept_promotion is not None

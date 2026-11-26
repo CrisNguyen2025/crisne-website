@@ -26,6 +26,7 @@ import type {
   SectionGroup,
 } from "@/lib/roadmap/types";
 import { useCanWrite } from "@/hooks/use-can-write";
+import { useCollapseRightRail } from "@/hooks/use-abot-sidebar";
 import { ActionMenu } from "@/components/ui/action-menu";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
@@ -63,6 +64,7 @@ export function TopicEditorialPage({
   const router = useRouter();
   const { toast } = useToast();
   const canWrite = useCanWrite();
+  const collapseRightRail = useCollapseRightRail();
   const { ownerStatusById, invalidateStatuses } = useTopicOwnerStatuses(
     topic.slug,
     canWrite
@@ -367,7 +369,8 @@ export function TopicEditorialPage({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={[]}
-        rail={focusRail}
+        rail={collapseRightRail ? undefined : focusRail}
+        collapseRightRail={collapseRightRail}
         nextLink={
           !isReorderMode && firstLesson
             ? {
@@ -520,7 +523,7 @@ export function TopicEditorialPage({
         {items.length > 0 && !(isReorderMode && canWrite) && (
           <div className="mt-8 space-y-10 motion-safe:animate-in motion-safe:fade-in duration-150">
             {focusItems.length > 0 && (
-              <section aria-labelledby="h-focus" className="xl:hidden">
+              <section aria-labelledby="h-focus" className={collapseRightRail ? undefined : "xl:hidden"}>
                 <div className="flex items-center gap-2 border-t border-border pt-6">
                   <h2
                     id="h-focus"

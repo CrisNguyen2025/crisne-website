@@ -12,6 +12,7 @@ import { EditItemInfoDrawer } from '@/components/roadmap/EditItemInfoDrawer';
 import { EditSectionModal } from '@/components/roadmap/EditSectionModal';
 import { EditTopicModal } from '@/components/roadmap/EditTopicModal';
 import { TopicEditorialPage } from '@/components/roadmap/TopicEditorialPage';
+import { isRoadmapWriteTool } from '@/logic/roadmap/roadmapAssistantService';
 import * as roadmapService from '@/logic/roadmap/roadmapService';
 
 const routerSpies = vi.hoisted(() => ({
@@ -371,5 +372,37 @@ describe('Roadmap CUD UI/UX upgrades', () => {
     );
     expect(screen.getByText('Nội dung bài học sẽ mất.')).toBeTruthy();
     expect(screen.queryByText('Hành động này không thể hoàn tác.')).toBeNull();
+  });
+
+  it('classifies write tools and excludes draft, quiz, and read-only tools in isRoadmapWriteTool', () => {
+    const writeTools = [
+      'create_item',
+      'update_item',
+      'update_item_content',
+      'delete_item',
+      'generate_topic',
+      'reorder_items',
+      'rename_section',
+      'import_items_from_text',
+      'mark_lesson_reviewed',
+      'promote_concept_to_lesson',
+      'save_owner_memory',
+      'archive_owner_memory',
+    ];
+    for (const tool of writeTools) {
+      expect(isRoadmapWriteTool(tool)).toBe(true);
+    }
+
+    const nonWriteTools = [
+      'draft_item_content',
+      'start_lesson_quiz',
+      'grade_lesson_quiz',
+      'list_topics',
+      'list_owner_memories',
+      'get_lesson_status',
+    ];
+    for (const tool of nonWriteTools) {
+      expect(isRoadmapWriteTool(tool)).toBe(false);
+    }
   });
 });
