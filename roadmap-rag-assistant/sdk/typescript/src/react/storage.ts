@@ -1,3 +1,4 @@
+import type { PageContext } from '../types';
 import type { ChatbotViewMode, ChatMessage } from './types';
 
 // The conversation lives in sessionStorage: it survives a reload or a page change in the same
@@ -27,6 +28,18 @@ function isStoredMessage(value: unknown): value is ChatMessage & { timestamp: st
   );
 }
 
+function sanitizeStoredPageContext(raw: unknown): PageContext | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const obj = raw as Record<string, unknown>;
+  const out: PageContext = {};
+  if (typeof obj.roadmapSlug === 'string' && obj.roadmapSlug.trim()) out.roadmapSlug = obj.roadmapSlug.trim();
+  if (typeof obj.roadmapTitle === 'string' && obj.roadmapTitle.trim()) out.roadmapTitle = obj.roadmapTitle.trim();
+  if (typeof obj.itemId === 'string' && obj.itemId.trim()) out.itemId = obj.itemId.trim();
+  if (typeof obj.itemTitle === 'string' && obj.itemTitle.trim()) out.itemTitle = obj.itemTitle.trim();
+  if (typeof obj.section === 'string' && obj.section.trim()) out.section = obj.section.trim();
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function loadConversation(key: string): StoredConversation | null {
   try {
     const raw = window.sessionStorage.getItem(key);
@@ -35,7 +48,14 @@ export function loadConversation(key: string): StoredConversation | null {
     if (typeof data.conversationId !== 'string' || !Array.isArray(data.messages)) return null;
     const messages = data.messages
       .filter(isStoredMessage)
-      .map((m) => ({ ...m, timestamp: new Date(m.timestamp) }));
+      .map((m) => {
+        const pageContext = sanitizeStoredPageContext((m as unknown as Record<string, unknown>).pageContext);
+        return {
+          ...m,
+          ...(pageContext ? { pageContext } : { pageContext: undefined }),
+          timestamp: new Date(m.timestamp),
+        };
+      });
     return messages.length > 0 ? { conversationId: data.conversationId, messages } : null;
   } catch {
     return null;
@@ -104,5 +124,51 @@ export function saveViewMode(key: string, mode: ChatbotViewMode): void {
     window.sessionStorage.setItem(key, mode);
   } catch {
     // Storage blocked: mode stays in memory only
+  }
+}
+
+export function openStateKey(baseUrl: string): string {
+  return `abot:open:${baseUrl}`;
+}
+
+export function loadOpenState(key: string): boolean | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveOpenState(key: string, open: boolean): void {
+  try {
+    window.sessionStorage.setItem(key, open ? 'true' : 'false');
+  } catch {
+    // Storage blocked: open state stays in memory only
+  }
+}
+
+export function sidebarWidthKey(baseUrl: string): string {
+  return `abot:sidebar-width:${baseUrl}`;
+}
+
+export function loadSidebarWidth(key: string): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSidebarWidth(key: string, width: number): void {
+  try {
+    window.sessionStorage.setItem(key, String(Math.round(width)));
+  } catch {
+    // Storage blocked: width stays in memory only
   }
 }

@@ -371,6 +371,11 @@ export function TopicEditorialPage({
         headings={[]}
         rail={collapseRightRail ? undefined : focusRail}
         collapseRightRail={collapseRightRail}
+        articleDataAttributes={{
+          "data-roadmap-context": true,
+          "data-roadmap-slug": topic.slug,
+          "data-roadmap-title": topic.title,
+        }}
         nextLink={
           !isReorderMode && firstLesson
             ? {

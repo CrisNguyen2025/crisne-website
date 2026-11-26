@@ -212,7 +212,9 @@ interface LectureShellProps {
   articleDataAttributes?: {
     "data-roadmap-context"?: boolean;
     "data-roadmap-slug"?: string;
+    "data-roadmap-title"?: string;
     "data-lesson-slug"?: string;
+    "data-lesson-title"?: string;
     "data-section"?: string;
   };
   onLessonNavigate?: (lessonId: string) => void;
@@ -592,7 +594,7 @@ export function LectureShell({
   return (
     <div className="flex min-h-dvh w-full flex-col">
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/85 backdrop-blur-md lg:hidden">
-        <div className="mx-auto flex h-14 w-full max-w-[90.5rem] items-center justify-between gap-2 px-4 sm:px-6">
+        <div className="flex h-14 w-full items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
@@ -649,8 +651,8 @@ export function LectureShell({
       </header>
 
       <div className="w-full flex-1 overflow-x-clip">
-        <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] lg:min-h-dvh w-full max-w-[90.5rem]">
-          <aside className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-0 h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)] before:pointer-events-none before:absolute before:inset-y-0 before:right-full before:w-screen before:bg-[var(--editorial-sidebar)] before:content-['']">
+        <div className="flex min-h-[calc(100dvh-3.5rem)] lg:min-h-dvh w-full">
+          <aside className="hidden lg:flex lg:w-[18.75rem] shrink-0 sticky top-0 h-dvh flex-col border-r border-border bg-[var(--editorial-sidebar)]">
             {renderSidebarHeader()}
             <div
               ref={syllabusScrollRef}
@@ -664,15 +666,13 @@ export function LectureShell({
           <div className="relative flex min-w-0 flex-1 flex-col">
             <main
               id="main-content"
-              className={cn(
-                "flex w-full flex-1 justify-center gap-8 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 lg:px-10 lg:pt-10 xl:gap-12 xl:px-12",
-                !collapseRightRail && "xl:justify-between"
-              )}
+              className="flex w-full flex-1 justify-center gap-8 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-8 lg:px-10 lg:pt-10 xl:gap-12 xl:px-12"
             >
               <article
                 {...articleDataAttributes}
                 className={cn(
-                  "min-w-0 w-full max-w-[48rem] xl:max-w-[50rem] transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  "min-w-0 w-full max-w-[48rem] transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  activeView === "summary" ? "xl:max-w-[54rem]" : "xl:max-w-[50rem]",
                   isTransitioning ? "opacity-65" : "opacity-100"
                 )}
               >

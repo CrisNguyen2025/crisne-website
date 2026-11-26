@@ -19,12 +19,14 @@ export interface ChatRequest {
   context?: PageContext;
 }
 
-/** Page the user is viewing; lets the assistant resolve "này" / "đây" references. */
+/** Page the user is viewing; lets the assistant resolve "này" / "đây" references and surface active page context. */
 export interface PageContext {
   roadmapSlug?: string;
+  roadmapTitle?: string;
   /** The section (mục) open in the list, by name (ADR-0009) */
   section?: string;
   itemId?: string;
+  itemTitle?: string;
 }
 
 export interface ChatResponse {
@@ -288,6 +290,8 @@ export interface ChatMessage {
   sources?: ChatSource[];
   citations?: ChatCitation[];
   actionPreview?: ActionPreviewMeta;
+  /** Snapshot of the Topic / Lesson page open when the user sent this message. */
+  pageContext?: PageContext;
   isRestored?: boolean;
   actionChips?: ChatActionChip[];
   status?: 'sending' | 'streaming' | 'complete' | 'error';

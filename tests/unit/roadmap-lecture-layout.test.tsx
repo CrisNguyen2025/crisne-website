@@ -791,4 +791,62 @@ describe("LectureShell & editorial pages", () => {
       delete document.documentElement.dataset.abotSidebar;
     }
   });
+
+  it("uses edge-anchored shell and collapses right rail when #main-content ResizeObserver width is below 980px", () => {
+    mockUseCanWrite.mockReturnValue(true);
+    mockUseMediaQuery.mockReturnValue(true);
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+
+    let resizeCallback: ResizeObserverCallback | null = null;
+    const origResizeObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class ResizeObserver {
+      constructor(cb: ResizeObserverCallback) {
+        resizeCallback = cb;
+      }
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    } as unknown as typeof globalThis.ResizeObserver;
+
+    document.documentElement.dataset.abotSidebar = "true";
+    try {
+      const { container } = render(
+        <LessonEditorialReader
+          lesson={ITEMS[0]}
+          processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
+          headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+          topic={TOPIC}
+          siblingGroups={groups}
+          allTopics={[TOPIC]}
+        />
+      );
+
+      const mainEl = container.querySelector("#main-content") as HTMLElement;
+      expect(mainEl).toBeTruthy();
+      expect(mainEl.className).toContain("justify-center");
+      expect(mainEl.className).not.toContain("xl:justify-between");
+      expect(container.innerHTML).not.toContain("max-w-[90.5rem]");
+
+      // Wide main container (>= 980px) keeps right rail visible even with Abot sidebar open
+      act(() => {
+        resizeCallback?.(
+          [{ contentRect: { width: 1020 } } as unknown as ResizeObserverEntry],
+          {} as ResizeObserver
+        );
+      });
+      expect(container.querySelector('nav[aria-label="On this page"]')).toBeTruthy();
+
+      // Narrowed main container (< 980px, e.g. user widened Abot sidebar) collapses right rail
+      act(() => {
+        resizeCallback?.(
+          [{ contentRect: { width: 860 } } as unknown as ResizeObserverEntry],
+          {} as ResizeObserver
+        );
+      });
+      expect(container.querySelector('nav[aria-label="On this page"]')).toBeNull();
+    } finally {
+      globalThis.ResizeObserver = origResizeObserver;
+      delete document.documentElement.dataset.abotSidebar;
+    }
+  });
 });

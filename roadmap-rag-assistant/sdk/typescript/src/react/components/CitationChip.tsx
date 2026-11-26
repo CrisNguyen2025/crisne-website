@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { safeHref } from "../utils/links";
+import { isInternalRouteHref, safeHref } from "../utils/links";
+import { ChatLink, useChatNavigate } from "../utils/navigation";
 
 const MIN_PANEL_WIDTH = 192;
 const MAX_PANEL_WIDTH = 296;
@@ -94,6 +95,7 @@ export function CitationChip({
   const touchOpenGuardRef = useRef(false);
   const panelId = useId();
   const [first] = citations;
+  const onNavigate = useChatNavigate();
 
   const clearSteal = useCallback(() => {
     if (stealTimer.current !== null) {
@@ -456,16 +458,15 @@ export function CitationChip({
             );
           }
           return (
-            <a
+            <ChatLink
               key={idx}
               href={link.href}
-              {...(link.external
-                ? { target: "_blank", rel: "noopener noreferrer" }
-                : {})}
+              external={link.external}
+              onNavigateComplete={closeImmediate}
               className="flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-[#F4F3F0]"
             >
               {body}
-            </a>
+            </ChatLink>
           );
         })}
       </span>
@@ -509,6 +510,16 @@ export function CitationChip({
           if (!singleLink) return;
           if (singleLink.external || event.metaKey || event.ctrlKey) {
             window.open(singleLink.href, "_blank", "noopener,noreferrer");
+            return;
+          }
+          if (
+            onNavigate &&
+            !event.shiftKey &&
+            !event.altKey &&
+            isInternalRouteHref(singleLink.href)
+          ) {
+            closeImmediate();
+            onNavigate(singleLink.href);
             return;
           }
           const anchor = panelRef.current?.querySelector<HTMLAnchorElement>("a[href]");

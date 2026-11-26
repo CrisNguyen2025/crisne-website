@@ -4,7 +4,10 @@ import {
   clearConversation,
   conversationKey,
   loadConversation,
+  loadOpenState,
+  openStateKey,
   saveConversation,
+  saveOpenState,
 } from "@/roadmap-rag-assistant/sdk/typescript/src/react/storage";
 import type { ChatMessage } from "@/roadmap-rag-assistant/sdk/typescript/src/react/types";
 
@@ -83,5 +86,62 @@ describe("conversation storage (P1-4)", () => {
     saveConversation(KEY, { conversationId: "c", messages: [msg(0)] });
     clearConversation(KEY);
     expect(loadConversation(KEY)).toBeNull();
+  });
+
+  it("round-trips widget open state and ignores unexpected values", () => {
+    const openKey = openStateKey("/api/roadmap-assistant");
+    expect(loadOpenState(openKey)).toBeNull();
+
+    saveOpenState(openKey, true);
+    expect(loadOpenState(openKey)).toBe(true);
+
+    saveOpenState(openKey, false);
+    expect(loadOpenState(openKey)).toBe(false);
+
+    store.setItem(openKey, "invalid");
+    expect(loadOpenState(openKey)).toBeNull();
+  });
+
+  it("preserves sanitized pageContext on stored user messages and drops malformed pageContext", () => {
+    saveConversation(KEY, {
+      conversationId: "conv-ctx",
+      messages: [
+        {
+          ...msg(0),
+          pageContext: {
+            roadmapSlug: "frontend",
+            roadmapTitle: "Frontend",
+            itemId: "nextjs-sec",
+            itemTitle: "Bảo mật Next.js",
+          },
+        },
+        msg(1),
+      ],
+    });
+    const loaded = loadConversation(KEY);
+    expect(loaded?.messages[0].pageContext).toEqual({
+      roadmapSlug: "frontend",
+      roadmapTitle: "Frontend",
+      itemId: "nextjs-sec",
+      itemTitle: "Bảo mật Next.js",
+    });
+    expect(loaded?.messages[1].pageContext).toBeUndefined();
+
+    store.setItem(
+      KEY,
+      JSON.stringify({
+        conversationId: "conv-bad-ctx",
+        messages: [
+          {
+            id: "m-0",
+            role: "user",
+            content: "hi",
+            timestamp: "2026-10-17T08:00:00Z",
+            pageContext: "not-an-object",
+          },
+        ],
+      })
+    );
+    expect(loadConversation(KEY)?.messages[0].pageContext).toBeUndefined();
   });
 });

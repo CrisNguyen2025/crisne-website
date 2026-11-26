@@ -103,9 +103,32 @@ def search_act(act: str, scope: Scope) -> bool:
     return scope in (Scope.ROADMAP, Scope.DOMAIN_GAP) and act in ("question", "statement")
 
 
-async def classify_for_routing(text: str, engine: Any, embed: Optional[Callable[[str], Any]] = None) -> ScopeResult:
-    """classify_scope with the live engine: catalog, centroids and a cached query vector (the search reuses it)."""
+async def classify_for_routing(
+    text: str,
+    engine: Any,
+    embed: Optional[Callable[[str], Any]] = None,
+    page_context: Optional[dict] = None,
+) -> ScopeResult:
+    """classify_scope with the live engine: catalog, open-page match, centroids and a cached query vector."""
     catalog = await engine.catalog()
+    if page_context and hasattr(engine, "find_page_document"):
+        from rag_service.domains.roadmap.retrieval.relevance import (
+            _doc_text,
+            content_words,
+            names_unknown_topic,
+        )
+
+        page_doc = engine.find_page_document(page_context)
+        focus = focus_of(text)
+        vocab = engine.corpus_vocabulary() if hasattr(engine, "corpus_vocabulary") else set()
+        if (
+            page_doc is not None
+            and focus
+            and not (vocab and names_unknown_topic(text, vocab))
+            and bool(content_words(focus) & content_words(_doc_text(page_doc)))
+        ):
+            return ScopeResult(Scope.ROADMAP, focus, "matches open page")
+
     centroids = engine.centroids()
     vec = await embed(text) if embed is not None and centroids is not None else None
     return classify_scope(text, catalog=catalog, centroids=centroids, query_vec=vec, thresholds=load_thresholds())

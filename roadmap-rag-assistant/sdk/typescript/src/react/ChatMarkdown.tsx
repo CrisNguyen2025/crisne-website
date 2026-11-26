@@ -14,6 +14,11 @@ import {
   markClaims,
 } from "./utils/citations";
 import { safeHref } from "./utils/links";
+import {
+  ChatLink,
+  ChatNavigationContext,
+  type ChatNavigateHandler,
+} from "./utils/navigation";
 
 /**
  * Rich Markdown Engine for chat answers.
@@ -632,16 +637,14 @@ export function renderInline(text: string): React.ReactNode[] {
   const renderLinkNode = (label: string, href: string): React.ReactNode => {
     const link = safeHref(href);
     return link ? (
-      <a
+      <ChatLink
         key={key++}
         href={link.href}
-        {...(link.external
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {})}
+        external={link.external}
         className="text-blue-600 underline decoration-blue-600/40 underline-offset-2 transition-colors hover:decoration-blue-600 dark:text-blue-400 dark:decoration-blue-400/40 dark:hover:decoration-blue-400"
       >
         {label}
-      </a>
+      </ChatLink>
     ) : (
       label
     );
@@ -1080,6 +1083,8 @@ export interface ChatMarkdownProps {
   /** Claims in `content` and their sources; each claim gets a chip with its `sources` */
   citations?: ChatCitation[];
   sources?: ChatSource[];
+  /** Optional SPA navigation handler for same-origin links (`/path`) when used standalone */
+  onNavigate?: ChatNavigateHandler;
 }
 
 /**
@@ -1115,6 +1120,7 @@ export function ChatMarkdown({
   onJumpToMessage,
   citations,
   sources,
+  onNavigate,
 }: ChatMarkdownProps) {
   const visible = streaming
     ? closeOpenInline(content.replace(/(\n[ \t]*)`{1,2}$/, "$1"))
@@ -1163,7 +1169,7 @@ export function ChatMarkdown({
   // With citations the answer is the root the source chips highlight in
   const scoped = marked.claims.length > 0 || uniqueSources.length > 0;
 
-  return (
+  const contentNode = (
     <div
       data-citation-root={scoped ? "" : undefined}
       className={`min-w-0 max-w-full space-y-3 break-words text-base md:text-sm leading-relaxed text-foreground ${className}`}
@@ -1175,5 +1181,12 @@ export function ChatMarkdown({
           card (a 30px jump); the card or its placeholder already shows progress */}
       {!caretInline && sourceChips}
     </div>
+  );
+
+  if (!onNavigate) return contentNode;
+  return (
+    <ChatNavigationContext.Provider value={onNavigate}>
+      {contentNode}
+    </ChatNavigationContext.Provider>
   );
 }

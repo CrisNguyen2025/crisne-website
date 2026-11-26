@@ -94,7 +94,11 @@ export interface UseRoadmapAssistantChatReturn {
   /** `options.titles` / `options.target`: fields the Owner edited on a Preview, sent with the confirming message */
   sendMessage: (
     textToSend?: string,
-    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+    options?: {
+      titles?: string[];
+      target?: { topic?: string; section?: string };
+      pageContext?: PageContext;
+    }
   ) => Promise<void>;
   stopStreaming: () => void;
   /** The conversation's context as last loaded by `refreshContext`. */
@@ -192,6 +196,11 @@ export function useRoadmapAssistantChat(
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const latestSnapshotRef = useRef({ conversationId, messages, isLoading });
+  useEffect(() => {
+    latestSnapshotRef.current = { conversationId, messages, isLoading };
+  }, [conversationId, messages, isLoading]);
+
   // Save after each finished turn (not per token), and only the settled messages
   useEffect(() => {
     if (isLoading) return;
@@ -201,6 +210,20 @@ export function useRoadmapAssistantChat(
     }, 300);
     return () => clearTimeout(timer);
   }, [messages, conversationId, isLoading, storageKey]);
+
+  // Flush settled messages on page reload/leave so a fast reload within the 300ms debounce never drops the last turn
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    const handlePageHide = () => {
+      const { conversationId: id, messages: current } = latestSnapshotRef.current;
+      const settled = current.filter((m) => m.status !== 'streaming' && m.status !== 'sending');
+      if (settled.length > 0) {
+        saveConversation(storageKey, { conversationId: id, messages: settled });
+      }
+    };
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
+  }, [storageKey]);
 
 
   // Pure useMemo instantiates client reactively without render-phase ref mutations/reads
@@ -292,7 +315,11 @@ export function useRoadmapAssistantChat(
   const sendMessage = useCallback(
     async (
       textToSend?: string,
-      options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+      options?: {
+        titles?: string[];
+        target?: { topic?: string; section?: string };
+        pageContext?: PageContext;
+      }
     ) => {
       const content = (textToSend ?? input).trim();
       if (!content) return;
@@ -304,10 +331,12 @@ export function useRoadmapAssistantChat(
         abortControllerRef.current = null;
       }
 
+      const activeContext = options?.pageContext ?? getContextRef.current?.();
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content,
+        ...(activeContext ? { pageContext: activeContext } : {}),
         timestamp: new Date(),
       };
 
@@ -569,7 +598,7 @@ export function useRoadmapAssistantChat(
             },
           },
           conversationId,
-          getContextRef.current?.(),
+          activeContext,
           options?.titles,
           options?.target
         );
@@ -600,7 +629,10 @@ export function useRoadmapAssistantChat(
       const question = index > 0 ? messages[index - 1] : undefined;
       if (!question || question.role !== 'user') return;
       setMessages((prev) => prev.filter((m) => m.id !== errorMessageId && m.id !== question.id));
-      void sendMessage(question.content);
+      void sendMessage(
+        question.content,
+        question.pageContext ? { pageContext: question.pageContext } : undefined
+      );
     },
     [messages, sendMessage]
   );

@@ -537,6 +537,17 @@ input[type="search"]::-webkit-search-cancel-button {
   html[data-abot-sidebar="true"] body {
     padding-right: var(--abot-sidebar-width, 25rem);
   }
+
+  html[data-abot-resizing="true"],
+  html[data-abot-resizing="true"] * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    cursor: ew-resize !important;
+  }
+
+  html[data-abot-resizing="true"] #main-content {
+    pointer-events: none;
+  }
 }
 
 

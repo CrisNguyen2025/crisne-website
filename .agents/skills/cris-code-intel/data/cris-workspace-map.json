@@ -185,6 +185,8 @@
         "roadmap-rag-assistant/sdk/typescript/src/client.ts",
         "roadmap-rag-assistant/sdk/typescript/src/react/useRoadmapAssistantChat.ts",
         "roadmap-rag-assistant/sdk/typescript/src/react/useThreadHistory.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/react/utils/pageContextRef.ts",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/ChatComposer.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx",
@@ -1045,7 +1047,7 @@
           "order": 1,
           "layer": "Presentation_UI",
           "component": "components/roadmap/RoadmapAssistantChatbot.tsx",
-          "action": "Đóng gói message, threadId và pageContext (topic slug hiện tại); hiển thị tin nhắn tạm thời trên UI",
+          "action": "Hiển thị chip Context Reference trang hiện tại (Topic/Lesson trên Tablet+) ở hàng dưới ChatComposer cùng dòng nút Send; đóng gói message, threadId và pageContext (roadmapSlug, roadmapTitle, itemId, itemTitle, section) kèm nhãn tham chiếu trên bong bóng tin nhắn đã gửi",
           "callsNext": "logic/roadmap/roadmapAssistantService.ts#roadmapChatClient",
           "dataPassed": "{ message, threadId, pageContext }"
         },
@@ -1081,7 +1083,7 @@
           "layer": "Persistence",
           "component": "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
           "functionOrMethod": "HybridRagEngine.search_live_knowledge",
-          "action": "Thực hiện tìm kiếm lai (Hybrid Retrieval: BM25 FTS + cosine similarity trên Gemini 768d in-memory vectors) trên topic, bài và đoạn bài (chunk theo heading từ full-export); đoạn khớp được gộp về bài cha thành passages, link trích dẫn trỏ #anchor của đoạn. Index tự làm mới khi /internal/reindex báo, hoặc sau TTL 30s nếu index-version đổi",
+          "action": "Thực hiện tìm kiếm lai (Hybrid Retrieval: BM25 FTS + cosine similarity trên Gemini in-memory vectors) và ghim/ưu tiên tài liệu Topic hoặc Lesson đang xem qua search_with_page_context khi câu hỏi trực chỉ ('bài này', 'trang này') hoặc khớp nội dung trang; đoạn khớp được gộp về bài cha thành passages kèm link #anchor",
           "callsNext": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py#GenerationPipeline.astream",
           "dataPassed": "Retrieved chunks with relevance scores and content"
         },

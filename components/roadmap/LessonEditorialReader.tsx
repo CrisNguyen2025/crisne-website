@@ -630,7 +630,9 @@ export function LessonEditorialReader({
         articleDataAttributes={{
           "data-roadmap-context": true,
           "data-roadmap-slug": topic.slug,
+          "data-roadmap-title": topic.title,
           "data-lesson-slug": lesson.slug,
+          "data-lesson-title": lesson.title,
           "data-section": lesson.section ?? "",
         }}
         onLessonNavigate={handleLessonNavigate}

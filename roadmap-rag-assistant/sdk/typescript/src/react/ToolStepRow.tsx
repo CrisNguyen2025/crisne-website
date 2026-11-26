@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CloseIcon } from "./icons";
+import { safeHref } from "./utils/links";
+import { ChatLink } from "./utils/navigation";
 
 export function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -149,22 +151,26 @@ export function ToolStepRow({
           {detail && <div className={items?.length ? "mb-1" : ""}>{detail}</div>}
           {items && items.length > 0 && (
             <ul className="space-y-0.5">
-              {items.map((it, idx) => (
+              {items.map((it, idx) => {
+                const link = it.href ? safeHref(it.href) : null;
+                return (
                 <li key={`${it.href ?? it.title}-${idx}`} className="flex min-w-0 items-baseline gap-1.5">
                   <span aria-hidden="true" className="text-[color:var(--chat-text-subtle,#75716A)]">•</span>
-                  {it.href ? (
-                    <a
-                      href={it.href}
+                  {link ? (
+                    <ChatLink
+                      href={link.href}
+                      external={link.external}
                       className="truncate font-medium text-[color:var(--chat-text,#1F1E1C)] underline decoration-[color:var(--chat-accent,#C2410C)]/40 underline-offset-2 hover:decoration-[color:var(--chat-accent,#C2410C)]"
                     >
                       {it.title}
-                    </a>
+                    </ChatLink>
                   ) : (
                     <span className="truncate">{it.title}</span>
                   )}
                   {it.topic && <span className="shrink-0 text-[color:var(--chat-text-subtle,#75716A)]">{it.topic}</span>}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

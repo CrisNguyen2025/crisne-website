@@ -140,6 +140,33 @@ describe('getRoadmapPageContext', () => {
     expect(getRoadmapPageContext()).toEqual({ roadmapSlug: 'ai', itemId: 'kb', section: 'Retrieval' });
   });
 
+  it('includes roadmapTitle and itemTitle when provided on the page dataset', () => {
+    stubPage('/frontend/ban-phat-hanh-bao-mat-nextjs', '', {
+      roadmapSlug: 'frontend',
+      roadmapTitle: 'Frontend',
+      lessonTitle: 'Bản phát hành bảo mật Next.js tháng 11/2026',
+      section: 'Next.js',
+    });
+    expect(getRoadmapPageContext()).toEqual({
+      roadmapSlug: 'frontend',
+      roadmapTitle: 'Frontend',
+      itemId: 'ban-phat-hanh-bao-mat-nextjs',
+      itemTitle: 'Bản phát hành bảo mật Next.js tháng 11/2026',
+      section: 'Next.js',
+    });
+
+    stubPage('/frontend', '', {
+      roadmapSlug: 'frontend',
+      roadmapTitle: 'Frontend',
+    });
+    expect(getRoadmapPageContext()).toEqual({
+      roadmapSlug: 'frontend',
+      roadmapTitle: 'Frontend',
+      itemId: undefined,
+      section: undefined,
+    });
+  });
+
   it('reads a Topic page with ?section=', () => {
     stubPage('/ai', '?section=RAG');
     expect(getRoadmapPageContext()).toEqual({ roadmapSlug: 'ai', itemId: undefined, section: 'RAG' });

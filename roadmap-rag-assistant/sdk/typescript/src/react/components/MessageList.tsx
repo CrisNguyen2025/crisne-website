@@ -1,15 +1,19 @@
 import React from "react";
 import {
   ArrowDownIcon,
+  BookOpenIcon,
   CheckCircleIcon,
   CheckIcon,
   CloseIcon,
   CopyIcon,
+  FileTextIcon,
   PromptBubbleIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
 } from "../icons";
 import { ChatMarkdown, markdownToPlainText } from "../ChatMarkdown";
+import { ChatLink } from "../utils/navigation";
+import { resolvePageContextRef } from "../utils/pageContextRef";
 import { LayerChoicePicker } from "../LayerChoicePicker";
 import { CollapsibleStepsSummary, StepItem } from "../ToolStepRow";
 import {
@@ -387,12 +391,34 @@ const MessageItem = React.memo(function MessageItem({
   const toolCalls = msg.toolCalls ?? [];
 
   if (isUser) {
+    const msgContextRef = resolvePageContextRef(msg.pageContext);
     return (
       <div
         key={msg.id}
         data-message-id={msg.id}
         className="group flex flex-col items-end gap-1"
       >
+        {msgContextRef && (
+          <ChatLink
+            href={msgContextRef.path}
+            external={false}
+            className="hidden md:inline-flex max-w-[85%] items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-0.5 text-xs leading-4 text-[#5E5B55] transition-colors hover:border-[#D6D3CC] hover:bg-[#F4F3F0] hover:text-[#1F1E1C]"
+          >
+            {msgContextRef.kind === "lesson" ? (
+              <FileTextIcon className="h-3 w-3 shrink-0 text-[#C2410C]" />
+            ) : (
+              <BookOpenIcon className="h-3 w-3 shrink-0 text-[#C2410C]" />
+            )}
+            <span
+              data-testid="message-context-ref"
+              data-context-path={msgContextRef.path}
+              title={msgContextRef.tooltip}
+              className="min-w-0 truncate font-medium"
+            >
+              {msgContextRef.label}
+            </span>
+          </ChatLink>
+        )}
         <div
           className={`relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C] transition-[background-color,box-shadow] duration-300 ${
             isHighlighted

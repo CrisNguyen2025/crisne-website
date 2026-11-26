@@ -16,8 +16,10 @@ output and `decided_by` the phase that settled the route, so a wrong answer name
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Awaitable, Callable, Optional, Sequence
 
+from rag_service.domains.roadmap.retrieval.relevance import asks_about_current_page
 from rag_service.domains.roadmap.router.grounding import build_grounding
 from rag_service.domains.roadmap.router.intent_router import Decision, IntentRouter
 from rag_service.domains.roadmap.router.policy import NAMED_PART, WRITE_ALLOW, WRITE_CONFIRM, WRITE_DENY, WRITE_NONE
@@ -57,7 +59,7 @@ class RouteOutcome:
     def decided_by(self) -> str:
         """The phase that settled this route: where to look first when it is wrong."""
         u = self.decision.understanding
-        if self.method == "scope":
+        if self.method in ("scope", "page_context"):
             return "P4_scope"
         if self.plan is not None:
             if self.plan.reason.startswith("system 2"):
@@ -95,6 +97,31 @@ def _unsupported_change(u) -> Optional[str]:
     if u.vague_content:
         return CONTENT_UNCLEAR
     return None
+
+
+_OPEN_PAGE_READ_VERB_RE = re.compile(
+    r"\b(?:tom\s+tat|giai\s+thich|phan\s+tich|noi\s+dung|y\s+chinh|diem\s+chinh|tong\s+quan|xem\s+lai|doc\s+lai)\b"
+)
+
+
+def _is_open_page_query(decision: Decision, page_context: Optional[dict]) -> bool:
+    """Undecided read/question explicitly pointing at the open Topic/Lesson ('tóm tắt bài này', 'trang này nói gì?')."""
+    if not page_context or not (
+        str(page_context.get("itemId") or "").strip() or str(page_context.get("roadmapSlug") or "").strip()
+    ):
+        return False
+    u = decision.understanding
+    if (
+        decision.intent is not None
+        or u.has_change_verb
+        or u.write_blocker is not None
+        or u.asks_usage
+        or u.target in (Target.OFF_TOPIC, Target.ASSISTANT)
+    ):
+        return False
+    if not asks_about_current_page(u.flat):
+        return False
+    return u.act.value == "question" or bool(_OPEN_PAGE_READ_VERB_RE.search(u.flat))
 
 
 def is_write_candidate(gate: WriteGate) -> bool:
@@ -195,6 +222,15 @@ async def decide_route(
     if (unsupported := _unsupported_change(decision.understanding)) is not None:
         ask = IntentClassificationResult(intent=IntentType.ROADMAP_CUD, confidence=0.9, needs_cud_extraction=False)
         return RouteOutcome(ask, "heuristic", decision, WriteGate(WRITE_DENY, unsupported))
+
+    if _is_open_page_query(decision, page_context):
+        found = IntentClassificationResult(
+            intent=IntentType.KNOWLEDGE_QUERY,
+            confidence=0.9,
+            sub_intent=KnowledgeSubIntent.SEARCH,
+            needs_cud_extraction=False,
+        )
+        return RouteOutcome(found, "page_context", decision, WriteGate(WRITE_NONE))
 
     scope, scope_outcome = await _check_scope_route(decision, content, scope_fn)
     if scope_outcome is not None:

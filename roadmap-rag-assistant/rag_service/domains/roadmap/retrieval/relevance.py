@@ -54,6 +54,17 @@ def corpus_vocabulary(docs: Iterable[Any]) -> Set[str]:
 # Typos ("retreival", "hybird") still name a known term; one wrong letter in four ("lora") does not
 TERM_MATCH_CUTOFF = 0.8
 
+CURRENT_PAGE_DEICTIC_RE = re.compile(
+    r"\b(?:trang\s+(?:nay|hien\s+tai|dang\s+xem)|bai\s+(?:hoc\s+)?(?:nay|hien\s+tai|dang\s+xem)"
+    r"|topic\s+(?:nay|hien\s+tai|dang\s+xem)|lo\s+trinh\s+(?:nay|hien\s+tai|dang\s+xem)"
+    r"|muc\s+nay|o\s+day|tren\s+trang\s+nay)\b"
+)
+
+
+def asks_about_current_page(query: str) -> bool:
+    """True when the question points deictically at the open page ('bài này', 'trang này', 'ở đây')."""
+    return bool(CURRENT_PAGE_DEICTIC_RE.search(fold(query)))
+
 
 def technical_terms(query: str) -> Set[str]:
     """ASCII words of 4+ letters or acronyms ("RLHF"), folded; Vietnamese syllables are left out."""
@@ -83,18 +94,30 @@ def names_unknown_topic(query: str, vocabulary: Set[str]) -> bool:
 
 
 def filter_on_topic(
-    query: str, matches: List[Tuple[Any, float]], vocabulary: Optional[Set[str]] = None
+    query: str,
+    matches: List[Tuple[Any, float]],
+    vocabulary: Optional[Set[str]] = None,
+    *,
+    pinned_doc_id: Optional[str] = None,
 ) -> List[Tuple[Any, float]]:
     """Keep the matches that share a content word with the query. A query with no content words is left as is.
 
     With `vocabulary`, a query whose technical terms are all unknown to the corpus keeps nothing.
+    When `pinned_doc_id` is set and the query points deictically at the open page ('bài này', 'trang này'),
+    that open page document stays in the matches even when the question repeats none of its title words.
     """
     words = content_words(query)
     if not words:
         return matches
     if vocabulary and names_unknown_topic(query, vocabulary):
         return []
-    return [(doc, score) for doc, score in matches if words & content_words(_doc_text(doc))]
+    keep_pinned = bool(pinned_doc_id) and asks_about_current_page(query)
+    return [
+        (doc, score)
+        for doc, score in matches
+        if (keep_pinned and str(getattr(doc, "id", "")) == pinned_doc_id)
+        or bool(words & content_words(_doc_text(doc)))
+    ]
 
 
 # English filler that appears in titles but names no technique

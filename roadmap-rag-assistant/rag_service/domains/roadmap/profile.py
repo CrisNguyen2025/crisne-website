@@ -39,6 +39,11 @@ def _roadmap_document(doc: Any, score: float) -> ContextDocument:
         # A lesson found through its sections links the best one (ADR-0014 anchor), so a citation opens it there
         href = lesson_href(doc) if doc.doc_type == "item" else knowledge_href(doc)
     lines = [f"Loại: {_DOC_KIND.get(doc.doc_type, doc.doc_type)}", f"Tên: {doc.title}"]
+    if getattr(doc, "is_current_page", False):
+        lines.append(
+            "Ngữ cảnh trang hiện tại: Người dùng đang mở trực tiếp trang này "
+            "(khi câu hỏi dùng 'bài này', 'trang này', 'topic này', 'ở đây' là chỉ tài liệu này)."
+        )
     if doc.doc_type != "topic":
         lines.append(f"Thuộc lộ trình: {doc.topic_title} (`{doc.topic_slug}`)")
     if doc.doc_type == "item":

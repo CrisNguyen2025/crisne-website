@@ -1,5 +1,6 @@
 import React from "react";
-import { ArrowUpIcon, StopIcon } from "../icons";
+import { ArrowUpIcon, BookOpenIcon, FileTextIcon, StopIcon } from "../icons";
+import type { PageContextRef } from "../utils/pageContextRef";
 
 /** Longest question the reader can type; the proxy and the service refuse more. */
 export const MAX_INPUT_LENGTH = 2000;
@@ -7,6 +8,11 @@ export const MAX_INPUT_LENGTH = 2000;
 const COUNTER_THRESHOLD = 1800;
 /** The box grows with its text up to this height (six 24px lines plus 14px padding), then scrolls. */
 const MAX_TEXTAREA_HEIGHT = 160;
+
+/** Shimmer sweep matching ToolStepRow's live label; keyframe lives in host globals.css. */
+const ANSWERING_SHIMMER_CLASS =
+  "relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.8s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/80 before:to-transparent motion-reduce:before:hidden";
+const ANSWERING_DOT_DELAYS = ["0ms", "180ms", "360ms"] as const;
 
 export interface ChatComposerProps {
   inputRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -19,14 +25,16 @@ export interface ChatComposerProps {
   handleKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   /** The phone keyboard is up: the bottom safe-area inset is not needed */
   isKeyboardOpen?: boolean;
+  /** Active Topic / Lesson page reference shown alongside the Send button on Tablet+ (`md:`). */
+  contextRef?: PageContextRef | null;
 }
 
 /**
- * 2-column flex composer:
- * - Text column (left, flex-1 min-w-0): textarea auto-grows from 1 line to MAX_TEXTAREA_HEIGHT (160px), then scrolls.
- *   Padding and width remain static regardless of line count or focus state to eliminate layout jitter.
- * - Action column (right, shrink-0): counter (when near limit) + send/stop button,
- *   anchored at the bottom (items-end) alongside the last text line.
+ * Adaptive composer:
+ * - Mobile (`< md`) or without `contextRef`: 2-column single-row pill (textarea left, send button right).
+ * - Tablet+ (`md:`) with `contextRef`: 2-row stacked card — full-width textarea on top, and `composer-toolbar`
+ *   on the bottom row holding the Copilot-style current page Context Reference chip alongside the Send button.
+ * - Textarea width and padding never change across focus/blur or line count to eliminate layout jitter.
  */
 export function ChatComposer({
   inputRef,
@@ -38,7 +46,11 @@ export function ChatComposer({
   handleSend,
   handleKeyDown,
   isKeyboardOpen = false,
+  contextRef = null,
 }: ChatComposerProps) {
+  const hasContextRef = Boolean(contextRef);
+  const showAnsweringOverlay = isLoading && input.length === 0;
+
   // When mobile keyboard dismisses (e.g. Back button pressed), blur textarea to drop active cursor
   const prevKeyboardOpenRef = React.useRef(isKeyboardOpen);
   React.useEffect(() => {
@@ -65,13 +77,19 @@ export function ChatComposer({
         isKeyboardOpen ? "pb-2" : "pb-[max(0.75rem,env(safe-area-inset-bottom))]"
       }`}
     >
-      {/* Outer composer card: 2-column flex row anchored to bottom */}
+      {/* Outer composer card: 1-row on mobile / plain pages; 2-row on Tablet+ when contextRef is active */}
       <div
         onClick={() => inputRef.current?.focus()}
         data-testid="composer-card"
-        className="group relative flex min-h-[48px] cursor-text items-end gap-1 rounded-[24px] border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_1px_3px_rgb(0_0_0_/_0.04),0_6px_20px_rgb(0_0_0_/_0.06)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none focus-within:border-[#D6D3CC] focus-within:shadow-[0_2px_6px_rgb(0_0_0_/_0.06),0_8px_24px_rgb(0_0_0_/_0.10)]"
+        className={`group relative flex min-h-[48px] cursor-text items-end gap-1 rounded-[24px] border bg-[#FFFFFF] p-1.5 shadow-[0_1px_3px_rgb(0_0_0_/_0.04),0_6px_20px_rgb(0_0_0_/_0.06)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none focus-within:border-[#D6D3CC] focus-within:shadow-[0_2px_6px_rgb(0_0_0_/_0.06),0_8px_24px_rgb(0_0_0_/_0.10)] ${
+          isLoading ? "border-[#D6D3CC]" : "border-[#E6E4DF]"
+        } ${
+          hasContextRef
+            ? "md:flex-col md:items-stretch md:gap-1 md:rounded-[20px] md:p-2"
+            : ""
+        }`}
       >
-        {/* Left column: Text Input Area */}
+        {/* Text Input Area */}
         <textarea
           ref={inputRef}
           rows={1}
@@ -92,48 +110,106 @@ export function ChatComposer({
               ? "Abot đang trả lời…"
               : "Hỏi Abot…"
           }
-          className="flex-1 min-w-0 resize-none overflow-y-auto bg-transparent py-1.5 pl-2.5 pr-1 text-base leading-6 text-[#1F1E1C] outline-none [scrollbar-width:thin] placeholder:text-[#75716A] disabled:opacity-50 md:text-sm md:leading-6"
+          className={`flex-1 min-w-0 resize-none overflow-y-auto bg-transparent py-1.5 pl-2.5 pr-1 text-base leading-6 text-[#1F1E1C] outline-none [scrollbar-width:thin] disabled:opacity-50 md:text-sm md:leading-6 ${
+            showAnsweringOverlay ? "placeholder:text-transparent" : "placeholder:text-[#75716A]"
+          } ${
+            hasContextRef ? "md:w-full md:flex-none md:pl-2" : ""
+          }`}
         />
 
-        {/* Right column: Action toolbar (counter + send/stop button) */}
+        {/* Action toolbar: holds current-page Context Reference (left, Tablet+) + counter & Send/Stop (right) */}
         <div
           data-testid="composer-toolbar"
-          className="flex shrink-0 items-center gap-1.5"
+          className={`flex shrink-0 items-center gap-1.5 ${
+            hasContextRef ? "md:w-full md:justify-between md:gap-2 md:pl-0.5" : ""
+          }`}
         >
-          {input.length >= COUNTER_THRESHOLD && (
-            <span
-              className={`shrink-0 select-none text-xs tabular-nums ${
-                input.length >= MAX_INPUT_LENGTH ? "text-[#B42318]" : "text-[#5E5B55]"
-              }`}
+          {contextRef && (
+            <div
+              data-testid="composer-context-ref"
+              data-context-kind={contextRef.kind}
+              data-context-path={contextRef.path}
+              title={contextRef.tooltip}
+              onClick={(e) => e.stopPropagation()}
+              className="hidden md:inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0] px-2 py-1 text-xs leading-4 text-[#1F1E1C] select-none"
             >
-              {input.length.toLocaleString("vi-VN")}/{MAX_INPUT_LENGTH.toLocaleString("vi-VN")}
-            </span>
+              {contextRef.kind === "lesson" ? (
+                <FileTextIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
+              ) : (
+                <BookOpenIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
+              )}
+              <span className="min-w-0 truncate font-medium text-[#1F1E1C]">
+                {contextRef.label}
+              </span>
+            </div>
           )}
-          {showStop ? (
-            <button
-              type="button"
-              onClick={stopStreaming}
-              title="Dừng phản hồi"
-              aria-label="Dừng phản hồi"
-              // Keeps focus in the text so the phone keyboard stays up
-              onMouseDown={(e) => e.preventDefault()}
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#1F1E1C] text-white transition-[opacity,transform] hover:opacity-85 active:scale-95"
-            >
-              <StopIcon className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleSend()}
-              onMouseDown={(e) => e.preventDefault()}
-              disabled={!input.trim()}
-              aria-label="Gửi tin nhắn"
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#C2410C] text-white transition-[background-color,opacity,transform] hover:bg-[#9A3412] active:scale-95 disabled:cursor-default disabled:opacity-40"
-            >
-              <ArrowUpIcon className="h-4 w-4" />
-            </button>
-          )}
+
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            {input.length >= COUNTER_THRESHOLD && (
+              <span
+                className={`shrink-0 select-none text-xs tabular-nums ${
+                  input.length >= MAX_INPUT_LENGTH ? "text-[#B42318]" : "text-[#5E5B55]"
+                }`}
+              >
+                {input.length.toLocaleString("vi-VN")}/{MAX_INPUT_LENGTH.toLocaleString("vi-VN")}
+              </span>
+            )}
+            {showStop ? (
+              <button
+                type="button"
+                onClick={stopStreaming}
+                title="Dừng phản hồi"
+                aria-label="Dừng phản hồi"
+                // Keeps focus in the text so the phone keyboard stays up
+                onMouseDown={(e) => e.preventDefault()}
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#1F1E1C] text-white ring-2 ring-[#1F1E1C]/15 transition-[opacity,transform,box-shadow] hover:opacity-85 active:scale-95"
+              >
+                <StopIcon className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSend()}
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={!input.trim()}
+                aria-label="Gửi tin nhắn"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#C2410C] text-white transition-[background-color,opacity,transform] hover:bg-[#9A3412] active:scale-95 disabled:cursor-default disabled:opacity-40"
+              >
+                <ArrowUpIcon className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Animated answering indicator overlaid on the textarea's first line while input is empty */}
+        {showAnsweringOverlay && (
+          <div
+            data-testid="composer-answering-indicator"
+            aria-hidden="true"
+            className={`pointer-events-none absolute left-4 top-3 right-12 flex items-center gap-2 select-none text-base leading-6 text-[#5E5B55] animate-in fade-in duration-150 motion-reduce:animate-none md:text-sm md:leading-6 ${
+              hasContextRef ? "md:top-3.5 md:right-4" : ""
+            }`}
+          >
+            <span className="relative flex h-2 w-2 shrink-0 items-center justify-center">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-[#C2410C]/45 animate-ping motion-reduce:hidden" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#C2410C]" />
+            </span>
+            <span className="inline-flex items-baseline gap-1 min-w-0">
+              <span className={`truncate font-medium ${ANSWERING_SHIMMER_CLASS}`}>
+                Abot đang trả lời
+              </span>
+              <span className="inline-flex items-center gap-[3px] pt-1">
+                {ANSWERING_DOT_DELAYS.map((delay) => (
+                  <span
+                    key={delay}
+                    className="h-[3px] w-[3px] rounded-full bg-[#5E5B55] animate-dot-wave motion-reduce:animate-none"
+                    style={{ animationDelay: delay }}
+                  />
+                ))}
+              </span>
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

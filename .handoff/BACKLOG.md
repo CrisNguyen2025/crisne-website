@@ -18,6 +18,7 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 ## Chờ Owner quyết định
 
+- Thống nhất Brand Concept & Semantic Design Tokens: chờ Phase 0 (wireframe 4 option rồi 2 option, Owner chọn, chốt Q2–Q5) trước khi tách `TASK-*`. Portfolio/Cris AI ngoài phạm vi; sau Phase 1 Portfolio có thể lệch màu vì còn dùng `--color-steel*`, chấp nhận tới khi mở lại phạm vi: `.handoff/PLAN-brand-design-system-unification.md`.
 - Mobile Android thật, 👍/👎 ở portfolio, Visitor có thấy Lesson Status không, và dọn các giả định cũ sau ADR-0019 (sitemap/robots/JSON-LD của Lesson): `.handoff/specs/TASK-lesson-status-001.md` mục 6, `docs/adr/0019-owner-only-site-no-public-news.md`.
 - Chia chương Topic (`TASK-topic-chapters-001`, `DRAFT`): chờ chốt câu hỏi mục 0 và viết ADR: `.handoff/specs/TASK-topic-chapters-001.md`.
 - Các mục đang chờ quyết định khác (câu 3 đổi techstack, câu 7 lịch sử chat qua deploy, bật lại `FEEDBACK_ENABLED`): `.handoff/PLAN-second-brain.md`, `docs/abot-next-actions-plan.md`.

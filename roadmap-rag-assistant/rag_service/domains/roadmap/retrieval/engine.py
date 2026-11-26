@@ -294,6 +294,94 @@ class HybridRagEngine:
             self._chunks_of = docs
         return self._chunks_present
 
+    def find_page_document(self, page_context: Optional[dict]) -> Optional[KnowledgeDocument]:
+        """Look up the indexed Lesson or Topic matching `page_context` (trusted DB document, or None)."""
+        if not page_context:
+            return None
+        item_ref = str(page_context.get("itemId") or "").strip()
+        topic_slug = str(page_context.get("roadmapSlug") or "").strip()
+        docs = getattr(self._vector_store, "_docs_map", {})
+        if item_ref:
+            fallback: Optional[KnowledgeDocument] = None
+            for d in docs.values():
+                if d.doc_type != "item":
+                    continue
+                if d.id == item_ref or d.item_slug == item_ref:
+                    if not topic_slug or d.topic_slug == topic_slug:
+                        return d
+                    if fallback is None:
+                        fallback = d
+            return fallback
+        if topic_slug:
+            for d in docs.values():
+                if d.doc_type == "topic" and d.topic_slug == topic_slug:
+                    return d
+        return None
+
+    def _select_page_passages(self, page_doc: KnowledgeDocument, query: str) -> List[dict]:
+        """Pick up to MAX_PASSAGES_PER_LESSON chunks of `page_doc`, preferring chunks sharing words with `query`."""
+        if page_doc.doc_type != "item":
+            return []
+        from rag_service.domains.roadmap.retrieval.relevance import content_words
+
+        docs = getattr(self._vector_store, "_docs_map", {})
+        chunks = [d for d in docs.values() if d.doc_type == "chunk" and d.parent_id == page_doc.id]
+        if not chunks:
+            return []
+
+        def _chunk_order(doc: KnowledgeDocument) -> int:
+            suffix = doc.id.rsplit("::", 1)[-1]
+            return int(suffix) if suffix.isdigit() else 0
+
+        ordered = sorted(chunks, key=_chunk_order)
+        q_words = content_words(query)
+        if q_words:
+            ranked = sorted(
+                enumerate(ordered),
+                key=lambda pair: (-len(q_words & content_words(f"{pair[1].heading or ''} {pair[1].content_text or ''}")), pair[0]),
+            )
+            chosen = [doc for _, doc in ranked[:MAX_PASSAGES_PER_LESSON]]
+        else:
+            chosen = ordered[:MAX_PASSAGES_PER_LESSON]
+        return [{"anchor": c.anchor, "heading": c.heading, "text": c.content_text or ""} for c in chosen]
+
+    async def search_with_page_context(
+        self, query: str, page_context: Optional[dict], limit: int = 5
+    ) -> List[Tuple[KnowledgeDocument, float]]:
+        """Run hybrid search and pin/mark the open Lesson or Topic when the question refers to or matches it."""
+        from rag_service.domains.roadmap.retrieval.relevance import _doc_text, asks_about_current_page, content_words
+
+        matches = await self.search_live_knowledge(query, limit=limit)
+        if not page_context:
+            return matches
+        page_doc = self.find_page_document(page_context)
+        if page_doc is None:
+            return matches
+
+        existing_idx = next((i for i, (doc, _) in enumerate(matches) if doc.id == page_doc.id), None)
+        if existing_idx is not None:
+            matched_doc, matched_score = matches[existing_idx]
+            top_score = max((s for _, s in matches), default=matched_score)
+            marked = matched_doc.model_copy(update={"is_current_page": True})
+            rest = [pair for i, pair in enumerate(matches) if i != existing_idx]
+            return [(marked, top_score), *rest][:limit]
+
+        q_words = content_words(query)
+        passages = self._select_page_passages(page_doc, query)
+        passage_text = " ".join(f"{p.get('heading') or ''} {p.get('text') or ''}" for p in passages)
+        shares_page_words = bool(q_words and (q_words & content_words(f"{_doc_text(page_doc)} {passage_text}")))
+        if not asks_about_current_page(query) and not shares_page_words:
+            return matches
+
+        pinned_doc = page_doc.model_copy(
+            update={
+                "is_current_page": True,
+                **({"passages": passages} if passages else {}),
+            }
+        )
+        top_score = max((s for _, s in matches), default=1.0)
+        return [(pinned_doc, top_score), *matches][:limit]
+
     def known_item_ids(self) -> set[str]:
         """Ids of every item in the current index (valid targets for `&item=` links)."""
         return {d.id for d in self._vector_store._docs_map.values() if d.doc_type == "item"}

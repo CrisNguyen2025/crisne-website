@@ -11,13 +11,13 @@ export const DESKTOP_DEFAULT_WIDTH = 400;
 export const DESKTOP_DEFAULT_HEIGHT = 650;
 export const DESKTOP_MIN_HEIGHT = 480;
 
-const DESKTOP_MEDIA_QUERY = "(min-width: 48rem)";
+export const DESKTOP_MEDIA_QUERY = "(min-width: 48rem)";
 const OPPOSITE_EDGE_GAP = 24;
 const KEYBOARD_RESIZE_STEP = 24;
 const ABSOLUTE_FLOOR = 320;
 const HEIGHT_TRANSITION = "height 200ms cubic-bezier(0.22, 1, 0.36, 1)";
 
-function getRootFontSize(): number {
+export function getRootFontSize(): number {
   if (typeof document === "undefined") return 16;
   const parsed = parseFloat(
     getComputedStyle(document.documentElement).fontSize
@@ -29,7 +29,7 @@ export function toRem(value: number, rootFontSize = getRootFontSize()): string {
   return `${value / rootFontSize}rem`;
 }
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
@@ -37,7 +37,7 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-function isDesktopViewport(): boolean {
+export function isDesktopViewport(): boolean {
   if (typeof window === "undefined") return false;
   if (typeof window.matchMedia === "function") {
     return window.matchMedia(DESKTOP_MEDIA_QUERY).matches;
@@ -233,6 +233,7 @@ export function useDesktopPanelHeight({
       const prevWillChange = container.style.willChange;
       document.body.style.userSelect = "none";
       document.body.style.cursor = "ns-resize";
+      container.style.transition = "none";
       container.style.willChange = "height";
       setIsDragging(true);
 
@@ -264,6 +265,7 @@ export function useDesktopPanelHeight({
         document.body.style.userSelect = prevUserSelect;
         document.body.style.cursor = prevCursor;
         if (containerRef.current) {
+          containerRef.current.style.transition = "";
           containerRef.current.style.willChange = prevWillChange;
         }
         window.removeEventListener("mousemove", onMouseMove);

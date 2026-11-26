@@ -63,6 +63,8 @@ export interface ChatMessage {
   /** Target (topic / section) of a Preview the Owner may correct before confirming. */
   editableTarget?: EditablePreviewTarget;
   actionPreview?: ActionPreviewMeta;
+  /** Snapshot of the Topic / Lesson page open when the user sent this message. */
+  pageContext?: PageContext;
   isRestored?: boolean;
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */
@@ -133,6 +135,11 @@ export interface ChatbotConfig {
    */
   getContext?: () => PageContext | undefined;
 
+  /**
+   * Optional active route key (e.g. pathname) so the widget refreshes its page context reference on SPA navigation.
+   */
+  routeKey?: string;
+
   /** Handles "/webmcp <request>" messages by running a WebMCP tool in the browser. */
   onWebMcpMessage?: (request: string) => Promise<string>;
 
@@ -167,6 +174,12 @@ export interface ChatbotConfig {
    * Optional notification callback (e.g., toast) for actions like deleting or switching a Thread.
    */
   onNotify?: (message: string, type?: 'success' | 'error') => void;
+
+  /**
+   * Optional SPA navigation handler for same-origin links (`/path`) rendered inside the widget.
+   * When omitted, links fall back to native browser navigation.
+   */
+  onNavigate?: (href: string) => void;
 
   /**
    * Callback fired with the last vote on an answer (1 for like, 0 for unlike, null when taken back),

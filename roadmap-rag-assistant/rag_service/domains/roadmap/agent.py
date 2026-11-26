@@ -171,11 +171,37 @@ class NextGenRoadmapAgent(
         async for ev in stream_words(text, delay):
             yield ev
 
-    def _source_deps(self, query: str = "") -> SourceDeps:
+    def _source_deps(self, query: str = "", page_context: Optional[dict] = None) -> SourceDeps:
         """The roadmap's hooks for the core RAG flow. Looked up at call time so tests can patch the engine."""
+        has_page_ref = bool(
+            page_context
+            and (str(page_context.get("itemId") or "").strip() or str(page_context.get("roadmapSlug") or "").strip())
+        )
+
+        async def _search(q: str, limit: int = 4):
+            if has_page_ref and hasattr(rag_engine, "search_with_page_context"):
+                return await rag_engine.search_with_page_context(q, page_context, limit=limit)
+            return await rag_engine.search_live_knowledge(q, limit=limit)
+
+        def _accept(q: str, matches: list):
+            pinned_id = next(
+                (
+                    str(doc.id)
+                    for doc, _ in matches
+                    if getattr(doc, "is_current_page", False) and getattr(doc, "id", None)
+                ),
+                None,
+            )
+            return filter_on_topic(
+                q,
+                matches,
+                rag_engine.corpus_vocabulary(),
+                pinned_doc_id=pinned_id,
+            )
+
         return SourceDeps(
-            search=lambda query, limit=4: rag_engine.search_live_knowledge(query, limit=limit),
-            accept=lambda query, matches: filter_on_topic(query, matches, rag_engine.corpus_vocabulary()),
+            search=_search,
+            accept=_accept,
             plan=_plan_queries if settings.rag_query_transform else None,
             rerank=_rerank if settings.rag_rerank else None,
             rerank_needed=_rerank_needed,
@@ -606,7 +632,7 @@ class NextGenRoadmapAgent(
             if answered["handled"] or answered.get("owner_denied"):
                 return
 
-        deps = self._source_deps(content)
+        deps = self._source_deps(content, page_context=page_context)
         is_domain_gap = (
             intent_res.intent == IntentType.KNOWLEDGE_QUERY
             and route_outcome.scope is not None
@@ -772,6 +798,11 @@ class NextGenRoadmapAgent(
     ):
         router_step = start_step("intent-router", input={"message": content})
         recent = history_store.get_recent(session_id, HISTORY_TURNS)
+        def _scope_for_turn(text: str):
+            if page_context and "page_context" in inspect.signature(classify_for_routing).parameters:
+                return classify_for_routing(text, rag_engine, rag_engine.query_vector, page_context=page_context)
+            return classify_for_routing(text, rag_engine, rag_engine.query_vector)
+
         try:
             # System 1, the write gate, and for a write candidate System 2 + grounding (router/route_decision.py)
             route_outcome = await decide_route(
@@ -782,7 +813,7 @@ class NextGenRoadmapAgent(
                 catalog=await rag_engine.catalog(),
                 page_context=page_context,
                 owner=is_owner(),
-                scope_fn=lambda text: classify_for_routing(text, rag_engine, rag_engine.query_vector),
+                scope_fn=_scope_for_turn,
             )
         except BaseException as exc:
             end_step_on_error(router_step, exc)

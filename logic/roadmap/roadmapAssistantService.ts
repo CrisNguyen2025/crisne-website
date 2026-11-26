@@ -68,9 +68,40 @@ export async function runWebMcpCommand(request: string): Promise<string> {
   return `✅ Đã chạy \`${plan.tool}\`${note}\n\n\`\`\`json\n${body}\n\`\`\``;
 }
 
+function readRoadmapDataset(): DOMStringMap | undefined {
+  if (typeof document === 'undefined') return undefined;
+  return document.querySelector<HTMLElement>('[data-roadmap-context]')?.dataset;
+}
+
+function buildPathPageContext(
+  first: string,
+  second: string | undefined,
+  querySection: string | undefined
+): PageContext {
+  const dataset = readRoadmapDataset();
+  const roadmapSlug = dataset?.roadmapSlug || first;
+  const roadmapTitle = dataset?.roadmapTitle?.trim() || undefined;
+  if (!second) {
+    return {
+      roadmapSlug,
+      ...(roadmapTitle ? { roadmapTitle } : {}),
+      itemId: undefined,
+      section: querySection,
+    };
+  }
+  const itemTitle = dataset?.lessonTitle?.trim() || undefined;
+  return {
+    roadmapSlug,
+    ...(roadmapTitle ? { roadmapTitle } : {}),
+    itemId: second,
+    ...(itemTitle ? { itemTitle } : {}),
+    section: dataset?.section || querySection,
+  };
+}
+
 /**
  * Page the user is viewing: `/[topicSlug]` or `/[topicSlug]/[lessonSlug]` (ADR-0014), with the
- * Lesson page's DOM dataset for its Topic and Section. Returns undefined on the server so SSR
+ * Lesson/Topic page's DOM dataset for titles and Section. Returns undefined on the server so SSR
  * never reads window, and on pages that are not a Topic or Lesson (`/news`, `/portfolio`, ...).
  */
 export function getRoadmapPageContext(): PageContext | undefined {
@@ -80,18 +111,7 @@ export function getRoadmapPageContext(): PageContext | undefined {
   const [first, second] = window.location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
 
   if (first && !isReservedTopicSlug(first)) {
-    if (second) {
-      const contextEl =
-        typeof document !== 'undefined'
-          ? document.querySelector<HTMLElement>('[data-roadmap-context]')
-          : null;
-      return {
-        roadmapSlug: contextEl?.dataset.roadmapSlug || first,
-        itemId: second,
-        section: contextEl?.dataset.section || querySection,
-      };
-    }
-    return { roadmapSlug: first, itemId: undefined, section: querySection };
+    return buildPathPageContext(first, second, querySection);
   }
 
   const roadmapSlug = params.get('topic') || undefined;

@@ -3,12 +3,14 @@ import React from "react";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { ChatComposer } from "@/roadmap-rag-assistant/sdk/typescript/src/react/components/ChatComposer";
+import type { PageContextRef } from "@/roadmap-rag-assistant/sdk/typescript/src/react/utils/pageContextRef";
 
 function ComposerTestHarness(props: {
   initialInput?: string;
   isKeyboardOpen?: boolean;
   isLoading?: boolean;
   showStop?: boolean;
+  contextRef?: PageContextRef | null;
   onSend?: (text?: string) => void;
   onStop?: () => void;
 }) {
@@ -26,6 +28,7 @@ function ComposerTestHarness(props: {
       handleSend={props.onSend ?? vi.fn()}
       handleKeyDown={vi.fn()}
       isKeyboardOpen={props.isKeyboardOpen ?? false}
+      contextRef={props.contextRef}
     />
   );
 }
@@ -148,7 +151,8 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
     fireEvent.click(sendBtn);
     expect(handleSend).toHaveBeenCalledTimes(1);
 
-    // Switch to streaming state
+    // Switch to streaming state (real handleSend clears input upon sending)
+    fireEvent.change(screen.getByPlaceholderText("Hỏi Abot…"), { target: { value: "" } });
     rerender(
       <ComposerTestHarness
         initialInput=""
@@ -160,6 +164,16 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
     );
 
     expect(screen.getByPlaceholderText("Abot đang trả lời…")).toBeDefined();
+    const indicator = screen.getByTestId("composer-answering-indicator");
+    expect(indicator.textContent).toContain("Abot đang trả lời");
+    expect(indicator.querySelectorAll(".animate-dot-wave")).toHaveLength(3);
+
+    // Typing a follow-up draft hides the answering overlay immediately
+    fireEvent.change(screen.getByPlaceholderText("Abot đang trả lời…"), {
+      target: { value: "Hỏi tiếp" },
+    });
+    expect(screen.queryByTestId("composer-answering-indicator")).toBeNull();
+
     const stopBtn = screen.getByRole("button", { name: "Dừng phản hồi" });
     fireEvent.click(stopBtn);
     expect(handleStop).toHaveBeenCalledTimes(1);
@@ -176,5 +190,53 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
     fireEvent.change(textarea, { target: { value: "a".repeat(2000) } });
     const maxCounter = screen.getByText("2.000/2.000");
     expect(maxCounter.className).toContain("text-[#B42318]");
+  });
+
+  it("renders Tablet+ current-page Context Reference chip inside composer-toolbar alongside Send button", () => {
+    const lessonRef: PageContextRef = {
+      kind: "lesson",
+      path: "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529",
+      label: "Bản phát hành bảo mật Next.js tháng 11/2026 và lỗi v16.4.5 & v15.5.29",
+      tooltip:
+        "Bản phát hành bảo mật Next.js tháng 11/2026 và lỗi v16.4.5 & v15.5.29 (/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529)",
+    };
+
+    const { rerender } = render(<ComposerTestHarness contextRef={lessonRef} />);
+
+    const card = screen.getByTestId("composer-card");
+    const toolbar = screen.getByTestId("composer-toolbar");
+    const chip = screen.getByTestId("composer-context-ref");
+    const sendBtn = screen.getByRole("button", { name: "Gửi tin nhắn" });
+    const textarea = screen.getByPlaceholderText("Hỏi Abot…");
+
+    // Chip sits inside composer-toolbar on the same row as the Send button, hidden below md (Tablet+)
+    expect(toolbar.contains(chip)).toBe(true);
+    expect(toolbar.contains(sendBtn)).toBe(true);
+    expect(chip.className).toContain("hidden");
+    expect(chip.className).toContain("md:inline-flex");
+    expect(card.className).toContain("md:flex-col");
+    expect(chip.getAttribute("data-context-kind")).toBe("lesson");
+    expect(chip.getAttribute("data-context-path")).toBe(lessonRef.path);
+    expect(chip.textContent).toBe(lessonRef.label);
+    expect(chip.textContent).not.toContain("Trang hiện tại");
+
+    // Textarea className remains static across typing even with contextRef enabled
+    const clsBefore = textarea.className;
+    fireEvent.change(textarea, { target: { value: "Tóm tắt bài này\nÝ thứ hai" } });
+    expect(textarea.className).toBe(clsBefore);
+
+    // Topic reference variant
+    rerender(
+      <ComposerTestHarness
+        contextRef={{
+          kind: "topic",
+          path: "/frontend",
+          label: "Frontend",
+          tooltip: "Frontend (/frontend)",
+        }}
+      />
+    );
+    expect(screen.getByTestId("composer-context-ref").getAttribute("data-context-kind")).toBe("topic");
+    expect(screen.getByTestId("composer-context-ref").textContent).toContain("Frontend");
   });
 });

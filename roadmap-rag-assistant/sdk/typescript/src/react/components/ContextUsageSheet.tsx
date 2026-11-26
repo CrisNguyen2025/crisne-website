@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import type { ContextLastTurn, ConversationContext } from "../../types";
 import type { ConversationContextState } from "../useRoadmapAssistantChat";
 import { formatPercent, formatTokenCount, formatTokenDelta } from "../utils/formatters";
-import { ChevronDownIcon, CloseIcon } from "../icons";
+import type { PageContextRef } from "../utils/pageContextRef";
+import { BookOpenIcon, ChevronDownIcon, CloseIcon, FileTextIcon } from "../icons";
 
 // One class per part: Tailwind needs the full class names to be present in the source
 const PART_COLORS: Record<string, string> = {
@@ -15,11 +16,12 @@ const RESERVED_COLOR = "bg-[#B9B6AF]";
 
 export interface ContextUsageSheetProps {
   context: ConversationContextState;
+  contextRef?: PageContextRef | null;
   onRetry: () => void;
   onClose: () => void;
 }
 
-export function ContextUsageSheet({ context, onRetry, onClose }: ContextUsageSheetProps) {
+export function ContextUsageSheet({ context, contextRef, onRetry, onClose }: ContextUsageSheetProps) {
   const { data, deltaTokens, isLoading, error } = context;
 
   // Captured first and stopped, so Escape closes this sheet and not the chat around it
@@ -55,6 +57,26 @@ export function ContextUsageSheet({ context, onRetry, onClose }: ContextUsageShe
             <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
           </button>
         </div>
+
+        {contextRef && (
+          <div
+            data-testid="context-sheet-page-ref"
+            title={contextRef.tooltip}
+            className="mt-2.5 hidden md:flex items-center justify-between gap-2 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0]/75 px-2.5 py-1.5 text-xs"
+          >
+            <span className="flex min-w-0 items-center gap-1.5 text-[#1F1E1C]">
+              {contextRef.kind === "lesson" ? (
+                <FileTextIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
+              ) : (
+                <BookOpenIcon className="h-3.5 w-3.5 shrink-0 text-[#C2410C]" />
+              )}
+              <span className="truncate font-medium">{contextRef.label}</span>
+            </span>
+            <span className="shrink-0 font-mono text-[11px] text-[#5E5B55] max-w-[45%] truncate">
+              {contextRef.path}
+            </span>
+          </div>
+        )}
 
         {data ? (
           <ContextBody data={data} deltaTokens={deltaTokens} />

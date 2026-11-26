@@ -24,14 +24,22 @@ import { useDrawerMotion } from "./utils/useDrawerMotion";
 import { useHeaderFlip } from "./utils/useHeaderFlip";
 import { useDesktopPanelHeight } from "./utils/useDesktopPanelHeight";
 import { useSidebarLayout } from "./utils/useSidebarLayout";
+import { useSidebarWidth } from "./utils/useSidebarWidth";
 import { useWidgetDismiss } from "./utils/useWidgetDismiss";
 import { useChatAutoScroll } from "./utils/useChatAutoScroll";
 import { DesktopResizeHandle } from "./components/DesktopResizeHandle";
 import { WELCOME_MESSAGE_ID } from "./welcome";
 import { MessageList } from "./components/MessageList";
 import { useFeedback, type VoteDetail } from "./useFeedback";
-import { feedbackKey } from "./storage";
+import {
+  feedbackKey,
+  loadOpenState,
+  openStateKey,
+  saveOpenState,
+} from "./storage";
 import { WIDGET_THEME_VARS } from "./tokens";
+import { ChatNavigationContext } from "./utils/navigation";
+import { useActiveContextRef } from "./utils/pageContextRef";
 
 export function RoadmapChatbotWidget({
   position = "bottom-right",
@@ -46,8 +54,10 @@ export function RoadmapChatbotWidget({
   initialMessages,
   onToolExecuted,
   onNotify,
+  onNavigate,
   onFeedback,
   getContext,
+  routeKey,
   onWebMcpMessage,
   className = "",
   conversationId: customConversationId,
@@ -55,7 +65,17 @@ export function RoadmapChatbotWidget({
   canWrite = false,
   restoreLatestThread = false,
 }: ChatbotConfig) {
-  const [isOpen, setIsOpen] = useState(initialOpen);
+  const openStorageKey = openStateKey(baseUrl);
+  const [isOpen, setIsOpenState] = useState<boolean>(
+    () => loadOpenState(openStorageKey) ?? initialOpen
+  );
+  const setIsOpen = useCallback(
+    (open: boolean) => {
+      setIsOpenState(open);
+      saveOpenState(openStorageKey, open);
+    },
+    [openStorageKey]
+  );
   const [isHovered, setIsHovered] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isSwitchMenuOpen, setIsSwitchMenuOpen] = useState(false);
@@ -66,17 +86,10 @@ export function RoadmapChatbotWidget({
   const [isSwitchingThread, setIsSwitchingThread] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const switchMenuRef = useRef<HTMLDivElement>(null);
-  const { viewMode, setViewMode, isSidebarActive } = useSidebarLayout(
-    baseUrl,
-    defaultViewMode,
-    isOpen
-  );
-  const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(
-    null
-  );
+  const { viewMode, setViewMode, isSidebarActive } = useSidebarLayout(baseUrl, defaultViewMode, isOpen);
+  const { pageContext: activePageContext, contextRef: activeContextRef } = useActiveContextRef(getContext, isOpen, routeKey);
+  const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [activeFeedbackMsgId, setActiveFeedbackMsgId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // What the open reason sheet holds so far
@@ -89,18 +102,13 @@ export function RoadmapChatbotWidget({
   }, [feedbackNotice]);
 
   // Votes show at once; the host only gets the last one (see useFeedback)
-  const {
-    votes: feedback,
-    vote,
-    commit,
-  } = useFeedback({
+  const { votes: feedback, vote, commit } = useFeedback({
     storageKey: feedbackKey(baseUrl),
     send: async (msgId, value, detail) => {
       const traceId = messages.find((m) => m.id === msgId)?.traceId;
       await onFeedback?.(msgId, value, { traceId, ...detail });
     },
-    onFailed: () =>
-      setFeedbackNotice("Chưa gửi được đánh giá, vui lòng thử lại."),
+    onFailed: () => setFeedbackNotice("Chưa gửi được đánh giá, vui lòng thử lại."),
   });
 
   const handleFeedback = (msgId: string, val: 1 | 0) => {
@@ -197,7 +205,7 @@ export function RoadmapChatbotWidget({
     setIsContextOpen(false);
     setIsMemoryOpen(false);
     setIsHistoryOpen(false);
-  }, []);
+  }, [setIsOpen]);
   const { close: animateClose } = useDrawerMotion(
     containerRef,
     scrimRef,
@@ -286,9 +294,29 @@ export function RoadmapChatbotWidget({
     onResize: handlePanelResize,
   });
 
+  const sidebarWidthProps = useSidebarWidth({
+    isSidebarActive,
+    baseUrl,
+    containerRef,
+    onResize: handlePanelResize,
+  });
+
   useEffect(() => {
-    isResizingRef.current = resizeHandleProps.isDragging;
-  }, [resizeHandleProps.isDragging]);
+    isResizingRef.current =
+      resizeHandleProps.isDragging || sidebarWidthProps.isDragging;
+  }, [resizeHandleProps.isDragging, sidebarWidthProps.isDragging]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (typeof window.requestAnimationFrame !== "function") {
+      handlePanelResize();
+      return;
+    }
+    const raf = window.requestAnimationFrame(() => {
+      handlePanelResize();
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [isOpen, viewMode, handlePanelResize]);
 
   // Auto-focus on open or when generation completes (Desktop only >= 768px, avoid aggressive mobile keyboard jump)
   useEffect(() => {
@@ -470,12 +498,13 @@ export function RoadmapChatbotWidget({
         : "idle";
 
   return (
-    <div
-      style={positionStyles}
-      className={`pointer-events-none flex flex-col font-sans ${
-        position.endsWith("left") ? "items-start" : "items-end"
-      } ${className}`}
-    >
+    <ChatNavigationContext.Provider value={onNavigate}>
+      <div
+        style={positionStyles}
+        className={`pointer-events-none flex flex-col font-sans ${
+          position.endsWith("left") ? "items-start" : "items-end"
+        } ${className}`}
+      >
       {isOpen && (
         <div
           ref={scrimRef}
@@ -490,14 +519,17 @@ export function RoadmapChatbotWidget({
           data-abot-overlay-root=""
           data-abot-view-mode={viewMode}
           style={{ ...WIDGET_THEME_VARS, ...keyboardBox }}
-          className={`pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] animate-in fade-in duration-200 max-md:slide-in-from-right max-md:duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:w-[25rem] md:max-w-[calc(100vw-2rem)] ${
+          className={`pointer-events-auto fixed inset-0 z-50 flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden bg-[#FFFFFF] text-[#1F1E1C] max-md:shadow-[-8px_0_28px_rgba(0,0,0,0.15)] transition-none animate-in fade-in animation-duration-200 max-md:slide-in-from-right max-md:animation-duration-300 motion-reduce:animate-none rounded-none border-0 md:relative md:inset-auto md:z-auto md:w-[25rem] ${
             viewMode === "sidebar"
-              ? "md:h-dvh md:max-h-dvh md:rounded-none md:border-l md:border-[#E6E4DF] md:shadow-none"
-              : "md:h-[40.625rem] md:max-h-[calc(100dvh-3rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] md:zoom-in-95"
+              ? "md:h-dvh md:max-h-dvh md:max-w-none md:rounded-none md:border-l md:border-[#E6E4DF] md:shadow-none"
+              : "md:h-[40.625rem] md:max-h-[calc(100dvh-3rem)] md:max-w-[calc(100vw-2rem)] md:rounded-2xl md:border md:border-[#E6E4DF] md:shadow-[0_1px_2px_rgb(0_0_0_/_0.06)] md:zoom-in-95"
           }`}
         >
           {viewMode === "floating" && !position.startsWith("top") && (
             <DesktopResizeHandle edge="top" {...resizeHandleProps} />
+          )}
+          {viewMode === "sidebar" && (
+            <DesktopResizeHandle edge="left" {...sidebarWidthProps} />
           )}
 
           <ChatHeader
@@ -607,6 +639,7 @@ export function RoadmapChatbotWidget({
             stopStreaming={stopStreaming}
             handleSend={handleSend}
             handleKeyDown={handleKeyDown}
+            contextRef={activeContextRef}
             isKeyboardOpen={
               typeof keyboardBox?.height === "number" &&
               typeof window !== "undefined" &&
@@ -622,6 +655,7 @@ export function RoadmapChatbotWidget({
           {isContextOpen && (
             <ContextUsageSheet
               context={conversationContext}
+              contextRef={activeContextRef}
               onRetry={() => void refreshContext()}
               onClose={() => setIsContextOpen(false)}
             />
@@ -629,7 +663,7 @@ export function RoadmapChatbotWidget({
 
           {/* ── Owner Memory Bottom Sheet (Owner-only, ADR-0015) ── */}
           {canWrite && isMemoryOpen && (
-            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={getContext?.()?.roadmapSlug} onPendingCountChange={setPendingMemoryCount} onClose={() => setIsMemoryOpen(false)} />
+            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug} onPendingCountChange={setPendingMemoryCount} onClose={() => setIsMemoryOpen(false)} />
           )}
 
           {/* ── Thread History Bottom Sheet (Owner-only, ADR-0012) ── */}
@@ -697,7 +731,8 @@ export function RoadmapChatbotWidget({
           <SparklesIcon className="h-3.5 w-3.5 text-[#8BB5D9]/80 transition-transform duration-300 group-hover:rotate-12 group-hover:text-[#C4E4FF]" />
         </button>
       )}
-    </div>
+      </div>
+    </ChatNavigationContext.Provider>
   );
 }
 

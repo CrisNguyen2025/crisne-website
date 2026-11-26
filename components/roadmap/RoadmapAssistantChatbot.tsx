@@ -6,7 +6,8 @@ import {
   ROADMAP_ASSISTANT_BASE_URL,
   runWebMcpCommand,
 } from "@/logic/roadmap/roadmapAssistantService";
-import React from "react";
+import React, { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { useToast } from "@/components/ui/toast";
 import { RoadmapChatbotWidget } from "@/roadmap-rag-assistant/sdk/typescript/src/react/RoadmapChatbotWidget";
@@ -49,6 +50,11 @@ export interface RoadmapAssistantChatbotProps {
   title?: string;
 
   /**
+   * Optional active pathname / route key so the widget refreshes its page context indicator on SPA transitions.
+   */
+  routeKey?: string;
+
+  /**
    * Optional callback fired when a tool executes.
    */
   onToolExecuted?: (toolName: string, result: string, isFailed?: boolean) => void;
@@ -75,6 +81,7 @@ export function RoadmapAssistantChatbot({
   zIndex = 9999,
   className = "",
   title = "Abot",
+  routeKey,
   onToolExecuted,
 }: RoadmapAssistantChatbotProps) {
   const handleToolExecuted = (
@@ -105,6 +112,13 @@ export function RoadmapAssistantChatbot({
 
   const canWrite = useCanWrite();
   const { toast } = useToast();
+  const router = useRouter();
+  const handleNavigate = useCallback(
+    (href: string) => {
+      router.push(href);
+    },
+    [router]
+  );
 
   return (
     <RoadmapChatbotWidget
@@ -119,6 +133,8 @@ export function RoadmapAssistantChatbot({
       className={className}
       onToolExecuted={handleToolExecuted}
       onNotify={toast}
+      onNavigate={handleNavigate}
+      routeKey={routeKey}
       getContext={getRoadmapPageContext}
       onWebMcpMessage={runWebMcpCommand}
     />

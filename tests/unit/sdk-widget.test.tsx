@@ -108,7 +108,52 @@ describe("RoadmapChatbotWidget", () => {
       expect(panel.className).toContain("md:border-l");
       expect(panel.style.height).toBe("");
       expect(screen.queryByRole("separator", { name: "Kéo để thay đổi chiều cao Abot" })).toBeNull();
+      const widthHandle = screen.getByRole("separator", { name: "Kéo để thay đổi chiều rộng Abot" });
+      expect(widthHandle).toBeTruthy();
+      expect(widthHandle.getAttribute("aria-orientation")).toBe("vertical");
       expect(document.documentElement.dataset.abotSidebar).toBe("true");
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("25rem");
+
+      // Keyboard resize widens and resets on double-click
+      fireEvent.keyDown(widthHandle, { key: "ArrowLeft" });
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("26.5rem");
+      expect(panel.style.width).toBe("26.5rem");
+      fireEvent.doubleClick(widthHandle);
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("25rem");
+      expect(panel.style.width).toBe("25rem");
+
+      // Dragging left edge widens the sidebar and persists to sessionStorage
+      fireEvent.mouseDown(widthHandle, { button: 0, clientX: 1040 });
+      expect(document.documentElement.dataset.abotResizing).toBe("true");
+      fireEvent.mouseMove(window, { clientX: 960 });
+      fireEvent.mouseUp(window);
+      expect(document.documentElement.dataset.abotResizing).toBeUndefined();
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("30rem");
+      expect(panel.style.width).toBe("30rem");
+      expect(window.sessionStorage.getItem(`abot:sidebar-width:${BASE}`)).toBe("480");
+
+      // Switch to Floating then back to Sidebar: panel width & --abot-sidebar-width stay in sync
+      fireEvent.click(screen.getByRole("button", { name: "Switch to" }));
+      fireEvent.click(screen.getByRole("button", { name: "Floating" }));
+      expect(panel.style.width).toBe("");
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("");
+      expect(panel.style.height).not.toBe("");
+
+      fireEvent.click(screen.getByRole("button", { name: "Switch to" }));
+      fireEvent.click(screen.getByRole("button", { name: "Sidebar" }));
+      expect(panel.style.height).toBe("");
+      expect(panel.style.width).toBe("30rem");
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("30rem");
+
+      // Resizing again after Floating -> Sidebar stays smooth and keeps syncing
+      const nextWidthHandle = screen.getByRole("separator", { name: "Kéo để thay đổi chiều rộng Abot" });
+      fireEvent.mouseDown(nextWidthHandle, { button: 0, clientX: 960 });
+      fireEvent.mouseMove(window, { clientX: 928 });
+      fireEvent.mouseUp(window);
+      expect(panel.style.width).toBe("32rem");
+      expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("32rem");
+
+      fireEvent.doubleClick(nextWidthHandle);
       expect(document.documentElement.style.getPropertyValue("--abot-sidebar-width")).toBe("25rem");
 
       // Desktop sidebar stays docked on outside clicks and global Escape
@@ -374,6 +419,201 @@ describe("RoadmapChatbotWidget", () => {
 
       fireEvent.click(heroSvg);
       expect(heroSvg.querySelectorAll('circle[stroke-dasharray="4 2.5"]')).toHaveLength(2);
+    });
+  });
+
+  describe("open-state persistence and internal SPA navigation", () => {
+    it("keeps Abot open across remount/reload via sessionStorage and respects explicit close", () => {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn().mockImplementation((query: string) => ({
+          matches: query === "(min-width: 48rem)",
+          media: query,
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        }))
+      );
+
+      const first = render(<RoadmapChatbotWidget baseUrl={BASE} />);
+      expect(screen.queryByRole("button", { name: "Đóng Abot" })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "Mở Abot" }));
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // Simulate full reload / unmount-remount with default initialOpen=false
+      first.unmount();
+      const reloaded = render(<RoadmapChatbotWidget baseUrl={BASE} />);
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // Explicit close persists false so next reload stays closed
+      fireEvent.click(screen.getByRole("button", { name: "Đóng Abot" }));
+      expect(screen.getByRole("button", { name: "Mở Abot" })).toBeTruthy();
+
+      reloaded.unmount();
+      render(<RoadmapChatbotWidget baseUrl={BASE} />);
+      expect(screen.queryByRole("button", { name: "Đóng Abot" })).toBeNull();
+    });
+
+    it("navigates internal markdown, citation, and step source links via onNavigate without closing Abot", async () => {
+      const onNavigate = vi.fn();
+      render(
+        <RoadmapChatbotWidget
+          baseUrl={BASE}
+          initialOpen
+          onNavigate={onNavigate}
+          initialMessages={[
+            {
+              id: "m-nav",
+              role: "assistant",
+              content: "Xem [Bài React](/react/hooks) và [Tài liệu ngoài](https://react.dev).",
+              sources: [
+                { id: "s1", title: "React Hooks", href: "/react/hooks", cited: true },
+              ],
+              steps: [
+                {
+                  id: "step-1",
+                  kind: "retrieval",
+                  status: "done",
+                  count: 1,
+                  items: [{ title: "Hook cơ bản", href: "/react/hooks#basic" }],
+                },
+              ],
+              status: "complete",
+              timestamp: new Date("2026-11-26T00:00:00Z"),
+            },
+          ]}
+        />
+      );
+
+      // 1. Plain left click on internal markdown link -> SPA onNavigate, stays open
+      const internalLink = screen.getByRole("link", { name: "Bài React" });
+      fireEvent.click(internalLink);
+      expect(onNavigate).toHaveBeenCalledWith("/react/hooks");
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // 2. Modified click (Ctrl/Meta) does not intercept SPA navigation
+      onNavigate.mockClear();
+      fireEvent.click(internalLink, { ctrlKey: true });
+      fireEvent.click(internalLink, { metaKey: true });
+      expect(onNavigate).not.toHaveBeenCalled();
+
+      // 3. External link stays native target=_blank and does not call onNavigate
+      const externalLink = screen.getByRole("link", { name: "Tài liệu ngoài" });
+      expect(externalLink.getAttribute("target")).toBe("_blank");
+      fireEvent.click(externalLink);
+      expect(onNavigate).not.toHaveBeenCalled();
+
+      // 4. Citation chip click navigates via onNavigate and keeps Abot open
+      const chip = screen.getByRole("button", { name: "React Hooks" });
+      fireEvent.mouseEnter(chip);
+      fireEvent.click(chip);
+      expect(onNavigate).toHaveBeenCalledWith("/react/hooks");
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // 5. Expanded step source link also navigates via onNavigate
+      onNavigate.mockClear();
+      fireEvent.click(screen.getByRole("button", { name: /Đã xử lý/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Tra cứu cơ sở tri thức/ }));
+      fireEvent.click(screen.getByRole("link", { name: "Hook cơ bản" }));
+      expect(onNavigate).toHaveBeenCalledWith("/react/hooks#basic");
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+    });
+
+    it("updates composer Context Reference across Topic/Lesson navigation, attaches it to sent messages, and navigates on click", async () => {
+      const onNavigate = vi.fn();
+      let currentCtx = {
+        roadmapSlug: "frontend",
+        roadmapTitle: "Frontend",
+        itemId: "ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529",
+        itemTitle: "Bản phát hành bảo mật Next.js tháng 11/2026",
+      } as {
+        roadmapSlug?: string;
+        roadmapTitle?: string;
+        itemId?: string;
+        itemTitle?: string;
+      } | undefined;
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(
+          new Response(
+            new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode('event: done\ndata: {"message":"Tóm tắt bài Next.js"}\n\n'));
+                c.close();
+              },
+            }),
+            { status: 200 }
+          )
+        )
+      );
+
+      const { rerender } = render(
+        <RoadmapChatbotWidget
+          baseUrl={BASE}
+          initialOpen
+          onNavigate={onNavigate}
+          routeKey="/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
+          getContext={() => currentCtx}
+        />
+      );
+
+      // 1. Lesson Context Reference shows in composer alongside Send button
+      const composerChip = screen.getByTestId("composer-context-ref");
+      expect(composerChip.getAttribute("data-context-kind")).toBe("lesson");
+      expect(composerChip.getAttribute("data-context-path")).toBe(
+        "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
+      );
+      expect(composerChip.textContent).toContain("Bản phát hành bảo mật Next.js tháng 11/2026");
+
+      // 2. Sending records the snapshot onto the user message bubble
+      fireEvent.change(screen.getByPlaceholderText(/Hỏi Abot/), {
+        target: { value: "Tóm tắt bài này" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Gửi tin nhắn" }));
+      await screen.findByText("Tóm tắt bài Next.js");
+
+      const sentChip = screen.getByTestId("message-context-ref");
+      expect(sentChip.getAttribute("data-context-path")).toBe(
+        "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
+      );
+      expect(sentChip.textContent).toBe("Bản phát hành bảo mật Next.js tháng 11/2026");
+
+      // 3. Navigating to Topic overview updates composer chip while keeping sent message snapshot intact
+      currentCtx = { roadmapSlug: "frontend", roadmapTitle: "Frontend" };
+      rerender(
+        <RoadmapChatbotWidget
+          baseUrl={BASE}
+          initialOpen
+          onNavigate={onNavigate}
+          routeKey="/frontend"
+          getContext={() => currentCtx}
+        />
+      );
+      expect(screen.getByTestId("composer-context-ref").getAttribute("data-context-kind")).toBe("topic");
+      expect(screen.getByTestId("composer-context-ref").getAttribute("data-context-path")).toBe("/frontend");
+      expect(screen.getByTestId("message-context-ref").getAttribute("data-context-path")).toBe(
+        "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
+      );
+
+      // 4. Clicking the sent message's context chip SPA-navigates back to that Lesson
+      fireEvent.click(sentChip.closest("a") as HTMLAnchorElement);
+      expect(onNavigate).toHaveBeenCalledWith(
+        "/frontend/ban-phat-hanh-bao-mat-nextjs-thang-112026-va-loi-v1645-va-v15529"
+      );
+
+      // 5. Navigating to root home clears the composer chip
+      currentCtx = undefined;
+      rerender(
+        <RoadmapChatbotWidget
+          baseUrl={BASE}
+          initialOpen
+          onNavigate={onNavigate}
+          routeKey="/"
+          getContext={() => currentCtx}
+        />
+      );
+      expect(screen.queryByTestId("composer-context-ref")).toBeNull();
     });
   });
 });

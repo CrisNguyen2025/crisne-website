@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import type { ChatbotViewMode } from "../types";
 import { loadViewMode, saveViewMode, viewModeKey } from "../storage";
 
 export const SIDEBAR_WIDTH_REM = "25rem";
+
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function useSidebarLayout(
   baseUrl: string,
@@ -24,12 +27,14 @@ export function useSidebarLayout(
 
   const isSidebarActive = isOpen && viewMode === "sidebar";
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (typeof document === "undefined") return;
     const root = document.documentElement;
     if (isSidebarActive) {
       root.dataset.abotSidebar = "true";
-      root.style.setProperty("--abot-sidebar-width", SIDEBAR_WIDTH_REM);
+      if (!root.style.getPropertyValue("--abot-sidebar-width")) {
+        root.style.setProperty("--abot-sidebar-width", SIDEBAR_WIDTH_REM);
+      }
     } else {
       delete root.dataset.abotSidebar;
       root.style.removeProperty("--abot-sidebar-width");

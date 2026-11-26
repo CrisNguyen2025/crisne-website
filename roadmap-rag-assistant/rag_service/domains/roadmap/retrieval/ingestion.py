@@ -30,6 +30,10 @@ class KnowledgeDocument(BaseModel):
         default_factory=list,
         description="Set on a copy of a lesson by search: its best matching chunks as {anchor, heading, text}",
     )
+    is_current_page: bool = Field(
+        default=False,
+        description="Set on a copy of the open Topic/Lesson document when grounded from PageContext",
+    )
 
     @property
     def fts_kind(self) -> str:
