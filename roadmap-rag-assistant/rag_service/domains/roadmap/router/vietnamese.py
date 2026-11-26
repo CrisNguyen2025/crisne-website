@@ -40,10 +40,24 @@ def normalize_vietnamese(text: str) -> str:
 
 
 # Chat shorthand with one meaning. Only lowercase standalone tokens: "DC Comics" or "K8s" are names.
-# Left out on purpose: "vs" (versus), "e", "r", "ad", "k" (handled where it ends a yes/no question).
+# Left out on purpose: "vs" (versus), "e", "r", "ad", "k" (handled where it ends a yes/no question),
+# "ns" (namespace, nanosecond), and shorthand that is also a tech term ("lm", "ms", "ng", "nx", "qa", "tg", "cx")
+# or has two common meanings ("bh", "bn", "đk", "nc", "dg", "v").
 TEENCODE = {
-    "dc": "được", "đc": "được", "ko": "không", "hok": "không", "hông": "không", "khum": "không",
-    "j": "gì", "mk": "mình", "mik": "mình", "bik": "biết", "bít": "biết", "ns": "nói", "z": "vậy",
+    "dc": "được", "đc": "được",
+    "ko": "không", "hok": "không", "hông": "không", "khum": "không", "khg": "không", "k0": "không", "kô": "không",
+    "j": "gì", "ji": "gì", "zì": "gì", "z": "vậy", "zậy": "vậy", "dzậy": "vậy", "zị": "vậy",
+    "ntn": "như thế nào", "ntnao": "như thế nào", "bnhiu": "bao nhiêu", "bnhieu": "bao nhiêu",
+    "bjo": "bây giờ", "bgio": "bây giờ", "hnay": "hôm nay", "hqua": "hôm qua", "trc": "trước", "chx": "chưa",
+    "đg": "đang", "tgian": "thời gian",
+    "mk": "mình", "mik": "mình", "mìn": "mình", "mềnh": "mình", "mn": "mọi người", "mng": "mọi người",
+    "ngta": "người ta", "pn": "bạn", "pạn": "bạn",
+    "nma": "nhưng mà", "nhma": "nhưng mà", "nhg": "nhưng", "nhưg": "nhưng", "lun": "luôn", "thui": "thôi",
+    "thoy": "thôi", "qá": "quá", "wá": "quá", "nhiu": "nhiều", "nhìu": "nhiều", "bth": "bình thường",
+    "bik": "biết", "bít": "biết", "bjt": "biết", "hiu": "hiểu", "hỉu": "hiểu", "hju": "hiểu", "thik": "thích",
+    "mún": "muốn", "đki": "đăng ký", "đky": "đăng ký",
+    "vd": "ví dụ", "vde": "vấn đề", "vđ": "vấn đề", "kq": "kết quả", "lquan": "liên quan",
+    "ctrinh": "chương trình", "ngcuu": "nghiên cứu", "ncuu": "nghiên cứu", "cty": "công ty",
 }
 _TEENCODE_TOKEN = re.compile(r"(?<![\w./-])(" + "|".join(sorted(TEENCODE, key=len, reverse=True)) + r")(?![\w./-])")
 
