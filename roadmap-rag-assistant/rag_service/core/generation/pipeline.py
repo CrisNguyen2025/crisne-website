@@ -30,7 +30,7 @@ from rag_service.core.augmentation.context import (
     format_documents,
     reorder_documents,
     select_documents,
-    synthesize_prompt,
+    synthesize_prompt_parts,
 )
 from rag_service.core.generation.delivery import metadata_event, token_event
 from rag_service.core.generation.faithfulness import unsupported_claims
@@ -194,7 +194,7 @@ class GenerationPipeline:
     def _build_stream_setup(profile: DomainProfile, req: GenerationRequest) -> dict[str, Any]:
         is_rag = req.mode == "rag"
         documents = reorder_documents(select_documents(req, profile)) if is_rag else []
-        prompt, selected_memory_ids = synthesize_prompt(req, profile, documents=documents)
+        prompt_parts, selected_memory_ids = synthesize_prompt_parts(req, profile, documents=documents)
         known = profile.known_links() if is_rag and profile.known_links else None
         links = citation.citation_filter(known)
         channel = SourceChannel(d.id for d in documents) if is_rag else None
@@ -210,7 +210,8 @@ class GenerationPipeline:
         return {
             "is_rag": is_rag,
             "documents": documents,
-            "prompt": prompt,
+            "prompt_parts": prompt_parts,
+            "prompt": prompt_parts.as_prompt(),
             "selected_memory_ids": selected_memory_ids,
             "links": links,
             "channel": channel,
@@ -267,7 +268,7 @@ class GenerationPipeline:
         pii, claims, tracker, hold = setup["pii"], setup["claims"], setup["tracker"], setup["hold"]
         result = StreamResult()
         try:
-            async for delta in astream(llm, setup["prompt"], result):  # S2
+            async for delta in astream(llm, setup["prompt_parts"], result):  # S2
                 text = channel.feed(delta) if channel else delta
                 if cite:
                     text = cite.feed(text)
@@ -307,12 +308,14 @@ class GenerationPipeline:
         clean: list[str] = []  # the answer without the sources line and source labels
         held: list[str] = []
 
+        prompt_meta = setup["prompt_parts"].trace_metadata()
         yield step_event("answer", "generation", "running")
         gen = start_step(
             profile.trace_names.get(req.mode, f"{req.mode}-answer"),
             "generation",
             model=settings.llm_model,
             input=prompt,
+            metadata=prompt_meta or None,
         )
         emitted = False  # any text sent yet (outside "fallback")
         async for did_emit, ev in self._run_llm_token_stream(llm, req, setup, clean, held, gen):
@@ -348,7 +351,7 @@ class GenerationPipeline:
                 usage_details=usage,
                 level="WARNING",
                 status_message=f"grounding failed: {', '.join(report.issues)}; answer withheld",
-                metadata={"grounding": report.grounding, "sections": sections, "fallback": "grounding"},
+                metadata={**prompt_meta, "grounding": report.grounding, "sections": sections, "fallback": "grounding"},
             )
             if (trace := current_trace()) is not None:
                 trace.flags["grounding_fallback"] = True
@@ -361,7 +364,9 @@ class GenerationPipeline:
             gen,
             output=answer,
             usage_details=usage,
-            metadata={"grounding": report.grounding, "sections": sections} if report else {"sections": sections},
+            metadata={**prompt_meta, "grounding": report.grounding, "sections": sections}
+            if report
+            else {**prompt_meta, "sections": sections},
             **self._grounding_step_level(report),
         )
         if held:

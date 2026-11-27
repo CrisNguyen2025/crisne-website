@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     # Comma-separated browser origins; empty because browsers go through the Next.js proxy.
     cors_origins: str = ""
 
+    # ── Prompt Management (Langfuse) ──
+    langfuse_prompt_sync: bool = False
+    langfuse_prompt_label: str = "production"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

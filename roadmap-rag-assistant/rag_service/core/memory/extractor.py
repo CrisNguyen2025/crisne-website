@@ -20,13 +20,13 @@ from typing import Any, List, Optional, Sequence
 from rag_service import observability
 from rag_service.auth import is_owner
 from rag_service.core.memory.store import (
-    _OPEN_CONTROL_TAG_RE,
     OWNER_MEMORY_KINDS,
     OwnerMemoryItem,
     OwnerMemoryStore,
     _escape_tag,
     owner_memory_store,
 )
+from rag_service.core.prompting import PromptParts, _OPEN_CONTROL_TAG_RE, llm_input, register_prompt
 from rag_service.pii import contains_secret, is_placeholder_only, mask_pii
 
 log = logging.getLogger(__name__)
@@ -152,14 +152,17 @@ def has_memory_signal(user_message: str, assistant_reply: str = "") -> bool:
     return bool(flat_reply and _REPLY_INSIGHT_RE.search(flat_reply))
 
 
-def _build_extraction_prompt(
+PROMPT_MEMORY_EXTRACT_SPEC = register_prompt("core-memory-extract", "1.0", "Owner memory auto-extractor")
+
+
+def _build_extraction_prompt_parts(
     *,
     user_message: str,
     assistant_reply: str,
     existing_active: Sequence[OwnerMemoryItem],
     existing_pending: Sequence[OwnerMemoryItem],
     scope: Optional[str],
-) -> str:
+) -> PromptParts:
     active_lines = [
         f"- id={_escape_tag(m.id)} | kind={_escape_tag(m.kind)} | scope={_escape_tag(m.scope or 'global')} | {_escape_tag(m.content)}"
         for m in existing_active[:30]
@@ -174,7 +177,7 @@ def _build_extraction_prompt(
     safe_user = _escape_tag(user_message[:1200])
     safe_reply = _escape_tag(assistant_reply[:800])
 
-    return (
+    system_text = (
         "Bạn là bộ trích xuất Owner Memory chạy nền.\n"
         "Nhiệm vụ: đọc lượt hội thoại gần nhất của Owner và chỉ trích xuất những sự thật BỀN VỮNG về chính Owner "
         "(nền tảng, techstack đang dùng, mục tiêu dài hạn, quy ước trả lời, hoặc điểm kiến thức hay nhầm).\n\n"
@@ -189,12 +192,37 @@ def _build_extraction_prompt(
         "8. `scoped`: `true` nếu chỉ áp dụng riêng cho ngữ cảnh đang mở (`" + scope_line + "`), `false` nếu áp dụng toàn cục.\n"
         "9. Chỉ đề xuất khi `confidence >= 0.75`. Tối đa 2 mục.\n\n"
         "Định dạng JSON:\n"
-        '[{"action":"ADD","kind":"techstack","content":"...","scoped":false,"replaces_memory_id":null,"confidence":0.9,"evidence_snippet":"..."}]\n\n'
+        '[{"action":"ADD","kind":"techstack","content":"...","scoped":false,"replaces_memory_id":null,"confidence":0.9,"evidence_snippet":"..."}]'
+    )
+    user_text = (
         f"ACTIVE MEMORIES:\n{active_block}\n\n"
         f"PENDING MEMORIES:\n{pending_block}\n\n"
-        f"OWNER MESSAGE:\n{safe_user}\n\n"
-        f"ASSISTANT REPLY (ngữ cảnh phụ):\n{safe_reply}"
+        f"<user_query>\nOWNER MESSAGE:\n{safe_user}\n</user_query>\n\n"
+        f"<assistant_reply>\nASSISTANT REPLY (ngữ cảnh phụ):\n{safe_reply}\n</assistant_reply>"
     )
+    return PromptParts(
+        system_text=system_text,
+        user_text=user_text,
+        prompt_id=PROMPT_MEMORY_EXTRACT_SPEC.id,
+        prompt_version=PROMPT_MEMORY_EXTRACT_SPEC.version,
+    )
+
+
+def _build_extraction_prompt(
+    *,
+    user_message: str,
+    assistant_reply: str,
+    existing_active: Sequence[OwnerMemoryItem],
+    existing_pending: Sequence[OwnerMemoryItem],
+    scope: Optional[str],
+) -> str:
+    return _build_extraction_prompt_parts(
+        user_message=user_message,
+        assistant_reply=assistant_reply,
+        existing_active=existing_active,
+        existing_pending=existing_pending,
+        scope=scope,
+    ).as_prompt()
 
 
 def _extract_json_array(raw_text: str) -> list[Any]:
@@ -364,9 +392,10 @@ def _parse_suggestions(
     return out
 
 
-async def _invoke_llm_text(llm: Any, prompt: str) -> str:
+async def _invoke_llm_text(llm: Any, prompt: str | PromptParts) -> str:
+    payload = llm_input(llm, prompt)
     if hasattr(llm, "ainvoke"):
-        res = await asyncio.wait_for(llm.ainvoke(prompt), timeout=EXTRACT_TIMEOUT_SECONDS)
+        res = await asyncio.wait_for(llm.ainvoke(payload), timeout=EXTRACT_TIMEOUT_SECONDS)
         content = getattr(res, "content", res)
         if isinstance(content, list):
             return "".join(
@@ -377,7 +406,7 @@ async def _invoke_llm_text(llm: Any, prompt: str) -> str:
         chunks: list[str] = []
 
         async def _collect() -> str:
-            async for chunk in llm.astream(prompt):
+            async for chunk in llm.astream(payload):
                 delta = getattr(chunk, "content", chunk)
                 if isinstance(delta, str):
                     chunks.append(delta)
@@ -403,16 +432,21 @@ async def extract_memory_suggestions(
     if not allow_when_full and len(existing_pending) >= MAX_PENDING_MEMORIES:
         return []
 
-    prompt = _build_extraction_prompt(
+    parts = _build_extraction_prompt_parts(
         user_message=user_message,
         assistant_reply=assistant_reply,
         existing_active=existing_active,
         existing_pending=existing_pending,
         scope=scope,
     )
-    span = observability.start_step("owner-memory-extract", "span", input={"scope": scope or "global"})
+    span = observability.start_step(
+        "owner-memory-extract",
+        "span",
+        input={"scope": scope or "global"},
+        metadata=parts.trace_metadata(),
+    )
     try:
-        raw = await _invoke_llm_text(llm, prompt)
+        raw = await _invoke_llm_text(llm, parts)
     except Exception as exc:
         log.warning("owner_memory.extractor: skipped due to LLM error (%s)", exc)
         observability.end_step(span, level="WARNING", status_message=str(exc))

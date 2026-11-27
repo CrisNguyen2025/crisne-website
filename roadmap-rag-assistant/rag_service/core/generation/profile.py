@@ -73,8 +73,14 @@ class DomainProfile:
     memory_max_items: int = 15  # active OwnerMemory items injected per answer (ADR-0015)
     memory_total_chars: int = 1500  # hard cap for <owner_memory> block (~375 tokens)
 
-    # ── Observability: Langfuse step name per mode ──
+    # ── Observability: Langfuse step name and prompt registry id per mode ──
     trace_names: dict[str, str] = field(
         default_factory=lambda: {"rag": "synthesize-answer", "chitchat": "chitchat-answer"}
+    )
+    prompt_ids: dict[str, str] = field(
+        default_factory=lambda: {"rag": "core-rag", "chitchat": "core-chitchat"}
+    )
+    prompt_versions: dict[str, str] = field(
+        default_factory=lambda: {"rag": "1.0", "chitchat": "1.0"}
     )
 

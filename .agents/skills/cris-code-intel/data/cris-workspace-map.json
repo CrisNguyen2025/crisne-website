@@ -177,6 +177,7 @@
         "roadmap-rag-assistant/rag_service/core/memory/extractor.py",
         "roadmap-rag-assistant/rag_service/core/orchestration/sources.py",
         "roadmap-rag-assistant/rag_service/core/retrieval/hybrid.py",
+        "roadmap-rag-assistant/rag_service/core/prompting.py",
         "roadmap-rag-assistant/rag_service/core/augmentation/context.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/retrieval/engine.py",
         "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
@@ -1093,7 +1094,7 @@
           "layer": "AI_Orchestration",
           "component": "roadmap-rag-assistant/rag_service/core/generation/pipeline.py",
           "functionOrMethod": "GenerationPipeline.astream",
-          "action": "Chọn lọc & sắp xếp tài liệu chữ U (reorder_documents), ghép context và gọi Gemini 2.5 Flash để sinh câu trả lời có trích dẫn nguồn (grounded citation), truyền luồng token qua SSE stream",
+          "action": "Chọn lọc & sắp xếp tài liệu chữ U (reorder_documents), dựng SystemMessage + HumanMessage qua PromptParts/prompting.py, gắn prompt_id/prompt_version lên Langfuse và gọi Gemini 2.5 Flash sinh câu trả lời có trích dẫn nguồn (grounded citation), truyền luồng token qua SSE stream",
           "callsNext": "app/api/roadmap-assistant/[...path]/route.ts",
           "dataPassed": "SSE chunks: data: { token, sources, trace_id }"
         },

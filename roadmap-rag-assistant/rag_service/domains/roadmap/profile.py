@@ -112,4 +112,6 @@ PROFILE = DomainProfile(
     grounding_note="\n\n> ⚠️ Một phần câu trả lời có thể không khớp dữ liệu hệ thống, hãy mở link bài học để đối chiếu.",
     # Stream sentence by sentence instead of holding the whole answer; a "đã tạo …" claim is dropped, not shown
     grounding_policy="sentence",
+    prompt_ids={"rag": "abot-rag", "chitchat": "abot-chitchat"},
+    prompt_versions={"rag": "1.0", "chitchat": "1.0"},
 )

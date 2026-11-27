@@ -32,10 +32,13 @@ def missed_structure(exc: BaseException) -> bool:
 
 async def invoke_structured(llm: Any, schema: Any, prompt: Any, attempts: int = 2) -> Any:
     """llm.with_structured_output(schema).ainvoke(prompt), tried again when the model skipped the structure."""
+    from rag_service.core.prompting import llm_input
+
     structured = llm.with_structured_output(schema)
+    payload = llm_input(structured, prompt)
     for attempt in range(attempts):
         try:
-            return await structured.ainvoke(prompt)
+            return await structured.ainvoke(payload)
         except Exception as exc:
             if attempt + 1 < attempts and missed_structure(exc) and not is_rate_limited(exc):
                 continue

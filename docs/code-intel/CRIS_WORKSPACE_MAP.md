@@ -117,7 +117,7 @@ sequenceDiagram
     Agent->>RAG: HybridRagEngine.search_live_knowledge(query)
     RAG->>RAG: Hybrid Search (BM25 FTS + In-memory Gemini 768d vectors)
     RAG-->>Agent: Trả về danh sách bài học có độ liên quan cao
-    Agent->>LLM: Gọi Gemini với System Prompt + Grounded Chunks
+    Agent->>LLM: Gọi Gemini với SystemMessage + HumanMessage (Grounded Chunks, prompt_id/version -> Langfuse)
     LLM-->>Agent: Sinh token câu trả lời kèm trích dẫn (citations)
     Agent-->>Proxy: SSE Stream chunks (data: { token, sources, trace_id })
     Proxy-->>UI: SSE Stream chunks

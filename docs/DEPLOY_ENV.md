@@ -154,6 +154,8 @@ Kiểm tra tên model Groq trên console.groq.com trước khi set.
 | `LANGFUSE_BASE_URL` | 🟡 | `https://jp.cloud.langfuse.com` |
 | `LANGFUSE_TRACING_ENVIRONMENT` | 🟡 | `production` |
 | `LANGFUSE_RELEASE` | 🟡 | |
+| `LANGFUSE_PROMPT_SYNC` | 🟡 | Mặc định `false`. Bật `true` để đồng bộ prompt theo label từ Langfuse (fail-open về bản local) |
+| `LANGFUSE_PROMPT_LABEL` | 🟡 | Label prompt trên Langfuse (mặc định `production`) |
 
 ---
 

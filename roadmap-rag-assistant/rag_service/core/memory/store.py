@@ -19,6 +19,7 @@ from typing import Any, List, Optional, Sequence, Tuple
 import httpx
 
 from rag_service.auth import is_owner
+from rag_service.core.prompting import escape_prompt_data
 
 log = logging.getLogger(__name__)
 
@@ -77,15 +78,7 @@ class OwnerMemoryItem:
     updated_at: Optional[str] = None
 
 
-_OPEN_CONTROL_TAG_RE = re.compile(
-    r"<(owner_memory|conversation_history|user_memory|context|document|turn|system|instructions?|prompt|developer|assistant|tool)\b",
-    re.IGNORECASE,
-)
-
-
-def _escape_tag(text: str) -> str:
-    escaped = (text or "").replace("</", "<\\/")
-    return _OPEN_CONTROL_TAG_RE.sub(r"<\\\1", escaped)
+_escape_tag = escape_prompt_data
 
 
 def _memory_tokens(text: str) -> set[str]:

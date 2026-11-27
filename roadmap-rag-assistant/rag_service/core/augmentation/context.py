@@ -9,7 +9,6 @@ cited, and documents far below the best match are left out.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import re
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 from rag_service.auth import is_owner
@@ -17,9 +16,13 @@ from rag_service.core.augmentation.documents import ContextDocument
 from rag_service.core.generation.profile import DomainProfile
 from rag_service.core.augmentation.history import HistoryStore, Turn, history_store
 from rag_service.core.memory.store import format_owner_memory
+from rag_service.core.prompting import PromptParts, escape_prompt_data, get_prompt_spec, register_prompt, resolve_system_text
 from rag_service.core.provenance import format_lesson_provenance_lines
 
 Mode = Literal["rag", "chitchat"]
+
+PROMPT_RAG_SPEC = register_prompt("core-rag", "1.0", "Core RAG answer generation")
+PROMPT_CHITCHAT_SPEC = register_prompt("core-chitchat", "1.0", "Core chitchat generation")
 
 
 @dataclass
@@ -38,16 +41,7 @@ class GenerationRequest:
     page_hint: str = ""
 
 
-_OPEN_CONTROL_TAG_RE = re.compile(
-    r"<(owner_memory|conversation_history|user_memory|context|document|turn|system|instructions?|prompt|developer|assistant|tool)\b",
-    re.IGNORECASE,
-)
-
-
-def _escape(text: str) -> str:
-    # Data inside a tag must not close it or spoof sibling XML sections.
-    escaped = (text or "").replace("</", "<\\/")
-    return _OPEN_CONTROL_TAG_RE.sub(r"<\\\1", escaped)
+_escape = escape_prompt_data
 
 
 def _attr(text: str) -> str:
@@ -135,19 +129,25 @@ def _has_document_provenance(req: GenerationRequest, docs: Sequence[ContextDocum
     return bool(req.lesson_provenances) and is_owner() and any(req.lesson_provenances.get(d.id) for d in docs)
 
 
-def _build_system_block(
+def _build_system_text(
     req: GenerationRequest,
     profile: DomainProfile,
     *,
     has_memory: bool,
     has_provenance: bool,
-) -> str:
+) -> tuple[str, str, str]:
+    default_spec = PROMPT_RAG_SPEC if req.mode == "rag" else PROMPT_CHITCHAT_SPEC
+    prompt_id = profile.prompt_ids.get(req.mode, default_spec.id)
+    prompt_version = profile.prompt_versions.get(req.mode, default_spec.version)
+    spec = get_prompt_spec(prompt_id) or register_prompt(prompt_id, prompt_version, f"{req.mode} answer generation")
     persona, rules = (
         (profile.persona_rag, profile.rules_rag)
         if req.mode == "rag"
         else (profile.persona_chitchat, profile.rules_chitchat)
     )
-    sections = [persona, rules]
+    base_default = "\n".join(s.strip("\n") for s in (persona, rules) if s)
+    base_text, version = resolve_system_text(spec, base_default)
+    sections = [base_text]
     if has_memory and profile.rules_owner_memory:
         sections.append(profile.rules_owner_memory)
     if req.mode == "rag" and has_provenance and profile.rules_provenance:
@@ -157,16 +157,26 @@ def _build_system_block(
     ):
         sections.append(profile.suggestion_format)
     # Fixed base text first, conditional addenda after: prefix stays stable from turn to turn
-    system = "\n".join(s.strip("\n") for s in sections if s)
-    return f"<system>\n{system}\n</system>"
+    return "\n".join(s.strip("\n") for s in sections if s), spec.id, version
 
 
-def synthesize_prompt(
+def _build_system_block(
+    req: GenerationRequest,
+    profile: DomainProfile,
+    *,
+    has_memory: bool,
+    has_provenance: bool,
+) -> str:
+    system_text, _, _ = _build_system_text(req, profile, has_memory=has_memory, has_provenance=has_provenance)
+    return f"<system>\n{system_text}\n</system>"
+
+
+def synthesize_prompt_parts(
     req: GenerationRequest,
     profile: DomainProfile,
     history: HistoryStore = history_store,
     documents: Optional[List[ContextDocument]] = None,
-) -> Tuple[str, List[str]]:
+) -> Tuple[PromptParts, List[str]]:
     docs: List[ContextDocument] = []
     if req.mode == "rag":
         docs = reorder_documents(select_documents(req, profile)) if documents is None else documents
@@ -183,17 +193,38 @@ def synthesize_prompt(
         else ("", [])
     )
     has_provenance = req.mode == "rag" and _has_document_provenance(req, docs)
-    parts = [_build_system_block(req, profile, has_memory=bool(mem_block), has_provenance=has_provenance)]
+    system_text, prompt_id, prompt_version = _build_system_text(
+        req, profile, has_memory=bool(mem_block), has_provenance=has_provenance
+    )
+    user_parts: List[str] = []
     if mem_block:
-        parts.append(mem_block)
+        user_parts.append(mem_block)
     if hist := format_history(history.get_recent(req.thread_id, profile.history_turns * 2), profile):
-        parts.append(hist)
+        user_parts.append(hist)
     if req.mode == "rag":
-        parts.append(format_documents(docs))
+        user_parts.append(format_documents(docs))
     if req.page_hint:
-        parts.append(f"<current_page>\n{_escape(req.page_hint)}\n</current_page>")
-    parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
-    return "\n\n".join(parts), selected_memory_ids
+        user_parts.append(f"<current_page>\n{_escape(req.page_hint)}\n</current_page>")
+    user_parts.append(f"{profile.query_note}\n<user_query>\n{_escape(req.query)}\n</user_query>")
+    return (
+        PromptParts(
+            system_text=system_text,
+            user_text="\n\n".join(user_parts),
+            prompt_id=prompt_id,
+            prompt_version=prompt_version,
+        ),
+        selected_memory_ids,
+    )
+
+
+def synthesize_prompt(
+    req: GenerationRequest,
+    profile: DomainProfile,
+    history: HistoryStore = history_store,
+    documents: Optional[List[ContextDocument]] = None,
+) -> Tuple[str, List[str]]:
+    parts, selected_memory_ids = synthesize_prompt_parts(req, profile, history=history, documents=documents)
+    return parts.as_prompt(), selected_memory_ids
 
 
 def build_prompt(

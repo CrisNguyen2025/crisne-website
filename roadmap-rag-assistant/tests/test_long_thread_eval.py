@@ -13,7 +13,12 @@ import pytest
 
 from rag_service.auth import current_actor
 from rag_service.context_usage import conversation_context, split_prompt
-from rag_service.core.augmentation.context import GenerationRequest, build_prompt, format_history, synthesize_prompt
+from rag_service.core.augmentation.context import (
+    GenerationRequest,
+    build_prompt,
+    format_history,
+    synthesize_prompt_parts,
+)
 from rag_service.core.augmentation.history import InMemoryHistoryStore, Turn
 from rag_service.core.memory import OwnerMemoryItem, OwnerMemoryStore
 from rag_service.core.retrieval.transform import HISTORY_TURNS, build_prompt as build_transform_prompt, needs_plan
@@ -77,8 +82,8 @@ async def test_owner_memory_survives_25_turn_eviction_while_visitor_stays_isolat
     even though turn-1 raw history has been evicted; Visitor never sees <owner_memory>."""
     store = InMemoryHistoryStore(max_messages=50)
     monkeypatch.setattr(
-        "rag_service.core.generation.pipeline.synthesize_prompt",
-        lambda req, profile, documents=None: synthesize_prompt(req, profile, history=store, documents=documents),
+        "rag_service.core.generation.pipeline.synthesize_prompt_parts",
+        lambda req, profile, documents=None: synthesize_prompt_parts(req, profile, history=store, documents=documents),
     )
     owner_tid = f"owner:{uuid.uuid4()}"
     visitor_tid = f"visitor:{uuid.uuid4()}"

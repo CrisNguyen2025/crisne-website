@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, AsyncGenerator
 
+from rag_service.core.prompting import PromptParts, astream_prompt
+
 
 class StreamResult:
     """Filled while `astream` runs; read after the loop ends."""
@@ -21,9 +23,9 @@ class StreamResult:
         return getattr(self.merged, "content", "") or ""
 
 
-async def astream(llm: Any, prompt: str, result: StreamResult) -> AsyncGenerator[str, None]:
+async def astream(llm: Any, prompt: str | PromptParts, result: StreamResult) -> AsyncGenerator[str, None]:
     """Yield text deltas; exceptions propagate so the pipeline can trip the circuit breaker."""
-    async for chunk in llm.astream(prompt):
+    async for chunk in astream_prompt(llm, prompt):
         result.merged = chunk if result.merged is None else result.merged + chunk
         if getattr(chunk, "content", None):
             yield chunk.content
