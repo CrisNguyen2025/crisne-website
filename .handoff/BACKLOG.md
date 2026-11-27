@@ -4,6 +4,8 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 
 ## Abot & Knowledge Acquisition
 
+- Nút `+ Add Context` góc trái Abot (`Actions` Slash kèm `/quiz` suggest `Topic` + kết nối 1 `Gmail Connector` với Agent + cột `ThreadMessage.contextJson`): code, schema, test tự động UI/route/Python và sync map đã hoàn tất (2026-11-27). Còn bước Owner review dry-run rồi chạy `yarn db:abot-context-connector --apply` lên Turso, thêm `CONNECTOR_ENCRYPTION_KEY` + Redirect URI `/api/v1/connectors/gmail/callback` trên Vercel/GCP, và chạy manual test thật `AC-4` trong `tests/manual/abot-add-context.md`: `.handoff/PLAN-abot-add-context.md`, `docs/adr/0021-abot-add-context-slash-actions-and-gmail-connector.md`.
+
 - Rovo Owner Memory (`ADR-0020`): code, schema, evals và test tự động đã hoàn tất (2026-11-26). Còn bước Owner review dry-run rồi chạy `yarn db:rovo-owner-memory --apply` lên Turso và chạy manual test `M14–M17` trong `tests/manual/owner-memory.md`: `docs/adr/0020-rovo-owner-memory-and-observations.md`.
 - Knowledge Acquisition Phase 3 (`KnowledgeRelation` / `Related Lessons`, `POST /internal/match-lessons`, Abot truy ngược `Lesson → External Source` cho Owner): code và schema Turso (`KnowledgeRelation`) đã hoàn tất (xác nhận `yarn db:knowledge-relations` dry-run `Schema already up to date` ngày 2026-11-26): `.handoff/PLAN-knowledge-acquisition.md`.
 - RSS/Atom nguồn ngoài (`/news`): Tier 1 (platform URL mapping, JSON Feed, dry-run `/api/news/sources/preview`, phân loại lỗi, xoá N+1 cron) đã triển khai (2026-11-25). Còn Tier 2–3 (`allowExternalLinks` + DNS pinning, per-source `fetchIntervalMinutes` & runner dày hơn 1 lần/ngày): `.handoff/RESEARCH-external-rss-config.md` (PROPOSAL).
@@ -15,6 +17,8 @@ Chỉ mục việc đang mở. Mỗi dòng trỏ tới nơi chứa chi tiết, k
 - Nhánh chưa merge còn giữ chờ review: `feat/visual-hierarchy` (`fc7bb4b`, worktree `.claude/worktrees/visual-hierarchy`). Hai ref local `[gone]` còn lại (`feat/news-security-perf`, `feat/roadmap-assistant-routing-quality`, đã xoá remote/worktree) chờ Owner chạy `git branch -D` nếu muốn xoá nốt ref local.
 - Kịch bản manual test chưa chạy / cần re-run trên môi trường thật (`tests/manual/README.md`): `tests/manual/owner-memory.md` (M1–M17), `tests/manual/lesson-status.md`, và re-run N1–N10, N14 của `tests/manual/news-inbox.md` trên `/news`.
 - AgentAdapter & handoff v3 (đã lên `main` @ `e1a7ce2`): còn test thủ công `tests/manual/agent-handoff.md` E4–E6, E8 và `tests/manual/agent-adapter.md` T1–T4 (T5, T6 mới một phần); chưa xác nhận step `yarn agents:sync --check` của CI chạy xanh trên `main`. Plan: `.handoff/PLAN-agent-adapter.md`.
+
+- Theme Apple / Railway / PostHog cho roadmap/news (2026-11-27, chưa commit): còn T6 `/news` chưa test được vì `dev.db` local thiếu cột `NewsItem.slug`. Nếu `PLAN-brand-design-system-unification` Phase 1 bỏ `.roadmap-theme`, phải đổi selector trong `app/styles/{apple,railway,posthog}-theme.css` sang `:root`: `tests/manual/design-theme.md`, `docs/design-system.md` mục "Theme Apple".
 
 ## Chờ Owner quyết định
 

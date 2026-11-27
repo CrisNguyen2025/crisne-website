@@ -30,7 +30,9 @@ def _known_links() -> Callable[[str], bool]:
 
 
 def _roadmap_document(doc: Any, score: float) -> ContextDocument:
-    """A KnowledgeDocument (rag_service.domains.roadmap.retrieval.ingestion) as one <document>; same fields as format_knowledge_context."""
+    """A KnowledgeDocument (or pre-built ContextDocument) as one <document>; same fields as format_knowledge_context."""
+    if isinstance(doc, ContextDocument):
+        return ContextDocument(id=doc.id, title=doc.title, body=doc.body, score=score, href=doc.href)
     from rag_service.domains.roadmap.retrieval.engine import knowledge_href, lesson_context_lines, lesson_href
 
     if not doc.topic_slug:

@@ -5,14 +5,13 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
+import type { ConnectorId } from "../types";
 import type { ChatbotConfig } from "./types";
+import { useGmailConnector } from "./useGmailConnector";
 import { useRoadmapAssistantChat } from "./useRoadmapAssistantChat";
 import { SparklesIcon } from "./icons";
 import { formatTime } from "./utils/formatters";
-import { FeedbackReasonSheet } from "./components/FeedbackReasonSheet";
-import { ContextUsageSheet } from "./components/ContextUsageSheet";
-import { OwnerMemorySheet } from "./components/OwnerMemorySheet";
-import { ThreadHistorySheet } from "./components/ThreadHistorySheet";
+import { WidgetModals } from "./components/WidgetModals";
 import { usePendingMemoryCount } from "./useOwnerMemories";
 import { useThreadHistory } from "./useThreadHistory";
 import { ChatComposer } from "./components/ChatComposer";
@@ -80,10 +79,10 @@ export function RoadmapChatbotWidget({
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isSwitchMenuOpen, setIsSwitchMenuOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
-  const [activeModal, setActiveModal] = useState<"context" | "memory" | "history" | null>(null);
+  const [activeModal, setActiveModal] = useState<"context" | "memory" | "history" | "gmail" | null>(null);
   const [modalSeq, setModalSeq] = useState(0);
   const isModalOpen = activeModal !== null;
-  const openModal = useCallback((modal: "context" | "memory" | "history") => {
+  const openModal = useCallback((modal: "context" | "memory" | "history" | "gmail") => {
     setModalSeq((s) => s + 1);
     setActiveModal(modal);
   }, []);
@@ -140,6 +139,7 @@ export function RoadmapChatbotWidget({
     activeTool,
     conversationId,
     sendMessage,
+    client,
     stopStreaming,
     conversationContext,
     refreshContext,
@@ -158,6 +158,16 @@ export function RoadmapChatbotWidget({
     canWrite,
     restoreLatestThread,
   });
+  const {
+    gmailStatus,
+    setGmailStatus,
+    isGmailAttached,
+    setIsGmailAttached,
+    toggleGmailAttached,
+    openGmailConfig,
+    refreshGmailStatus,
+    resolveTurnConnectors,
+  } = useGmailConnector({ client, canWrite, onOpenModal: () => openModal("gmail") });
 
   const [memorySuggestionBanner, setMemorySuggestionBanner] = useState<number | null>(null);
   const isMemoryOpenRef = useRef(activeModal === "memory");
@@ -366,6 +376,7 @@ export function RoadmapChatbotWidget({
 
   const handleNewChat = useCallback(() => {
     captureBeforeReset();
+    setIsGmailAttached(false);
     clearMessages();
   }, [captureBeforeReset, clearMessages]);
 
@@ -433,40 +444,27 @@ export function RoadmapChatbotWidget({
 
   const handleSend = (
     textToSend?: string,
-    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+    options?: {
+      titles?: string[];
+      target?: { topic?: string; section?: string };
+      connectors?: ConnectorId[];
+    }
   ) => {
     if (isSendingRef.current) return;
-
     const val = (textToSend ?? input).trim();
     if (!val) return;
-
     isSendingRef.current = true;
-    setTimeout(() => {
-      isSendingRef.current = false;
-    }, 400);
-
+    setTimeout(() => { isSendingRef.current = false; }, 400);
     captureBeforeSend();
-
-    // 1. Immediately wipe both React state and DOM value
     setInput("");
-    if (inputRef.current) {
-      inputRef.current.value = "";
-    }
-
-    // 2. Keep input focused immediately
+    if (inputRef.current) inputRef.current.value = "";
     inputRef.current?.focus();
-
     isAtBottomRef.current = true;
     autoFollowRef.current = true;
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-    sendMessage(val, options);
-
-    // 4. Re-ensure focus on next animation frame
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const connectors = resolveTurnConnectors(val, options?.connectors);
+    sendMessage(val, options || connectors ? { ...options, ...(connectors ? { connectors } : {}) } : undefined);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -642,6 +640,15 @@ export function RoadmapChatbotWidget({
             handleSend={handleSend}
             handleKeyDown={handleKeyDown}
             contextRef={activeContextRef}
+            currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug}
+            canWrite={canWrite}
+            hasWebMcp={Boolean(onWebMcpMessage)}
+            gmailStatus={gmailStatus}
+            isGmailAttached={isGmailAttached}
+            onToggleGmailAttached={toggleGmailAttached}
+            onOpenGmailConfig={openGmailConfig}
+            onOpenAddMenu={refreshGmailStatus}
+            loadTopics={() => client.listRoadmaps()}
             isKeyboardOpen={
               typeof keyboardBox?.height === "number" &&
               typeof window !== "undefined" &&
@@ -653,56 +660,43 @@ export function RoadmapChatbotWidget({
             <DesktopResizeHandle edge="bottom" {...resizeHandleProps} />
           )}
 
-          {activeModal === "context" && (
-            <ContextUsageSheet
-              key={`context-${modalSeq}`}
-              context={conversationContext}
-              contextRef={activeContextRef}
-              zIndex={modalZIndex}
-              onRetry={() => void refreshContext()}
-              onClose={() => setActiveModal(null)}
-            />
-          )}
-          {canWrite && activeModal === "memory" && (
-            <OwnerMemorySheet
-              key={`memory-${modalSeq}`}
-              baseUrl={baseUrl}
-              currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug}
-              zIndex={modalZIndex}
-              onPendingCountChange={setPendingMemoryCount}
-              onClose={() => setActiveModal(null)}
-            />
-          )}
-          {canWrite && activeModal === "history" && (
-            <ThreadHistorySheet
-              key={`history-${modalSeq}`}
-              threads={historyThreads}
-              query={historyQuery}
-              onQueryChange={setHistoryQuery}
-              isLoading={isHistoryLoading}
-              isSearching={isHistorySearching}
-              error={historyError}
-              deletingId={deletingHistoryId}
-              currentThreadId={conversationId}
-              zIndex={modalZIndex}
-              onRetry={() => void refreshHistory()}
-              onSelectThread={handleSelectHistoryThread}
-              onDeleteThread={handleDeleteHistoryThread}
-              onClose={closeHistorySheet}
-            />
-          )}
-          {activeFeedbackMsgId && (
-            <FeedbackReasonSheet
-              key={activeFeedbackMsgId}
-              messageId={activeFeedbackMsgId}
-              onDraftChange={(reason, comment) => setSheetDraft({ reason, comment })}
-              onSubmit={(reason, comment) => void commit(activeFeedbackMsgId, { reason, comment })}
-              onClose={() => {
-                void commit(activeFeedbackMsgId);
-                setActiveFeedbackMsgId(null);
-              }}
-            />
-          )}
+          <WidgetModals
+            activeModal={activeModal}
+            modalSeq={modalSeq}
+            modalZIndex={modalZIndex}
+            canWrite={canWrite}
+            baseUrl={baseUrl}
+            currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug}
+            conversationContext={conversationContext}
+            activeContextRef={activeContextRef}
+            refreshContext={refreshContext}
+            setPendingMemoryCount={setPendingMemoryCount}
+            historyThreads={historyThreads}
+            historyQuery={historyQuery}
+            setHistoryQuery={setHistoryQuery}
+            isHistoryLoading={isHistoryLoading}
+            isHistorySearching={isHistorySearching}
+            historyError={historyError}
+            deletingHistoryId={deletingHistoryId}
+            conversationId={conversationId}
+            refreshHistory={refreshHistory}
+            onSelectHistoryThread={handleSelectHistoryThread}
+            onDeleteHistoryThread={handleDeleteHistoryThread}
+            closeHistorySheet={closeHistorySheet}
+            client={client}
+            gmailStatus={gmailStatus}
+            isGmailAttached={isGmailAttached}
+            setGmailStatus={setGmailStatus}
+            setIsGmailAttached={setIsGmailAttached}
+            onCloseModal={() => setActiveModal(null)}
+            activeFeedbackMsgId={activeFeedbackMsgId}
+            setSheetDraft={setSheetDraft}
+            commitFeedback={commit}
+            onCloseFeedback={() => {
+              if (activeFeedbackMsgId) void commit(activeFeedbackMsgId);
+              setActiveFeedbackMsgId(null);
+            }}
+          />
         </div>
       )}
 

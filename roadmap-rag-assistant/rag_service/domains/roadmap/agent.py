@@ -38,6 +38,8 @@ from rag_service.domains.roadmap.memory_commands import MemoryCommands
 from rag_service.domains.roadmap.quiz_commands import QuizCommands
 from rag_service.tools.topic_resolver import resolve_topic
 from rag_service.domains.roadmap.sections import SectionCommands
+from rag_service.domains.roadmap.gmail_connector import ConnectorMixin
+from rag_service.domains.roadmap.slash_commands import SlashCommandMixin, apply_slash_rewrite, parse_slash_command
 from rag_service.domains.roadmap.pipeline import generation_pipeline
 from rag_service.domains.roadmap.profile import PROFILE
 from rag_service.core.memory import owner_memory_store
@@ -142,6 +144,33 @@ async def _plan_queries(llm, query: str, session_id: str, page_hint: str = ""):
     return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm, page_hint=page_hint)
 
 
+def _build_turn_context_meta(raw_message: str, input_dict: dict) -> Optional[dict]:
+    parsed = parse_slash_command(raw_message)
+    slash_cmd = f"/{parsed[0]}" if parsed else None
+    connectors = [c for c in (input_dict.get("connectors") or []) if c == "gmail" and is_owner()]
+    if slash_cmd == "/gmail" and "gmail" not in connectors and is_owner():
+        connectors.append("gmail")
+    ctx = input_dict.get("context") or {}
+    page_meta = {
+        k: v.strip()[:200]
+        for k, v in (
+            ("roadmapSlug", ctx.get("roadmapSlug")),
+            ("roadmapTitle", ctx.get("roadmapTitle")),
+            ("section", ctx.get("section")),
+            ("itemTitle", ctx.get("itemTitle")),
+        )
+        if isinstance(v, str) and v.strip()
+    }
+    meta: dict = {}
+    if connectors:
+        meta["connectors"] = connectors
+    if slash_cmd:
+        meta["slashCommand"] = slash_cmd
+    if page_meta:
+        meta["pageContext"] = page_meta
+    return meta or None
+
+
 class NextGenRoadmapAgent(
     RoadmapAgentActions,
     RoadmapCommands,
@@ -151,6 +180,8 @@ class NextGenRoadmapAgent(
     LessonStatusCommands,
     MemoryCommands,
     QuizCommands,
+    SlashCommandMixin,
+    ConnectorMixin,
 ):
     """Enterprise-grade Agentic Roadmap Assistant with Live RAG and State Machine."""
 
@@ -248,6 +279,7 @@ class NextGenRoadmapAgent(
 
         tool_messages = [e for e in events if e.get("type") == "tool_end"]
         final_text = "".join([e.get("delta", "") for e in events if e.get("type") == "token"])
+        suggestions = next((e.get("items") or [] for e in events if e.get("type") == "suggestions"), [])
 
         class MockAIMsg:
             def __init__(self, text, tools):
@@ -266,7 +298,7 @@ class NextGenRoadmapAgent(
             msgs.append(MockToolMsg(tm["name"], tm["result"]))
         msgs.append(MockAIMsg(final_text, []))
 
-        return {"messages": msgs}
+        return {"messages": msgs, **({"suggestions": suggestions} if suggestions else {})}
 
     def invoke(self, input_dict: dict, config: dict | None = None) -> dict:
         return asyncio.run(self.ainvoke(input_dict, config))
@@ -301,7 +333,8 @@ class NextGenRoadmapAgent(
                 metadata = ev
             yield ev
         # Every branch (LLM, template, tool) becomes memory for the next turn's prompt.
-        record_turn(session_id, message, "".join(reply))
+        user_meta = _build_turn_context_meta(message, input_dict)
+        record_turn(session_id, message, "".join(reply), user_context_meta=user_meta)
         log_turn(session_id, steps, tools, metadata)
 
     async def handle_catalog(
@@ -545,49 +578,76 @@ class NextGenRoadmapAgent(
         input_dict: dict,
         outcome: dict,
     ) -> AsyncGenerator[dict, None]:
-        async for ev in self.handle_pending(
-            content=content,
-            lower=lower,
-            session_id=session_id,
-            session_ctx=session_ctx,
-            delay=delay,
-            outcome=outcome,
-            titles=input_dict.get("titles"),
-            target=input_dict.get("target"),
-        ):
-            yield ev
-        if outcome["handled"]:
-            _mark_pre_route("pending_action")
-            return
-
-        async for ev in self._run_entry_guards(
-            raw_content=raw_content,
-            content=content,
-            session_id=session_id,
-            session_ctx=session_ctx,
-            delay=delay,
-            outcome=outcome,
-        ):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        async for ev in self._run_syntax_guards(content=content, delay=delay, outcome=outcome):
-            yield ev
-        if outcome["handled"]:
-            return
-
-        async for ev in self._run_domain_or_mixed_guards(
-            content=content,
-            raw_content=raw_content,
-            lower=lower,
-            page_context=page_context,
-            session_id=session_id,
-            session_ctx=session_ctx,
-            delay=delay,
-            outcome=outcome,
-        ):
-            yield ev
+        stages: list[tuple[Optional[str], AsyncGenerator[dict, None]]] = [
+            (
+                "pending_action",
+                self.handle_pending(
+                    content=content,
+                    lower=lower,
+                    session_id=session_id,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                    titles=input_dict.get("titles"),
+                    target=input_dict.get("target"),
+                ),
+            ),
+            (
+                None,
+                self._run_entry_guards(
+                    raw_content=raw_content,
+                    content=content,
+                    session_id=session_id,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                ),
+            ),
+            (
+                "slash_command",
+                self.handle_slash_command(
+                    raw_content=raw_content,
+                    page_context=page_context,
+                    session_id=session_id,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                ),
+            ),
+            (
+                None,
+                self._dispatch_gmail_connector(
+                    connectors=input_dict.get("connectors"),
+                    content=content,
+                    session_id=session_id,
+                    page_context=page_context,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                ),
+            ),
+            (None, self._run_syntax_guards(content=content, delay=delay, outcome=outcome)),
+            (
+                None,
+                self._run_domain_or_mixed_guards(
+                    content=content,
+                    raw_content=raw_content,
+                    lower=lower,
+                    page_context=page_context,
+                    session_id=session_id,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                ),
+            ),
+        ]
+        for flag_name, gen in stages:
+            async for ev in gen:
+                yield ev
+            if outcome["handled"]:
+                if flag_name:
+                    _mark_pre_route(flag_name)
+                return
 
     async def _handle_route_gate_blocks(
         self,
@@ -1027,10 +1087,40 @@ class NextGenRoadmapAgent(
         ):
             yield ev
 
+    async def _dispatch_gmail_connector(
+        self,
+        *,
+        connectors: list | None,
+        content: str,
+        session_id: str,
+        page_context: dict | None,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        if "gmail" not in (connectors or []):
+            return
+        outcome["handled"] = True
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+        _mark_pre_route("gmail_connector")
+        async for ev in self.handle_gmail_connector_turn(
+            content=content,
+            session_id=session_id,
+            page_context=page_context,
+            session_ctx=session_ctx,
+            delay=delay,
+        ):
+            yield ev
+
     async def _astream_events_impl(
         self, input_dict: dict, config: dict | None = None
     ) -> AsyncGenerator[dict, None]:
         raw_content = input_dict.get("messages", [{}])[-1].get("content", "").strip()
+        raw_content, active_connectors = apply_slash_rewrite(raw_content, input_dict.get("connectors"))
+        input_dict = {**input_dict, **({"connectors": active_connectors} if active_connectors else {})}
         page_context = input_dict.get("context")
         # Typing effect only for streaming clients; fast=True (sync /chat) skips it entirely.
         delay = 0.0 if input_dict.get("fast") else self.typing_delay

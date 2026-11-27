@@ -116,21 +116,24 @@ PROMPT_OBSERVATIONS_SPEC = register_prompt("abot-observations", "1.0", "Owner ob
 
 def _build_observation_prompt_parts(snapshot: dict[str, Any]) -> PromptParts:
     topics = [
-        f"- {t.get('slug')}: {_escape_tag(str(t.get('title') or ''))} ({t.get('itemCount', 0)} bài)"
+        f"- {_escape_tag(str(t.get('slug') or ''))}: {_escape_tag(str(t.get('title') or ''))} ({t.get('itemCount', 0)} bài)"
         for t in (snapshot.get("topics") or [])[:10]
     ]
     lessons = [
-        f"- [{it.get('topicSlug')}] {_escape_tag(str(it.get('title') or ''))} (status={it.get('status')})"
+        f"- [{_escape_tag(str(it.get('topicSlug') or ''))}] {_escape_tag(str(it.get('title') or ''))} (status={_escape_tag(str(it.get('status') or ''))})"
         for it in (snapshot.get("recentLessons") or [])[:15]
     ]
     news = snapshot.get("newsSignals") or {}
-    tags = [f"{t.get('tag')}({t.get('count')})" for t in (news.get("topTags") or [])[:8]]
+    tags = [
+        f"{_escape_tag(str(t.get('tag') or ''))}({t.get('count')})"
+        for t in (news.get("topTags") or [])[:8]
+    ]
     events = [
-        f"- [{ev.get('eventType')}] ({ev.get('topicSlug') or 'global'}): {_escape_tag(str(ev.get('summary') or ''))}"
+        f"- [{_escape_tag(str(ev.get('eventType') or ''))}] ({_escape_tag(str(ev.get('topicSlug') or 'global'))}): {_escape_tag(str(ev.get('summary') or ''))}"
         for ev in (snapshot.get("activityEvents") or [])[:20]
     ]
     existing = [
-        f"- id={m.get('id')} | {m.get('status')} | {m.get('source')} | {_escape_tag(str(m.get('content') or ''))}"
+        f"- id={_escape_tag(str(m.get('id') or ''))} | {_escape_tag(str(m.get('status') or ''))} | {_escape_tag(str(m.get('source') or ''))} | {_escape_tag(str(m.get('content') or ''))}"
         for m in (snapshot.get("existingMemories") or [])[:35]
     ]
     system_text = (

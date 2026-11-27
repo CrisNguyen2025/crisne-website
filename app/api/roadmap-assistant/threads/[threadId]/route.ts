@@ -6,6 +6,7 @@ import {
   MAX_THREAD_MESSAGES,
   OWNER_THREAD_PREFIX,
   THREAD_RETENTION_MS,
+  parseMessageContextMeta,
   stripOwnerThreadPrefix,
   toOwnerThreadId,
 } from "@/lib/roadmap/thread-state";
@@ -26,7 +27,7 @@ async function readThreadDetail(scopedThreadId: string) {
       where: { threadId: scopedThreadId },
       orderBy: { id: "desc" },
       take: MAX_THREAD_MESSAGES,
-      select: { id: true, role: true, content: true, createdAt: true },
+      select: { id: true, role: true, content: true, contextJson: true, createdAt: true },
     }),
     prisma.threadState.findUnique({
       where: { threadId: scopedThreadId },
@@ -40,13 +41,17 @@ async function readThreadDetail(scopedThreadId: string) {
     }),
   ]);
 
-  const messages = newestFirst.reverse().map((m) => ({
-    id: `restored-${m.id}`,
-    role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-    content: m.content,
-    timestamp: m.createdAt.toISOString(),
-    isRestored: true,
-  }));
+  const messages = newestFirst.reverse().map((m) => {
+    const contextMeta = parseMessageContextMeta(m.contextJson);
+    return {
+      id: `restored-${m.id}`,
+      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: m.content,
+      timestamp: m.createdAt.toISOString(),
+      isRestored: true,
+      ...(contextMeta ? { contextMeta } : {}),
+    };
+  });
 
   const state = rawState
     ? {

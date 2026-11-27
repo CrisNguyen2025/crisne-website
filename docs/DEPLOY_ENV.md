@@ -28,10 +28,11 @@
 | ENV | | Ghi chú |
 |---|---|---|
 | `AUTH_SECRET` | 🔴 | `npx auth secret` |
-| `AUTH_GOOGLE_ID` | 🔴 | Redirect URI: `https://crisne.blog/api/auth/callback/google` |
-| `AUTH_GOOGLE_SECRET` | 🔴 | |
+| `AUTH_GOOGLE_ID` | 🔴 | Redirect URI: `https://crisne.blog/api/auth/callback/google` (login) và `https://crisne.blog/api/v1/connectors/gmail/callback` (Gmail Connector) |
+| `AUTH_GOOGLE_SECRET` | 🔴 | Dùng chung cho NextAuth login và Abot Gmail Connector |
 | `AUTH_OWNER_EMAILS` | 🔴 | Phân tách bằng dấu phẩy. Trống = không ai ghi được |
 | `ADMIN_API_KEY` | 🔴 🔗 | Chrome extension, script, RAG service |
+| `CONNECTOR_ENCRYPTION_KEY` | 🟡 | 32-byte hex (64 ký tự) hoặc base64 để mã hoá OAuth token của `OwnerConnector` bằng AES-256-GCM (bắt buộc khi bật Gmail Connector) |
 
 ### Roadmap Assistant (proxy tới Render)
 | ENV | | Ghi chú |

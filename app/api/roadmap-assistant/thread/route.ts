@@ -6,6 +6,7 @@ import {
   MAX_THREAD_MESSAGES,
   OWNER_THREAD_PREFIX,
   THREAD_RETENTION_MS,
+  parseMessageContextMeta,
   stripOwnerThreadPrefix,
   toOwnerThreadId,
 } from '@/lib/roadmap/thread-state';
@@ -78,16 +79,20 @@ export async function GET(req: NextRequest) {
       where: { threadId: targetThreadId },
       orderBy: { id: 'desc' },
       take: MAX_THREAD_MESSAGES,
-      select: { id: true, role: true, content: true, createdAt: true },
+      select: { id: true, role: true, content: true, contextJson: true, createdAt: true },
     });
 
-    const messages = newestFirst.reverse().map((m) => ({
-      id: `restored-${m.id}`,
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content,
-      timestamp: m.createdAt.toISOString(),
-      isRestored: true,
-    }));
+    const messages = newestFirst.reverse().map((m) => {
+      const contextMeta = parseMessageContextMeta(m.contextJson);
+      return {
+        id: `restored-${m.id}`,
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+        timestamp: m.createdAt.toISOString(),
+        isRestored: true,
+        ...(contextMeta ? { contextMeta } : {}),
+      };
+    });
 
     return NextResponse.json(
       {

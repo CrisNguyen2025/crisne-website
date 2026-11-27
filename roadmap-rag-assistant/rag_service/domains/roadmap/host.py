@@ -31,3 +31,58 @@ class AgentHostMixin:
         async def _resolve_target_topic(
             self, topic_hint: Optional[str], content: str, page_context: Any, session_ctx: Any
         ) -> Optional[dict]: ...
+
+        def handle_quiz_command(
+            self,
+            *,
+            content: str,
+            page_context: Any,
+            session_id: str,
+            session_ctx: Any,
+            delay: float,
+            outcome: dict,
+        ) -> AsyncGenerator[dict, None]: ...
+
+        def handle_topic_quiz_menu(
+            self,
+            *,
+            topic_ref: str,
+            page_context: Any,
+            session_id: str,
+            session_ctx: Any,
+            delay: float,
+            outcome: dict,
+        ) -> AsyncGenerator[dict, None]: ...
+
+        def handle_listing(
+            self,
+            *,
+            content: str,
+            lower: str,
+            delay: float,
+            outcome: dict,
+        ) -> AsyncGenerator[dict, None]: ...
+
+        def handle_memory_command(
+            self,
+            *,
+            content: str,
+            page_context: Any,
+            session_ctx: Any,
+            delay: float,
+            outcome: dict,
+        ) -> AsyncGenerator[dict, None]: ...
+
+        async def _build_status_query_reply(
+            self,
+            adapter: Any,
+            content: str,
+            page_context: Any,
+            session_ctx: Any,
+            is_kwn: bool,
+            is_rev: bool,
+        ) -> tuple[str, str]: ...
+
+        async def _list_active_owner_memories(
+            self, active_topic: Optional[str], query: str
+        ) -> list[Any]: ...

@@ -34,6 +34,7 @@ async function cleanUp() {
   await prisma.ownerMemory.deleteMany();
   await prisma.ownerActivityEvent.deleteMany();
   await prisma.ownerPreference.deleteMany();
+  await prisma.newsItem.deleteMany({ where: { canonicalUrl: "https://nextjs.org/blog/security-update" } });
   await prisma.roadmap.deleteMany({ where: { slug: "rovo-test-topic" } });
 }
 
@@ -431,11 +432,34 @@ describe("/api/v1/memories (ADR-0015)", () => {
     expect(eventsJson.events).toHaveLength(1);
     expect(eventsJson.events[0].summary).toBe("Không dùng Vue");
 
+    await prisma.newsItem.create({
+      data: {
+        sourceUrl: "https://nextjs.org/blog/security-update",
+        canonicalUrl: "https://nextjs.org/blog/security-update",
+        domain: "nextjs.org",
+        platform: "article",
+        origin: "manual",
+        title: "Next.js Security",
+        isSaved: true,
+        tags: JSON.stringify([
+          "nextjs",
+          "sk-proj-abcdefghijklmnopqrstuvwxyz123456",
+          "mail owner@example.com",
+        ]),
+      },
+    });
+
     const snapRes = await GET_SNAPSHOT(makeReq("GET", "http://localhost/api/v1/memories/activity-snapshot"));
     expect(snapRes.status).toBe(200);
     const snapJson = await snapRes.json();
     expect(typeof snapJson.sourceHash).toBe("string");
     expect(snapJson.snapshot.activityEvents).toHaveLength(1);
+    const topTagNames = snapJson.snapshot.newsSignals.topTags.map((t: { tag: string }) => t.tag);
+    expect(topTagNames).toContain("nextjs");
+    expect(topTagNames).toContain("mail [email]");
+    expect(topTagNames.some((t: string) => t.includes("sk-proj-"))).toBe(false);
+    expect(topTagNames.some((t: string) => t.includes("owner@example.com"))).toBe(false);
+    await prisma.newsItem.deleteMany({ where: { canonicalUrl: "https://nextjs.org/blog/security-update" } });
 
     writeAccess.hasWriteAccess.mockResolvedValue(false);
     const visitorProxy = await PROXY_POST(

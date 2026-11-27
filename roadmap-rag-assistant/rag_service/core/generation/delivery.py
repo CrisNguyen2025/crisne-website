@@ -73,7 +73,14 @@ def metadata_event(
     return ev
 
 
-def record_turn(thread_id: str, user: str, assistant: str, store: HistoryStore = history_store) -> None:
+def record_turn(
+    thread_id: str,
+    user: str,
+    assistant: str,
+    store: HistoryStore = history_store,
+    *,
+    user_context_meta: Optional[Dict[str, Any]] = None,
+) -> None:
     """Store one user/assistant exchange; empty sides are skipped."""
-    store.append(thread_id, "user", mask_pii(user.strip()))
+    store.append(thread_id, "user", mask_pii(user.strip()), context_meta=user_context_meta)
     store.append(thread_id, "assistant", mask_pii(assistant.strip()))

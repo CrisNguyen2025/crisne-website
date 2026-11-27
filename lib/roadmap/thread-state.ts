@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   extractHighlightedSnippet,
   foldSearchText,
@@ -169,4 +170,63 @@ export function buildThreadTitle(contents: readonly string[]): string {
 
 export function extractMatchSnippet(content: string, query: string): string | null {
   return extractHighlightedSnippet(content, query, MAX_SNIPPET_CHARS)?.text ?? null;
+}
+
+const MAX_CONTEXT_JSON_CHARS = 4096;
+
+export const ThreadMessageContextSchema = z
+  .object({
+    connectors: z.array(z.enum(["gmail"])).max(5).optional(),
+    slashCommand: z.string().trim().min(1).max(32).optional(),
+    gmailRefs: z
+      .array(
+        z.object({
+          subject: z.string().trim().min(1).max(200),
+          from: z.string().trim().min(1).max(160),
+          date: z.string().trim().max(80).optional(),
+        })
+      )
+      .max(5)
+      .optional(),
+    pageContext: z
+      .object({
+        roadmapSlug: z.string().trim().max(120).optional(),
+        roadmapTitle: z.string().trim().max(200).optional(),
+        section: z.string().trim().max(200).optional(),
+        itemTitle: z.string().trim().max(200).optional(),
+        url: z.string().trim().max(300).optional(),
+      })
+      .optional(),
+  })
+  .strict();
+
+export type ThreadMessageContextMeta = z.infer<typeof ThreadMessageContextSchema>;
+
+export function serializeMessageContextMeta(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  const parsed = ThreadMessageContextSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const data = parsed.data;
+  if (
+    !data.connectors?.length &&
+    !data.slashCommand &&
+    !data.gmailRefs?.length &&
+    !data.pageContext
+  ) {
+    return null;
+  }
+  const serialized = JSON.stringify(data);
+  return serialized.length <= MAX_CONTEXT_JSON_CHARS ? serialized : null;
+}
+
+export function parseMessageContextMeta(
+  raw: string | null | undefined
+): ThreadMessageContextMeta | null {
+  if (!raw || raw.length > MAX_CONTEXT_JSON_CHARS) return null;
+  try {
+    const parsed = ThreadMessageContextSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }

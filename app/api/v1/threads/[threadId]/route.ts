@@ -11,6 +11,8 @@ import {
   cleanTopicField,
   isOwnerThreadId,
   isThreadRole,
+  parseMessageContextMeta,
+  serializeMessageContextMeta,
 } from '@/lib/roadmap/thread-state';
 
 // History and open Topic of an Owner's Roadmap Assistant Thread (ADR-0012).
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest, context: RouteContext) {
         where: { threadId: thread.threadId },
         orderBy: { id: 'desc' },
         take: MAX_THREAD_MESSAGES,
-        select: { role: true, content: true },
+        select: { role: true, content: true, contextJson: true },
       }),
       prisma.threadState.findUnique({
         where: { threadId: thread.threadId },
@@ -72,7 +74,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
         }
       : null;
 
-    return NextResponse.json({ messages: newestFirst.reverse(), state }, { headers: NO_STORE });
+    const messages = newestFirst.reverse().map((m) => {
+      const contextMeta = parseMessageContextMeta(m.contextJson);
+      return {
+        role: m.role,
+        content: m.content,
+        ...(contextMeta ? { contextMeta } : {}),
+      };
+    });
+
+    return NextResponse.json({ messages, state }, { headers: NO_STORE });
   } catch (error) {
     console.error('[API GET /api/v1/threads/[threadId]] Error:', error);
     return NextResponse.json({ error: 'Failed to read thread' }, { status: 500 });
@@ -95,8 +106,16 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (!isThreadRole(body?.role) || !content) {
       return NextResponse.json({ error: 'role (user | assistant) and content are required' }, { status: 400 });
     }
+    const contextJson = serializeMessageContextMeta(body?.contextMeta);
 
-    await prisma.threadMessage.create({ data: { threadId: thread.threadId, role: body.role, content } });
+    await prisma.threadMessage.create({
+      data: {
+        threadId: thread.threadId,
+        role: body.role,
+        content,
+        ...(contextJson ? { contextJson } : {}),
+      },
+    });
 
     // Older than the newest MAX_THREAD_MESSAGES of this Thread
     const firstExcess = await prisma.threadMessage.findMany({

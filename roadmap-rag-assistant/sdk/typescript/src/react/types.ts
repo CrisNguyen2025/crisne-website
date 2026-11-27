@@ -5,6 +5,7 @@ import type {
   ChatCitation,
   ChatSource,
   EditablePreviewTarget,
+  MessageContextMeta,
   PageContext,
 } from '../types';
 import type { AssistantStepEvent, AssistantStepItem } from '../client';
@@ -65,6 +66,8 @@ export interface ChatMessage {
   actionPreview?: ActionPreviewMeta;
   /** Snapshot of the Topic / Lesson page open when the user sent this message. */
   pageContext?: PageContext;
+  /** Attached context metadata (connectors, slash action, page snapshot) persisted with the message. */
+  contextMeta?: MessageContextMeta;
   isRestored?: boolean;
   actionChips?: ChatActionChip[];
   /** Follow-up prompts shown as chips under the answer; tapping one sends its prompt. */

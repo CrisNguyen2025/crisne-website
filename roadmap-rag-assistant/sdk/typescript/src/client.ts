@@ -7,11 +7,14 @@ import type {
   AssistantStepEvent,
   ChangeReview,
   ChatResponse,
+  ConnectorId,
   ConversationContext,
   CreatedLessonItem,
   CreateLessonInput,
   CreateOwnerMemoryInput,
   EditablePreviewTarget,
+  GmailConnectorConfig,
+  GmailConnectorStatus,
   HealthResponse,
   LatestThreadResponse,
   LogMemoryActivityInput,
@@ -35,6 +38,8 @@ export interface RoadmapChatClientOptions {
   memoriesBaseUrl?: string;
   /** Base path for Roadmap CRUD API (defaults to `/api/v1/roadmaps`). */
   roadmapsBaseUrl?: string;
+  /** Base path for Owner Connector APIs (defaults to `/api/v1/connectors`). */
+  connectorsBaseUrl?: string;
   /** Total time allowed for one request, in ms. */
   timeout?: number;
   /** Longest silence allowed between stream chunks, in ms. */
@@ -73,6 +78,7 @@ export class RoadmapChatClient {
   private readonly baseUrl: string;
   private readonly memoriesBaseUrl: string;
   private readonly roadmapsBaseUrl: string;
+  private readonly connectorsBaseUrl: string;
   private readonly timeout: number;
   private readonly idleTimeout: number;
 
@@ -86,6 +92,10 @@ export class RoadmapChatClient {
       ''
     );
     this.roadmapsBaseUrl = (options.roadmapsBaseUrl || '/api/v1/roadmaps').replace(
+      /\/$/,
+      ''
+    );
+    this.connectorsBaseUrl = (options.connectorsBaseUrl || '/api/v1/connectors').replace(
       /\/$/,
       ''
     );
@@ -108,7 +118,8 @@ export class RoadmapChatClient {
     threadId: string = 'default',
     context?: PageContext,
     titles?: string[],
-    target?: EditablePreviewTarget
+    target?: EditablePreviewTarget,
+    connectors?: ConnectorId[]
   ): AbortController {
     const controller = new AbortController();
 
@@ -137,6 +148,7 @@ export class RoadmapChatClient {
             context,
             ...(titles?.length ? { titles } : {}),
             ...(target && Object.keys(target).length ? { target } : {}),
+            ...(connectors?.length ? { connectors } : {}),
           }),
           signal: controller.signal,
         });
@@ -308,6 +320,7 @@ export class RoadmapChatClient {
                     sources: Array.isArray(data.metadata?.sources) ? data.metadata.sources : undefined,
                     citations: Array.isArray(data.metadata?.citations) ? data.metadata.citations : undefined,
                     changes: Array.isArray(data.changes) ? data.changes : undefined,
+                    suggestions: Array.isArray(data.suggestions) ? data.suggestions : undefined,
                     traceId: typeof data.trace_id === 'string' ? data.trace_id : undefined,
                   };
                   isTerminated = true;
@@ -659,6 +672,50 @@ export class RoadmapChatClient {
     }
     const data = (await resp.json()) as { item: CreatedLessonItem };
     return data.item;
+  }
+
+  /** Fetch Gmail connector status, email identity, config, and labels (Owner-only). */
+  async getGmailConnectorStatus(): Promise<GmailConnectorStatus> {
+    const resp = await fetch(`${this.connectorsBaseUrl}/gmail/status`, {
+      cache: 'no-store',
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không tải được trạng thái Gmail (${resp.status})`);
+    }
+    return (await resp.json()) as GmailConnectorStatus;
+  }
+
+  /** Update Owner Gmail connector query/label config. */
+  async updateGmailConnectorConfig(
+    config: GmailConnectorConfig
+  ): Promise<GmailConnectorStatus> {
+    const resp = await fetch(`${this.connectorsBaseUrl}/gmail/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không lưu được cấu hình Gmail (${resp.status})`);
+    }
+    return (await resp.json()) as GmailConnectorStatus;
+  }
+
+  /** Disconnect Gmail connector and revoke token. */
+  async disconnectGmail(): Promise<void> {
+    const resp = await fetch(`${this.connectorsBaseUrl}/gmail/disconnect`, {
+      method: 'POST',
+    });
+    if (!resp.ok) {
+      const err = (await resp.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error || `Không ngắt được kết nối Gmail (${resp.status})`);
+    }
+  }
+
+  /** Return URL used to start popup Gmail OAuth2 consent flow. */
+  getGmailAuthUrl(): string {
+    return `${this.connectorsBaseUrl}/gmail/auth`;
   }
 
   /**

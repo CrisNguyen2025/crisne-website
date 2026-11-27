@@ -39,6 +39,8 @@ class GenerationRequest:
     lesson_provenances: Dict[str, Sequence[Any]] = field(default_factory=dict)
     # Current open page hint placed adjacent to <user_query> so history about an earlier page cannot hijack 'này'/'đây'.
     page_hint: str = ""
+    # When True, LinkGuard strips any external/scheme URL not explicitly present on the turn's documents.
+    restrict_external_links: bool = False
 
 
 _escape = escape_prompt_data

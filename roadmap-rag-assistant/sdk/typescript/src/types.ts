@@ -13,10 +13,55 @@ export interface ToolCallResult {
   endedAt?: number;
 }
 
+export type ConnectorId = 'gmail';
+
+export type ConnectorStatusValue = 'disconnected' | 'connected' | 'expired' | 'error';
+
+export interface GmailConnectorConfig {
+  allowedLabelIds?: string[];
+  defaultQuery?: string;
+  maxEmails?: number;
+  excludeSensitiveSubjects?: boolean;
+}
+
+export interface GmailLabelOption {
+  id: string;
+  name: string;
+}
+
+export interface GmailConnectorStatus {
+  connected: boolean;
+  status: ConnectorStatusValue;
+  accountEmail: string | null;
+  config: GmailConnectorConfig;
+  labels?: GmailLabelOption[];
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface ChatSuggestion {
+  label: string;
+  prompt: string;
+}
+
+export interface MessageContextMeta {
+  connectors?: ConnectorId[];
+  slashCommand?: string;
+  gmailRefs?: { subject: string; from: string; date?: string }[];
+  pageContext?: {
+    roadmapSlug?: string;
+    roadmapTitle?: string;
+    section?: string;
+    itemTitle?: string;
+    url?: string;
+  };
+}
+
 export interface ChatRequest {
   message: string;
   thread_id?: string;
   context?: PageContext;
+  connectors?: ConnectorId[];
 }
 
 /** Page the user is viewing; lets the assistant resolve "này" / "đây" references and surface active page context. */
@@ -41,6 +86,10 @@ export interface ChatResponse {
   citations?: ChatCitation[];
   /** What the turn's actions wrote, one per executed action (streaming endpoint only). */
   changes?: ChangeReview[];
+  /** Clickable follow-up / quiz prompt chips returned by the turn. */
+  suggestions?: ChatSuggestion[];
+  /** Context attachments metadata associated with a message turn. */
+  contextMeta?: MessageContextMeta;
   /** Langfuse trace of the turn, to attach 👍/👎 feedback to (streaming endpoint, only when tracing is on). */
   traceId?: string;
 }
@@ -416,6 +465,7 @@ export interface LatestThreadMessage {
   content: string;
   timestamp: string;
   isRestored?: boolean;
+  contextMeta?: MessageContextMeta;
 }
 
 export interface LatestThreadResponse {

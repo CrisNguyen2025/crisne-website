@@ -78,6 +78,9 @@ async function preparePostBody(req: NextRequest, actor: Actor): Promise<Prepared
   }
 
   const scoped: Record<string, unknown> = { ...parsedPayload.data };
+  if (actor !== "owner") {
+    delete scoped.connectors;
+  }
   const threadId = ownThreadId(scoped.thread_id);
   scoped.thread_id = scopeThreadId(threadId, actor);
   if (typeof scoped.action_id === "string") scoped.action_id = scopeThreadId(scoped.action_id, actor);

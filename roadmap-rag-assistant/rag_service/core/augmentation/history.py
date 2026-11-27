@@ -8,7 +8,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, List, Literal, Protocol
+from typing import Any, Deque, Dict, List, Literal, Optional, Protocol
 
 from rag_service.core.bounded import BoundedStore
 from rag_service.core.thread_api import ThreadApi, default_thread_api
@@ -23,7 +23,13 @@ class Turn:
 
 
 class HistoryStore(Protocol):
-    def append(self, thread_id: str, role: Role, content: str) -> None: ...
+    def append(
+        self,
+        thread_id: str,
+        role: Role,
+        content: str,
+        context_meta: Optional[Dict[str, Any]] = None,
+    ) -> None: ...
 
     def get_recent(self, thread_id: str, n: int) -> List[Turn]:
         """Last `n` messages of the thread, oldest first."""
@@ -48,7 +54,13 @@ class InMemoryHistoryStore:
         self._threads: BoundedStore[Deque[Turn]] = BoundedStore()
         self._max = max_messages
 
-    def append(self, thread_id: str, role: Role, content: str) -> None:
+    def append(
+        self,
+        thread_id: str,
+        role: Role,
+        content: str,
+        context_meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
         if not content:
             return
         sid = thread_id or "default"
@@ -94,7 +106,13 @@ class SqliteHistoryStore:
         self._db.execute("DELETE FROM chat_turn WHERE created_at < ?", (time.time() - HISTORY_RETENTION_SECONDS,))
         self._db.commit()
 
-    def append(self, thread_id: str, role: Role, content: str) -> None:
+    def append(
+        self,
+        thread_id: str,
+        role: Role,
+        content: str,
+        context_meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
         if not content:
             return
         sid = thread_id or "default"
@@ -144,10 +162,19 @@ class HttpHistoryStore:
         self._cache = InMemoryHistoryStore(max_messages)
         self._api = api
 
-    def append(self, thread_id: str, role: Role, content: str) -> None:
+    def append(
+        self,
+        thread_id: str,
+        role: Role,
+        content: str,
+        context_meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self._cache.append(thread_id, role, content)
         if content and self._api.stored(thread_id):
-            self._api.write_later("POST", thread_id, {"role": role, "content": content})
+            payload: Dict[str, Any] = {"role": role, "content": content}
+            if context_meta:
+                payload["contextMeta"] = context_meta
+            self._api.write_later("POST", thread_id, payload)
 
     def get_recent(self, thread_id: str, n: int) -> List[Turn]:
         return self._cache.get_recent(thread_id, n)

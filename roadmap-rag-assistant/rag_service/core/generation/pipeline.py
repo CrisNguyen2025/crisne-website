@@ -23,6 +23,7 @@ from rag_service.auth import is_owner
 from rag_service.config import settings
 from rag_service.context_usage import record_last_turn, record_turn_diagnostics, split_prompt
 from rag_service.core.generation import citation, guardrails
+from rag_service.core.generation.links import is_external_or_scheme_href
 from rag_service.core.generation.sources_channel import SourceChannel
 from rag_service.core.generation.cite_channel import CiteChannel, CitationTracker, strip_marks
 from rag_service.core.augmentation.context import (
@@ -196,6 +197,19 @@ class GenerationPipeline:
         documents = reorder_documents(select_documents(req, profile)) if is_rag else []
         prompt_parts, selected_memory_ids = synthesize_prompt_parts(req, profile, documents=documents)
         known = profile.known_links() if is_rag and profile.known_links else None
+        if req.restrict_external_links:
+            allowed_external = frozenset(
+                d.href.strip() for d in documents if d.href and is_external_or_scheme_href(d.href)
+            )
+            base_allow = known
+
+            def _strict_allow(href: str) -> bool:
+                clean = (href or "").strip()
+                if is_external_or_scheme_href(clean):
+                    return clean in allowed_external
+                return base_allow(clean) if base_allow is not None else True
+
+            known = _strict_allow
         links = citation.citation_filter(known)
         channel = SourceChannel(d.id for d in documents) if is_rag else None
         cite = CiteChannel(d.id for d in documents) if is_rag else None

@@ -102,7 +102,9 @@ export async function GET(req: NextRequest) {
 
     const newsTagCounts = new Map<string, number>();
     for (const item of newsItems) {
-      for (const tag of parseTagsJson(item.tags)) {
+      for (const rawTag of parseTagsJson(item.tags)) {
+        const tag = safeMaskText(rawTag, 40);
+        if (!tag) continue;
         newsTagCounts.set(tag, (newsTagCounts.get(tag) ?? 0) + 1);
       }
     }

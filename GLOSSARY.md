@@ -103,6 +103,10 @@ _Avoid_: outline, template
 Lệnh của Owner để Roadmap Assistant tạo trọn một Topic từ một mục tiêu học.
 _Avoid_: auto-generate
 
+**Connector**:
+Kết nối một tài khoản ngoài của Owner (như hộp thư Gmail) với Roadmap Assistant để trợ lý truy xuất ngữ cảnh theo yêu cầu trong từng lượt hỏi mà không nạp vào kho Lesson.
+_Avoid_: plugin, external sync, mailbox sync
+
 ## News
 
 **News Source**:

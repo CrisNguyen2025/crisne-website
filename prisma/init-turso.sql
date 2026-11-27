@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS "ThreadMessage" (
     "threadId" TEXT NOT NULL,
     "role" TEXT NOT NULL,
     "content" TEXT NOT NULL,
+    "contextJson" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -315,3 +316,23 @@ CREATE INDEX IF NOT EXISTS "KnowledgeRelation_fromLessonId_idx" ON "KnowledgeRel
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "KnowledgeRelation_toLessonId_idx" ON "KnowledgeRelation"("toLessonId");
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "OwnerConnector" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "provider" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'connected',
+    "accountEmail" TEXT NOT NULL,
+    "encryptedRefreshToken" TEXT NOT NULL,
+    "encryptedAccessToken" TEXT,
+    "tokenExpiresAt" DATETIME,
+    "scopes" TEXT NOT NULL,
+    "configJson" TEXT NOT NULL DEFAULT '{}',
+    "lastSyncedAt" DATETIME,
+    "lastError" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "OwnerConnector_provider_key" ON "OwnerConnector"("provider");

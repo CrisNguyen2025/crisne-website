@@ -16,6 +16,7 @@ from rag_service.api.schemas import (
     ActionConfirmResponse,
     ChatRequest,
     ChatResponse,
+    ChatSuggestion,
     ContextRequest,
     HealthResponse,
     MatchLessonsRequest,
@@ -57,6 +58,7 @@ _SKIP_MEMORY_TOOLS = {
     "start_lesson_quiz",
     "grade_lesson_quiz",
     "mark_lesson_reviewed",
+    "query_gmail_connector",
 }
 
 
@@ -67,6 +69,8 @@ class _SseTurnState:
     steps: dict[str, dict] = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
     changes: list[dict] = field(default_factory=list)
+    suggestions: list[dict[str, str]] = field(default_factory=list)
+    used_connectors: list[str] = field(default_factory=list)
     had_preview: bool = False
     trace_id: str | None = None
     answer_mode: str | None = None
@@ -100,6 +104,27 @@ def _record_step_event(ev: dict, state: _SseTurnState) -> str:
     return _sse_line("step", payload)
 
 
+def _dispatch_fallback_meta_event(ev_type: str, ev: dict, state: _SseTurnState) -> str | None:
+    if ev_type == "action_preview":
+        state.had_preview = True
+        return _sse_line("action_preview", _normalize_action_preview_payload(ev))
+    if ev_type == "metadata":
+        state.metadata.update({k: v for k, v in ev.items() if k != "type"})
+        return None
+    if ev_type == "suggestions":
+        items = ev.get("items") or []
+        state.suggestions = [
+            {"label": str(s["label"]), "prompt": str(s["prompt"])}
+            for s in items
+            if isinstance(s, dict) and s.get("label") and s.get("prompt")
+        ]
+        return None
+    if ev_type == "trace":
+        state.trace_id = ev.get("trace_id")
+        return f"event: trace\ndata: {json.dumps({'trace_id': state.trace_id})}\n\n"
+    return None
+
+
 def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
     ev_type = ev.get("type")
     if ev_type == "tool_start":
@@ -120,16 +145,7 @@ def _dispatch_fallback_event(ev: dict, state: _SseTurnState) -> str | None:
         payload = {k: v for k, v in ev.items() if k != "type"}
         state.changes.append(payload)
         return _sse_line("change_review", payload)
-    if ev_type == "action_preview":
-        state.had_preview = True
-        return _sse_line("action_preview", _normalize_action_preview_payload(ev))
-    if ev_type == "metadata":
-        state.metadata.update({k: v for k, v in ev.items() if k != "type"})
-        return None
-    if ev_type == "trace":
-        state.trace_id = ev.get("trace_id")
-        return f"event: trace\ndata: {json.dumps({'trace_id': state.trace_id})}\n\n"
-    return None
+    return _dispatch_fallback_meta_event(ev_type or "", ev, state)
 
 
 async def _stream_fallback_sse(
@@ -184,6 +200,8 @@ def _build_done_payload(state: _SseTurnState) -> dict[str, Any]:
         done_payload["metadata"] = state.metadata
     if state.changes:
         done_payload["changes"] = state.changes
+    if state.suggestions:
+        done_payload["suggestions"] = state.suggestions
     if state.trace_id:
         done_payload["trace_id"] = state.trace_id
     return done_payload
@@ -201,6 +219,18 @@ async def drain_background_tasks(max_wait_seconds: float = 3.0) -> None:
             await owner_memory_store.flush_touches()
     except Exception as exc:
         print(f"[Routes] Skipped flushing memory touches on shutdown: {exc}")
+
+
+def _resolve_turn_connectors(message: str, connectors: Sequence[str] | None) -> list[str]:
+    if not is_owner():
+        return []
+    from rag_service.domains.roadmap.slash_commands import parse_slash_command
+
+    active = list(connectors or [])
+    parsed = parse_slash_command(message)
+    if parsed and parsed[0] == "gmail" and "gmail" not in active:
+        active.append("gmail")
+    return active
 
 
 def _maybe_schedule_memory_extraction(
@@ -222,10 +252,12 @@ def _maybe_schedule_memory_extraction(
     tools = list(executed_tool_names)
     if state is not None:
         tools.extend(str(t.get("name") or "") for t in state.executed_tools)
+    skip_connectors = bool(state.used_connectors or state.metadata.get("connectors")) if state is not None else False
     if (
         not is_owner()
         or skip_preview
         or skip_changes
+        or skip_connectors
         or any(name in _SKIP_MEMORY_TOOLS for name in tools)
     ):
         return
@@ -290,6 +322,9 @@ def _schedule_sync_chat_memory(agent: Any, req: ChatRequest, response: ChatRespo
         or name in ("import_items_from_text", "promote_concept_to_lesson")
         for name in tool_names
     )
+    had_connectors = bool(_resolve_turn_connectors(req.message, req.connectors))
+    if had_connectors:
+        return
     _maybe_schedule_memory_extraction(
         agent,
         req.message,
@@ -302,12 +337,18 @@ def _schedule_sync_chat_memory(agent: Any, req: ChatRequest, response: ChatRespo
     )
 
 
-def _build_sse_extra_input(titles: list[str] | None, target: dict | None) -> dict:
+def _build_sse_extra_input(
+    titles: list[str] | None,
+    target: dict | None,
+    connectors: list[str] | None = None,
+) -> dict:
     extra_input: dict = {}
     if titles:
         extra_input["titles"] = titles
     if target is not None:
         extra_input["target"] = target
+    if connectors:
+        extra_input["connectors"] = list(connectors)
     return extra_input
 
 
@@ -346,16 +387,19 @@ async def _sse_stream_generator(
     actor: Actor | None = None,
     titles: list[str] | None = None,
     target: dict | None = None,
+    connectors: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     """Universal SSE generator that handles both LangChain and FallbackAgent streaming."""
     # The body is streamed after the handler returns: set the caller where the agent runs
     if actor is not None:
         set_actor(actor)
     agent = _get_agent()
-    state = _SseTurnState()
+    raw_connectors = list(connectors) if connectors else []
+    active_connectors = _resolve_turn_connectors(message, connectors)
+    state = _SseTurnState(used_connectors=active_connectors)
     config = {"configurable": {"thread_id": thread_id}}
-    # Only sent with a confirmation that edits names or target; other agents never see the keys
-    extra_input = _build_sse_extra_input(titles, target)
+    # Pass raw_connectors to the agent so Visitor spoofing is explicitly denied with OWNER_ONLY_MESSAGE.
+    extra_input = _build_sse_extra_input(titles, target, raw_connectors or None)
 
     try:
         async for chunk in _stream_sse_agent_events(agent, message, context, extra_input, config, state):
@@ -363,9 +407,10 @@ async def _sse_stream_generator(
 
         done_payload = _build_done_payload(state)
         yield _sse_line("done", done_payload)
-        _maybe_schedule_memory_extraction(
-            agent, message, done_payload["message"], thread_id, context, state
-        )
+        if not (state.used_connectors or state.metadata.get("connectors")):
+            _maybe_schedule_memory_extraction(
+                agent, message, done_payload["message"], thread_id, context, state
+            )
 
     except Exception as exc:
         yield _sse_line("error", {"error": str(exc)})
@@ -382,6 +427,7 @@ async def chat_stream(req: ChatRequest, request: Request):
             _actor_of(request),
             req.titles,
             req.target.model_dump(exclude_none=True) if req.target else None,
+            req.connectors,
         ),
         media_type="text/event-stream",
         headers={
@@ -398,10 +444,17 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     set_actor(_actor_of(request))
     agent = _get_agent()
 
+    sync_connectors = _resolve_turn_connectors(req.message, req.connectors)
+    sync_input = {
+        "messages": [{"role": "user", "content": req.message}],
+        "context": req.context,
+        "fast": True,
+        **({"connectors": sync_connectors} if sync_connectors else {}),
+    }
     try:
         if isinstance(agent, FallbackAgent):
             res = await agent.ainvoke(
-                {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
+                sync_input,
                 config={"configurable": {"thread_id": req.thread_id}},
             )
             msgs = res.get("messages", [])
@@ -410,12 +463,17 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
                 for m in msgs if getattr(m, "type", "") == "tool"
             ]
             last_content = msgs[-1].content if msgs else ""
-            response = ChatResponse(message=last_content, tool_calls=tool_calls)
+            raw_suggestions = res.get("suggestions") or []
+            response = ChatResponse(
+                message=last_content,
+                tool_calls=tool_calls,
+                suggestions=[ChatSuggestion(**s) for s in raw_suggestions if isinstance(s, dict)],
+            )
             _schedule_sync_chat_memory(agent, req, response)
             return response
 
         result = agent.invoke(
-            {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
+            sync_input,
             config={"configurable": {"thread_id": req.thread_id}},
         )
 
@@ -441,7 +499,7 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         print(f"[Routes] Chat error ({exc}), using fallback agent...")
         fallback = FallbackAgent(tools=ALL_TOOLS)
         res = await fallback.ainvoke(
-            {"messages": [{"role": "user", "content": req.message}], "context": req.context, "fast": True},
+            sync_input,
             config={"configurable": {"thread_id": req.thread_id}},
         )
         msgs = res.get("messages", [])

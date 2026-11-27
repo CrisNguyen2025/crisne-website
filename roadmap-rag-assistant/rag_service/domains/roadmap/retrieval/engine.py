@@ -325,6 +325,19 @@ class HybridRagEngine:
             self._chunks_of = docs
         return self._chunks_present
 
+    @staticmethod
+    def _find_item_document(
+        docs: dict[str, KnowledgeDocument],
+        item_ref: str,
+        topic_slug: str,
+    ) -> Optional[KnowledgeDocument]:
+        matches = [d for d in docs.values() if d.doc_type == "item" and item_ref in (d.id, d.item_slug)]
+        if topic_slug:
+            for d in matches:
+                if d.topic_slug == topic_slug:
+                    return d
+        return matches[0] if matches else None
+
     def find_page_document(self, page_context: Optional[dict]) -> Optional[KnowledgeDocument]:
         """Look up the indexed Lesson or Topic matching `page_context` (trusted DB document, or None)."""
         if not page_context:
@@ -333,20 +346,9 @@ class HybridRagEngine:
         topic_slug = str(page_context.get("roadmapSlug") or "").strip()
         docs = getattr(self._vector_store, "_docs_map", {})
         if item_ref:
-            fallback: Optional[KnowledgeDocument] = None
-            for d in docs.values():
-                if d.doc_type != "item":
-                    continue
-                if d.id == item_ref or d.item_slug == item_ref:
-                    if not topic_slug or d.topic_slug == topic_slug:
-                        return d
-                    if fallback is None:
-                        fallback = d
-            return fallback
+            return self._find_item_document(docs, item_ref, topic_slug)
         if topic_slug:
-            for d in docs.values():
-                if d.doc_type == "topic" and d.topic_slug == topic_slug:
-                    return d
+            return next((d for d in docs.values() if d.doc_type == "topic" and d.topic_slug == topic_slug), None)
         return None
 
     def _select_page_passages(self, page_doc: KnowledgeDocument, query: str) -> List[dict]:

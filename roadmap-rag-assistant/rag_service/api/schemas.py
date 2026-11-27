@@ -36,6 +36,18 @@ class ChatRequest(BaseModel):
     # Names the Owner edited on a create Preview; applied when this message confirms it (commands.handle_pending)
     titles: Optional[list[Annotated[str, Field(min_length=1, max_length=200)]]] = Field(default=None, max_length=20)
     target: Optional[PreviewTargetEdit] = Field(default=None)
+    connectors: Optional[list[Annotated[str, Field(min_length=1, max_length=32)]]] = Field(
+        default=None,
+        max_length=5,
+        description="Active per-turn external context connectors (e.g. ['gmail']), Owner-only.",
+    )
+
+
+class ChatSuggestion(BaseModel):
+    """Clickable prompt chip returned alongside a reply."""
+
+    label: str
+    prompt: str
 
 
 class ContextRequest(BaseModel):
@@ -62,6 +74,7 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="List of tools invoked during this turn",
     )
+    suggestions: list[ChatSuggestion] = Field(default_factory=list)
 
 
 class IndexHealthInfo(BaseModel):

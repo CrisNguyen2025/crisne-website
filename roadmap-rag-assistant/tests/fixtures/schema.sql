@@ -42,6 +42,7 @@ CREATE TABLE "ThreadMessage" (
     "threadId" TEXT NOT NULL,
     "role" TEXT NOT NULL,
     "content" TEXT NOT NULL,
+    "contextJson" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -211,6 +212,23 @@ CREATE TABLE "IngestJob" (
     CONSTRAINT "IngestJob_newsItemId_fkey" FOREIGN KEY ("newsItemId") REFERENCES "NewsItem" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE "OwnerConnector" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "provider" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'connected',
+    "accountEmail" TEXT NOT NULL,
+    "encryptedRefreshToken" TEXT NOT NULL,
+    "encryptedAccessToken" TEXT,
+    "tokenExpiresAt" DATETIME,
+    "scopes" TEXT NOT NULL,
+    "configJson" TEXT NOT NULL DEFAULT '{}',
+    "lastSyncedAt" DATETIME,
+    "lastError" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Roadmap_slug_key" ON "Roadmap"("slug");
 
@@ -318,4 +336,7 @@ CREATE INDEX "IngestJob_status_lockedUntil_idx" ON "IngestJob"("status", "locked
 
 -- CreateIndex
 CREATE INDEX "IngestJob_newsItemId_idx" ON "IngestJob"("newsItemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "OwnerConnector_provider_key" ON "OwnerConnector"("provider");
 

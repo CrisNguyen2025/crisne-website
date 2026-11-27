@@ -38,6 +38,7 @@ Core docs được ghi trong buổi `/grill-with-docs` hoặc khi Owner yêu c�
 | [0018](adr/0018-owner-only-site-except-public-news.md)        | Site chỉ dành cho Owner, trừ Public News                     | superseded by ADR-0019 |
 | [0019](adr/0019-owner-only-site-no-public-news.md)           | Site chỉ dành cho Owner, bỏ Public News                      | accepted               |
 | [0020](adr/0020-rovo-owner-memory-and-observations.md)        | Rovo-style Owner Memory (Explicit + Observation), Kill-switch & Activity Event | accepted               |
+| [0021](adr/0021-abot-add-context-slash-actions-and-gmail-connector.md) | Nút thêm ngữ cảnh, lệnh Slash trước định tuyến và Gmail Connector một tài khoản | accepted               |
 
 ## Sơ đồ Mermaid
 

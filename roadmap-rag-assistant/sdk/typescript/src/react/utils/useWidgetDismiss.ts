@@ -74,7 +74,7 @@ export function useWidgetDismiss({
     };
 
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
       if (isOptionsOpen || isSwitchMenuOpen) {
         setIsOptionsOpen(false);
         setIsSwitchMenuOpen(false);

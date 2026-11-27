@@ -11,6 +11,7 @@ import {
   contentStats,
   contentToHtml,
   readingMinutes,
+  sanitizeDangerousHtml,
 } from "@/lib/roadmap/content-utils";
 import {
   CalloutNode,
@@ -111,6 +112,24 @@ describe("contentToHtml legacy normalization & callouts", () => {
     expect(out).toBe(
       '<div class="callout callout-warning"><div class="callout-content"><p>Chú ý hiệu năng</p></div></div>'
     );
+  });
+
+  it("strips slash-separated event handlers, SVG/math/style tags, and entity-obfuscated JS URIs while preserving safe HTML", () => {
+    const dirty = [
+      '<p>Safe text</p>',
+      '<span data-provenance-ref="01937d99-0000-7000-8000-000000000001"></span>',
+      '<img/src=x/onerror=alert(1)>',
+      '<svg onload=alert(1)><circle/></svg>',
+      '<a href="&#106;avascript:alert(1)">Click</a>',
+      '<a href=javascript:alert(1)>Unquoted</a>',
+      '<img src="data:image/svg+xml,<svg onload=alert(1)/>">',
+      '<img src="data:image/png;base64,iVBORw0KGgo=">',
+    ].join("");
+    const clean = sanitizeDangerousHtml(dirty);
+    expect(clean).toContain("<p>Safe text</p>");
+    expect(clean).toContain('data-provenance-ref="01937d99-0000-7000-8000-000000000001"');
+    expect(clean).toContain('src="data:image/png;base64,iVBORw0KGgo="');
+    expect(clean).not.toMatch(/onerror|onload|<svg|javascript:|image\/svg\+xml/i);
   });
 });
 

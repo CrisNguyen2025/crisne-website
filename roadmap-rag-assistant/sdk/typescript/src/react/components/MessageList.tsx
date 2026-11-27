@@ -5,6 +5,7 @@ import {
   CheckIcon,
   CloseIcon,
   CopyIcon,
+  MailIcon,
   PromptBubbleIcon,
   ThumbsDownIcon,
   ThumbsUpIcon,
@@ -48,7 +49,11 @@ export interface MessageListProps {
   showFeedback?: boolean;
   sendMessage: (
     textToSend?: string,
-    options?: { titles?: string[]; target?: { topic?: string; section?: string } }
+    options?: {
+      titles?: string[];
+      target?: { topic?: string; section?: string };
+      connectors?: import('../../types').ConnectorId[];
+    }
   ) => void;
   retry: (errorMessageId: string) => void;
   copyMessage: (id: string, text: string) => void;
@@ -393,12 +398,35 @@ const MessageItem = React.memo(function MessageItem({
   const toolCalls = msg.toolCalls ?? [];
 
   if (isUser) {
+    const hasGmailContext = Boolean(msg.contextMeta?.connectors?.includes("gmail"));
+    const slashTag = msg.contextMeta?.slashCommand;
     return (
       <div
         key={msg.id}
         data-message-id={msg.id}
         className="group flex flex-col items-end gap-1"
       >
+        {(hasGmailContext || slashTag) && (
+          <div className="flex max-w-[88%] flex-wrap justify-end gap-1 md:max-w-[85%]">
+            {hasGmailContext && (
+              <span
+                data-testid="message-context-gmail-chip"
+                className="inline-flex items-center gap-1 rounded-full border border-[#D7E6DC] bg-[#F1F8F4] px-2 py-0.5 text-[11px] font-medium text-[#2F6846]"
+              >
+                <MailIcon className="h-3 w-3 shrink-0" />
+                <span>Gmail</span>
+              </span>
+            )}
+            {slashTag && (
+              <span
+                data-testid="message-context-slash-chip"
+                className="inline-flex items-center rounded-full border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-0.5 font-mono text-[11px] font-medium text-[#C2410C]"
+              >
+                {slashTag}
+              </span>
+            )}
+          </div>
+        )}
         <div
           className={`relative max-w-[88%] md:max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3.5 py-2.5 text-base md:text-sm leading-relaxed text-[#1F1E1C] transition-[background-color,box-shadow] duration-300 ${
             isHighlighted

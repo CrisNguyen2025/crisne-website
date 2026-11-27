@@ -40,9 +40,11 @@ export function roadmapSourceLabel(href: string): string | null {
   return topic ? `Roadmap · ${topic}` : null;
 }
 
-/** Source label for a citation: the roadmap topic, else the external host. */
-export function citationSourceLabel(href?: string | null): string {
+/** Source label for a citation: Gmail, the roadmap topic, else the external host. */
+export function citationSourceLabel(href?: string | null, id?: string): string {
+  if (id && id.startsWith("gmail:")) return "Gmail";
   if (!href) return "Roadmap";
+  if (href.startsWith("https://mail.google.com/")) return "Gmail";
   const roadmap = roadmapSourceLabel(href);
   if (roadmap) return roadmap;
   if (/^https?:\/\//i.test(href)) {
@@ -438,7 +440,7 @@ export function CitationChip({
               <span className="flex items-center gap-1.5 text-xs text-[#5E5B55]">
                 <GlobeIcon />
                 <span className="truncate">
-                  {citationSourceLabel(citation.href)}
+                  {citationSourceLabel(citation.href, citation.id)}
                 </span>
               </span>
               <span className="mt-0.5 line-clamp-2 block text-sm font-medium leading-snug text-[#1F1E1C]">
@@ -534,7 +536,7 @@ export function CitationChip({
       >
         <GlobeIcon />
         <span className="truncate">
-          {first.title || citationSourceLabel(first.href)}
+          {first.title || citationSourceLabel(first.href, first.id)}
         </span>
         {citations.length > 1 && <span>+{citations.length - 1}</span>}
       </button>

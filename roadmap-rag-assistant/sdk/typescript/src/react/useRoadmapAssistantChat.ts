@@ -10,7 +10,13 @@ import {
 import { buildWelcomeMessage, WELCOME_MESSAGE_ID } from './welcome';
 import { RoadmapChatClient } from '../client';
 import type { ChatMessage } from './types';
-import type { AssistantStepEvent, ConversationContext, PageContext } from '../types';
+import type {
+  AssistantStepEvent,
+  ConnectorId,
+  ConversationContext,
+  MessageContextMeta,
+  PageContext,
+} from '../types';
 
 /**
  * Merge a step event into the step already shown under that id.
@@ -98,8 +104,11 @@ export interface UseRoadmapAssistantChatReturn {
       titles?: string[];
       target?: { topic?: string; section?: string };
       pageContext?: PageContext;
+      connectors?: ConnectorId[];
+      contextMeta?: MessageContextMeta;
     }
   ) => Promise<void>;
+  client: RoadmapChatClient;
   stopStreaming: () => void;
   /** The conversation's context as last loaded by `refreshContext`. */
   conversationContext: ConversationContextState;
@@ -271,6 +280,7 @@ export function useRoadmapAssistantChat(
           content: m.content,
           status: 'complete',
           isRestored: m.isRestored ?? true,
+          ...(m.contextMeta ? { contextMeta: m.contextMeta } : {}),
           timestamp: new Date(m.timestamp),
         }))
       );
@@ -319,6 +329,8 @@ export function useRoadmapAssistantChat(
         titles?: string[];
         target?: { topic?: string; section?: string };
         pageContext?: PageContext;
+        connectors?: ConnectorId[];
+        contextMeta?: MessageContextMeta;
       }
     ) => {
       const content = (textToSend ?? input).trim();
@@ -332,11 +344,24 @@ export function useRoadmapAssistantChat(
       }
 
       const activeContext = options?.pageContext ?? getContextRef.current?.();
+      const connectors = options?.connectors?.length ? options.connectors : undefined;
+      const slashMatch = content.match(/^\s*(\/[a-zA-Z0-9_-]+)/);
+      const slashCommand = slashMatch ? slashMatch[1].toLowerCase() : undefined;
+      const resolvedMeta: MessageContextMeta | undefined =
+        options?.contextMeta ??
+        (connectors || slashCommand
+          ? {
+              ...(connectors ? { connectors } : {}),
+              ...(slashCommand ? { slashCommand } : {}),
+            }
+          : undefined);
+
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content,
         ...(activeContext ? { pageContext: activeContext } : {}),
+        ...(resolvedMeta ? { contextMeta: resolvedMeta } : {}),
         timestamp: new Date(),
       };
 
@@ -565,6 +590,7 @@ export function useRoadmapAssistantChat(
                       : msg.steps,
                     sources: finalResp.sources ?? msg.sources,
                     citations: finalResp.citations ?? msg.citations,
+                    suggestions: finalResp.suggestions?.length ? finalResp.suggestions : msg.suggestions,
                     traceId: finalResp.traceId ?? msg.traceId,
                     // `done` repeats every change of the turn: fills in any event missed mid-stream
                     changes: finalResp.changes?.length ? finalResp.changes : msg.changes,
@@ -601,7 +627,8 @@ export function useRoadmapAssistantChat(
           conversationId,
           activeContext,
           options?.titles,
-          options?.target
+          options?.target,
+          connectors
         );
       } catch (err: unknown) {
         const { text } = friendlyError(err);
@@ -632,7 +659,15 @@ export function useRoadmapAssistantChat(
       setMessages((prev) => prev.filter((m) => m.id !== errorMessageId && m.id !== question.id));
       void sendMessage(
         question.content,
-        question.pageContext ? { pageContext: question.pageContext } : undefined
+        question.pageContext || question.contextMeta
+          ? {
+              ...(question.pageContext ? { pageContext: question.pageContext } : {}),
+              ...(question.contextMeta?.connectors?.length
+                ? { connectors: question.contextMeta.connectors }
+                : {}),
+              ...(question.contextMeta ? { contextMeta: question.contextMeta } : {}),
+            }
+          : undefined
       );
     },
     [messages, sendMessage]
@@ -681,6 +716,7 @@ export function useRoadmapAssistantChat(
               content: m.content,
               status: 'complete',
               isRestored: m.isRestored ?? true,
+              ...(m.contextMeta ? { contextMeta: m.contextMeta } : {}),
               timestamp: new Date(m.timestamp),
             }))
           : [buildWelcomeMessage(getContextRef.current?.(), canWriteRef.current)];
@@ -724,6 +760,7 @@ export function useRoadmapAssistantChat(
     error,
     conversationId,
     sendMessage,
+    client,
     stopStreaming,
     conversationContext,
     refreshContext,

@@ -67,11 +67,12 @@ model SlugRedirect {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model ThreadMessage {
-  id        Int      @id @default(autoincrement()) // Strictly increasing, so it orders a Thread's messages
-  threadId  String   // Always "owner:..."; a Visitor's Thread is never stored
-  role      String   // user | assistant
-  content   String
-  createdAt DateTime @default(now())
+  id          Int      @id @default(autoincrement()) // Strictly increasing, so it orders a Thread's messages
+  threadId    String   // Always "owner:..."; a Visitor's Thread is never stored
+  role        String   // user | assistant
+  content     String
+  contextJson String?  // Optional sanitized context attachment metadata (ADR-0021); never email bodies or tokens
+  createdAt   DateTime @default(now())
 
   @@index([threadId])
   @@index([createdAt])
@@ -289,5 +290,26 @@ model IngestJob {
   @@index([status, nextRunAt])
   @@index([status, lockedUntil])
   @@index([newsItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// External context Connectors of the Owner (ADR-0021): single account per provider
+// Tokens stored encrypted via AES-256-GCM; strictly Owner-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model OwnerConnector {
+  id                    String    @id @default(uuid(7))
+  provider              String    @unique // "gmail" (single connected Gmail account for Agent)
+  status                String    @default("connected") // "connected" | "expired" | "error"
+  accountEmail          String
+  encryptedRefreshToken String
+  encryptedAccessToken  String?
+  tokenExpiresAt        DateTime?
+  scopes                String
+  configJson            String    @default("{}")
+  lastSyncedAt          DateTime?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
 

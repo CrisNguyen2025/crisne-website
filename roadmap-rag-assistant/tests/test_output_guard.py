@@ -149,3 +149,30 @@ def test_link_guard_leaves_app_pages_and_files_alone():
     text = "[N](/notes/x) [P](/portfolio) [L](/login) [F](/og-image.png) [H](/) [T](#top)"
     assert guard.feed(text) + guard.flush() == text
     assert guard.removed == []
+
+
+def test_link_guard_restricts_external_urls_when_allowlist_is_given():
+    allowed_gmail = "https://mail.google.com/mail/u/0/#all/msg-1"
+    guard = LinkGuard(
+        roadmap_link_allowed({"ai"}, {"vdb"}, allowed_external_hrefs=[allowed_gmail])
+    )
+    text = (
+        f"[Mail]({allowed_gmail}) "
+        "[Lesson](/ai/vdb) "
+        "[Leak](https://evil.com/steal?x=1) "
+        "![Px](http://evil.com/p) "
+        "[Proto](//evil.com/z) "
+        "[Send](mailto:evil@x.com?body=1) "
+        "[JS](javascript:alert) "
+        "[Data](data:text/html,evil)"
+    )
+    out = guard.feed(text) + guard.flush()
+    assert out == f"[Mail]({allowed_gmail}) [Lesson](/ai/vdb) Leak !Px Proto Send JS Data"
+    assert guard.removed == [
+        "https://evil.com/steal?x=1",
+        "http://evil.com/p",
+        "//evil.com/z",
+        "mailto:evil@x.com?body=1",
+        "javascript:alert",
+        "data:text/html,evil",
+    ]

@@ -122,7 +122,9 @@
         "ADR-0012",
         "ADR-0015",
         "ADR-0017",
-        "ADR-0019"
+        "ADR-0019",
+        "ADR-0020",
+        "ADR-0021"
       ],
       "glossary": [
         "Roadmap Assistant",
@@ -134,7 +136,8 @@
         "Thread Summary",
         "Change",
         "Preview",
-        "Pending Action"
+        "Pending Action",
+        "Connector"
       ],
       "keyFiles": [
         "app/api/roadmap-assistant/[...path]/route.ts",
@@ -142,6 +145,16 @@
         "app/api/roadmap-assistant/threads/route.ts",
         "app/api/roadmap-assistant/threads/[threadId]/route.ts",
         "app/api/v1/threads/[threadId]/route.ts",
+        "app/api/v1/connectors/gmail/auth/route.ts",
+        "app/api/v1/connectors/gmail/callback/route.ts",
+        "app/api/v1/connectors/gmail/status/route.ts",
+        "app/api/v1/connectors/gmail/config/route.ts",
+        "app/api/v1/connectors/gmail/disconnect/route.ts",
+        "app/api/v1/connectors/gmail/query/route.ts",
+        "lib/connectors/crypto.ts",
+        "lib/connectors/schemas.ts",
+        "lib/connectors/gmail-client.ts",
+        "lib/connectors/gmail-service.ts",
         "app/api/v1/memories/route.ts",
         "app/api/v1/memories/[id]/route.ts",
         "app/api/v1/memories/settings/route.ts",
@@ -168,6 +181,8 @@
         "roadmap-rag-assistant/rag_service/domains/roadmap/lesson_status.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/memory_commands.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/slash_commands.py",
+        "roadmap-rag-assistant/rag_service/domains/roadmap/gmail_connector.py",
         "roadmap-rag-assistant/rag_service/domains/roadmap/linking_advisor.py",
         "roadmap-rag-assistant/rag_service/webmcp_planner.py",
         "roadmap-rag-assistant/rag_service/state/session_store.py",
@@ -192,14 +207,18 @@
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/AbotDialog.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx",
-        "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx"
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/AddContextMenu.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/SlashCommandPopover.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/GmailConnectorDialog.tsx"
       ],
       "dataModels": [
         "In-memory Topic/Section/Lesson Embeddings",
         "PendingAction Store",
         "ThreadMessage",
         "ThreadState",
-        "OwnerMemory"
+        "OwnerMemory",
+        "OwnerConnector"
       ]
     },
     {
@@ -1030,6 +1049,72 @@
       "summary": "Proxy Owner-only (403 Visitor) kích hoạt tổng hợp quan sát tức thì và prune mục hết hạn trên Python (ADR-0020)",
       "handler": "app/api/roadmap-assistant/[...path]/route.ts#forward",
       "triggersFlow": "FLOW_ABOT_OWNER_MEMORY_MANAGE"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_AUTH",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/auth",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Khởi tạo popup Google OAuth2 (PKCE + state, scope gmail.readonly) kết nối 1 Gmail với Agent (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/auth/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_CALLBACK",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/callback",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Xác thực state/PKCE, đổi token và mã hóa AES-256-GCM lưu OwnerConnector (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/callback/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_STATUS",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/status",
+      "method": "GET",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Trả trạng thái kết nối Gmail, accountEmail, cấu hình bộ lọc và danh sách nhãn cho dialog cấu hình (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/status/route.ts#GET",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_CONFIG",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/config",
+      "method": "PATCH",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Cập nhật danh sách nhãn, defaultQuery, maxEmails và bộ lọc OTP của Gmail Connector (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/config/route.ts#PATCH",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_DISCONNECT",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/disconnect",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Thu hồi token Google và xóa bản ghi OwnerConnector khỏi Turso (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/disconnect/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
+    },
+    {
+      "id": "EP_API_GMAIL_CONNECTOR_QUERY",
+      "type": "api_route",
+      "path": "/api/v1/connectors/gmail/query",
+      "method": "POST",
+      "authRequirement": "owner_only",
+      "domainId": "roadmap-assistant-abot",
+      "summary": "Truy vấn Gmail theo bộ lọc cho Python Abot, tách HTML, lọc OTP và trả văn bản sạch (ADR-0021)",
+      "handler": "app/api/v1/connectors/gmail/query/route.ts#POST",
+      "triggersFlow": "FLOW_ABOT_GMAIL_CONNECTOR"
     }
   ],
   "executionFlows": [
@@ -2266,6 +2351,105 @@
         "ADR-0017",
         "ADR-0019"
       ]
+    },
+    {
+      "id": "FLOW_ABOT_SLASH_ACTIONS",
+      "name": "Menu Actions (Slash) kèm gợi ý Topic cho /quiz",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner | Visitor",
+      "trigger": "Người dùng bấm nút (+) -> Actions hoặc gõ '/' ở đầu ô nhập trên ChatComposer",
+      "preconditions": [
+        "Slash ở đầu câu mới mở bảng chọn; Slash giữa câu (/api/...) không kích hoạt",
+        "Lệnh Owner-only (/quiz, /status, /review, /next, /draft, /remember, /gmail) ẩn và bị chặn trên Visitor"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "roadmap-rag-assistant/sdk/typescript/src/react/components/SlashCommandPopover.tsx",
+          "functionOrMethod": "SlashCommandPopover",
+          "action": "Hiển thị danh sách lệnh theo phân quyền; chọn /quiz sẽ nạp Topics ưu tiên Topic đang xem để chọn",
+          "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/components/ChatComposer.tsx#ChatComposer",
+          "dataPassed": "/quiz <Topic Title>"
+        },
+        {
+          "order": 2,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/slash_commands.py",
+          "functionOrMethod": "SlashCommandMixin",
+          "action": "Định tuyến xác định lệnh Slash trước IntentRouter; gọi QuizCommands.handle_topic_quiz_menu xếp hạng bài phù hợp và phát chips suggestions",
+          "callsNext": "roadmap-rag-assistant/rag_service/domains/roadmap/quiz_commands.py#QuizCommands",
+          "dataPassed": "{ message, suggestions: [{ label, prompt }] }"
+        }
+      ],
+      "invariants": [
+        "Mọi thao tác ghi từ Slash (/draft, /remember) vẫn bắt buộc đi qua Preview -> ok",
+        "Lượt dùng Slash được lưu kèm slashCommand trong ThreadMessage.contextJson cho Owner"
+      ],
+      "failureModes": [
+        "Topic chưa có bài học đủ nội dung (>= 40 ký tự): trả hướng dẫn bổ sung nội dung trước khi quiz"
+      ],
+      "relatedAdrs": [
+        "ADR-0010",
+        "ADR-0012",
+        "ADR-0021"
+      ]
+    },
+    {
+      "id": "FLOW_ABOT_GMAIL_CONNECTOR",
+      "name": "Kết nối 1 Gmail Connector và truy vấn hộp thư theo từng lượt chat cho Owner",
+      "domainId": "roadmap-assistant-abot",
+      "actor": "Owner",
+      "trigger": "Owner cấu hình Gmail từ nút (+) -> Gmail hoặc gắn chip [Gmail] / gõ /gmail khi hỏi Abot",
+      "preconditions": [
+        "Actor bắt buộc là Owner (Proxy xóa connectors khỏi payload nếu Visitor gửi)",
+        "CONNECTOR_ENCRYPTION_KEY 32-byte và AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET đã cấu hình"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "layer": "Presentation_UI",
+          "component": "roadmap-rag-assistant/sdk/typescript/src/react/components/GmailConnectorDialog.tsx",
+          "functionOrMethod": "GmailConnectorDialog",
+          "action": "Mở popup Google OAuth2 (gmail.readonly), cấu hình nhãn/defaultQuery hoặc ngắt kết nối; bật chip Gmail trong ChatComposer",
+          "callsNext": "app/api/v1/connectors/gmail/auth/route.ts#GET",
+          "dataPassed": "PKCE state + popup postMessage"
+        },
+        {
+          "order": 2,
+          "layer": "Routing_Gateway",
+          "component": "app/api/v1/connectors/gmail/query/route.ts",
+          "functionOrMethod": "POST",
+          "action": "Giải mã token AES-256-GCM, làm mới token nếu sắp hết hạn, lọc Spam/Trash & tiêu đề OTP/mật khẩu, tách HTML thành text sạch <= 4000 ký tự",
+          "callsNext": "lib/connectors/gmail-service.ts#queryConnectedGmail",
+          "dataPassed": "{ accountEmail, emails }"
+        },
+        {
+          "order": 3,
+          "layer": "AI_Orchestration",
+          "component": "roadmap-rag-assistant/rag_service/domains/roadmap/gmail_connector.py",
+          "functionOrMethod": "ConnectorMixin",
+          "action": "Bọc email thành ContextDocument(id='gmail:<id>'), chạy GenerationPipeline trả lời kèm citation [[gmail:...]], bỏ qua OUT_OF_SCOPE và không ghi nội dung email vào OwnerMemory",
+          "callsNext": null,
+          "dataPassed": "SSE tokens + citations + ThreadMessage.contextJson (metadata gọn)"
+        }
+      ],
+      "invariants": [
+        "Chỉ kết nối tối đa 1 tài khoản Gmail (OwnerConnector.provider @unique)",
+        "Refresh/access token không bao giờ gửi về Python hay trình duyệt",
+        "Nội dung email không bao giờ đi vào OwnerMemory extractor hay chỉ mục RAG vector"
+      ],
+      "failureModes": [
+        "Refresh token 7 ngày trên GCP Testing mode hết hạn (invalid_grant): cập nhật status='expired' và trả GMAIL_TOKEN_EXPIRED để nhắc Kết nối lại"
+      ],
+      "relatedAdrs": [
+        "ADR-0001",
+        "ADR-0002",
+        "ADR-0006",
+        "ADR-0012",
+        "ADR-0020",
+        "ADR-0021"
+      ]
     }
   ],
   "dataModels": [
@@ -2548,6 +2732,33 @@
         "kind thuộc 5 giá trị: profile | techstack | goal | preference | learning_note; content <= 300 ký tự",
         "status thuộc active | pending | archived; gợi ý tự động luôn ở pending chờ duyệt"
       ]
+    },
+    {
+      "id": "MODEL_OWNER_CONNECTOR",
+      "name": "OwnerConnector",
+      "source": "prisma",
+      "table": "OwnerConnector",
+      "domainId": "roadmap-assistant-abot",
+      "fields": [
+        "id",
+        "provider",
+        "status",
+        "accountEmail",
+        "encryptedRefreshToken",
+        "encryptedAccessToken",
+        "tokenExpiresAt",
+        "scopes",
+        "configJson",
+        "lastSyncedAt",
+        "lastError",
+        "createdAt",
+        "updatedAt"
+      ],
+      "relations": [],
+      "invariants": [
+        "Chỉ dành cho Owner; mỗi provider duy nhất 1 bản ghi (provider='gmail' @unique cho 1 tài khoản Gmail kết nối với Agent)",
+        "encryptedRefreshToken và encryptedAccessToken mã hóa AES-256-GCM bằng CONNECTOR_ENCRYPTION_KEY"
+      ]
     }
   ],
   "invariantsAndRules": [
@@ -2640,6 +2851,11 @@
       "ruleId": "ADR-0020",
       "title": "Rovo Owner Memory & Observations (supersedes ADR-0015)",
       "summary": "Tách Explicit vs Suggested vs Observed; thêm OwnerPreference kill-switches, OwnerActivityEvent (90d prune), lọc secret/PII/XML, cách ly Lesson draft mặc định, xoá cứng memory theo Topic, ranking ổn định prefix & evals/memory/."
+    },
+    {
+      "ruleId": "ADR-0021",
+      "title": "Abot Add Context (+ Button), Slash Actions & Gmail Connector",
+      "summary": "ChatComposer 2 hàng thống nhất với nút (+) chứa Actions (Slash + /quiz suggest Topic) và 1 Gmail Connector (OwnerConnector, gmail.readonly, AES-256-GCM tái sử dụng AUTH_GOOGLE_ID/SECRET) kèm cột ThreadMessage.contextJson."
     }
   ]
 }

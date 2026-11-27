@@ -283,3 +283,17 @@ describe("message length limit (P1-6)", () => {
     expect(upstream).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("connector actor isolation", () => {
+  it("strips spoofed connectors from Visitor requests while preserving Owner connectors", async () => {
+    await callPost("chat/stream", { message: "Check mail", thread_id: "t-v", connectors: ["gmail"] });
+    expect(forwarded(0).body.connectors).toBeUndefined();
+
+    await callPost(
+      "chat/stream",
+      { message: "Check mail", thread_id: "t-o", connectors: ["gmail"] },
+      { "x-admin-key": "machine-key" },
+    );
+    expect(forwarded(1).body.connectors).toEqual(["gmail"]);
+  });
+});

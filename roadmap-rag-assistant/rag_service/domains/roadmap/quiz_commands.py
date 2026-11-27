@@ -70,6 +70,14 @@ _OVERDUE_TARGET_RE = re.compile(
     r"\b(?:bai\s+(?:can\s+on\s+nhat|lau\s+chua\s+on|can\s+on|cu\s+nhat)|can\s+on\s+nhat|lau\s+chua\s+on)\b",
     re.IGNORECASE,
 )
+_TOPIC_SUMMARY_QUIZ_RE = re.compile(
+    r"^\s*(?:quiz|on)\s+tong\s+hop(?:\s+(?:topic|chu\s+de))?(?:\s+(?P<topic>.+))?$",
+    re.IGNORECASE,
+)
+_TOPIC_MENU_QUIZ_RE = re.compile(
+    r"^\s*quiz\s+(?:topic|chu\s+de)(?:\s+(?P<topic>.+))?$",
+    re.IGNORECASE,
+)
 _TOPIC_TAIL_RE = re.compile(
     r"\s+(?:trong|o|thuoc|cua|in)\s+(?:topic\s+|chu\s+de\s+|lo\s+trinh\s+)?(?P<topic>.+)$",
     re.IGNORECASE,
@@ -166,6 +174,92 @@ def _extract_quiz_topic_tail(rest_orig: str, rest_flat: str) -> tuple[Optional[s
         return None, rest_orig, rest_flat
     topic_hint = orig_tm.group("topic").strip(" .?!\"“”") or tail_words or None
     return topic_hint, rest_orig[: orig_tm.start()].strip(), rest_flat[: tm.start()].strip()
+
+
+def parse_topic_quiz_request(text: str) -> Optional[tuple[str, bool]]:
+    """Match 'quiz tong hop topic <Topic>' -> (topic, True) or 'quiz topic <Topic>' -> (topic, False)."""
+    cleaned = normalize_vietnamese(text or "").strip()
+    if not cleaned:
+        return None
+    flat = fold(cleaned)
+    for pattern, is_summary in ((_TOPIC_SUMMARY_QUIZ_RE, True), (_TOPIC_MENU_QUIZ_RE, False)):
+        m = pattern.match(flat)
+        if not m:
+            continue
+        matched_topic = (m.group("topic") or "").strip(" .?!\"“”")
+        if not matched_topic:
+            return "", is_summary
+        orig = cleaned[len(cleaned) - len(matched_topic) :].strip(" .?!\"“”")
+        return orig or matched_topic, is_summary
+    return None
+
+
+def _rank_topic_quiz_lessons(items: Sequence[dict]) -> tuple[list[dict], list[dict]]:
+    """Order quiz-ready lessons: learning -> overdue known -> target -> remaining known."""
+    rich: list[dict] = []
+    short: list[dict] = []
+    for item in items:
+        plain = strip_html_for_quiz(item.get("content") or "")
+        if len(plain) >= MIN_LESSON_CHARS:
+            rich.append(item)
+        else:
+            short.append(item)
+
+    overdue_order = {id(it): idx for idx, it in enumerate(filter_and_sort_review_lessons(rich))}
+    known_idx = 0
+    prioritized: list[tuple[int, int, dict]] = []
+    for pos, item in enumerate(rich):
+        st = _status_of(item)
+        if st == "learning":
+            prioritized.append((0, pos, item))
+        elif st == "known" and id(item) in overdue_order:
+            prioritized.append((1, overdue_order[id(item)], item))
+        elif st == "target":
+            prioritized.append((2, pos, item))
+        else:
+            known_idx += 1
+            prioritized.append((3, known_idx, item))
+    prioritized.sort(key=lambda row: (row[0], row[1]))
+    return [row[2] for row in prioritized], short
+
+
+def _quiz_reason_badge(item: dict) -> str:
+    st = _status_of(item)
+    if st == "learning":
+        return "Đang học · nên kiểm tra ngay"
+    if st == "known":
+        return "Đã nắm · nên ôn nhắc lại"
+    return "Chưa học · đã đủ nội dung"
+
+
+def _build_topic_quiz_menu_payload(
+    topic_title: str,
+    ranked: Sequence[dict],
+    short: Sequence[dict],
+) -> tuple[str, list[dict[str, str]]]:
+    lines = [f"🎯 **Danh sách quiz phù hợp cho Topic `{topic_title}`**\n"]
+    suggestions: list[dict[str, str]] = []
+    for idx, item in enumerate(ranked[:5], start=1):
+        title = str(item.get("title") or "").strip()
+        section = str(item.get("section") or "").strip()
+        sec_note = f" *(Mục {section})*" if section else ""
+        lines.append(f"{idx}. **{title}**{sec_note} — {_quiz_reason_badge(item)}")
+        if len(suggestions) < 4:
+            short_label = title[:26] + ("…" if len(title) > 26 else "")
+            suggestions.append({"label": f"Quiz: {short_label}", "prompt": f"quiz bài {title}"})
+
+    if len(ranked) >= 2:
+        suggestions.append({
+            "label": f"Ôn tổng hợp {topic_title[:20]}",
+            "prompt": f"quiz tổng hợp topic {topic_title}",
+        })
+    if short:
+        missing_titles = ", ".join(str(i.get("title") or "") for i in short[:3])
+        lines.append(
+            f"\n💡 *{len(short)} bài chưa đủ nội dung nên tạm bỏ qua ({missing_titles}).*"
+        )
+    lines.append("\nChọn một chip bên dưới để bắt đầu 3 câu Active Recall ngay:")
+    return "\n".join(lines), suggestions
 
 
 def parse_quiz_request(text: str) -> Optional[QuizRequest]:
@@ -558,7 +652,7 @@ class QuizCommands(AgentHostMixin):
             session_ctx.pending_concept_promotion = proposal
 
         preview_payload: Optional[dict] = None
-        if passed_count >= pass_threshold:
+        if passed_count >= pass_threshold and quiz.get("lesson_id"):
             preview_text, preview_payload = self._prepare_quiz_status_preview(quiz, session_id, session_ctx)
             reply_parts.append("\n" + preview_text)
             if proposal is not None:
@@ -682,6 +776,154 @@ class QuizCommands(AgentHostMixin):
                 return lesson, lesson.get("topic_slug") or lesson.get("roadmapSlug"), lesson.get("topic_title")
         return None, None, None
 
+    async def _stream_topic_quiz_picker(
+        self, adapter, delay: float
+    ) -> AsyncGenerator[dict, None]:
+        topics = [t for t in (await adapter.list_topics() or []) if t.get("slug") and t.get("title")]
+        if not topics:
+            async for ev in self._stream_text(
+                "Hiện chưa có Topic nào trong lộ trình để tạo danh sách quiz.", delay
+            ):
+                yield ev
+            return
+        suggestions = [
+            {"label": str(t["title"]), "prompt": f"/quiz {t['title']}"}
+            for t in topics[:6]
+        ]
+        lines = ["📚 **Chọn Topic bạn muốn làm quiz:**\n"]
+        for t in topics[:8]:
+            lines.append(f"- **{t['title']}** ({t.get('itemCount', 0)} bài học)")
+        lines.append("\nChọn nhanh một Topic bên dưới hoặc gõ `/quiz <tên Topic>`.")
+        yield {"type": "suggestions", "items": suggestions}
+        async for ev in self._stream_text("\n".join(lines), delay):
+            yield ev
+
+    async def handle_topic_quiz_menu(
+        self,
+        *,
+        topic_ref: str,
+        page_context,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        """List ranked Active Recall quizzes suitable for a Topic and emit clickable suggestions."""
+        outcome["handled"] = True
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+
+        adapter = get_adapter()
+        topic = await self._resolve_target_topic(topic_ref or None, topic_ref, page_context, session_ctx)
+        if topic is None:
+            async for ev in self._stream_topic_quiz_picker(adapter, delay):
+                yield ev
+            return
+
+        topic_title = str(topic.get("title") or topic.get("slug") or "")
+        ranked, short = _rank_topic_quiz_lessons(topic.get("items") or [])
+        if not ranked:
+            async for ev in self._stream_text(
+                f"Topic **{topic_title}** hiện chưa có bài học nào đủ nội dung (>= {MIN_LESSON_CHARS} ký tự) để tạo quiz.\n\n"
+                "💡 Bạn có thể thêm nội dung cho bài học trước rồi quay lại `/quiz` nhé.",
+                delay,
+            ):
+                yield ev
+            return
+
+        yield {
+            "type": "tool_start",
+            "name": "list_topic_quizzes",
+            "args": {"topic": topic_title, "ready_count": len(ranked)},
+        }
+        reply, suggestions = _build_topic_quiz_menu_payload(topic_title, ranked, short)
+        yield {
+            "type": "tool_end",
+            "name": "list_topic_quizzes",
+            "result": f"Tìm thấy {len(ranked)} bài phù hợp trong Topic {topic_title}",
+        }
+        yield {"type": "suggestions", "items": suggestions}
+        async for ev in self._stream_text(reply, delay):
+            yield ev
+
+    async def handle_topic_summary_quiz(
+        self,
+        *,
+        topic_ref: str,
+        page_context,
+        session_id: str,
+        session_ctx,
+        delay: float,
+        outcome: dict,
+    ) -> AsyncGenerator[dict, None]:
+        """Start a mixed Active Recall quiz synthesized from top lessons of a Topic."""
+        outcome["handled"] = True
+        if not is_owner():
+            async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
+                yield ev
+            return
+
+        topic = await self._resolve_target_topic(topic_ref or None, topic_ref, page_context, session_ctx)
+        if topic is None:
+            async for ev in self._stream_topic_quiz_picker(get_adapter(), delay):
+                yield ev
+            return
+
+        ranked, _ = _rank_topic_quiz_lessons(topic.get("items") or [])
+        picked = ranked[:3]
+        if not picked:
+            async for ev in self._stream_text(
+                f"Topic **{topic.get('title')}** chưa có bài đủ nội dung để ôn tổng hợp.", delay
+            ):
+                yield ev
+            return
+
+        topic_title = str(topic.get("title") or topic.get("slug") or "")
+        topic_slug = str(topic.get("slug") or "")
+        per_lesson = max(600, MAX_QUIZ_SOURCE_CHARS // len(picked))
+        combined = "\n\n".join(
+            f"[Bài: {it.get('title')}]\n{strip_html_for_quiz(it.get('content') or '', max_chars=per_lesson)}"
+            for it in picked
+        )
+        yield {
+            "type": "tool_start",
+            "name": "start_lesson_quiz",
+            "args": {"topic": topic_title, "lessons": [i.get("title") for i in picked]},
+        }
+        questions = await generate_quiz_questions(
+            getattr(self, "llm", None),
+            title=f"Tổng hợp Topic {topic_title}",
+            plain_text=combined,
+            count=DEFAULT_QUIZ_QUESTIONS,
+        )
+        session_ctx.clear_pending()
+        session_ctx.active_quiz = {
+            "lesson_id": None,
+            "lesson_title": f"Tổng hợp Topic {topic_title}",
+            "lesson_status": "known",
+            "is_topic_summary": True,
+            "topic_slug": topic_slug,
+            "topic_title": topic_title,
+            "excerpt": combined[:2500],
+            "questions": questions,
+            "index": 0,
+            "results": [],
+        }
+        yield {
+            "type": "tool_end",
+            "name": "start_lesson_quiz",
+            "result": f"Đã tạo {len(questions)} câu ôn tổng hợp Topic {topic_title}",
+        }
+        intro = (
+            f"🎯 **Ôn tập tổng hợp ({len(questions)} câu) — Topic `{topic_title}`**\n\n"
+            f"**Câu 1/{len(questions)}:** {questions[0]['question']}\n\n"
+            "*(Trả lời ngắn gọn bằng ý hiểu của bạn, hoặc gõ **dừng quiz** bất cứ lúc nào để thoát.)*"
+        )
+        async for ev in self._stream_text(intro, delay):
+            yield ev
+
     async def handle_quiz_command(
         self,
         *,
@@ -693,6 +935,22 @@ class QuizCommands(AgentHostMixin):
         outcome: dict,
     ) -> AsyncGenerator[dict, None]:
         """Start an Active Recall quiz grounded in a Lesson's content (Owner-only, runs before router)."""
+        if (topic_req := parse_topic_quiz_request(content)) is not None:
+            topic_ref, is_summary = topic_req
+            target_fn = (
+                self.handle_topic_summary_quiz if is_summary else self.handle_topic_quiz_menu
+            )
+            async for ev in target_fn(
+                topic_ref=topic_ref,
+                page_context=page_context,
+                session_id=session_id,
+                session_ctx=session_ctx,
+                delay=delay,
+                outcome=outcome,
+            ):
+                yield ev
+            return
+
         req = parse_quiz_request(content)
         if req is None:
             return
@@ -703,6 +961,26 @@ class QuizCommands(AgentHostMixin):
                 yield ev
             return
 
+        async for ev in self._start_lesson_quiz_flow(
+            req=req,
+            content=content,
+            page_context=page_context,
+            session_id=session_id,
+            session_ctx=session_ctx,
+            delay=delay,
+        ):
+            yield ev
+
+    async def _start_lesson_quiz_flow(
+        self,
+        *,
+        req: QuizRequest,
+        content: str,
+        page_context,
+        session_id: str,
+        session_ctx,
+        delay: float,
+    ) -> AsyncGenerator[dict, None]:
         adapter = get_adapter()
         if req.use_overdue_review:
             lesson, topic_slug, topic_title = await self._pick_overdue_quiz_lesson(

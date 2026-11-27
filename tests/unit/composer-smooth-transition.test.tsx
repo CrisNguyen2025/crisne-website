@@ -211,12 +211,11 @@ describe("ChatComposer - 2-Column Row Layout & Auto-Grow UX", () => {
     const sendBtn = screen.getByRole("button", { name: "Gửi tin nhắn" });
     const textarea = screen.getByPlaceholderText("Hỏi Abot…");
 
-    // Chip sits inside composer-toolbar on the same row as the Send button, hidden below md (Tablet+)
+    // Card is always unified 2-row (`flex-col`): textarea above, toolbar (with `+` and Send) below
+    expect(card.className).toContain("flex-col");
+    expect(toolbar.contains(screen.getByRole("button", { name: "Thêm ngữ cảnh" }))).toBe(true);
     expect(toolbar.contains(chip)).toBe(true);
     expect(toolbar.contains(sendBtn)).toBe(true);
-    expect(chip.className).toContain("hidden");
-    expect(chip.className).toContain("md:inline-flex");
-    expect(card.className).toContain("md:flex-col");
     expect(chip.getAttribute("data-context-kind")).toBe("lesson");
     expect(chip.getAttribute("data-context-path")).toBe(lessonRef.path);
     expect(chip.textContent).toBe(lessonRef.label);

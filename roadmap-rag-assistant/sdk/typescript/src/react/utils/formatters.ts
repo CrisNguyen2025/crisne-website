@@ -68,6 +68,8 @@ export function formatToolDisplayName(name: string): string {
       return 'Chấm câu trả lời ôn tập';
     case 'mark_lesson_reviewed':
       return 'Đánh dấu đã ôn bài';
+    case 'query_gmail_connector':
+      return 'Tra cứu Gmail đã kết nối';
     default:
       return name;
   }

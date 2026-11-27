@@ -32,6 +32,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [assistant-topic-grounding-tooling.md](assistant-topic-grounding-tooling.md) | Grounding và tooling ở mức topic, kèm eval tự động | 2026-11-05 @ `1b7eaab` | Eval pass; case chat pass; 1 lỗi nhỏ (lỗi 9) |
 | [rag-index-sync.md](rag-index-sync.md) | Đồng bộ dữ liệu roadmap ↔ index RAG, kiểm tra /health, thêm/xoá bài và Lesson Status | 2026-11-24 (chưa commit, trên `fd46546`) | Case 6, 7, 8 Pass (case 7 pass ở lần 2, sau khi sửa lỗi 1); case 9 không test được local; case 1–5 chưa chạy |
 | [seed-import.md](seed-import.md) | Nhập bài seed vào topic AI Architecture (`target`) | 2026-11-05 (local & Turso dry-run) | Local pass; dry-run Turso pass; chờ Owner apply |
+| [design-theme.md](design-theme.md) | Theme Default / Apple / Railway / PostHog cho roadmap và news (nút Tùy chọn) | 2026-11-27 (chưa commit, trên `2b3e3cd`) | T1–T5, T7, T8 Pass; T6 `/news` không test được local |
 | [lesson-status.md](lesson-status.md) | Đọc và đổi Lesson Status (ADR-0010, Step 6) | Chưa chạy | Kịch bản mới |
 | [dead-code-cleanup.md](dead-code-cleanup.md) | Dọn dẹp dead code, chip chat, sitemap, topic resolution, và xóa route thừa (TASK-dead-code-cleanup-001) | 2026-11-06 @ `a2828a5` | 5/5 Pass |
 | [abot-stream-snippets.md](abot-stream-snippets.md) | Stream thẻ gợi ý (snippet) & cuộn bám đáy êm ái (TASK-abot-stream-snippets-001) | 2026-11-06 | 6/6 Pass |
@@ -44,6 +45,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [owner-memory.md](owner-memory.md) | Owner Memory xuyên Thread, cache invalidate, nối tiếp Thread & cách ly Visitor (ADR-0015) | Chưa chạy | Kịch bản mới (M1–M9) |
 | [knowledge-provenance.md](knowledge-provenance.md) | Đưa News Item vào Lesson kèm Provenance, chip nguồn trên trang Lesson (ADR-0017, TASK-knowledge-provenance-001..003) | 2026-11-23 (chưa commit, trên `ce7564a`) | P1–P10 Pass |
 | [global-search.md](global-search.md) | Global Search / Command Palette (`Cmd+K`) tìm Topic, Lesson kèm `#anchor`, NewsItem (Owner-only) | Chưa chạy | Kịch bản mới (S1–S6) |
+| [abot-add-context.md](abot-add-context.md) | Nút `+ Add Context` (`Actions` Slash `/quiz -> Topic` & `Gmail Connector`, `ADR-0021`) | 2026-11-27 (test tự động) | AC-1..AC-3, AC-5..AC-6 tự động Pass; AC-4 (Google OAuth thật) chưa chạy |
 
 ## Cách chạy (đã kiểm chứng)
 

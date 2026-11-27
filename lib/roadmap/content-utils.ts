@@ -127,26 +127,55 @@ export function contentToHtml(content: string): string {
   return html;
 }
 
+const DANGEROUS_PAIRED_TAG_RE = /<(script|iframe|object|embed|form|svg|math|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const DANGEROUS_SINGLE_TAG_RE = /<\/?(?:script|iframe|object|embed|form|svg|math|style|base|meta|link)\b[^>]*>/gi;
+const INLINE_EVENT_ATTR_RE = /([\s/"'])on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+)/gi;
+const URL_ATTR_RE = /(\s(?:href|src|action|formaction|xlink:href)\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+const SAFE_DATA_IMAGE_RE = /^data:image\/(?:png|jpe?g|gif|webp|avif);/i;
+
+function decodeHtmlNumericEntities(value: string): string {
+  return value.replace(/&#(?:x([0-9a-f]+)|(\d+));?/gi, (_m, hex: string | undefined, dec: string | undefined) => {
+    const code = hex ? Number.parseInt(hex, 16) : Number.parseInt(dec ?? '', 10);
+    if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return '';
+    return String.fromCodePoint(code);
+  });
+}
+
+function isUnsafeAttributeUrl(rawValue: string): boolean {
+  const decoded = decodeHtmlNumericEntities(rawValue);
+  let normalized = '';
+  for (let i = 0; i < decoded.length; i += 1) {
+    if (decoded.charCodeAt(i) > 32) normalized += decoded[i];
+  }
+  const lower = normalized.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('vbscript:')) return true;
+  if (lower.startsWith('data:')) return !SAFE_DATA_IMAGE_RE.test(lower);
+  return false;
+}
+
 /**
- * Strips malicious tags, event handlers, and javascript protocols to prevent XSS
+ * Strips malicious tags, event handlers, and javascript/vbscript/unsafe data URIs to prevent XSS.
  */
 export function sanitizeDangerousHtml(rawHtml: string): string {
   if (!rawHtml) return '';
 
   let safe = rawHtml;
-  // Remove script, iframe, object, embed, form tags and contents
-  safe = safe.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  safe = safe.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
-  safe = safe.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
-  safe = safe.replace(/<embed\b[^>]*>/gi, '');
-  safe = safe.replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form>/gi, '');
+  safe = safe.replace(DANGEROUS_PAIRED_TAG_RE, '');
+  safe = safe.replace(DANGEROUS_SINGLE_TAG_RE, '');
 
-  // Remove dangerous inline event handlers (e.g. onclick=, onerror=, onload=)
-  safe = safe.replace(/(?<=\s)on[a-z]+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
-
-  // Remove javascript: or unsafe data: URIs in href or src (allow safe data:image/)
-  safe = safe.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, 'href="#"');
-  safe = safe.replace(/src\s*=\s*["']\s*javascript:[^"']*["']/gi, 'src=""');
+  // Sanitize attributes only inside HTML tags so prose/code text stays intact
+  safe = safe.replace(/<[a-z][^>]*>/gi, (tag) => {
+    const withoutEvents = tag.replace(INLINE_EVENT_ATTR_RE, '$1');
+    return withoutEvents.replace(
+      URL_ATTR_RE,
+      (fullMatch, prefix: string, dq: string | undefined, sq: string | undefined, uq: string | undefined) => {
+        const val = dq ?? sq ?? uq ?? '';
+        if (!isUnsafeAttributeUrl(val)) return fullMatch;
+        const isHrefLike = /^\s*(?:href|action|formaction)/i.test(prefix);
+        return isHrefLike ? `${prefix}"#"` : `${prefix}""`;
+      }
+    );
+  });
 
   return safe;
 }

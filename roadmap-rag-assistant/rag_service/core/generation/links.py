@@ -14,6 +14,12 @@ LINK = re.compile(r"\[([^\]\n]*)\]\(([^)\s]*)\)")
 PARTIAL_LINK = re.compile(r"\[[^\]\n]*(?:\](?:\([^)\s]*)?)?")
 # Held back at most this long; anything longer is not a link the model is writing
 MAX_PENDING = 300
+_SCHEME_OR_PROTOCOL_REL = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//)")
+
+
+def is_external_or_scheme_href(href: str) -> bool:
+    """True for URLs with an explicit scheme (https:, mailto:, javascript:, ...) or //host."""
+    return bool(_SCHEME_OR_PROTOCOL_REL.match((href or "").strip()))
 
 
 class LinkGuard:
