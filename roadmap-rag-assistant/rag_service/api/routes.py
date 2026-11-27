@@ -444,12 +444,13 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     set_actor(_actor_of(request))
     agent = _get_agent()
 
-    sync_connectors = _resolve_turn_connectors(req.message, req.connectors)
+    # Pass raw req.connectors so Visitor spoofing is explicitly denied with OWNER_ONLY_MESSAGE, matching /chat/stream.
+    raw_sync_connectors = list(req.connectors) if req.connectors else []
     sync_input = {
         "messages": [{"role": "user", "content": req.message}],
         "context": req.context,
         "fast": True,
-        **({"connectors": sync_connectors} if sync_connectors else {}),
+        **({"connectors": raw_sync_connectors} if raw_sync_connectors else {}),
     }
     try:
         if isinstance(agent, FallbackAgent):

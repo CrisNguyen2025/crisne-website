@@ -792,7 +792,10 @@ class QuizCommands(AgentHostMixin):
         ]
         lines = ["📚 **Chọn Topic bạn muốn làm quiz:**\n"]
         for t in topics[:8]:
-            lines.append(f"- **{t['title']}** ({t.get('itemCount', 0)} bài học)")
+            lesson_count = (t.get("_count") or {}).get("items")
+            if lesson_count is None:
+                lesson_count = t.get("itemCount", 0)
+            lines.append(f"- **{t['title']}** ({lesson_count} bài học)")
         lines.append("\nChọn nhanh một Topic bên dưới hoặc gõ `/quiz <tên Topic>`.")
         yield {"type": "suggestions", "items": suggestions}
         async for ev in self._stream_text("\n".join(lines), delay):

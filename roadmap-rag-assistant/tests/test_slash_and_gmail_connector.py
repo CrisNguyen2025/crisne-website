@@ -77,6 +77,29 @@ async def test_slash_quiz_topic_returns_ranked_suggestions_for_owner_and_blocks_
         assert v_res.status_code == 200
         assert OWNER_ONLY_MESSAGE in v_res.text
 
+        # Bare /quiz without active topic lists topics using real adapter _count.items count
+        mock_adapter.list_topics.return_value = [
+            {"id": "t-ai", "slug": "ai-architecture", "title": "AI Architecture", "_count": {"items": 12}},
+        ]
+        mock_adapter.get_topic.return_value = None
+        picker_res = await client.post(
+            "/chat/stream",
+            headers=owner_headers,
+            json={"message": "/quiz", "thread_id": f"owner:{uuid.uuid4()}"},
+        )
+        assert picker_res.status_code == 200
+        picker_done = _parse_sse_done(picker_res.text)
+        assert "12 bài học" in picker_done["message"]
+
+        mock_adapter.get_topic.return_value = {
+            "id": "t-ai",
+            "slug": "ai-architecture",
+            "title": "AI Architecture",
+            "items": [
+                {"id": "l1", "title": "Hybrid Search", "section": "RAG", "status": "learning", "content": "<p>" + "x" * 80 + "</p>"},
+                {"id": "l2", "title": "BM25", "section": "RAG", "status": "target", "content": "<p>" + "y" * 80 + "</p>"},
+            ],
+        }
         o_res = await client.post(
             "/chat/stream",
             headers=owner_headers,
@@ -171,6 +194,19 @@ async def test_gmail_connector_isolation_and_grounding(
         )
         assert v_res.status_code == 200
         assert OWNER_ONLY_MESSAGE in v_res.text
+        assert called is False
+
+        v_sync_res = await client.post(
+            "/chat",
+            headers=visitor_headers,
+            json={
+                "message": "Trong Gmail có gì mới?",
+                "thread_id": f"visitor:{uuid.uuid4()}",
+                "connectors": ["gmail"],
+            },
+        )
+        assert v_sync_res.status_code == 200
+        assert OWNER_ONLY_MESSAGE in v_sync_res.json()["message"]
         assert called is False
 
         # 2. Expired token instructs Owner cleanly to reconnect

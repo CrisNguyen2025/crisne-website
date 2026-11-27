@@ -51,7 +51,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 
 - **Server:** `yarn dev` (3334) và `yarn rag:dev` (8000). Owner nhờ `DEV_OWNER_BYPASS=true` trong `.env.local` (chỉ có tác dụng với `next dev`), không cần đăng nhập Google.
 - **DB:** đang là **Turso thật**. Chỉ dùng topic test riêng và xoá chúng sau khi chạy. Tên topic test **không** được chứa chữ "Section" hay "mục", vì Abot hiểu nhầm (lỗi 2 của assistant-sections). Nên dùng `QA Sandbox`.
-- **Chat:** bấm nút "Mở Abot". Ô nhập có placeholder `Hỏi Abot…` và chỉ có một dòng, nên không gửi được nội dung nhiều dòng.
+- **Chat:** bấm nút "Mở Abot". Khung nhập Unified 2-Row Card có `<textarea>` placeholder `Hỏi Abot…` ở hàng trên (hỗ trợ nhiều dòng qua `Shift+Enter`), hàng dưới gồm nút `+` (`Thêm ngữ cảnh`) / chip bên trái và nút gửi bên phải.
 - **Preview:** câu xác nhận hiện là "Xác nhận thực hiện" (helper cũ còn dò "Đang chờ bạn xác nhận").
 - **Chờ trả lời:** dùng [helpers/abot-send.js](helpers/abot-send.js), helper này đợi đến khi chữ trên trang ngừng thay đổi. Đừng chờ `response.finished()` của `/chat/stream`, vì nó không bao giờ kết thúc và làm Playwright treo.
 - **Thêm bài nền nhanh:** gọi thẳng API, không qua chat:
