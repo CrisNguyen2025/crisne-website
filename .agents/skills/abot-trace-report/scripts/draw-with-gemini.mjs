@@ -31,7 +31,12 @@ Content, in this order:
 3. Router phases strip for the observation named "intent-router" (skip if absent): 9 cells P0..P8 from metadata "phases.P<n>_<name>",
    each cell shows the phase name and its value (or "—" if empty); highlight the cell named in metadata "phases.decided_by".
    Under it one line: method, act, target, and rules joined by ", ".
-4. A small legend for the colors used.`;
+   If "intent-router" is absent and the root observation metadata has "pre_route", show a compact banner "Pre-route shortcut · <pre_route>" instead.
+4. Data lineage summary strip (compact key-value pills from observation outputs/metadata when present):
+   thread context (history_turns, active_topic_slug, pending_kind), owner memory (explicit_count, observed_count),
+   retrieval (queries count, rewritten, reranked, before_gate -> kept, dropped_by_gate titles), provenance (provenance_entries),
+   and generation sections (documents count, dropped_documents, citations, grounding).
+5. A small legend for the colors used.`;
 
 function extractHtml(text) {
   const start = text.search(/<!doctype html|<html[\s>]/i);
@@ -100,6 +105,12 @@ async function main() {
       latencyMs: obs.latencyMs,
       model: obs.model,
       metadata: obs.metadata,
+      summaryOutput:
+        obs.name in { "load-thread-context": 1, "load-owner-memory": 1, "load-provenance": 1 }
+          ? obs.output
+          : obs.name === "retrieve-live-knowledge" && Array.isArray(obs.output)
+            ? { keptCount: obs.output.length }
+            : undefined,
     })),
   };
 

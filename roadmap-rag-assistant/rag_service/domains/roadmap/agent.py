@@ -127,6 +127,16 @@ def _unless_empty(reply: Callable[[bool], str]) -> Callable[[bool], str]:
     return lambda owner: empty_roadmap_reply(owner) if rag_engine.is_empty() else reply(owner)
 
 
+def _mark_pre_route(name: str) -> None:
+    if (trace := current_trace()) is not None:
+        trace.flags.setdefault("pre_route", name)
+
+
+def _mark_dispatch(name: str) -> None:
+    if (trace := current_trace()) is not None:
+        trace.flags["dispatch"] = name
+
+
 async def _plan_queries(llm, query: str, session_id: str, page_hint: str = ""):
     """Query plan for a turn: the recent conversation is passed so references like "bài đó" can be resolved."""
     return await plan_queries(query, history_store.get_recent(session_id, HISTORY_TURNS), llm, page_hint=page_hint)
@@ -344,42 +354,65 @@ class NextGenRoadmapAgent(
         delay: float,
         outcome: dict,
     ) -> AsyncGenerator[dict, None]:
-        handlers = (
-            self.handle_section_rename(
-                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+        named_handlers = (
+            (
+                "section_rename",
+                self.handle_section_rename(
+                    content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_lesson_edit(
-                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            (
+                "lesson_edit",
+                self.handle_lesson_edit(
+                    content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_concept_promotion(
-                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            (
+                "concept_promotion",
+                self.handle_concept_promotion(
+                    content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_lesson_content(
-                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            (
+                "lesson_content",
+                self.handle_lesson_content(
+                    content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_status_change(
-                content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            (
+                "status_change",
+                self.handle_status_change(
+                    content=content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_memory_command(
-                content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+            (
+                "memory_command",
+                self.handle_memory_command(
+                    content=raw_content, page_context=page_context, session_ctx=session_ctx, delay=delay, outcome=outcome
+                ),
             ),
-            self.handle_quiz_command(
-                content=raw_content,
-                page_context=page_context,
-                session_id=session_id,
-                session_ctx=session_ctx,
-                delay=delay,
-                outcome=outcome,
+            (
+                "quiz_command",
+                self.handle_quiz_command(
+                    content=raw_content,
+                    page_context=page_context,
+                    session_id=session_id,
+                    session_ctx=session_ctx,
+                    delay=delay,
+                    outcome=outcome,
+                ),
             ),
         )
-        for gen in handlers:
+        for handler_name, gen in named_handlers:
             async for ev in gen:
                 yield ev
             if outcome["handled"]:
+                _mark_pre_route(handler_name)
                 return
 
         if self.bulk_import_applies(raw_content, lower, page_context):
             outcome["handled"] = True
+            _mark_pre_route("bulk_import")
             async for ev in self.handle_bulk_import(
                 raw_content=raw_content, lower=lower, page_context=page_context, delay=delay
             ):
@@ -427,6 +460,7 @@ class NextGenRoadmapAgent(
                 outcome["handled"] = True
                 if (trace := current_trace()) is not None:
                     trace.flags["guard"] = flag_name
+                _mark_pre_route(f"entry_guard:{flag_name}")
                 async for ev in self._stream_text(reply_text, delay):
                     yield ev
                 return
@@ -439,6 +473,8 @@ class NextGenRoadmapAgent(
             outcome=outcome,
         ):
             yield ev
+        if outcome["handled"]:
+            _mark_pre_route("active_quiz")
 
     async def _run_syntax_guards(
         self,
@@ -449,6 +485,7 @@ class NextGenRoadmapAgent(
     ) -> AsyncGenerator[dict, None]:
         if (unnamed := unnamed_create_reply(content)) is not None:
             outcome["handled"] = True
+            _mark_pre_route("syntax_guard:unnamed_create")
             async for ev in self._stream_text(unnamed if is_owner() else OWNER_ONLY_MESSAGE, delay):
                 yield ev
             return
@@ -457,6 +494,7 @@ class NextGenRoadmapAgent(
             outcome["handled"] = True
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "legacy_level"
+            _mark_pre_route("syntax_guard:legacy_level")
             async for ev in self._stream_text(legacy, delay):
                 yield ev
 
@@ -490,6 +528,7 @@ class NextGenRoadmapAgent(
             outcome["handled"] = True
             if (trace := current_trace()) is not None:
                 trace.flags["guard"] = "mixed_intents"
+            _mark_pre_route("mixed_intents")
             async for ev in self._stream_text(mixed_intent_reply(mixed_steps), delay):
                 yield ev
 
@@ -518,6 +557,7 @@ class NextGenRoadmapAgent(
         ):
             yield ev
         if outcome["handled"]:
+            _mark_pre_route("pending_action")
             return
 
         async for ev in self._run_entry_guards(
@@ -562,12 +602,14 @@ class NextGenRoadmapAgent(
     ) -> AsyncGenerator[dict, None]:
         if intent_res.intent == IntentType.OUT_OF_SCOPE:
             outcome["handled"] = True
+            _mark_dispatch("out_of_scope")
             async for ev in self._stream_text(out_of_scope_reply(is_owner()), delay):
                 yield ev
             return
 
         if intent_res.intent == IntentType.UNCLEAR or route_gate.denied:
             outcome["handled"] = True
+            _mark_dispatch("route_gate_blocked")
             blocked = route_gate.reason == BLOCKED_CHANGE
             if (trace := current_trace()) is not None and route_gate.denied:
                 trace.flags["guard"] = "cud_blocked" if blocked else "cud_unconfirmed"
@@ -587,6 +629,7 @@ class NextGenRoadmapAgent(
             TOPIC_REFERENCE.search(lower) or TOPIC_REFERENCE_FOLDED.search(fold(lower))
         ):
             outcome["handled"] = True
+            _mark_dispatch("missing_active_topic")
             yield step_event("answer", "generation", "done", mode="unclear", fallback_reason=None)
             async for ev in self._stream_text(NO_TOPIC_REPLY, delay):
                 yield ev
@@ -614,9 +657,12 @@ class NextGenRoadmapAgent(
                 outcome=answered,
             ):
                 yield ev
-            if not answered["handled"] and (trace := current_trace()) is not None:
+            if answered["handled"]:
+                _mark_dispatch("catalog")
+            elif (trace := current_trace()) is not None:
                 trace.flags["catalog_fallback"] = True
         elif intent_res.sub_intent == KnowledgeSubIntent.LESSON_STATUS:
+            _mark_dispatch("lesson_status")
             if not is_owner():
                 async for ev in self._stream_text(OWNER_ONLY_MESSAGE, delay):
                     yield ev
@@ -665,6 +711,7 @@ class NextGenRoadmapAgent(
             ):
                 yield ev
             if answered["handled"]:
+                _mark_dispatch("current_section")
                 return
 
         deps = self._source_deps(content, page_context=page_context)
@@ -673,6 +720,7 @@ class NextGenRoadmapAgent(
             and route_outcome.scope is not None
             and route_outcome.scope.scope == Scope.DOMAIN_GAP
         )
+        _mark_dispatch("rag_domain_gap" if is_domain_gap else "rag_sources")
         focus_topic = (focus_written(content) or route_outcome.scope.focus) if is_domain_gap else None
         if is_domain_gap:
             # The roadmap's field, no lesson yet: if the search finds nothing, say so instead of "no match"
@@ -701,7 +749,17 @@ class NextGenRoadmapAgent(
             if "touch" in params:
                 kwargs["touch"] = False
             items = await owner_memory_store.list_active(active_topic, **kwargs)
-            end_step(mem_step, output={"count": len(items)})
+            explicit_n = sum(1 for m in items if getattr(m, "source", "explicit") == "explicit")
+            observed_n = sum(1 for m in items if getattr(m, "source", "") == "observed")
+            end_step(
+                mem_step,
+                output={
+                    "count": len(items),
+                    "explicit_count": explicit_n,
+                    "observed_count": observed_n,
+                    "scope": active_topic or "global",
+                },
+            )
             return items
         except BaseException as exc:
             end_step_on_error(mem_step, exc)
@@ -711,7 +769,19 @@ class NextGenRoadmapAgent(
         load_step = start_step("load-thread-context", "span", input={"has_page_context": bool(page_context)})
         try:
             await asyncio.gather(history_store.load(session_id), session_store.load(session_id))
-            end_step(load_step, output={"topic_loaded": bool(getattr(session_ctx, "topic_loaded", False))})
+            pending = session_ctx.active_pending()
+            end_step(
+                load_step,
+                output={
+                    "topic_loaded": bool(getattr(session_ctx, "topic_loaded", False)),
+                    "history_turns": len(history_store.get_recent(session_id, HISTORY_TURNS)),
+                    "active_topic_slug": session_ctx.active_topic_slug,
+                    "active_lesson_id": session_ctx.active_lesson_id,
+                    "active_section": session_ctx.active_section,
+                    "pending_kind": pending[1] if pending else None,
+                    "active_quiz": session_ctx.active_quiz is not None,
+                },
+            )
         except BaseException as exc:
             end_step_on_error(load_step, exc)
             raise
@@ -730,7 +800,11 @@ class NextGenRoadmapAgent(
     ) -> AsyncGenerator[dict, None]:
         active_topic = page_slug or session_ctx.active_topic_slug
         owner = is_owner()
-        owner_memories = await self._list_active_owner_memories(active_topic, content) if owner else []
+        if owner:
+            deps = dataclasses.replace(
+                deps,
+                load_memories=lambda: self._list_active_owner_memories(active_topic, content),
+            )
         saw_no_match = False
         async for ev in answer_from_sources(
             query=content,
@@ -739,7 +813,6 @@ class NextGenRoadmapAgent(
             delay=delay,
             llm=self.llm,
             deps=deps,
-            owner_memories=owner_memories,
             memory_scope=active_topic,
         ):
             if ev.get("type") == "step" and ev.get("id") == "answer" and ev.get("mode") == "no_match":
@@ -791,6 +864,7 @@ class NextGenRoadmapAgent(
     ) -> AsyncGenerator[dict, None]:
         # "làm được gì", "cách thêm bài vào topic": the command list, not an LLM answer that may refuse or invent syntax
         if understood.asks_usage:
+            _mark_dispatch("help_usage")
             yield step_event("answer", "generation", "done", mode="help")
             async for ev in self._stream_text(await self._help_reply(), delay):
                 yield ev
@@ -811,11 +885,13 @@ class NextGenRoadmapAgent(
         ):
             yield ev
         if outcome["handled"]:
+            _mark_dispatch("chitchat_llm")
             return
         llm_failed = outcome["llm_failed"]
 
         # A low-confidence guess (default fallback, no LLM) gets a short prompt, not the full greeting
         if intent_res.confidence < UNCLEAR_CONFIDENCE:
+            _mark_dispatch("chitchat_unclear")
             yield step_event(
                 "answer", "generation", "done", mode="unclear", fallback_reason=self._llm_fallback_reason(llm_failed)
             )
@@ -823,6 +899,7 @@ class NextGenRoadmapAgent(
                 yield ev
             return
 
+        _mark_dispatch("chitchat_greeting")
         resp = await self._greeting_reply()
         yield step_event(
             "answer",
@@ -909,6 +986,7 @@ class NextGenRoadmapAgent(
         delay: float,
     ) -> AsyncGenerator[dict, None]:
         if route_gate.mode != WRITE_NONE:
+            _mark_dispatch("cud")
             async for ev in self.handle_cud(
                 content=content,
                 lower=lower,
