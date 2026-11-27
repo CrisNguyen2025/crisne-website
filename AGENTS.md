@@ -27,6 +27,10 @@ Skill dự án nằm thật ở `.agents/skills/` (Claude Code, Codex, Antigravi
 - **`verify-ci`:** dùng sau khi sửa code; subagent `verifier` của Claude Code chạy skill này.
 - **`cris-doctor`:** chỉ đọc, CLI `yarn doctor`. Chạy `--scope <vùng>` trước khi lập plan cho vùng đó. Sửa xong finding thì chạy `--update-baseline` và commit `.handoff/doctor/baseline.json` cùng thay đổi.
 - **`sonar-clean-code`:** chuẩn Sonar Clean Code Concept (Consistent, Intentional, Adaptable, Responsible) kết hợp AST (`eslint-plugin-sonarjs` + `ruff` Sonar rules) và audit ngữ nghĩa để detect và refactor theo batch nhỏ, giữ nguyên behavior và ranh giới `AGENTS.md`.
+- **UI skills (`baseline-ui`, `improve-ui`, `fixing-accessibility`, `fixing-motion-performance`, `fixing-metadata`, `create-design-md`):** nguồn [ibelick/ui-skills](https://github.com/ibelick/ui-skills) (MIT), cập nhật bằng `npx skills update`. Rule của repo và `docs/design-system.md` thắng khi mâu thuẫn:
+  - `baseline-ui`: animation JS dùng thư viện repo đang chọn (`.handoff/PLAN-brand-design-system-unification.md` giữ `framer-motion`, bỏ `motion`), không theo rule `motion/react`. Tracking, gradient, shadow của theme roadmap/news (`app/styles/*-theme.css`) theo file nguồn của theme, không bị coi là vi phạm.
+  - `improve-ui`: ghi plan vào `.handoff/` theo quy ước handoff, không tạo `design-plans/` ở gốc repo.
+  - `create-design-md`: lệnh `npx @google/design.md` tải package từ npm, hỏi user trước khi chạy.
 
 ## 🤖 Config agent (MCP, subagent, hook)
 
