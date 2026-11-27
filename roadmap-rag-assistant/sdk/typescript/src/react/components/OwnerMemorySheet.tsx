@@ -28,6 +28,7 @@ import {
   RowActionButtons,
   UndoMemoryBanner,
 } from "./OwnerMemorySections";
+import { AbotDialog, useAbotDialogClose } from "./AbotDialog";
 
 type RovoTab = "observations" | "explicit";
 
@@ -186,16 +187,18 @@ function MemoryRowCard({
 export interface OwnerMemorySheetProps {
   baseUrl: string;
   currentTopicSlug?: string;
+  zIndex?: number;
   onPendingCountChange?: (count: number) => void;
   onClose: () => void;
 }
 
-export function OwnerMemorySheet({
+function OwnerMemoryContent({
   baseUrl,
   currentTopicSlug,
   onPendingCountChange,
   onClose,
-}: OwnerMemorySheetProps) {
+}: Omit<OwnerMemorySheetProps, "zIndex">) {
+  const requestClose = useAbotDialogClose(onClose);
   const client = useMemo(() => new RoadmapChatClient({ baseUrl }), [baseUrl]);
   const {
     activeItems,
@@ -236,31 +239,27 @@ export function OwnerMemorySheet({
   const [promotingId, setPromotingId] = useState<string | null>(null);
   const [undoState, setUndoState] = useState<UndoActionState | null>(null);
   const undoTimerRef = useRef<number | null>(null);
+  const hasLoadedOnceRef = useRef(false);
 
   useEffect(() => {
-    void refresh();
+    void refresh().then(() => {
+      hasLoadedOnceRef.current = true;
+    });
   }, [refresh]);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (hasLoadedOnceRef.current && !isLoading) {
       onPendingCountChange?.(pendingItems.length);
     }
   }, [isLoading, pendingItems.length, onPendingCountChange]);
 
   useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      onClose();
-    };
-    document.addEventListener("keydown", handleKey, true);
     return () => {
-      document.removeEventListener("keydown", handleKey, true);
       if (undoTimerRef.current !== null) {
         window.clearTimeout(undoTimerRef.current);
       }
     };
-  }, [onClose]);
+  }, []);
 
   const showUndo = (message: string, apply: () => Promise<void>) => {
     if (undoTimerRef.current !== null) {
@@ -423,56 +422,49 @@ export function OwnerMemorySheet({
     : null;
 
   return (
-    <div className="absolute inset-0 z-30 flex items-end bg-black/20" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Bộ nhớ Abot"
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90%] w-full flex-col overflow-hidden rounded-t-2xl border-t border-[#E6E4DF] bg-[#FFFFFF] shadow-[0_-0.25rem_1rem_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200"
-      >
-        {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-[#E6E4DF]/60 px-3.5 py-2.5">
-          <div className="flex items-center gap-2">
-            <MemoryIcon className="h-4 w-4 text-[#1F1E1C]" />
-            <span className="text-xs font-semibold text-[#1F1E1C]">Bộ nhớ Abot</span>
-            {!settings.memoryEnabled && (
-              <span className="rounded-full bg-[#FBEDE5] px-2 py-0.5 text-[0.625rem] font-medium text-[#B42318]">
-                Đang tắt
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSettingsOpen((prev) => !prev);
-                setConfirmClear(false);
-              }}
-              aria-label="Cài đặt bộ nhớ"
-              aria-expanded={isSettingsOpen}
-              title="Cài đặt bộ nhớ"
-              className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] ${
-                isSettingsOpen ? "bg-[#F4F3F0] text-[#1F1E1C]" : ""
-              }`}
-            >
-              <SlidersIcon className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              title="Đóng"
-              aria-label="Đóng bảng bộ nhớ"
-              autoFocus
-              className="flex h-8 w-8 min-h-11 min-w-11 cursor-pointer items-center justify-center rounded text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] md:h-7 md:w-7 md:min-h-0 md:min-w-0"
-            >
-              <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
-            </button>
-          </div>
+    <>
+      {/* Top bar */}
+      <div className="flex shrink-0 items-center justify-between border-b border-[#E6E4DF]/60 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <MemoryIcon className="h-4 w-4 text-[#1F1E1C]" />
+          <span className="text-xs font-semibold text-[#1F1E1C] sm:text-[13px]">Bộ nhớ Abot</span>
+          {!settings.memoryEnabled && (
+            <span className="rounded-full bg-[#FBEDE5] px-2 py-0.5 text-[0.625rem] font-medium text-[#B42318]">
+              Đang tắt
+            </span>
+          )}
         </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setIsSettingsOpen((prev) => !prev);
+              setConfirmClear(false);
+            }}
+            aria-label="Cài đặt bộ nhớ"
+            aria-expanded={isSettingsOpen}
+            title="Cài đặt bộ nhớ"
+            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] md:h-7 md:w-7 ${
+              isSettingsOpen ? "bg-[#F4F3F0] text-[#1F1E1C]" : ""
+            }`}
+          >
+            <SlidersIcon className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={requestClose}
+            title="Đóng"
+            aria-label="Đóng bảng bộ nhớ"
+            autoFocus
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] md:h-7 md:w-7"
+          >
+            <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
+          </button>
+        </div>
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-3.5 py-3">
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5">
           {error && (
             <div className="mb-2.5 flex items-center justify-between gap-2 rounded-lg border border-[#B42318]/20 bg-[#FBEDE5] px-2.5 py-1.5 text-[0.6875rem] text-[#B42318]">
               <span>{error}</span>
@@ -514,7 +506,7 @@ export function OwnerMemorySheet({
           )}
 
           {/* Rovo Summary Banner */}
-          <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-[#E6E4DF] bg-[#FAF9F7] px-3 py-2.5">
+          <div className="mb-3 flex flex-col items-start gap-2 rounded-xl border border-[#E6E4DF] bg-[#FAF9F7] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold text-[#1F1E1C]">
                 {tab === "observations" ? "Tổng hợp tự động của Abot" : "Thông tin bạn khai báo trực tiếp"}
@@ -712,14 +704,14 @@ export function OwnerMemorySheet({
               {/* Search + Filters */}
               <div className="space-y-1.5">
                 <div className="relative">
-                  <SearchIcon className="pointer-events-none absolute top-2 left-2.5 h-3.5 w-3.5 text-[#8A8780]" />
+                  <SearchIcon className="pointer-events-none absolute top-3 left-2.5 h-3.5 w-3.5 text-[#8A8780] md:top-2" />
                   <input
                     type="search"
                     aria-label="Tìm kiếm ghi nhớ"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Tìm kiếm ghi nhớ..."
-                    className="w-full rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] py-1.5 pr-2.5 pl-8 text-xs text-[#1F1E1C] placeholder:text-[#8A8780] focus:border-[#1F1E1C]/40 focus:outline-none"
+                    className="w-full rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] py-1.5 pr-2.5 pl-8 text-base text-[#1F1E1C] placeholder:text-[#8A8780] focus:border-[#1F1E1C]/40 focus:outline-none md:text-xs"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -890,7 +882,7 @@ export function OwnerMemorySheet({
         </div>
 
         {/* Sticky Footer */}
-        <div className="flex items-center justify-between gap-2 border-t border-[#E6E4DF]/60 bg-[#FFFFFF] px-3.5 py-2 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#E6E4DF]/60 bg-[#FFFFFF] px-4 py-2.5">
           <span className="text-[0.6875rem] text-[#5E5B55]">
             Chỉ dùng riêng cho Owner, ẩn hoàn toàn với Visitor.
           </span>
@@ -905,7 +897,31 @@ export function OwnerMemorySheet({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </>
+  );
+}
+
+export function OwnerMemorySheet({
+  baseUrl,
+  currentTopicSlug,
+  zIndex,
+  onPendingCountChange,
+  onClose,
+}: OwnerMemorySheetProps) {
+  return (
+    <AbotDialog
+      label="Bộ nhớ Abot"
+      size="lg"
+      zIndex={zIndex}
+      onClose={onClose}
+      panelClassName="min-h-[20rem] sm:min-h-[26rem]"
+    >
+      <OwnerMemoryContent
+        baseUrl={baseUrl}
+        currentTopicSlug={currentTopicSlug}
+        onPendingCountChange={onPendingCountChange}
+        onClose={onClose}
+      />
+    </AbotDialog>
   );
 }

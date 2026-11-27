@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import type { ContextLastTurn, ConversationContext } from "../../types";
 import type { ConversationContextState } from "../useRoadmapAssistantChat";
 import { formatPercent, formatTokenCount, formatTokenDelta } from "../utils/formatters";
 import type { PageContextRef } from "../utils/pageContextRef";
-import { BookOpenIcon, ChevronDownIcon, CloseIcon, FileTextIcon } from "../icons";
+import { BookOpenIcon, ChevronDownIcon, CloseIcon, ContextIcon, FileTextIcon } from "../icons";
+import { AbotDialog, useAbotDialogClose } from "./AbotDialog";
 
 // One class per part: Tailwind needs the full class names to be present in the source
 const PART_COLORS: Record<string, string> = {
@@ -17,52 +18,45 @@ const RESERVED_COLOR = "bg-[#B9B6AF]";
 export interface ContextUsageSheetProps {
   context: ConversationContextState;
   contextRef?: PageContextRef | null;
+  zIndex?: number;
   onRetry: () => void;
   onClose: () => void;
 }
 
-export function ContextUsageSheet({ context, contextRef, onRetry, onClose }: ContextUsageSheetProps) {
+function ContextUsageContent({
+  context,
+  contextRef,
+  onRetry,
+  onClose,
+}: Omit<ContextUsageSheetProps, "zIndex">) {
   const { data, deltaTokens, isLoading, error } = context;
-
-  // Captured first and stopped, so Escape closes this sheet and not the chat around it
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      onClose();
-    };
-    document.addEventListener("keydown", handleKey, true);
-    return () => document.removeEventListener("keydown", handleKey, true);
-  }, [onClose]);
+  const requestClose = useAbotDialogClose(onClose);
 
   return (
-    <div className="absolute inset-0 z-30 flex items-end bg-black/20" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Context"
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85%] w-full flex-col overflow-y-auto rounded-t-2xl border-t border-[#E6E4DF] bg-[#FFFFFF] p-3.5 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)] animate-in slide-in-from-bottom-2 duration-200"
-      >
-        <div className="flex items-center justify-between border-b border-[#E6E4DF]/60 pb-2">
-          <span className="text-xs font-semibold text-[#1F1E1C]">Context</span>
-          <button
-            type="button"
-            onClick={onClose}
-            title="Đóng"
-            aria-label="Đóng bảng context"
-            autoFocus
-            className="flex h-8 w-8 min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] md:h-5 md:w-5 md:min-h-0 md:min-w-0"
-          >
-            <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
-          </button>
+    <>
+      <div className="flex shrink-0 items-center justify-between border-b border-[#E6E4DF]/60 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ContextIcon className="h-4 w-4 text-[#5E5B55]" />
+          <span className="text-xs font-semibold text-[#1F1E1C] sm:text-[13px]">Context</span>
         </div>
+        <button
+          type="button"
+          onClick={requestClose}
+          title="Đóng"
+          aria-label="Đóng bảng context"
+          autoFocus
+          className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#5E5B55] hover:bg-[#F4F3F0] hover:text-[#1F1E1C] md:h-7 md:w-7"
+        >
+          <CloseIcon className="h-4 w-4 md:h-3.5 md:w-3.5" />
+        </button>
+      </div>
 
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3.5">
         {contextRef && (
           <div
             data-testid="context-sheet-page-ref"
             title={contextRef.tooltip}
-            className="mt-2.5 hidden md:flex items-center justify-between gap-2 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0]/75 px-2.5 py-1.5 text-xs"
+            className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-[#E6E4DF] bg-[#F4F3F0]/75 px-2.5 py-1.5 text-xs"
           >
             <span className="flex min-w-0 items-center gap-1.5 text-[#1F1E1C]">
               {contextRef.kind === "lesson" ? (
@@ -72,7 +66,7 @@ export function ContextUsageSheet({ context, contextRef, onRetry, onClose }: Con
               )}
               <span className="truncate font-medium">{contextRef.label}</span>
             </span>
-            <span className="shrink-0 font-mono text-[11px] text-[#5E5B55] max-w-[45%] truncate">
+            <span className="max-w-[45%] shrink-0 truncate font-mono text-[11px] text-[#5E5B55]">
               {contextRef.path}
             </span>
           </div>
@@ -93,7 +87,26 @@ export function ContextUsageSheet({ context, contextRef, onRetry, onClose }: Con
           </p>
         )}
       </div>
-    </div>
+    </>
+  );
+}
+
+export function ContextUsageSheet({
+  context,
+  contextRef,
+  zIndex,
+  onRetry,
+  onClose,
+}: ContextUsageSheetProps) {
+  return (
+    <AbotDialog label="Context" size="sm" zIndex={zIndex} onClose={onClose}>
+      <ContextUsageContent
+        context={context}
+        contextRef={contextRef}
+        onRetry={onRetry}
+        onClose={onClose}
+      />
+    </AbotDialog>
   );
 }
 
@@ -106,7 +119,7 @@ function ContextBody({ data, deltaTokens }: { data: ConversationContext; deltaTo
   const isWindowFull = !!messages?.limit && (messages.count ?? 0) >= messages.limit;
 
   return (
-    <div className="pt-2.5">
+    <div>
       <div className="flex items-baseline justify-between text-xs">
         <span className="font-semibold text-[#1F1E1C]">{formatPercent(used, budget)} đã dùng</span>
         <span className="text-[#5E5B55]">

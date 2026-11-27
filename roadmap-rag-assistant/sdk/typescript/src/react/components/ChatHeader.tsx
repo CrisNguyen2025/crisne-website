@@ -116,21 +116,6 @@ export function ChatHeader({
       </div>
 
       <div className="relative z-10 flex shrink-0 items-center gap-0.5">
-        {canWrite && openHistory && (
-          <button
-            type="button"
-            onClick={() => {
-              closeMenus();
-              openHistory();
-            }}
-            title="Lịch sử chat"
-            aria-label="Lịch sử chat"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#4D4B46] transition-colors hover:bg-[#F4F3F0] hover:text-[#1F1E1C] active:scale-95 cursor-pointer"
-          >
-            <HistoryIcon className="h-[18px] w-[18px]" />
-          </button>
-        )}
-
         <button
           type="button"
           disabled={!canNewChat}
@@ -228,17 +213,19 @@ export function ChatHeader({
 
           {isOptionsOpen && (
             <div className="absolute right-0 top-full mt-1.5 z-40 min-w-[200px] whitespace-nowrap rounded-xl border border-[#E6E4DF] bg-[#FFFFFF] p-1.5 shadow-[0_4px_20px_rgba(0,0,0,0.08)] animate-in fade-in zoom-in-95 duration-150">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsOptionsOpen(false);
-                  openContext();
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
-              >
-                <ContextIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
-                <span>Context</span>
-              </button>
+              {canWrite && openHistory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    openHistory();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
+                >
+                  <HistoryIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                  <span>Lịch sử chat</span>
+                </button>
+              )}
               {canWrite && openMemory && (
                 <button
                   type="button"
@@ -259,30 +246,44 @@ export function ChatHeader({
                   )}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  openContext();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium text-[#1F1E1C] transition-colors cursor-pointer hover:bg-[#F4F3F0]"
+              >
+                <ContextIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                <span>Context</span>
+              </button>
               {canWrite && (
-                <button
-                  type="button"
-                  onClick={handleCopyConversationId}
-                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
-                    copiedConvId
-                      ? "bg-[#3F7D58]/10 text-[#3F7D58]"
-                      : "text-[#1F1E1C] hover:bg-[#F4F3F0]"
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    {copiedConvId ? (
-                      <CheckIcon className="h-4 w-4 text-[#3F7D58] shrink-0" />
-                    ) : (
-                      <CopyIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
-                    )}
-                    <span>Mã hội thoại</span>
-                  </span>
-                  {copiedConvId && (
-                    <span className="rounded-full bg-[#3F7D58]/15 px-2 py-0.5 text-[11px] font-semibold text-[#3F7D58]">
-                      Đã copy
+                <>
+                  <div className="my-1 border-t border-[#E6E4DF]/70" />
+                  <button
+                    type="button"
+                    onClick={handleCopyConversationId}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                      copiedConvId
+                        ? "bg-[#3F7D58]/10 text-[#3F7D58]"
+                        : "text-[#1F1E1C] hover:bg-[#F4F3F0]"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {copiedConvId ? (
+                        <CheckIcon className="h-4 w-4 text-[#3F7D58] shrink-0" />
+                      ) : (
+                        <CopyIcon className="h-4 w-4 text-[#5E5B55] shrink-0" />
+                      )}
+                      <span>Mã hội thoại</span>
                     </span>
-                  )}
-                </button>
+                    {copiedConvId && (
+                      <span className="rounded-full bg-[#3F7D58]/15 px-2 py-0.5 text-[11px] font-semibold text-[#3F7D58]">
+                        Đã copy
+                      </span>
+                    )}
+                  </button>
+                </>
               )}
             </div>
           )}

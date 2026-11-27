@@ -5,6 +5,7 @@ export interface UseWidgetDismissOptions {
   isOpen: boolean;
   isOptionsOpen: boolean;
   isSwitchMenuOpen: boolean;
+  isModalOpen?: boolean;
   viewMode: ChatbotViewMode;
   containerRef: React.RefObject<HTMLDivElement | null>;
   scrimRef: React.RefObject<HTMLDivElement | null>;
@@ -29,6 +30,7 @@ export function useWidgetDismiss({
   isOpen,
   isOptionsOpen,
   isSwitchMenuOpen,
+  isModalOpen = false,
   viewMode,
   containerRef,
   scrimRef,
@@ -39,11 +41,12 @@ export function useWidgetDismiss({
   setIsSwitchMenuOpen,
 }: UseWidgetDismissOptions) {
   useEffect(() => {
-    if (!isOpen && !isOptionsOpen && !isSwitchMenuOpen) return;
+    if ((!isOpen && !isOptionsOpen && !isSwitchMenuOpen) || isModalOpen) return;
 
     const handleClick = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
       if (scrimRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-abot-modal-root]")) return;
 
       if (
         isOpen &&
@@ -94,6 +97,7 @@ export function useWidgetDismiss({
     isOpen,
     isOptionsOpen,
     isSwitchMenuOpen,
+    isModalOpen,
     viewMode,
     containerRef,
     scrimRef,

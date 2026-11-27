@@ -80,9 +80,13 @@ export function RoadmapChatbotWidget({
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isSwitchMenuOpen, setIsSwitchMenuOpen] = useState(false);
   const [copiedConvId, setCopiedConvId] = useState(false);
-  const [isContextOpen, setIsContextOpen] = useState(false);
-  const [isMemoryOpen, setIsMemoryOpen] = useState(false);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState<"context" | "memory" | "history" | null>(null);
+  const [modalSeq, setModalSeq] = useState(0);
+  const isModalOpen = activeModal !== null;
+  const openModal = useCallback((modal: "context" | "memory" | "history") => {
+    setModalSeq((s) => s + 1);
+    setActiveModal(modal);
+  }, []);
   const [isSwitchingThread, setIsSwitchingThread] = useState(false);
   const optionsRef = useRef<HTMLDivElement>(null);
   const switchMenuRef = useRef<HTMLDivElement>(null);
@@ -156,10 +160,10 @@ export function RoadmapChatbotWidget({
   });
 
   const [memorySuggestionBanner, setMemorySuggestionBanner] = useState<number | null>(null);
-  const isMemoryOpenRef = useRef(isMemoryOpen);
+  const isMemoryOpenRef = useRef(activeModal === "memory");
   useEffect(() => {
-    isMemoryOpenRef.current = isMemoryOpen;
-  }, [isMemoryOpen]);
+    isMemoryOpenRef.current = activeModal === "memory";
+  }, [activeModal]);
   const [pendingMemoryCount, setPendingMemoryCount] = usePendingMemoryCount(
     baseUrl,
     canWrite && restoreLatestThread && isOpen,
@@ -184,7 +188,7 @@ export function RoadmapChatbotWidget({
     removeThread: removeHistoryThread,
   } = useThreadHistory({
     baseUrl,
-    isOpen: isOpen && isHistoryOpen,
+    isOpen: isOpen && activeModal === "history",
     enabled: canWrite,
   });
 
@@ -202,14 +206,12 @@ export function RoadmapChatbotWidget({
     setIsOpen(false);
     setIsOptionsOpen(false);
     setIsSwitchMenuOpen(false);
-    setIsContextOpen(false);
-    setIsMemoryOpen(false);
-    setIsHistoryOpen(false);
+    setActiveModal(null);
   }, [setIsOpen]);
   const { close: animateClose } = useDrawerMotion(
     containerRef,
     scrimRef,
-    isOpen && !activeFeedbackMsgId && !isMemoryOpen && !isContextOpen && !isHistoryOpen,
+    isOpen && !activeFeedbackMsgId && !isModalOpen,
     dismiss
   );
   const closeDrawer = useCallback(
@@ -239,6 +241,7 @@ export function RoadmapChatbotWidget({
     isOpen,
     isOptionsOpen,
     isSwitchMenuOpen,
+    isModalOpen,
     viewMode,
     containerRef,
     scrimRef,
@@ -322,16 +325,14 @@ export function RoadmapChatbotWidget({
   useEffect(() => {
     if (
       isOpen &&
-      !isMemoryOpen &&
-      !isHistoryOpen &&
-      !isContextOpen &&
+      !isModalOpen &&
       typeof window !== "undefined" &&
       window.innerWidth >= 768
     ) {
       const timer = setTimeout(() => inputRef.current?.focus(), 50);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, isLoading, isMemoryOpen, isHistoryOpen, isContextOpen]);
+  }, [isOpen, isLoading, isModalOpen]);
 
   // Reset the "copied" tick after a moment
   useEffect(() => {
@@ -369,7 +370,7 @@ export function RoadmapChatbotWidget({
   }, [captureBeforeReset, clearMessages]);
 
   const closeHistorySheet = useCallback(() => {
-    setIsHistoryOpen(false);
+    setActiveModal((prev) => (prev === "history" ? null : prev));
     setHistoryQuery("");
   }, [setHistoryQuery]);
 
@@ -487,6 +488,7 @@ export function RoadmapChatbotWidget({
   // The header line stays the fixed subtitle while answering; the streaming state shows in the
   // message itself, not in the header.
   const status = subtitle;
+  const modalZIndex = zIndex >= 120 ? zIndex + 10 : 120;
   const showStop = isStreaming && !input.trim();
   const lastMsg = messages[messages.length - 1];
   const activityState: MascotState = isStreaming
@@ -543,9 +545,9 @@ export function RoadmapChatbotWidget({
             hideBrand={isInitStage}
             mascotRef={headerMascotRef}
             textRef={headerTextRef}
-            openContext={() => { setIsMemoryOpen(false); setIsHistoryOpen(false); setIsContextOpen(true); void refreshContext(); }}
-            openMemory={canWrite ? () => { setIsContextOpen(false); setIsHistoryOpen(false); setIsMemoryOpen(true); } : undefined}
-            openHistory={canWrite ? () => { setIsContextOpen(false); setIsMemoryOpen(false); setIsHistoryOpen(true); } : undefined}
+            openContext={() => { openModal("context"); void refreshContext(); }}
+            openMemory={canWrite ? () => openModal("memory") : undefined}
+            openHistory={canWrite ? () => openModal("history") : undefined}
             pendingMemoryCount={canWrite ? pendingMemoryCount : 0}
             handleCopyConversationId={handleCopyConversationId}
             isOptionsOpen={isOptionsOpen}
@@ -599,7 +601,7 @@ export function RoadmapChatbotWidget({
             </div>
           )}
 
-          {canWrite && memorySuggestionBanner !== null && pendingMemoryCount > 0 && !isMemoryOpen && (
+          {canWrite && memorySuggestionBanner !== null && pendingMemoryCount > 0 && activeModal !== "memory" && (
             <div
               role="status"
               className="mx-3 mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-[#E6E4DF] bg-[#FAF9F7] px-2.5 py-1.5 text-[0.6875rem] text-[#1F1E1C]"
@@ -612,7 +614,7 @@ export function RoadmapChatbotWidget({
                   type="button"
                   onClick={() => {
                     setMemorySuggestionBanner(null);
-                    setIsMemoryOpen(true);
+                    openModal("memory");
                   }}
                   className="cursor-pointer rounded bg-[#1F1E1C] px-2 py-0.5 font-medium text-white hover:opacity-90"
                 >
@@ -651,24 +653,29 @@ export function RoadmapChatbotWidget({
             <DesktopResizeHandle edge="bottom" {...resizeHandleProps} />
           )}
 
-          {/* ── Context Bottom Sheet ── */}
-          {isContextOpen && (
+          {activeModal === "context" && (
             <ContextUsageSheet
+              key={`context-${modalSeq}`}
               context={conversationContext}
               contextRef={activeContextRef}
+              zIndex={modalZIndex}
               onRetry={() => void refreshContext()}
-              onClose={() => setIsContextOpen(false)}
+              onClose={() => setActiveModal(null)}
             />
           )}
-
-          {/* ── Owner Memory Bottom Sheet (Owner-only, ADR-0015) ── */}
-          {canWrite && isMemoryOpen && (
-            <OwnerMemorySheet baseUrl={baseUrl} currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug} onPendingCountChange={setPendingMemoryCount} onClose={() => setIsMemoryOpen(false)} />
+          {canWrite && activeModal === "memory" && (
+            <OwnerMemorySheet
+              key={`memory-${modalSeq}`}
+              baseUrl={baseUrl}
+              currentTopicSlug={activePageContext?.roadmapSlug ?? getContext?.()?.roadmapSlug}
+              zIndex={modalZIndex}
+              onPendingCountChange={setPendingMemoryCount}
+              onClose={() => setActiveModal(null)}
+            />
           )}
-
-          {/* ── Thread History Bottom Sheet (Owner-only, ADR-0012) ── */}
-          {canWrite && isHistoryOpen && (
+          {canWrite && activeModal === "history" && (
             <ThreadHistorySheet
+              key={`history-${modalSeq}`}
               threads={historyThreads}
               query={historyQuery}
               onQueryChange={setHistoryQuery}
@@ -677,27 +684,20 @@ export function RoadmapChatbotWidget({
               error={historyError}
               deletingId={deletingHistoryId}
               currentThreadId={conversationId}
+              zIndex={modalZIndex}
               onRetry={() => void refreshHistory()}
               onSelectThread={handleSelectHistoryThread}
               onDeleteThread={handleDeleteHistoryThread}
               onClose={closeHistorySheet}
             />
           )}
-
-          {/* ── Feedback Reason Bottom Sheet ── */}
           {activeFeedbackMsgId && (
             <FeedbackReasonSheet
-              // A fresh sheet per reply: one reply's draft never shows up on another
               key={activeFeedbackMsgId}
               messageId={activeFeedbackMsgId}
-              onDraftChange={(reason, comment) =>
-                setSheetDraft({ reason, comment })
-              }
-              onSubmit={(reason, comment) =>
-                void commit(activeFeedbackMsgId, { reason, comment })
-              }
+              onDraftChange={(reason, comment) => setSheetDraft({ reason, comment })}
+              onSubmit={(reason, comment) => void commit(activeFeedbackMsgId, { reason, comment })}
               onClose={() => {
-                // Closed without a reason (or after sending one): sends the 👎 if it is still waiting
                 void commit(activeFeedbackMsgId);
                 setActiveFeedbackMsgId(null);
               }}
@@ -706,7 +706,6 @@ export function RoadmapChatbotWidget({
         </div>
       )}
 
-      {/* ── Launcher (hidden while open: the panel takes its corner; header has a close button) ── */}
       {!isOpen && (
         <button
           type="button"
@@ -719,15 +718,8 @@ export function RoadmapChatbotWidget({
           aria-label="Mở Abot"
           className="pointer-events-auto group flex h-11 items-center gap-2 rounded-full border border-white/25 bg-[#181A20] pl-2.5 pr-4 text-[14px] font-medium tracking-normal text-white shadow-[0_10px_25px_-5px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_0_rgba(255,255,255,0.2)] transition-all duration-200 hover:bg-[#22252D] hover:border-white/40 hover:scale-[1.03] active:scale-[0.97] select-none cursor-pointer"
         >
-          <AbotMascot
-            size={30}
-            state={isHovered ? "happy" : activityState}
-          />
-
-          <span className="text-white/95 transition-colors group-hover:text-white">
-            Abot
-          </span>
-
+          <AbotMascot size={30} state={isHovered ? "happy" : activityState} />
+          <span className="text-white/95 transition-colors group-hover:text-white">Abot</span>
           <SparklesIcon className="h-3.5 w-3.5 text-[#8BB5D9]/80 transition-transform duration-300 group-hover:rotate-12 group-hover:text-[#C4E4FF]" />
         </button>
       )}

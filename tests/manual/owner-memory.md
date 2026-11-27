@@ -21,7 +21,7 @@ Kiểm thử thủ công luồng **Owner Memory** lưu ở Turso (`/api/v1/memor
 
 | # | Vai trò | Việc | Kỳ vọng |
 |---|---|---|---|
-| M1 | Owner | Mở Abot → ⋮ → bấm **Bộ nhớ** | Mở sheet `OwnerMemorySheet` có 2 tab `Đang nhớ` / `Chờ duyệt`; bấm `Esc` chỉ đóng sheet, drawer vẫn mở |
+| M1 | Owner | Mở Abot → ⋮ → bấm **Bộ nhớ** | Mở Dialog Modal căn giữa màn hình `OwnerMemorySheet` (rộng rãi theo kích thước màn hình) có 2 tab **Abot quan sát** / **Bạn chia sẻ trực tiếp**; bấm `Esc` hoặc chạm nền tối chỉ đóng modal, drawer/panel Abot vẫn mở |
 | M2 | Owner | Thêm 1 mục toàn cục (vd: `"Khi giải thích luôn kết thúc bằng 1 dòng Tóm tắt"`) qua `OwnerMemorySheet` rồi hỏi ngay 1 câu bất kỳ trong chat | Không phải chờ 60s cache: câu trả lời áp dụng ngay quy ước vừa thêm; `GET /api/v1/memories?status=active` có mục vừa tạo |
 | M3 | Owner | Đang mở 1 Topic cụ thể, nhắn `"nhớ giúp mình là đang học Next.js 15 trong topic này"` | Abot trả Preview có nút `[✅ Xác nhận thực hiện]` và `[❌ Hủy bỏ]`, **chưa** ghi vào DB trước khi xác nhận |
 | M4 | Owner | Bấm `[✅ Xác nhận thực hiện]` trên Preview ở M3 | Tool pill hiện nhãn tiếng Việt **Lưu bộ nhớ Owner**; DB có mục mới gắn đúng `scopeTopicSlug` của Topic đang mở |

@@ -189,6 +189,7 @@
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ChatComposer.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/MessageList.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ChangeReviewCard.tsx",
+        "roadmap-rag-assistant/sdk/typescript/src/react/components/AbotDialog.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/OwnerMemorySheet.tsx",
         "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx"
       ],
@@ -2163,7 +2164,7 @@
       "name": "Quản lý lịch sử Thread, tìm kiếm và chuyển Thread đang mở cho Owner",
       "domainId": "roadmap-assistant-abot",
       "actor": "Owner",
-      "trigger": "Owner bấm icon Lịch sử chat trên ChatHeader để mở Bottom Sheet ThreadHistorySheet",
+      "trigger": "Owner mở menu Tùy chọn (...) trên ChatHeader -> Lịch sử chat để mở Dialog Modal ThreadHistorySheet",
       "preconditions": [
         "Actor bắt buộc là Owner (canWrite === true phía client; requireWriteAccess phía API)"
       ],
@@ -2173,7 +2174,7 @@
           "layer": "Presentation_UI",
           "component": "roadmap-rag-assistant/sdk/typescript/src/react/components/ThreadHistorySheet.tsx",
           "functionOrMethod": "ThreadHistorySheet",
-          "action": "Mở Bottom Sheet danh sách Thread gần đây, lọc tức thì ở client và kích hoạt search server có debounce kèm xác nhận xóa 2 chạm",
+          "action": "Mở Dialog Modal căn giữa màn hình danh sách Thread gần đây, lọc tức thì ở client và kích hoạt search server có debounce kèm xác nhận xóa 2 chạm",
           "callsNext": "roadmap-rag-assistant/sdk/typescript/src/react/useThreadHistory.ts#useThreadHistory",
           "dataPassed": "{ query, selectedThreadId }"
         },

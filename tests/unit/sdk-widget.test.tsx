@@ -27,7 +27,7 @@ describe("RoadmapChatbotWidget", () => {
   });
 
   describe("menu by access (P1-5, P1-7)", () => {
-    it("reader: puts disabled New Chat and Close outside menu, and Context without conversation id inside menu", async () => {
+    it("reader: puts disabled New Chat and Close outside menu, and Context without conversation id or history inside menu", async () => {
       openWidget(false);
       const newChatBtn = screen.getByRole("button", { name: "Cuộc trò chuyện mới" }) as HTMLButtonElement;
       expect(newChatBtn.disabled).toBe(true);
@@ -36,17 +36,98 @@ describe("RoadmapChatbotWidget", () => {
 
       await openMenu();
       expect(screen.getByRole("button", { name: "Context" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Lịch sử chat" })).toBeNull();
       expect(screen.queryByText("Thu gọn")).toBeNull();
       expect(screen.queryByText("Mã hội thoại")).toBeNull();
     });
 
-    it("owner: offers the conversation id and memory inside more options", async () => {
+    it("owner: moves chat history into more options alongside memory, context, and conversation id", async () => {
       openWidget(true);
-      expect(screen.getByRole("button", { name: "Lịch sử chat" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Lịch sử chat" })).toBeNull();
       await openMenu();
+      expect(screen.getByRole("button", { name: "Lịch sử chat" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Context" })).toBeTruthy();
       expect(screen.getByText("Bộ nhớ")).toBeTruthy();
       expect(screen.getByText("Mã hội thoại")).toBeTruthy();
+    });
+
+    it("opens more options items as centered dialogs sized per option and keeps Abot panel open on modal interactions", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          if (url.endsWith("/threads")) {
+            return new Response(JSON.stringify({ threads: [] }), { status: 200 });
+          }
+          if (url.endsWith("/chat/context")) {
+            return new Response(
+              JSON.stringify({
+                model: "openai/gpt-oss-120b",
+                window: 131_072,
+                budget: 10_000,
+                used: 1_000,
+                parts: [{ key: "system", label: "System prompt", tokens: 1_000 }],
+                reserved: [],
+                omitted: [],
+                last_turn: null,
+              }),
+              { status: 200 }
+            );
+          }
+          if (url.startsWith("/api/v1/memories/settings")) {
+            return new Response(
+              JSON.stringify({
+                settings: { id: "default", memoryEnabled: true, autoObserveEnabled: true },
+              }),
+              { status: 200 }
+            );
+          }
+          if (url.startsWith("/api/v1/memories")) {
+            return new Response(JSON.stringify({ memories: [] }), { status: 200 });
+          }
+          return new Response("{}", { status: 404 });
+        })
+      );
+
+      openWidget(true);
+
+      // 1. Context -> compact centered dialog ("sm")
+      await openMenu();
+      fireEvent.click(screen.getByRole("button", { name: "Context" }));
+      const contextDialog = screen.getByRole("dialog", { name: "Context" });
+      expect(contextDialog.parentElement?.className).toContain("items-center");
+      expect(contextDialog.parentElement?.className).toContain("justify-center");
+      expect(contextDialog.className).toContain("rounded-2xl");
+      expect(contextDialog.className).not.toContain("rounded-t-2xl");
+      expect(contextDialog.className).toContain("lg:max-w-[32rem]");
+
+      // Clicking inside or on modal backdrop closes only the dialog, keeping Abot open
+      fireEvent.mouseDown(contextDialog);
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+      fireEvent.mouseDown(contextDialog.parentElement!);
+      fireEvent.click(contextDialog.parentElement!);
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Context" })).toBeNull());
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // 2. Lịch sử chat -> medium centered dialog ("md")
+      await openMenu();
+      fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+      const historyDialog = screen.getByRole("dialog", { name: "Lịch sử chat" });
+      expect(historyDialog.className).toContain("rounded-2xl");
+      expect(historyDialog.className).toContain("lg:max-w-[38rem]");
+      fireEvent.keyDown(document, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Lịch sử chat" })).toBeNull());
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
+
+      // 3. Bộ nhớ -> large centered dialog ("lg")
+      await openMenu();
+      fireEvent.click(screen.getByRole("button", { name: /Bộ nhớ/ }));
+      const memoryDialog = screen.getByRole("dialog", { name: "Bộ nhớ Abot" });
+      expect(memoryDialog.className).toContain("rounded-2xl");
+      expect(memoryDialog.className).toContain("lg:max-w-[46rem]");
+      fireEvent.click(screen.getByRole("button", { name: "Đóng bảng bộ nhớ" }));
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Bộ nhớ Abot" })).toBeNull());
+      expect(screen.getByRole("button", { name: "Đóng Abot" })).toBeTruthy();
     });
 
     it("enables New Chat after a message is sent and resets to disabled init stage on click", async () => {

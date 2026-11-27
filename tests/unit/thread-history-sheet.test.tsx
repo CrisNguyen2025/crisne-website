@@ -8,6 +8,11 @@ import { expectNoA11yViolations } from "../setup/a11y";
 
 const BASE = "/api/roadmap-assistant";
 
+function openHistoryDialog() {
+  fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
+  fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+}
+
 function makeThreads(): ThreadSummary[] {
   return [
     {
@@ -48,7 +53,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens Bottom Sheet, searches, switches to another Thread, and passes axe-core a11y", async () => {
+  it("opens centered dialog modal, searches, switches to another Thread, and passes axe-core a11y", async () => {
     let threads = makeThreads();
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -95,7 +100,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
       <RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite threadId="t-current" />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
 
     await waitFor(() => expect(screen.getByText("Hỏi về RAG Hybrid")).toBeTruthy());
     expect(screen.getByText("Đang mở")).toBeTruthy();
@@ -103,6 +108,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
     expect(screen.getByText("Ôn tập App Router")).toBeTruthy();
 
     await expectNoA11yViolations(container);
+    await expectNoA11yViolations(document.querySelector("[data-abot-modal-root]")!);
 
     // Search filters immediately and then shows server matchedSnippet
     const searchInput = screen.getByLabelText("Tìm kiếm lịch sử chat");
@@ -160,7 +166,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() => expect(screen.getByText("Hỏi về RAG Hybrid")).toBeTruthy());
 
     // First click enters confirm state, Escape cancels confirm without closing sheet
@@ -208,7 +214,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
 
     render(<RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite threadId="t-current" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("500"));
 
     fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
@@ -266,7 +272,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() =>
       expect(screen.getByText("Chưa có cuộc trò chuyện nào trong 30 ngày qua.")).toBeTruthy()
     );
@@ -287,7 +293,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
         ]}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() => expect(screen.getByText("Ôn tập App Router")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: /^Ôn tập App Router/ }));
@@ -317,7 +323,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
     const desktop = render(
       <RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite threadId="t-current" />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() => expect(screen.getByText("Hỏi về RAG Hybrid")).toBeTruthy());
     expect(document.activeElement).toBe(screen.getByLabelText("Tìm kiếm lịch sử chat"));
     desktop.unmount();
@@ -337,7 +343,7 @@ describe("ThreadHistorySheet inside RoadmapChatbotWidget", () => {
     const mobile = render(
       <RoadmapChatbotWidget baseUrl={BASE} initialOpen canWrite threadId="t-current" />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Lịch sử chat" }));
+    openHistoryDialog();
     await waitFor(() => expect(screen.getByText("Hỏi về RAG Hybrid")).toBeTruthy());
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Đóng lịch sử chat" }));
 

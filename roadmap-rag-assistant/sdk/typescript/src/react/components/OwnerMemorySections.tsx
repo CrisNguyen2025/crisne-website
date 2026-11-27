@@ -108,7 +108,7 @@ export function MemoryEditForm({
         aria-label="Nội dung bộ nhớ khi sửa"
         value={editContent}
         onChange={(e) => onEditContentChange(e.target.value)}
-        className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#FAF9F7] px-2 py-1 text-xs text-[#1F1E1C] focus:outline-none"
+        className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#FAF9F7] px-2 py-1 text-base text-[#1F1E1C] focus:outline-none md:text-xs"
       />
     </div>
   );
@@ -300,7 +300,7 @@ export function PromoteMemoryPanel({
           value={customSection}
           onChange={(e) => setCustomSection(e.target.value)}
           placeholder="Tên Section mới"
-          className="w-full rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-[0.6875rem] text-[#1F1E1C] focus:outline-none"
+          className="w-full rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-base text-[#1F1E1C] focus:outline-none md:text-[0.6875rem]"
         />
       )}
       <input
@@ -309,7 +309,7 @@ export function PromoteMemoryPanel({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Tiêu đề Lesson"
-        className="w-full rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-xs text-[#1F1E1C] focus:outline-none"
+        className="w-full rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-base text-[#1F1E1C] focus:outline-none md:text-xs"
       />
       <textarea
         rows={2}
@@ -317,7 +317,7 @@ export function PromoteMemoryPanel({
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Mô tả ngắn cho Lesson"
-        className="w-full resize-none rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-[0.6875rem] text-[#1F1E1C] focus:outline-none"
+        className="w-full resize-none rounded-md border border-[#E6E4DF] bg-[#FFFFFF] px-2 py-1 text-base text-[#1F1E1C] focus:outline-none md:text-[0.6875rem]"
       />
       <div className="flex justify-end gap-1.5">
         <button
@@ -507,7 +507,7 @@ export function MemoryComposerForm({
         value={draft}
         onChange={(e) => onDraftChange(e.target.value)}
         placeholder="Ví dụ: Đang dùng Next.js 15 + FastAPI; khi viết bài luôn có mục Lỗi thường gặp"
-        className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] px-2.5 py-1.5 text-xs text-[#1F1E1C] placeholder:text-[#8A8780] focus:border-[#1F1E1C]/40 focus:outline-none"
+        className="w-full resize-none rounded-lg border border-[#E6E4DF] bg-[#FFFFFF] px-2.5 py-1.5 text-base text-[#1F1E1C] placeholder:text-[#8A8780] focus:border-[#1F1E1C]/40 focus:outline-none md:text-xs"
       />
       <div className="mt-2 flex items-center justify-end gap-1.5">
         <button
