@@ -13,6 +13,7 @@ import type {
 } from "@/lib/roadmap/types";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { DesignMenu } from "@/components/design-menu";
 import { openGlobalSearch } from "@/lib/search/search-controller";
 import { cn, getScrollBehavior } from "@/lib/utils";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
@@ -558,6 +559,7 @@ export function LectureShell({
               <Search className="size-3.5" />
             </Button>
           )}
+          {!onClose && <DesignMenu />}
           {onClose && (
             <button
               type="button"
@@ -645,6 +647,7 @@ export function LectureShell({
               activeHeadingId={activeHeadingId}
               onJump={jumpToHeading}
             />
+            <DesignMenu />
             {sidebarHeaderAction}
           </div>
         </div>

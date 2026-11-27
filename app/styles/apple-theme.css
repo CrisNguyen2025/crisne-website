@@ -1,0 +1,92 @@
+/*
+ * Apple theme for roadmap and news pages (.roadmap-theme), picked from the "Tùy chọn" menu
+ * (hooks/use-design.ts sets html[data-design="apple"]).
+ *
+ * Token values are taken from an independent analysis of apple.com, not from Apple:
+ * https://getdesign.md/apple/design-md (not affiliated with or endorsed by Apple).
+ * Deviations from that file are marked "repo:".
+ *
+ * Always light: html[data-design="apple"] .roadmap-theme (0,2,1) outranks .dark .roadmap-theme (0,2,0),
+ * so every token the dark block overrides is restated here with its light value.
+ */
+
+html[data-design="apple"] .roadmap-theme {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  /* Action Blue is the only interactive accent */
+  --primary: #0066cc;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f7;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f5f5f7;
+  /* repo: #6e6e73 instead of #7a7a7a, which is 4.3:1 on white (docs/design-system.md asks for 4.5:1) */
+  --muted-foreground: #6e6e73;
+  --accent: #f5f5f7;
+  --accent-foreground: #1d1d1f;
+  --border: #e0e0e0;
+  --input: #e0e0e0;
+  --ring: #0071e3;
+  /* repo: the file has no error color, keep the default light one */
+  --destructive: #c83e32;
+
+  --editorial-sidebar: #f5f5f7;
+  --editorial-sidebar-hover: rgb(29 29 31 / 4.5%);
+  --editorial-sidebar-active: rgb(29 29 31 / 7%);
+  --editorial-accent: #0066cc;
+  --editorial-accent-soft: rgb(0 102 204 / 9%);
+
+  /* repo: Lesson status keeps its own three colors (ADR-0010), light values */
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+
+  /* SF Pro through the system font on Apple devices; the file's own fallback elsewhere */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+
+/* Pill radius for actions, no shadow on buttons */
+html[data-design="apple"] .roadmap-theme [data-slot="button"] {
+  border-radius: 9999px;
+  box-shadow: none;
+}
+
+/* Body 17px / 1.47 with negative tracking; headlines 600 with tighter tracking */
+html[data-design="apple"] .roadmap-theme .editorial-prose {
+  font-size: 1.0625rem;
+  line-height: 1.47;
+  letter-spacing: -0.022em;
+  color: var(--foreground);
+}
+
+html[data-design="apple"] .roadmap-theme .editorial-prose :is(p, li) {
+  line-height: 1.47;
+}
+
+html[data-design="apple"] .roadmap-theme .editorial-prose h2 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+html[data-design="apple"] .roadmap-theme .editorial-prose :is(h3, h4) {
+  letter-spacing: -0.015em;
+}
+
+html[data-design="apple"] .roadmap-theme .font-display {
+  letter-spacing: -0.02em;
+}

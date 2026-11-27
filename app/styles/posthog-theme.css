@@ -1,0 +1,163 @@
+/*
+ * PostHog theme for roadmap and news pages (.roadmap-theme), picked from the "Tùy chọn" menu
+ * (hooks/use-design.ts sets html[data-design="posthog"]).
+ *
+ * Token values come from https://designmd.me/discover/posthog/raw ("Design System Inspired by
+ * PostHog", a third-party extraction of posthog.com, not PostHog's own document).
+ * Where the file contradicts itself, the front matter tokens win over prose. Deviations are marked "repo:".
+ *
+ * Follows the site's light/dark: light is the measured theme, dark is the file's `themes` block
+ * (marked derived there). Both selectors outrank .dark .roadmap-theme, so every token is restated.
+ */
+
+html[data-design="posthog"] .roadmap-theme {
+  color-scheme: light;
+
+  /* canvas for the page, surface for cards and panels */
+  --background: #eeefe9;
+  /* body #111111, not #000000, for copy */
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  /* primary CTA orange with body-colored text (6.3:1) */
+  --primary: #cd8407;
+  --primary-foreground: #111111;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #111111;
+  --muted: #f5f5f5;
+  /* faint: tertiary text and placeholders */
+  --muted-foreground: #23251d;
+  --accent: #f5f5f5;
+  --accent-foreground: #111111;
+  /* hairline */
+  --border: #b17816;
+  --input: #b17816;
+  /* blue focus ring on every focusable element */
+  --ring: rgb(37 99 235);
+  /* repo: the file defines no semantic colors, keep the default light error color */
+  --destructive: #c83e32;
+  /* lg 8px for buttons, md about 6px for the rest */
+  --radius: 0.5rem;
+  /* :root computes --radius-* from its own --radius, so restate them for this scope */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  /* raised surface, since canvas is not for internal sections */
+  --editorial-sidebar: #f5f5f5;
+  --editorial-sidebar-hover: rgb(17 17 17 / 5%);
+  --editorial-sidebar-active: rgb(205 132 7 / 14%);
+  /* repo: link #f54e00 is 3.1:1 on canvas; a darker orange keeps text at 4.5:1 */
+  --editorial-accent: #b33a00;
+  --editorial-accent-soft: rgb(205 132 7 / 12%);
+
+  /* repo: Lesson status keeps its own three colors (ADR-0010), light values */
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+
+  /* RoundHog has no published font file; the file's own fallback stack, one family for everything */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-geist-mono: ui-monospace, "Source Code Pro", monospace;
+
+  font-family: var(--font-sans);
+}
+
+html.dark[data-design="posthog"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #14100a;
+  --foreground: #fdfaf5;
+  --card: #221e19;
+  --card-foreground: #fdfaf5;
+  --popover: #221e19;
+  --popover-foreground: #fdfaf5;
+  --primary: #cd8407;
+  --primary-foreground: #0b0b0c;
+  --secondary: #2e2a25;
+  --secondary-foreground: #fdfaf5;
+  --muted: #2e2a25;
+  --muted-foreground: #a4a19c;
+  --accent: #2e2a25;
+  --accent-foreground: #fdfaf5;
+  --border: #3a3631;
+  --input: #3a3631;
+  --ring: #cd8407;
+  /* repo: default dark error color */
+  --destructive: #ef6b5e;
+
+  --editorial-sidebar: #221e19;
+  --editorial-sidebar-hover: rgb(253 250 245 / 5%);
+  --editorial-sidebar-active: rgb(205 132 7 / 16%);
+  /* #cd8407 is 6.3:1 on the dark background */
+  --editorial-accent: #cd8407;
+  --editorial-accent-soft: rgb(205 132 7 / 14%);
+
+  /* repo: Lesson status, dark values */
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}
+
+/* Buttons and cards are flat; elevation is color blocking */
+html[data-design="posthog"] .roadmap-theme [data-slot="button"] {
+  box-shadow: none;
+}
+
+/* body-md 15px / 500 / 1.5, letter-spacing 0 (front matter) */
+html[data-design="posthog"] .roadmap-theme .editorial-prose {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0;
+  color: var(--foreground);
+}
+
+html[data-design="posthog"] .roadmap-theme .editorial-prose :is(p, li) {
+  line-height: 1.5;
+}
+
+/* heading-md 24px / 700 / 1.33 / -0.6px */
+html[data-design="posthog"] .roadmap-theme .editorial-prose h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.33;
+  letter-spacing: -0.6px;
+}
+
+/* heading-sm 19.2857px / 600 / 1.56 / -0.48px */
+html[data-design="posthog"] .roadmap-theme .editorial-prose h3 {
+  font-size: 1.2054rem;
+  font-weight: 600;
+  line-height: 1.56;
+  letter-spacing: -0.48px;
+}
+
+/* heading-xs 18px / 600 / 1.56 / -0.45px */
+html[data-design="posthog"] .roadmap-theme .editorial-prose h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.56;
+  letter-spacing: -0.45px;
+}
+
+html[data-design="posthog"] .roadmap-theme .font-display {
+  font-weight: 700;
+  letter-spacing: -0.9px;
+}

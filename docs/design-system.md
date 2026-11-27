@@ -14,6 +14,24 @@ Quy ước UI cho code mới của `crisne-website`. Skill `cris-doctor` bắt c
 
 Tài liệu gốc: [Tailwind CSS v4: Theme variables](https://tailwindcss.com/docs/theme), [shadcn/ui: Theming](https://ui.shadcn.com/docs/theming).
 
+## Theme roadmap và news (Default / Apple / Railway / PostHog)
+
+Nút "Tùy chọn" (…) ở header trang chủ, trang topic/lesson (`LectureShell`) và `/news` cho chọn theme.
+
+- Lựa chọn lưu trong localStorage key `design` (`hooks/use-design.ts`), gắn `data-design="<theme>"` lên `<html>` (Default thì không gắn). Đây là setting riêng, tách khỏi light/dark của `theme-provider`.
+- Mỗi theme là một file `app/styles/<theme>-theme.css`, chỉ ghi đè token trong `.roadmap-theme`. Abot widget và `/portfolio` không đổi theo.
+- Theme chỉ gồm token màu, font, radius, shadow và typography của `.editorial-prose`. Bố cục trang của site gốc (nav, tile, breakpoint riêng) không áp.
+- Chỗ nào lệch so với file nguồn thì có comment `repo:` trong CSS: contrast chữ nhỏ ≥ 4.5:1, giữ token trạng thái Lesson theo ADR-0010, giữ màu lỗi khi nguồn không có màu semantic.
+- Màu mới cho theme thêm vào file theme, không viết hex trong component (`DS-RAW-COLOR` vẫn áp dụng).
+
+| Theme | Nguồn token | Light/dark | Font |
+|---|---|---|---|
+| Apple | [getdesign.md/apple/design-md](https://getdesign.md/apple/design-md) | Luôn light | System font (SF Pro trên máy Apple) |
+| Railway | DESIGN.md "Inspired by Railway" do Owner cung cấp (2026-11-27), một số màu được file ghi là suy đoán | Luôn dark | IBM Plex Serif cho heading (`--font-plex-serif`, `next/font`, không preload), Inter cho body |
+| PostHog | [designmd.me/discover/posthog/raw](https://designmd.me/discover/posthog/raw) | Theo site: light là bản đo được, dark lấy từ khối `themes` của file (file ghi là suy ra) | Stack fallback của file, vì RoundHog không có file font công khai |
+
+Cả ba nguồn đều là bản phân tích của bên thứ ba từ site công khai, không phải tài liệu của Apple, Railway hay PostHog, và không được họ chấp thuận.
+
 ## Rule
 
 | Mã | Rule | Cách đúng |

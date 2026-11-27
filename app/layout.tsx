@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import Script from "next/script";
-import { Inter, JetBrains_Mono, Fraunces } from "next/font/google";
+import { Inter, JetBrains_Mono, Fraunces, IBM_Plex_Serif } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { JsonLd } from "@/components/json-ld";
@@ -46,6 +46,17 @@ const fraunces = Fraunces({
   axes: ["SOFT", "WONK"],
   style: ["normal", "italic"],
   weight: "variable",
+});
+
+// Railway theme headings only (app/styles/railway-theme.css); not preloaded, the browser
+// fetches it only when a heading in that theme renders
+const ibmPlexSerif = IBM_Plex_Serif({
+  variable: "--font-plex-serif",
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+  preload: false,
+  fallback: ["Georgia", "serif"],
+  weight: ["400", "500"],
 });
 
 const SITE_URL = "https://crisne.blog";
@@ -150,7 +161,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} ${ibmPlexSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

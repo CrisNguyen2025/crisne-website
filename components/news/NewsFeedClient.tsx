@@ -41,6 +41,7 @@ import type {
 } from "@/lib/news/schemas";
 import * as newsService from "@/logic/news/newsService";
 import { useToast } from "@/components/ui/toast";
+import { DesignMenu } from "@/components/design-menu";
 import { MobileNewsDrawer } from "./MobileNewsDrawer";
 import { NewsCard } from "./NewsCard";
 import { NewsReaderPanel, NewsReaderSkeleton } from "./NewsReaderPanel";
@@ -384,6 +385,7 @@ function NewsFeedHeader({
             <Plus className="size-4" />
             <span className="hidden sm:inline">Thêm link</span>
           </button>
+          <DesignMenu triggerClassName="size-9" />
         </div>
       </div>
     </header>

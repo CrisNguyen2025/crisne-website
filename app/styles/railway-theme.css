@@ -1,0 +1,110 @@
+/*
+ * Railway theme for roadmap and news pages (.roadmap-theme), picked from the "Tùy chọn" menu
+ * (hooks/use-design.ts sets html[data-design="railway"]).
+ *
+ * Token values come from a "Design System Inspired by Railway" DESIGN.md the Owner supplied
+ * (2026-11-27). Several of its colors are marked "inferred" there; it is not Railway's own document.
+ * Deviations from that file are marked "repo:".
+ *
+ * Always dark (the file defines only a dark palette): html[data-design="railway"] .roadmap-theme
+ * (0,2,1) outranks both .roadmap-theme and .dark .roadmap-theme, so every token is restated here.
+ */
+
+html[data-design="railway"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #13111c;
+  --foreground: #ffffff;
+  --card: #13111c;
+  --card-foreground: #ffffff;
+  --popover: #13111c;
+  --popover-foreground: #ffffff;
+  /* Purple only for primary CTAs; white text on it is 4.6:1 */
+  --primary: #9d4edd;
+  --primary-foreground: #ffffff;
+  --secondary: #33323e;
+  --secondary-foreground: #f7f7f8;
+  --muted: #33323e;
+  --muted-foreground: #a1a0ab;
+  /* Hover background per the file: white at 5% */
+  --accent: rgb(255 255 255 / 5%);
+  --accent-foreground: #ffffff;
+  --border: #33323e;
+  --input: rgb(255 255 255 / 10%);
+  --ring: #9d4edd;
+  /* repo: the file has no error color, keep the default dark one */
+  --destructive: #ef6b5e;
+  /* 6px buttons and inputs (rounded-lg), about 8px cards (rounded-xl) */
+  --radius: 0.375rem;
+  /* :root computes --radius-* from its own --radius, so restate them for this scope */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  --editorial-sidebar: #08070c;
+  --editorial-sidebar-hover: rgb(255 255 255 / 5%);
+  --editorial-sidebar-active: rgb(157 78 221 / 10%);
+  /* repo: #9d4edd as small text on #13111c is 4.0:1; a lighter purple keeps the 4.5:1 rule */
+  --editorial-accent: #b07ee8;
+  --editorial-accent-soft: rgb(157 78 221 / 10%);
+
+  /* repo: Lesson status keeps its own three colors (ADR-0010), dark values */
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+
+  /* Serif for display and headings, Inter (already --font-sans) for body and UI */
+  --font-display: var(--font-plex-serif), Georgia, serif;
+  --font-geist-mono: ui-monospace, "Cascadia Code", "Courier New", monospace;
+
+  font-family: var(--font-sans);
+}
+
+/* Primary CTA gets the blue-purple glow; every other button stays flat */
+html[data-design="railway"] .roadmap-theme [data-slot="button"] {
+  box-shadow: none;
+}
+
+html[data-design="railway"] .roadmap-theme [data-slot="button"].bg-primary {
+  box-shadow:
+    rgb(65 78 166 / 10%) 0 -12px 127px 0,
+    rgb(65 78 166 / 7%) 0 -4.38px 46.357px 0,
+    rgb(65 78 166 / 6%) 0 -2.127px 22.506px 0,
+    rgb(65 78 166 / 4%) 0 -1.042px 11.033px 0,
+    rgb(65 78 166 / 3%) 0 -0.412px 4.362px 0;
+}
+
+/* Body MD 18px / 27px; headings in IBM Plex Serif 500 with no tracking */
+html[data-design="railway"] .roadmap-theme .editorial-prose {
+  font-size: 1.125rem;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+
+html[data-design="railway"] .roadmap-theme .editorial-prose :is(p, li) {
+  line-height: 1.5;
+}
+
+html[data-design="railway"] .roadmap-theme .editorial-prose a {
+  color: #dcdce0;
+}
+
+html[data-design="railway"] .roadmap-theme .editorial-prose a:hover {
+  color: #ffffff;
+}
+
+html[data-design="railway"] .roadmap-theme .editorial-prose h2 {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+html[data-design="railway"] .roadmap-theme .font-display {
+  letter-spacing: 0;
+}

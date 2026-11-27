@@ -15,6 +15,7 @@ import { NEWS_PATH } from "@/lib/news/paths";
 import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { openGlobalSearch } from "@/lib/search/search-controller";
 import { Button } from "@/components/ui/button";
+import { DesignMenu } from "@/components/design-menu";
 import {
   clearDeletedTopicSlug,
   getDeletedLessonIdsSnapshot,
@@ -160,40 +161,43 @@ export function PublicationHome({
             </div>
           </div>
 
-          {canWrite && (
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                onClick={openGlobalSearch}
-                aria-label="Tìm kiếm nhanh (Cmd+K)"
-                className="cursor-pointer bg-card px-3 text-xs"
-              >
-                <Search className="size-3.5 text-muted-foreground" />
-                <span>Tìm kiếm</span>
-                <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
-                  ⌘K
-                </kbd>
-              </Button>
-              <Link
-                href={NEWS_PATH}
-                prefetch={true}
-                className="inline-flex h-9 touch-manipulation items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
-              >
-                <Newspaper className="size-3.5 text-muted-foreground" />
-                <span>News</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setIsCreateTopicOpen(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
-              >
-                <Plus className="size-3.5" />
-                <span>Tạo topic</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {canWrite && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={openGlobalSearch}
+                  aria-label="Tìm kiếm nhanh (Cmd+K)"
+                  className="cursor-pointer bg-card px-3 text-xs"
+                >
+                  <Search className="size-3.5 text-muted-foreground" />
+                  <span>Tìm kiếm</span>
+                  <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
+                    ⌘K
+                  </kbd>
+                </Button>
+                <Link
+                  href={NEWS_PATH}
+                  prefetch={true}
+                  className="inline-flex h-9 touch-manipulation items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
+                >
+                  <Newspaper className="size-3.5 text-muted-foreground" />
+                  <span>News</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateTopicOpen(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+                >
+                  <Plus className="size-3.5" />
+                  <span>Tạo topic</span>
+                </button>
+              </>
+            )}
+            <DesignMenu triggerClassName="size-9" />
+          </div>
         </header>
 
         <section className="mt-10" aria-labelledby="topics-heading">
