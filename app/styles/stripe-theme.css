@@ -1,0 +1,95 @@
+/*
+ * Stripe theme for roadmap and news pages (.roadmap-theme), picked from DesignMenu
+ * (hooks/use-design.ts sets html[data-design="stripe"]).
+ *
+ * Light tokens derive from https://getdesign.md/stripe/design-md (#f6f9fc canvas-soft,
+ * #0d253d ink, #e3e8ee hairline, #533afd / #4434d4 accent, #003770 shadow-blue).
+ * Dark counterpart is derived from Stripe's navy/brand-dark-900 tones.
+ */
+
+html[data-design="stripe"] .roadmap-theme {
+  color-scheme: light;
+
+  --background: #f6f9fc;
+  --foreground: #0d253d;
+  --card: #ffffff;
+  --card-foreground: #0d253d;
+  --popover: #ffffff;
+  --popover-foreground: #0d253d;
+  --primary: #0d253d;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0d253d;
+  --muted: #f5f8fb;
+  --muted-foreground: #4c5e74;
+  --accent: #e9eff6;
+  --accent-foreground: #0d253d;
+  --border: #e3e8ee;
+  --input: #cbd6e2;
+  --ring: #533afd;
+  --destructive: #c83e32;
+  --radius: 0.5rem;
+
+  --editorial-sidebar: #f1f5f9;
+  --editorial-sidebar-hover: rgb(13 37 61 / 4.5%);
+  --editorial-sidebar-active: #ffffff;
+  --editorial-accent: #4434d4;
+  --editorial-accent-rail: #533afd;
+  --editorial-accent-soft: rgb(83 58 253 / 5%);
+  --editorial-paper-shadow:
+    0 1px 2px rgb(0 55 112 / 0.04),
+    0 10px 26px -12px rgb(0 55 112 / 0.1);
+
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+}
+
+html.dark[data-design="stripe"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #09111e;
+  --foreground: #f6f9fc;
+  --card: #0f1a2b;
+  --card-foreground: #f6f9fc;
+  --popover: #142136;
+  --popover-foreground: #f6f9fc;
+  --primary: #f6f9fc;
+  --primary-foreground: #09111e;
+  --secondary: #152236;
+  --secondary-foreground: #f6f9fc;
+  --muted: #152236;
+  --muted-foreground: #9fb1c7;
+  --accent: #1c2c44;
+  --accent-foreground: #f6f9fc;
+  --border: #1d2e47;
+  --input: #2c4161;
+  --ring: #665efd;
+  --destructive: #ef6b5e;
+
+  --editorial-sidebar: #070e19;
+  --editorial-sidebar-hover: rgb(246 249 252 / 5%);
+  --editorial-sidebar-active: #152236;
+  --editorial-accent: #b9b9f9;
+  --editorial-accent-rail: #665efd;
+  --editorial-accent-soft: rgb(102 94 253 / 9%);
+  --editorial-paper-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 12px 32px -12px rgb(0 0 0 / 0.7);
+
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}

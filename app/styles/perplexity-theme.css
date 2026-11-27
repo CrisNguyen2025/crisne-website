@@ -1,0 +1,95 @@
+/*
+ * Perplexity theme for roadmap and news pages (.roadmap-theme), picked from DesignMenu
+ * (hooks/use-design.ts sets html[data-design="perplexity"]).
+ *
+ * Palette inspired by perplexity.ai (#f3f3ee warm alabaster desk, #13343b deep peacock ink,
+ * #1fb8cd / #20808d turquoise signal). Applied with 90/9/1 color restraint.
+ */
+
+html[data-design="perplexity"] .roadmap-theme {
+  color-scheme: light;
+
+  --background: #f3f3ee;
+  --foreground: #13343b;
+  --card: #ffffff;
+  --card-foreground: #13343b;
+  --popover: #ffffff;
+  --popover-foreground: #13343b;
+  --primary: #13343b;
+  --primary-foreground: #ffffff;
+  --secondary: #eeefe9;
+  --secondary-foreground: #13343b;
+  --muted: #f5f5f0;
+  --muted-foreground: #526166;
+  --accent: #eaece6;
+  --accent-foreground: #13343b;
+  --border: #e2e5e0;
+  --input: #cfd4ce;
+  --ring: #1fb8cd;
+  --destructive: #c83e32;
+  --radius: 0.625rem;
+
+  --editorial-sidebar: #eeefe9;
+  --editorial-sidebar-hover: rgb(19 52 59 / 4.5%);
+  --editorial-sidebar-active: #ffffff;
+  /* repo: #1fb8cd is < 4.5:1 on white; #186b76 keeps small text >= 5.9:1 */
+  --editorial-accent: #186b76;
+  --editorial-accent-rail: #1fb8cd;
+  --editorial-accent-soft: rgb(31 184 205 / 6%);
+  --editorial-paper-shadow:
+    0 1px 2px rgb(19 52 59 / 0.04),
+    0 8px 24px -12px rgb(19 52 59 / 0.09);
+
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+}
+
+html.dark[data-design="perplexity"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #131515;
+  --foreground: #f3f3ee;
+  --card: #191c1c;
+  --card-foreground: #f3f3ee;
+  --popover: #1e2222;
+  --popover-foreground: #f3f3ee;
+  --primary: #f3f3ee;
+  --primary-foreground: #13343b;
+  --secondary: #202424;
+  --secondary-foreground: #f3f3ee;
+  --muted: #202424;
+  --muted-foreground: #9faaab;
+  --accent: #282d2d;
+  --accent-foreground: #f3f3ee;
+  --border: #272c2c;
+  --input: #363d3d;
+  --ring: #5ad7e8;
+  --destructive: #ef6b5e;
+
+  --editorial-sidebar: #101212;
+  --editorial-sidebar-hover: rgb(243 243 238 / 5%);
+  --editorial-sidebar-active: #202424;
+  --editorial-accent: #5ad7e8;
+  --editorial-accent-rail: #1fb8cd;
+  --editorial-accent-soft: rgb(31 184 205 / 8%);
+  --editorial-paper-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 12px 32px -12px rgb(0 0 0 / 0.65);
+
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}

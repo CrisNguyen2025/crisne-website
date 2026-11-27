@@ -150,7 +150,7 @@ function getTocLinkClass(isRail: boolean, level: number, isActive: boolean): str
       "-ml-[0.0625rem] border-l-2 py-0.5",
       level === 3 ? "pl-5" : "pl-3.5",
       isActive
-        ? "border-[var(--editorial-accent)] text-[var(--editorial-accent)]"
+        ? "border-[var(--editorial-accent-rail)] text-foreground"
         : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
     );
   }

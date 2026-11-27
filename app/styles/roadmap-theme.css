@@ -1,35 +1,53 @@
+/*
+ * Default theme for roadmap and news pages (.roadmap-theme): Option 7 — Figma.
+ *
+ * Token values derive from https://getdesign.md/figma/design-md (a third-party extraction
+ * of figma.com, not Figma's own document). Applied with 90/9/1 color restraint on a
+ * tactile paper-desk surface hierarchy (#f7f7f5 desk -> #ffffff elevated sheets).
+ * Deviations from the source are marked "repo:".
+ */
+
 html:has(.roadmap-theme) {
   scroll-behavior: auto;
   scrollbar-gutter: stable;
 }
 
 .roadmap-theme {
-  --background: #faf9f5;
-  --foreground: #1a1a1a;
+  color-scheme: light;
+
+  --background: #f7f7f5;
+  --foreground: #000000;
   --card: #ffffff;
-  --card-foreground: #1a1a1a;
+  --card-foreground: #000000;
   --popover: #ffffff;
-  --popover-foreground: #1a1a1a;
-  --primary: #1a1a1a;
-  --primary-foreground: #faf9f5;
-  --secondary: #f1efe9;
-  --secondary-foreground: #1a1a1a;
-  --muted: #f4f3ee;
-  --muted-foreground: #5c5a55;
-  --accent: #efede6;
-  --accent-foreground: #1a1a1a;
-  --border: rgb(26 26 26 / 9%);
-  --input: rgb(26 26 26 / 14%);
-  --ring: #c04a30;
+  --popover-foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2ef;
+  --secondary-foreground: #000000;
+  --muted: #f5f5f2;
+  --muted-foreground: #525252;
+  --accent: #eaeae6;
+  --accent-foreground: #000000;
+  --border: #e6e6e6;
+  --input: #d1d1cf;
+  --ring: #1ea64a;
+  /* repo: source defines no destructive color; keep accessible crimson */
   --destructive: #c83e32;
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
-  --editorial-sidebar: #f4f3ee;
-  --editorial-sidebar-hover: rgb(26 26 26 / 4.5%);
-  --editorial-sidebar-active: rgb(26 26 26 / 6.5%);
-  --editorial-accent: #c04a30;
-  --editorial-accent-soft: rgb(192 74 48 / 9%);
+  --editorial-sidebar: #f2f2ef;
+  --editorial-sidebar-hover: rgb(0 0 0 / 4%);
+  --editorial-sidebar-active: #ffffff;
+  /* repo: #1ea64a is 3.2:1 on white; #157a36 keeps small text >= 5.1:1 while #1ea64a serves as the surgical rail */
+  --editorial-accent: #157a36;
+  --editorial-accent-rail: #1ea64a;
+  --editorial-accent-soft: rgb(30 166 74 / 6%);
+  --editorial-paper-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 8px 24px -12px rgb(0 0 0 / 0.09);
 
+  /* Lesson status keeps its own three colors (ADR-0010), light values */
   --status-target: oklch(0.45 0.14 245);
   --status-target-bg: oklch(0.95 0.025 245);
   --status-target-border: oklch(0.84 0.055 245);
@@ -45,30 +63,37 @@ html:has(.roadmap-theme) {
 }
 
 .dark .roadmap-theme {
-  --background: #161513;
-  --foreground: #ece9e2;
-  --card: #1f1e1b;
-  --card-foreground: #ece9e2;
-  --popover: #22201d;
-  --popover-foreground: #ece9e2;
-  --primary: #ece9e2;
-  --primary-foreground: #161513;
-  --secondary: #24221f;
-  --secondary-foreground: #ece9e2;
-  --muted: #21201d;
-  --muted-foreground: #a39f96;
-  --accent: #272521;
-  --accent-foreground: #ece9e2;
-  --border: rgb(255 250 240 / 9%);
-  --input: rgb(255 250 240 / 13%);
-  --ring: #e3745b;
+  color-scheme: dark;
+
+  --background: #050505;
+  --foreground: #ffffff;
+  --card: #121214;
+  --card-foreground: #ffffff;
+  --popover: #16161a;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+  --secondary: #19191d;
+  --secondary-foreground: #ffffff;
+  --muted: #19191d;
+  --muted-foreground: #a4a4ac;
+  --accent: #232329;
+  --accent-foreground: #ffffff;
+  --border: #232327;
+  --input: #33333a;
+  --ring: #dceeb1;
   --destructive: #ef6b5e;
 
-  --editorial-sidebar: #1c1b18;
-  --editorial-sidebar-hover: rgb(255 250 240 / 5%);
-  --editorial-sidebar-active: rgb(255 250 240 / 8%);
-  --editorial-accent: #e3745b;
-  --editorial-accent-soft: rgb(227 116 91 / 12%);
+  --editorial-sidebar: #0b0b0c;
+  --editorial-sidebar-hover: rgb(255 255 255 / 5%);
+  --editorial-sidebar-active: #18181c;
+  /* repo: Figma block-lime (#dceeb1) provides >14:1 contrast on #121214 */
+  --editorial-accent: #dceeb1;
+  --editorial-accent-rail: #dceeb1;
+  --editorial-accent-soft: rgb(220 238 177 / 8%);
+  --editorial-paper-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 12px 32px -12px rgb(0 0 0 / 0.65);
 
   --status-target: oklch(0.78 0.11 245);
   --status-target-bg: oklch(0.25 0.04 245);
@@ -79,6 +104,30 @@ html:has(.roadmap-theme) {
   --status-known: oklch(0.77 0.11 155);
   --status-known-bg: oklch(0.25 0.04 155);
   --status-known-border: oklch(0.38 0.07 155);
+}
+
+.roadmap-theme .editorial-paper {
+  box-shadow: var(--editorial-paper-shadow);
+}
+
+@media (min-width: 640px) {
+  .roadmap-theme .editorial-paper-sm {
+    box-shadow: var(--editorial-paper-shadow);
+  }
+}
+
+.roadmap-theme .editorial-nav-active {
+  background-color: var(--editorial-sidebar-active);
+  color: var(--foreground);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    inset 2.5px 0 0 var(--editorial-accent-rail);
+}
+
+.roadmap-theme .editorial-accent-rail-card {
+  box-shadow:
+    var(--editorial-paper-shadow),
+    inset 3px 0 0 var(--editorial-accent-rail);
 }
 
 .roadmap-theme .editorial-prose {
@@ -154,8 +203,8 @@ html:has(.roadmap-theme) {
 }
 
 .roadmap-theme .editorial-prose blockquote {
-  border-left: 0.25rem solid var(--editorial-accent);
-  background: var(--editorial-accent-soft);
+  border-left: 0.1875rem solid var(--editorial-accent-rail);
+  background: var(--muted);
   border-radius: 0 0.5rem 0.5rem 0;
   padding: 0.75rem 1.25rem;
   color: var(--foreground);
@@ -165,7 +214,7 @@ html:has(.roadmap-theme) {
 .roadmap-theme .editorial-prose pre,
 .roadmap-theme .editorial-prose code.block {
   display: block;
-  background: var(--card);
+  background: var(--muted);
   color: var(--foreground);
   border: 0.0625rem solid var(--border);
   border-radius: 0.5rem;
@@ -215,7 +264,7 @@ html:has(.roadmap-theme) {
 }
 
 .roadmap-theme .editorial-prose ul > li::marker {
-  color: var(--editorial-accent);
+  color: var(--editorial-accent-rail);
 }
 
 .roadmap-theme .editorial-prose ol {

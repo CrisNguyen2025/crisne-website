@@ -14,23 +14,31 @@ Quy ước UI cho code mới của `crisne-website`. Skill `cris-doctor` bắt c
 
 Tài liệu gốc: [Tailwind CSS v4: Theme variables](https://tailwindcss.com/docs/theme), [shadcn/ui: Theming](https://ui.shadcn.com/docs/theming).
 
-## Theme roadmap và news (Default / Apple / Railway / PostHog)
+## Theme roadmap và news (Figma mặc định + Brand options)
 
 Nút "Tùy chọn" (…) ở header trang chủ, trang topic/lesson (`LectureShell`) và `/news` cho chọn theme.
 
-- Lựa chọn lưu trong localStorage key `design` (`hooks/use-design.ts`), gắn `data-design="<theme>"` lên `<html>` (Default thì không gắn). Đây là setting riêng, tách khỏi light/dark của `theme-provider`.
-- Mỗi theme là một file `app/styles/<theme>-theme.css`, chỉ ghi đè token trong `.roadmap-theme`. Abot widget và `/portfolio` không đổi theo.
-- Theme chỉ gồm token màu, font, radius, shadow và typography của `.editorial-prose`. Bố cục trang của site gốc (nav, tile, breakpoint riêng) không áp.
+- Lựa chọn lưu trong localStorage key `design` (`hooks/use-design.ts`), gắn `data-design="<theme>"` lên `<html>` (mặc định `default` = **Figma** thì không gắn). Đây là setting riêng, tách khỏi light/dark của `theme-provider`.
+- Theme mặc định (`.roadmap-theme` trong `app/styles/roadmap-theme.css`) áp hệ **Figma** trên bố cục giấy nổi 90/9/1 (`#f7f7f5` desk → `#ffffff` sheet, `#000000` primary/ink, `#1ea64a` / `#157a36` rail/accent; Dark: `#050505` → `#121214`, `#dceeb1` accent).
+- Mỗi theme thay thế là một file `app/styles/<theme>-theme.css`, chỉ ghi đè token trong `.roadmap-theme`. Abot widget (`AbotMascot` và khung chat) cùng `/portfolio` không đổi theo.
 - Chỗ nào lệch so với file nguồn thì có comment `repo:` trong CSS: contrast chữ nhỏ ≥ 4.5:1, giữ token trạng thái Lesson theo ADR-0010, giữ màu lỗi khi nguồn không có màu semantic.
 - Màu mới cho theme thêm vào file theme, không viết hex trong component (`DS-RAW-COLOR` vẫn áp dụng).
 
-| Theme | Nguồn token | Light/dark | Font |
+| Theme | Nguồn token | Light/dark | Ghi chú |
 |---|---|---|---|
+| Figma (Mặc định) | [getdesign.md/figma/design-md](https://getdesign.md/figma/design-md) | Light & Dark | `#f7f7f5` / `#000000`, rail `#1ea64a` (`#157a36` cho chữ nhỏ), Dark `#050505` / `#dceeb1` |
+| Perplexity | Palette `perplexity.ai` | Light & Dark | `#f3f3ee` / `#13343b`, rail `#1fb8cd` (`#186b76` cho chữ nhỏ) |
+| Cursor | Palette `cursor.com` | Light & Dark | `#f7f7f4` / `#26251e`, rail `#f54e00` (`#b83a00` cho chữ nhỏ) |
+| Anthropic | Palette ấm trước đây của `.roadmap-theme` | Light & Dark | `#f7f5f0` / `#141413`, rail `#d97757` (`#a54628` cho chữ nhỏ) |
+| Linear | [getdesign.md/linear/design-md](https://getdesign.md/linear/design-md) | Light & Dark | Dark `#08090a` / `#111215` / `#5e6ad2`; Light suy dẫn `#f4f5f7` / `#4550b5` |
+| Letters | `letters.app` & [getdesign.md/design-md/letters](https://getdesign.md/design-md/letters) | Light & Dark | `#f2f2f4` / `#070709`, rail `#2597d0` (`#166ac4` cho chữ nhỏ); Dark suy dẫn |
+| Stripe | [getdesign.md/stripe/design-md](https://getdesign.md/stripe/design-md) | Light & Dark | `#f6f9fc` / `#0d253d`, rail `#533afd` (`#4434d4` chữ nhỏ), bóng ánh `#003770` |
+| Discord | [getdesign.md/discord/design-md](https://getdesign.md/discord/design-md) | Light & Dark | Dark `#0d0f24` / `#5865f2` / `#00b0f4`; Light suy dẫn `#f3f4f8` / `#4450c9` |
 | Apple | [getdesign.md/apple/design-md](https://getdesign.md/apple/design-md) | Luôn light | System font (SF Pro trên máy Apple) |
-| Railway | DESIGN.md "Inspired by Railway" do Owner cung cấp (2026-11-27), một số màu được file ghi là suy đoán | Luôn dark | IBM Plex Serif cho heading (`--font-plex-serif`, `next/font`, không preload), Inter cho body |
-| PostHog | [designmd.me/discover/posthog/raw](https://designmd.me/discover/posthog/raw) | Theo site: light là bản đo được, dark lấy từ khối `themes` của file (file ghi là suy ra) | Stack fallback của file, vì RoundHog không có file font công khai |
+| Railway | DESIGN.md "Inspired by Railway" (2026-11-27) | Luôn dark | IBM Plex Serif cho heading (`--font-plex-serif`), Inter cho body |
+| PostHog | [designmd.me/discover/posthog/raw](https://designmd.me/discover/posthog/raw) | Light & Dark | Stack fallback hệ thống |
 
-Cả ba nguồn đều là bản phân tích của bên thứ ba từ site công khai, không phải tài liệu của Apple, Railway hay PostHog, và không được họ chấp thuận.
+Các nguồn trích xuất bên thứ ba không phải tài liệu chính thức của từng hãng.
 
 ## Rule
 

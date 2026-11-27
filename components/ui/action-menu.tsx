@@ -89,7 +89,7 @@ export function ActionMenu({ items, label = "More actions", icon, align = "end",
           role={isOpen ? "menu" : undefined}
           aria-hidden={!isOpen || undefined}
           className={cn(
-            "absolute top-full z-50 mt-1 w-52 rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            "absolute top-full z-50 mt-1 max-h-80 w-56 overflow-y-auto rounded-xl border border-border bg-popover p-1 text-sm text-popover-foreground shadow-lg transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
             align === "end" ? "right-0 origin-top-right" : "left-0 origin-top-left",
             isVisible ? "opacity-100 scale-100 translate-y-0" : "pointer-events-none opacity-0 scale-95 -translate-y-1"
           )}

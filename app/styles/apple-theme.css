@@ -39,7 +39,9 @@ html[data-design="apple"] .roadmap-theme {
   --editorial-sidebar-hover: rgb(29 29 31 / 4.5%);
   --editorial-sidebar-active: rgb(29 29 31 / 7%);
   --editorial-accent: #0066cc;
+  --editorial-accent-rail: #0066cc;
   --editorial-accent-soft: rgb(0 102 204 / 9%);
+  --editorial-paper-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.08);
 
   /* repo: Lesson status keeps its own three colors (ADR-0010), light values */
   --status-target: oklch(0.45 0.14 245);

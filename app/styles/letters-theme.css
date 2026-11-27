@@ -1,0 +1,96 @@
+/*
+ * Letters theme for roadmap and news pages (.roadmap-theme), picked from DesignMenu
+ * (hooks/use-design.ts sets html[data-design="letters"]).
+ *
+ * Light tokens derive from letters.app and getdesign.md/design-md/letters public summary
+ * (#070709 primary, #ffffff sheet, #f5f5f5 surface, #60606c slate, #2597d0 / #166ac4 sky).
+ * Dark counterpart is derived.
+ */
+
+html[data-design="letters"] .roadmap-theme {
+  color-scheme: light;
+
+  --background: #f2f2f4;
+  --foreground: #070709;
+  --card: #ffffff;
+  --card-foreground: #070709;
+  --popover: #ffffff;
+  --popover-foreground: #070709;
+  --primary: #070709;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f7;
+  --secondary-foreground: #070709;
+  --muted: #f5f5f7;
+  --muted-foreground: #60606c;
+  --accent: #ebebee;
+  --accent-foreground: #070709;
+  --border: #e4e5e7;
+  --input: #d2d4da;
+  --ring: #2597d0;
+  --destructive: #c83e32;
+  --radius: 0.625rem;
+
+  --editorial-sidebar: #f7f7f8;
+  --editorial-sidebar-hover: rgb(7 7 9 / 4%);
+  --editorial-sidebar-active: #ffffff;
+  /* repo: #2597d0 is 3.2:1 on white; #166ac4 keeps small text >= 5.4:1 */
+  --editorial-accent: #166ac4;
+  --editorial-accent-rail: #2597d0;
+  --editorial-accent-soft: rgb(37 151 208 / 6%);
+  --editorial-paper-shadow:
+    0 1px 2px rgb(7 7 9 / 0.04),
+    0 8px 24px -12px rgb(7 7 9 / 0.09);
+
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+}
+
+html.dark[data-design="letters"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #09090b;
+  --foreground: #f4f4f6;
+  --card: #121216;
+  --card-foreground: #f4f4f6;
+  --popover: #16161b;
+  --popover-foreground: #f4f4f6;
+  --primary: #f4f4f6;
+  --primary-foreground: #09090b;
+  --secondary: #18181d;
+  --secondary-foreground: #f4f4f6;
+  --muted: #18181d;
+  --muted-foreground: #9e9ea9;
+  --accent: #212128;
+  --accent-foreground: #f4f4f6;
+  --border: #23232a;
+  --input: #32323c;
+  --ring: #5cb8eb;
+  --destructive: #ef6b5e;
+
+  --editorial-sidebar: #0d0d10;
+  --editorial-sidebar-hover: rgb(244 244 246 / 5%);
+  --editorial-sidebar-active: #18181d;
+  --editorial-accent: #7cc8f2;
+  --editorial-accent-rail: #5cb8eb;
+  --editorial-accent-soft: rgb(92 184 235 / 8%);
+  --editorial-paper-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 12px 32px -12px rgb(0 0 0 / 0.65);
+
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}

@@ -13,10 +13,16 @@ const STATUS_ICON: Record<LessonStatus, React.ComponentType<{ className?: string
   known: CheckCircle2,
 };
 
+const STATUS_ICON_TONE: Record<LessonStatus, string> = {
+  target: 'text-[var(--status-target)]',
+  learning: 'text-[var(--status-learning)]',
+  known: 'text-[var(--status-known)]',
+};
+
 const STATUS_TONE: Record<LessonStatus, string> = {
-  target: 'border-[var(--status-target-border)] bg-[var(--status-target-bg)] text-[var(--status-target)]',
-  learning: 'border-[var(--status-learning-border)] bg-[var(--status-learning-bg)] text-[var(--status-learning)]',
-  known: 'border-[var(--status-known-border)] bg-[var(--status-known-bg)] text-[var(--status-known)]',
+  target: 'border-border bg-muted text-foreground',
+  learning: 'border-border bg-muted text-foreground',
+  known: 'border-border bg-muted text-foreground',
 };
 
 interface LessonStatusBadgeProps {
@@ -30,12 +36,12 @@ export function LessonStatusBadge({ status, className }: LessonStatusBadgeProps)
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none',
+        'inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium leading-none',
         STATUS_TONE[status],
         className
       )}
     >
-      <Icon className="size-3" />
+      <Icon className={cn('size-3', STATUS_ICON_TONE[status])} />
       {LESSON_STATUS_LABEL[status]}
     </span>
   );

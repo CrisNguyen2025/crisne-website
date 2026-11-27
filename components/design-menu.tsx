@@ -5,7 +5,14 @@ import { ActionMenu, type ActionMenuItem } from "@/components/ui/action-menu";
 import { setDesign, useDesign, type Design } from "@/hooks/use-design";
 
 const DESIGN_OPTIONS: Array<{ value: Design; label: string }> = [
-  { value: "default", label: "Theme: Default" },
+  { value: "default", label: "Theme: Figma (Mặc định)" },
+  { value: "perplexity", label: "Theme: Perplexity" },
+  { value: "cursor", label: "Theme: Cursor" },
+  { value: "anthropic", label: "Theme: Anthropic" },
+  { value: "linear", label: "Theme: Linear" },
+  { value: "letters", label: "Theme: Letters" },
+  { value: "stripe", label: "Theme: Stripe" },
+  { value: "discord", label: "Theme: Discord" },
   { value: "apple", label: "Theme: Apple" },
   { value: "railway", label: "Theme: Railway" },
   { value: "posthog", label: "Theme: PostHog" },

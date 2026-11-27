@@ -101,7 +101,7 @@ export const NewsCard = React.memo(function NewsCard({
       data-news-card-id={item.id}
       className={`group relative cursor-pointer overflow-hidden border-b border-border px-4 py-4 [contain:layout_style] transition-[background-color,box-shadow,opacity] duration-150 ease-out sm:px-5 ${
         isSelected
-          ? "bg-card shadow-[inset_2px_0_0_var(--foreground)]"
+          ? "editorial-nav-active bg-card"
           : "hover:bg-muted/60 active:bg-muted/80"
       } ${isDone ? "opacity-75" : ""}`}
     >
@@ -110,7 +110,7 @@ export const NewsCard = React.memo(function NewsCard({
           <span
             aria-label="Chưa đọc"
             title="Chưa đọc"
-            className="size-1.5 shrink-0 rounded-full bg-[var(--editorial-accent)]"
+            className="size-1.5 shrink-0 rounded-full bg-[var(--editorial-accent-rail)]"
           />
         )}
         <PlatformIcon platform={item.platform} />

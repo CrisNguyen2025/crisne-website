@@ -1,6 +1,6 @@
-# Kịch bản kiểm thử: Theme Default / Apple / Railway / PostHog (roadmap và news)
+# Kịch bản kiểm thử: Theme Figma (Mặc định) & Brand Options (roadmap và news)
 
-Phạm vi: nút "Tùy chọn" (…) đổi theme của vùng `.roadmap-theme`. Code: `hooks/use-design.ts`, `components/design-menu.tsx`, `app/styles/{apple,railway,posthog}-theme.css`, font `--font-plex-serif` trong `app/layout.tsx`, header của `PublicationHome`, `LectureShell`, `NewsFeedClient`. Quy ước: `docs/design-system.md` mục "Theme roadmap và news".
+Phạm vi: nút "Tùy chọn" (…) đổi theme của vùng `.roadmap-theme`. Code: `hooks/use-design.ts`, `components/design-menu.tsx`, `app/styles/roadmap-theme.css` (Figma mặc định), `app/styles/{perplexity,cursor,anthropic,linear,letters,stripe,discord,apple,railway,posthog}-theme.css`, header của `PublicationHome`, `LectureShell`, `NewsFeedClient`. Quy ước: `docs/design-system.md` mục "Theme roadmap và news".
 
 ## Chuẩn bị
 

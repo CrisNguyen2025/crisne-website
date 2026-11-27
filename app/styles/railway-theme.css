@@ -47,7 +47,9 @@ html[data-design="railway"] .roadmap-theme {
   --editorial-sidebar-active: rgb(157 78 221 / 10%);
   /* repo: #9d4edd as small text on #13111c is 4.0:1; a lighter purple keeps the 4.5:1 rule */
   --editorial-accent: #b07ee8;
+  --editorial-accent-rail: #9d4edd;
   --editorial-accent-soft: rgb(157 78 221 / 10%);
+  --editorial-paper-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
 
   /* repo: Lesson status keeps its own three colors (ADR-0010), dark values */
   --status-target: oklch(0.78 0.11 245);

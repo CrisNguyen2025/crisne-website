@@ -165,7 +165,7 @@ export function LecturePager({
           <span className="text-xs font-medium text-muted-foreground">
             {prev.label}
           </span>
-          <span className="mt-0.5 truncate text-sm font-medium text-[var(--editorial-accent)]">
+          <span className="mt-0.5 truncate text-sm font-medium text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
             {prev.title}
           </span>
         </Link>
@@ -183,7 +183,7 @@ export function LecturePager({
           <span className="text-xs font-medium text-muted-foreground">
             {next.label}
           </span>
-          <span className="mt-0.5 truncate text-sm font-medium text-[var(--editorial-accent)]">
+          <span className="mt-0.5 truncate text-sm font-medium text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
             {next.title}
           </span>
         </Link>
@@ -409,8 +409,8 @@ export function LectureShell({
               className={cn(
                 "flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150 active:bg-[var(--editorial-sidebar-active)]",
                 isActive
-                  ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
-                  : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-[var(--editorial-accent)]"
+                  ? "editorial-nav-active"
+                  : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
               )}
             >
               {dotClass && (
@@ -674,8 +674,8 @@ export function LectureShell({
               <article
                 {...articleDataAttributes}
                 className={cn(
-                  "min-w-0 w-full max-w-[48rem] transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                  activeView === "summary" ? "xl:max-w-[54rem]" : "xl:max-w-[50rem]",
+                  "min-w-0 w-full max-w-3xl transition-opacity duration-200 ease-out motion-reduce:transition-none sm:rounded-2xl sm:border sm:border-border sm:bg-card sm:px-8 sm:py-8 lg:px-10 lg:py-9 editorial-paper-sm",
+                  activeView === "summary" ? "xl:max-w-4xl" : "xl:max-w-3xl",
                   isTransitioning ? "opacity-65" : "opacity-100"
                 )}
               >

@@ -69,8 +69,8 @@ export const viewport: Viewport = {
   // scrolling the focused field into view, so full-height panels (Abot) don't bounce on focus.
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf9f5" },
-    { media: "(prefers-color-scheme: dark)", color: "#161513" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#050505" },
   ],
 };
 

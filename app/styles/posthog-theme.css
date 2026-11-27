@@ -52,7 +52,9 @@ html[data-design="posthog"] .roadmap-theme {
   --editorial-sidebar-active: rgb(205 132 7 / 14%);
   /* repo: link #f54e00 is 3.1:1 on canvas; a darker orange keeps text at 4.5:1 */
   --editorial-accent: #b33a00;
+  --editorial-accent-rail: #cd8407;
   --editorial-accent-soft: rgb(205 132 7 / 12%);
+  --editorial-paper-shadow: none;
 
   /* repo: Lesson status keeps its own three colors (ADR-0010), light values */
   --status-target: oklch(0.45 0.14 245);
@@ -101,7 +103,9 @@ html.dark[data-design="posthog"] .roadmap-theme {
   --editorial-sidebar-active: rgb(205 132 7 / 16%);
   /* #cd8407 is 6.3:1 on the dark background */
   --editorial-accent: #cd8407;
+  --editorial-accent-rail: #cd8407;
   --editorial-accent-soft: rgb(205 132 7 / 14%);
+  --editorial-paper-shadow: none;
 
   /* repo: Lesson status, dark values */
   --status-target: oklch(0.78 0.11 245);

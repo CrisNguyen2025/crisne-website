@@ -1,0 +1,95 @@
+/*
+ * Cursor theme for roadmap and news pages (.roadmap-theme), picked from DesignMenu
+ * (hooks/use-design.ts sets html[data-design="cursor"]).
+ *
+ * Palette inspired by cursor.com (#f7f7f4 warm stone, #26251e warm ink, #f54e00 signal orange).
+ * Applied with 90/9/1 color restraint.
+ */
+
+html[data-design="cursor"] .roadmap-theme {
+  color-scheme: light;
+
+  --background: #f7f7f4;
+  --foreground: #26251e;
+  --card: #ffffff;
+  --card-foreground: #26251e;
+  --popover: #ffffff;
+  --popover-foreground: #26251e;
+  --primary: #26251e;
+  --primary-foreground: #f7f7f4;
+  --secondary: #f2f1ec;
+  --secondary-foreground: #26251e;
+  --muted: #f6f5f1;
+  --muted-foreground: #5d5b51;
+  --accent: #eceae2;
+  --accent-foreground: #26251e;
+  --border: #e6e4dc;
+  --input: #d5d2c7;
+  --ring: #f54e00;
+  --destructive: #c83e32;
+  --radius: 0.625rem;
+
+  --editorial-sidebar: #f2f1ec;
+  --editorial-sidebar-hover: rgb(38 37 30 / 4.5%);
+  --editorial-sidebar-active: #ffffff;
+  /* repo: #f54e00 is 3.4:1 on white; #b83a00 keeps small text >= 5.7:1 */
+  --editorial-accent: #b83a00;
+  --editorial-accent-rail: #f54e00;
+  --editorial-accent-soft: rgb(245 78 0 / 5%);
+  --editorial-paper-shadow:
+    0 1px 2px rgb(38 37 30 / 0.04),
+    0 8px 24px -12px rgb(38 37 30 / 0.09);
+
+  --status-target: oklch(0.45 0.14 245);
+  --status-target-bg: oklch(0.95 0.025 245);
+  --status-target-border: oklch(0.84 0.055 245);
+  --status-learning: oklch(0.47 0.14 68);
+  --status-learning-bg: oklch(0.955 0.032 78);
+  --status-learning-border: oklch(0.85 0.075 75);
+  --status-known: oklch(0.44 0.12 155);
+  --status-known-bg: oklch(0.952 0.025 155);
+  --status-known-border: oklch(0.84 0.06 155);
+}
+
+html.dark[data-design="cursor"] .roadmap-theme {
+  color-scheme: dark;
+
+  --background: #12110c;
+  --foreground: #f7f7f4;
+  --card: #191712;
+  --card-foreground: #f7f7f4;
+  --popover: #1e1c16;
+  --popover-foreground: #f7f7f4;
+  --primary: #f7f7f4;
+  --primary-foreground: #12110c;
+  --secondary: #201e17;
+  --secondary-foreground: #f7f7f4;
+  --muted: #201e17;
+  --muted-foreground: #a8a59a;
+  --accent: #29261e;
+  --accent-foreground: #f7f7f4;
+  --border: #28251c;
+  --input: #383428;
+  --ring: #ff864d;
+  --destructive: #ef6b5e;
+
+  --editorial-sidebar: #0e0d09;
+  --editorial-sidebar-hover: rgb(247 247 244 / 5%);
+  --editorial-sidebar-active: #201e17;
+  --editorial-accent: #ff864d;
+  --editorial-accent-rail: #f54e00;
+  --editorial-accent-soft: rgb(245 78 0 / 8%);
+  --editorial-paper-shadow:
+    0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 12px 32px -12px rgb(0 0 0 / 0.65);
+
+  --status-target: oklch(0.78 0.11 245);
+  --status-target-bg: oklch(0.25 0.04 245);
+  --status-target-border: oklch(0.38 0.07 245);
+  --status-learning: oklch(0.8 0.12 78);
+  --status-learning-bg: oklch(0.26 0.045 72);
+  --status-learning-border: oklch(0.4 0.08 74);
+  --status-known: oklch(0.77 0.11 155);
+  --status-known-bg: oklch(0.25 0.04 155);
+  --status-known-border: oklch(0.38 0.07 155);
+}

@@ -3,11 +3,34 @@
 import { useSyncExternalStore } from "react";
 
 /** Visual theme for the roadmap and news pages; light/dark is a separate setting (theme-provider) */
-export type Design = "default" | "apple" | "railway" | "posthog";
+export type Design =
+  | "default"
+  | "perplexity"
+  | "cursor"
+  | "anthropic"
+  | "linear"
+  | "letters"
+  | "stripe"
+  | "discord"
+  | "apple"
+  | "railway"
+  | "posthog";
 
 const STORAGE_KEY = "design";
 const DEFAULT_DESIGN: Design = "default";
-const DESIGNS: readonly Design[] = ["default", "apple", "railway", "posthog"];
+export const DESIGNS: readonly Design[] = [
+  "default",
+  "perplexity",
+  "cursor",
+  "anthropic",
+  "linear",
+  "letters",
+  "stripe",
+  "discord",
+  "apple",
+  "railway",
+  "posthog",
+];
 
 function isDesign(value: string | null | undefined): value is Design {
   return DESIGNS.includes(value as Design);
@@ -25,7 +48,7 @@ function readStoredDesign(): Design {
   }
 }
 
-// app/styles/{apple,railway,posthog}-theme.css key off this attribute
+// app/styles/*-theme.css key off this attribute; "default" uses app/styles/roadmap-theme.css (Figma)
 function applyDesign(design: Design) {
   const root = globalThis.document?.documentElement;
   if (!root) return;

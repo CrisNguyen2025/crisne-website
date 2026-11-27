@@ -5,6 +5,13 @@
 @import "./spacing.css";
 @import "./font-optimization.css";
 @import "./roadmap-theme.css";
+@import "./perplexity-theme.css";
+@import "./cursor-theme.css";
+@import "./anthropic-theme.css";
+@import "./linear-theme.css";
+@import "./letters-theme.css";
+@import "./stripe-theme.css";
+@import "./discord-theme.css";
 @import "./apple-theme.css";
 @import "./railway-theme.css";
 @import "./posthog-theme.css";

@@ -28,6 +28,7 @@ import type {
 import { useCanWrite } from "@/hooks/use-can-write";
 import { useCollapseRightRail } from "@/hooks/use-abot-sidebar";
 import { ActionMenu } from "@/components/ui/action-menu";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
 import { cn, getScrollBehavior } from "@/lib/utils";
@@ -106,6 +107,7 @@ export function TopicEditorialPage({
   const [targetSection, setTargetSection] = useState<string | null>(null);
   const [isEditTopicOpen, setIsEditTopicOpen] = useState(false);
   const [renamingSection, setRenamingSection] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | LessonStatus>("all");
 
   const baseKey = useMemo(
     () =>
@@ -169,6 +171,16 @@ export function TopicEditorialPage({
 
   const isSingleUnscopedGroup =
     siblingGroups.length === 1 && siblingGroups[0].section === null;
+
+  const filteredGroups = useMemo<SectionGroup[]>(() => {
+    if (!canWrite || statusFilter === "all") return siblingGroups;
+    return siblingGroups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter((it) => (it.status ?? "known") === statusFilter),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [canWrite, siblingGroups, statusFilter]);
 
   useEffect(() => {
     if (!initialSelectedSection || initialSelectedSection === "all") return;
@@ -573,16 +585,50 @@ export function TopicEditorialPage({
             )}
 
             <section aria-labelledby="h-curriculum">
-              <h2
-                id="h-curriculum"
-                className="scroll-mt-16 border-t border-border pt-6 font-display text-[1.5rem] font-normal leading-snug tracking-[-0.015em] text-foreground sm:text-[1.75rem]"
-              >
-                Nội dung lộ trình
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6">
+                <h2
+                  id="h-curriculum"
+                  className="scroll-mt-16 font-display text-2xl font-normal leading-snug tracking-tight text-foreground"
+                >
+                  Nội dung lộ trình
+                </h2>
+                {canWrite && (
+                  <div
+                    role="group"
+                    aria-label="Lọc bài học theo trạng thái"
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    {(
+                      [
+                        { id: "all", label: `Tất cả (${items.length})` },
+                        { id: "learning", label: `Đang học (${ownerTotals.learning})` },
+                        { id: "target", label: `Mục tiêu (${ownerTotals.target})` },
+                        { id: "known", label: "Đã nắm" },
+                      ] as const
+                    ).map((opt) => (
+                      <Button
+                        key={opt.id}
+                        type="button"
+                        size="sm"
+                        variant={statusFilter === opt.id ? "default" : "outline"}
+                        onClick={() => setStatusFilter(opt.id)}
+                        className="h-7 cursor-pointer rounded-full px-3 text-xs"
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-              {isSingleUnscopedGroup ? (
-                <ul className="mt-4 space-y-3">
-                  {siblingGroups[0].items.map((item) => {
+              {filteredGroups.length === 0 && (
+                <p className="mt-6 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                  Không có bài học nào khớp trạng thái đang chọn.
+                </p>
+              )}
+              {filteredGroups.length > 0 && isSingleUnscopedGroup && (
+                <ul className="mt-4 divide-y divide-border">
+                  {filteredGroups[0].items.map((item) => {
                     const dotClass =
                       canWrite && item.status && item.status !== "known"
                         ? STATUS_DOT[item.status]
@@ -590,37 +636,43 @@ export function TopicEditorialPage({
                     return (
                       <li
                         key={item.id}
-                        className="flex items-baseline gap-2.5 text-sm leading-relaxed"
+                        className="flex items-baseline justify-between gap-3 py-2.5 text-sm leading-relaxed"
                       >
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "mt-2 size-1.5 shrink-0 rounded-full",
-                            dotClass || "bg-[var(--editorial-accent)]"
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <Link
-                            href={lessonPath(topic.slug, item.slug || item.id)}
-                            prefetch={true}
-                            className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
-                          >
-                            {item.title}
-                          </Link>
-                          {item.description && (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              — {item.description}
-                            </span>
-                          )}
+                        <div className="flex min-w-0 items-baseline gap-2.5">
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              "mt-2 size-1.5 shrink-0 rounded-full",
+                              dotClass || "bg-muted-foreground/50"
+                            )}
+                          />
+                          <div className="min-w-0">
+                            <Link
+                              href={lessonPath(topic.slug, item.slug || item.id)}
+                              prefetch={true}
+                              className="font-medium text-foreground transition-colors hover:text-[var(--editorial-accent)] hover:underline underline-offset-4"
+                            >
+                              {item.title}
+                            </Link>
+                            {item.description && (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                — {item.description}
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {canWrite && item.status && item.status !== "known" && (
+                          <LessonStatusBadge status={item.status} />
+                        )}
                       </li>
                     );
                   })}
                 </ul>
-              ) : (
+              )}
+              {filteredGroups.length > 0 && !isSingleUnscopedGroup && (
                 <div className="mt-5 space-y-8">
-                  {siblingGroups.map((group, idx) => {
+                  {filteredGroups.map((group, idx) => {
                     const { primary, sub } = splitSectionLabel(group.section);
                     return (
                       <section
@@ -692,7 +744,7 @@ export function TopicEditorialPage({
                           </div>
                         </div>
 
-                        <ul className="mt-3 space-y-2.5">
+                        <ul className="mt-3 divide-y divide-border">
                           {group.items.map((item) => {
                             const dotClass =
                               canWrite && item.status && item.status !== "known"
@@ -701,33 +753,38 @@ export function TopicEditorialPage({
                             return (
                               <li
                                 key={item.id}
-                                className="flex items-baseline gap-2.5 text-sm leading-relaxed"
+                                className="flex items-baseline justify-between gap-3 py-2.5 text-sm leading-relaxed"
                               >
-                                <span
-                                  aria-hidden="true"
-                                  className={cn(
-                                    "mt-2 size-1.5 shrink-0 rounded-full",
-                                    dotClass || "bg-[var(--editorial-accent)]"
-                                  )}
-                                />
-                                <div className="min-w-0">
-                                  <Link
-                                    href={lessonPath(
-                                      topic.slug,
-                                      item.slug || item.id
+                                <div className="flex min-w-0 items-baseline gap-2.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className={cn(
+                                      "mt-2 size-1.5 shrink-0 rounded-full",
+                                      dotClass || "bg-muted-foreground/50"
                                     )}
-                                    prefetch={true}
-                                    className="font-medium text-[var(--editorial-accent)] hover:underline underline-offset-4"
-                                  >
-                                    {item.title}
-                                  </Link>
-                                  {item.description && (
-                                    <span className="text-muted-foreground">
-                                      {" "}
-                                      — {item.description}
-                                    </span>
-                                  )}
+                                  />
+                                  <div className="min-w-0">
+                                    <Link
+                                      href={lessonPath(
+                                        topic.slug,
+                                        item.slug || item.id
+                                      )}
+                                      prefetch={true}
+                                      className="font-medium text-foreground transition-colors hover:text-[var(--editorial-accent)] hover:underline underline-offset-4"
+                                    >
+                                      {item.title}
+                                    </Link>
+                                    {item.description && (
+                                      <span className="text-muted-foreground">
+                                        {" "}
+                                        — {item.description}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                                {canWrite && item.status && item.status !== "known" && (
+                                  <LessonStatusBadge status={item.status} />
+                                )}
                               </li>
                             );
                           })}

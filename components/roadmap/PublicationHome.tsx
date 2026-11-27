@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Newspaper, Plus, Search } from "lucide-react";
+import { ArrowRight, Newspaper, Plus, Search } from "lucide-react";
 import type {
   PublicationTopicSummary,
   RecentLessonSummary,
@@ -186,19 +186,59 @@ export function PublicationHome({
                   <Newspaper className="size-3.5 text-muted-foreground" />
                   <span>News</span>
                 </Link>
-                <button
+                <Button
                   type="button"
+                  size="lg"
                   onClick={() => setIsCreateTopicOpen(true)}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground transition-[background-color,transform] duration-150 ease-out hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+                  className="cursor-pointer px-3 text-xs"
                 >
                   <Plus className="size-3.5" />
                   <span>Tạo topic</span>
-                </button>
+                </Button>
               </>
             )}
             <DesignMenu triggerClassName="size-9" />
           </div>
         </header>
+
+        {visibleRecentLessons.length > 0 && (
+          <section className="mt-8" aria-label="Tiếp tục đọc">
+            <Link
+              href={lessonPath(
+                visibleRecentLessons[0].topicSlug,
+                visibleRecentLessons[0].slug
+              )}
+              prefetch={true}
+              className="editorial-accent-rail-card group flex flex-col justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-[border-color,transform] duration-150 ease-out hover:border-foreground/25 active:scale-[0.995] sm:flex-row sm:items-center sm:p-6"
+            >
+              <div className="min-w-0 space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  <span className="text-[var(--editorial-accent)]">
+                    Tiếp tục đọc
+                  </span>
+                  <span aria-hidden="true"> · </span>
+                  <span>{visibleRecentLessons[0].topicTitle}</span>
+                  <span aria-hidden="true"> · </span>
+                  <span className="tabular-nums">
+                    {formatFriendlyTime(visibleRecentLessons[0].updatedAt)}
+                  </span>
+                </p>
+                <h2 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                  {visibleRecentLessons[0].title}
+                </h2>
+                {visibleRecentLessons[0].description && (
+                  <p className="line-clamp-1 text-sm text-muted-foreground">
+                    {visibleRecentLessons[0].description}
+                  </p>
+                )}
+              </div>
+              <span className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground transition-opacity group-hover:opacity-90">
+                <span>Đọc tiếp</span>
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </span>
+            </Link>
+          </section>
+        )}
 
         <section className="mt-10" aria-labelledby="topics-heading">
           <h2
@@ -209,7 +249,7 @@ export function PublicationHome({
           </h2>
 
           {visibleTopics.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+            <div className="mt-4 rounded-2xl border border-dashed border-border bg-card px-6 py-12 text-center">
               <p className="text-sm text-muted-foreground">
                 Chưa có Topic nào.
               </p>
@@ -221,11 +261,11 @@ export function PublicationHome({
                   key={topic.slug}
                   href={topicPath(topic.slug)}
                   prefetch={true}
-                  className="group flex flex-col justify-between rounded-xl border border-border bg-card p-5 transition-[border-color,background-color,box-shadow,transform] duration-150 ease-out hover:border-[var(--editorial-accent)] hover:shadow-xs active:scale-[0.99]"
+                  className="editorial-paper group flex flex-col justify-between rounded-2xl border border-border bg-card p-5 transition-[border-color,transform] duration-150 ease-out hover:-translate-y-0.5 hover:border-foreground/25 active:scale-[0.99]"
                 >
                   <div>
                     <div className="flex items-baseline justify-between gap-3">
-                      <h3 className="line-clamp-2 text-[0.9375rem] font-semibold tracking-tight text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
+                      <h3 className="line-clamp-2 text-base font-semibold tracking-tight text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
                         {topic.title}
                       </h3>
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
@@ -238,7 +278,7 @@ export function PublicationHome({
                       </p>
                     )}
                   </div>
-                  <p className="mt-4 text-[0.6875rem] tabular-nums text-muted-foreground/80">
+                  <p className="mt-4 border-t border-border pt-3 text-xs tabular-nums text-muted-foreground">
                     {topic.sectionNames.length} mục
                   </p>
                 </Link>
@@ -247,9 +287,9 @@ export function PublicationHome({
           )}
         </section>
 
-        {visibleRecentLessons.length > 0 && (
+        {visibleRecentLessons.length > 1 && (
           <section
-            className="mt-12 max-w-3xl"
+            className="mt-10"
             aria-labelledby="recent-lessons-heading"
           >
             <h2
@@ -259,13 +299,13 @@ export function PublicationHome({
               Mới cập nhật
             </h2>
 
-            <div className="mt-3 divide-y divide-border border-t border-border">
-              {visibleRecentLessons.map((lesson) => (
+            <div className="editorial-paper mt-3 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {visibleRecentLessons.slice(1).map((lesson) => (
                 <Link
                   key={lesson.id}
                   href={lessonPath(lesson.topicSlug, lesson.slug)}
                   prefetch={true}
-                  className="group -mx-2 flex flex-col gap-0.5 rounded-lg px-2 py-3 text-sm transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] active:bg-[var(--editorial-sidebar-active)] sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                  className="group flex flex-col gap-0.5 px-4 py-3 text-sm transition-colors duration-150 hover:bg-muted/60 active:bg-muted sm:flex-row sm:items-baseline sm:justify-between sm:gap-4 sm:px-5"
                 >
                   <div className="min-w-0 sm:truncate">
                     <span className="font-medium text-foreground transition-colors group-hover:text-[var(--editorial-accent)]">
