@@ -466,8 +466,8 @@ export default function ImageComponent({
               src={getMediaUrl({ url: src })}
               alt={altText}
               preview={{
-                visible: showFullscreen,
-                onVisibleChange: (vis) => setShowFullscreen(vis),
+                open: showFullscreen,
+                onOpenChange: (open) => setShowFullscreen(open),
               }}
             />
           </div>

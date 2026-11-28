@@ -639,13 +639,8 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
           value={activeFormats.blockType}
           style={{ width: 110 }}
           disabled={disabled}
-        >
-          {Object.entries(BlockTypeToBlockName).map(([value, title]) => (
-            <Select.Option value={value} key={value}>
-              {title}
-            </Select.Option>
-          ))}
-        </Select>
+          options={Object.entries(BlockTypeToBlockName).map(([value, title]) => ({ value, label: title }))}
+        />
       </Tooltip>
 
       <ToolbarButtonGroup>
@@ -875,7 +870,7 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
         }
         width={420}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <form
           onSubmit={(e) => {
@@ -953,7 +948,7 @@ export const ToolbarPlugin = ({ editor: propEditor, disabled }: Props) => {
         }
         width={440}
         centered
-        destroyOnClose
+        destroyOnHidden
       >
         <div className='flex flex-col gap-4 mt-4'>
           {/* Upload Local File Box */}
