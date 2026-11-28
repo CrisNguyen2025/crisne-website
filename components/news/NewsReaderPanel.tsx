@@ -7,12 +7,14 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  RotateCw,
   Trash2,
   X,
 } from "lucide-react";
 import { formatNewsContentType } from "@/lib/news/content-type";
 import type { ExtractionMethod, NewsItemDto } from "@/lib/news/schemas";
 import { dayjs } from "@/lib/roadmap/date-utils";
+import { Button } from "@/components/ui/button";
 import { AddToLessonSheet } from "./AddToLessonSheet";
 import { EmphasisText } from "./EmphasisText";
 import { NewsDecisionBar } from "./NewsDecisionBar";
@@ -23,6 +25,7 @@ interface NewsReaderPanelProps {
   duplicateTitle?: string;
   isUpdating?: boolean;
   isDeleting?: boolean;
+  isRetrying?: boolean;
   onToggleRead: (item: NewsItemDto, nextState: "read" | "unread") => void;
   onToggleSave: (item: NewsItemDto) => void;
   onDismiss: (item: NewsItemDto) => void;
@@ -30,6 +33,8 @@ interface NewsReaderPanelProps {
   onDelete: (item: NewsItemDto) => void;
   onUpdateTags: (item: NewsItemDto, tags: string[]) => Promise<void>;
   onOpenExternal: (item: NewsItemDto) => void;
+  /** Re-queues a failed or partial item; the retry button is hidden when omitted */
+  onRetry?: (item: NewsItemDto) => void;
   /** Opens another item by id in the reader, e.g. the possible duplicate */
   onOpenItem?: (itemId: string) => void;
   /** Skip the mount fade-in when hosted inside MobileNewsDrawer so the slide transition stays crisp */
@@ -66,6 +71,7 @@ export function NewsReaderPanel({
   duplicateTitle,
   isUpdating = false,
   isDeleting = false,
+  isRetrying = false,
   onToggleRead,
   onToggleSave,
   onDismiss,
@@ -74,6 +80,7 @@ export function NewsReaderPanel({
   onUpdateTags,
   onOpenExternal,
   onOpenItem,
+  onRetry,
   animateMount = true,
 }: NewsReaderPanelProps) {
   const isSummaryReady = item.ingestStatus === "ready" && item.reviewStatus !== "dismissed";
@@ -122,6 +129,8 @@ export function NewsReaderPanel({
 
   const isWorking =
     item.ingestStatus === "queued" || item.ingestStatus === "processing";
+  const canRetry =
+    Boolean(onRetry) && (item.ingestStatus === "failed" || item.ingestStatus === "partial");
   const publishedAt = item.publishedAt ?? item.createdAt;
   const contentTypeLabel = isPendingIngest(item) ? null : formatNewsContentType(item.tags);
   const safeThumbnailUrl = item.thumbnailUrl ? toSafeHttpHref(item.thumbnailUrl) : undefined;
@@ -262,6 +271,19 @@ export function NewsReaderPanel({
             {item.extractionError && (
               <div className="mt-5 [overflow-wrap:anywhere] rounded-lg bg-[var(--editorial-accent-soft)] px-3 py-2.5 text-sm text-destructive">
                 {item.extractionError}
+                {canRetry && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 flex"
+                    disabled={isRetrying || isDeleting}
+                    onClick={() => onRetry?.(item)}
+                  >
+                    <RotateCw className={isRetrying ? "animate-spin" : undefined} />
+                    {isRetrying ? "Đang gửi lại" : "Thử lại"}
+                  </Button>
+                )}
               </div>
             )}
 

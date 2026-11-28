@@ -19,6 +19,7 @@ File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsRead
 | N13 | Reader của một bài `ready` | Không còn nút "Public"/"Đang public", danh sách không còn badge Public; "Đưa vào Lesson" vẫn có |
 | N14 | Shortcut PWA (cài lại app trên Android) "Feed Ingestion" và "RSS Sources" | Mở đúng `/news` và `/news/sources` |
 | N15 | Thêm link bài ảnh TikTok `https://www.tiktok.com/@trihuynh.dev2026/photo/7712881150922247445`, sau đó chạy lại với "Đọc sâu" (`forceDeep`) | Lần đầu: `extractionMethod` là `description` (caption 1051 ký tự), có tiêu đề, TL;DR, ý chính, tag, không còn lỗi `Unsupported URL`. Đọc sâu: `vision`, nội dung có chữ đọc từ slide ("Ảnh 1: ..."). Không lấy được ảnh thì lỗi có tiền tố `[PHOTO_POST]` (TASK-tiktok-photo-post-001) |
+| N16 | Mở một bài đang lỗi (`partial`/`failed`, có dòng lỗi đỏ) trong panel đọc, bấm Thử lại | Nút nằm dưới dòng lỗi, đổi thành "Đang gửi lại" và bị khoá khi đang gửi; `POST /api/news/<id>/reingest` body `{"forceDeep":false}` trả 202; toast "Đã đưa bài vào hàng đợi tóm tắt lại"; bài chuyển sang Trong hàng đợi → Đang tóm tắt. Bài `ready` không có lỗi thì không hiện nút |
 
 ## Ghi kết quả
 

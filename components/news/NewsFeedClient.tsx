@@ -862,6 +862,7 @@ export function NewsFeedClient({
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [workerHealth, setWorkerHealth] = useState<NewsWorkerHealthDto | null>(() =>
     initialWorkerHealth ??
     (workerConfigured ? null : { configured: false, status: "unconfigured" })
@@ -1142,6 +1143,25 @@ export function NewsFeedClient({
     [displayData.items, refreshFeed, selectedItem, toast]
   );
 
+  const handleRetry = useCallback(
+    async (item: NewsItemDto) => {
+      setRetryingId(item.id);
+      try {
+        await newsService.reingestNewsItem(item.id, false);
+        await refreshFeed({ invalidateCache: true });
+        toast("Đã đưa bài vào hàng đợi tóm tắt lại", "success");
+      } catch (error) {
+        toast(
+          error instanceof Error ? error.message : "Không thể tóm tắt lại bài tin.",
+          "error"
+        );
+      } finally {
+        setRetryingId(null);
+      }
+    },
+    [refreshFeed, toast]
+  );
+
   const handleOpenPaste = useCallback(() => setIsPasteOpen(true), []);
   // Keyboard shortcuts: 'N' quick paste, 'J'/'K' navigate, 'S' toggle save
   useFeedKeyboardShortcuts({
@@ -1282,6 +1302,7 @@ export function NewsFeedClient({
         }
         isUpdating={busyItemId === item.id}
         isDeleting={deletingId === item.id}
+        isRetrying={retryingId === item.id}
         onToggleRead={handleToggleRead}
         onToggleSave={handleToggleSave}
         onDismiss={handleDismiss}
@@ -1290,6 +1311,7 @@ export function NewsFeedClient({
         onUpdateTags={handleUpdateTags}
         onOpenExternal={handleOpenExternal}
         onOpenItem={handleOpenItem}
+        onRetry={handleRetry}
       />
     ),
     [
@@ -1301,9 +1323,11 @@ export function NewsFeedClient({
       handleOpenExternal,
       handleOpenItem,
       handleReopen,
+      handleRetry,
       handleToggleRead,
       handleToggleSave,
       handleUpdateTags,
+      retryingId,
     ]
   );
 

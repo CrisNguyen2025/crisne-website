@@ -101,6 +101,57 @@ describe("news feed UI components", () => {
     return { props, ...render(<NewsReaderPanel {...props} />) };
   }
 
+  it("shows a retry button only for failed or partial items with an extraction error", () => {
+    const failed = makeItem({
+      ingestStatus: "partial",
+      tldr: null,
+      extractionMethod: "metadata_only",
+      extractionError: "Metadata: ERROR: Unsupported URL",
+    });
+    const onRetry = vi.fn();
+    renderPanel(failed, { onRetry });
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    expect(onRetry).toHaveBeenCalledWith(failed);
+
+    cleanup();
+    renderPanel(failed, { onRetry, isRetrying: true });
+    const pending = screen.getByRole("button", { name: "Đang gửi lại" }) as HTMLButtonElement;
+    expect(pending.disabled).toBe(true);
+
+    cleanup();
+    renderPanel(makeItem({ ingestStatus: "queued", extractionError: "Lỗi cũ" }), { onRetry });
+    expect(screen.queryByRole("button", { name: "Thử lại" })).toBeNull();
+
+    cleanup();
+    renderPanel(failed);
+    expect(screen.queryByRole("button", { name: "Thử lại" })).toBeNull();
+  });
+
+  it("reingestNewsItem posts to the reingest route without forcing deep extraction", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ item: makeItem(), jobId: "job-2" }), { status: 202 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await newsService.reingestNewsItem("news 1", false);
+      expect(result.jobId).toBe("job-2");
+      expect(fetchMock).toHaveBeenCalledWith("/api/news/news%201/reingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceDeep: false }),
+      });
+
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "News item not found" }), { status: 404 })
+      );
+      await expect(newsService.reingestNewsItem("missing", false)).rejects.toThrow(
+        "News item not found"
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("renders NewsReaderPanel details, thumbnail, 2-step delete, and tag editing without personal note", async () => {
     const item = makeItem({
       possibleDuplicateOfId: "news-0",
