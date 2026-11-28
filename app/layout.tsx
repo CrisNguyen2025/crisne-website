@@ -69,7 +69,7 @@ export const viewport: Viewport = {
   // scrolling the focused field into view, so full-height panels (Abot) don't bounce on focus.
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#050505" },
   ],
 };
@@ -161,6 +161,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-design="apple"
       className={`${inter.variable} ${jetbrainsMono.variable} ${fraunces.variable} ${ibmPlexSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >

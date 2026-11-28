@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useAnimatedPresence } from "@/hooks/use-animated-presence";
+import { useBottomSheetDrag } from "@/hooks/use-bottom-sheet-drag";
 import { useCanWrite } from "@/hooks/use-can-write";
 import { Button } from "@/components/ui/button";
 import { useMounted, useOverlay } from "@/components/ui/dialog";
@@ -125,6 +126,11 @@ export function GlobalSearchPalette() {
     closeGlobalSearch();
   }, []);
 
+  const { isExpanded, sheetRef, backdropRef, sheetTouchHandlers } = useBottomSheetDrag({
+    open: effectiveOpen,
+    onClose: handleClose,
+  });
+
   useOverlay(effectiveOpen, handleClose);
 
   const runSearch = useCallback(
@@ -228,6 +234,7 @@ export function GlobalSearchPalette() {
 
   useEffect(() => {
     if (!effectiveOpen) return;
+    if (window.matchMedia?.("(max-width: 639px)").matches) return;
     const rafId = window.requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
@@ -323,71 +330,106 @@ export function GlobalSearchPalette() {
       aria-hidden={!effectiveOpen || undefined}
     >
       <div
+        ref={backdropRef}
         className={cn(
-          "absolute inset-0 bg-foreground/40 backdrop-blur-xs transition-opacity ease-out motion-reduce:transition-none",
-          isVisible ? "opacity-100 duration-150" : "opacity-0 duration-150"
+          "absolute inset-0 bg-foreground/40 sm:backdrop-blur-xs transition-opacity ease-out motion-reduce:transition-none",
+          isVisible ? "opacity-100 duration-250" : "opacity-0 duration-200"
         )}
         onClick={effectiveOpen ? handleClose : undefined}
       />
 
       <div
+        ref={sheetRef}
         role={effectiveOpen ? "dialog" : undefined}
         aria-modal={effectiveOpen ? "true" : undefined}
         aria-label="Tìm kiếm nhanh toàn workspace"
+        {...sheetTouchHandlers}
         className={cn(
-          "roadmap-theme relative flex max-h-128 w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card text-card-foreground shadow-xl transition-[transform,opacity] ease-out motion-reduce:transition-none sm:max-w-2xl sm:rounded-2xl",
+          "roadmap-theme relative flex w-full flex-col overflow-hidden border border-border bg-card pb-[env(safe-area-inset-bottom)] text-card-foreground shadow-xl transition-[transform,opacity,height,max-height,border-radius] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:h-auto sm:max-h-128 sm:max-w-2xl sm:rounded-2xl sm:border sm:pt-0 sm:pb-0",
+          isExpanded
+            ? "h-dvh max-h-dvh rounded-none border-x-0 border-t-0 pt-[env(safe-area-inset-top)]"
+            : "h-[82dvh] max-h-[90dvh] rounded-t-2xl",
           isVisible
-            ? "translate-y-0 opacity-100 duration-150 sm:scale-100"
-            : "translate-y-3 opacity-0 duration-150 sm:translate-y-1 sm:scale-95"
+            ? "translate-y-0 opacity-100 duration-300 sm:scale-100"
+            : "translate-y-full opacity-0 duration-200 sm:translate-y-1 sm:scale-95"
         )}
       >
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <input
-            ref={inputRef}
-            type="search"
-            value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="Tìm Topic, bài học, mục nội dung hoặc News…"
-            aria-label="Tìm kiếm Topic, Bài học và News"
-            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-          />
-          {isLoading && (
-            <Loader2
-              className="size-4 shrink-0 animate-spin text-muted-foreground"
-              aria-label="Đang tìm kiếm"
-            />
-          )}
-          {query && (
+        <div
+          data-sheet-handle
+          className="shrink-0 touch-none select-none border-b border-border sm:hidden"
+        >
+          <div className="flex justify-center pt-2 pb-0.5" aria-hidden="true">
+            <span className="h-1 w-9 rounded-full bg-muted-foreground/30" />
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2">
             <Button
               type="button"
               variant="ghost"
-              size="icon-xs"
-              aria-label="Xoá từ khoá"
-              onClick={() => {
-                handleQueryChange("");
-                inputRef.current?.focus();
-              }}
+              size="icon-lg"
+              aria-label="Đóng"
+              className="size-10 shrink-0 rounded-full text-muted-foreground"
+              onClick={handleClose}
             >
-              <X className="size-3.5" />
+              <X className="size-5" />
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Đóng tìm kiếm"
-            onClick={handleClose}
-          >
-            <X className="size-4" />
-          </Button>
+            <h2 className="min-w-0 flex-1 text-center text-base font-semibold text-foreground">
+              Tìm kiếm
+            </h2>
+            <span aria-hidden="true" className="size-10 shrink-0" />
+          </div>
+        </div>
+
+        <div className="px-4 pt-3 pb-2 sm:p-0">
+          <div className="flex h-11 items-center gap-2 rounded-xl border border-input bg-background px-3 focus-within:ring-2 focus-within:ring-ring sm:h-auto sm:rounded-none sm:border-0 sm:border-b sm:border-border sm:bg-transparent sm:px-4 sm:py-3 sm:focus-within:ring-0">
+            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <input
+              ref={inputRef}
+              type="search"
+              value={query}
+              onChange={(e) => handleQueryChange(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Tìm Topic, bài học, mục nội dung hoặc News…"
+              aria-label="Tìm kiếm Topic, Bài học và News"
+              className="min-w-0 flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-sm"
+            />
+            {isLoading && (
+              <Loader2
+                className="size-4 shrink-0 animate-spin text-muted-foreground"
+                aria-label="Đang tìm kiếm"
+              />
+            )}
+            {query && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Xoá từ khoá"
+                className="size-8 sm:size-6"
+                onClick={() => {
+                  handleQueryChange("");
+                  inputRef.current?.focus();
+                }}
+              >
+                <X className="size-3.5" />
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Đóng tìm kiếm"
+              className="hidden size-6 sm:inline-flex"
+              onClick={handleClose}
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
         </div>
 
         <div
           role="group"
           aria-label="Phạm vi tìm kiếm"
-          className="flex items-center gap-1 border-b border-border bg-muted/40 px-4 py-2"
+          className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-4 py-2 sm:gap-1"
         >
           {SCOPE_OPTIONS.map((opt) => {
             const isSelected = scope === opt.id;
@@ -398,6 +440,7 @@ export function GlobalSearchPalette() {
                 aria-pressed={isSelected}
                 variant={isSelected ? "secondary" : "ghost"}
                 size="xs"
+                className="h-8 px-2.5 sm:h-6 sm:px-2"
                 onClick={() => handleScopeChange(opt.id)}
               >
                 {opt.label}
@@ -464,7 +507,7 @@ export function GlobalSearchPalette() {
                               navigateTo(topic.href);
                             }}
                             className={cn(
-                              "flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                              "flex min-h-11 items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors sm:min-h-0 sm:py-2",
                               isActive
                                 ? "bg-[var(--editorial-sidebar-active)]"
                                 : "hover:bg-[var(--editorial-sidebar-hover)]"
@@ -519,7 +562,7 @@ export function GlobalSearchPalette() {
                               navigateTo(lesson.href);
                             }}
                             className={cn(
-                              "flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                              "flex min-h-11 items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors sm:min-h-0 sm:py-2",
                               isActive
                                 ? "bg-[var(--editorial-sidebar-active)]"
                                 : "hover:bg-[var(--editorial-sidebar-hover)]"
@@ -577,7 +620,7 @@ export function GlobalSearchPalette() {
                               navigateTo(news.href);
                             }}
                             className={cn(
-                              "flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                              "flex min-h-11 items-start gap-2.5 rounded-lg px-2.5 py-2.5 text-left transition-colors sm:min-h-0 sm:py-2",
                               isActive
                                 ? "bg-[var(--editorial-sidebar-active)]"
                                 : "hover:bg-[var(--editorial-sidebar-hover)]"

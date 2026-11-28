@@ -110,7 +110,7 @@ function LessonStatusMenu({
         aria-label={`Trạng thái: ${label}. Đổi trạng thái`}
         onClick={() => setIsOpen((v) => !v)}
         className={cn(
-          "-ml-1.5 h-7 gap-1.5 rounded-md border-0 bg-transparent px-1.5 text-xs font-medium cursor-pointer",
+          "-ml-1.5 h-9 gap-1.5 rounded-md border-0 bg-transparent px-2 text-xs font-medium cursor-pointer sm:h-7 sm:px-1.5",
           STATUS_TRIGGER_TONE[currentStatus]
         )}
       >
@@ -649,12 +649,12 @@ export function LessonEditorialReader({
             )}
           </nav>
 
-          <h1 className="font-sans text-3xl font-semibold leading-tight tracking-tight text-foreground text-balance lg:text-4xl">
+          <h1 className="font-sans text-2xl font-semibold leading-tight tracking-tight text-foreground text-balance sm:text-3xl lg:text-4xl">
             {lesson.title}
           </h1>
 
           {lesson.description && (
-            <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground sm:text-lg">
               {lesson.description}
             </p>
           )}
@@ -677,7 +677,7 @@ export function LessonEditorialReader({
             </span>
 
             {canWrite && (
-              <div className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
+              <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap sm:gap-1">
                 <Button
                   type="button"
                   variant="ghost"
@@ -687,7 +687,7 @@ export function LessonEditorialReader({
                   onClick={openContentEditor}
                   aria-label={contentActionLabel}
                   title={contentActionLabel}
-                  className="cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+                  className="size-9 cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground sm:size-7"
                 >
                   <Pencil className="size-4" />
                 </Button>

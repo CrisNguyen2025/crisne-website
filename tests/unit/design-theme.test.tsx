@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DesignMenu } from "@/components/design-menu";
-import { DESIGNS, setDesign, useDesign } from "@/hooks/use-design";
+import {
+  DEFAULT_DESIGN,
+  DESIGNS,
+  ENABLE_DESIGN_SWITCHER,
+  setDesign,
+  useDesign,
+} from "@/hooks/use-design";
 
 function DesignProbe() {
   const design = useDesign();
@@ -14,7 +20,7 @@ describe("useDesign and DesignMenu", () => {
   beforeEach(() => {
     window.localStorage.clear();
     delete document.documentElement.dataset.design;
-    setDesign("default");
+    setDesign(DEFAULT_DESIGN);
   });
 
   afterEach(() => {
@@ -23,13 +29,14 @@ describe("useDesign and DesignMenu", () => {
     delete document.documentElement.dataset.design;
   });
 
-  it("defaults to Figma ('default') with no data-design attribute", () => {
+  it("defaults to Apple ('apple') and applies data-design='apple'", () => {
     render(<DesignProbe />);
-    expect(screen.getByTestId("current-design").textContent).toBe("default");
-    expect(document.documentElement.dataset.design).toBeUndefined();
+    expect(DEFAULT_DESIGN).toBe("apple");
+    expect(screen.getByTestId("current-design").textContent).toBe("apple");
+    expect(document.documentElement.dataset.design).toBe("apple");
   });
 
-  it("supports all 11 registered themes and applies data-design attribute", () => {
+  it("keeps all 11 registered themes and applies data-design attribute", () => {
     expect(DESIGNS).toEqual([
       "default",
       "perplexity",
@@ -56,7 +63,8 @@ describe("useDesign and DesignMenu", () => {
     }
   });
 
-  it("renders DesignMenu with Figma default and switches theme on click", () => {
+  it("hides DesignMenu switcher button while ENABLE_DESIGN_SWITCHER is false", () => {
+    expect(ENABLE_DESIGN_SWITCHER).toBe(false);
     render(
       <>
         <DesignProbe />
@@ -64,20 +72,8 @@ describe("useDesign and DesignMenu", () => {
       </>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
-    expect(screen.getByRole("menuitem", { name: "Theme: Figma (Mặc định)" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Theme: Perplexity" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Theme: Cursor" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Theme: Stripe" })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: "Theme: Discord" })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "Theme: Perplexity" }));
-    expect(screen.getByTestId("current-design").textContent).toBe("perplexity");
-    expect(document.documentElement.dataset.design).toBe("perplexity");
-
-    fireEvent.click(screen.getByRole("button", { name: "Tùy chọn" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Theme: Figma (Mặc định)" }));
-    expect(screen.getByTestId("current-design").textContent).toBe("default");
-    expect(document.documentElement.dataset.design).toBeUndefined();
+    expect(screen.queryByRole("button", { name: "Tùy chọn" })).toBeNull();
+    expect(screen.getByTestId("current-design").textContent).toBe("apple");
+    expect(document.documentElement.dataset.design).toBe("apple");
   });
 });

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAnimatedPresence } from "@/hooks/use-animated-presence";
+import { useBottomSheetDrag } from "@/hooks/use-bottom-sheet-drag";
 
 const OVERLAY_INTERACTIVE_SELECTOR =
   '[aria-modal="true"], [role="listbox"], [role="menu"]';
@@ -249,11 +250,32 @@ interface DialogProps {
   onAfterClose?: () => void;
   title: ReactNode;
   titleClassName?: string;
+  hideHeaderTitleOnMobile?: boolean;
+  hideCloseOnMobile?: boolean;
   description?: ReactNode;
   icon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+}
+
+function getHeaderRowPadding(hideTitle: boolean, hideClose: boolean): string {
+  if (hideTitle && hideClose) return "py-0 sm:py-4";
+  if (hideTitle) return "py-1";
+  if (hideClose) return "px-5 pt-1 pb-3 sm:py-4";
+  return "px-3 py-2.5 sm:px-5 sm:py-4";
+}
+
+function getSheetSurfaceClass(isExpanded: boolean, isVisible: boolean): string {
+  return cn(
+    "relative flex w-full flex-col overflow-hidden border border-border bg-card text-card-foreground shadow-xl transition-[transform,opacity,height,max-height,border-radius] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none sm:max-w-md",
+    isExpanded
+      ? "h-dvh max-h-dvh rounded-none border-x-0 border-t-0 pt-[env(safe-area-inset-top)] sm:h-auto sm:max-h-[90dvh] sm:rounded-2xl sm:border sm:pt-0"
+      : "max-h-[90dvh] rounded-t-2xl sm:rounded-2xl",
+    isVisible
+      ? "translate-y-0 opacity-100 duration-300 sm:scale-100"
+      : "translate-y-full opacity-0 duration-200 sm:translate-y-1 sm:scale-[0.97]"
+  );
 }
 
 /** Centered dialog on sm and up; a bottom sheet on phones. */
@@ -263,6 +285,8 @@ export function Dialog({
   onAfterClose,
   title,
   titleClassName,
+  hideHeaderTitleOnMobile = false,
+  hideCloseOnMobile = false,
   description,
   icon,
   children,
@@ -271,8 +295,14 @@ export function Dialog({
 }: DialogProps) {
   const isMounted = useMounted();
   const { shouldRender, isVisible } = useAnimatedPresence(open, DIALOG_EXIT_MS, onAfterClose);
+  const { isExpanded, sheetRef, backdropRef, sheetTouchHandlers } = useBottomSheetDrag({
+    open,
+    onClose,
+  });
   useOverlay(open, onClose);
   if (!shouldRender || !isMounted) return null;
+
+  const headerRowPadding = getHeaderRowPadding(hideHeaderTitleOnMobile, hideCloseOnMobile);
 
   return createPortal(
     <div
@@ -283,40 +313,73 @@ export function Dialog({
       aria-hidden={!open || undefined}
     >
       <div
+        ref={backdropRef}
         className={cn(
           "absolute inset-0 bg-black/40 sm:backdrop-blur-[0.125rem] transition-opacity ease-out motion-reduce:transition-none",
-          isVisible ? "opacity-100 duration-[180ms]" : "opacity-0 duration-[150ms]"
+          isVisible ? "opacity-100 duration-250" : "opacity-0 duration-200"
         )}
         onClick={open ? onClose : undefined}
       />
       <div
+        ref={sheetRef}
         role={open ? "dialog" : undefined}
         aria-modal={open ? "true" : undefined}
-        className={cn(
-          "relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-card text-card-foreground shadow-xl will-change-[transform,opacity] transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
-          "sm:max-w-md sm:rounded-2xl",
-          isVisible
-            ? "translate-y-0 opacity-100 duration-[220ms] sm:scale-100"
-            : "translate-y-4 opacity-0 duration-[180ms] sm:translate-y-1 sm:scale-[0.97]",
-          className
-        )}
+        {...sheetTouchHandlers}
+        className={cn(getSheetSurfaceClass(isExpanded, isVisible), className)}
       >
-        <div className="flex items-start gap-3 border-b border-border px-5 py-4">
-          {icon && <div className="mt-0.5 shrink-0 text-primary">{icon}</div>}
-          <div className="min-w-0 flex-1">
-            <h2 className={cn("text-sm font-semibold text-foreground", titleClassName)}>{title}</h2>
-            {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        <div
+          data-sheet-handle
+          className={cn(
+            "shrink-0 touch-none select-none border-border",
+            hideHeaderTitleOnMobile ? "border-b-0 sm:border-b" : "border-b"
+          )}
+        >
+          <div className="flex justify-center pt-2 pb-0.5 sm:hidden" aria-hidden="true">
+            <span className="h-1 w-9 rounded-full bg-muted-foreground/30" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 rounded-lg p-1 text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
+          <div
+            className={cn(
+              "flex items-center gap-2 sm:items-start sm:gap-3 sm:px-5 sm:py-4",
+              headerRowPadding
+            )}
           >
-            <X className="size-4" />
-          </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className={cn(
+                "shrink-0 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer sm:order-last sm:-mr-1 sm:inline-flex sm:size-7 sm:rounded-lg",
+                hideCloseOnMobile ? "hidden" : "inline-flex size-10"
+              )}
+            >
+              <X className="size-5 sm:size-4" />
+            </button>
+            {icon && <div className="mt-0.5 hidden shrink-0 text-primary sm:block">{icon}</div>}
+            <div
+              className={cn(
+                "min-w-0 flex-1 text-center sm:text-left",
+                hideHeaderTitleOnMobile && "sr-only sm:not-sr-only"
+              )}
+            >
+              <h2 className={cn("text-base font-semibold text-foreground sm:text-sm", titleClassName)}>
+                {title}
+              </h2>
+              {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+            </div>
+            {!hideHeaderTitleOnMobile && !hideCloseOnMobile && (
+              <span aria-hidden="true" className="size-10 shrink-0 sm:hidden" />
+            )}
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] px-5 py-4">{children}</div>
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] px-5 sm:py-4",
+            hideHeaderTitleOnMobile ? "pt-1" : "pt-3.5",
+            footer ? "pb-4" : "pb-[max(1rem,env(safe-area-inset-bottom))]"
+          )}
+        >
+          {children}
+        </div>
         {footer && (
           <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}

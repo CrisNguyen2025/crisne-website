@@ -13,10 +13,10 @@ interface NewsDecisionBarProps {
 }
 
 const OUTLINE =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-[background-color,border-color,color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
+  "inline-flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-[background-color,border-color,color,transform] duration-150 ease-out hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:h-9 sm:flex-initial sm:justify-start";
 
 const SAVED_BTN =
-  "inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--status-known-border)] bg-[var(--status-known-bg)] px-3 text-sm font-medium text-[var(--status-known)] transition-[opacity,transform] duration-150 ease-out hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer";
+  "inline-flex h-10 flex-1 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[var(--status-known-border)] bg-[var(--status-known-bg)] px-3 text-sm font-medium text-[var(--status-known)] transition-[opacity,transform] duration-150 ease-out hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:h-9 sm:flex-initial sm:justify-start";
 
 function ActionButtonIcon({
   isLoading,

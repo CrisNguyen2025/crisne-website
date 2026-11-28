@@ -106,6 +106,7 @@ interface SidebarLessonTocProps {
   activeHeadingId: string;
   onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
   onAfterJump?: () => void;
+  density?: "default" | "comfortable";
 }
 
 /** Nested table of contents displayed directly beneath the active Lesson in the left nav. */
@@ -114,6 +115,7 @@ export function SidebarLessonToc({
   activeHeadingId,
   onJump,
   onAfterJump,
+  density = "default",
 }: SidebarLessonTocProps) {
   if (headings.length === 0) return null;
 
@@ -134,7 +136,8 @@ export function SidebarLessonToc({
                 onAfterJump?.();
               }}
               className={cn(
-                "block rounded-md py-1 text-xs leading-snug transition-colors duration-150",
+                "block rounded-md leading-snug transition-colors duration-150",
+                density === "comfortable" ? "py-2 text-sm" : "py-1 text-xs",
                 h.level === 3 ? "pl-4 pr-2" : "px-2",
                 isActive
                   ? "font-medium text-foreground"

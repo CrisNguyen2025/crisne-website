@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Newspaper, Plus, Search } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BookOpen, Newspaper, Plus, Search } from "lucide-react";
 import type {
   PublicationTopicSummary,
   RecentLessonSummary,
@@ -16,6 +16,7 @@ import { lessonPath, topicPath } from "@/lib/roadmap/paths";
 import { openGlobalSearch } from "@/lib/search/search-controller";
 import { Button } from "@/components/ui/button";
 import { DesignMenu } from "@/components/design-menu";
+import { cn } from "@/lib/utils";
 import {
   clearDeletedTopicSlug,
   getDeletedLessonIdsSnapshot,
@@ -33,16 +34,24 @@ import { CreateTopicModal } from "./CreateTopicModal";
 import { usePendingRoadmapRefresh } from "./usePendingRoadmapRefresh";
 import type { RoadmapUpdatedEventDetail } from "./useTopicOwnerStatuses";
 
+interface NewsMetricsSummary {
+  inbox: number;
+  saved: number;
+  total: number;
+}
+
 interface PublicationHomeProps {
   topics: PublicationTopicSummary[];
   recentLessons: RecentLessonSummary[];
   totalLessons?: number;
+  newsMetrics?: NewsMetricsSummary;
 }
 
 export function PublicationHome({
   topics,
   recentLessons,
   totalLessons = 0,
+  newsMetrics,
 }: PublicationHomeProps) {
   const router = useRouter();
   const canWrite = useCanWrite();
@@ -142,26 +151,23 @@ export function PublicationHome({
     <div className="roadmap-theme min-h-dvh bg-background text-foreground flex flex-col">
       <main
         id="main-content"
-        className="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-14 lg:pb-20"
+        className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-8 sm:pt-12 lg:pb-20"
       >
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-8">
+        <header className="flex items-center justify-between gap-3 border-b border-border pb-5 sm:pb-6">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <AbotMascot
-              size={72}
+              size={56}
               enablePoke
-              className="size-16 sm:size-[4.5rem]"
+              className="size-10 shrink-0 sm:size-14"
             />
             <div className="min-w-0">
-              <h1 className="font-display text-[2.25rem] font-normal leading-[1.12] tracking-[-0.02em] text-foreground sm:text-[2.75rem]">
+              <h1 className="font-display text-2xl font-semibold leading-none tracking-tight text-foreground sm:text-4xl">
                 Crisne
               </h1>
-              <p className="mt-2 text-sm tabular-nums text-muted-foreground">
-                {visibleTopics.length} topics · {visibleTotalLessons} bài học
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {canWrite && (
               <>
                 <Button
@@ -170,36 +176,96 @@ export function PublicationHome({
                   size="lg"
                   onClick={openGlobalSearch}
                   aria-label="Tìm kiếm nhanh (Cmd+K)"
-                  className="cursor-pointer bg-card px-3 text-xs"
+                  className="size-9 cursor-pointer bg-card px-0 text-xs sm:w-auto sm:px-3"
                 >
-                  <Search className="size-3.5 text-muted-foreground" />
-                  <span>Tìm kiếm</span>
+                  <Search className="size-4 text-muted-foreground sm:size-3.5" />
+                  <span className="hidden sm:inline">Tìm kiếm</span>
                   <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground sm:inline">
                     ⌘K
                   </kbd>
                 </Button>
-                <Link
-                  href={NEWS_PATH}
-                  prefetch={true}
-                  className="inline-flex h-9 touch-manipulation items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-[background-color,border-color,transform] duration-150 ease-out hover:border-foreground/25 hover:bg-accent active:scale-[0.98]"
-                >
-                  <Newspaper className="size-3.5 text-muted-foreground" />
-                  <span>News</span>
-                </Link>
                 <Button
                   type="button"
                   size="lg"
                   onClick={() => setIsCreateTopicOpen(true)}
-                  className="cursor-pointer px-3 text-xs"
+                  aria-label="Tạo topic"
+                  className="size-9 cursor-pointer px-0 text-xs sm:w-auto sm:px-3"
                 >
-                  <Plus className="size-3.5" />
-                  <span>Tạo topic</span>
+                  <Plus className="size-4 sm:size-3.5" />
+                  <span className="hidden sm:inline">Tạo topic</span>
                 </Button>
               </>
             )}
             <DesignMenu triggerClassName="size-9" />
           </div>
         </header>
+
+        <section
+          aria-label="Tổng quan"
+          className={cn(
+            "mt-5 grid gap-3 sm:mt-6 sm:gap-4",
+            canWrite ? "grid-cols-2" : "grid-cols-1"
+          )}
+        >
+          <a
+            href="#topics-heading"
+            className="group flex min-w-0 flex-col justify-between rounded-2xl border border-border bg-secondary/70 p-3.5 transition-[border-color,background-color,transform] duration-150 ease-out hover:border-foreground/20 hover:bg-secondary active:scale-[0.99] sm:p-5"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <BookOpen
+                  className="size-3.5 shrink-0 text-[var(--editorial-accent)] sm:size-4"
+                  aria-hidden="true"
+                />
+                <span className="truncate">Topics &amp; Lesson</span>
+              </span>
+              <ArrowRight
+                className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </div>
+            <div className="mt-3">
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-3xl">
+                {visibleTotalLessons}
+              </p>
+              <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
+                {visibleTopics.length} topics · {visibleTotalLessons} bài học
+              </p>
+            </div>
+          </a>
+
+          {canWrite && (
+            <Link
+              href={NEWS_PATH}
+              prefetch={true}
+              className="group flex min-w-0 flex-col justify-between rounded-2xl border border-border bg-secondary/70 p-3.5 transition-[border-color,background-color,transform] duration-150 ease-out hover:border-foreground/20 hover:bg-secondary active:scale-[0.99] sm:p-5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Newspaper
+                    className="size-3.5 shrink-0 text-[var(--editorial-accent)] sm:size-4"
+                    aria-hidden="true"
+                  />
+                  <span className="truncate">News</span>
+                </span>
+                <ArrowUpRight
+                  className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-3xl">
+                  {newsMetrics ? newsMetrics.inbox : "—"}
+                </p>
+                <p className="mt-1 truncate text-xs tabular-nums text-muted-foreground">
+                  {newsMetrics
+                    ? `${newsMetrics.inbox} chờ xử lý · ${newsMetrics.saved} đã lưu`
+                    : "Mở hộp tin"}
+                </p>
+              </div>
+            </Link>
+          )}
+        </section>
 
         {visibleRecentLessons.length > 0 && (
           <section className="mt-8" aria-label="Tiếp tục đọc">

@@ -511,8 +511,8 @@ function NewsFilterToolbar({
                 placeholder="Tìm tiêu đề, tag, domain"
                 aria-label="Tìm kiếm bài tin trên di động"
                 className={cn(
-                  "h-9 w-full rounded-lg border border-input bg-card pl-9 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring",
-                  q ? "pr-8" : "pr-3"
+                  "h-10 w-full rounded-lg border border-input bg-card pl-9 text-base text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring sm:h-9 sm:text-sm",
+                  q ? "pr-9 sm:pr-8" : "pr-3"
                 )}
               />
               {q && (
@@ -520,7 +520,7 @@ function NewsFilterToolbar({
                   type="button"
                   onClick={() => onSearchChange("")}
                   aria-label="Xoá từ khoá trên di động"
-                  className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground cursor-pointer"
+                  className="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground cursor-pointer sm:right-1.5 sm:size-6"
                 >
                   <X className="size-3.5" />
                 </button>

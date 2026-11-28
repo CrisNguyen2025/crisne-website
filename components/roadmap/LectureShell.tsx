@@ -168,13 +168,13 @@ export function LecturePager({
   if (!prev && !next) return null;
 
   return (
-    <footer className="mt-12 grid grid-cols-1 gap-4 border-t border-border pt-6 sm:grid-cols-2">
+    <footer className="mt-12 grid grid-cols-1 gap-3 border-t border-border pt-6 sm:grid-cols-2 sm:gap-4">
       {prev ? (
         <Link
           href={prev.href}
           prefetch={true}
           onClick={prev.onClick}
-          className="group flex min-w-0 flex-col gap-1 py-1 text-left"
+          className="group flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card/60 px-3.5 py-3 text-left transition-colors hover:border-foreground/20 sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-1"
         >
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <ArrowLeft className="size-3.5 shrink-0" aria-hidden="true" />
@@ -193,7 +193,7 @@ export function LecturePager({
           href={next.href}
           prefetch={true}
           onClick={next.onClick}
-          className="group flex min-w-0 flex-col items-start gap-1 py-1 sm:items-end sm:text-right"
+          className="group flex min-w-0 flex-col items-start gap-1 rounded-xl border border-border bg-card/60 px-3.5 py-3 transition-colors hover:border-foreground/20 sm:items-end sm:rounded-none sm:border-0 sm:bg-transparent sm:px-0 sm:py-1 sm:text-right"
         >
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <span>{next.label}</span>
@@ -403,7 +403,8 @@ export function LectureShell({
   const renderLessonItems = (
     items: ChecklistItem[],
     sectionKey: string,
-    closeDrawer?: () => void
+    closeDrawer?: () => void,
+    density: "default" | "comfortable" = "default"
   ) => (
     <ul className="space-y-0.5">
       {items.map((sib) => {
@@ -421,7 +422,10 @@ export function LectureShell({
               }
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex min-h-8 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium leading-snug transition-colors duration-150 active:bg-[var(--editorial-sidebar-active)]",
+                "flex items-center gap-2 rounded-lg px-2 text-sm font-medium leading-snug transition-colors duration-150 active:bg-[var(--editorial-sidebar-active)]",
+                density === "comfortable"
+                  ? "min-h-10 py-2"
+                  : "min-h-8 py-1.5",
                 isActive
                   ? "text-[var(--editorial-accent)]"
                   : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
@@ -445,6 +449,7 @@ export function LectureShell({
                 activeHeadingId={activeHeadingId}
                 onJump={jumpToHeading}
                 onAfterJump={closeDrawer}
+                density={density}
               />
             )}
           </li>
@@ -461,7 +466,10 @@ export function LectureShell({
     (g) => g.section !== null
   ).length;
 
-  const renderSidebarNavigation = (closeDrawer?: () => void) => (
+  const renderSidebarNavigation = (
+    closeDrawer?: () => void,
+    density: "default" | "comfortable" = "default"
+  ) => (
     <nav aria-label="Bài học trong topic" className="space-y-2">
       {totalLessonsCount > 0 && (
         <p className="px-2 text-xs tabular-nums text-muted-foreground">
@@ -485,7 +493,12 @@ export function LectureShell({
       )}
       {totalLessonsCount > 0 &&
         (isSingleUnscopedGroup ? (
-          renderLessonItems(siblingGroups[0].items, "__none__", closeDrawer)
+          renderLessonItems(
+            siblingGroups[0].items,
+            "__none__",
+            closeDrawer,
+            density
+          )
         ) : (
           <div className="space-y-3">
             {siblingGroups.map((group) => {
@@ -510,7 +523,12 @@ export function LectureShell({
                     onClick={(e) =>
                       handleToggleSection(groupKey, e.currentTarget)
                     }
-                    className="h-auto min-h-8 w-full items-start justify-start gap-1.5 rounded-lg px-2 py-1.5 text-left whitespace-normal hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer"
+                    className={cn(
+                      "h-auto w-full items-start justify-start gap-1.5 rounded-lg px-2 text-left whitespace-normal hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer",
+                      density === "comfortable"
+                        ? "min-h-10 py-2"
+                        : "min-h-8 py-1.5"
+                    )}
                   >
                     <ChevronRight
                       className={cn(
@@ -560,7 +578,12 @@ export function LectureShell({
                   >
                     <div className="overflow-hidden">
                       <div className="mt-0.5 pl-1 pb-1">
-                        {renderLessonItems(group.items, groupKey, closeDrawer)}
+                        {renderLessonItems(
+                          group.items,
+                          groupKey,
+                          closeDrawer,
+                          density
+                        )}
                       </div>
                     </div>
                   </div>
@@ -590,7 +613,7 @@ export function LectureShell({
           size="icon-sm"
           onClick={onClose}
           aria-label="Đóng danh sách bài học"
-          className="text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer"
+          className="size-9 text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground cursor-pointer sm:size-7"
         >
           <X className="size-4" />
         </Button>
@@ -603,7 +626,7 @@ export function LectureShell({
       <header className="sticky top-0 z-30 h-14 w-full border-b border-border bg-background">
         <div
           className={cn(
-            "mx-auto flex h-full w-full items-center gap-3 px-4 sm:px-6",
+            "mx-auto flex h-full w-full items-center gap-2.5 px-4 sm:gap-3 sm:px-6",
             !isAbotSidebarOpen && "lg:px-8"
           )}
         >
@@ -614,7 +637,7 @@ export function LectureShell({
             onClick={() => setIsDrawerOpen(true)}
             aria-label="Mở danh sách bài học"
             className={cn(
-              "shrink-0 cursor-pointer",
+              "size-9 shrink-0 cursor-pointer sm:size-7",
               !collapseLeftNav && "lg:hidden"
             )}
           >
@@ -632,10 +655,13 @@ export function LectureShell({
             >
               C
             </span>
-            <span>Crisne</span>
+            <span className="hidden sm:inline">Crisne</span>
           </Link>
 
-          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-border" />
+          <span
+            aria-hidden="true"
+            className="hidden h-5 w-px shrink-0 bg-border sm:inline"
+          />
 
           <Link
             href={topicPath(topic.slug)}
@@ -651,7 +677,7 @@ export function LectureShell({
               variant="outline"
               onClick={openGlobalSearch}
               aria-label="Tìm kiếm nhanh (Cmd+K)"
-              className="ml-auto size-8 shrink-0 cursor-pointer justify-center bg-card px-0 text-sm font-normal text-muted-foreground sm:mx-auto sm:h-9 sm:w-full sm:max-w-sm sm:justify-start sm:px-3"
+              className="ml-auto size-9 shrink-0 cursor-pointer justify-center bg-card px-0 text-sm font-normal text-muted-foreground sm:mx-auto sm:h-9 sm:w-full sm:max-w-sm sm:justify-start sm:px-3"
             >
               <Search className="size-4 shrink-0" aria-hidden="true" />
               <span className="hidden truncate sm:inline">
@@ -782,7 +808,28 @@ export function LectureShell({
           ref={drawerScrollRef}
           className="flex-1 overflow-y-auto overscroll-contain px-3 py-4"
         >
-          {renderSidebarNavigation(() => setIsDrawerOpen(false))}
+          {renderSidebarNavigation(() => setIsDrawerOpen(false), "comfortable")}
+        </div>
+        <div className="shrink-0 border-t border-border px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] lg:hidden">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Link
+              href="/"
+              prefetch={true}
+              onClick={() => setIsDrawerOpen(false)}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-sm font-medium text-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)]"
+            >
+              Topics
+            </Link>
+            <Link
+              href={NEWS_PATH}
+              prefetch={true}
+              onClick={() => setIsDrawerOpen(false)}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+            >
+              <Newspaper className="size-4" aria-hidden="true" />
+              <span>News</span>
+            </Link>
+          </div>
         </div>
       </Sheet>
     </div>

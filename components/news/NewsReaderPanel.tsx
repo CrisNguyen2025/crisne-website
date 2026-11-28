@@ -175,25 +175,25 @@ export function NewsReaderPanel({
             {formatNewsTitle(item)}
           </h1>
 
-          <div className="mt-4 flex flex-wrap items-center gap-1 border-b border-border pb-4">
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-b border-border pb-4 sm:gap-1">
             <a
               href={toSafeHttpHref(item.canonicalUrl)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => onOpenExternal(item)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98]"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] sm:h-8 sm:px-2"
             >
               <ExternalLink className="size-4" />
               Mở nguồn gốc
             </a>
             {isSummaryReady && <AddToLessonSheet item={item} isDisabled={isUpdating || isDeleting} />}
             {confirmDelete ? (
-              <span className="inline-flex items-center gap-1 motion-safe:animate-in motion-safe:fade-in duration-150">
+              <span className="inline-flex items-center gap-1.5 motion-safe:animate-in motion-safe:fade-in duration-150 sm:gap-1">
                 <button
                   type="button"
                   disabled={isDeleting || isUpdating}
                   onClick={() => onDelete(item)}
-                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-destructive px-2.5 text-xs font-medium text-destructive-foreground transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                  className="inline-flex h-9 items-center gap-1 rounded-lg bg-destructive px-3 text-xs font-medium text-destructive-foreground transition-[opacity,transform] duration-150 hover:opacity-90 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:h-8 sm:px-2.5"
                 >
                   {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                   Xác nhận xoá
@@ -202,7 +202,7 @@ export function NewsReaderPanel({
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setConfirmDelete(false)}
-                  className="inline-flex h-8 items-center rounded-lg px-2 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer"
+                  className="inline-flex h-9 items-center rounded-lg px-2.5 text-xs text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:pointer-events-none cursor-pointer sm:h-8 sm:px-2"
                 >
                   Huỷ
                 </button>
@@ -212,7 +212,7 @@ export function NewsReaderPanel({
                 type="button"
                 disabled={isDeleting || isUpdating}
                 onClick={() => setConfirmDelete(true)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-sm text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-destructive/10 hover:text-destructive active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:h-8 sm:px-2"
               >
                 <Trash2 className="size-4" />
                 Xoá
@@ -338,7 +338,7 @@ export function NewsReaderPanel({
                         disabled={isUpdating}
                         onClick={() => void handleRemoveTag(tag)}
                         aria-label={`Xoá tag ${tag}`}
-                        className="-mr-0.5 rounded p-0.5 text-muted-foreground transition-colors duration-150 hover:bg-background/70 hover:text-foreground disabled:pointer-events-none cursor-pointer"
+                        className="relative -mr-0.5 rounded p-0.5 text-muted-foreground transition-colors duration-150 hover:bg-background/70 hover:text-foreground disabled:pointer-events-none cursor-pointer pointer-coarse:after:absolute pointer-coarse:after:-inset-2 pointer-coarse:after:content-['']"
                       >
                         <X className="size-3" />
                       </button>
@@ -356,14 +356,14 @@ export function NewsReaderPanel({
                   onChange={(e) => setTagInput(e.target.value)}
                   placeholder="Thêm tag (vd: ai, nextjs)..."
                   maxLength={32}
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-card px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-card px-3 text-base text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring sm:h-8 sm:px-2.5 sm:text-sm"
                 />
                 <button
                   type="submit"
                   disabled={
                     isUpdating || !tagInput.trim() || item.tags.length >= 8
                   }
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer"
+                  className="inline-flex h-10 items-center gap-1 rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-accent active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 cursor-pointer sm:h-8 sm:px-2.5 sm:text-xs"
                 >
                   <Plus className="size-3.5" />
                   Thêm

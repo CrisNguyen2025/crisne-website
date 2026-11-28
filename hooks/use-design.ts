@@ -17,7 +17,9 @@ export type Design =
   | "posthog";
 
 const STORAGE_KEY = "design";
-const DEFAULT_DESIGN: Design = "default";
+export const DEFAULT_DESIGN: Design = "apple";
+/** Temporarily hides the theme switcher UI and locks default theme to Apple without deleting other themes */
+export const ENABLE_DESIGN_SWITCHER = false;
 export const DESIGNS: readonly Design[] = [
   "default",
   "perplexity",
@@ -40,6 +42,7 @@ let currentDesign: Design | null = null;
 const listeners = new Set<() => void>();
 
 function readStoredDesign(): Design {
+  if (!ENABLE_DESIGN_SWITCHER) return DEFAULT_DESIGN;
   try {
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
     return isDesign(stored) ? stored : DEFAULT_DESIGN;
@@ -52,7 +55,7 @@ function readStoredDesign(): Design {
 function applyDesign(design: Design) {
   const root = globalThis.document?.documentElement;
   if (!root) return;
-  if (design === DEFAULT_DESIGN) {
+  if (design === "default") {
     delete root.dataset.design;
   } else {
     root.dataset.design = design;

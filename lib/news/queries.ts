@@ -116,7 +116,7 @@ function accumulateNewsCountGroup(
   if (row.isSaved || isDismissed) counts.done += n;
 }
 
-async function computeNewsCounts(): Promise<NewsCountsDto> {
+export async function computeNewsCounts(): Promise<NewsCountsDto> {
   const groups = await prisma.newsItem.groupBy({
     by: ["reviewStatus", "ingestStatus", "readState", "isSaved"],
     _count: { _all: true },

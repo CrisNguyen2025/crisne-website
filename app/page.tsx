@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import { permanentRedirect } from 'next/navigation';
+import { auth } from '@/auth';
+import { isOwnerEmail } from '@/lib/auth/owner-access';
+import { computeNewsCounts } from '@/lib/news/queries';
 import { findItemBySlug, resolveTopicGlobal } from '@/lib/roadmap/resolveRoadmap';
 import { getPublicationHomeData } from '@/lib/roadmap/queries';
 import { PublicationHome } from '@/components/roadmap/PublicationHome';
@@ -10,6 +13,20 @@ import { lessonPath, topicPath } from '@/lib/roadmap/paths';
 const SITE_URL = 'https://crisne.blog';
 
 export const dynamic = 'force-dynamic';
+
+function isDevOwnerBypass(): boolean {
+  return process.env.NODE_ENV === 'development' && process.env.DEV_OWNER_BYPASS === 'true';
+}
+
+async function canReadOwnerMetrics(): Promise<boolean> {
+  if (isDevOwnerBypass()) return true;
+  try {
+    const session = await auth();
+    return isOwnerEmail(session?.user?.email);
+  } catch {
+    return false;
+  }
+}
 
 export const metadata: Metadata = {
   title: 'Crisne — Knowledge Based',
@@ -65,7 +82,19 @@ export default async function Home({ searchParams }: PageProps) {
     if (redirectUrl) permanentRedirect(redirectUrl);
   }
 
-  const data = await getPublicationHomeData();
+  const [data, isOwner] = await Promise.all([
+    getPublicationHomeData(),
+    canReadOwnerMetrics(),
+  ]);
+
+  const newsCounts = isOwner ? await computeNewsCounts() : null;
+  const newsMetrics = newsCounts
+    ? {
+        inbox: newsCounts.inbox,
+        saved: newsCounts.saved,
+        total: newsCounts.total,
+      }
+    : undefined;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -95,6 +124,7 @@ export default async function Home({ searchParams }: PageProps) {
         topics={data.topics}
         recentLessons={data.recentLessons}
         totalLessons={data.totalLessons}
+        newsMetrics={newsMetrics}
       />
     </>
   );
