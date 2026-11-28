@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
-import { useAnimatedPresence } from "@/hooks/use-animated-presence";
 import { cn, getScrollBehavior } from "@/lib/utils";
 
 const ACTIVE_HEADING_OFFSET = 128;
@@ -103,26 +101,26 @@ export function useActiveHeading(headings: ContentHeading[]) {
   return { activeHeadingId, jumpToHeading };
 }
 
-interface LectureTocLinksProps {
+interface SidebarLessonTocProps {
   headings: ContentHeading[];
   activeHeadingId: string;
   onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
-  variant: "rail" | "inline";
+  onAfterJump?: () => void;
 }
 
-function LectureTocLinks({
+/** Nested table of contents displayed directly beneath the active Lesson in the left nav. */
+export function SidebarLessonToc({
   headings,
   activeHeadingId,
   onJump,
-  variant,
-}: LectureTocLinksProps) {
-  const isRail = variant === "rail";
+  onAfterJump,
+}: SidebarLessonTocProps) {
+  if (headings.length === 0) return null;
+
   return (
-    <ul
-      className={cn(
-        "text-[0.8125rem]",
-        isRail ? "mt-3 space-y-1.5 border-l border-border" : "space-y-1.5"
-      )}
+    <ol
+      aria-label="Trên trang này"
+      className="mt-1 mb-2 ml-4 space-y-0.5 border-l border-border pl-2"
     >
       {headings.map((h) => {
         const isActive = activeHeadingId === h.id;
@@ -130,246 +128,24 @@ function LectureTocLinks({
           <li key={h.id}>
             <a
               href={`#${h.id}`}
-              onClick={(e) => onJump(e, h.id)}
-              className={getTocLinkClass(isRail, h.level, isActive)}
+              aria-current={isActive ? "true" : undefined}
+              onClick={(e) => {
+                onJump(e, h.id);
+                onAfterJump?.();
+              }}
+              className={cn(
+                "block rounded-md py-1 text-xs leading-snug transition-colors duration-150",
+                h.level === 3 ? "pl-4 pr-2" : "px-2",
+                isActive
+                  ? "font-medium text-foreground"
+                  : "font-normal text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+              )}
             >
               {h.text}
             </a>
           </li>
         );
       })}
-    </ul>
-  );
-}
-
-function getTocLinkClass(isRail: boolean, level: number, isActive: boolean): string {
-  const base = "block font-normal leading-snug transition-colors duration-150";
-  if (isRail) {
-    return cn(
-      base,
-      "-ml-[0.0625rem] border-l-2 py-0.5",
-      level === 3 ? "pl-5" : "pl-3.5",
-      isActive
-        ? "border-[var(--editorial-accent-rail)] text-foreground"
-        : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
-    );
-  }
-  return cn(
-    base,
-    "rounded-md py-1 px-2",
-    level === 3 && "pl-5",
-    isActive
-      ? "bg-[var(--editorial-sidebar-active)] text-[var(--editorial-accent)]"
-      : "text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
-  );
-}
-
-export function DesktopTocRail({
-  headings,
-  activeHeadingId,
-  onJump,
-  footer,
-}: {
-  headings: ContentHeading[];
-  activeHeadingId: string;
-  onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
-  /** Shown under "On this page", set apart by a divider line */
-  footer?: React.ReactNode;
-}) {
-  const navRef = useRef<HTMLElement>(null);
-  const hasHeadings = headings.length > 0;
-
-  useEffect(() => {
-    if (!activeHeadingId) return;
-    const navEl = navRef.current;
-    if (!navEl || navEl.scrollHeight <= navEl.clientHeight) return;
-    const escapedId =
-      typeof CSS !== "undefined" && typeof CSS.escape === "function"
-        ? CSS.escape(activeHeadingId)
-        : activeHeadingId;
-    const activeLink = navEl.querySelector<HTMLElement>(
-      `a[href="#${escapedId}"]`
-    );
-    if (!activeLink) return;
-    const navRect = navEl.getBoundingClientRect();
-    const linkRect = activeLink.getBoundingClientRect();
-    if (linkRect.top < navRect.top + 16 || linkRect.bottom > navRect.bottom - 16) {
-      const targetTop =
-        activeLink.offsetTop - navEl.clientHeight / 2 + activeLink.clientHeight / 2;
-      navEl.scrollTo?.({
-        top: Math.max(0, targetTop),
-        behavior: getScrollBehavior(),
-      });
-    }
-  }, [activeHeadingId]);
-
-  return (
-    <aside
-      aria-hidden={(!hasHeadings && !footer) || undefined}
-      className="hidden xl:block w-[15.75rem] shrink-0"
-    >
-      {(hasHeadings || footer) && (
-        // Only the TOC scrolls: a footer outside the scroll box lets its popovers (⋯ menu) overflow the rail
-        <div className="sticky top-20 flex max-h-[calc(100dvh-6.5rem)] flex-col">
-          {hasHeadings && (
-            <nav
-              ref={navRef}
-              aria-label="On this page"
-              className="min-h-0 overflow-y-auto no-scrollbar"
-            >
-              <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-                On this page
-              </p>
-              <LectureTocLinks
-                headings={headings}
-                activeHeadingId={activeHeadingId}
-                onJump={onJump}
-                variant="rail"
-              />
-            </nav>
-          )}
-          {footer && (
-            <div
-              className={cn(
-                "shrink-0",
-                hasHeadings && "mt-5 border-t border-border pt-5"
-              )}
-            >
-              {footer}
-            </div>
-          )}
-        </div>
-      )}
-    </aside>
-  );
-}
-
-export function TabletInlineToc({
-  headings,
-  activeHeadingId,
-  onJump,
-  showOnXl = false,
-}: {
-  headings: ContentHeading[];
-  activeHeadingId: string;
-  onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
-  showOnXl?: boolean;
-}) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-
-  if (headings.length === 0) return null;
-
-  return (
-    <details
-      ref={detailsRef}
-      className={cn(
-        "hidden lg:block group mb-6 rounded-xl border border-border bg-[var(--editorial-sidebar)] px-4 py-3 text-xs",
-        !showOnXl && "xl:hidden"
-      )}
-    >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 font-semibold text-foreground transition-colors duration-150 select-none [&::-webkit-details-marker]:hidden">
-        <span>On this page</span>
-        <span className="inline-flex items-center gap-1.5 text-muted-foreground tabular-nums">
-          <span>{headings.length}</span>
-          <ChevronRight className="size-3.5 transition-transform duration-150 motion-reduce:transition-none group-open:rotate-90" />
-        </span>
-      </summary>
-      <div className="mt-2.5 border-t border-border/80 pt-2.5">
-        <LectureTocLinks
-          headings={headings}
-          activeHeadingId={activeHeadingId}
-          onJump={(e, id) => {
-            onJump(e, id);
-            if (detailsRef.current) detailsRef.current.open = false;
-          }}
-          variant="inline"
-        />
-      </div>
-    </details>
-  );
-}
-
-export function MobileTocDropdown({
-  headings,
-  activeHeadingId,
-  onJump,
-}: {
-  headings: ContentHeading[];
-  activeHeadingId: string;
-  onJump: (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 150);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsOpen(false);
-    };
-    window.addEventListener("pointerdown", onPointerDown);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isOpen]);
-
-  if (headings.length === 0) return null;
-
-  const scrollToTop = () => {
-    setIsOpen(false);
-    window.scrollTo({ top: 0, behavior: getScrollBehavior() });
-  };
-
-  return (
-    <div ref={rootRef}>
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        onClick={() => setIsOpen((v) => !v)}
-        className="inline-flex min-h-[2.75rem] items-center gap-1 px-2 text-xs font-medium text-muted-foreground transition-[color,transform] duration-150 hover:text-foreground active:scale-[0.98] cursor-pointer"
-      >
-        <span>On this page</span>
-        <ChevronRight
-          className={cn(
-            "size-3.5 transition-transform duration-150 motion-reduce:transition-none",
-            isOpen && "rotate-90 text-foreground"
-          )}
-        />
-      </button>
-
-      {shouldRender && (
-        <div
-          aria-hidden={!isOpen || undefined}
-          className={cn(
-            "absolute inset-x-4 top-full z-40 mt-1.5 max-h-[65dvh] origin-top overflow-y-auto overscroll-contain rounded-xl border border-border bg-[var(--editorial-sidebar)] p-3 shadow-lg transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
-            isVisible
-              ? "translate-y-0 scale-100 opacity-100"
-              : "-translate-y-1 scale-[0.98] opacity-0 pointer-events-none"
-          )}
-        >
-          <button
-            type="button"
-            onClick={scrollToTop}
-            className="mb-2 block w-full rounded-md border-b border-border/80 px-2 pb-2 pt-1 text-left text-xs font-medium text-[var(--editorial-accent)] transition-colors duration-150 hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer"
-          >
-            Lên đầu trang ↑
-          </button>
-          <LectureTocLinks
-            headings={headings}
-            activeHeadingId={activeHeadingId}
-            onJump={(e, id) => {
-              onJump(e, id);
-              setIsOpen(false);
-            }}
-            variant="inline"
-          />
-        </div>
-      )}
-    </div>
+    </ol>
   );
 }

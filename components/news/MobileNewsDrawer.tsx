@@ -111,7 +111,7 @@ export function MobileNewsDrawer<T>({
         aria-label={isActive ? label(renderedItem) : undefined}
         className={cn(
           // Portaled to <body>, outside the News layout's `roadmap-theme`; apply it to the panel (not the backdrop wrapper, which would paint an opaque background over the list)
-          "roadmap-theme absolute inset-y-0 right-0 flex h-full w-full touch-pan-y flex-col border-l border-border bg-card text-card-foreground shadow-2xl will-change-transform [contain:layout_style] transition-transform ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:max-w-3xl",
+          "roadmap-theme absolute inset-y-0 right-0 flex h-full w-full touch-pan-y flex-col border-l border-border bg-background text-foreground shadow-2xl will-change-transform [contain:layout_style] transition-transform ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none md:max-w-3xl",
           showPanel ? "translate-x-0 duration-[240ms]" : "translate-x-full duration-[200ms]"
         )}
       >

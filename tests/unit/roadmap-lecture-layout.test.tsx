@@ -24,7 +24,7 @@ import { LessonEditorialReader } from "@/components/roadmap/LessonEditorialReade
 import { LessonStatusPicker } from "@/components/roadmap/LessonStatus";
 
 const mockUseCanWrite = vi.fn(() => false);
-const mockUseMediaQuery = vi.fn(() => false);
+const mockUseMediaQuery = vi.fn<(query?: string) => boolean>(() => false);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -59,7 +59,7 @@ vi.mock("@/hooks/use-can-write", () => ({
 
 vi.mock("@/hooks/use-media-query", () => ({
   MOBILE_VIEWPORT_QUERY: "(max-width: 767px)",
-  useMediaQuery: () => mockUseMediaQuery(),
+  useMediaQuery: (query: string) => mockUseMediaQuery(query),
 }));
 
 vi.mock("@/components/theme-toggle", () => ({
@@ -264,9 +264,8 @@ describe("LectureShell & editorial pages", () => {
     expect(screen.queryByRole("link", { name: "Tổng quan" })).toBeNull();
     expect(screen.getByText(ITEMS[0].title)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Nền tảng/ })).toBeNull();
-    expect(screen.getAllByText("On this page").length).toBeGreaterThanOrEqual(
-      1
-    );
+    expect(screen.getByRole("link", { name: /Crisne/ }).getAttribute("href")).toBe("/");
+    expect(screen.queryByRole("list", { name: "Trên trang này" })).toBeNull();
 
     const sectionedGroups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
     rerender(
@@ -365,14 +364,14 @@ describe("LectureShell & editorial pages", () => {
     expect(article?.getAttribute("data-lesson-slug")).toBe("why-agents-fail");
     expect(article?.getAttribute("data-section")).toBe("Nền tảng");
 
-    const prevLink = screen.getByRole("link", { name: /Trang trước/ });
+    const prevLink = screen.getByRole("link", { name: /Trước/ });
     expect(prevLink.getAttribute("href")).toBe("/harness-engineering");
 
-    expect(screen.getAllByText("On this page").length).toBeGreaterThanOrEqual(
-      1
-    );
+    const inlineToc = container.querySelector('ol[aria-label="Trên trang này"]');
+    expect(inlineToc?.textContent).toContain("Mở đầu");
+    expect(container.querySelector('nav[aria-label="On this page"]')).toBeNull();
 
-    const nextLink = screen.getByRole("link", { name: /Trang sau/ });
+    const nextLink = screen.getByRole("link", { name: /Sau/ });
     expect(nextLink.getAttribute("href")).toBe("/harness-engineering/repo-source-of-truth");
   });
 
@@ -421,60 +420,47 @@ describe("LectureShell & editorial pages", () => {
     expect(container.querySelector("nav")).toBeNull();
   });
 
-  it("puts Topic back into desktop breadcrumb and places Owner controls in right rail on xl or inside the ⋯ menu below xl", () => {
+  it("renders global top bar, Topic › Section breadcrumb, and inline meta actions without right rail", () => {
     mockUseCanWrite.mockReturnValue(true);
     const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
-    const renderLesson = () =>
-      render(
-        <LessonEditorialReader
-          lesson={ITEMS[0]}
-          processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
-          headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
-          topic={TOPIC}
-          siblingGroups={groups}
-          allTopics={[TOPIC]}
-        />
-      );
+    const { container } = render(
+      <LessonEditorialReader
+        lesson={ITEMS[0]}
+        processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
+        headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+        topic={TOPIC}
+        siblingGroups={groups}
+        allTopics={[TOPIC]}
+      />
+    );
 
-    mockUseMediaQuery.mockReturnValue(true);
-    const xl = renderLesson();
-    const sidebar = xl.container.querySelector("aside");
-    expect(sidebar?.querySelector('a[href="/"]')).toBeNull();
-    const breadcrumb = xl.container.querySelector('article header nav[aria-label="Breadcrumb"]');
-    expect(breadcrumb?.parentElement?.className).toContain("hidden lg:flex");
-    expect(breadcrumb?.querySelector('a[href="/"]')?.textContent).toContain("Topics");
+    const asides = container.querySelectorAll("aside");
+    expect(asides).toHaveLength(1);
+    const sidebar = asides[0];
+    expect(sidebar.querySelector('a[href="/"]')).toBeNull();
+
+    const topBar = container.querySelector("header");
+    expect(topBar?.querySelector('a[href="/"]')?.textContent).toContain("Crisne");
+    expect(topBar?.querySelector(`a[href="/${TOPIC.slug}"]`)?.textContent).toContain(TOPIC.title);
+    expect(screen.getByRole("button", { name: "Tìm kiếm nhanh (Cmd+K)" })).toBeTruthy();
+
+    const breadcrumb = container.querySelector('article header nav[aria-label="Breadcrumb"]');
+    expect(breadcrumb?.querySelector('a[href="/"]')).toBeNull();
     expect(breadcrumb?.textContent).toContain(TOPIC.title);
     expect(breadcrumb?.textContent).toContain("Nền tảng");
 
-    const toc = xl.container.querySelector('nav[aria-label="On this page"]');
-    const status = screen.getByRole("group", { name: "Trạng thái bài học" });
-    expect(toc?.closest("aside")).toBe(status.closest("aside"));
-    expect(toc!.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(xl.container.querySelector("article header [role=group]")).toBeNull();
-    xl.unmount();
+    const h1 = screen.getByRole("heading", { level: 1, name: ITEMS[0].title });
+    expect(h1.className).toContain("font-sans");
+    expect(h1.className).not.toContain("font-display");
 
-    mockUseMediaQuery.mockReturnValue(false);
-    const narrow = renderLesson();
-    const articleHeader = narrow.container.querySelector("article header");
-    expect(articleHeader?.querySelector('[role="group"]')).toBeNull();
-    expect(screen.queryByRole("group", { name: "Trạng thái bài học" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Sửa bài học" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Nội dung" })).toBeNull();
+    expect(screen.getByRole("button", { name: /Trạng thái:/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sửa nội dung" })).toBeTruthy();
 
-    // Mobile sticky header hosts Topic back + the "⋯" Owner menu trigger
-    const mobileHeader = narrow.container.querySelector("header.lg\\:hidden");
-    expect(mobileHeader?.querySelector('nav[aria-label="Topic navigation"]')?.textContent).toContain(TOPIC.title);
-    const mobileMenuTrigger = mobileHeader?.querySelector('button[aria-label="Thao tác bài học"]') as HTMLButtonElement;
-    expect(mobileMenuTrigger).toBeTruthy();
-
-    fireEvent.click(mobileMenuTrigger);
-    const statusGroup = screen.getByRole("group", { name: "Trạng thái bài học" });
-    expect(statusGroup.className).toContain("flex-col");
+    const moreMenuTrigger = screen.getByRole("button", { name: "Thao tác bài học" });
+    fireEvent.click(moreMenuTrigger);
     const editInfoBtn = screen.getByRole("button", { name: "Sửa bài học" });
-    const editContentBtn = screen.getByRole("button", { name: "Nội dung" });
     const deleteBtn = screen.getByRole("button", { name: "Xoá bài học" });
-    expect(editInfoBtn.compareDocumentPosition(editContentBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(editContentBtn.compareDocumentPosition(deleteBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(editInfoBtn.compareDocumentPosition(deleteBtn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("extracts H2/H3 outline from DEFAULT_LESSON_TEMPLATE_HTML and lets Owner open editor from template", () => {
@@ -526,14 +512,18 @@ describe("LectureShell & editorial pages", () => {
           allTopics={[TOPIC]}
         />
       );
-      fireEvent.click(screen.getAllByRole("button", { name: "Thao tác bài học" })[0]);
-      const pick = (name: string) =>
+      const pick = (name: string) => {
+        const trigger = screen.getByRole("button", { name: /Trạng thái:/ });
+        if (trigger.getAttribute("aria-expanded") !== "true") {
+          fireEvent.click(trigger);
+        }
         fireEvent.click(screen.getByRole("button", { name }));
+      };
 
       pick("Mục tiêu");
       pick("Đang học");
       pick("Mục tiêu");
-      expect(screen.getByRole("button", { name: "Mục tiêu" }).getAttribute("aria-pressed")).toBe("true");
+      expect(screen.getByRole("button", { name: /Trạng thái: Mục tiêu/ })).toBeTruthy();
       expect(updateItemStatus).not.toHaveBeenCalled();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
@@ -541,6 +531,7 @@ describe("LectureShell & editorial pages", () => {
       expect(updateItemStatus).toHaveBeenCalledTimes(1);
       expect(updateItemStatus).toHaveBeenCalledWith(ITEMS[0].id, "target");
 
+      fireEvent.click(screen.getByRole("button", { name: /Trạng thái:/ }));
       const pressed = screen
         .getAllByRole("button", { pressed: true })
         .find((b) => b.closest('[aria-label="Trạng thái bài học"]'))!
@@ -577,10 +568,9 @@ describe("LectureShell & editorial pages", () => {
       />
     );
 
-    expect(screen.getByText(/4 phút ·/)).toBeTruthy();
+    expect(screen.getByText(/4 phút đọc, cập nhật/)).toBeTruthy();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Thao tác bài học" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Nội dung" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sửa nội dung" }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Mock Save Content" }));
     });
@@ -589,7 +579,7 @@ describe("LectureShell & editorial pages", () => {
       id: ITEMS[0].id,
       content: mockDrawerSavePayload,
     });
-    expect(screen.getByText(/3 phút ·/)).toBeTruthy();
+    expect(screen.getByText(/3 phút đọc, cập nhật/)).toBeTruthy();
     expect(screen.getAllByText("Mục lục mới").length).toBeGreaterThanOrEqual(1);
 
     view.rerender(
@@ -608,7 +598,7 @@ describe("LectureShell & editorial pages", () => {
       />
     );
 
-    expect(screen.getByText(/5 phút ·/)).toBeTruthy();
+    expect(screen.getByText(/5 phút đọc, cập nhật/)).toBeTruthy();
     expect(screen.getAllByText("Từ server").length).toBeGreaterThanOrEqual(1);
   });
 
@@ -643,6 +633,9 @@ describe("LectureShell & editorial pages", () => {
     expect(activeLessonLink.getAttribute("aria-current")).toBe("page");
     expect(activeLessonLink.className).toContain("font-medium");
     expect(activeLessonLink.className).not.toContain("font-semibold");
+    expect(activeLessonLink.className).not.toContain("editorial-nav-active");
+    expect(activeLessonLink.className).not.toContain("border");
+    expect(activeLessonLink.className).not.toContain("bg-card");
     expect(inactiveLessonLink.className).toContain("font-medium");
     expect(inactiveLessonLink.className).not.toContain("font-semibold");
 
@@ -658,17 +651,15 @@ describe("LectureShell & editorial pages", () => {
     expect(dotSlot?.className).toContain("opacity-100");
     expect(screen.getByLabelText("Mục đang đọc")).toBe(dotSlot);
 
-    const railNav = container.querySelector('nav[aria-label="On this page"]');
-    const inlineDetails = container.querySelector("details");
-    const tocLinks = [
-      ...(railNav?.querySelectorAll("a") ?? []),
-      ...(inlineDetails?.querySelectorAll("a") ?? []),
-    ];
-    expect(tocLinks.length).toBe(4);
-    for (const link of tocLinks) {
-      expect(link.className).toContain("font-normal");
-      expect(link.className).not.toContain("font-medium");
-    }
+    const tocList = container.querySelector('ol[aria-label="Trên trang này"]');
+    expect(tocList).toBeTruthy();
+    expect(tocList?.closest("li")).toBe(activeLessonLink.closest("li"));
+    const tocLinks = Array.from(tocList?.querySelectorAll("a") ?? []);
+    expect(tocLinks).toHaveLength(2);
+    expect(tocLinks[0].getAttribute("aria-current")).toBe("true");
+    expect(tocLinks[0].className).toContain("font-medium");
+    expect(tocLinks[1].getAttribute("aria-current")).toBeNull();
+    expect(tocLinks[1].className).toContain("font-normal");
   });
 
   it("keeps constant font-weight and fixed check icon slot in LessonStatusPicker", () => {
@@ -760,9 +751,54 @@ describe("LectureShell & editorial pages", () => {
     expect(screen.getByRole("button", { name: /Nền tảng/ }).getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("collapses right rail into compact menu when Abot sidebar is active on laptop xl viewports", () => {
+  it("renders nested headings under the active lesson and jumps on click, closing mobile drawer when used inside drawer", () => {
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const headings = [
+      { id: "sec-1", text: "Mục một", level: 2 as const },
+      { id: "sec-2", text: "Mục hai", level: 3 as const },
+    ];
+    const targetHeading = document.createElement("h2");
+    targetHeading.id = "sec-1";
+    targetHeading.textContent = "Mục một";
+    const headingScrollMock = vi.fn();
+    targetHeading.scrollIntoView = headingScrollMock;
+    document.body.appendChild(targetHeading);
+
+    try {
+      render(
+        <LectureShell
+          topic={TOPIC}
+          siblingGroups={groups}
+          activeView="lesson"
+          activeLessonId={ITEMS[0].id}
+          defaultOpenSectionKey="Nền tảng"
+          canWrite={false}
+          ownerStatusById={{}}
+          headings={headings}
+        >
+          <p>Body</p>
+        </LectureShell>
+      );
+
+      fireEvent.click(screen.getByRole("link", { name: "Mục một" }));
+      expect(headingScrollMock).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Mở danh sách bài học" }));
+      const dialog = screen.getByRole("dialog", { name: TOPIC.title });
+      const drawerTocLink = dialog.querySelector('ol[aria-label="Trên trang này"] a[href="#sec-1"]') as HTMLAnchorElement;
+      expect(drawerTocLink).toBeTruthy();
+
+      fireEvent.click(drawerTocLink);
+      expect(headingScrollMock).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("dialog", { name: TOPIC.title })).toBeNull();
+    } finally {
+      targetHeading.remove();
+    }
+  });
+
+  it("hides desktop left nav and exposes drawer button when Abot sidebar is open at 1280px", () => {
     mockUseCanWrite.mockReturnValue(true);
-    mockUseMediaQuery.mockImplementation((query?: string) => query === "(min-width: 1280px)");
+    mockUseMediaQuery.mockImplementation((query?: string) => query === "(max-width: 1365px)");
     const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
 
     document.documentElement.dataset.abotSidebar = "true";
@@ -778,24 +814,92 @@ describe("LectureShell & editorial pages", () => {
         />
       );
 
-      expect(container.querySelector('nav[aria-label="On this page"]')).toBeNull();
-      expect(screen.getAllByRole("button", { name: "Thao tác bài học" }).length).toBeGreaterThanOrEqual(1);
+      expect(container.querySelector("aside")).toBeNull();
+      const drawerBtn = screen.getByRole("button", { name: "Mở danh sách bài học" });
+      expect(drawerBtn.className).not.toContain("lg:hidden");
+      const articleEl = container.querySelector("article");
+      expect(articleEl?.className).toContain("max-w-none");
+      expect(articleEl?.className).not.toContain("max-w-180");
 
       act(() => {
         delete document.documentElement.dataset.abotSidebar;
         window.dispatchEvent(new CustomEvent("abot:sidebar-change"));
       });
 
-      expect(container.querySelector('nav[aria-label="On this page"]')).toBeTruthy();
+      expect(container.querySelector("aside")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Mở danh sách bài học" }).className).toContain("lg:hidden");
+      expect(container.querySelector("article")?.className).toContain("max-w-180");
     } finally {
       delete document.documentElement.dataset.abotSidebar;
     }
   });
 
-  it("uses edge-anchored shell and collapses right rail when #main-content ResizeObserver width is below 980px", () => {
+  it("hides status trigger, edit button, action menu, and sidebar status icons when canWrite is false", () => {
+    mockUseCanWrite.mockReturnValue(false);
+    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    const { container } = render(
+      <LessonEditorialReader
+        lesson={ITEMS[0]}
+        processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
+        headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+        topic={TOPIC}
+        siblingGroups={groups}
+        allTopics={[TOPIC]}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: /Trạng thái:/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sửa nội dung" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Thêm nội dung" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Thao tác bài học" })).toBeNull();
+    const sidebar = container.querySelector("aside");
+    expect(sidebar?.querySelector('[role="img"]')).toBeNull();
+  });
+
+  it("collapses right focus rail on TopicEditorialPage when Abot sidebar is active on laptop xl viewports", async () => {
+    mockUseCanWrite.mockReturnValue(true);
+    mockUseMediaQuery.mockImplementation((query?: string) => query === "(min-width: 1280px)");
+    vi.mocked(roadmapService.fetchRoadmapBySlug).mockResolvedValueOnce({
+      roadmap: TOPIC,
+      items: [{ ...ITEMS[0], status: "learning" }, { ...ITEMS[1], status: "known" }],
+      sections: ["Nền tảng", "Thực hành"],
+    });
+
+    document.documentElement.dataset.abotSidebar = "true";
+    try {
+      const { container } = render(
+        <TopicEditorialPage
+          topic={TOPIC}
+          initialItems={ITEMS}
+          initialSections={["Nền tảng", "Thực hành"]}
+        />
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(container.querySelector('nav[aria-label="Đang theo dõi"]')).toBeNull();
+
+      act(() => {
+        delete document.documentElement.dataset.abotSidebar;
+        window.dispatchEvent(new CustomEvent("abot:sidebar-change"));
+      });
+
+      expect(container.querySelector('nav[aria-label="Đang theo dõi"]')).toBeTruthy();
+    } finally {
+      delete document.documentElement.dataset.abotSidebar;
+    }
+  });
+
+  it("keeps reading column centered and collapses Topic focus rail when #main-content ResizeObserver width is below 980px", async () => {
     mockUseCanWrite.mockReturnValue(true);
     mockUseMediaQuery.mockReturnValue(true);
-    const groups = groupBySection(ITEMS, ["Nền tảng", "Thực hành"]);
+    vi.mocked(roadmapService.fetchRoadmapBySlug).mockResolvedValueOnce({
+      roadmap: TOPIC,
+      items: [{ ...ITEMS[0], status: "learning" }],
+      sections: ["Nền tảng", "Thực hành"],
+    });
 
     let resizeCallback: ResizeObserverCallback | null = null;
     const origResizeObserver = globalThis.ResizeObserver;
@@ -811,39 +915,36 @@ describe("LectureShell & editorial pages", () => {
     document.documentElement.dataset.abotSidebar = "true";
     try {
       const { container } = render(
-        <LessonEditorialReader
-          lesson={ITEMS[0]}
-          processedHtml='<h2 id="h-1">Mở đầu</h2><p>Nội dung</p>'
-          headings={[{ id: "h-1", text: "Mở đầu", level: 2 }]}
+        <TopicEditorialPage
           topic={TOPIC}
-          siblingGroups={groups}
-          allTopics={[TOPIC]}
+          initialItems={ITEMS}
+          initialSections={["Nền tảng", "Thực hành"]}
         />
       );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
 
       const mainEl = container.querySelector("#main-content") as HTMLElement;
       expect(mainEl).toBeTruthy();
       expect(mainEl.className).toContain("justify-center");
-      expect(mainEl.className).not.toContain("xl:justify-between");
-      expect(container.innerHTML).not.toContain("max-w-[90.5rem]");
 
-      // Wide main container (>= 980px) keeps right rail visible even with Abot sidebar open
       act(() => {
         resizeCallback?.(
           [{ contentRect: { width: 1020 } } as unknown as ResizeObserverEntry],
           {} as ResizeObserver
         );
       });
-      expect(container.querySelector('nav[aria-label="On this page"]')).toBeTruthy();
+      expect(container.querySelector('nav[aria-label="Đang theo dõi"]')).toBeTruthy();
 
-      // Narrowed main container (< 980px, e.g. user widened Abot sidebar) collapses right rail
       act(() => {
         resizeCallback?.(
           [{ contentRect: { width: 860 } } as unknown as ResizeObserverEntry],
           {} as ResizeObserver
         );
       });
-      expect(container.querySelector('nav[aria-label="On this page"]')).toBeNull();
+      expect(container.querySelector('nav[aria-label="Đang theo dõi"]')).toBeNull();
     } finally {
       globalThis.ResizeObserver = origResizeObserver;
       delete document.documentElement.dataset.abotSidebar;

@@ -129,12 +129,12 @@ export function NewsReaderPanel({
   return (
     <article
       aria-label={item.title}
-      className={`@container flex min-h-0 min-w-0 flex-1 flex-col bg-card ${
+      className={`@container flex min-h-0 min-w-0 flex-1 flex-col bg-background ${
         animateMount ? "motion-safe:animate-in motion-safe:fade-in duration-150 ease-out" : ""
       }`}
     >
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
-        <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-5 sm:px-8 sm:py-7">
+        <div className="mx-auto w-full min-w-0 max-w-180 px-4 py-6 sm:px-8 sm:py-8">
           <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <PlatformIcon platform={item.platform} />
             <span className="truncate">
@@ -157,16 +157,16 @@ export function NewsReaderPanel({
           </div>
 
           <h1
-            className={`mt-2 [overflow-wrap:anywhere] ${
+            className={`mt-2.5 [overflow-wrap:anywhere] ${
               isPendingIngest(item)
                 ? "break-all font-mono text-base text-muted-foreground"
-                : "font-display text-2xl font-semibold leading-tight text-foreground sm:text-[28px]"
+                : "font-sans text-2xl font-semibold leading-tight tracking-tight text-foreground text-balance sm:text-3xl"
             }`}
           >
             {formatNewsTitle(item)}
           </h1>
 
-          <div className="mt-3 flex flex-wrap items-center gap-1">
+          <div className="mt-4 flex flex-wrap items-center gap-1 border-b border-border pb-4">
             <a
               href={toSafeHttpHref(item.canonicalUrl)}
               target="_blank"
@@ -275,9 +275,9 @@ export function NewsReaderPanel({
             )}
 
             {item.tldr && (
-              <section className="mt-5 border-l-2 border-[var(--editorial-accent)] pl-4">
+              <section className="mt-6 border-l-2 border-[var(--editorial-accent)] pl-4">
                 <h2 className={SECTION_LABEL}>TL;DR</h2>
-                <p className="mt-1.5 [overflow-wrap:anywhere] text-[15px] leading-relaxed text-foreground">
+                <p className="mt-1.5 [overflow-wrap:anywhere] text-base leading-relaxed text-foreground">
                   {item.tldr}
                 </p>
               </section>
@@ -286,7 +286,7 @@ export function NewsReaderPanel({
             {item.takeaways.length > 0 && (
               <section className="mt-7">
                 <h2 className={SECTION_LABEL}>Ý chính</h2>
-                <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground [overflow-wrap:anywhere]">
+                <ul className="mt-2.5 list-disc space-y-2.5 pl-5 text-base leading-relaxed text-foreground [overflow-wrap:anywhere]">
                   {item.takeaways.map((point, index) => (
                     <li key={index}>
                       <EmphasisText text={point} />
@@ -334,7 +334,7 @@ export function NewsReaderPanel({
                   onChange={(e) => setTagInput(e.target.value)}
                   placeholder="Thêm tag (vd: ai, nextjs)..."
                   maxLength={32}
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-card px-2.5 text-sm text-foreground placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 <button
                   type="submit"
@@ -371,10 +371,10 @@ export function NewsReaderSkeleton() {
     <div
       role="status"
       aria-label="Đang tải bài"
-      className="@container hidden min-h-0 min-w-0 flex-1 flex-col bg-card xl:flex"
+      className="@container hidden min-h-0 min-w-0 flex-1 flex-col bg-background xl:flex"
     >
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto w-full max-w-3xl px-8 py-7">
+        <div className="mx-auto w-full max-w-180 px-8 py-8">
           <div className={`h-3 w-56 ${SKELETON_BAR}`} />
           <div className={`mt-4 h-7 w-4/5 ${SKELETON_BAR}`} />
           <div className={`mt-2 h-7 w-3/5 ${SKELETON_BAR}`} />

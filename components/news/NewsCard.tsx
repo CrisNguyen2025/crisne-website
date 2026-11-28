@@ -102,7 +102,7 @@ export const NewsCard = React.memo(function NewsCard({
       className={`group relative cursor-pointer overflow-hidden border-b border-border px-4 py-4 [contain:layout_style] transition-[background-color,box-shadow,opacity] duration-150 ease-out sm:px-5 ${
         isSelected
           ? "editorial-nav-active bg-card"
-          : "hover:bg-muted/60 active:bg-muted/80"
+          : "hover:bg-[var(--editorial-sidebar-hover)] active:bg-[var(--editorial-sidebar-active)]"
       } ${isDone ? "opacity-75" : ""}`}
     >
       <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -129,7 +129,7 @@ export const NewsCard = React.memo(function NewsCard({
           className={`block w-full min-w-0 touch-manipulation text-left decoration-1 underline-offset-4 transition-colors duration-150 group-hover:underline cursor-pointer after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring ${
             isPending
               ? "line-clamp-2 break-all font-mono text-sm text-muted-foreground"
-              : "line-clamp-2 [overflow-wrap:anywhere] font-display text-[17px] font-semibold leading-snug text-foreground"
+              : "line-clamp-2 [overflow-wrap:anywhere] font-sans text-base font-semibold leading-snug text-foreground"
           }`}
         >
           {formatNewsTitle(item)}

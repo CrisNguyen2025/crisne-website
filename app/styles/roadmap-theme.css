@@ -132,9 +132,8 @@ html:has(.roadmap-theme) {
 
 .roadmap-theme .editorial-prose {
   font-family: var(--font-sans);
-  font-size: 1rem;
+  font-size: 1.0625rem;
   line-height: 1.75;
-  max-width: 65ch;
   color: color-mix(in oklch, var(--foreground) 92%, transparent);
 }
 

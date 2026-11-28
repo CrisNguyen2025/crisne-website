@@ -52,68 +52,70 @@ export function NewsDecisionBar({
   const saveIcon = isSavedActive ? BookmarkCheck : Bookmark;
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-card px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
-      <button
-        type="button"
-        disabled={isBusy}
-        onClick={() => {
-          setActiveAction("save");
-          onToggleSave(item);
-        }}
-        className={isSavedActive ? SAVED_BTN : OUTLINE}
-      >
-        <ActionButtonIcon isLoading={currentAction === "save"} icon={saveIcon} />
-        {isSavedActive ? "Đã lưu" : "Lưu"}
-      </button>
-
-      {isDismissed ? (
+    <div className="shrink-0 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-8">
+      <div className="mx-auto flex w-full max-w-180 flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={isBusy}
           onClick={() => {
-            setActiveAction("reopen");
-            onReopen(item);
+            setActiveAction("save");
+            onToggleSave(item);
           }}
-          className={OUTLINE}
+          className={isSavedActive ? SAVED_BTN : OUTLINE}
         >
-          <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
-          Đưa lại Chờ xử lý
+          <ActionButtonIcon isLoading={currentAction === "save"} icon={saveIcon} />
+          {isSavedActive ? "Đã lưu" : "Lưu"}
         </button>
-      ) : (
-        <>
+
+        {isDismissed ? (
           <button
             type="button"
             disabled={isBusy}
             onClick={() => {
-              setActiveAction("dismiss");
-              onDismiss(item);
+              setActiveAction("reopen");
+              onReopen(item);
             }}
             className={OUTLINE}
           >
-            <ActionButtonIcon isLoading={currentAction === "dismiss"} icon={X} />
-            Bỏ qua
+            <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
+            Đưa lại Chờ xử lý
           </button>
-          {item.isSaved && (
+        ) : (
+          <>
             <button
               type="button"
               disabled={isBusy}
               onClick={() => {
-                setActiveAction("reopen");
-                onReopen(item);
+                setActiveAction("dismiss");
+                onDismiss(item);
               }}
               className={OUTLINE}
             >
-              <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
-              Đưa lại Chờ xử lý
+              <ActionButtonIcon isLoading={currentAction === "dismiss"} icon={X} />
+              Bỏ qua
             </button>
-          )}
-        </>
-      )}
+            {item.isSaved && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  setActiveAction("reopen");
+                  onReopen(item);
+                }}
+                className={OUTLINE}
+              >
+                <ActionButtonIcon isLoading={currentAction === "reopen"} icon={Inbox} />
+                Đưa lại Chờ xử lý
+              </button>
+            )}
+          </>
+        )}
 
-      <span className="ml-auto hidden text-xs text-muted-foreground lg:inline">
-        <kbd className="font-mono">S</kbd> lưu · <kbd className="font-mono">J</kbd>/
-        <kbd className="font-mono">K</kbd> chuyển bài
-      </span>
+        <span className="ml-auto hidden text-xs text-muted-foreground lg:inline">
+          <kbd className="font-mono">S</kbd> lưu · <kbd className="font-mono">J</kbd>/
+          <kbd className="font-mono">K</kbd> chuyển bài
+        </span>
+      </div>
     </div>
   );
 }

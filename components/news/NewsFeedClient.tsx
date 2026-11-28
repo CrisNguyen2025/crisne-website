@@ -781,7 +781,7 @@ function NewsReaderSlot({
   if (isSettling) {
     return <NewsReaderSkeleton />;
   }
-  return <div className="hidden flex-1 bg-card xl:block" />;
+  return <div className="hidden flex-1 bg-background xl:block" />;
 }
 
 export function NewsFeedClient({
@@ -1338,7 +1338,7 @@ export function NewsFeedClient({
           aria-label="Danh sách tin"
           inert={isNarrowDrawerOpen || undefined}
           aria-hidden={isNarrowDrawerOpen || undefined}
-          className="flex w-full min-w-0 flex-col border-r border-border xl:w-[520px] xl:shrink-0"
+          className="flex w-full min-w-0 flex-col border-r border-border bg-[var(--editorial-sidebar)] xl:w-[520px] xl:shrink-0"
         >
           <NewsFilterToolbar
             filterBarRef={filterBarRef}

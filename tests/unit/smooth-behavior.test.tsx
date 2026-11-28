@@ -11,7 +11,6 @@ import { ImagePreview } from "@/components/ui/image-preview";
 import { ToastProvider } from "@/components/ui/toast";
 import { CreateTopicModal } from "@/components/roadmap/CreateTopicModal";
 import { LectureShell } from "@/components/roadmap/LectureShell";
-import { MobileTocDropdown } from "@/components/roadmap/LectureToc";
 import { NewsDecisionBar } from "@/components/news/NewsDecisionBar";
 import { NewsFeedClient } from "@/components/news/NewsFeedClient";
 
@@ -228,29 +227,54 @@ describe("Behavior Smooth enhancements", () => {
     expect(screen.queryByAltText("Minh hoạ")).toBeNull();
   });
 
-  it("keeps MobileTocDropdown mounted for exit transition and uses getScrollBehavior", () => {
-    vi.useFakeTimers();
-    const scrollToSpy = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  it("jumps smoothly from SidebarLessonToc inside LectureShell using getScrollBehavior", () => {
+    const targetHeading = document.createElement("h2");
+    targetHeading.id = "h-1";
+    targetHeading.textContent = "Mục đầu";
+    const headingScrollMock = vi.fn();
+    targetHeading.scrollIntoView = headingScrollMock;
+    document.body.appendChild(targetHeading);
 
-    render(
-      <MobileTocDropdown
-        headings={[{ id: "h-1", text: "Mục đầu", level: 2 }]}
-        activeHeadingId="h-1"
-        onJump={vi.fn()}
-      />
-    );
+    try {
+      render(
+        <LectureShell
+          topic={{ id: "t-1", slug: "ai", title: "AI", order: 0 }}
+          siblingGroups={[
+            {
+              section: null,
+              items: [
+                {
+                  id: "l-1",
+                  slug: "lesson-1",
+                  title: "Bài 1",
+                  description: "",
+                  section: null,
+                  order: 0,
+                  createdAt: "2026-11-22T00:00:00.000Z",
+                  updatedAt: "2026-11-22T00:00:00.000Z",
+                },
+              ],
+            },
+          ]}
+          activeView="lesson"
+          activeLessonId="l-1"
+          defaultOpenSectionKey="__none__"
+          canWrite={false}
+          ownerStatusById={{}}
+          headings={[{ id: "h-1", text: "Mục đầu", level: 2 }]}
+        >
+          <p>Body</p>
+        </LectureShell>
+      );
 
-    fireEvent.click(screen.getByRole("button", { name: "On this page" }));
-    expect(screen.getByText("Lên đầu trang ↑")).toBeTruthy();
-
-    fireEvent.click(screen.getByText("Lên đầu trang ↑"));
-    expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
-    expect(screen.getByText("Lên đầu trang ↑")).toBeTruthy();
-
-    act(() => {
-      vi.advanceTimersByTime(150);
-    });
-    expect(screen.queryByText("Lên đầu trang ↑")).toBeNull();
+      fireEvent.click(screen.getByRole("link", { name: "Mục đầu" }));
+      expect(headingScrollMock).toHaveBeenCalledWith({
+        behavior: "smooth",
+        block: "start",
+      });
+    } finally {
+      targetHeading.remove();
+    }
   });
 
   it("frames the active lesson in LectureShell mobile drawer when opened", () => {

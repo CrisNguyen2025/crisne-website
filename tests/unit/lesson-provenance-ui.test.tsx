@@ -216,6 +216,9 @@ describe("Provenance on the Lesson page (ADR-0017)", () => {
     const relatedLink = await screen.findByRole("link", { name: "Agent Memory" });
     expect(relatedLink.getAttribute("href")).toBe("/ai-agent/agent-memory");
     expect(relatedLink.closest("section")?.getAttribute("aria-busy")).toBeNull();
+    const relatedItem = relatedLink.closest("li");
+    expect(relatedItem?.textContent).toContain("AI Agent · Nền tảng");
+    expect(relatedLink.className).not.toContain("border");
   });
 
   it("hides RelatedLessons skeleton when resolved with no related lessons", async () => {

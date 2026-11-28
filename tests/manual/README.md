@@ -46,6 +46,7 @@ Thư mục này lưu các kịch bản test thủ công **cùng kết quả đã
 | [knowledge-provenance.md](knowledge-provenance.md) | Đưa News Item vào Lesson kèm Provenance, chip nguồn trên trang Lesson (ADR-0017, TASK-knowledge-provenance-001..003) | 2026-11-23 (chưa commit, trên `ce7564a`) | P1–P10 Pass |
 | [global-search.md](global-search.md) | Global Search / Command Palette (`Cmd+K`) tìm Topic, Lesson kèm `#anchor`, NewsItem (Owner-only) | Chưa chạy | Kịch bản mới (S1–S6) |
 | [abot-add-context.md](abot-add-context.md) | Nút `+ Add Context` (`Actions` Slash `/quiz -> Topic` & `Gmail Connector`, `ADR-0021`) | 2026-11-27 (test tự động) | AC-1..AC-3, AC-5..AC-6 tự động Pass; AC-4 (Google OAuth thật) chưa chạy |
+| [lesson-docs-layout.md](lesson-docs-layout.md) | Bố cục docs cho Lesson reader (phương án A): thanh trên, menu trái chữ + mục lục inline, cột đọc 720px, Abot sidebar <1366px | Chưa chạy | Kịch bản mới (L1–L8) |
 
 ## Cách chạy (đã kiểm chứng)
 

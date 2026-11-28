@@ -7,6 +7,7 @@ const LEFT_SIDEBAR_WIDTH_REM = 18.75;
 const MAIN_MIN_WIDTH_FOR_RAIL_REM = 61.25;
 const MAIN_MIN_WIDTH_FOR_RAIL_PX = 980;
 const DEFAULT_ABOT_WIDTH_REM = 25;
+const COLLAPSE_LEFT_NAV_BASE_MAX_PX = 1365;
 
 function getRootFontSize(): number {
   if (typeof document === "undefined") return 16;
@@ -122,4 +123,28 @@ export function useCollapseRightRail(): boolean {
     return isMainTooNarrow;
   }
   return !isWideByMediaQuery;
+}
+
+export function useIsAbotSidebarOpen(): boolean {
+  const snapshot = useSyncExternalStore(
+    subscribeAbotSidebar,
+    getAbotSidebarStateSnapshot,
+    () => "0:25"
+  );
+  return snapshot.startsWith("1:");
+}
+
+export function useCollapseLeftNav(): boolean {
+  const snapshot = useSyncExternalStore(
+    subscribeAbotSidebar,
+    getAbotSidebarStateSnapshot,
+    () => "0:25"
+  );
+  const isAbotSidebarActive = snapshot.startsWith("1:");
+  const abotWidthRem = Number(snapshot.slice(2)) || DEFAULT_ABOT_WIDTH_REM;
+  const extraAbotPx = Math.max(0, (abotWidthRem - DEFAULT_ABOT_WIDTH_REM) * 16);
+  const maxWidthPx = Math.round(COLLAPSE_LEFT_NAV_BASE_MAX_PX + extraAbotPx);
+  const isTooNarrow = useMediaQuery(`(max-width: ${maxWidthPx}px)`);
+
+  return isAbotSidebarActive && isTooNarrow;
 }

@@ -3,7 +3,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Edit3, FileText, ListTree, MoreHorizontal, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Edit3,
+  ListTree,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import type { ContentHeading } from "@/lib/roadmap/content-utils";
 import {
   contentToHtml,
@@ -21,6 +29,7 @@ import {
 } from "@/lib/roadmap/pending-write";
 import {
   DEFAULT_LESSON_STATUS,
+  LESSON_STATUS_LABEL,
   LESSON_STATUS_SAVE_DELAY_MS,
   type LessonStatus,
 } from "@/lib/roadmap/status";
@@ -31,10 +40,8 @@ import type {
 } from "@/lib/roadmap/types";
 import { cn } from "@/lib/utils";
 import { useAnimatedPresence } from "@/hooks/use-animated-presence";
-import { useCollapseRightRail } from "@/hooks/use-abot-sidebar";
 import { useCanWrite } from "@/hooks/use-can-write";
-import { useMediaQuery } from "@/hooks/use-media-query";
-import { ActionMenu } from "@/components/ui/action-menu";
+import { Button } from "@/components/ui/button";
 import { ImagePreview } from "@/components/ui/image-preview";
 import { useToast } from "@/components/ui/toast";
 import * as roadmapService from "@/logic/roadmap/roadmapService";
@@ -48,111 +55,30 @@ import {
 } from "./EditItemInfoDrawer";
 import { LectureShell } from "./LectureShell";
 import { LessonSources } from "./LessonSources";
-import { LessonStatusPicker } from "./LessonStatus";
+import {
+  LessonStatusPicker,
+  STATUS_ICON,
+  STATUS_TRIGGER_TONE,
+} from "./LessonStatus";
 import { ProvenanceChips } from "./ProvenanceChip";
 import { RelatedLessons } from "./RelatedLessons";
 import { useLessonProvenance } from "./useLessonProvenance";
 import { usePendingRoadmapRefresh } from "./usePendingRoadmapRefresh";
 import { useTopicOwnerStatuses } from "./useTopicOwnerStatuses";
 
-/** Tailwind `xl`: "On this page" moves to the right rail */
-const XL_VIEWPORT_QUERY = "(min-width: 1280px)";
-
-const OWNER_ACTION_CLASS =
-  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-[0.98] cursor-pointer";
-
-const OWNER_EDITOR_ACTION_CLASS =
-  "group inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium text-foreground shadow-2xs transition-[border-color,background-color,transform] duration-150 hover:border-[var(--editorial-accent)]/50 hover:bg-[var(--editorial-sidebar-hover)] active:scale-[0.98] cursor-pointer";
-
-interface LessonControlsPanelProps {
+interface LessonStatusMenuProps {
   currentStatus: LessonStatus;
-  hasContent: boolean;
-  headerAction?: React.ReactNode;
-  footerAction?: React.ReactNode;
   onChangeStatus: (status: LessonStatus) => void;
-  onOpenInfo: () => void;
-  onOpenContent: () => void;
 }
 
-/** Vertical status + edit controls block shared between the desktop right rail and the mobile/tablet menu. */
-function LessonControlsPanel({
+/** Inline status trigger in the Lesson meta row opening the 3-status picker popover. */
+function LessonStatusMenu({
   currentStatus,
-  hasContent,
-  headerAction,
-  footerAction,
   onChangeStatus,
-  onOpenInfo,
-  onOpenContent,
-}: LessonControlsPanelProps) {
-  return (
-    <div className="w-full">
-      <div className="mb-1.5 flex items-center justify-between pl-2.5">
-        <p className="text-[0.6875rem] text-muted-foreground">Trạng thái</p>
-        {headerAction}
-      </div>
-      <LessonStatusPicker
-        value={currentStatus}
-        onChange={onChangeStatus}
-        variant="list"
-      />
-      <div className="mt-2.5 flex flex-col gap-1.5 border-t border-border pt-2.5">
-        <button
-          type="button"
-          onClick={onOpenInfo}
-          className={cn(OWNER_ACTION_CLASS, "w-full")}
-        >
-          <Edit3 className="size-4 shrink-0" />
-          <span>Sửa bài học</span>
-        </button>
-        <button
-          type="button"
-          onMouseEnter={preloadLessonContentEditor}
-          onFocus={preloadLessonContentEditor}
-          onClick={onOpenContent}
-          className={cn(OWNER_EDITOR_ACTION_CLASS, "w-full")}
-        >
-          <FileText className="size-4 shrink-0 text-[var(--editorial-accent)]" />
-          <span>{hasContent ? "Nội dung" : "Thêm nội dung"}</span>
-          <ChevronRight
-            aria-hidden="true"
-            className="ml-auto size-3.5 shrink-0 text-muted-foreground/70 transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-[var(--editorial-accent)]"
-          />
-        </button>
-      </div>
-      {footerAction}
-    </div>
-  );
-}
-
-interface LessonOwnerMenuProps {
-  currentStatus: LessonStatus;
-  hasContent: boolean;
-  onChangeStatus: (status: LessonStatus) => void;
-  onOpenInfo: () => void;
-  onOpenContent: () => void;
-  onDelete: () => void;
-  triggerClassName?: string;
-}
-
-/** Compact "⋯" menu on <xl viewports opening a popover mirroring the desktop right block. */
-function LessonOwnerMenu({
-  currentStatus,
-  hasContent,
-  onChangeStatus,
-  onOpenInfo,
-  onOpenContent,
-  onDelete,
-  triggerClassName,
-}: LessonOwnerMenuProps) {
+}: LessonStatusMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  const handleAfterClose = useCallback(() => {
-    setIsConfirmingDelete(false);
-  }, []);
-
-  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 150, handleAfterClose);
+  const { shouldRender, isVisible } = useAnimatedPresence(isOpen, 150);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -170,31 +96,108 @@ function LessonOwnerMenu({
     };
   }, [isOpen]);
 
-  const toggleMenu = () => {
-    setIsOpen((prev) => {
-      const next = !prev;
-      if (next) preloadLessonContentEditor();
-      return next;
-    });
-  };
+  const StatusIcon = STATUS_ICON[currentStatus];
+  const label = LESSON_STATUS_LABEL[currentStatus];
 
   return (
     <div ref={rootRef} className="relative shrink-0">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-label={`Trạng thái: ${label}. Đổi trạng thái`}
+        onClick={() => setIsOpen((v) => !v)}
+        className={cn(
+          "-ml-1.5 h-7 gap-1.5 rounded-md border-0 bg-transparent px-1.5 text-xs font-medium cursor-pointer",
+          STATUS_TRIGGER_TONE[currentStatus]
+        )}
+      >
+        <StatusIcon className="size-3.5 shrink-0" aria-hidden={true} />
+        <span>{label}</span>
+        <ChevronDown className="size-3 opacity-70" aria-hidden="true" />
+      </Button>
+
+      {shouldRender && (
+        <div
+          aria-hidden={!isOpen || undefined}
+          className={cn(
+            "absolute left-0 top-full z-50 mt-1.5 w-52 origin-top-left rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            isVisible
+              ? "translate-y-0 scale-100 opacity-100"
+              : "-translate-y-1 scale-95 opacity-0 pointer-events-none"
+          )}
+        >
+          <LessonStatusPicker
+            value={currentStatus}
+            onChange={(next) => {
+              onChangeStatus(next);
+              setIsOpen(false);
+            }}
+            variant="list"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface LessonMoreMenuProps {
+  onOpenInfo: () => void;
+  onDelete: () => void;
+}
+
+/** Compact "⋯" menu in the Lesson meta row for editing metadata or deleting the lesson. */
+function LessonMoreMenu({ onOpenInfo, onDelete }: LessonMoreMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const handleAfterClose = useCallback(() => {
+    setIsConfirmingDelete(false);
+  }, []);
+
+  const { shouldRender, isVisible } = useAnimatedPresence(
+    isOpen,
+    150,
+    handleAfterClose
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setIsOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
         aria-label="Thao tác bài học"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         title="Thao tác bài học"
-        onClick={toggleMenu}
+        onClick={() => setIsOpen((v) => !v)}
         className={cn(
-          "inline-flex touch-manipulation items-center justify-center rounded-lg text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground active:scale-95 cursor-pointer",
-          isOpen && "bg-[var(--editorial-sidebar-hover)] text-foreground",
-          triggerClassName
+          "cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground",
+          isOpen && "bg-[var(--editorial-sidebar-hover)] text-foreground"
         )}
       >
         <MoreHorizontal className="size-4" />
-      </button>
+      </Button>
 
       {shouldRender && (
         <div
@@ -202,67 +205,70 @@ function LessonOwnerMenu({
           aria-label={isOpen ? "Thao tác bài học" : undefined}
           aria-hidden={!isOpen || undefined}
           className={cn(
-            "absolute right-0 top-full z-50 mt-1.5 w-64 origin-top-right rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
+            "absolute right-0 top-full z-50 mt-1.5 w-56 origin-top-right rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl transition-[transform,opacity] duration-150 ease-out motion-reduce:transition-none",
             isVisible
               ? "translate-y-0 scale-100 opacity-100"
               : "-translate-y-1 scale-95 opacity-0 pointer-events-none"
           )}
         >
-          <LessonControlsPanel
-            currentStatus={currentStatus}
-            hasContent={hasContent}
-            onChangeStatus={onChangeStatus}
-            onOpenInfo={() => {
-              setIsOpen(false);
-              onOpenInfo();
-            }}
-            onOpenContent={() => {
-              setIsOpen(false);
-              onOpenContent();
-            }}
-            footerAction={
-              <div className="mt-2.5 border-t border-border pt-2">
-                {isConfirmingDelete ? (
-                  <div className="space-y-2 rounded-lg bg-muted/50 p-2">
-                    <p className="text-xs font-medium text-foreground">
-                      Xoá bài học này?
-                    </p>
-                    <p className="text-[0.6875rem] text-muted-foreground">
-                      Hành động này không thể hoàn tác.
-                    </p>
-                    <div className="flex justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsConfirmingDelete(false)}
-                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-150 hover:bg-muted hover:text-foreground active:scale-[0.98] cursor-pointer"
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsOpen(false);
-                          onDelete();
-                        }}
-                        className="rounded-lg bg-destructive px-2.5 py-1 text-xs font-medium text-white transition-[background-color,transform] duration-150 hover:bg-destructive/90 active:scale-[0.98] cursor-pointer"
-                      >
-                        Xoá
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
+          <div className="flex flex-col gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsOpen(false);
+                onOpenInfo();
+              }}
+              className="h-auto min-h-9 w-full justify-start gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-[var(--editorial-sidebar-hover)] cursor-pointer"
+            >
+              <Edit3 className="size-4 shrink-0 text-muted-foreground" />
+              <span>Sửa bài học</span>
+            </Button>
+
+            {isConfirmingDelete ? (
+              <div className="mt-1 space-y-2 rounded-lg bg-muted p-2">
+                <p className="text-xs font-medium text-foreground">
+                  Xoá bài học này?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Hành động này không thể hoàn tác.
+                </p>
+                <div className="flex justify-end gap-1.5">
+                  <Button
                     type="button"
-                    onClick={() => setIsConfirmingDelete(true)}
-                    className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-destructive transition-[background-color,transform] duration-150 hover:bg-destructive/10 active:scale-[0.99] cursor-pointer"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setIsConfirmingDelete(false)}
+                    className="cursor-pointer text-muted-foreground"
                   >
-                    <Trash2 className="size-4 shrink-0" />
-                    <span>Xoá bài học</span>
-                  </button>
-                )}
+                    Hủy
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="xs"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onDelete();
+                    }}
+                    className="cursor-pointer bg-destructive text-primary-foreground hover:bg-destructive/90"
+                  >
+                    Xoá
+                  </Button>
+                </div>
               </div>
-            }
-          />
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="h-auto min-h-9 w-full justify-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+              >
+                <Trash2 className="size-4 shrink-0" />
+                <span>Xoá bài học</span>
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -289,26 +295,29 @@ function EmptyLessonPlaceholder({
       </p>
       {canWrite && (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <button
+          <Button
             type="button"
+            size="lg"
             onMouseEnter={preloadLessonContentEditor}
             onFocus={preloadLessonContentEditor}
             onClick={onStartTemplate}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground transition-[background-color,transform] duration-150 hover:bg-primary/90 active:scale-[0.98] cursor-pointer"
+            className="cursor-pointer px-3"
           >
             <ListTree className="size-4" />
             <span>Soạn từ mẫu chuẩn</span>
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="lg"
             onMouseEnter={preloadLessonContentEditor}
             onFocus={preloadLessonContentEditor}
             onClick={onStartBlank}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-[border-color,background-color,transform] duration-150 hover:border-foreground/30 hover:bg-muted active:scale-[0.98] cursor-pointer"
+            className="cursor-pointer bg-card px-3"
           >
             <Edit3 className="size-4" />
             <span>Soạn tự do</span>
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -339,9 +348,6 @@ export function LessonEditorialReader({
   const router = useRouter();
   const { toast } = useToast();
   const canWrite = useCanWrite();
-  const isXl = useMediaQuery(XL_VIEWPORT_QUERY);
-  const collapseRightRail = useCollapseRightRail();
-  const showDesktopRail = isXl && !collapseRightRail;
   usePendingRoadmapRefresh(lessonPath(topic.slug, lesson.slug));
   const { ownerStatusById, setOptimisticStatus, invalidateStatuses } =
     useTopicOwnerStatuses(topic.slug, canWrite, lesson.id);
@@ -565,48 +571,8 @@ export function LessonEditorialReader({
     setIsContentOpen(true);
   };
 
-  // Owner controls sit right under "On this page" in the xl right rail; on <xl they live in the "⋯" menu
-  const lessonActionMenu = (
-    <ActionMenu
-      label="Thao tác bài học"
-      items={[
-        {
-          label: "Xoá bài học",
-          icon: Trash2,
-          danger: true,
-          confirm: {
-            title: "Xoá bài học này?",
-            description: "Hành động này không thể hoàn tác.",
-            confirmLabel: "Xoá",
-          },
-          onSelect: handleDeleteLesson,
-        },
-      ]}
-    />
-  );
-
-  const desktopRailControls = (
-    <LessonControlsPanel
-      currentStatus={currentStatus}
-      hasContent={Boolean(rendered.html)}
-      headerAction={lessonActionMenu}
-      onChangeStatus={handleChangeStatus}
-      onOpenInfo={() => setIsInfoOpen(true)}
-      onOpenContent={openContentEditor}
-    />
-  );
-
-  const renderCompactOwnerMenu = (triggerClassName: string) => (
-    <LessonOwnerMenu
-      currentStatus={currentStatus}
-      hasContent={Boolean(rendered.html)}
-      onChangeStatus={handleChangeStatus}
-      onOpenInfo={() => setIsInfoOpen(true)}
-      onOpenContent={openContentEditor}
-      onDelete={handleDeleteLesson}
-      triggerClassName={triggerClassName}
-    />
-  );
+  const hasContent = Boolean(rendered.html);
+  const contentActionLabel = hasContent ? "Sửa nội dung" : "Thêm nội dung";
 
   return (
     <>
@@ -619,13 +585,6 @@ export function LessonEditorialReader({
         canWrite={canWrite}
         ownerStatusById={ownerStatusById}
         headings={rendered.headings}
-        railFooter={canWrite && showDesktopRail ? desktopRailControls : undefined}
-        collapseRightRail={collapseRightRail}
-        sidebarHeaderAction={
-          canWrite && !showDesktopRail
-            ? renderCompactOwnerMenu("size-9 border border-border/70 bg-card")
-            : undefined
-        }
         isTransitioning={isTransitioning}
         articleDataAttributes={{
           "data-roadmap-context": true,
@@ -640,13 +599,13 @@ export function LessonEditorialReader({
           prevLesson
             ? {
                 href: lessonPath(topic.slug, prevLesson.slug || prevLesson.id),
-                label: "Trang trước",
+                label: "Trước",
                 title: prevLesson.title,
                 onClick: () => handleLessonNavigate(prevLesson.id),
               }
             : {
                 href: topicPath(topic.slug),
-                label: "Trang trước",
+                label: "Trước",
                 title: "Tổng quan",
               }
         }
@@ -654,7 +613,7 @@ export function LessonEditorialReader({
           nextLesson
             ? {
                 href: lessonPath(topic.slug, nextLesson.slug || nextLesson.id),
-                label: "Trang sau",
+                label: "Sau",
                 title: nextLesson.title,
                 onClick: () => handleLessonNavigate(nextLesson.id),
               }
@@ -662,73 +621,83 @@ export function LessonEditorialReader({
         }
       >
         <header>
-          <div className="hidden lg:flex items-center justify-between gap-3">
-            <nav
-              aria-label="Breadcrumb"
-              className="min-w-0 flex items-center gap-1.5 truncate text-xs text-muted-foreground"
+          <nav
+            aria-label="Breadcrumb"
+            className="mb-3 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground"
+          >
+            <Link
+              href={topicPath(topic.slug)}
+              prefetch={true}
+              className="shrink-0 font-medium transition-colors hover:text-[var(--editorial-accent)]"
             >
-              <Link
-                href="/"
-                prefetch={true}
-                className="inline-flex shrink-0 items-center gap-1 font-medium transition-colors hover:text-[var(--editorial-accent)]"
-              >
-                <span>Topics</span>
-              </Link>
-              <span
-                className="shrink-0 text-muted-foreground/50"
-                aria-hidden="true"
-              >
-                /
-              </span>
-              <Link
-                href={topicPath(topic.slug)}
-                prefetch={true}
-                className="shrink-0 font-medium transition-colors hover:text-[var(--editorial-accent)]"
-              >
-                {topic.title}
-              </Link>
-              {lesson.section && (
-                <>
-                  <span
-                    className="shrink-0 text-muted-foreground/50"
-                    aria-hidden="true"
-                  >
-                    /
-                  </span>
-                  <Link
-                    href={`${topicPath(topic.slug)}?section=${encodeURIComponent(lesson.section)}`}
-                    prefetch={true}
-                    className="min-w-0 truncate transition-colors hover:text-[var(--editorial-accent)]"
-                  >
-                    {lesson.section}
-                  </Link>
-                </>
-              )}
-            </nav>
-
-            {canWrite && !showDesktopRail && (
-              <div className={collapseRightRail ? undefined : "xl:hidden"}>
-                {renderCompactOwnerMenu("size-8")}
-              </div>
+              {topic.title}
+            </Link>
+            {lesson.section && (
+              <>
+                <ChevronRight
+                  className="size-3.5 shrink-0 text-muted-foreground/60"
+                  aria-hidden="true"
+                />
+                <Link
+                  href={`${topicPath(topic.slug)}?section=${encodeURIComponent(lesson.section)}`}
+                  prefetch={true}
+                  className="min-w-0 truncate transition-colors hover:text-[var(--editorial-accent)]"
+                >
+                  {lesson.section}
+                </Link>
+              </>
             )}
-          </div>
+          </nav>
 
-          <h1 className="font-display text-[2rem] font-normal leading-[1.15] tracking-[-0.02em] text-foreground text-balance sm:text-[2.5rem] lg:mt-3">
+          <h1 className="font-sans text-3xl font-semibold leading-tight tracking-tight text-foreground text-balance lg:text-4xl">
             {lesson.title}
           </h1>
 
-          <p className="mt-2.5 text-xs tabular-nums text-muted-foreground">
-            {rendered.readingMinutes && rendered.readingMinutes > 0
-              ? `${rendered.readingMinutes} phút · `
-              : ""}
-            {formatFriendlyTime(lesson.updatedAt)}
-          </p>
-
           {lesson.description && (
-            <p className="mt-5 text-[1.0625rem] leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
               {lesson.description}
             </p>
           )}
+
+          <div className="mt-5 flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border pb-5 text-xs text-muted-foreground">
+            {canWrite && (
+              <>
+                <LessonStatusMenu
+                  currentStatus={currentStatus}
+                  onChangeStatus={handleChangeStatus}
+                />
+                <span aria-hidden="true">·</span>
+              </>
+            )}
+
+            <span className="tabular-nums">
+              {rendered.readingMinutes && rendered.readingMinutes > 0
+                ? `${rendered.readingMinutes} phút đọc, cập nhật ${formatFriendlyTime(lesson.updatedAt)}`
+                : `Cập nhật ${formatFriendlyTime(lesson.updatedAt)}`}
+            </span>
+
+            {canWrite && (
+              <div className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseEnter={preloadLessonContentEditor}
+                  onFocus={preloadLessonContentEditor}
+                  onClick={openContentEditor}
+                  aria-label={contentActionLabel}
+                  title={contentActionLabel}
+                  className="cursor-pointer text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground"
+                >
+                  <Pencil className="size-4" />
+                </Button>
+                <LessonMoreMenu
+                  onOpenInfo={() => setIsInfoOpen(true)}
+                  onDelete={handleDeleteLesson}
+                />
+              </div>
+            )}
+          </div>
         </header>
 
         <div className="mt-7">
@@ -736,7 +705,7 @@ export function LessonEditorialReader({
             <div
               ref={setContentElement}
               onClick={handleContentClick}
-              className="post-content-view editorial-prose prose dark:prose-invert max-w-none select-text [&_h2]:scroll-mt-16 [&_h3]:scroll-mt-16 [&_h4]:scroll-mt-16"
+              className="post-content-view editorial-prose prose dark:prose-invert max-w-none select-text [&_h2]:scroll-mt-20 [&_h3]:scroll-mt-20 [&_h4]:scroll-mt-20"
               dangerouslySetInnerHTML={{ __html: rendered.html }}
             />
           ) : (

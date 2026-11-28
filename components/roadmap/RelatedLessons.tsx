@@ -54,19 +54,19 @@ export function RelatedLessons({
       >
         Bài học liên quan
       </h2>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-3 space-y-1.5">
         {relations.map((rel) => (
-          <li key={rel.lessonId} className="text-sm">
+          <li key={rel.lessonId} className="flex flex-wrap items-baseline gap-x-2 py-1 text-sm">
             <Link
               href={lessonPath(rel.roadmapSlug, rel.lessonSlug)}
-              className="font-medium text-[var(--editorial-accent)] hover:underline"
+              prefetch={true}
+              className="font-medium text-foreground transition-colors hover:text-[var(--editorial-accent)]"
             >
               {rel.title}
             </Link>
-            <span className="text-muted-foreground">
-              {" "}
-              · {rel.roadmapTitle}
-              {rel.section ? ` › ${rel.section}` : ""}
+            <span className="text-xs text-muted-foreground">
+              {rel.roadmapTitle}
+              {rel.section ? ` · ${rel.section}` : ""}
             </span>
           </li>
         ))}

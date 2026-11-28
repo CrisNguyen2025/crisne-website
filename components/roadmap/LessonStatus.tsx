@@ -3,20 +3,35 @@
 import React from 'react';
 import { Check, CheckCircle2, CircleDot, Target } from 'lucide-react';
 import { LESSON_STATUSES, LESSON_STATUS_LABEL, type LessonStatus } from '@/lib/roadmap/status';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // Lesson Status (ADR-0010): the Owner's progress with a lesson, shown to the Owner only
 
-const STATUS_ICON: Record<LessonStatus, React.ComponentType<{ className?: string }>> = {
+export const STATUS_ICON: Record<
+  LessonStatus,
+  React.ComponentType<{
+    className?: string;
+    role?: string;
+    'aria-label'?: string;
+    'aria-hidden'?: boolean;
+  }>
+> = {
   target: Target,
   learning: CircleDot,
   known: CheckCircle2,
 };
 
-const STATUS_ICON_TONE: Record<LessonStatus, string> = {
+export const STATUS_ICON_TONE: Record<LessonStatus, string> = {
   target: 'text-[var(--status-target)]',
   learning: 'text-[var(--status-learning)]',
   known: 'text-[var(--status-known)]',
+};
+
+export const STATUS_TRIGGER_TONE: Record<LessonStatus, string> = {
+  target: 'text-[var(--status-target)] hover:bg-[var(--status-target-bg)]',
+  learning: 'text-[var(--status-learning)] hover:bg-[var(--status-learning-bg)]',
+  known: 'text-[var(--status-known)] hover:bg-[var(--status-known-bg)]',
 };
 
 const STATUS_TONE: Record<LessonStatus, string> = {
@@ -94,14 +109,15 @@ export function LessonStatusPicker({
         const Icon = STATUS_ICON[status];
         const isActive = status === value;
         return (
-          <button
+          <Button
             key={status}
             type="button"
+            variant="ghost"
             aria-pressed={isActive}
             disabled={disabled}
             onClick={() => !isActive && onChange(status)}
             className={cn(
-              'inline-flex items-center text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out disabled:pointer-events-none disabled:opacity-50',
+              'h-auto items-center text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out disabled:pointer-events-none disabled:opacity-50',
               variant !== 'pill' && 'cursor-pointer',
               variant === 'pill' && [
                 'gap-1.5 rounded-full border px-3 py-1 active:scale-[0.97]',
@@ -110,13 +126,13 @@ export function LessonStatusPicker({
                   : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground',
               ],
               variant === 'list' && [
-                'min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm active:bg-[var(--editorial-sidebar-active)]',
+                'min-h-9 w-full justify-start gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm active:bg-[var(--editorial-sidebar-active)]',
                 isActive
                   ? STATUS_LIST_ACTIVE[status]
                   : 'text-muted-foreground hover:bg-[var(--editorial-sidebar-hover)] hover:text-foreground',
               ],
               variant === 'tabs' && [
-                '-mb-px border-b-2 pb-2 pt-0.5 active:scale-[0.98]',
+                '-mb-px rounded-none border-b-2 px-0 pb-2 pt-0.5 hover:bg-transparent active:scale-[0.98]',
                 isActive
                   ? STATUS_TAB_ACTIVE[status]
                   : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -137,7 +153,7 @@ export function LessonStatusPicker({
                 )}
               />
             )}
-          </button>
+          </Button>
         );
       })}
     </div>
