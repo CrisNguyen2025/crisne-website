@@ -52,7 +52,7 @@ verification_gate:
 
 # TASK: Worker tóm tắt được bài ảnh TikTok (`/photo/`, slideshow)
 
-> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): COMPLETED 2026-11-28 trên nhánh `fix/tiktok-photo-post` (đã commit, chưa merge `main`). Đủ 7 bước, gate pass, chạy thật trên link gốc ra `description` và lấy được 10 ảnh. Còn: merge; chạy manual `N15` (đặc biệt `forceDeep`, vì Gemini Vision trên ảnh thật chưa gọi); ruff chưa chạy được vì máy chưa cài.
+> **Trạng thái hiện tại** (cập nhật mỗi khi dừng): COMPLETED 2026-11-28 trên nhánh `fix/tiktok-photo-post` (đã lên `main` @ `f337ba1`, nhánh đã xoá). Đủ 7 bước, gate pass, chạy thật trên link gốc ra `description` và lấy được 10 ảnh. Còn: chạy manual `N15` (đặc biệt `forceDeep`, vì Gemini Vision trên ảnh thật chưa gọi); ruff chưa chạy được vì máy chưa cài.
 
 ## 1. Context & Architectural Intent
 
