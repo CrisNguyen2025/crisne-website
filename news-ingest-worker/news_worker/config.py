@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     worker_concurrency: int = 2
     max_video_duration_seconds: int = 1200
     max_vision_frames: int = 6
+    max_photo_images: int = 10
     min_description_chars: int = 300
     min_transcript_words: int = 40
     media_proxy_url: str = ""

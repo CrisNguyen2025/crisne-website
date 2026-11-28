@@ -195,6 +195,7 @@ Cấu hình service tách riêng: Language **Docker** · Root Directory `news-in
 | `WORKER_CONCURRENCY` | 🟡 | Số job xử lý song song (`1..5`, mặc định `2`) |
 | `MAX_VIDEO_DURATION_SECONDS` | 🟡 | Mặc định `1200` (20 phút) |
 | `MAX_VISION_FRAMES` | 🟡 | Mặc định `6` |
+| `MAX_PHOTO_IMAGES` | 🟡 | Số ảnh tối đa đọc bằng Vision cho một bài ảnh TikTok, mặc định `10` |
 | `MEDIA_PROXY_URL` | 🟡 | Proxy HTTP/SOCKS tùy chọn chỉ dùng cho `yt-dlp` tải media |
 | `TIKTOK_FALLBACK_API_URL` | 🟡 | Endpoint Cobalt-compatible tùy chọn khi `yt-dlp` bị chặn IP trên TikTok |
 | `TIKTOK_FALLBACK_API_KEY` | 🟡 | API key tùy chọn cho `TIKTOK_FALLBACK_API_URL` (`Authorization: Api-Key ...`) |

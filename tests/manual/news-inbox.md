@@ -18,6 +18,7 @@ File liên quan: `components/news/NewsFeedClient.tsx`, `NewsCard.tsx`, `NewsRead
 | N12 | Mở `/news`, `/news/sources`, `/news/<slug-bất-kỳ>` khi chưa đăng nhập (cửa sổ ẩn danh) | 307 về `/login?callbackUrl=<đường dẫn>`, không còn trang tin công khai |
 | N13 | Reader của một bài `ready` | Không còn nút "Public"/"Đang public", danh sách không còn badge Public; "Đưa vào Lesson" vẫn có |
 | N14 | Shortcut PWA (cài lại app trên Android) "Feed Ingestion" và "RSS Sources" | Mở đúng `/news` và `/news/sources` |
+| N15 | Thêm link bài ảnh TikTok `https://www.tiktok.com/@trihuynh.dev2026/photo/7712881150922247445`, sau đó chạy lại với "Đọc sâu" (`forceDeep`) | Lần đầu: `extractionMethod` là `description` (caption 1051 ký tự), có tiêu đề, TL;DR, ý chính, tag, không còn lỗi `Unsupported URL`. Đọc sâu: `vision`, nội dung có chữ đọc từ slide ("Ảnh 1: ..."). Không lấy được ảnh thì lỗi có tiền tố `[PHOTO_POST]` (TASK-tiktok-photo-post-001) |
 
 ## Ghi kết quả
 

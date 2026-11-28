@@ -98,7 +98,16 @@ def _fetch_video_metadata_sync(url: str, settings: Settings | None = None) -> di
         "description": info.get("description") or "",
         "duration": info.get("duration"),
         "published_at": _format_upload_date(info.get("upload_date")),
+        "is_audio_only": _is_audio_only(info.get("formats")),
     }
+
+
+def _is_audio_only(formats: Any) -> bool:
+    if not isinstance(formats, list) or not formats:
+        return False
+    return all(
+        isinstance(fmt, dict) and (fmt.get("vcodec") or "none") == "none" for fmt in formats
+    )
 
 
 async def fetch_video_metadata(url: str, settings: Settings | None = None) -> dict[str, Any]:
@@ -314,15 +323,28 @@ def _extract_slides_vision_sync(
     if not frame_paths:
         raise RuntimeError("Không cắt được frame nào từ video.")
 
-    parts: list[Any] = [
-        (
-            "Đây là các frame cắt từ một video/slide ngắn. Hãy trích xuất trung thực toàn bộ chữ, "
-            "số liệu, code, tiêu đề và thông tin hiển thị trên các slide/frame thành văn bản súc tích "
-            "để làm tư liệu tóm tắt. Chỉ mô tả đúng nội dung xuất hiện trong ảnh, không bịa thêm."
-        )
+    prompt = (
+        "Đây là các frame cắt từ một video/slide ngắn. Hãy trích xuất trung thực toàn bộ chữ, "
+        "số liệu, code, tiêu đề và thông tin hiển thị trên các slide/frame thành văn bản súc tích "
+        "để làm tư liệu tóm tắt. Chỉ mô tả đúng nội dung xuất hiện trong ảnh, không bịa thêm."
+    )
+    images = [
+        (frame.read_bytes(), "image/jpeg") for frame in frame_paths[: settings.max_vision_frames]
     ]
-    for frame in frame_paths[: settings.max_vision_frames]:
-        parts.append(types.Part.from_bytes(data=frame.read_bytes(), mime_type="image/jpeg"))
+    return _ask_gemini_vision(prompt, images, settings)
+
+
+def _ask_gemini_vision(
+    prompt: str,
+    images: list[tuple[bytes, str]],
+    settings: Settings,
+) -> str:
+    gemini_keys = settings.get_gemini_keys()
+    if not gemini_keys:
+        raise RuntimeError("Thiếu GEMINI_API_KEY cho bước Vision.")
+    parts: list[Any] = [prompt]
+    for data, mime_type in images:
+        parts.append(types.Part.from_bytes(data=data, mime_type=mime_type))
 
     last_exc: Exception | None = None
     for api_key in gemini_keys:
@@ -348,3 +370,53 @@ async def extract_slides_with_vision(
     return await asyncio.to_thread(
         _extract_slides_vision_sync, url, tmp_dir, settings, duration, media_url
     )
+
+
+PHOTO_POST_VISION_PROMPT = (
+    "Đây là các ảnh slide của một bài ảnh TikTok, xếp đúng thứ tự người đăng. Hãy trích xuất "
+    "trung thực toàn bộ chữ, số liệu, code và tiêu đề trên từng ảnh, ghi theo dạng "
+    "'Ảnh 1: ...', 'Ảnh 2: ...'. Chỉ mô tả đúng nội dung xuất hiện trong ảnh, không bịa thêm."
+)
+
+
+def _detect_image_mime(data: bytes) -> str | None:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG"):
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _extract_photo_post_vision_sync(
+    image_urls: list[str],
+    tmp_dir: str,
+    settings: Settings,
+) -> str:
+    if not settings.get_gemini_keys():
+        raise RuntimeError("Thiếu GEMINI_API_KEY cho bước Vision.")
+    tmp_path = Path(tmp_dir)
+    images: list[tuple[bytes, str]] = []
+    for index, image_url in enumerate(image_urls[: settings.max_photo_images], start=1):
+        try:
+            image_file = _download_direct_media_sync(
+                image_url, tmp_path / f"photo_{index:02d}.bin", settings=settings
+            )
+        except Exception:  # noqa: S112 -- one broken slide must not drop the whole post
+            continue
+        data = image_file.read_bytes()
+        mime_type = _detect_image_mime(data)
+        if mime_type:
+            images.append((data, mime_type))
+    if not images:
+        raise RuntimeError("[PHOTO_POST] Không tải được ảnh nào của bài ảnh TikTok.")
+    return _ask_gemini_vision(PHOTO_POST_VISION_PROMPT, images, settings)
+
+
+async def extract_photo_post_with_vision(
+    image_urls: list[str],
+    tmp_dir: str,
+    settings: Settings,
+) -> str:
+    return await asyncio.to_thread(_extract_photo_post_vision_sync, image_urls, tmp_dir, settings)
