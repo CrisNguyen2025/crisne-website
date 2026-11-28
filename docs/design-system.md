@@ -40,6 +40,23 @@ Nút "Tùy chọn" (…) ở header trang chủ, trang topic/lesson (`LectureShe
 
 Các nguồn trích xuất bên thứ ba không phải tài liệu chính thức của từng hãng.
 
+### Trục chữ (typography)
+
+Cùng menu "Tùy chọn" có thêm trục chữ, độc lập với theme màu: `Chữ: Mặc định` và `Chữ: Docs gọn`.
+
+- Lưu trong localStorage key `typography` (`hooks/use-typography.ts`), gắn `data-typography="docs"` lên `<html>`; mặc định thì không gắn và giữ thang chữ của theme màu.
+- CSS ở `app/styles/docs-typography.css`, `@import` sau cùng trong `globals.css` để thắng rule chữ của theme cùng specificity. Mọi selector bắt đầu bằng `html[data-typography="docs"] .roadmap-theme`, chỉ đổi font, cỡ, độ đậm, line-height, tracking, không đổi màu.
+- Không tải font mới: heading và body cùng dùng `--font-sans` của theme đang chọn (Inter ở mặc định, system font ở Apple/PostHog; Railway mất serif ở heading).
+
+| Phần tử | Docs gọn (cảm hứng Mintlify / Discord docs) |
+|---|---|
+| Body `.editorial-prose` | 16px / 28px |
+| H1 (`.font-display`, hoặc H1 trong `article`) | 28px (mobile) → 30px (≥ 640px), 600, tracking -0.025em |
+| H2 | 24px / 600, tracking -0.02em |
+| H3 | 20px / 600 |
+| H4 | 16px / 600 |
+| Code block, bảng | 14px |
+
 ## Rule
 
 | Mã | Rule | Cách đúng |

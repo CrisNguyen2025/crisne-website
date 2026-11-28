@@ -1,0 +1,78 @@
+/*
+ * "Docs gọn" type scale for roadmap and news pages (.roadmap-theme), picked from DesignMenu
+ * (hooks/use-typography.ts sets html[data-typography="docs"]). Works with any color theme
+ * (html[data-design]): it only touches font family, size, weight, line height and tracking.
+ *
+ * Inspired by Mintlify docs (e.g. Discord developer docs): one sans family for body and headings,
+ * body 16/28, H1 28→30, H2 24, H3 20, H4 16, code 14. Uses the theme's own --font-sans (Inter by
+ * default, system font in Apple/PostHog), so no extra font is loaded.
+ *
+ * Imported last in globals.css so these rules win over theme rules of the same specificity.
+ */
+
+html[data-typography="docs"] .roadmap-theme {
+  --font-display: var(--font-sans);
+}
+
+html[data-typography="docs"] .roadmap-theme .font-display {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+html[data-typography="docs"] .roadmap-theme :is(h1.font-display, article h1:not(.font-mono)) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.75rem;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+@media (min-width: 40rem) {
+  html[data-typography="docs"] .roadmap-theme :is(h1.font-display, article h1:not(.font-mono)) {
+    font-size: 1.875rem;
+  }
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.75;
+  letter-spacing: normal;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose :is(p, li) {
+  line-height: 1.75;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose h2 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 1.33;
+  letter-spacing: -0.02em;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose h3 {
+  font-weight: 600;
+  font-size: 1.25rem;
+  line-height: 1.4;
+  letter-spacing: -0.015em;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose h4 {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.5;
+  letter-spacing: normal;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose :is(pre, code.block) {
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+html[data-typography="docs"] .roadmap-theme .editorial-prose table {
+  font-size: 0.875rem;
+}

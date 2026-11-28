@@ -15,6 +15,7 @@
 @import "./apple-theme.css";
 @import "./railway-theme.css";
 @import "./posthog-theme.css";
+@import "./docs-typography.css";
 
 @custom-variant dark (&:is(.dark *));
 
